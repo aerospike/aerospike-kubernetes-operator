@@ -164,19 +164,16 @@ func (r *SingleClusterReconciler) createOrUpdateSTSLoadBalancerSvc() error {
 
 func (r *SingleClusterReconciler) deleteLBServiceIfPresent(svcName, svcNamespace string) error {
 	service := &corev1.Service{}
-	svcNamespacedName := types.NamespacedName{Name: svcName, Namespace: svcNamespace}
+	service.Name = svcName
+	service.Namespace = svcNamespace
 
-	if err := r.Client.Get(context.TODO(), svcNamespacedName, service); err != nil {
+	if err := r.Client.Delete(context.TODO(), service); err != nil {
 		if errors.IsNotFound(err) {
 			r.Log.Info("LoadBalancer is not configured. Skipping...")
 
 			return nil
 		}
 
-		return fmt.Errorf("failed to get loadbalancer service %s: %v", svcName, err)
-	}
-
-	if err := r.Client.Delete(context.TODO(), service); err != nil {
 		return fmt.Errorf("failed to delete loadbalancer service %s: %v", svcName, err)
 	}
 
@@ -296,9 +293,11 @@ func (r *SingleClusterReconciler) createOrUpdatePodService(pName, pNamespace str
 
 func (r *SingleClusterReconciler) deletePodService(pName, pNamespace string) error {
 	service := &corev1.Service{}
-
+	service.Name = pName
+	service.Namespace = pNamespace
 	serviceName := types.NamespacedName{Name: pName, Namespace: pNamespace}
-	if err := r.Client.Get(context.TODO(), serviceName, service); err != nil {
+
+	if err := r.Client.Delete(context.TODO(), service); err != nil {
 		if errors.IsNotFound(err) {
 			r.Log.Info(
 				"Pod service not found for deletion. Skipping...",
@@ -308,10 +307,6 @@ func (r *SingleClusterReconciler) deletePodService(pName, pNamespace string) err
 			return nil
 		}
 
-		return fmt.Errorf("failed to get service for pod %s: %v", pName, err)
-	}
-
-	if err := r.Client.Delete(context.TODO(), service); err != nil {
 		return fmt.Errorf("failed to delete service for pod %s: %v", pName, err)
 	}
 
