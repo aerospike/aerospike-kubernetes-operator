@@ -244,6 +244,7 @@ func negativeDeployNetworkPolicyTest(ctx goctx.Context, multiPodPerHost, enableT
 					// cluster will crash as there will be no network status annotations
 					Expect(deployClusterWithTO(k8sClient, ctx, aeroCluster, retryInterval, shortRetry)).Should(HaveOccurred())
 					Expect(DeleteCluster(k8sClient, ctx, aeroCluster)).ToNot(HaveOccurred())
+					Expect(CleanupPVC(k8sClient, aeroCluster.Namespace, aeroCluster.Name)).ToNot(HaveOccurred())
 				},
 			)
 
@@ -564,6 +565,7 @@ func negativeUpdateNetworkPolicyTest(ctx goctx.Context) {
 			AfterEach(
 				func() {
 					Expect(DeleteCluster(k8sClient, ctx, aeroCluster)).ToNot(HaveOccurred())
+					Expect(CleanupPVC(k8sClient, aeroCluster.Namespace, aeroCluster.Name)).ToNot(HaveOccurred())
 				},
 			)
 
@@ -637,6 +639,7 @@ func doTestNetworkPolicy(
 
 	AfterEach(func() {
 		Expect(DeleteCluster(k8sClient, ctx, aeroCluster)).ToNot(HaveOccurred())
+		Expect(CleanupPVC(k8sClient, aeroCluster.Namespace, aeroCluster.Name)).ToNot(HaveOccurred())
 	})
 
 	It(

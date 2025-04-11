@@ -208,7 +208,6 @@ func multiClusterPVCTest(
 
 			// Delete 2nd cluster
 			Expect(DeleteCluster(k8sClient, ctx, aeroCluster2)).ToNot(HaveOccurred())
-
 			Expect(CleanupPVC(k8sClient, aeroCluster2.Namespace, aeroCluster2.Name)).ToNot(HaveOccurred())
 
 			// Validate 1st cluster pvc after delete

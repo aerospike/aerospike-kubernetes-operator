@@ -28,6 +28,7 @@ var _ = Describe("Sample files validation", func() {
 
 	AfterEach(func() {
 		Expect(DeleteCluster(k8sClient, ctx, aeroCluster)).NotTo(HaveOccurred())
+		Expect(CleanupPVC(k8sClient, aeroCluster.Namespace, aeroCluster.Name)).NotTo(HaveOccurred())
 	})
 
 	DescribeTable("Sample files validation",

@@ -6,6 +6,7 @@ package cluster
 
 import (
 	goctx "context"
+	"fmt"
 	"time"
 
 	. "github.com/onsi/ginkgo/v2"
@@ -22,12 +23,28 @@ import (
 var _ = Describe(
 	"LDAP External Auth test", func() {
 		ctx := goctx.TODO()
+		clusterName := fmt.Sprintf("ldap-auth-%d", GinkgoParallelProcess())
+		clusterNamespacedName := test.GetNamespacedName(
+			clusterName, namespace,
+		)
+
+		AfterEach(
+			func() {
+				aeroCluster := &asdbv1.AerospikeCluster{
+					ObjectMeta: metav1.ObjectMeta{
+						Name:      clusterNamespacedName.Name,
+						Namespace: clusterNamespacedName.Namespace,
+					},
+				}
+
+				Expect(DeleteCluster(k8sClient, ctx, aeroCluster)).ToNot(HaveOccurred())
+				Expect(CleanupPVC(k8sClient, aeroCluster.Namespace, aeroCluster.Name)).ToNot(HaveOccurred())
+			},
+		)
+
 		It(
 			"Validate LDAP user transactions", func() {
 				By("DeployCluster with LDAP auth")
-				clusterNamespacedName := test.GetNamespacedName(
-					"ldap-auth", namespace,
-				)
 				aeroCluster := getAerospikeClusterSpecWithLDAP(clusterNamespacedName)
 				Expect(DeployCluster(k8sClient, ctx, aeroCluster)).ToNot(HaveOccurred())
 
@@ -39,8 +56,6 @@ var _ = Describe(
 
 				By("Validate invalid user")
 				Expect(validateTransactions(aeroCluster, "dne", "dne")).To(HaveOccurred())
-
-				Expect(DeleteCluster(k8sClient, ctx, aeroCluster)).ToNot(HaveOccurred())
 			},
 		)
 	},
