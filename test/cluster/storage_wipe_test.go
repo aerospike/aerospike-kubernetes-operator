@@ -41,7 +41,7 @@ var _ = Describe(
 					},
 				}
 
-				clusterName := "storage-wipe"
+				clusterName := fmt.Sprintf("storage-wipe-%d", GinkgoParallelProcess())
 				clusterNamespacedName := test.GetNamespacedName(
 					clusterName, namespace,
 				)
@@ -55,8 +55,8 @@ var _ = Describe(
 							},
 						}
 
-						Expect(deleteCluster(k8sClient, ctx, aeroCluster)).ToNot(HaveOccurred())
-						Expect(cleanupPVC(k8sClient, aeroCluster.Namespace, aeroCluster.Name)).ToNot(HaveOccurred())
+						Expect(DeleteCluster(k8sClient, ctx, aeroCluster)).ToNot(HaveOccurred())
+						Expect(CleanupPVC(k8sClient, aeroCluster.Namespace, aeroCluster.Name)).ToNot(HaveOccurred())
 					},
 				)
 
@@ -87,15 +87,13 @@ var _ = Describe(
 
 						By("Cleaning up previous pvc")
 
-						err := cleanupPVC(k8sClient, namespace, aeroCluster.Name)
-						Expect(err).ToNot(HaveOccurred())
+						Expect(CleanupPVC(k8sClient, namespace, aeroCluster.Name)).ToNot(HaveOccurred())
 
 						By("Deploying the cluster")
 
-						err = deployCluster(k8sClient, ctx, aeroCluster)
-						Expect(err).ToNot(HaveOccurred())
+						Expect(DeployCluster(k8sClient, ctx, aeroCluster)).ToNot(HaveOccurred())
 
-						aeroCluster, err = getCluster(
+						aeroCluster, err := getCluster(
 							k8sClient, ctx, clusterNamespacedName,
 						)
 						Expect(err).ToNot(HaveOccurred())

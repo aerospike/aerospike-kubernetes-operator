@@ -33,9 +33,9 @@ var _ = Describe(
 				},
 			}
 
-			Expect(deleteCluster(k8sClient, ctx, aeroCluster)).NotTo(HaveOccurred())
+			Expect(DeleteCluster(k8sClient, ctx, aeroCluster)).NotTo(HaveOccurred())
 			Expect(deletePDB(ctx, aeroCluster)).NotTo(HaveOccurred())
-			Expect(cleanupPVC(k8sClient, aeroCluster.Namespace, aeroCluster.Name)).ToNot(HaveOccurred())
+			Expect(CleanupPVC(k8sClient, aeroCluster.Namespace, aeroCluster.Name)).ToNot(HaveOccurred())
 		})
 
 		Context("Valid Operations", func() {
@@ -44,8 +44,7 @@ var _ = Describe(
 					clusterNamespacedName, 2,
 				)
 
-				err := deployCluster(k8sClient, ctx, aeroCluster)
-				Expect(err).ToNot(HaveOccurred())
+				Expect(DeployCluster(k8sClient, ctx, aeroCluster)).ToNot(HaveOccurred())
 				validatePDB(ctx, aeroCluster, defaultMaxUnavailable.IntValue())
 			})
 
@@ -55,8 +54,7 @@ var _ = Describe(
 				)
 
 				aeroCluster.Spec.MaxUnavailable = &maxUnavailable
-				err := deployCluster(k8sClient, ctx, aeroCluster)
-				Expect(err).ToNot(HaveOccurred())
+				Expect(DeployCluster(k8sClient, ctx, aeroCluster)).ToNot(HaveOccurred())
 				validatePDB(ctx, aeroCluster, maxUnavailable.IntValue())
 			})
 
@@ -65,16 +63,14 @@ var _ = Describe(
 					clusterNamespacedName, 2,
 				)
 
-				err := deployCluster(k8sClient, ctx, aeroCluster)
-				Expect(err).ToNot(HaveOccurred())
+				Expect(DeployCluster(k8sClient, ctx, aeroCluster)).ToNot(HaveOccurred())
 				validatePDB(ctx, aeroCluster, defaultMaxUnavailable.IntValue())
 
 				// Update maxUnavailable
 				By("Update maxUnavailable to 0")
 				aeroCluster.Spec.MaxUnavailable = &maxUnavailable
 
-				err = updateCluster(k8sClient, ctx, aeroCluster)
-				Expect(err).ToNot(HaveOccurred())
+				Expect(updateCluster(k8sClient, ctx, aeroCluster)).ToNot(HaveOccurred())
 				validatePDB(ctx, aeroCluster, maxUnavailable.IntValue())
 			})
 
@@ -84,11 +80,10 @@ var _ = Describe(
 				)
 
 				aeroCluster.Spec.DisablePDB = ptr.To(true)
-				err := deployCluster(k8sClient, ctx, aeroCluster)
-				Expect(err).ToNot(HaveOccurred())
+				Expect(DeployCluster(k8sClient, ctx, aeroCluster)).ToNot(HaveOccurred())
 
 				// Validate PDB is not created
-				_, err = getPDB(ctx, aeroCluster)
+				_, err := getPDB(ctx, aeroCluster)
 				Expect(err).To(HaveOccurred())
 				Expect(errors.IsNotFound(err)).To(BeTrue())
 				pkgLog.Info("PDB not created as expected")
@@ -100,16 +95,14 @@ var _ = Describe(
 				)
 
 				By("Create cluster with PDB enabled")
-				err := deployCluster(k8sClient, ctx, aeroCluster)
-				Expect(err).ToNot(HaveOccurred())
+				Expect(DeployCluster(k8sClient, ctx, aeroCluster)).ToNot(HaveOccurred())
 				validatePDB(ctx, aeroCluster, defaultMaxUnavailable.IntValue())
 
 				By("Update disablePDB to true")
 				aeroCluster.Spec.DisablePDB = ptr.To(true)
-				err = updateCluster(k8sClient, ctx, aeroCluster)
-				Expect(err).ToNot(HaveOccurred())
+				Expect(updateCluster(k8sClient, ctx, aeroCluster)).ToNot(HaveOccurred())
 
-				aeroCluster, err = getCluster(k8sClient, ctx, clusterNamespacedName)
+				aeroCluster, err := getCluster(k8sClient, ctx, clusterNamespacedName)
 				Expect(err).ToNot(HaveOccurred())
 				Expect(aeroCluster.Spec.MaxUnavailable).To(BeNil())
 
@@ -164,8 +157,7 @@ var _ = Describe(
 
 				// Create cluster with disabledPDB
 				aeroCluster.Spec.DisablePDB = ptr.To(true)
-				err = deployCluster(k8sClient, ctx, aeroCluster)
-				Expect(err).ToNot(HaveOccurred())
+				Expect(DeployCluster(k8sClient, ctx, aeroCluster)).ToNot(HaveOccurred())
 			})
 		})
 
@@ -179,8 +171,7 @@ var _ = Describe(
 
 				// Cluster size is 2
 				aeroCluster.Spec.MaxUnavailable = &value
-				err := deployCluster(k8sClient, ctx, aeroCluster)
-				Expect(err).To(HaveOccurred())
+				Expect(DeployCluster(k8sClient, ctx, aeroCluster)).To(HaveOccurred())
 			})
 
 			It("Should fail if maxUnavailable is greater than RF", func() {
@@ -192,8 +183,8 @@ var _ = Describe(
 				aeroCluster.Spec.Size = 4
 				value := intstr.FromInt32(2)
 				aeroCluster.Spec.MaxUnavailable = &value
-				err := deployCluster(k8sClient, ctx, aeroCluster)
-				Expect(err).To(HaveOccurred())
+				Expect(DeployCluster(k8sClient, ctx, aeroCluster)).To(HaveOccurred())
+
 			})
 		})
 	})

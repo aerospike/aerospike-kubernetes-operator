@@ -57,29 +57,25 @@ func rollCluster(ctx goCtx.Context, image string) {
 			Aerospike: &asdbv1.AerospikeServerVolumeAttachment{Path: tempTestDir},
 		},
 	)
-	err = deployCluster(k8sClient, ctx, aeroCluster)
-	Expect(err).ToNot(HaveOccurred())
+	Expect(DeployCluster(k8sClient, ctx, aeroCluster)).ToNot(HaveOccurred())
 
 	defer func(
 		k8sClient client.Client, ctx goCtx.Context,
 		aeroCluster *asdbv1.AerospikeCluster,
 	) {
-		Expect(deleteCluster(k8sClient, ctx, aeroCluster)).ToNot(HaveOccurred())
-		Expect(cleanupPVC(k8sClient, aeroCluster.Namespace, aeroCluster.Name)).ToNot(HaveOccurred())
+		Expect(DeleteCluster(k8sClient, ctx, aeroCluster)).ToNot(HaveOccurred())
+		Expect(CleanupPVC(k8sClient, aeroCluster.Namespace, aeroCluster.Name)).ToNot(HaveOccurred())
 	}(k8sClient, ctx, aeroCluster)
 
 	// Create a file in the empty dir as a marker.
 	err = createMarkerFile(ctx, aeroCluster)
 	Expect(err).ToNot(HaveOccurred())
-
 	err = rollingRestartClusterTest(
 		logger, k8sClient, ctx, clusterNamespacedName,
 	)
 	Expect(err).ToNot(HaveOccurred())
-
 	podToMarkerPresent, err := isMarkerPresent(ctx, aeroCluster)
 	Expect(err).ToNot(HaveOccurred())
-
 	pkgLog.Info("Rolling restarted", "Markers", podToMarkerPresent)
 
 	for _, marker := range podToMarkerPresent {

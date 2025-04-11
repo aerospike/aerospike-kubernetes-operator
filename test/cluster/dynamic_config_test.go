@@ -58,8 +58,8 @@ var _ = Describe(
 					},
 				}
 
-				Expect(deleteCluster(k8sClient, ctx, aeroCluster)).ToNot(HaveOccurred())
-				Expect(cleanupPVC(k8sClient, aeroCluster.Namespace, aeroCluster.Name)).ToNot(HaveOccurred())
+				Expect(DeleteCluster(k8sClient, ctx, aeroCluster)).ToNot(HaveOccurred())
+				Expect(CleanupPVC(k8sClient, aeroCluster.Namespace, aeroCluster.Name)).ToNot(HaveOccurred())
 			},
 		)
 
@@ -91,8 +91,7 @@ var _ = Describe(
 							},
 						}
 						aeroCluster.Spec.EnableDynamicConfigUpdate = ptr.To(true)
-						err := deployCluster(k8sClient, ctx, aeroCluster)
-						Expect(err).ToNot(HaveOccurred())
+						Expect(DeployCluster(k8sClient, ctx, aeroCluster)).ToNot(HaveOccurred())
 					},
 				)
 
@@ -325,8 +324,7 @@ var _ = Describe(
 							},
 						}
 						aeroCluster.Spec.EnableDynamicConfigUpdate = ptr.To(true)
-						err := deployCluster(k8sClient, ctx, aeroCluster)
-						Expect(err).ToNot(HaveOccurred())
+						Expect(DeployCluster(k8sClient, ctx, aeroCluster)).ToNot(HaveOccurred())
 					},
 				)
 
@@ -486,8 +484,7 @@ var _ = Describe(
 
 						aeroCluster.Spec.AerospikeAccessControl.Users = append(aeroCluster.Spec.AerospikeAccessControl.Users, admin2)
 
-						err := deployCluster(k8sClient, ctx, aeroCluster)
-						Expect(err).ToNot(HaveOccurred())
+						Expect(DeployCluster(k8sClient, ctx, aeroCluster)).ToNot(HaveOccurred())
 					},
 				)
 
@@ -623,8 +620,7 @@ var _ = Describe(
 						nsList := aeroCluster.Spec.AerospikeConfig.Value["namespaces"].([]interface{})
 						nsList = append(nsList, getSCNamespaceConfig("test1", "/test/dev/xvdf1"))
 						aeroCluster.Spec.AerospikeConfig.Value["namespaces"] = nsList
-						err := deployCluster(k8sClient, ctx, aeroCluster)
-						Expect(err).ToNot(HaveOccurred())
+						Expect(DeployCluster(k8sClient, ctx, aeroCluster)).ToNot(HaveOccurred())
 					},
 				)
 

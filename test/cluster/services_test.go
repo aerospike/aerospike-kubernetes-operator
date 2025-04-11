@@ -39,8 +39,8 @@ var _ = Describe(
 		aeroCluster := &asdbv1.AerospikeCluster{}
 		AfterEach(
 			func() {
-				Expect(deleteCluster(k8sClient, ctx, aeroCluster)).ToNot(HaveOccurred())
-				Expect(cleanupPVC(k8sClient, aeroCluster.Namespace, aeroCluster.Name)).ToNot(HaveOccurred())
+				Expect(DeleteCluster(k8sClient, ctx, aeroCluster)).ToNot(HaveOccurred())
+				Expect(CleanupPVC(k8sClient, aeroCluster.Namespace, aeroCluster.Name)).ToNot(HaveOccurred())
 			},
 		)
 		It(
@@ -53,8 +53,7 @@ var _ = Describe(
 					clusterNamespacedName, 2,
 				)
 				aeroCluster.Spec.SeedsFinderServices.LoadBalancer = createLoadBalancer()
-				err := deployCluster(k8sClient, ctx, aeroCluster)
-				Expect(err).ToNot(HaveOccurred())
+				Expect(DeployCluster(k8sClient, ctx, aeroCluster)).ToNot(HaveOccurred())
 
 				By("Validate")
 				validateLoadBalancerExists(aeroCluster)
@@ -71,14 +70,12 @@ var _ = Describe(
 					clusterNamespacedName, 2,
 				)
 				aeroCluster.Spec.SeedsFinderServices.LoadBalancer = createLoadBalancer()
-				err := deployCluster(k8sClient, ctx, aeroCluster)
-				Expect(err).ToNot(HaveOccurred())
+				Expect(DeployCluster(k8sClient, ctx, aeroCluster)).ToNot(HaveOccurred())
 
 				By("UpdateCluster with LB")
 
 				aeroCluster.Spec.SeedsFinderServices.LoadBalancer.ExternalTrafficPolicy = "Cluster"
-				err = updateCluster(k8sClient, ctx, aeroCluster)
-				Expect(err).ToNot(HaveOccurred())
+				Expect(updateCluster(k8sClient, ctx, aeroCluster)).ToNot(HaveOccurred())
 			},
 		)
 
@@ -92,10 +89,9 @@ var _ = Describe(
 					clusterNamespacedName, 2,
 				)
 				aeroCluster.Spec.SeedsFinderServices.LoadBalancer = nil
-				err := deployCluster(k8sClient, ctx, aeroCluster)
-				Expect(err).ToNot(HaveOccurred())
+				Expect(DeployCluster(k8sClient, ctx, aeroCluster)).ToNot(HaveOccurred())
 				service := &corev1.Service{}
-				err = k8sClient.Get(
+				err := k8sClient.Get(
 					goctx.TODO(), loadBalancerName(aeroCluster), service,
 				)
 				Expect(err).To(HaveOccurred())

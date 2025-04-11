@@ -709,7 +709,7 @@ func getClusterIfExists(
 	return aeroCluster, nil
 }
 
-func deleteCluster(
+func DeleteCluster(
 	k8sClient client.Client, ctx goctx.Context,
 	aeroCluster *asdbv1.AerospikeCluster,
 ) error {
@@ -774,16 +774,7 @@ func deleteCluster(
 	return nil
 }
 
-// DeleteCluster is the public variant of deleteCluster
-// Remove this when deleteCluster will be made public
-func DeleteCluster(
-	k8sClient client.Client, ctx goctx.Context,
-	aeroCluster *asdbv1.AerospikeCluster,
-) error {
-	return deleteCluster(k8sClient, ctx, aeroCluster)
-}
-
-func deployCluster(
+func DeployCluster(
 	k8sClient client.Client, ctx goctx.Context,
 	aeroCluster *asdbv1.AerospikeCluster,
 ) error {
@@ -791,15 +782,6 @@ func deployCluster(
 		k8sClient, ctx, aeroCluster, retryInterval,
 		getTimeout(aeroCluster.Spec.Size),
 	)
-}
-
-// DeployCluster is the public variant of deployCluster
-// Remove this when deployCluster will be made public
-func DeployCluster(
-	k8sClient client.Client, ctx goctx.Context,
-	aeroCluster *asdbv1.AerospikeCluster,
-) error {
-	return deployCluster(k8sClient, ctx, aeroCluster)
 }
 
 func deployClusterWithTO(

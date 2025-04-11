@@ -118,8 +118,7 @@ func negativeDeployNetworkPolicyTest(ctx goctx.Context, multiPodPerHost, enableT
 				func() {
 					aeroCluster := createDummyAerospikeCluster(clusterNamespacedName, 2)
 					aeroCluster.Spec.AerospikeNetworkPolicy.AccessType = asdbv1.AerospikeNetworkTypeCustomInterface
-					err := deployCluster(k8sClient, ctx, aeroCluster)
-					Expect(err).Should(HaveOccurred())
+					Expect(DeployCluster(k8sClient, ctx, aeroCluster)).Should(HaveOccurred())
 				},
 			)
 
@@ -129,8 +128,7 @@ func negativeDeployNetworkPolicyTest(ctx goctx.Context, multiPodPerHost, enableT
 				func() {
 					aeroCluster := createDummyAerospikeCluster(clusterNamespacedName, 2)
 					aeroCluster.Spec.AerospikeNetworkPolicy.AlternateAccessType = asdbv1.AerospikeNetworkTypeCustomInterface
-					err := deployCluster(k8sClient, ctx, aeroCluster)
-					Expect(err).Should(HaveOccurred())
+					Expect(DeployCluster(k8sClient, ctx, aeroCluster)).Should(HaveOccurred())
 				},
 			)
 
@@ -140,8 +138,7 @@ func negativeDeployNetworkPolicyTest(ctx goctx.Context, multiPodPerHost, enableT
 				func() {
 					aeroCluster := createDummyAerospikeCluster(clusterNamespacedName, 2)
 					aeroCluster.Spec.AerospikeNetworkPolicy.TLSAccessType = asdbv1.AerospikeNetworkTypeCustomInterface
-					err := deployCluster(k8sClient, ctx, aeroCluster)
-					Expect(err).Should(HaveOccurred())
+					Expect(DeployCluster(k8sClient, ctx, aeroCluster)).Should(HaveOccurred())
 				},
 			)
 
@@ -151,8 +148,7 @@ func negativeDeployNetworkPolicyTest(ctx goctx.Context, multiPodPerHost, enableT
 				func() {
 					aeroCluster := createDummyAerospikeCluster(clusterNamespacedName, 2)
 					aeroCluster.Spec.AerospikeNetworkPolicy.TLSAlternateAccessType = asdbv1.AerospikeNetworkTypeCustomInterface
-					err := deployCluster(k8sClient, ctx, aeroCluster)
-					Expect(err).Should(HaveOccurred())
+					Expect(DeployCluster(k8sClient, ctx, aeroCluster)).Should(HaveOccurred())
 				},
 			)
 
@@ -162,8 +158,7 @@ func negativeDeployNetworkPolicyTest(ctx goctx.Context, multiPodPerHost, enableT
 				func() {
 					aeroCluster := createDummyAerospikeCluster(clusterNamespacedName, 2)
 					aeroCluster.Spec.AerospikeNetworkPolicy.FabricType = asdbv1.AerospikeNetworkTypeCustomInterface
-					err := deployCluster(k8sClient, ctx, aeroCluster)
-					Expect(err).Should(HaveOccurred())
+					Expect(DeployCluster(k8sClient, ctx, aeroCluster)).Should(HaveOccurred())
 				},
 			)
 
@@ -173,8 +168,7 @@ func negativeDeployNetworkPolicyTest(ctx goctx.Context, multiPodPerHost, enableT
 				func() {
 					aeroCluster := createDummyAerospikeCluster(clusterNamespacedName, 2)
 					aeroCluster.Spec.AerospikeNetworkPolicy.TLSFabricType = asdbv1.AerospikeNetworkTypeCustomInterface
-					err := deployCluster(k8sClient, ctx, aeroCluster)
-					Expect(err).Should(HaveOccurred())
+					Expect(DeployCluster(k8sClient, ctx, aeroCluster)).Should(HaveOccurred())
 				},
 			)
 
@@ -183,8 +177,7 @@ func negativeDeployNetworkPolicyTest(ctx goctx.Context, multiPodPerHost, enableT
 				func() {
 					aeroCluster := createDummyAerospikeCluster(clusterNamespacedName, 2)
 					aeroCluster.Spec.AerospikeNetworkPolicy.FabricType = "invalid-enum"
-					err := deployCluster(k8sClient, ctx, aeroCluster)
-					Expect(err).Should(HaveOccurred())
+					Expect(DeployCluster(k8sClient, ctx, aeroCluster)).Should(HaveOccurred())
 				},
 			)
 
@@ -202,8 +195,7 @@ func negativeDeployNetworkPolicyTest(ctx goctx.Context, multiPodPerHost, enableT
 					aeroCluster.Spec.PodSpec.AerospikeObjectMeta.Annotations = map[string]string{
 						networkAnnotationKey: "ipvlan-conf-2, ipvlan-conf-3",
 					}
-					err := deployCluster(k8sClient, ctx, aeroCluster)
-					Expect(err).Should(HaveOccurred())
+					Expect(DeployCluster(k8sClient, ctx, aeroCluster)).Should(HaveOccurred())
 				},
 			)
 
@@ -218,8 +210,7 @@ func negativeDeployNetworkPolicyTest(ctx goctx.Context, multiPodPerHost, enableT
 						networkAnnotationKey: networkOne,
 					}
 					aeroCluster.Spec.PodSpec.HostNetwork = true
-					err := deployCluster(k8sClient, ctx, aeroCluster)
-					Expect(err).Should(HaveOccurred())
+					Expect(DeployCluster(k8sClient, ctx, aeroCluster)).Should(HaveOccurred())
 				},
 			)
 
@@ -235,8 +226,7 @@ func negativeDeployNetworkPolicyTest(ctx goctx.Context, multiPodPerHost, enableT
 					aeroCluster.Spec.PodSpec.AerospikeObjectMeta.Annotations = map[string]string{
 						networkAnnotationKey: networkOne,
 					}
-					err := deployCluster(k8sClient, ctx, aeroCluster)
-					Expect(err).Should(HaveOccurred())
+					Expect(DeployCluster(k8sClient, ctx, aeroCluster)).Should(HaveOccurred())
 				},
 			)
 
@@ -252,11 +242,8 @@ func negativeDeployNetworkPolicyTest(ctx goctx.Context, multiPodPerHost, enableT
 					}
 
 					// cluster will crash as there will be no network status annotations
-					err := deployClusterWithTO(k8sClient, ctx, aeroCluster, retryInterval, shortRetry)
-					Expect(err).Should(HaveOccurred())
-
-					err = deleteCluster(k8sClient, ctx, aeroCluster)
-					Expect(err).ToNot(HaveOccurred())
+					Expect(deployClusterWithTO(k8sClient, ctx, aeroCluster, retryInterval, shortRetry)).Should(HaveOccurred())
+					Expect(DeleteCluster(k8sClient, ctx, aeroCluster)).ToNot(HaveOccurred())
 				},
 			)
 
@@ -267,8 +254,7 @@ func negativeDeployNetworkPolicyTest(ctx goctx.Context, multiPodPerHost, enableT
 					aeroCluster := createDummyAerospikeCluster(clusterNamespacedName, 2)
 					aeroCluster.Spec.AerospikeNetworkPolicy.AccessType = asdbv1.AerospikeNetworkTypeCustomInterface
 					aeroCluster.Spec.AerospikeNetworkPolicy.CustomAccessNetworkNames = []string{}
-					err := deployCluster(k8sClient, ctx, aeroCluster)
-					Expect(err).Should(HaveOccurred())
+					Expect(DeployCluster(k8sClient, ctx, aeroCluster)).Should(HaveOccurred())
 				},
 			)
 		},
@@ -295,8 +281,8 @@ func negativeDeployNetworkPolicyTest(ctx goctx.Context, multiPodPerHost, enableT
 						},
 					}
 
-					Expect(deleteCluster(k8sClient, ctx, aeroCluster)).ToNot(HaveOccurred())
-					Expect(cleanupPVC(k8sClient, aeroCluster.Namespace, aeroCluster.Name)).ToNot(HaveOccurred())
+					Expect(DeleteCluster(k8sClient, ctx, aeroCluster)).ToNot(HaveOccurred())
+					Expect(CleanupPVC(k8sClient, aeroCluster.Namespace, aeroCluster.Name)).ToNot(HaveOccurred())
 				},
 			)
 
@@ -372,8 +358,7 @@ func negativeUpdateNetworkPolicyTest(ctx goctx.Context) {
 						clusterNamespacedName, 3,
 					)
 
-					err := deployCluster(k8sClient, ctx, aeroCluster)
-					Expect(err).ToNot(HaveOccurred())
+					Expect(DeployCluster(k8sClient, ctx, aeroCluster)).ToNot(HaveOccurred())
 				},
 			)
 
@@ -386,8 +371,8 @@ func negativeUpdateNetworkPolicyTest(ctx goctx.Context) {
 						},
 					}
 
-					Expect(deleteCluster(k8sClient, ctx, aeroCluster)).ToNot(HaveOccurred())
-					Expect(cleanupPVC(k8sClient, aeroCluster.Namespace, aeroCluster.Name)).ToNot(HaveOccurred())
+					Expect(DeleteCluster(k8sClient, ctx, aeroCluster)).ToNot(HaveOccurred())
+					Expect(CleanupPVC(k8sClient, aeroCluster.Namespace, aeroCluster.Name)).ToNot(HaveOccurred())
 				},
 			)
 
@@ -578,8 +563,7 @@ func negativeUpdateNetworkPolicyTest(ctx goctx.Context) {
 
 			AfterEach(
 				func() {
-					err := deleteCluster(k8sClient, ctx, aeroCluster)
-					Expect(err).ToNot(HaveOccurred())
+					Expect(DeleteCluster(k8sClient, ctx, aeroCluster)).ToNot(HaveOccurred())
 				},
 			)
 
@@ -599,8 +583,7 @@ func negativeUpdateNetworkPolicyTest(ctx goctx.Context) {
 
 					By("Creating cluster with custom fabric interface")
 
-					err := deployCluster(k8sClient, ctx, aeroCluster)
-					Expect(err).ToNot(HaveOccurred())
+					Expect(DeployCluster(k8sClient, ctx, aeroCluster)).ToNot(HaveOccurred())
 
 					By("Updating custom fabric interface network list")
 
@@ -610,8 +593,7 @@ func negativeUpdateNetworkPolicyTest(ctx goctx.Context) {
 						networkStatusAnnotationKey: fabricNetStatusTwo,
 					}
 
-					err = updateCluster(k8sClient, ctx, aeroCluster)
-					Expect(err).Should(HaveOccurred())
+					Expect(updateCluster(k8sClient, ctx, aeroCluster)).Should(HaveOccurred())
 				},
 			)
 
@@ -631,8 +613,7 @@ func negativeUpdateNetworkPolicyTest(ctx goctx.Context) {
 
 					By("Creating cluster with custom tlsfabric interface")
 
-					err := deployCluster(k8sClient, ctx, aeroCluster)
-					Expect(err).ToNot(HaveOccurred())
+					Expect(DeployCluster(k8sClient, ctx, aeroCluster)).ToNot(HaveOccurred())
 
 					By("Updating custom tlsFabric interface network list")
 
@@ -642,8 +623,7 @@ func negativeUpdateNetworkPolicyTest(ctx goctx.Context) {
 						networkStatusAnnotationKey: fabricNetStatusTwo,
 					}
 
-					err = updateCluster(k8sClient, ctx, aeroCluster)
-					Expect(err).Should(HaveOccurred())
+					Expect(updateCluster(k8sClient, ctx, aeroCluster)).Should(HaveOccurred())
 				},
 			)
 		})
@@ -656,8 +636,7 @@ func doTestNetworkPolicy(
 	var aeroCluster *asdbv1.AerospikeCluster
 
 	AfterEach(func() {
-		err := deleteCluster(k8sClient, ctx, aeroCluster)
-		Expect(err).ToNot(HaveOccurred())
+		Expect(DeleteCluster(k8sClient, ctx, aeroCluster)).ToNot(HaveOccurred())
 	})
 
 	It(

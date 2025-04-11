@@ -69,8 +69,7 @@ var _ = Describe(
 
 						aeroCluster.Spec.PodSpec.MultiPodPerHost = ptr.To(false)
 						randomizeServicePorts(aeroCluster, false, GinkgoParallelProcess())
-						err = deployCluster(k8sClient, ctx, aeroCluster)
-						Expect(err).ToNot(HaveOccurred())
+						Expect(DeployCluster(k8sClient, ctx, aeroCluster)).ToNot(HaveOccurred())
 
 						podName = clusterName + "-2-0"
 						pod := &corev1.Pod{}
@@ -91,8 +90,8 @@ var _ = Describe(
 							},
 						}
 
-						Expect(deleteCluster(k8sClient, ctx, aeroCluster)).ToNot(HaveOccurred())
-						Expect(cleanupPVC(k8sClient, aeroCluster.Namespace, aeroCluster.Name)).ToNot(HaveOccurred())
+						Expect(DeleteCluster(k8sClient, ctx, aeroCluster)).ToNot(HaveOccurred())
+						Expect(CleanupPVC(k8sClient, aeroCluster.Namespace, aeroCluster.Name)).ToNot(HaveOccurred())
 					},
 				)
 

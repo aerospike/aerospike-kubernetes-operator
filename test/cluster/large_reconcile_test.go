@@ -46,8 +46,8 @@ var _ = Describe(
 
 				AfterEach(
 					func() {
-						Expect(deleteCluster(k8sClient, ctx, aeroCluster)).ToNot(HaveOccurred())
-						Expect(cleanupPVC(k8sClient, aeroCluster.Namespace, aeroCluster.Name)).ToNot(HaveOccurred())
+						Expect(DeleteCluster(k8sClient, ctx, aeroCluster)).ToNot(HaveOccurred())
+						Expect(CleanupPVC(k8sClient, aeroCluster.Namespace, aeroCluster.Name)).ToNot(HaveOccurred())
 					},
 				)
 
@@ -56,10 +56,9 @@ var _ = Describe(
 
 						By("Deploy and load data")
 
-						err := deployCluster(k8sClient, ctx, aeroCluster)
-						Expect(err).ToNot(HaveOccurred())
+						Expect(DeployCluster(k8sClient, ctx, aeroCluster)).ToNot(HaveOccurred())
 
-						aeroCluster, err = getCluster(
+						aeroCluster, err := getCluster(
 							k8sClient, ctx, clusterNamespacedName,
 						)
 						Expect(err).ToNot(HaveOccurred())
@@ -72,7 +71,7 @@ var _ = Describe(
 						// Create a 5 node cluster
 						// Add some data to make migration time taking
 						// Change size to 2
-						aeroCluster, err := getCluster(
+						aeroCluster, err = getCluster(
 							k8sClient, ctx, clusterNamespacedName,
 						)
 						Expect(err).ToNot(HaveOccurred())

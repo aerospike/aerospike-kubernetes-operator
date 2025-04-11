@@ -39,8 +39,8 @@ var _ = Describe(
 							},
 						}
 
-						Expect(deleteCluster(k8sClient, ctx, aeroCluster)).ToNot(HaveOccurred())
-						Expect(cleanupPVC(k8sClient, aeroCluster.Namespace, aeroCluster.Name)).ToNot(HaveOccurred())
+						Expect(DeleteCluster(k8sClient, ctx, aeroCluster)).ToNot(HaveOccurred())
+						Expect(CleanupPVC(k8sClient, aeroCluster.Namespace, aeroCluster.Name)).ToNot(HaveOccurred())
 					},
 				)
 
@@ -51,8 +51,7 @@ var _ = Describe(
 						)
 
 						By("DeployClusterWithoutResource")
-						err := deployCluster(k8sClient, ctx, aeroCluster)
-						Expect(err).ToNot(HaveOccurred())
+						Expect(DeployCluster(k8sClient, ctx, aeroCluster)).ToNot(HaveOccurred())
 
 						By("Testing aerospike-server resource")
 						validUpdateResourceTest(k8sClient, ctx, clusterNamespacedName, true)
@@ -118,10 +117,7 @@ func invalidResourceTest(ctx goctx.Context, checkAeroServer bool) {
 					aeroCluster.Spec.PodSpec.AerospikeInitContainerSpec.Resources = resources
 				}
 
-				err := deployCluster(
-					k8sClient, ctx, aeroCluster,
-				)
-				Expect(err).Should(HaveOccurred())
+				Expect(DeployCluster(k8sClient, ctx, aeroCluster)).Should(HaveOccurred())
 			})
 		},
 	)
@@ -145,17 +141,14 @@ func invalidResourceTest(ctx goctx.Context, checkAeroServer bool) {
 
 			AfterEach(
 				func() {
-					Expect(deleteCluster(k8sClient, ctx, aeroCluster)).ToNot(HaveOccurred())
-					Expect(cleanupPVC(k8sClient, aeroCluster.Namespace, aeroCluster.Name)).ToNot(HaveOccurred())
+					Expect(DeleteCluster(k8sClient, ctx, aeroCluster)).ToNot(HaveOccurred())
+					Expect(CleanupPVC(k8sClient, aeroCluster.Namespace, aeroCluster.Name)).ToNot(HaveOccurred())
 				},
 			)
 
 			It("UpdateClusterWithResource: should fail for request exceeding limit", func() {
 				// setup cluster to update resource
-				err := deployCluster(
-					k8sClient, ctx, aeroCluster,
-				)
-				Expect(err).ToNot(HaveOccurred())
+				Expect(DeployCluster(k8sClient, ctx, aeroCluster)).ToNot(HaveOccurred())
 
 				// It should be greater than given in cluster namespace
 				resourceMem := resource.MustParse("3Gi")
@@ -180,8 +173,7 @@ func invalidResourceTest(ctx goctx.Context, checkAeroServer bool) {
 					aeroCluster.Spec.PodSpec.AerospikeInitContainerSpec.Resources = resources
 				}
 
-				err = updateCluster(k8sClient, ctx, aeroCluster)
-				Expect(err).Should(HaveOccurred())
+				Expect(updateCluster(k8sClient, ctx, aeroCluster)).Should(HaveOccurred())
 			})
 		},
 	)

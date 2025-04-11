@@ -36,8 +36,8 @@ var _ = Describe(
 							},
 						}
 
-						Expect(deleteCluster(k8sClient, ctx, aeroCluster)).ToNot(HaveOccurred())
-						Expect(cleanupPVC(k8sClient, aeroCluster.Namespace, aeroCluster.Name)).ToNot(HaveOccurred())
+						Expect(DeleteCluster(k8sClient, ctx, aeroCluster)).ToNot(HaveOccurred())
+						Expect(CleanupPVC(k8sClient, aeroCluster.Namespace, aeroCluster.Name)).ToNot(HaveOccurred())
 					},
 				)
 
@@ -49,8 +49,7 @@ var _ = Describe(
 						aeroCluster.Spec.PodSpec.HostNetwork = true
 						aeroCluster.Spec.PodSpec.MultiPodPerHost = ptr.To(true)
 
-						err := deployCluster(k8sClient, ctx, aeroCluster)
-						Expect(err).To(HaveOccurred())
+						Expect(DeployCluster(k8sClient, ctx, aeroCluster)).To(HaveOccurred())
 					},
 				)
 
@@ -65,22 +64,19 @@ var _ = Describe(
 						aeroCluster.Spec.PodSpec.HostNetwork = false
 						randomizeServicePorts(aeroCluster, true, GinkgoParallelProcess())
 
-						err := deployCluster(k8sClient, ctx, aeroCluster)
-						Expect(err).ToNot(HaveOccurred())
+						Expect(DeployCluster(k8sClient, ctx, aeroCluster)).ToNot(HaveOccurred())
 						checkAdvertisedAddress(ctx, aeroCluster, false)
 
 						By("Updating cluster, Should advertise node address when dynamically enabled")
 
 						aeroCluster.Spec.PodSpec.HostNetwork = true
-						err = updateCluster(k8sClient, ctx, aeroCluster)
-						Expect(err).ToNot(HaveOccurred())
+						Expect(updateCluster(k8sClient, ctx, aeroCluster)).ToNot(HaveOccurred())
 						checkAdvertisedAddress(ctx, aeroCluster, true)
 
 						By("Updating cluster, Should not advertise node address when dynamically disabled")
 
 						aeroCluster.Spec.PodSpec.HostNetwork = false
-						err = updateCluster(k8sClient, ctx, aeroCluster)
-						Expect(err).ToNot(HaveOccurred())
+						Expect(updateCluster(k8sClient, ctx, aeroCluster)).ToNot(HaveOccurred())
 						checkAdvertisedAddress(ctx, aeroCluster, false)
 					},
 				)

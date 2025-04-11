@@ -95,6 +95,7 @@ var _ = AfterSuite(
 		}
 
 		Expect(cluster.DeleteCluster(k8sClient, testCtx, &aeroCluster)).ToNot(HaveOccurred())
+		Expect(cluster.CleanupPVC(k8sClient, aeroCluster.Namespace, aeroCluster.Name)).ToNot(HaveOccurred())
 
 		By("Delete Backup Service")
 		backupService := asdbv1beta1.AerospikeBackupService{

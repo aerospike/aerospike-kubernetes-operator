@@ -73,8 +73,8 @@ var _ = Describe(
 							},
 						}
 
-						Expect(deleteCluster(k8sClient, ctx, aeroCluster)).ToNot(HaveOccurred())
-						Expect(cleanupPVC(k8sClient, aeroCluster.Namespace, aeroCluster.Name)).ToNot(HaveOccurred())
+						Expect(DeleteCluster(k8sClient, ctx, aeroCluster)).ToNot(HaveOccurred())
+						Expect(CleanupPVC(k8sClient, aeroCluster.Namespace, aeroCluster.Name)).ToNot(HaveOccurred())
 					},
 				)
 
@@ -157,10 +157,9 @@ var _ = Describe(
 
 						By("Deploying the cluster")
 
-						err := deployCluster(k8sClient, ctx, aeroCluster)
-						Expect(err).ToNot(HaveOccurred())
+						Expect(DeployCluster(k8sClient, ctx, aeroCluster)).ToNot(HaveOccurred())
 
-						aeroCluster, err = getCluster(
+						aeroCluster, err := getCluster(
 							k8sClient, ctx, clusterNamespacedName,
 						)
 						Expect(err).ToNot(HaveOccurred())
@@ -198,10 +197,9 @@ var _ = Describe(
 
 						By("Deploying the cluster")
 
-						err := deployCluster(k8sClient, ctx, aeroCluster)
-						Expect(err).ToNot(HaveOccurred())
+						Expect(DeployCluster(k8sClient, ctx, aeroCluster)).ToNot(HaveOccurred())
 
-						err = checkData(
+						err := checkData(
 							aeroCluster, false, false, map[string]struct{}{},
 						)
 						Expect(err).ToNot(HaveOccurred())
@@ -229,8 +227,7 @@ var _ = Describe(
 						Expect(err).ToNot(HaveOccurred())
 
 						By("Deleting the cluster but retaining the test volumes")
-						err = deleteCluster(k8sClient, ctx, aeroCluster)
-						Expect(err).ToNot(HaveOccurred())
+						Expect(DeleteCluster(k8sClient, ctx, aeroCluster)).ToNot(HaveOccurred())
 
 						By("Recreating. Older volumes will still be around and reused")
 						aeroCluster = getStorageInitAerospikeCluster(
@@ -257,8 +254,7 @@ var _ = Describe(
 						)
 						Expect(err).ToNot(HaveOccurred())
 
-						err = deleteCluster(k8sClient, ctx, aeroCluster)
-						Expect(err).ToNot(HaveOccurred())
+						Expect(DeleteCluster(k8sClient, ctx, aeroCluster)).ToNot(HaveOccurred())
 
 						pvcs, err := getAeroClusterPVCList(
 							aeroCluster, k8sClient,
@@ -290,8 +286,7 @@ var _ = Describe(
 
 						By("Deploying the cluster")
 
-						err := deployCluster(k8sClient, ctx, aeroCluster)
-						Expect(err).ToNot(HaveOccurred())
+						Expect(DeployCluster(k8sClient, ctx, aeroCluster)).ToNot(HaveOccurred())
 					},
 				)
 			},
@@ -326,8 +321,7 @@ var _ = Describe(
 
 						By("Deploying the cluster")
 
-						err := deployCluster(k8sClient, ctx, aeroCluster)
-						Expect(err).Should(HaveOccurred())
+						Expect(DeployCluster(k8sClient, ctx, aeroCluster)).Should(HaveOccurred())
 					},
 				)
 			},
@@ -360,8 +354,7 @@ var _ = Describe(
 						aeroCluster.Labels = make(map[string]string)
 						aeroCluster.Labels["checkLabel"] = "true"
 
-						err := deployCluster(k8sClient, ctx, aeroCluster)
-						Expect(err).ToNot(HaveOccurred())
+						Expect(DeployCluster(k8sClient, ctx, aeroCluster)).ToNot(HaveOccurred())
 					},
 				)
 
@@ -374,8 +367,8 @@ var _ = Describe(
 							},
 						}
 
-						Expect(deleteCluster(k8sClient, ctx, aeroCluster)).ToNot(HaveOccurred())
-						Expect(cleanupPVC(k8sClient, aeroCluster.Namespace, aeroCluster.Name)).ToNot(HaveOccurred())
+						Expect(DeleteCluster(k8sClient, ctx, aeroCluster)).ToNot(HaveOccurred())
+						Expect(CleanupPVC(k8sClient, aeroCluster.Namespace, aeroCluster.Name)).ToNot(HaveOccurred())
 					},
 				)
 

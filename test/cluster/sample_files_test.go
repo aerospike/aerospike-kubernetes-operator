@@ -27,7 +27,7 @@ var _ = Describe("Sample files validation", func() {
 	)
 
 	AfterEach(func() {
-		Expect(deleteCluster(k8sClient, ctx, aeroCluster)).NotTo(HaveOccurred())
+		Expect(DeleteCluster(k8sClient, ctx, aeroCluster)).NotTo(HaveOccurred())
 	})
 
 	DescribeTable("Sample files validation",
@@ -50,7 +50,7 @@ var _ = Describe("Sample files validation", func() {
 			Expect(err).NotTo(HaveOccurred())
 
 			defer func() {
-				Expect(deleteCluster(k8sClient, ctx, destCluster)).NotTo(HaveOccurred())
+				Expect(DeleteCluster(k8sClient, ctx, destCluster)).NotTo(HaveOccurred())
 			}()
 
 			By("Creating XDR source cluster")

@@ -61,8 +61,8 @@ var _ = Describe(
 						},
 					}
 
-					Expect(deleteCluster(k8sClient, ctx, aeroCluster)).ToNot(HaveOccurred())
-					Expect(cleanupPVC(k8sClient, aeroCluster.Namespace, aeroCluster.Name)).ToNot(HaveOccurred())
+					Expect(DeleteCluster(k8sClient, ctx, aeroCluster)).ToNot(HaveOccurred())
+					Expect(CleanupPVC(k8sClient, aeroCluster.Namespace, aeroCluster.Name)).ToNot(HaveOccurred())
 				})
 
 				Context(
@@ -78,10 +78,7 @@ var _ = Describe(
 									aeroCluster.Spec.Storage.Volumes[0],
 								)
 
-								err := deployCluster(
-									k8sClient, ctx, aeroCluster,
-								)
-								Expect(err).Should(HaveOccurred())
+								Expect(DeployCluster(k8sClient, ctx, aeroCluster)).Should(HaveOccurred())
 							},
 						)
 					},
@@ -99,10 +96,7 @@ var _ = Describe(
 									SecretName: "secret",
 								}
 
-								err := deployCluster(
-									k8sClient, ctx, aeroCluster,
-								)
-								Expect(err).Should(HaveOccurred())
+								Expect(DeployCluster(k8sClient, ctx, aeroCluster)).Should(HaveOccurred())
 							},
 						)
 
@@ -114,10 +108,7 @@ var _ = Describe(
 
 								aeroCluster.Spec.Storage.Volumes[0].Source = asdbv1.VolumeSource{}
 
-								err := deployCluster(
-									k8sClient, ctx, aeroCluster,
-								)
-								Expect(err).Should(HaveOccurred())
+								Expect(DeployCluster(k8sClient, ctx, aeroCluster)).Should(HaveOccurred())
 							},
 						)
 
@@ -131,10 +122,7 @@ var _ = Describe(
 								volumeMode := v1.PersistentVolumeMode("invalid")
 								aeroCluster.Spec.Storage.Volumes[0].Source.PersistentVolume.VolumeMode = volumeMode
 
-								err := deployCluster(
-									k8sClient, ctx, aeroCluster,
-								)
-								Expect(err).Should(HaveOccurred())
+								Expect(DeployCluster(k8sClient, ctx, aeroCluster)).Should(HaveOccurred())
 							},
 						)
 
@@ -149,10 +137,7 @@ var _ = Describe(
 								aeroCluster.Spec.Storage.Volumes[0].Source.PersistentVolume.AccessModes =
 									[]v1.PersistentVolumeAccessMode{accessMode}
 
-								err := deployCluster(
-									k8sClient, ctx, aeroCluster,
-								)
-								Expect(err).Should(HaveOccurred())
+								Expect(DeployCluster(k8sClient, ctx, aeroCluster)).Should(HaveOccurred())
 							},
 						)
 
@@ -174,10 +159,7 @@ var _ = Describe(
 										aeroCluster.Spec.Storage.Volumes[i].Source.PersistentVolume.Annotations = annotations
 									}
 								}
-								err := deployCluster(
-									k8sClient, ctx, aeroCluster,
-								)
-								Expect(err).ShouldNot(HaveOccurred())
+								Expect(DeployCluster(k8sClient, ctx, aeroCluster)).ShouldNot(HaveOccurred())
 
 								pvcs, err := getAeroClusterPVCList(
 									aeroCluster, k8sClient,
@@ -217,10 +199,7 @@ var _ = Describe(
 									},
 								}
 
-								err := deployCluster(
-									k8sClient, ctx, aeroCluster,
-								)
-								Expect(err).Should(HaveOccurred())
+								Expect(DeployCluster(k8sClient, ctx, aeroCluster)).Should(HaveOccurred())
 							},
 						)
 
@@ -235,10 +214,7 @@ var _ = Describe(
 								aeroCluster.Spec.Storage.Volumes[0].InitContainers = []asdbv1.VolumeAttachment{}
 								aeroCluster.Spec.Storage.Volumes[0].Aerospike = nil
 
-								err := deployCluster(
-									k8sClient, ctx, aeroCluster,
-								)
-								Expect(err).Should(HaveOccurred())
+								Expect(DeployCluster(k8sClient, ctx, aeroCluster)).Should(HaveOccurred())
 							},
 						)
 
@@ -267,10 +243,7 @@ var _ = Describe(
 									},
 								}
 
-								err := deployCluster(
-									k8sClient, ctx, aeroCluster,
-								)
-								Expect(err).Should(HaveOccurred())
+								Expect(DeployCluster(k8sClient, ctx, aeroCluster)).Should(HaveOccurred())
 							},
 						)
 
@@ -300,10 +273,7 @@ var _ = Describe(
 										Path:          "/opt/aerospike",
 									},
 								}
-								err := deployCluster(
-									k8sClient, ctx, aeroCluster,
-								)
-								Expect(err).Should(HaveOccurred())
+								Expect(DeployCluster(k8sClient, ctx, aeroCluster)).Should(HaveOccurred())
 							},
 						)
 
@@ -320,10 +290,7 @@ var _ = Describe(
 									},
 								}
 
-								err := deployCluster(
-									k8sClient, ctx, aeroCluster,
-								)
-								Expect(err).Should(HaveOccurred())
+								Expect(DeployCluster(k8sClient, ctx, aeroCluster)).Should(HaveOccurred())
 							},
 						)
 
@@ -340,10 +307,7 @@ var _ = Describe(
 									},
 								}
 
-								err := deployCluster(
-									k8sClient, ctx, aeroCluster,
-								)
-								Expect(err).Should(HaveOccurred())
+								Expect(DeployCluster(k8sClient, ctx, aeroCluster)).Should(HaveOccurred())
 							},
 						)
 					},
@@ -356,10 +320,7 @@ var _ = Describe(
 									clusterNamespacedName, "/opt/aerospike", "",
 								)
 
-								err := deployCluster(
-									k8sClient, ctx, aeroCluster,
-								)
-								Expect(err).ShouldNot(HaveOccurred())
+								Expect(DeployCluster(k8sClient, ctx, aeroCluster)).ShouldNot(HaveOccurred())
 							},
 						)
 						It(
@@ -368,10 +329,7 @@ var _ = Describe(
 									clusterNamespacedName, "/opt/aerospike/data", "/opt/aerospike/data",
 								)
 
-								err := deployCluster(
-									k8sClient, ctx, aeroCluster,
-								)
-								Expect(err).ShouldNot(HaveOccurred())
+								Expect(DeployCluster(k8sClient, ctx, aeroCluster)).ShouldNot(HaveOccurred())
 							},
 						)
 						It(
@@ -380,10 +338,7 @@ var _ = Describe(
 									clusterNamespacedName, "", "",
 								)
 
-								err := deployCluster(
-									k8sClient, ctx, aeroCluster,
-								)
-								Expect(err).ShouldNot(HaveOccurred())
+								Expect(DeployCluster(k8sClient, ctx, aeroCluster)).ShouldNot(HaveOccurred())
 							},
 						)
 						It(
@@ -392,10 +347,7 @@ var _ = Describe(
 									clusterNamespacedName, "", "/opt/aerospike",
 								)
 
-								err := deployCluster(
-									k8sClient, ctx, aeroCluster,
-								)
-								Expect(err).Should(HaveOccurred())
+								Expect(DeployCluster(k8sClient, ctx, aeroCluster)).Should(HaveOccurred())
 							},
 						)
 					},
@@ -415,8 +367,7 @@ var _ = Describe(
 						aeroCluster := createDummyAerospikeCluster(
 							clusterNamespacedName, 2,
 						)
-						err := deployCluster(k8sClient, ctx, aeroCluster)
-						Expect(err).ToNot(HaveOccurred())
+						Expect(DeployCluster(k8sClient, ctx, aeroCluster)).ToNot(HaveOccurred())
 					},
 				)
 
@@ -429,8 +380,8 @@ var _ = Describe(
 							},
 						}
 
-						Expect(deleteCluster(k8sClient, ctx, aeroCluster)).ToNot(HaveOccurred())
-						Expect(cleanupPVC(k8sClient, aeroCluster.Namespace, aeroCluster.Name)).ToNot(HaveOccurred())
+						Expect(DeleteCluster(k8sClient, ctx, aeroCluster)).ToNot(HaveOccurred())
+						Expect(CleanupPVC(k8sClient, aeroCluster.Namespace, aeroCluster.Name)).ToNot(HaveOccurred())
 					},
 				)
 

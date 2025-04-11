@@ -5,7 +5,7 @@ metadata:
   namespace: aerospike
 
 spec:
-  size: 6
+  size: 2
   image: aerospike/aerospike-server-enterprise:8.0.0.2
 
   storage:
@@ -39,7 +39,7 @@ spec:
           path: /etc/aerospike/secret
 
   podSpec:
-    multiPodPerHost: false
+    multiPodPerHost: true
 
   aerospikeAccessControl:
     users:

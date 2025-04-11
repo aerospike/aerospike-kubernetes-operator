@@ -42,8 +42,7 @@ var _ = Describe(
 						racks := getDummyRackConf(1, 2)
 						aeroCluster.Spec.RackConfig = asdbv1.RackConfig{Racks: racks}
 
-						err := deployCluster(k8sClient, ctx, aeroCluster)
-						Expect(err).ToNot(HaveOccurred())
+						Expect(DeployCluster(k8sClient, ctx, aeroCluster)).ToNot(HaveOccurred())
 					},
 				)
 
@@ -210,8 +209,8 @@ var _ = Describe(
 						}
 
 						// cleanup cluster
-						Expect(deleteCluster(k8sClient, ctx, aeroCluster)).ToNot(HaveOccurred())
-						Expect(cleanupPVC(k8sClient, aeroCluster.Namespace, aeroCluster.Name)).ToNot(HaveOccurred())
+						Expect(DeleteCluster(k8sClient, ctx, aeroCluster)).ToNot(HaveOccurred())
+						Expect(CleanupPVC(k8sClient, aeroCluster.Namespace, aeroCluster.Name)).ToNot(HaveOccurred())
 					},
 				)
 			},
@@ -300,8 +299,7 @@ var _ = Describe(
 						)
 						aeroCluster.Spec.RackConfig = asdbv1.RackConfig{Racks: racks}
 
-						err := deployCluster(k8sClient, ctx, aeroCluster)
-						Expect(err).ToNot(HaveOccurred())
+						Expect(DeployCluster(k8sClient, ctx, aeroCluster)).ToNot(HaveOccurred())
 					},
 				)
 
@@ -389,8 +387,8 @@ var _ = Describe(
 							},
 						}
 
-						Expect(deleteCluster(k8sClient, ctx, aeroCluster)).ToNot(HaveOccurred())
-						Expect(cleanupPVC(k8sClient, aeroCluster.Namespace, aeroCluster.Name)).ToNot(HaveOccurred())
+						Expect(DeleteCluster(k8sClient, ctx, aeroCluster)).ToNot(HaveOccurred())
+						Expect(CleanupPVC(k8sClient, aeroCluster.Namespace, aeroCluster.Name)).ToNot(HaveOccurred())
 					},
 				)
 			},
@@ -415,8 +413,8 @@ var _ = Describe(
 							},
 						}
 
-						Expect(deleteCluster(k8sClient, ctx, aeroCluster)).ToNot(HaveOccurred())
-						Expect(cleanupPVC(k8sClient, aeroCluster.Namespace, aeroCluster.Name)).ToNot(HaveOccurred())
+						Expect(DeleteCluster(k8sClient, ctx, aeroCluster)).ToNot(HaveOccurred())
+						Expect(CleanupPVC(k8sClient, aeroCluster.Namespace, aeroCluster.Name)).ToNot(HaveOccurred())
 					},
 				)
 
@@ -525,13 +523,10 @@ var _ = Describe(
 								racks := getDummyRackConf(1)
 								aeroCluster.Spec.RackConfig = asdbv1.RackConfig{Racks: racks}
 
-								err := deployCluster(
-									k8sClient, ctx, aeroCluster,
-								)
-								Expect(err).ToNot(HaveOccurred())
+								Expect(DeployCluster(k8sClient, ctx, aeroCluster)).ToNot(HaveOccurred())
 
 								// Update storage
-								aeroCluster, err = getCluster(
+								aeroCluster, err := getCluster(
 									k8sClient, ctx, clusterNamespacedName,
 								)
 								Expect(err).ToNot(HaveOccurred())
@@ -596,13 +591,10 @@ var _ = Describe(
 								racks[0].InputStorage = getStorage(volumes)
 								aeroCluster.Spec.RackConfig = asdbv1.RackConfig{Racks: racks}
 
-								err := deployCluster(
-									k8sClient, ctx, aeroCluster,
-								)
-								Expect(err).ToNot(HaveOccurred())
+								Expect(DeployCluster(k8sClient, ctx, aeroCluster)).ToNot(HaveOccurred())
 
 								// Update storage
-								aeroCluster, err = getCluster(
+								aeroCluster, err := getCluster(
 									k8sClient, ctx, clusterNamespacedName,
 								)
 								Expect(err).ToNot(HaveOccurred())
@@ -649,13 +641,10 @@ var _ = Describe(
 								aeroCluster.Spec.RackConfig = asdbv1.RackConfig{Racks: racks}
 
 								// Deploy cluster
-								err := deployCluster(
-									k8sClient, ctx, aeroCluster,
-								)
-								Expect(err).ToNot(HaveOccurred())
+								Expect(DeployCluster(k8sClient, ctx, aeroCluster)).ToNot(HaveOccurred())
 
 								// Update storage
-								aeroCluster, err = getCluster(
+								aeroCluster, err := getCluster(
 									k8sClient, ctx, clusterNamespacedName,
 								)
 								Expect(err).ToNot(HaveOccurred())

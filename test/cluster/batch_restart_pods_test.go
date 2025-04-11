@@ -71,8 +71,7 @@ var _ = Describe("BatchRestart", func() {
 				racks := getDummyRackConf(1, 2)
 				aeroCluster.Spec.RackConfig.Racks = racks
 				aeroCluster.Spec.RackConfig.Namespaces = []string{"test"}
-				err := deployCluster(k8sClient, ctx, aeroCluster)
-				Expect(err).ToNot(HaveOccurred())
+				Expect(DeployCluster(k8sClient, ctx, aeroCluster)).ToNot(HaveOccurred())
 			},
 		)
 
@@ -84,8 +83,8 @@ var _ = Describe("BatchRestart", func() {
 						Namespace: clusterNamespacedName.Namespace,
 					},
 				}
-				Expect(deleteCluster(k8sClient, ctx, aeroCluster)).ToNot(HaveOccurred())
-				Expect(cleanupPVC(k8sClient, aeroCluster.Namespace, aeroCluster.Name)).ToNot(HaveOccurred())
+				Expect(DeleteCluster(k8sClient, ctx, aeroCluster)).ToNot(HaveOccurred())
+				Expect(CleanupPVC(k8sClient, aeroCluster.Namespace, aeroCluster.Name)).ToNot(HaveOccurred())
 			},
 		)
 
@@ -167,8 +166,8 @@ var _ = Describe("BatchRestart", func() {
 					},
 				}
 
-				Expect(deleteCluster(k8sClient, ctx, aeroCluster)).ToNot(HaveOccurred())
-				Expect(cleanupPVC(k8sClient, aeroCluster.Namespace, aeroCluster.Name)).ToNot(HaveOccurred())
+				Expect(DeleteCluster(k8sClient, ctx, aeroCluster)).ToNot(HaveOccurred())
+				Expect(CleanupPVC(k8sClient, aeroCluster.Namespace, aeroCluster.Name)).ToNot(HaveOccurred())
 			},
 		)
 		It("Should fail if replication-factor is 1", func() {
@@ -178,8 +177,7 @@ var _ = Describe("BatchRestart", func() {
 			aeroCluster.Spec.RackConfig.Racks = racks
 			aeroCluster.Spec.RackConfig.Namespaces = []string{"test"}
 			aeroCluster.Spec.RackConfig.RollingUpdateBatchSize = percent("100%")
-			err := deployCluster(k8sClient, ctx, aeroCluster)
-			Expect(err).To(HaveOccurred())
+			Expect(DeployCluster(k8sClient, ctx, aeroCluster)).To(HaveOccurred())
 
 			By("Using RollingUpdateBatchSize Count")
 			aeroCluster = createDummyAerospikeClusterWithRF(clusterNamespacedName, 2, 1)
@@ -187,8 +185,7 @@ var _ = Describe("BatchRestart", func() {
 			aeroCluster.Spec.RackConfig.Racks = racks
 			aeroCluster.Spec.RackConfig.Namespaces = []string{"test"}
 			aeroCluster.Spec.RackConfig.RollingUpdateBatchSize = count(10)
-			err = deployCluster(k8sClient, ctx, aeroCluster)
-			Expect(err).To(HaveOccurred())
+			Expect(DeployCluster(k8sClient, ctx, aeroCluster)).To(HaveOccurred())
 		})
 		It("Should fail if namespace is configured in single rack", func() {
 			aeroCluster := createDummyAerospikeClusterWithRF(clusterNamespacedName, 2, 2)
@@ -211,8 +208,7 @@ var _ = Describe("BatchRestart", func() {
 				},
 			}
 
-			err := deployCluster(k8sClient, ctx, aeroCluster)
-			Expect(err).To(HaveOccurred())
+			Expect(DeployCluster(k8sClient, ctx, aeroCluster)).To(HaveOccurred())
 		})
 		It("Should pass if namespace is configured in 1+ racks", func() {
 			aeroCluster := createDummyAerospikeClusterWithRF(clusterNamespacedName, 2, 2)
@@ -237,8 +233,7 @@ var _ = Describe("BatchRestart", func() {
 			aeroCluster.Spec.RackConfig.Racks[0].InputAerospikeConfig = config
 			aeroCluster.Spec.RackConfig.Racks[1].InputAerospikeConfig = config
 
-			err := deployCluster(k8sClient, ctx, aeroCluster)
-			Expect(err).ToNot(HaveOccurred())
+			Expect(DeployCluster(k8sClient, ctx, aeroCluster)).ToNot(HaveOccurred())
 		})
 	})
 
@@ -254,8 +249,7 @@ func BatchRollingRestart(ctx goctx.Context, clusterNamespacedName types.Namespac
 			racks := getDummyRackConf(1, 2)
 			aeroCluster.Spec.RackConfig.Racks = racks
 			aeroCluster.Spec.RackConfig.Namespaces = []string{"test"}
-			err := deployCluster(k8sClient, ctx, aeroCluster)
-			Expect(err).ToNot(HaveOccurred())
+			Expect(DeployCluster(k8sClient, ctx, aeroCluster)).ToNot(HaveOccurred())
 		},
 	)
 
@@ -268,8 +262,8 @@ func BatchRollingRestart(ctx goctx.Context, clusterNamespacedName types.Namespac
 				},
 			}
 
-			Expect(deleteCluster(k8sClient, ctx, aeroCluster)).ToNot(HaveOccurred())
-			Expect(cleanupPVC(k8sClient, aeroCluster.Namespace, aeroCluster.Name)).ToNot(HaveOccurred())
+			Expect(DeleteCluster(k8sClient, ctx, aeroCluster)).ToNot(HaveOccurred())
+			Expect(CleanupPVC(k8sClient, aeroCluster.Namespace, aeroCluster.Name)).ToNot(HaveOccurred())
 		},
 	)
 	// Restart 1 node at a time
@@ -375,8 +369,7 @@ func BatchUpgrade(ctx goctx.Context, clusterNamespacedName types.NamespacedName)
 			racks := getDummyRackConf(1, 2)
 			aeroCluster.Spec.RackConfig.Racks = racks
 			aeroCluster.Spec.RackConfig.Namespaces = []string{"test"}
-			err := deployCluster(k8sClient, ctx, aeroCluster)
-			Expect(err).ToNot(HaveOccurred())
+			Expect(DeployCluster(k8sClient, ctx, aeroCluster)).ToNot(HaveOccurred())
 		},
 	)
 
@@ -389,8 +382,8 @@ func BatchUpgrade(ctx goctx.Context, clusterNamespacedName types.NamespacedName)
 				},
 			}
 
-			Expect(deleteCluster(k8sClient, ctx, aeroCluster)).ToNot(HaveOccurred())
-			Expect(cleanupPVC(k8sClient, aeroCluster.Namespace, aeroCluster.Name)).ToNot(HaveOccurred())
+			Expect(DeleteCluster(k8sClient, ctx, aeroCluster)).ToNot(HaveOccurred())
+			Expect(CleanupPVC(k8sClient, aeroCluster.Namespace, aeroCluster.Name)).ToNot(HaveOccurred())
 		},
 	)
 	// Restart 1 node at a time

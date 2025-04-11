@@ -141,8 +141,8 @@ var _ = AfterSuite(
 
 		for idx := range aeroClusters {
 			aeroCluster := aeroClusters[idx]
-			err := cluster.DeleteCluster(k8sClient, testCtx, &aeroCluster)
-			Expect(err).ToNot(HaveOccurred())
+			Expect(cluster.DeleteCluster(k8sClient, testCtx, &aeroCluster)).ToNot(HaveOccurred())
+			Expect(cluster.CleanupPVC(k8sClient, aeroCluster.Namespace, aeroCluster.Name)).ToNot(HaveOccurred())
 		}
 
 		By("Delete Backup")

@@ -98,8 +98,7 @@ func PauseReconcileTest(ctx goctx.Context) {
 	BeforeEach(
 		func() {
 			aeroCluster := createDummyAerospikeCluster(clusterNamespacedName, 2)
-			err := deployCluster(k8sClient, ctx, aeroCluster)
-			Expect(err).ToNot(HaveOccurred())
+			Expect(DeployCluster(k8sClient, ctx, aeroCluster)).ToNot(HaveOccurred())
 		},
 	)
 
@@ -112,8 +111,8 @@ func PauseReconcileTest(ctx goctx.Context) {
 				},
 			}
 
-			Expect(deleteCluster(k8sClient, ctx, aeroCluster)).ToNot(HaveOccurred())
-			Expect(cleanupPVC(k8sClient, aeroCluster.Namespace, aeroCluster.Name)).ToNot(HaveOccurred())
+			Expect(DeleteCluster(k8sClient, ctx, aeroCluster)).ToNot(HaveOccurred())
+			Expect(CleanupPVC(k8sClient, aeroCluster.Namespace, aeroCluster.Name)).ToNot(HaveOccurred())
 		},
 	)
 
@@ -219,8 +218,8 @@ func ValidateAerospikeBenchmarkConfigs(ctx goctx.Context) {
 						},
 					}
 
-					Expect(deleteCluster(k8sClient, ctx, aeroCluster)).ToNot(HaveOccurred())
-					Expect(cleanupPVC(k8sClient, aeroCluster.Namespace, aeroCluster.Name)).ToNot(HaveOccurred())
+					Expect(DeleteCluster(k8sClient, ctx, aeroCluster)).ToNot(HaveOccurred())
+					Expect(CleanupPVC(k8sClient, aeroCluster.Namespace, aeroCluster.Name)).ToNot(HaveOccurred())
 				},
 			)
 			It(
@@ -233,12 +232,11 @@ func ValidateAerospikeBenchmarkConfigs(ctx goctx.Context) {
 						aeroCluster.Spec.AerospikeConfig.Value["namespaces"].([]interface{})[0].(map[string]interface{})
 					namespaceConfig["enable-benchmarks-read"] = false
 					aeroCluster.Spec.AerospikeConfig.Value["namespaces"].([]interface{})[0] = namespaceConfig
-					err := deployCluster(k8sClient, ctx, aeroCluster)
-					Expect(err).ToNot(HaveOccurred())
+					Expect(DeployCluster(k8sClient, ctx, aeroCluster)).ToNot(HaveOccurred())
 
 					By("Validating benchmarking is disabled")
 
-					aeroCluster, err = getCluster(k8sClient, ctx, clusterNamespacedName)
+					aeroCluster, err := getCluster(k8sClient, ctx, clusterNamespacedName)
 					Expect(err).ToNot(HaveOccurred())
 
 					pod := aeroCluster.Status.Pods["deploy-cluster-benchmark-0-0"]
@@ -305,8 +303,7 @@ func ScaleDownWithMigrateFillDelay(ctx goctx.Context) {
 					aeroCluster := createDummyAerospikeCluster(clusterNamespacedName, 4)
 					aeroCluster.Spec.AerospikeConfig.Value["service"].(map[string]interface{})["migrate-fill-delay"] =
 						migrateFillDelay
-					err := deployCluster(k8sClient, ctx, aeroCluster)
-					Expect(err).ToNot(HaveOccurred())
+					Expect(DeployCluster(k8sClient, ctx, aeroCluster)).ToNot(HaveOccurred())
 				},
 			)
 
@@ -319,8 +316,8 @@ func ScaleDownWithMigrateFillDelay(ctx goctx.Context) {
 						},
 					}
 
-					Expect(deleteCluster(k8sClient, ctx, aeroCluster)).ToNot(HaveOccurred())
-					Expect(cleanupPVC(k8sClient, aeroCluster.Namespace, aeroCluster.Name)).ToNot(HaveOccurred())
+					Expect(DeleteCluster(k8sClient, ctx, aeroCluster)).ToNot(HaveOccurred())
+					Expect(CleanupPVC(k8sClient, aeroCluster.Namespace, aeroCluster.Name)).ToNot(HaveOccurred())
 				},
 			)
 
@@ -376,8 +373,8 @@ func clusterWithMaxIgnorablePod(ctx goctx.Context) {
 				},
 			}
 
-			Expect(deleteCluster(k8sClient, ctx, aeroCluster)).ToNot(HaveOccurred())
-			Expect(cleanupPVC(k8sClient, aeroCluster.Namespace, aeroCluster.Name)).ToNot(HaveOccurred())
+			Expect(DeleteCluster(k8sClient, ctx, aeroCluster)).ToNot(HaveOccurred())
+			Expect(CleanupPVC(k8sClient, aeroCluster.Namespace, aeroCluster.Name)).ToNot(HaveOccurred())
 		},
 	)
 
@@ -659,8 +656,7 @@ func deployClusterForMaxIgnorablePods(ctx goctx.Context, clusterNamespacedName t
 
 	randomizeServicePorts(aeroCluster, false, GinkgoParallelProcess())
 
-	err := deployCluster(k8sClient, ctx, aeroCluster)
-	Expect(err).ToNot(HaveOccurred())
+	Expect(DeployCluster(k8sClient, ctx, aeroCluster)).ToNot(HaveOccurred())
 }
 
 // Test cluster deployment with all image post 5.7.0 except the latest version
@@ -673,8 +669,8 @@ func DeployClusterForAllImagesPost570(ctx goctx.Context) {
 
 	AfterEach(
 		func() {
-			Expect(deleteCluster(k8sClient, ctx, aeroCluster)).ToNot(HaveOccurred())
-			Expect(cleanupPVC(k8sClient, aeroCluster.Namespace, aeroCluster.Name)).ToNot(HaveOccurred())
+			Expect(DeleteCluster(k8sClient, ctx, aeroCluster)).ToNot(HaveOccurred())
+			Expect(CleanupPVC(k8sClient, aeroCluster.Namespace, aeroCluster.Name)).ToNot(HaveOccurred())
 		},
 	)
 
@@ -696,8 +692,7 @@ func DeployClusterForAllImagesPost570(ctx goctx.Context) {
 				)
 				Expect(err).ToNot(HaveOccurred())
 
-				err = deployCluster(k8sClient, ctx, aeroCluster)
-				Expect(err).ToNot(HaveOccurred())
+				Expect(DeployCluster(k8sClient, ctx, aeroCluster)).ToNot(HaveOccurred())
 
 				aeroCluster, err = getCluster(k8sClient, ctx, clusterNamespacedName)
 				Expect(err).ToNot(HaveOccurred())
@@ -727,8 +722,8 @@ func DeployClusterForDiffStorageTest(
 			aeroCluster := &asdbv1.AerospikeCluster{}
 			AfterEach(
 				func() {
-					Expect(deleteCluster(k8sClient, ctx, aeroCluster)).ToNot(HaveOccurred())
-					Expect(cleanupPVC(k8sClient, aeroCluster.Namespace, aeroCluster.Name)).ToNot(HaveOccurred())
+					Expect(DeleteCluster(k8sClient, ctx, aeroCluster)).ToNot(HaveOccurred())
+					Expect(CleanupPVC(k8sClient, aeroCluster.Namespace, aeroCluster.Name)).ToNot(HaveOccurred())
 				},
 			)
 			// Cluster with n nodes, enterprise can be more than 8
@@ -753,8 +748,7 @@ func DeployClusterForDiffStorageTest(
 						randomizeServicePorts(aeroCluster, true, GinkgoParallelProcess())
 					}
 
-					err := deployCluster(k8sClient, ctx, aeroCluster)
-					Expect(err).ToNot(HaveOccurred())
+					Expect(DeployCluster(k8sClient, ctx, aeroCluster)).ToNot(HaveOccurred())
 				},
 			)
 
@@ -775,8 +769,7 @@ func DeployClusterForDiffStorageTest(
 						randomizeServicePorts(aeroCluster, true, GinkgoParallelProcess())
 					}
 
-					err := deployCluster(k8sClient, ctx, aeroCluster)
-					Expect(err).ToNot(HaveOccurred())
+					Expect(DeployCluster(k8sClient, ctx, aeroCluster)).ToNot(HaveOccurred())
 				},
 			)
 			// Data in Memory Without Persistence
@@ -796,8 +789,7 @@ func DeployClusterForDiffStorageTest(
 						randomizeServicePorts(aeroCluster, true, GinkgoParallelProcess())
 					}
 
-					err := deployCluster(k8sClient, ctx, aeroCluster)
-					Expect(err).ToNot(HaveOccurred())
+					Expect(DeployCluster(k8sClient, ctx, aeroCluster)).ToNot(HaveOccurred())
 				},
 			)
 			// Shadow Device
@@ -854,8 +846,7 @@ func DeployClusterWithDNSConfiguration(ctx goctx.Context) {
 			}
 			aeroCluster.Spec.PodSpec.DNSConfig = dnsConfig
 
-			err := deployCluster(k8sClient, ctx, aeroCluster)
-			Expect(err).ShouldNot(HaveOccurred())
+			Expect(DeployCluster(k8sClient, ctx, aeroCluster)).ShouldNot(HaveOccurred())
 
 			sts, err := getSTSFromRackID(aeroCluster, 0)
 			Expect(err).ShouldNot(HaveOccurred())
@@ -865,8 +856,8 @@ func DeployClusterWithDNSConfiguration(ctx goctx.Context) {
 
 	AfterEach(
 		func() {
-			Expect(deleteCluster(k8sClient, ctx, aeroCluster)).ToNot(HaveOccurred())
-			Expect(cleanupPVC(k8sClient, aeroCluster.Namespace, aeroCluster.Name)).ToNot(HaveOccurred())
+			Expect(DeleteCluster(k8sClient, ctx, aeroCluster)).ToNot(HaveOccurred())
+			Expect(CleanupPVC(k8sClient, aeroCluster.Namespace, aeroCluster.Name)).ToNot(HaveOccurred())
 		},
 	)
 }
@@ -890,11 +881,10 @@ func DeployClusterWithSyslog(ctx goctx.Context) {
 			}
 
 			aeroCluster.Spec.AerospikeConfig.Value["logging"] = loggingConf
-			err := deployCluster(k8sClient, ctx, aeroCluster)
-			Expect(err).ShouldNot(HaveOccurred())
+			Expect(DeployCluster(k8sClient, ctx, aeroCluster)).ShouldNot(HaveOccurred())
 
-			Expect(deleteCluster(k8sClient, ctx, aeroCluster)).ToNot(HaveOccurred())
-			Expect(cleanupPVC(k8sClient, aeroCluster.Namespace, aeroCluster.Name)).ToNot(HaveOccurred())
+			Expect(DeleteCluster(k8sClient, ctx, aeroCluster)).ToNot(HaveOccurred())
+			Expect(CleanupPVC(k8sClient, aeroCluster.Namespace, aeroCluster.Name)).ToNot(HaveOccurred())
 		},
 	)
 }
@@ -913,8 +903,7 @@ func UpdateTLSClusterTest(ctx goctx.Context) {
 			}
 			aeroCluster.Spec.Storage = getBasicStorageSpecObject()
 
-			err := deployCluster(k8sClient, ctx, aeroCluster)
-			Expect(err).ToNot(HaveOccurred())
+			Expect(DeployCluster(k8sClient, ctx, aeroCluster)).ToNot(HaveOccurred())
 		},
 	)
 
@@ -927,8 +916,8 @@ func UpdateTLSClusterTest(ctx goctx.Context) {
 				},
 			}
 
-			Expect(deleteCluster(k8sClient, ctx, aeroCluster)).ToNot(HaveOccurred())
-			Expect(cleanupPVC(k8sClient, aeroCluster.Namespace, aeroCluster.Name)).ToNot(HaveOccurred())
+			Expect(DeleteCluster(k8sClient, ctx, aeroCluster)).ToNot(HaveOccurred())
+			Expect(CleanupPVC(k8sClient, aeroCluster.Namespace, aeroCluster.Name)).ToNot(HaveOccurred())
 		},
 	)
 
@@ -1166,8 +1155,7 @@ func UpdateClusterTest(ctx goctx.Context) {
 				aeroCluster.Spec.Storage.Volumes, dynamicNsVolume, dynamicNsVolume1,
 			)
 
-			err := deployCluster(k8sClient, ctx, aeroCluster)
-			Expect(err).ToNot(HaveOccurred())
+			Expect(DeployCluster(k8sClient, ctx, aeroCluster)).ToNot(HaveOccurred())
 		},
 	)
 
@@ -1180,8 +1168,8 @@ func UpdateClusterTest(ctx goctx.Context) {
 				},
 			}
 
-			Expect(deleteCluster(k8sClient, ctx, aeroCluster)).ToNot(HaveOccurred())
-			Expect(cleanupPVC(k8sClient, aeroCluster.Namespace, aeroCluster.Name)).ToNot(HaveOccurred())
+			Expect(DeleteCluster(k8sClient, ctx, aeroCluster)).ToNot(HaveOccurred())
+			Expect(CleanupPVC(k8sClient, aeroCluster.Namespace, aeroCluster.Name)).ToNot(HaveOccurred())
 		},
 	)
 
@@ -1500,8 +1488,7 @@ func negativeDeployClusterValidationTest(
 					)
 
 					aeroCluster := createDummyAerospikeCluster(cName, 1)
-					err := deployCluster(k8sClient, ctx, aeroCluster)
-					Expect(err).Should(HaveOccurred())
+					Expect(DeployCluster(k8sClient, ctx, aeroCluster)).Should(HaveOccurred())
 				},
 			)
 
@@ -1511,8 +1498,7 @@ func negativeDeployClusterValidationTest(
 					cName := test.GetNamespacedName("validclustername", "")
 
 					aeroCluster := createDummyAerospikeCluster(cName, 1)
-					err := deployCluster(k8sClient, ctx, aeroCluster)
-					Expect(err).Should(HaveOccurred())
+					Expect(DeployCluster(k8sClient, ctx, aeroCluster)).Should(HaveOccurred())
 				},
 			)
 
@@ -1522,12 +1508,10 @@ func negativeDeployClusterValidationTest(
 						clusterNamespacedName, 1,
 					)
 					aeroCluster.Spec.Image = "InvalidImage"
-					err := deployCluster(k8sClient, ctx, aeroCluster)
-					Expect(err).Should(HaveOccurred())
+					Expect(DeployCluster(k8sClient, ctx, aeroCluster)).Should(HaveOccurred())
 
 					aeroCluster.Spec.Image = invalidImage
-					err = deployCluster(k8sClient, ctx, aeroCluster)
-					Expect(err).Should(HaveOccurred())
+					Expect(DeployCluster(k8sClient, ctx, aeroCluster)).Should(HaveOccurred())
 				},
 			)
 
@@ -1536,8 +1520,7 @@ func negativeDeployClusterValidationTest(
 					aeroCluster := createDummyAerospikeCluster(
 						clusterNamespacedName, 0,
 					)
-					err := deployCluster(k8sClient, ctx, aeroCluster)
-					Expect(err).Should(HaveOccurred())
+					Expect(DeployCluster(k8sClient, ctx, aeroCluster)).Should(HaveOccurred())
 				},
 			)
 
@@ -1550,10 +1533,7 @@ func negativeDeployClusterValidationTest(
 								clusterNamespacedName, 1, latestImage,
 							)
 							aeroCluster.Spec.OperatorClientCertSpec.CertPathInOperator = &asdbv1.AerospikeCertPathInOperatorSource{}
-							err := deployCluster(
-								k8sClient, ctx, aeroCluster,
-							)
-							Expect(err).Should(HaveOccurred())
+							Expect(DeployCluster(k8sClient, ctx, aeroCluster)).Should(HaveOccurred())
 						},
 					)
 
@@ -1565,10 +1545,7 @@ func negativeDeployClusterValidationTest(
 							)
 							aeroCluster.Spec.OperatorClientCertSpec.SecretCertSource.ClientKeyFilename = ""
 
-							err := deployCluster(
-								k8sClient, ctx, aeroCluster,
-							)
-							Expect(err).Should(HaveOccurred())
+							Expect(DeployCluster(k8sClient, ctx, aeroCluster)).Should(HaveOccurred())
 						},
 					)
 
@@ -1580,10 +1557,7 @@ func negativeDeployClusterValidationTest(
 							)
 							aeroCluster.Spec.OperatorClientCertSpec.SecretCertSource.CaCertsSource = &asdbv1.CaCertsSource{}
 
-							err := deployCluster(
-								k8sClient, ctx, aeroCluster,
-							)
-							Expect(err).Should(HaveOccurred())
+							Expect(DeployCluster(k8sClient, ctx, aeroCluster)).Should(HaveOccurred())
 						},
 					)
 
@@ -1601,10 +1575,7 @@ func negativeDeployClusterValidationTest(
 									ClientCertPath: "",
 								}
 
-							err := deployCluster(
-								k8sClient, ctx, aeroCluster,
-							)
-							Expect(err).Should(HaveOccurred())
+							Expect(DeployCluster(k8sClient, ctx, aeroCluster)).Should(HaveOccurred())
 						},
 					)
 				},
@@ -1620,8 +1591,7 @@ func negativeDeployClusterValidationTest(
 								clusterNamespacedName, 1,
 							)
 							aeroCluster.Spec.AerospikeConfig = &asdbv1.AerospikeConfigSpec{}
-							err := deployCluster(k8sClient, ctx, aeroCluster)
-							Expect(err).Should(HaveOccurred())
+							Expect(DeployCluster(k8sClient, ctx, aeroCluster)).Should(HaveOccurred())
 
 							aeroCluster = createDummyAerospikeCluster(
 								clusterNamespacedName, 1,
@@ -1631,8 +1601,7 @@ func negativeDeployClusterValidationTest(
 									"namespaces": "invalidConf",
 								},
 							}
-							err = deployCluster(k8sClient, ctx, aeroCluster)
-							Expect(err).Should(HaveOccurred())
+							Expect(DeployCluster(k8sClient, ctx, aeroCluster)).Should(HaveOccurred())
 						},
 					)
 
@@ -1643,10 +1612,7 @@ func negativeDeployClusterValidationTest(
 								clusterNamespacedName, 1,
 							)
 							aeroCluster.Spec.AerospikeConfig.Value["service"].(map[string]interface{})["advertise-ipv6"] = true
-							err := deployCluster(
-								k8sClient, ctx, aeroCluster,
-							)
-							Expect(err).Should(HaveOccurred())
+							Expect(DeployCluster(k8sClient, ctx, aeroCluster)).Should(HaveOccurred())
 						},
 					)
 
@@ -1659,10 +1625,7 @@ func negativeDeployClusterValidationTest(
 										clusterNamespacedName, 1,
 									)
 									aeroCluster.Spec.AerospikeConfig.Value["namespaces"] = nil
-									err := deployCluster(
-										k8sClient, ctx, aeroCluster,
-									)
-									Expect(err).Should(HaveOccurred())
+									Expect(DeployCluster(k8sClient, ctx, aeroCluster)).Should(HaveOccurred())
 								},
 							)
 
@@ -1679,10 +1642,7 @@ func negativeDeployClusterValidationTest(
 												aeroCluster.Spec.AerospikeConfig.Value["namespaces"].([]interface{})[0].(map[string]interface{})
 											namespaceConfig["storage-engine"] = nil
 											aeroCluster.Spec.AerospikeConfig.Value["namespaces"].([]interface{})[0] = namespaceConfig
-											err := deployCluster(
-												k8sClient, ctx, aeroCluster,
-											)
-											Expect(err).Should(HaveOccurred())
+											Expect(DeployCluster(k8sClient, ctx, aeroCluster)).Should(HaveOccurred())
 										},
 									)
 
@@ -1699,10 +1659,7 @@ func negativeDeployClusterValidationTest(
 												namespaceConfig["storage-engine"].(map[string]interface{})["devices"]; ok {
 												namespaceConfig["storage-engine"].(map[string]interface{})["devices"] = nil
 												aeroCluster.Spec.AerospikeConfig.Value["namespaces"].([]interface{})[0] = namespaceConfig
-												err := deployCluster(
-													k8sClient, ctx, aeroCluster,
-												)
-												Expect(err).Should(HaveOccurred())
+												Expect(DeployCluster(k8sClient, ctx, aeroCluster)).Should(HaveOccurred())
 											}
 										},
 									)
@@ -1766,10 +1723,7 @@ func negativeDeployClusterValidationTest(
 												namespaceConfig["storage-engine"].(map[string]interface{})["devices"] =
 													[]string{"/dev/xvdf1 /dev/xvdf2 /dev/xvdf3"}
 												aeroCluster.Spec.AerospikeConfig.Value["namespaces"].([]interface{})[0] = namespaceConfig
-												err := deployCluster(
-													k8sClient, ctx, aeroCluster,
-												)
-												Expect(err).Should(HaveOccurred())
+												Expect(DeployCluster(k8sClient, ctx, aeroCluster)).Should(HaveOccurred())
 											}
 										},
 									)
@@ -1786,10 +1740,7 @@ func negativeDeployClusterValidationTest(
 											if _, ok := namespaceConfig["storage-engine"].(map[string]interface{})["files"]; ok {
 												namespaceConfig["storage-engine"].(map[string]interface{})["files"] = nil
 												aeroCluster.Spec.AerospikeConfig.Value["namespaces"].([]interface{})[0] = namespaceConfig
-												err := deployCluster(
-													k8sClient, ctx, aeroCluster,
-												)
-												Expect(err).Should(HaveOccurred())
+												Expect(DeployCluster(k8sClient, ctx, aeroCluster)).Should(HaveOccurred())
 											}
 										},
 									)
@@ -1811,10 +1762,7 @@ func negativeDeployClusterValidationTest(
 												)
 												namespaceConfig["storage-engine"].(map[string]interface{})["devices"] = devList
 												aeroCluster.Spec.AerospikeConfig.Value["namespaces"].([]interface{})[0] = namespaceConfig
-												err := deployCluster(
-													k8sClient, ctx, aeroCluster,
-												)
-												Expect(err).Should(HaveOccurred())
+												Expect(DeployCluster(k8sClient, ctx, aeroCluster)).Should(HaveOccurred())
 											}
 										},
 									)
@@ -1838,10 +1786,7 @@ func negativeDeployClusterValidationTest(
 											nsList := aeroCluster.Spec.AerospikeConfig.Value["namespaces"].([]interface{})
 											nsList = append(nsList, secondNs)
 											aeroCluster.Spec.AerospikeConfig.Value["namespaces"] = nsList
-											err := deployCluster(
-												k8sClient, ctx, aeroCluster,
-											)
-											Expect(err).Should(HaveOccurred())
+											Expect(DeployCluster(k8sClient, ctx, aeroCluster)).Should(HaveOccurred())
 										},
 									)
 
@@ -1860,10 +1805,7 @@ func negativeDeployClusterValidationTest(
 													"enable-xdr":         false,
 													"xdr-digestlog-path": "/opt/aerospike/xdr/digestlog 100G",
 												}
-												err := deployCluster(
-													k8sClient, ctx, aeroCluster,
-												)
-												Expect(err).Should(HaveOccurred())
+												Expect(DeployCluster(k8sClient, ctx, aeroCluster)).Should(HaveOccurred())
 											}
 										},
 									)
@@ -1897,19 +1839,13 @@ func negativeDeployClusterValidationTest(
 										clusterNamespacedName, 1,
 									)
 									aeroCluster.Spec.AerospikeConfig.Value["service"].(map[string]interface{})["node-id"] = "a1"
-									err := deployCluster(
-										k8sClient, ctx, aeroCluster,
-									)
-									Expect(err).Should(HaveOccurred())
+									Expect(DeployCluster(k8sClient, ctx, aeroCluster)).Should(HaveOccurred())
 
 									aeroCluster = createDummyAerospikeCluster(
 										clusterNamespacedName, 1,
 									)
 									aeroCluster.Spec.AerospikeConfig.Value["service"].(map[string]interface{})["cluster-name"] = "cluster-name"
-									err = deployCluster(
-										k8sClient, ctx, aeroCluster,
-									)
-									Expect(err).Should(HaveOccurred())
+									Expect(DeployCluster(k8sClient, ctx, aeroCluster)).Should(HaveOccurred())
 								},
 							)
 
@@ -1932,10 +1868,7 @@ func negativeDeployClusterValidationTest(
 										},
 									}
 									aeroCluster.Spec.AerospikeConfig.Value["network"] = networkConf
-									err := deployCluster(
-										k8sClient, ctx, aeroCluster,
-									)
-									Expect(err).Should(HaveOccurred())
+									Expect(DeployCluster(k8sClient, ctx, aeroCluster)).Should(HaveOccurred())
 
 									// if "tls-name" in conf
 									// "tls-port"
@@ -1954,10 +1887,7 @@ func negativeDeployClusterValidationTest(
 										},
 									}
 									aeroCluster.Spec.AerospikeConfig.Value["network"] = networkConf
-									err = deployCluster(
-										k8sClient, ctx, aeroCluster,
-									)
-									Expect(err).Should(HaveOccurred())
+									Expect(DeployCluster(k8sClient, ctx, aeroCluster)).Should(HaveOccurred())
 								},
 							)
 						},
@@ -1976,8 +1906,7 @@ func negativeDeployClusterValidationTest(
 							aeroCluster.Spec.AerospikeConfig.Value["service"] = map[string]interface{}{
 								"feature-key-file": "/randompath/features.conf",
 							}
-							err := deployCluster(k8sClient, ctx, aeroCluster)
-							Expect(err).Should(HaveOccurred())
+							Expect(DeployCluster(k8sClient, ctx, aeroCluster)).Should(HaveOccurred())
 						},
 					)
 
@@ -1995,8 +1924,7 @@ func negativeDeployClusterValidationTest(
 									},
 								},
 							}
-							err := deployCluster(k8sClient, ctx, aeroCluster)
-							Expect(err).Should(HaveOccurred())
+							Expect(DeployCluster(k8sClient, ctx, aeroCluster)).Should(HaveOccurred())
 						},
 					)
 
@@ -2017,8 +1945,7 @@ func negativeDeployClusterValidationTest(
 									},
 								},
 							}
-							err := deployCluster(k8sClient, ctx, aeroCluster)
-							Expect(err).Should(HaveOccurred())
+							Expect(DeployCluster(k8sClient, ctx, aeroCluster)).Should(HaveOccurred())
 						},
 					)
 
@@ -2038,8 +1965,7 @@ func negativeDeployClusterValidationTest(
 									},
 								},
 							}
-							err := deployCluster(k8sClient, ctx, aeroCluster)
-							Expect(err).Should(HaveOccurred())
+							Expect(DeployCluster(k8sClient, ctx, aeroCluster)).Should(HaveOccurred())
 						},
 					)
 
@@ -2059,8 +1985,7 @@ func negativeDeployClusterValidationTest(
 									},
 								},
 							}
-							err := deployCluster(k8sClient, ctx, aeroCluster)
-							Expect(err).Should(HaveOccurred())
+							Expect(DeployCluster(k8sClient, ctx, aeroCluster)).Should(HaveOccurred())
 						},
 					)
 				},
@@ -2074,9 +1999,7 @@ func negativeDeployClusterValidationTest(
 							aeroCluster := createDummyAerospikeCluster(clusterNamespacedName, 2)
 							defaultDNS := v1.DNSDefault
 							aeroCluster.Spec.PodSpec.InputDNSPolicy = &defaultDNS
-							err := deployCluster(k8sClient, ctx, aeroCluster)
-
-							Expect(err).Should(HaveOccurred())
+							Expect(DeployCluster(k8sClient, ctx, aeroCluster)).Should(HaveOccurred())
 						},
 					)
 
@@ -2086,8 +2009,7 @@ func negativeDeployClusterValidationTest(
 							aeroCluster := createDummyAerospikeCluster(clusterNamespacedName, 2)
 							noneDNS := v1.DNSNone
 							aeroCluster.Spec.PodSpec.InputDNSPolicy = &noneDNS
-							err := deployCluster(k8sClient, ctx, aeroCluster)
-							Expect(err).Should(HaveOccurred())
+							Expect(DeployCluster(k8sClient, ctx, aeroCluster)).Should(HaveOccurred())
 						},
 					)
 				},
@@ -2133,8 +2055,7 @@ func negativeUpdateClusterValidationTest(
 						clusterNamespacedName, 3,
 					)
 
-					err := deployCluster(k8sClient, ctx, aeroCluster)
-					Expect(err).ToNot(HaveOccurred())
+					Expect(DeployCluster(k8sClient, ctx, aeroCluster)).ToNot(HaveOccurred())
 				},
 			)
 
@@ -2147,8 +2068,8 @@ func negativeUpdateClusterValidationTest(
 						},
 					}
 
-					Expect(deleteCluster(k8sClient, ctx, aeroCluster)).ToNot(HaveOccurred())
-					Expect(cleanupPVC(k8sClient, aeroCluster.Namespace, aeroCluster.Name)).ToNot(HaveOccurred())
+					Expect(DeleteCluster(k8sClient, ctx, aeroCluster)).ToNot(HaveOccurred())
+					Expect(CleanupPVC(k8sClient, aeroCluster.Namespace, aeroCluster.Name)).ToNot(HaveOccurred())
 				},
 			)
 
@@ -2537,8 +2458,7 @@ func negativeUpdateClusterValidationTest(
 						clusterNamespacedName, 2, latestImage,
 					)
 
-					err := deployCluster(k8sClient, ctx, aeroCluster)
-					Expect(err).ToNot(HaveOccurred())
+					Expect(DeployCluster(k8sClient, ctx, aeroCluster)).ToNot(HaveOccurred())
 				},
 			)
 
@@ -2551,8 +2471,8 @@ func negativeUpdateClusterValidationTest(
 						},
 					}
 
-					Expect(deleteCluster(k8sClient, ctx, aeroCluster)).ToNot(HaveOccurred())
-					Expect(cleanupPVC(k8sClient, aeroCluster.Namespace, aeroCluster.Name)).ToNot(HaveOccurred())
+					Expect(DeleteCluster(k8sClient, ctx, aeroCluster)).ToNot(HaveOccurred())
+					Expect(CleanupPVC(k8sClient, aeroCluster.Namespace, aeroCluster.Name)).ToNot(HaveOccurred())
 				},
 			)
 

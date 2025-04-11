@@ -70,7 +70,7 @@ var _ = SynchronizedBeforeSuite(
 
 		logf.SetLogger(zap.New(zap.WriteTo(GinkgoWriter), zap.UseDevMode(true)))
 
-		By("Bootstrapping test environment")
+		By("Initialising kubernetes clients")
 		k8sClient, _, err = test.InitialiseClients(scheme, &config)
 		Expect(err).NotTo(HaveOccurred())
 	},

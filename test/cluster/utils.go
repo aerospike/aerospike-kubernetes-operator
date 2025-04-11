@@ -176,7 +176,7 @@ func isClusterStateValid(
 }
 
 func getTimeout(nodes int32) time.Duration {
-	return 3 * time.Minute * time.Duration(nodes)
+	return 4 * time.Minute * time.Duration(nodes)
 }
 
 func getPodLogs(
@@ -729,7 +729,7 @@ func deletePVC(k8sClient client.Client, pvcNamespacedName types.NamespacedName) 
 	return nil
 }
 
-func cleanupPVC(k8sClient client.Client, ns, clName string) error {
+func CleanupPVC(k8sClient client.Client, ns, clName string) error {
 	if clName == "" {
 		if err := k8sClient.DeleteAllOf(goctx.TODO(), &corev1.PersistentVolumeClaim{}, client.InNamespace(ns)); err != nil {
 			return fmt.Errorf("could not delete pvcs: %w", err)

@@ -51,8 +51,8 @@ func securityContextTest(
 					Namespace: clusterNamespacedName.Namespace,
 				},
 			}
-			Expect(deleteCluster(k8sClient, ctx, aeroCluster)).ToNot(HaveOccurred())
-			Expect(cleanupPVC(k8sClient, aeroCluster.Namespace, aeroCluster.Name)).ToNot(HaveOccurred())
+			Expect(DeleteCluster(k8sClient, ctx, aeroCluster)).ToNot(HaveOccurred())
+			Expect(CleanupPVC(k8sClient, aeroCluster.Namespace, aeroCluster.Name)).ToNot(HaveOccurred())
 		},
 	)
 	It(
@@ -77,8 +77,7 @@ func securityContextTest(
 				aeroCluster.Spec.PodSpec.AerospikeInitContainerSpec.SecurityContext = &corev1.SecurityContext{Privileged: new(bool)}
 			}
 
-			err := deployCluster(k8sClient, ctx, aeroCluster)
-			Expect(err).ToNot(HaveOccurred())
+			Expect(DeployCluster(k8sClient, ctx, aeroCluster)).ToNot(HaveOccurred())
 
 			By("Validate")
 			validateSecurityContext(
@@ -95,8 +94,7 @@ func securityContextTest(
 				clusterNamespacedName, 2,
 			)
 
-			err := deployCluster(k8sClient, ctx, aeroCluster)
-			Expect(err).ToNot(HaveOccurred())
+			Expect(DeployCluster(k8sClient, ctx, aeroCluster)).ToNot(HaveOccurred())
 
 			By("UpdateCluster with SecurityContext")
 
@@ -114,8 +112,7 @@ func securityContextTest(
 				aeroCluster.Spec.PodSpec.AerospikeInitContainerSpec.SecurityContext = &corev1.SecurityContext{Privileged: new(bool)}
 			}
 
-			err = updateCluster(k8sClient, ctx, aeroCluster)
-			Expect(err).ToNot(HaveOccurred())
+			Expect(updateCluster(k8sClient, ctx, aeroCluster)).ToNot(HaveOccurred())
 
 			By("Validate")
 			validateSecurityContext(
@@ -134,8 +131,7 @@ func securityContextTest(
 				aeroCluster.Spec.PodSpec.AerospikeInitContainerSpec.SecurityContext = nil
 			}
 
-			err = updateCluster(k8sClient, ctx, aeroCluster)
-			Expect(err).ToNot(HaveOccurred())
+			Expect(updateCluster(k8sClient, ctx, aeroCluster)).ToNot(HaveOccurred())
 
 			By("Validate")
 			validateSecurityContext(

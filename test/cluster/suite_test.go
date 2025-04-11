@@ -72,7 +72,7 @@ func deleteAllClusters(namespace string) {
 
 	for clusterIndex := range list.Items {
 		By(fmt.Sprintf("Deleting cluster \"%s/%s\".", list.Items[clusterIndex].Namespace, list.Items[clusterIndex].Name))
-		err := deleteCluster(k8sClient, ctx, &list.Items[clusterIndex])
+		err := DeleteCluster(k8sClient, ctx, &list.Items[clusterIndex])
 		Expect(err).NotTo(HaveOccurred())
 	}
 }
@@ -135,7 +135,7 @@ var _ = SynchronizedAfterSuite(func() {
 
 	for idx := range test.Namespaces {
 		deleteAllClusters(test.Namespaces[idx])
-		_ = cleanupPVC(k8sClient, test.Namespaces[idx], "")
+		_ = CleanupPVC(k8sClient, test.Namespaces[idx], "")
 	}
 
 	By("tearing down the test environment")
