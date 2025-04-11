@@ -32,13 +32,14 @@ import (
 
 	"github.com/aerospike/aerospike-backup-service/v3/pkg/dto"
 	"github.com/aerospike/aerospike-backup-service/v3/pkg/validation"
+	asdbv1beta1 "github.com/aerospike/aerospike-kubernetes-operator/v4/api/v1beta1"
 )
 
 const defaultPollingPeriod time.Duration = 60 * time.Second
 
 // SetupAerospikeRestoreWebhookWithManager registers the webhook for AerospikeRestore in the manager.
 func SetupAerospikeRestoreWebhookWithManager(mgr ctrl.Manager) error {
-	return ctrl.NewWebhookManagedBy(mgr).For(&AerospikeRestore{}).
+	return ctrl.NewWebhookManagedBy(mgr).For(&asdbv1beta1.AerospikeRestore{}).
 		WithDefaulter(&AerospikeRestoreCustomDefaulter{}).
 		WithValidator(&AerospikeRestoreCustomValidator{}).
 		Complete()
@@ -58,7 +59,7 @@ var _ webhook.CustomDefaulter = &AerospikeRestoreCustomDefaulter{}
 
 // Default implements webhook.CustomDefaulter so a webhook will be registered for the type
 func (ard *AerospikeRestoreCustomDefaulter) Default(_ context.Context, obj runtime.Object) error {
-	restore, ok := obj.(*AerospikeRestore)
+	restore, ok := obj.(*asdbv1beta1.AerospikeRestore)
 	if !ok {
 		return fmt.Errorf("expected AerospikeRestore, got %T", obj)
 	}
@@ -86,7 +87,7 @@ var _ webhook.CustomValidator = &AerospikeRestoreCustomValidator{}
 // ValidateCreate implements webhook.CustomValidator so a webhook will be registered for the type
 func (arv *AerospikeRestoreCustomValidator) ValidateCreate(_ context.Context, obj runtime.Object,
 ) (admission.Warnings, error) {
-	restore, ok := obj.(*AerospikeRestore)
+	restore, ok := obj.(*asdbv1beta1.AerospikeRestore)
 	if !ok {
 		return nil, fmt.Errorf("expected AerospikeRestore, got %T", obj)
 	}
@@ -100,14 +101,14 @@ func (arv *AerospikeRestoreCustomValidator) ValidateCreate(_ context.Context, ob
 		return nil, gErr
 	}
 
-	if err := ValidateBackupSvcSupportedVersion(k8sClient,
+	if err := asdbv1beta1.ValidateBackupSvcSupportedVersion(k8sClient,
 		restore.Spec.BackupService.Name,
 		restore.Spec.BackupService.Namespace,
 	); err != nil {
 		return nil, err
 	}
 
-	if err := restore.validateRestoreConfig(k8sClient); err != nil {
+	if err := validateRestoreConfig(k8sClient, restore); err != nil {
 		return nil, err
 	}
 
@@ -117,7 +118,7 @@ func (arv *AerospikeRestoreCustomValidator) ValidateCreate(_ context.Context, ob
 // ValidateUpdate implements webhook.CustomValidator so a webhook will be registered for the type
 func (arv *AerospikeRestoreCustomValidator) ValidateUpdate(_ context.Context, oldObj, newObj runtime.Object,
 ) (admission.Warnings, error) {
-	restore, ok := newObj.(*AerospikeRestore)
+	restore, ok := newObj.(*asdbv1beta1.AerospikeRestore)
 	if !ok {
 		return nil, fmt.Errorf("expected AerospikeRestore, got %T", newObj)
 	}
@@ -126,7 +127,7 @@ func (arv *AerospikeRestoreCustomValidator) ValidateUpdate(_ context.Context, ol
 
 	arLog.Info("Validate update")
 
-	oldRestore := oldObj.(*AerospikeRestore)
+	oldRestore := oldObj.(*asdbv1beta1.AerospikeRestore)
 
 	if !reflect.DeepEqual(oldRestore.Spec, restore.Spec) {
 		return nil, fmt.Errorf("aerospikeRestore Spec is immutable")
@@ -138,7 +139,7 @@ func (arv *AerospikeRestoreCustomValidator) ValidateUpdate(_ context.Context, ol
 // ValidateDelete implements webhook.CustomValidator so a webhook will be registered for the type
 func (arv *AerospikeRestoreCustomValidator) ValidateDelete(_ context.Context, obj runtime.Object,
 ) (admission.Warnings, error) {
-	restore, ok := obj.(*AerospikeRestore)
+	restore, ok := obj.(*asdbv1beta1.AerospikeRestore)
 	if !ok {
 		return nil, fmt.Errorf("expected AerospikeRestore, got %T", obj)
 	}
@@ -151,45 +152,45 @@ func (arv *AerospikeRestoreCustomValidator) ValidateDelete(_ context.Context, ob
 	return nil, nil
 }
 
-func (r *AerospikeRestore) validateRestoreConfig(k8sClient client.Client) error {
+func validateRestoreConfig(k8sClient client.Client, restore *asdbv1beta1.AerospikeRestore) error {
 	restoreConfig := make(map[string]interface{})
 
-	if err := yaml.Unmarshal(r.Spec.Config.Raw, &restoreConfig); err != nil {
+	if err := yaml.Unmarshal(restore.Spec.Config.Raw, &restoreConfig); err != nil {
 		return err
 	}
 
-	backupSvcConfig, err := getBackupServiceFullConfig(k8sClient, r.Spec.BackupService.Name,
-		r.Spec.BackupService.Namespace)
+	backupSvcConfig, err := getBackupServiceFullConfig(k8sClient, restore.Spec.BackupService.Name,
+		restore.Spec.BackupService.Namespace)
 	if err != nil {
 		return err
 	}
 
-	switch r.Spec.Type {
-	case Full, Incremental:
+	switch restore.Spec.Type {
+	case asdbv1beta1.Full, asdbv1beta1.Incremental:
 		var restoreRequest dto.RestoreRequest
 
-		if _, ok := restoreConfig[RoutineKey]; ok {
-			return fmt.Errorf("routine field is not allowed in restore config for restore type %s", r.Spec.Type)
+		if _, ok := restoreConfig[asdbv1beta1.RoutineKey]; ok {
+			return fmt.Errorf("routine field is not allowed in restore config for restore type %s", restore.Spec.Type)
 		}
 
-		if _, ok := restoreConfig[TimeKey]; ok {
-			return fmt.Errorf("time field is not allowed in restore config for restore type %s", r.Spec.Type)
+		if _, ok := restoreConfig[asdbv1beta1.TimeKey]; ok {
+			return fmt.Errorf("time field is not allowed in restore config for restore type %s", restore.Spec.Type)
 		}
 
-		if err := yaml.UnmarshalStrict(r.Spec.Config.Raw, &restoreRequest); err != nil {
+		if err := yaml.UnmarshalStrict(restore.Spec.Config.Raw, &restoreRequest); err != nil {
 			return err
 		}
 
 		return validation.ValidateRestoreRequest(&restoreRequest, backupSvcConfig)
 
-	case Timestamp:
+	case asdbv1beta1.Timestamp:
 		var restoreRequest dto.RestoreTimestampRequest
 
-		if _, ok := restoreConfig[SourceKey]; ok {
-			return fmt.Errorf("source field is not allowed in restore config for restore type %s", r.Spec.Type)
+		if _, ok := restoreConfig[asdbv1beta1.SourceKey]; ok {
+			return fmt.Errorf("source field is not allowed in restore config for restore type %s", restore.Spec.Type)
 		}
 
-		if err := yaml.UnmarshalStrict(r.Spec.Config.Raw, &restoreRequest); err != nil {
+		if err := yaml.UnmarshalStrict(restore.Spec.Config.Raw, &restoreRequest); err != nil {
 			return err
 		}
 
@@ -197,6 +198,6 @@ func (r *AerospikeRestore) validateRestoreConfig(k8sClient client.Client) error 
 
 	default:
 		// Code flow should not come here
-		return fmt.Errorf("unknown restore type %s", r.Spec.Type)
+		return fmt.Errorf("unknown restore type %s", restore.Spec.Type)
 	}
 }

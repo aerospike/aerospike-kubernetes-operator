@@ -21,7 +21,6 @@ import (
 	"sigs.k8s.io/controller-runtime/pkg/webhook"
 
 	// Import all Kubernetes client auth plugins (e.g. Azure, GCP, OIDC, etc.)
-	// to ensure that exec-entrypoint and run can make use of them.
 	_ "k8s.io/client-go/plugin/pkg/client/auth"
 	"k8s.io/client-go/tools/record"
 	ctrl "sigs.k8s.io/controller-runtime"
@@ -30,14 +29,18 @@ import (
 	"sigs.k8s.io/controller-runtime/pkg/healthz"
 	"sigs.k8s.io/controller-runtime/pkg/log/zap"
 
+	asdbv1 "github.com/aerospike/aerospike-kubernetes-operator/v4/api/v1"
+	asdbv1beta1 "github.com/aerospike/aerospike-kubernetes-operator/v4/api/v1beta1"
+	"github.com/aerospike/aerospike-kubernetes-operator/v4/internal/controller/backup"
+	backupservice "github.com/aerospike/aerospike-kubernetes-operator/v4/internal/controller/backup-service"
+	"github.com/aerospike/aerospike-kubernetes-operator/v4/internal/controller/cluster"
+	"github.com/aerospike/aerospike-kubernetes-operator/v4/internal/controller/restore"
+	"github.com/aerospike/aerospike-kubernetes-operator/v4/pkg/configschema"
+
+	webhookv1beta1 "github.com/aerospike/aerospike-kubernetes-operator/v4/internal/webhook/v1beta1"
 	// +kubebuilder:scaffold:imports
-	asdbv1 "github.com/aerospike/aerospike-kubernetes-operator/api/v1"
-	asdbv1beta1 "github.com/aerospike/aerospike-kubernetes-operator/api/v1beta1"
-	"github.com/aerospike/aerospike-kubernetes-operator/internal/controller/backup"
-	backupservice "github.com/aerospike/aerospike-kubernetes-operator/internal/controller/backup-service"
-	"github.com/aerospike/aerospike-kubernetes-operator/internal/controller/cluster"
-	"github.com/aerospike/aerospike-kubernetes-operator/internal/controller/restore"
-	"github.com/aerospike/aerospike-kubernetes-operator/pkg/configschema"
+	// to ensure that exec-entrypoint and run can make use of them.
+	webhookv1 "github.com/aerospike/aerospike-kubernetes-operator/v4/internal/webhook/v1"
 	"github.com/aerospike/aerospike-management-lib/asconfig"
 )
 
@@ -282,7 +285,7 @@ func main() {
 		os.Exit(1)
 	}
 
-	if err = asdbv1.SetupAerospikeClusterWebhookWithManager(mgr); err != nil {
+	if err = webhookv1.SetupAerospikeClusterWebhookWithManager(mgr); err != nil {
 		setupLog.Error(err, "unable to create webhook", "v1-webhook", "AerospikeCluster")
 		os.Exit(1)
 	}
@@ -299,7 +302,7 @@ func main() {
 		os.Exit(1)
 	}
 
-	if err = asdbv1beta1.SetupAerospikeBackupServiceWebhookWithManager(mgr); err != nil {
+	if err = webhookv1beta1.SetupAerospikeBackupServiceWebhookWithManager(mgr); err != nil {
 		setupLog.Error(err, "unable to create webhook", "webhook", "AerospikeBackupService")
 		os.Exit(1)
 	}
@@ -316,7 +319,7 @@ func main() {
 		os.Exit(1)
 	}
 
-	if err = asdbv1beta1.SetupAerospikeBackupWebhookWithManager(mgr); err != nil {
+	if err = webhookv1beta1.SetupAerospikeBackupWebhookWithManager(mgr); err != nil {
 		setupLog.Error(err, "unable to create webhook", "webhook", "AerospikeBackup")
 		os.Exit(1)
 	}
@@ -333,7 +336,7 @@ func main() {
 		os.Exit(1)
 	}
 
-	if err = asdbv1beta1.SetupAerospikeRestoreWebhookWithManager(mgr); err != nil {
+	if err = webhookv1beta1.SetupAerospikeRestoreWebhookWithManager(mgr); err != nil {
 		setupLog.Error(err, "unable to create webhook", "webhook", "AerospikeRestore")
 		os.Exit(1)
 	}
