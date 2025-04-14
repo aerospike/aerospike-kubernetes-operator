@@ -2,6 +2,7 @@ package cluster
 
 import (
 	goctx "context"
+	"fmt"
 	"time"
 
 	. "github.com/onsi/ginkgo/v2"
@@ -11,33 +12,38 @@ import (
 	"k8s.io/apimachinery/pkg/types"
 	"k8s.io/client-go/dynamic"
 	"k8s.io/client-go/util/retry"
+
+	asdbv1 "github.com/aerospike/aerospike-kubernetes-operator/v4/api/v1"
+	"github.com/aerospike/aerospike-kubernetes-operator/v4/test"
 )
 
 var _ = Describe("AutoScaler", func() {
 	ctx := goctx.TODO()
 
 	Context("When doing scale operations", func() {
-		clusterName := "autoscale"
-		clusterNamespacedName := getNamespacedName(
+		clusterName := fmt.Sprintf("autoscale-%d", GinkgoParallelProcess())
+		clusterNamespacedName := test.GetNamespacedName(
 			clusterName, namespace,
 		)
 
 		BeforeEach(
 			func() {
 				aeroCluster := createDummyAerospikeCluster(clusterNamespacedName, 2)
-				err := deployCluster(k8sClient, ctx, aeroCluster)
-				Expect(err).ToNot(HaveOccurred())
+				Expect(DeployCluster(k8sClient, ctx, aeroCluster)).ToNot(HaveOccurred())
 			},
 		)
 
 		AfterEach(
 			func() {
-				aeroCluster, err := getCluster(
-					k8sClient, ctx, clusterNamespacedName,
-				)
-				Expect(err).ToNot(HaveOccurred())
+				aeroCluster := &asdbv1.AerospikeCluster{
+					ObjectMeta: metav1.ObjectMeta{
+						Name:      clusterName,
+						Namespace: namespace,
+					},
+				}
 
-				_ = deleteCluster(k8sClient, ctx, aeroCluster)
+				Expect(DeleteCluster(k8sClient, ctx, aeroCluster)).ToNot(HaveOccurred())
+				Expect(CleanupPVC(k8sClient, aeroCluster.Namespace, aeroCluster.Name)).ToNot(HaveOccurred())
 			},
 		)
 
@@ -84,6 +90,6 @@ func validateScaleSubresourceOperation(currentSize, desiredSize int, clusterName
 			Expect(err).ToNot(HaveOccurred())
 
 			return aeroCluster.Spec.Size
-		}, 1*time.Minute,
+		}, time.Minute, time.Second,
 	).Should(Equal(int32(desiredSize)))
 }

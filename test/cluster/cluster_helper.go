@@ -18,14 +18,15 @@ import (
 	"k8s.io/apimachinery/pkg/util/intstr"
 	"k8s.io/apimachinery/pkg/util/sets"
 	"k8s.io/apimachinery/pkg/util/wait"
+	"k8s.io/client-go/util/retry"
 	"k8s.io/utils/ptr"
 	ctrl "sigs.k8s.io/controller-runtime"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 
 	as "github.com/aerospike/aerospike-client-go/v7"
-	asdbv1 "github.com/aerospike/aerospike-kubernetes-operator/api/v1"
-	"github.com/aerospike/aerospike-kubernetes-operator/pkg/utils"
-	"github.com/aerospike/aerospike-kubernetes-operator/test"
+	asdbv1 "github.com/aerospike/aerospike-kubernetes-operator/v4/api/v1"
+	"github.com/aerospike/aerospike-kubernetes-operator/v4/pkg/utils"
+	"github.com/aerospike/aerospike-kubernetes-operator/v4/test"
 	lib "github.com/aerospike/aerospike-management-lib"
 	"github.com/aerospike/aerospike-management-lib/info"
 )
@@ -64,7 +65,7 @@ const (
 var aerospikeVolumeInitMethodDeleteFiles = asdbv1.AerospikeVolumeMethodDeleteFiles
 
 var (
-	retryInterval      = time.Second * 5
+	retryInterval      = time.Second * 30
 	cascadeDeleteFalse = false
 	cascadeDeleteTrue  = true
 	logger             = logr.Discard()
@@ -105,11 +106,6 @@ func rollingRestartClusterByEnablingTLS(
 	}
 
 	err = validateServiceUpdate(k8sClient, ctx, clusterNamespacedName, []int32{serviceTLSPort, serviceNonTLSPort})
-	if err != nil {
-		return err
-	}
-
-	aeroCluster, err = getCluster(k8sClient, ctx, clusterNamespacedName)
 	if err != nil {
 		return err
 	}
@@ -168,11 +164,6 @@ func rollingRestartClusterByDisablingTLS(
 		return err
 	}
 
-	aeroCluster, err = getCluster(k8sClient, ctx, clusterNamespacedName)
-	if err != nil {
-		return err
-	}
-
 	// port should remain same i.e. service tls-port
 	err = validateReadinessProbe(ctx, k8sClient, aeroCluster, serviceTLSPort)
 	if err != nil {
@@ -223,7 +214,7 @@ func scaleUpClusterTestWithNSDeviceHandling(
 
 	for podName := range aeroCluster.Status.Pods {
 		// DirtyVolumes are not populated for scaled-up pods.
-		if podName == "update-cluster-0-3" {
+		if podName == aeroCluster.Name+"-0-3" {
 			continue
 		}
 
@@ -718,7 +709,7 @@ func getClusterIfExists(
 	return aeroCluster, nil
 }
 
-func deleteCluster(
+func DeleteCluster(
 	k8sClient client.Client, ctx goctx.Context,
 	aeroCluster *asdbv1.AerospikeCluster,
 ) error {
@@ -730,7 +721,7 @@ func deleteCluster(
 	// TODO: Maybe add these checks in cluster delete itself.
 	// time.Sleep(time.Second * 12)
 
-	clusterNamespacedName := getNamespacedName(
+	clusterNamespacedName := test.GetNamespacedName(
 		aeroCluster.Name, aeroCluster.Namespace,
 	)
 
@@ -783,16 +774,7 @@ func deleteCluster(
 	return nil
 }
 
-// DeleteCluster is the public variant of deleteCluster
-// Remove this when deleteCluster will be made public
-func DeleteCluster(
-	k8sClient client.Client, ctx goctx.Context,
-	aeroCluster *asdbv1.AerospikeCluster,
-) error {
-	return deleteCluster(k8sClient, ctx, aeroCluster)
-}
-
-func deployCluster(
+func DeployCluster(
 	k8sClient client.Client, ctx goctx.Context,
 	aeroCluster *asdbv1.AerospikeCluster,
 ) error {
@@ -800,15 +782,6 @@ func deployCluster(
 		k8sClient, ctx, aeroCluster, retryInterval,
 		getTimeout(aeroCluster.Spec.Size),
 	)
-}
-
-// DeployCluster is the public variant of deployCluster
-// Remove this when deployCluster will be made public
-func DeployCluster(
-	k8sClient client.Client, ctx goctx.Context,
-	aeroCluster *asdbv1.AerospikeCluster,
-) error {
-	return deployCluster(k8sClient, ctx, aeroCluster)
 }
 
 func deployClusterWithTO(
@@ -862,8 +835,18 @@ func updateClusterWithTO(
 	k8sClient client.Client, ctx goctx.Context,
 	aeroCluster *asdbv1.AerospikeCluster, timeout time.Duration,
 ) error {
-	err := k8sClient.Update(ctx, aeroCluster)
-	if err != nil {
+	if err := retry.RetryOnConflict(retry.DefaultRetry, func() error {
+		current, err := getCluster(k8sClient, ctx, utils.GetNamespacedName(aeroCluster))
+		if err != nil {
+			return err
+		}
+
+		current.Spec = *lib.DeepCopy(&aeroCluster.Spec).(*asdbv1.AerospikeClusterSpec)
+		current.Labels = aeroCluster.Labels
+		current.Annotations = aeroCluster.Annotations
+
+		return k8sClient.Update(ctx, current)
+	}); err != nil {
 		return err
 	}
 
@@ -871,6 +854,24 @@ func updateClusterWithTO(
 		k8sClient, ctx, aeroCluster, int(aeroCluster.Spec.Size), retryInterval,
 		timeout, []asdbv1.AerospikeClusterPhase{asdbv1.AerospikeClusterCompleted},
 	)
+}
+
+func updateClusterWithNoWait(
+	k8sClient client.Client, ctx goctx.Context,
+	aeroCluster *asdbv1.AerospikeCluster,
+) error {
+	return retry.RetryOnConflict(retry.DefaultRetry, func() error {
+		current, err := getCluster(k8sClient, ctx, utils.GetNamespacedName(aeroCluster))
+		if err != nil {
+			return err
+		}
+
+		current.Spec = *lib.DeepCopy(&aeroCluster.Spec).(*asdbv1.AerospikeClusterSpec)
+		current.Labels = aeroCluster.Labels
+		current.Annotations = aeroCluster.Annotations
+
+		return k8sClient.Update(ctx, current)
+	})
 }
 
 func getClusterPodList(

@@ -9,8 +9,9 @@ import (
 	v1 "k8s.io/api/core/v1"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 
-	asdbv1 "github.com/aerospike/aerospike-kubernetes-operator/api/v1"
-	"github.com/aerospike/aerospike-kubernetes-operator/pkg/utils"
+	asdbv1 "github.com/aerospike/aerospike-kubernetes-operator/v4/api/v1"
+	"github.com/aerospike/aerospike-kubernetes-operator/v4/pkg/utils"
+	"github.com/aerospike/aerospike-kubernetes-operator/v4/test"
 )
 
 const tempTestDir = "/tmp/test"
@@ -39,7 +40,7 @@ func WarmRestart(ctx goCtx.Context) {
 
 func rollCluster(ctx goCtx.Context, image string) {
 	clusterName := "warm-restart-cluster"
-	clusterNamespacedName := getNamespacedName(clusterName, namespace)
+	clusterNamespacedName := test.GetNamespacedName(clusterName, namespace)
 
 	aeroCluster, err := getAeroClusterConfig(
 		clusterNamespacedName, image,
@@ -56,28 +57,25 @@ func rollCluster(ctx goCtx.Context, image string) {
 			Aerospike: &asdbv1.AerospikeServerVolumeAttachment{Path: tempTestDir},
 		},
 	)
-	err = deployCluster(k8sClient, ctx, aeroCluster)
-	Expect(err).ToNot(HaveOccurred())
+	Expect(DeployCluster(k8sClient, ctx, aeroCluster)).ToNot(HaveOccurred())
 
 	defer func(
 		k8sClient client.Client, ctx goCtx.Context,
 		aeroCluster *asdbv1.AerospikeCluster,
 	) {
-		_ = deleteCluster(k8sClient, ctx, aeroCluster)
+		Expect(DeleteCluster(k8sClient, ctx, aeroCluster)).ToNot(HaveOccurred())
+		Expect(CleanupPVC(k8sClient, aeroCluster.Namespace, aeroCluster.Name)).ToNot(HaveOccurred())
 	}(k8sClient, ctx, aeroCluster)
 
 	// Create a file in the empty dir as a marker.
 	err = createMarkerFile(ctx, aeroCluster)
 	Expect(err).ToNot(HaveOccurred())
-
 	err = rollingRestartClusterTest(
 		logger, k8sClient, ctx, clusterNamespacedName,
 	)
 	Expect(err).ToNot(HaveOccurred())
-
 	podToMarkerPresent, err := isMarkerPresent(ctx, aeroCluster)
 	Expect(err).ToNot(HaveOccurred())
-
 	pkgLog.Info("Rolling restarted", "Markers", podToMarkerPresent)
 
 	for _, marker := range podToMarkerPresent {

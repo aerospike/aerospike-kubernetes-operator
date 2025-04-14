@@ -36,7 +36,7 @@ import (
 	"sigs.k8s.io/controller-runtime/pkg/webhook"
 	"sigs.k8s.io/controller-runtime/pkg/webhook/admission"
 
-	asdbv1 "github.com/aerospike/aerospike-kubernetes-operator/api/v1"
+	asdbv1 "github.com/aerospike/aerospike-kubernetes-operator/v4/api/v1"
 	lib "github.com/aerospike/aerospike-management-lib"
 	"github.com/aerospike/aerospike-management-lib/asconfig"
 )
@@ -219,6 +219,25 @@ func validate(aslog logr.Logger, cluster *asdbv1.AerospikeCluster) (admission.Wa
 			"image version %s not supported. Base version %s", version,
 			baseVersion,
 		)
+	}
+
+	initVersion, err := asdbv1.GetImageVersion(asdbv1.GetAerospikeInitContainerImage(cluster))
+	if err != nil {
+		return warnings, err
+	}
+
+	if asdbv1.GetBool(cluster.Spec.EnableDynamicConfigUpdate) {
+		val, err = lib.CompareVersions(initVersion, minInitVersionForDynamicConf)
+		if err != nil {
+			return warnings, fmt.Errorf("failed to check init image version: %v", err)
+		}
+
+		if val < 0 {
+			return warnings, fmt.Errorf("cannot set enableDynamicConfigUpdate flag, init container version is less"+
+				" than %s. Please visit https://aerospike.com/docs/cloud/kubernetes/operator/Cluster-configuration-settings#spec"+
+				" for more details about enableDynamicConfigUpdate flag",
+				minInitVersionForDynamicConf)
+		}
 	}
 
 	err = validateClusterSize(aslog, int(cluster.Spec.Size))
