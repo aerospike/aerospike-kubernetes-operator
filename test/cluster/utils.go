@@ -70,7 +70,7 @@ func waitForAerospikeCluster(
 			if err != nil {
 				if errors.IsNotFound(err) {
 					pkgLog.Info(
-						"Waiting for availability of %s AerospikeCluster\n",
+						"Waiting for availability of AerospikeCluster\n",
 						"name", aeroCluster.Name,
 					)
 
@@ -101,7 +101,7 @@ func isClusterStateValid(
 	newCluster *asdbv1.AerospikeCluster, replicas int, expectedPhases []asdbv1.AerospikeClusterPhase,
 ) bool {
 	if int(newCluster.Status.Size) != replicas {
-		pkgLog.Info("Cluster size is not correct")
+		pkgLog.Info("Cluster size is not correct", "name", aeroCluster.Name)
 		return false
 	}
 
@@ -116,7 +116,7 @@ func isClusterStateValid(
 		}
 
 		if !reflect.DeepEqual(statusToSpec, &newCluster.Spec) {
-			pkgLog.Info("Cluster status is not matching the spec")
+			pkgLog.Info("Cluster status is not matching the spec", "name", aeroCluster.Name)
 			return false
 		}
 	}
@@ -131,7 +131,7 @@ func isClusterStateValid(
 
 	for podName := range newCluster.Status.Pods {
 		if newCluster.Status.Pods[podName].Aerospike.NodeID == "" {
-			pkgLog.Info("Cluster pod's nodeID is empty")
+			pkgLog.Info("Cluster pod's nodeID is empty", "name", aeroCluster.Name)
 			return false
 		}
 
@@ -142,21 +142,21 @@ func isClusterStateValid(
 		pkgLog.Info(
 			fmt.Sprintf("Cluster pod's image %s not same as spec %s", newCluster.Status.Pods[podName].Image,
 				aeroCluster.Spec.Image,
-			),
+			), "name", aeroCluster.Name,
 		)
 
 		return false
 	}
 
 	if newCluster.Labels[asdbv1.AerospikeAPIVersionLabel] != asdbv1.AerospikeAPIVersion {
-		pkgLog.Info("Cluster API version label is not correct")
+		pkgLog.Info("Cluster API version label is not correct", "name", aeroCluster.Name)
 		return false
 	}
 
 	// Validate phase
 	phaseSet := set.NewSet(expectedPhases...)
 	if !phaseSet.Contains(newCluster.Status.Phase) {
-		pkgLog.Info("Cluster phase is not correct")
+		pkgLog.Info("Cluster phase is not correct", "name", aeroCluster.Name)
 		return false
 	}
 
@@ -165,18 +165,18 @@ func isClusterStateValid(
 		selector := labels.SelectorFromSet(operatorUtils.LabelsForAerospikeCluster(newCluster.Name))
 
 		if newCluster.Status.Selector != selector.String() {
-			pkgLog.Info("Cluster status selector is not correct")
+			pkgLog.Info("Cluster status selector is not correct", "name", aeroCluster.Name)
 			return false
 		}
 	}
 
-	pkgLog.Info("Cluster state is validated successfully")
+	pkgLog.Info("Cluster state is validated successfully", "name", aeroCluster.Name)
 
 	return true
 }
 
 func getTimeout(nodes int32) time.Duration {
-	return 3 * time.Minute * time.Duration(nodes)
+	return 4 * time.Minute * time.Duration(nodes)
 }
 
 func getPodLogs(
@@ -729,33 +729,16 @@ func deletePVC(k8sClient client.Client, pvcNamespacedName types.NamespacedName) 
 	return nil
 }
 
-func cleanupPVC(k8sClient client.Client, ns string) error {
-	// List the pvc for this aeroCluster's statefulset
-	pvcList := &corev1.PersistentVolumeClaimList{}
-	clLabels := map[string]string{"app": "aerospike-cluster"}
-	labelSelector := labels.SelectorFromSet(clLabels)
-	listOps := &client.ListOptions{Namespace: ns, LabelSelector: labelSelector}
-
-	if err := k8sClient.List(goctx.TODO(), pvcList, listOps); err != nil {
-		return err
-	}
-
-	for pvcIndex := range pvcList.Items {
-		pkgLog.Info("Found pvc, deleting it", "pvcName",
-			pvcList.Items[pvcIndex].Name, "namespace", pvcList.Items[pvcIndex].Namespace)
-
-		if operatorUtils.IsPVCTerminating(&pvcList.Items[pvcIndex]) {
-			continue
+func CleanupPVC(k8sClient client.Client, ns, clName string) error {
+	if clName == "" {
+		if err := k8sClient.DeleteAllOf(goctx.TODO(), &corev1.PersistentVolumeClaim{}, client.InNamespace(ns)); err != nil {
+			return fmt.Errorf("could not delete pvcs: %w", err)
 		}
-		// if utils.ContainsString(pvc.Finalizers, "kubernetes.io/pvc-protection") {
-		//	pvc.Finalizers = utils.RemoveString(pvc.Finalizers, "kubernetes.io/pvc-protection")
-		//	if err := k8sClient.Patch(goctx.TODO(), &pvc, client.Merge); err != nil {
-		//		return fmt.Errorf("could not patch %s finalizer from following pvc: %s: %w",
-		//			"kubernetes.io/pvc-protection", pvc.Name, err)
-		//	}
-		// }
-		if err := k8sClient.Delete(goctx.TODO(), &pvcList.Items[pvcIndex]); err != nil {
-			return fmt.Errorf("could not delete pvc %s: %w", pvcList.Items[pvcIndex].Name, err)
+	} else {
+		clLabels := operatorUtils.LabelsForAerospikeCluster(clName)
+		if err := k8sClient.DeleteAllOf(goctx.TODO(), &corev1.PersistentVolumeClaim{}, client.InNamespace(ns),
+			client.MatchingLabels(clLabels)); err != nil {
+			return fmt.Errorf("could not delete pvcs: %w", err)
 		}
 	}
 
@@ -900,9 +883,15 @@ func getGitRepoRootPath() (string, error) {
 	return strings.TrimSpace(string(path)), nil
 }
 
-func getNamespacedName(name, namespace string) types.NamespacedName {
-	return types.NamespacedName{
-		Name:      name,
-		Namespace: namespace,
+func randomizeServicePorts(
+	aeroCluster *asdbv1.AerospikeCluster,
+	tlsEnabled bool, processID int,
+) {
+	if tlsEnabled {
+		aeroCluster.Spec.AerospikeConfig.Value["network"].(map[string]interface {
+		})["service"].(map[string]interface{})["tls-port"] = serviceTLSPort + processID*10
 	}
+
+	aeroCluster.Spec.AerospikeConfig.Value["network"].(map[string]interface {
+	})["service"].(map[string]interface{})["port"] = serviceNonTLSPort + processID*10
 }

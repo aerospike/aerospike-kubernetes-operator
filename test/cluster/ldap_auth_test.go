@@ -6,6 +6,7 @@ package cluster
 
 import (
 	goctx "context"
+	"fmt"
 	"time"
 
 	. "github.com/onsi/ginkgo/v2"
@@ -22,30 +23,39 @@ import (
 var _ = Describe(
 	"LDAP External Auth test", func() {
 		ctx := goctx.TODO()
+		clusterName := fmt.Sprintf("ldap-auth-%d", GinkgoParallelProcess())
+		clusterNamespacedName := test.GetNamespacedName(
+			clusterName, namespace,
+		)
+
+		AfterEach(
+			func() {
+				aeroCluster := &asdbv1.AerospikeCluster{
+					ObjectMeta: metav1.ObjectMeta{
+						Name:      clusterNamespacedName.Name,
+						Namespace: clusterNamespacedName.Namespace,
+					},
+				}
+
+				Expect(DeleteCluster(k8sClient, ctx, aeroCluster)).ToNot(HaveOccurred())
+				Expect(CleanupPVC(k8sClient, aeroCluster.Namespace, aeroCluster.Name)).ToNot(HaveOccurred())
+			},
+		)
+
 		It(
 			"Validate LDAP user transactions", func() {
 				By("DeployCluster with LDAP auth")
-				clusterNamespacedName := getNamespacedName(
-					"ldap-auth", namespace,
-				)
 				aeroCluster := getAerospikeClusterSpecWithLDAP(clusterNamespacedName)
-				err := deployCluster(k8sClient, ctx, aeroCluster)
-				Expect(err).ToNot(HaveOccurred())
+				Expect(DeployCluster(k8sClient, ctx, aeroCluster)).ToNot(HaveOccurred())
 
 				By("Validate transactions for user01")
-				err = validateTransactions(aeroCluster, "user01", "password01")
-				Expect(err).ToNot(HaveOccurred())
+				Expect(validateTransactions(aeroCluster, "user01", "password01")).ToNot(HaveOccurred())
 
 				By("Validate transactions for user02")
-				err = validateTransactions(aeroCluster, "user02", "password02")
-				Expect(err).ToNot(HaveOccurred())
+				Expect(validateTransactions(aeroCluster, "user02", "password02")).ToNot(HaveOccurred())
 
 				By("Validate invalid user")
-				err = validateTransactions(aeroCluster, "dne", "dne")
-				Expect(err).To(HaveOccurred())
-
-				err = deleteCluster(k8sClient, ctx, aeroCluster)
-				Expect(err).ToNot(HaveOccurred())
+				Expect(validateTransactions(aeroCluster, "dne", "dne")).To(HaveOccurred())
 			},
 		)
 	},
