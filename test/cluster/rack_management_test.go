@@ -2,15 +2,18 @@ package cluster
 
 import (
 	goctx "context"
+	"fmt"
 	"time"
 
 	. "github.com/onsi/ginkgo/v2"
 	. "github.com/onsi/gomega"
 	v1 "k8s.io/api/core/v1"
 	"k8s.io/apimachinery/pkg/api/resource"
+	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/utils/ptr"
 
 	asdbv1 "github.com/aerospike/aerospike-kubernetes-operator/v4/api/v1"
+	"github.com/aerospike/aerospike-kubernetes-operator/v4/test"
 )
 
 var _ = Describe(
@@ -19,25 +22,36 @@ var _ = Describe(
 
 		Context(
 			"When doing valid operations", func() {
+				clusterName := fmt.Sprintf("rack-management-%d", GinkgoParallelProcess())
+				clusterNamespacedName := test.GetNamespacedName(
+					clusterName, namespace,
+				)
+
+				AfterEach(
+					func() {
+						aeroCluster := &asdbv1.AerospikeCluster{
+							ObjectMeta: metav1.ObjectMeta{
+								Name:      clusterNamespacedName.Name,
+								Namespace: clusterNamespacedName.Namespace,
+							},
+						}
+						Expect(DeleteCluster(k8sClient, ctx, aeroCluster)).ToNot(HaveOccurred())
+						Expect(CleanupPVC(k8sClient, aeroCluster.Namespace, aeroCluster.Name)).ToNot(HaveOccurred())
+					},
+				)
 
 				It(
 					"Should validate rack management flow", func() {
-						clusterName := "rack-management1"
-						clusterNamespacedName := getNamespacedName(
-							clusterName, namespace,
-						)
-
 						aeroCluster := createDummyAerospikeCluster(
 							clusterNamespacedName, 2,
 						)
 
 						// Setup: Deploy cluster without rack
-						err := deployCluster(k8sClient, ctx, aeroCluster)
-						Expect(err).ToNot(HaveOccurred())
+						Expect(DeployCluster(k8sClient, ctx, aeroCluster)).ToNot(HaveOccurred())
 
 						// Op1: AddRackInCluster
 						By("Adding 1st rack in the cluster")
-						err = addRack(
+						err := addRack(
 							k8sClient, ctx, clusterNamespacedName,
 							&asdbv1.Rack{ID: 1},
 						)
@@ -90,11 +104,6 @@ var _ = Describe(
 
 						By("Removing rack enabled namespace")
 
-						aeroCluster, err = getCluster(
-							k8sClient, ctx, clusterNamespacedName,
-						)
-						Expect(err).ToNot(HaveOccurred())
-
 						aeroCluster.Spec.RackConfig.Namespaces = []string{}
 
 						err = updateCluster(k8sClient, ctx, aeroCluster)
@@ -125,11 +134,6 @@ var _ = Describe(
 
 						By("Removing all racks")
 
-						aeroCluster, err = getCluster(
-							k8sClient, ctx, clusterNamespacedName,
-						)
-						Expect(err).ToNot(HaveOccurred())
-
 						rackConf := asdbv1.RackConfig{}
 						aeroCluster.Spec.RackConfig = rackConf
 
@@ -142,23 +146,12 @@ var _ = Describe(
 							k8sClient, ctx, clusterNamespacedName,
 						)
 						Expect(err).ToNot(HaveOccurred())
-
-						// cleanup: Remove the cluster
-						By("Cleaning up the cluster")
-
-						err = deleteCluster(k8sClient, ctx, aeroCluster)
-						Expect(err).ToNot(HaveOccurred())
 					},
 				)
 
 				It(
 					"should allow Cluster sz less than number of racks",
 					func() {
-						clusterName := "rack-management2"
-						clusterNamespacedName := getNamespacedName(
-							clusterName, namespace,
-						)
-
 						aeroCluster := createDummyAerospikeCluster(
 							clusterNamespacedName, 2,
 						)
@@ -167,33 +160,23 @@ var _ = Describe(
 						aeroCluster.Spec.RackConfig.Racks = racks
 
 						// Setup: Deploy cluster without rack
-						err := deployCluster(k8sClient, ctx, aeroCluster)
-						Expect(err).ToNot(HaveOccurred())
+						Expect(DeployCluster(k8sClient, ctx, aeroCluster)).ToNot(HaveOccurred())
 
 						// Op1: AddRackInCluster
 						By("Adding 1st rack in the cluster")
-						aeroCluster, err = getCluster(
-							k8sClient, ctx, clusterNamespacedName,
-						)
-						Expect(err).ToNot(HaveOccurred())
 
 						racks = getDummyRackConf(1, 2, 3, 4, 5, 6)
 						aeroCluster.Spec.RackConfig.Racks = racks
 
-						err = updateCluster(k8sClient, ctx, aeroCluster)
-						Expect(err).ToNot(HaveOccurred())
+						Expect(updateCluster(k8sClient, ctx, aeroCluster)).ToNot(HaveOccurred())
 
-						err = validateRackEnabledCluster(
+						err := validateRackEnabledCluster(
 							k8sClient, ctx, clusterNamespacedName,
 						)
 						Expect(err).ToNot(HaveOccurred())
 
 						// Op2: RemoveRack
 						By("Removing single rack")
-						aeroCluster, err = getCluster(
-							k8sClient, ctx, clusterNamespacedName,
-						)
-						Expect(err).ToNot(HaveOccurred())
 
 						racks = getDummyRackConf(1, 2, 3, 4, 5)
 						aeroCluster.Spec.RackConfig.Racks = racks
@@ -205,11 +188,6 @@ var _ = Describe(
 							k8sClient, ctx, clusterNamespacedName,
 						)
 						Expect(err).ToNot(HaveOccurred())
-						// cleanup: Remove the cluster
-						By("Cleaning up the cluster")
-
-						err = deleteCluster(k8sClient, ctx, aeroCluster)
-						Expect(err).ToNot(HaveOccurred())
 					},
 				)
 
@@ -217,18 +195,13 @@ var _ = Describe(
 					"When using valid rack aerospike config", func() {
 						// WARNING: Tests assume that only "service" is updated in aerospikeConfig, Validation is hardcoded
 
-						clusterName := "rack-config-update"
-						clusterNamespacedName := getNamespacedName(
-							clusterName, namespace,
-						)
-						aeroCluster := createDummyAerospikeCluster(
-							clusterNamespacedName, 2,
-						)
-						racks := getDummyRackConf(1, 2)
-
 						It(
 							"Should validate whole flow of rack.AerospikeConfig use",
 							func() {
+								aeroCluster := createDummyAerospikeCluster(
+									clusterNamespacedName, 2,
+								)
+								racks := getDummyRackConf(1, 2)
 
 								// Op1: Add rack.AerospikeConfig
 								By("Deploying cluster having rack.AerospikeConfig")
@@ -256,8 +229,7 @@ var _ = Describe(
 								Expect(err).ToNot(HaveOccurred())
 
 								aeroCluster.Spec.RackConfig = asdbv1.RackConfig{Racks: racksCopy}
-								err = deployCluster(k8sClient, ctx, aeroCluster)
-								Expect(err).ToNot(HaveOccurred())
+								Expect(DeployCluster(k8sClient, ctx, aeroCluster)).ToNot(HaveOccurred())
 
 								err = validateRackEnabledCluster(
 									k8sClient, ctx, clusterNamespacedName,
@@ -272,11 +244,6 @@ var _ = Describe(
 
 								// Op2: Update rack.AerospikeConfig
 								By("Update rack.AerospikeConfig")
-
-								aeroCluster, err := getCluster(
-									k8sClient, ctx, clusterNamespacedName,
-								)
-								Expect(err).ToNot(HaveOccurred())
 
 								racks[0].InputAerospikeConfig = &asdbv1.AerospikeConfigSpec{
 									Value: map[string]interface{}{
@@ -316,11 +283,6 @@ var _ = Describe(
 
 								// Op3: Remove rack.AerospikeConfig
 								By("Remove rack.AerospikeConfig")
-
-								aeroCluster, err = getCluster(
-									k8sClient, ctx, clusterNamespacedName,
-								)
-								Expect(err).ToNot(HaveOccurred())
 
 								racks[0].InputAerospikeConfig = nil
 								racks[1].InputAerospikeConfig = nil
@@ -364,12 +326,6 @@ var _ = Describe(
 									)
 									Expect(err).ToNot(HaveOccurred())
 								}
-
-								// cleanup: Remove the cluster
-								By("Cleaning up the cluster")
-
-								err = deleteCluster(k8sClient, ctx, aeroCluster)
-								Expect(err).ToNot(HaveOccurred())
 							},
 						)
 					},
@@ -377,23 +333,16 @@ var _ = Describe(
 
 				Context(
 					"When using valid rack storage config", func() {
-
-						clusterName := "rack-specific-storage"
-						clusterNamespacedName := getNamespacedName(
-							clusterName, namespace,
-						)
-						aeroCluster := createDummyRackAwareWithStorageAerospikeCluster(
-							clusterNamespacedName, 2,
-						)
-
 						It(
 							"Should validate empty common storage if per rack storage is provided",
 							func() {
+								aeroCluster := createDummyRackAwareWithStorageAerospikeCluster(
+									clusterNamespacedName, 2,
+								)
 
-								err := deployCluster(k8sClient, ctx, aeroCluster)
-								Expect(err).ToNot(HaveOccurred())
+								Expect(DeployCluster(k8sClient, ctx, aeroCluster)).ToNot(HaveOccurred())
 
-								err = validateRackEnabledCluster(
+								err := validateRackEnabledCluster(
 									k8sClient, ctx,
 									clusterNamespacedName,
 								)
@@ -407,10 +356,8 @@ var _ = Describe(
 
 		Context(
 			"When doing invalid operations", func() {
-				clusterName := "invalid-rack-config"
-				clusterNamespacedName := getNamespacedName(
-					clusterName, namespace,
-				)
+				clusterName := fmt.Sprintf("invalid-rack-config-%d", GinkgoParallelProcess())
+				clusterNamespacedName := test.GetNamespacedName(clusterName, namespace)
 
 				Context(
 					"when deploy cluster with invalid rack ", func() {
@@ -421,16 +368,14 @@ var _ = Describe(
 										aeroCluster := createDummyAerospikeCluster(
 											clusterNamespacedName, 2,
 										)
+
 										rackConf := asdbv1.RackConfig{
 											Racks: []asdbv1.Rack{
 												{ID: 2}, {ID: 2},
 											},
 										}
 										aeroCluster.Spec.RackConfig = rackConf
-										err := deployCluster(
-											k8sClient, ctx, aeroCluster,
-										)
-										Expect(err).Should(HaveOccurred())
+										Expect(DeployCluster(k8sClient, ctx, aeroCluster)).Should(HaveOccurred())
 									},
 								)
 								It(
@@ -445,10 +390,7 @@ var _ = Describe(
 											},
 										}
 										aeroCluster.Spec.RackConfig = rackConf
-										err := deployCluster(
-											k8sClient, ctx, aeroCluster,
-										)
-										Expect(err).Should(HaveOccurred())
+										Expect(DeployCluster(k8sClient, ctx, aeroCluster)).Should(HaveOccurred())
 									},
 								)
 								It(
@@ -464,10 +406,7 @@ var _ = Describe(
 											},
 										}
 										aeroCluster.Spec.RackConfig = rackConf
-										err := deployCluster(
-											k8sClient, ctx, aeroCluster,
-										)
-										Expect(err).Should(HaveOccurred())
+										Expect(DeployCluster(k8sClient, ctx, aeroCluster)).Should(HaveOccurred())
 									},
 								)
 							},
@@ -486,8 +425,7 @@ var _ = Describe(
 
 										aeroCluster.Spec.RackConfig.Racks[0].InputStorage = nil
 
-										err := deployCluster(k8sClient, ctx, aeroCluster)
-										Expect(err).Should(HaveOccurred())
+										Expect(DeployCluster(k8sClient, ctx, aeroCluster)).Should(HaveOccurred())
 
 									},
 								)
@@ -510,10 +448,7 @@ var _ = Describe(
 												"namespaces": "invalidConf",
 											},
 										}
-										err := deployCluster(
-											k8sClient, ctx, aeroCluster,
-										)
-										Expect(err).Should(HaveOccurred())
+										Expect(DeployCluster(k8sClient, ctx, aeroCluster)).Should(HaveOccurred())
 									},
 								)
 
@@ -535,10 +470,7 @@ var _ = Describe(
 										aeroCluster.Spec.RackConfig.Racks = append(aeroCluster.Spec.RackConfig.Racks,
 											asdbv1.Rack{ID: 2, InputAerospikeConfig: RackASConfig})
 
-										err := deployCluster(
-											k8sClient, ctx, aeroCluster,
-										)
-										Expect(err).Should(HaveOccurred())
+										Expect(DeployCluster(k8sClient, ctx, aeroCluster)).Should(HaveOccurred())
 									},
 								)
 
@@ -620,11 +552,7 @@ var _ = Describe(
 																},
 															}
 															aeroCluster.Spec.RackConfig.Racks[0].InputAerospikeConfig = &aeroConfig
-															err := deployCluster(
-																k8sClient, ctx,
-																aeroCluster,
-															)
-															Expect(err).Should(HaveOccurred())
+															Expect(DeployCluster(k8sClient, ctx, aeroCluster)).Should(HaveOccurred())
 														}
 													},
 												)
@@ -654,11 +582,7 @@ var _ = Describe(
 																},
 															}
 															aeroCluster.Spec.RackConfig.Racks[0].InputAerospikeConfig = &aeroConfig
-															err := deployCluster(
-																k8sClient, ctx,
-																aeroCluster,
-															)
-															Expect(err).Should(HaveOccurred())
+															Expect(DeployCluster(k8sClient, ctx, aeroCluster)).Should(HaveOccurred())
 														}
 													},
 												)
@@ -685,12 +609,7 @@ var _ = Describe(
 														},
 													}
 													aeroCluster.Spec.RackConfig.Racks[0].InputAerospikeConfig = &aeroConfig
-													err := deployCluster(
-														k8sClient, ctx,
-														aeroCluster,
-													)
-													Expect(err).Should(HaveOccurred())
-
+													Expect(DeployCluster(k8sClient, ctx, aeroCluster)).Should(HaveOccurred())
 												}
 											},
 										)
@@ -715,21 +634,21 @@ var _ = Describe(
 								}
 								aeroCluster.Spec.RackConfig = rackConf
 
-								err := deployCluster(
-									k8sClient, ctx, aeroCluster,
-								)
-								Expect(err).ToNot(HaveOccurred())
+								Expect(DeployCluster(k8sClient, ctx, aeroCluster)).ToNot(HaveOccurred())
 							},
 						)
 
 						AfterEach(
 							func() {
-								aeroCluster, err := getCluster(
-									k8sClient, ctx, clusterNamespacedName,
-								)
-								Expect(err).ToNot(HaveOccurred())
+								aeroCluster := &asdbv1.AerospikeCluster{
+									ObjectMeta: metav1.ObjectMeta{
+										Name:      clusterNamespacedName.Name,
+										Namespace: clusterNamespacedName.Namespace,
+									},
+								}
 
-								_ = deleteCluster(k8sClient, ctx, aeroCluster)
+								Expect(DeleteCluster(k8sClient, ctx, aeroCluster)).ToNot(HaveOccurred())
+								Expect(CleanupPVC(k8sClient, aeroCluster.Namespace, aeroCluster.Name)).ToNot(HaveOccurred())
 							},
 						)
 
@@ -800,9 +719,10 @@ var _ = Describe(
 
 		Context("When testing failed rack recovery by scale down", func() {
 			clusterName := "failed-rack-config"
-			clusterNamespacedName := getNamespacedName(
+			clusterNamespacedName := test.GetNamespacedName(
 				clusterName, namespace,
 			)
+
 			BeforeEach(
 				func() {
 					nodes, err := getNodeList(ctx, k8sClient)
@@ -812,21 +732,24 @@ var _ = Describe(
 					racks := getDummyRackConf(1, 2)
 					aeroCluster.Spec.RackConfig = asdbv1.RackConfig{Racks: racks}
 					aeroCluster.Spec.PodSpec.MultiPodPerHost = ptr.To(false)
+					randomizeServicePorts(aeroCluster, false, GinkgoParallelProcess())
 
 					By("Deploying cluster")
-					err = deployCluster(k8sClient, ctx, aeroCluster)
-					Expect(err).ToNot(HaveOccurred())
+					Expect(DeployCluster(k8sClient, ctx, aeroCluster)).ToNot(HaveOccurred())
 				},
 			)
 
 			AfterEach(
 				func() {
-					aeroCluster, err := getCluster(
-						k8sClient, ctx, clusterNamespacedName,
-					)
-					Expect(err).ToNot(HaveOccurred())
+					aeroCluster := &asdbv1.AerospikeCluster{
+						ObjectMeta: metav1.ObjectMeta{
+							Name:      clusterName,
+							Namespace: namespace,
+						},
+					}
 
-					_ = deleteCluster(k8sClient, ctx, aeroCluster)
+					Expect(DeleteCluster(k8sClient, ctx, aeroCluster)).ToNot(HaveOccurred())
+					Expect(CleanupPVC(k8sClient, aeroCluster.Namespace, aeroCluster.Name)).ToNot(HaveOccurred())
 				},
 			)
 
@@ -842,8 +765,6 @@ var _ = Describe(
 				Expect(err).To(HaveOccurred())
 
 				By("Scaling down the cluster size, failed pods should recover")
-				aeroCluster, err = getCluster(k8sClient, ctx, clusterNamespacedName)
-				Expect(err).ToNot(HaveOccurred())
 
 				aeroCluster.Spec.Size--
 
@@ -854,8 +775,8 @@ var _ = Describe(
 
 		Context(
 			"When testing failed rack recovery by rolling restart", func() {
-				clusterName := "cl-resource-insuff"
-				clusterNamespacedName := getNamespacedName(
+				clusterName := fmt.Sprintf("cl-resource-insuff-%d", GinkgoParallelProcess())
+				clusterNamespacedName := test.GetNamespacedName(
 					clusterName, namespace,
 				)
 
@@ -865,18 +786,22 @@ var _ = Describe(
 						racks := getDummyRackConf(1, 2)
 						aeroCluster.Spec.RackConfig.Racks = racks
 						aeroCluster.Spec.RackConfig.Namespaces = []string{"test"}
-						aeroCluster.Spec.PodSpec.AerospikeContainerSpec.Resources = schedulableResource("200Mi")
-						err := deployCluster(k8sClient, ctx, aeroCluster)
-						Expect(err).ToNot(HaveOccurred())
+						aeroCluster.Spec.PodSpec.AerospikeContainerSpec.Resources = schedulableResource("400Mi")
+						Expect(DeployCluster(k8sClient, ctx, aeroCluster)).ToNot(HaveOccurred())
 					},
 				)
 
 				AfterEach(
 					func() {
-						aeroCluster, err := getCluster(k8sClient, ctx, clusterNamespacedName)
-						Expect(err).ToNot(HaveOccurred())
+						aeroCluster := &asdbv1.AerospikeCluster{
+							ObjectMeta: metav1.ObjectMeta{
+								Name:      clusterName,
+								Namespace: namespace,
+							},
+						}
 
-						_ = deleteCluster(k8sClient, ctx, aeroCluster)
+						Expect(DeleteCluster(k8sClient, ctx, aeroCluster)).ToNot(HaveOccurred())
+						Expect(CleanupPVC(k8sClient, aeroCluster.Namespace, aeroCluster.Name)).ToNot(HaveOccurred())
 					},
 				)
 
@@ -889,10 +814,7 @@ var _ = Describe(
 					err = updateClusterWithTO(k8sClient, ctx, aeroCluster, 1*time.Minute)
 					Expect(err).Should(HaveOccurred())
 
-					aeroCluster, err = getCluster(k8sClient, ctx, clusterNamespacedName)
-					Expect(err).ToNot(HaveOccurred())
-
-					aeroCluster.Spec.PodSpec.AerospikeContainerSpec.Resources = schedulableResource("200Mi")
+					aeroCluster.Spec.PodSpec.AerospikeContainerSpec.Resources = schedulableResource("400Mi")
 
 					err = updateCluster(k8sClient, ctx, aeroCluster)
 					Expect(err).ToNot(HaveOccurred())
@@ -908,10 +830,7 @@ var _ = Describe(
 					err = updateClusterWithTO(k8sClient, ctx, aeroCluster, time.Minute*3)
 					Expect(err).To(HaveOccurred())
 
-					aeroCluster, err = getCluster(k8sClient, ctx, clusterNamespacedName)
-					Expect(err).ToNot(HaveOccurred())
-
-					aeroCluster.Spec.PodSpec.AerospikeContainerSpec.Resources = schedulableResource("200Mi")
+					aeroCluster.Spec.PodSpec.AerospikeContainerSpec.Resources = schedulableResource("400Mi")
 					aeroCluster.Spec.RackConfig.Racks[0].ID = 2
 					aeroCluster.Spec.RackConfig.Racks[1].ID = 1
 
