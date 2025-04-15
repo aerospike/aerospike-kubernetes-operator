@@ -2,10 +2,26 @@ apiVersion: v1
 entries:
   aerospike-backup:
   - apiVersion: v2
+    appVersion: 4.0.2
+    created: "2025-04-15T10:30:33.025408+05:30"
+    description: A Helm chart for Aerospike Backup Custom Resource
+    digest: 9901fde2374a3e214ddc301fbd8dcb7110858d942603652440b26ea87582f3fb
+    icon: https://avatars0.githubusercontent.com/u/2214313?s=200&v=4
+    maintainers:
+    - email: developers@aerospike.com
+      name: Aerospike
+    name: aerospike-backup
+    sources:
+    - https://github.com/aerospike/aerospike-kubernetes-operator
+    type: application
+    urls:
+    - https://aerospike.github.io/aerospike-kubernetes-operator/aerospike-backup-4.0.2.tgz
+    version: 4.0.2
+  - apiVersion: v2
     appVersion: 4.0.1
     created: "2025-03-13T05:39:48.851105+05:30"
     description: A Helm chart for Aerospike Backup Custom Resource
-    digest: 540d1038533320407ecaf5ff0a2a1fb000e6d522b42e07e58e1184810e12acb9
+    digest: a35600588525f710c66cf3d704340a001480f05a200029de1b8884f64c2f7387
     icon: https://avatars0.githubusercontent.com/u/2214313?s=200&v=4
     maintainers:
     - email: developers@aerospike.com
@@ -67,10 +83,26 @@ entries:
     version: 3.4.0
   aerospike-backup-service:
   - apiVersion: v2
+    appVersion: 4.0.2
+    created: "2025-04-15T10:30:33.027082+05:30"
+    description: A Helm chart for Aerospike Backup Service Custom Resource
+    digest: 46b300fbc79c58919b88b9bc98ae8fbc2dd7003c849c8fbd961c75f5e7824063
+    icon: https://avatars0.githubusercontent.com/u/2214313?s=200&v=4
+    maintainers:
+    - email: developers@aerospike.com
+      name: Aerospike
+    name: aerospike-backup-service
+    sources:
+    - https://github.com/aerospike/aerospike-kubernetes-operator
+    type: application
+    urls:
+    - https://aerospike.github.io/aerospike-kubernetes-operator/aerospike-backup-service-4.0.2.tgz
+    version: 4.0.2
+  - apiVersion: v2
     appVersion: 4.0.1
     created: "2025-03-13T05:39:48.851823+05:30"
     description: A Helm chart for Aerospike Backup Service Custom Resource
-    digest: e88e6e0428b98a9046cd48fb9b61a146a03c4e8775a604eec2cff045b5f04fed
+    digest: 8f12ae8eda2c2a8e11742f803cbb1b8f883d63f3bb8c886d54d4244dbe26e12f
     icon: https://avatars0.githubusercontent.com/u/2214313?s=200&v=4
     maintainers:
     - email: developers@aerospike.com
@@ -132,10 +164,26 @@ entries:
     version: 3.4.0
   aerospike-cluster:
   - apiVersion: v2
+    appVersion: 4.0.2
+    created: "2025-04-15T10:30:33.036734+05:30"
+    description: A Helm chart for Aerospike Cluster Custom Resource
+    digest: c13adda0b53c9937cbdb45121c73bb30a0a6db402f142f1604e6f77829ea79ec
+    icon: https://avatars0.githubusercontent.com/u/2214313?s=200&v=4
+    maintainers:
+    - email: developers@aerospike.com
+      name: Aerospike
+    name: aerospike-cluster
+    sources:
+    - https://github.com/aerospike/aerospike-kubernetes-operator
+    type: application
+    urls:
+    - https://aerospike.github.io/aerospike-kubernetes-operator/aerospike-cluster-4.0.2.tgz
+    version: 4.0.2
+  - apiVersion: v2
     appVersion: 4.0.1
     created: "2025-03-13T05:39:48.860627+05:30"
     description: A Helm chart for Aerospike Cluster Custom Resource
-    digest: 1ac7d0bf4c5810b2d25e330b86d78a736367f75b4ba548ef348996a392c8a86d
+    digest: 82a3d66cc8792b41405e0bb7e5e168e4e9e11e3d40433307ab968e119fa1f3ce
     icon: https://avatars0.githubusercontent.com/u/2214313?s=200&v=4
     maintainers:
     - email: developers@aerospike.com
@@ -453,10 +501,26 @@ entries:
     version: 1.0.0
   aerospike-kubernetes-operator:
   - apiVersion: v2
+    appVersion: 4.0.2
+    created: "2025-04-15T10:30:33.10815+05:30"
+    description: A Helm chart for Aerospike Kubernetes Operator
+    digest: 8b149ea2b5f49634bae4fe42f17e8909dc9a0ee555ff498e86d325784f5b9fdf
+    icon: https://avatars0.githubusercontent.com/u/2214313?s=200&v=4
+    maintainers:
+    - email: developers@aerospike.com
+      name: Aerospike
+    name: aerospike-kubernetes-operator
+    sources:
+    - https://github.com/aerospike/aerospike-kubernetes-operator
+    type: application
+    urls:
+    - https://aerospike.github.io/aerospike-kubernetes-operator/aerospike-kubernetes-operator-4.0.2.tgz
+    version: 4.0.2
+  - apiVersion: v2
     appVersion: 4.0.1
     created: "2025-03-13T05:39:48.926626+05:30"
     description: A Helm chart for Aerospike Kubernetes Operator
-    digest: 4297e307230acd7ba68f45d03d24db4d65579cc7b9c601d604bb72b49d987d9d
+    digest: 347748833fd97e257a3d9aedcfc23266279c7a0dc9f90fcd44e49ed34cae3ce6
     icon: https://avatars0.githubusercontent.com/u/2214313?s=200&v=4
     maintainers:
     - email: developers@aerospike.com
@@ -774,10 +838,26 @@ entries:
     version: 1.0.0
   aerospike-restore:
   - apiVersion: v2
+    appVersion: 4.0.2
+    created: "2025-04-15T10:30:33.109794+05:30"
+    description: A Helm chart for Aerospike Restore Custom Resource
+    digest: 578e5ea7f9e42bf02bcdda0deb24f30ac3bb3784a3f59097c42e6bb4c5227df3
+    icon: https://avatars0.githubusercontent.com/u/2214313?s=200&v=4
+    maintainers:
+    - email: developers@aerospike.com
+      name: Aerospike
+    name: aerospike-restore
+    sources:
+    - https://github.com/aerospike/aerospike-kubernetes-operator
+    type: application
+    urls:
+    - https://aerospike.github.io/aerospike-kubernetes-operator/aerospike-restore-4.0.2.tgz
+    version: 4.0.2
+  - apiVersion: v2
     appVersion: 4.0.1
     created: "2025-03-13T05:39:48.92733+05:30"
     description: A Helm chart for Aerospike Restore Custom Resource
-    digest: 56a2991a81fe02f56bef935138eb5025b79b7e0751dc3a467d6d9121166c0079
+    digest: feaa4387d4c42a89d158eefed3990e50357e7ff4814d47353c4d569eef35dc32
     icon: https://avatars0.githubusercontent.com/u/2214313?s=200&v=4
     maintainers:
     - email: developers@aerospike.com
@@ -837,4 +917,4 @@ entries:
     urls:
     - https://aerospike.github.io/aerospike-kubernetes-operator/aerospike-restore-3.4.0.tgz
     version: 3.4.0
-generated: "2025-03-13T05:39:48.85011+05:30"
+generated: "2025-04-15T10:30:33.023363+05:30"
