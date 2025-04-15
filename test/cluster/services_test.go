@@ -111,32 +111,23 @@ var _ = Describe(
 
 		It("Validate LB deleted", func() {
 			By("DeployCluster with LB")
-			clusterNamespacedName := getNamespacedName(
+			clusterNamespacedName := test.GetNamespacedName(
 				"load-balancer-delete", namespace,
 			)
-			aeroCluster := createDummyAerospikeCluster(
+			aeroCluster = createDummyAerospikeCluster(
 				clusterNamespacedName, 2,
 			)
 			aeroCluster.Spec.SeedsFinderServices.LoadBalancer = createLoadBalancer()
-			err := deployCluster(k8sClient, ctx, aeroCluster)
-			Expect(err).ToNot(HaveOccurred())
+			Expect(DeployCluster(k8sClient, ctx, aeroCluster)).ToNot(HaveOccurred())
 
 			By("Validate")
 			validateLoadBalancerExists(aeroCluster)
 
 			By("Delete LB service")
-			aeroCluster, err = getCluster(
-				k8sClient, ctx, clusterNamespacedName,
-			)
-			Expect(err).ToNot(HaveOccurred())
 			aeroCluster.Spec.SeedsFinderServices.LoadBalancer = nil
-			err = updateCluster(k8sClient, ctx, aeroCluster)
+			err := updateCluster(k8sClient, ctx, aeroCluster)
 			Expect(err).ToNot(HaveOccurred())
-
 			validateLoadBalancerSvcDeleted(aeroCluster)
-
-			err = deleteCluster(k8sClient, ctx, aeroCluster)
-			Expect(err).ToNot(HaveOccurred())
 		})
 	},
 )

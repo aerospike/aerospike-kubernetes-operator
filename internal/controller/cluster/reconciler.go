@@ -157,7 +157,7 @@ func (r *SingleClusterReconciler) Reconcile() (result ctrl.Result, recErr error)
 		return reconcile.Result{}, recErr
 	}
 
-	if err := r.createOrUpdateSTSLoadBalancerSvc(); err != nil {
+	if err := r.reconcileSTSLoadBalancerSvc(); err != nil {
 		r.Log.Error(err, "Failed to create LoadBalancer service")
 		r.Recorder.Eventf(
 			r.aeroCluster, corev1.EventTypeWarning, "ServiceCreateFailed",

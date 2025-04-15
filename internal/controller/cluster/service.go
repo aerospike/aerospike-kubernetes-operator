@@ -90,7 +90,7 @@ func (r *SingleClusterReconciler) createOrUpdateSTSHeadlessSvc() error {
 	return r.updateServicePorts(service)
 }
 
-func (r *SingleClusterReconciler) createOrUpdateSTSLoadBalancerSvc() error {
+func (r *SingleClusterReconciler) reconcileSTSLoadBalancerSvc() error {
 	loadBalancer := r.aeroCluster.Spec.SeedsFinderServices.LoadBalancer
 	serviceName := r.aeroCluster.Name + "-lb"
 
