@@ -15,7 +15,8 @@ import (
 	"sigs.k8s.io/controller-runtime/pkg/client"
 
 	as "github.com/aerospike/aerospike-client-go/v7"
-	asdbv1 "github.com/aerospike/aerospike-kubernetes-operator/api/v1"
+	asdbv1 "github.com/aerospike/aerospike-kubernetes-operator/v4/api/v1"
+	webhookv1 "github.com/aerospike/aerospike-kubernetes-operator/v4/internal/webhook/v1"
 )
 
 // fromSecretPasswordProvider provides user password from the secret provided in AerospikeUserSpec.
@@ -63,7 +64,7 @@ func (pp fromSecretPasswordProvider) GetDefaultPassword(spec *asdbv1.AerospikeCl
 	}
 
 	// Default password file specified. Get the secret name from the volume
-	volume := spec.Storage.GetVolumeForAerospikePath(*defaultPasswordFilePath)
+	volume := webhookv1.GetVolumeForAerospikePath(&spec.Storage, *defaultPasswordFilePath)
 	secretName := volume.Source.Secret.SecretName
 
 	// Get the password from the secret.
@@ -131,7 +132,7 @@ func (r *SingleClusterReconciler) getClientPolicy() *as.ClientPolicy {
 			// InsecureSkipVerify: true,
 		}
 
-		if clientCertSpec == nil || !clientCertSpec.IsClientCertConfigured() {
+		if clientCertSpec == nil || !asdbv1.IsClientCertConfigured(clientCertSpec) {
 			// This is possible when tls-authenticate-client = false
 			r.Log.Info(
 				"Operator's client cert is not configured. Skip using client certs.",

@@ -2,12 +2,15 @@ package cluster
 
 import (
 	goctx "context"
+	"fmt"
 
 	. "github.com/onsi/ginkgo/v2"
 	. "github.com/onsi/gomega"
 	corev1 "k8s.io/api/core/v1"
+	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 
-	asdbv1 "github.com/aerospike/aerospike-kubernetes-operator/api/v1"
+	asdbv1 "github.com/aerospike/aerospike-kubernetes-operator/v4/api/v1"
+	"github.com/aerospike/aerospike-kubernetes-operator/v4/test"
 )
 
 // This file needs to be changed based on setup. update zone, region, nodeName according to setup
@@ -32,11 +35,8 @@ var _ = Describe(
 
 		Context(
 			"When doing valid operations", func() {
-
-				clusterName := "rack-enabled"
-				clusterNamespacedName := getNamespacedName(
-					clusterName, namespace,
-				)
+				clusterName := fmt.Sprintf("rack-enabled-%d", GinkgoParallelProcess())
+				clusterNamespacedName := test.GetNamespacedName(clusterName, namespace)
 
 				BeforeEach(
 					func() {
@@ -63,8 +63,7 @@ var _ = Describe(
 						}
 						aeroCluster.Spec.RackConfig = rackConf
 
-						err = deployCluster(k8sClient, ctx, aeroCluster)
-						Expect(err).ToNot(HaveOccurred())
+						Expect(DeployCluster(k8sClient, ctx, aeroCluster)).ToNot(HaveOccurred())
 
 						err = validateRackEnabledCluster(
 							k8sClient, ctx, clusterNamespacedName,
@@ -75,13 +74,15 @@ var _ = Describe(
 
 				AfterEach(
 					func() {
-						aeroCluster, err := getCluster(
-							k8sClient, ctx, clusterNamespacedName,
-						)
-						Expect(err).ToNot(HaveOccurred())
+						aeroCluster := &asdbv1.AerospikeCluster{
+							ObjectMeta: metav1.ObjectMeta{
+								Name:      clusterName,
+								Namespace: namespace,
+							},
+						}
 
-						err = deleteCluster(k8sClient, ctx, aeroCluster)
-						Expect(err).ToNot(HaveOccurred())
+						Expect(DeleteCluster(k8sClient, ctx, aeroCluster)).ToNot(HaveOccurred())
+						Expect(CleanupPVC(k8sClient, aeroCluster.Namespace, aeroCluster.Name)).ToNot(HaveOccurred())
 					},
 				)
 

@@ -7,13 +7,13 @@ import (
 	"regexp"
 	"strings"
 
-	v1 "k8s.io/api/core/v1"
 	"k8s.io/apimachinery/pkg/util/sets"
 	"k8s.io/utils/ptr"
 
-	internalerrors "github.com/aerospike/aerospike-kubernetes-operator/errors"
-	lib "github.com/aerospike/aerospike-management-lib"
+	internalerrors "github.com/aerospike/aerospike-kubernetes-operator/v4/errors"
 )
+
+var versionRegex = regexp.MustCompile(`(\d+(\.\d+)+)`)
 
 const (
 	// DefaultRackID is the ID for the default rack created when no racks are specified.
@@ -34,19 +34,13 @@ const (
 )
 
 const (
-	baseVersion                  = "6.0.0.0"
-	baseInitVersion              = "1.0.0"
-	minInitVersionForDynamicConf = "2.2.0"
-)
-
-const (
 	// Namespace keys.
 	confKeyNamespace = "namespaces"
-	confKeyTLSName   = "tls-name"
+	ConfKeyTLSName   = "tls-name"
 
 	// Network section keys.
-	confKeyNetwork          = "network"
-	confKeyNetworkService   = "service"
+	ConfKeyNetwork          = "network"
+	ConfKeyNetworkService   = "service"
 	confKeyNetworkHeartbeat = "heartbeat"
 	confKeyNetworkFabric    = "fabric"
 
@@ -225,11 +219,11 @@ func ParseDockerImageTag(tag string) (
 // IsServiceTLSEnabled tells if service is tls enabled.
 func IsServiceTLSEnabled(aerospikeConfigSpec *AerospikeConfigSpec) bool {
 	aerospikeConfig := aerospikeConfigSpec.Value
-	if networkConfInterface, ok := aerospikeConfig[confKeyNetwork]; ok {
+	if networkConfInterface, ok := aerospikeConfig[ConfKeyNetwork]; ok {
 		if networkConf, ok := networkConfInterface.(map[string]interface{}); ok {
-			if serviceConfInterface, ok := networkConf[confKeyNetworkService]; ok {
+			if serviceConfInterface, ok := networkConf[ConfKeyNetworkService]; ok {
 				if serviceConf, ok := serviceConfInterface.(map[string]interface{}); ok {
-					if _, ok := serviceConf[confKeyTLSName]; ok {
+					if _, ok := serviceConf[ConfKeyTLSName]; ok {
 						return true
 					}
 				}
@@ -434,7 +428,7 @@ func GetFabricTLSNameAndPort(aeroConf *AerospikeConfigSpec) (tlsName string, por
 func GetTLSNameAndPort(
 	aeroConf *AerospikeConfigSpec, connectionType string,
 ) (tlsName string, port *int) {
-	if networkConfTmp, ok := aeroConf.Value[confKeyNetwork]; ok {
+	if networkConfTmp, ok := aeroConf.Value[ConfKeyNetwork]; ok {
 		networkConf := networkConfTmp.(map[string]interface{})
 		serviceConf := networkConf[connectionType].(map[string]interface{})
 
@@ -452,7 +446,7 @@ func GetTLSNameAndPort(
 }
 
 func GetServicePort(aeroConf *AerospikeConfigSpec) *int {
-	return GetPortFromConfig(aeroConf, confKeyNetworkService, "port")
+	return GetPortFromConfig(aeroConf, ConfKeyNetworkService, "port")
 }
 
 func GetHeartbeatPort(aeroConf *AerospikeConfigSpec) *int {
@@ -466,7 +460,7 @@ func GetFabricPort(aeroConf *AerospikeConfigSpec) *int {
 func GetPortFromConfig(
 	aeroConf *AerospikeConfigSpec, connectionType string, paramName string,
 ) *int {
-	if networkConf, ok := aeroConf.Value[confKeyNetwork]; ok {
+	if networkConf, ok := aeroConf.Value[ConfKeyNetwork]; ok {
 		if connectionConfig, ok := networkConf.(map[string]interface{})[connectionType]; ok {
 			if port, ok := connectionConfig.(map[string]interface{})[paramName]; ok {
 				intPort := int(port.(float64))
@@ -525,14 +519,13 @@ func IsClusterSCEnabled(aeroCluster *AerospikeCluster) bool {
 	return false
 }
 
-func getContainerNames(containers []v1.Container) []string {
-	containerNames := make([]string, 0, len(containers))
-
-	for idx := range containers {
-		containerNames = append(containerNames, containers[idx].Name)
+func IsNSSCEnabled(nsConf map[string]interface{}) bool {
+	scEnabled, ok := nsConf["strong-consistency"]
+	if !ok {
+		return false
 	}
 
-	return containerNames
+	return scEnabled.(bool)
 }
 
 // GetBool returns the value of the given bool pointer. If the pointer is nil, it returns false.
@@ -567,37 +560,6 @@ func GetDefaultPasswordFilePath(aerospikeConfigSpec *AerospikeConfigSpec) *strin
 	return &passFile
 }
 
-func getMinRunningInitVersion(pods map[string]AerospikePodStatus) (string, error) {
-	minVersion := ""
-
-	for idx := range pods {
-		if pods[idx].InitImage != "" {
-			version, err := GetImageVersion(pods[idx].InitImage)
-			if err != nil {
-				return "", err
-			}
-
-			if minVersion == "" {
-				minVersion = version
-				continue
-			}
-
-			val, err := lib.CompareVersions(version, minVersion)
-			if err != nil {
-				return "", fmt.Errorf("failed to check image version: %v", err)
-			}
-
-			if val < 0 {
-				minVersion = version
-			}
-		} else {
-			return baseInitVersion, nil
-		}
-	}
-
-	return minVersion, nil
-}
-
 func DistributeItems(totalItems, totalGroups int) []int {
 	itemsPerGroup, extraItems := totalItems/totalGroups, totalItems%totalGroups
 
@@ -624,4 +586,42 @@ func GetAllPodNames(pods map[string]AerospikePodStatus) sets.Set[string] {
 	}
 
 	return podNames
+}
+
+// GetImageVersion extracts the Aerospike version from a container image.
+// The implementation extracts the image tag and find the longest string from
+// it that is a version string.
+// Note: The behaviour should match the operator's python implementation in
+// init container extracting version.
+func GetImageVersion(imageStr string) (string, error) {
+	_, _, version := ParseDockerImageTag(imageStr)
+
+	if version == "" || strings.EqualFold(version, "latest") {
+		return "", fmt.Errorf(
+			"image version is mandatory for image: %v", imageStr,
+		)
+	}
+
+	// Ignore special prefixes and suffixes.
+	matches := versionRegex.FindAllString(version, -1)
+	if matches == nil || len(matches) < 1 {
+		return "", fmt.Errorf(
+			"invalid image version format: %v", version,
+		)
+	}
+
+	longest := 0
+
+	for i := range matches {
+		if len(matches[i]) >= len(matches[longest]) {
+			longest = i
+		}
+	}
+
+	return matches[longest], nil
+}
+
+func IsClientCertConfigured(certSpec *AerospikeOperatorClientCertSpec) bool {
+	return (certSpec.SecretCertSource != nil && certSpec.SecretCertSource.ClientCertFilename != "") ||
+		(certSpec.CertPathInOperator != nil && certSpec.CertPathInOperator.ClientCertPath != "")
 }

@@ -12,7 +12,7 @@ import (
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 
-	"github.com/aerospike/aerospike-kubernetes-operator/api/v1beta1"
+	"github.com/aerospike/aerospike-kubernetes-operator/v4/api/v1beta1"
 )
 
 const (
@@ -26,9 +26,9 @@ const (
 var secrets map[string][]byte
 var cacertSecrets map[string][]byte
 
-const secretDir = "../config/samples/secrets"               //nolint:gosec // for testing
-const cacertSecretDir = "../config/samples/secrets/cacerts" //nolint:gosec // for testing
-const awsCredentialPath = "$HOME/.aws/credentials"          //nolint:gosec // for testing
+const secretDir = "../../config/samples/secrets"               //nolint:gosec // for testing
+const cacertSecretDir = "../../config/samples/secrets/cacerts" //nolint:gosec // for testing
+const awsCredentialPath = "$HOME/.aws/credentials"             //nolint:gosec // for testing
 
 const AerospikeSecretName = "aerospike-secret"
 const TLSCacertSecretName = "aerospike-cacert-secret" //nolint:gosec // for testing
@@ -150,7 +150,7 @@ func initConfigSecret(secretDirectory string) (map[string][]byte, error) {
 	return initSecrets, nil
 }
 
-func setupByUser(k8sClient client.Client, ctx goctx.Context) error {
+func SetupByUser(k8sClient client.Client, ctx goctx.Context) error {
 	var err error
 	// Create configSecret
 	if secrets, err = initConfigSecret(secretDir); err != nil {
@@ -287,7 +287,7 @@ func createAuthSecret(
 	return nil
 }
 
-func setupBackupServicePreReq(k8sClient client.Client, ctx goctx.Context, namespace string) error {
+func SetupBackupServicePreReq(k8sClient client.Client, ctx goctx.Context, namespace string) error {
 	// Create SA for aerospike backup service
 	if err := createServiceAccount(k8sClient, goctx.TODO(), v1beta1.AerospikeBackupServiceKey, namespace); err != nil {
 		return err

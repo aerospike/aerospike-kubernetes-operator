@@ -1,6 +1,7 @@
 package backup
 
 import (
+	goctx "context"
 	"testing"
 	"time"
 
@@ -10,16 +11,17 @@ import (
 	corev1 "k8s.io/api/core/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	k8Runtime "k8s.io/apimachinery/pkg/runtime"
+	"k8s.io/client-go/rest"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 	"sigs.k8s.io/controller-runtime/pkg/envtest"
 	logf "sigs.k8s.io/controller-runtime/pkg/log"
 	"sigs.k8s.io/controller-runtime/pkg/log/zap"
 
-	asdbv1 "github.com/aerospike/aerospike-kubernetes-operator/api/v1"
-	asdbv1beta1 "github.com/aerospike/aerospike-kubernetes-operator/api/v1beta1"
-	"github.com/aerospike/aerospike-kubernetes-operator/test"
-	backupservice "github.com/aerospike/aerospike-kubernetes-operator/test/backup_service"
-	"github.com/aerospike/aerospike-kubernetes-operator/test/cluster"
+	asdbv1 "github.com/aerospike/aerospike-kubernetes-operator/v4/api/v1"
+	asdbv1beta1 "github.com/aerospike/aerospike-kubernetes-operator/v4/api/v1beta1"
+	"github.com/aerospike/aerospike-kubernetes-operator/v4/test"
+	backupservice "github.com/aerospike/aerospike-kubernetes-operator/v4/test/backup_service"
+	"github.com/aerospike/aerospike-kubernetes-operator/v4/test/cluster"
 )
 
 var testEnv *envtest.Environment
@@ -38,13 +40,28 @@ var _ = BeforeSuite(
 		logf.SetLogger(zap.New(zap.WriteTo(GinkgoWriter), zap.UseDevMode(true)))
 
 		By("Bootstrapping test environment")
-		var err error
+		var (
+			err error
+			cfg *rest.Config
+		)
 
-		testEnv, _, k8sClient, _, err = test.BootStrapTestEnv(scheme)
+		testEnv, cfg, err = test.StartTestEnvironment()
 		Expect(err).NotTo(HaveOccurred())
 
+		k8sClient, _, err = test.InitialiseClients(scheme, cfg)
+		Expect(err).NotTo(HaveOccurred())
+
+		// Set up all necessary Secrets, RBAC roles, and ServiceAccounts for the test environment
+		err = test.SetupByUser(k8sClient, goctx.TODO())
+		Expect(err).ToNot(HaveOccurred())
+
+		// Set up AerospikeBackupService RBAC and AWS secret
+		err = test.SetupBackupServicePreReq(k8sClient, goctx.TODO(), namespace)
+		Expect(err).ToNot(HaveOccurred())
+
 		By("Deploy Backup Service")
-		backupService, err := backupservice.NewBackupService()
+		backupServiceNamespacedName := test.GetNamespacedName("backup-service", namespace)
+		backupService, err := backupservice.NewBackupService(backupServiceNamespacedName)
 		Expect(err).ToNot(HaveOccurred())
 
 		backupService.Spec.Service = &asdbv1beta1.Service{
@@ -77,8 +94,8 @@ var _ = AfterSuite(
 			},
 		}
 
-		err := cluster.DeleteCluster(k8sClient, testCtx, &aeroCluster)
-		Expect(err).ToNot(HaveOccurred())
+		Expect(cluster.DeleteCluster(k8sClient, testCtx, &aeroCluster)).ToNot(HaveOccurred())
+		Expect(cluster.CleanupPVC(k8sClient, aeroCluster.Namespace, aeroCluster.Name)).ToNot(HaveOccurred())
 
 		By("Delete Backup Service")
 		backupService := asdbv1beta1.AerospikeBackupService{
@@ -88,7 +105,7 @@ var _ = AfterSuite(
 			},
 		}
 
-		err = backupservice.DeleteBackupService(k8sClient, &backupService)
+		err := backupservice.DeleteBackupService(k8sClient, &backupService)
 		Expect(err).ToNot(HaveOccurred())
 
 		By("tearing down the test environment")

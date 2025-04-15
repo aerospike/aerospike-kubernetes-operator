@@ -7,14 +7,16 @@ import (
 
 	. "github.com/onsi/ginkgo/v2"
 	. "github.com/onsi/gomega"
+	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/types"
 	"k8s.io/apimachinery/pkg/util/intstr"
 	"k8s.io/apimachinery/pkg/util/sets"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 
 	as "github.com/aerospike/aerospike-client-go/v7"
-	asdbv1 "github.com/aerospike/aerospike-kubernetes-operator/api/v1"
-	"github.com/aerospike/aerospike-kubernetes-operator/pkg/utils"
+	asdbv1 "github.com/aerospike/aerospike-kubernetes-operator/v4/api/v1"
+	"github.com/aerospike/aerospike-kubernetes-operator/v4/pkg/utils"
+	"github.com/aerospike/aerospike-kubernetes-operator/v4/test"
 	"github.com/aerospike/aerospike-management-lib/deployment"
 )
 
@@ -27,16 +29,21 @@ var _ = Describe("SCMode", func() {
 	ctx := goctx.TODO()
 
 	Context("When doing valid operation", func() {
-		clusterName := "sc-mode"
-		clusterNamespacedName := getNamespacedName(
+		clusterName := fmt.Sprintf("sc-mode-%d", GinkgoParallelProcess())
+		clusterNamespacedName := test.GetNamespacedName(
 			clusterName, namespace,
 		)
-		AfterEach(func() {
-			aeroCluster, err := getCluster(k8sClient, ctx, clusterNamespacedName)
-			Expect(err).ToNot(HaveOccurred())
 
-			err = deleteCluster(k8sClient, ctx, aeroCluster)
-			Expect(err).ToNot(HaveOccurred())
+		AfterEach(func() {
+			aeroCluster := &asdbv1.AerospikeCluster{
+				ObjectMeta: metav1.ObjectMeta{
+					Name:      clusterName,
+					Namespace: namespace,
+				},
+			}
+
+			Expect(DeleteCluster(k8sClient, ctx, aeroCluster)).ToNot(HaveOccurred())
+			Expect(CleanupPVC(k8sClient, aeroCluster.Namespace, aeroCluster.Name)).ToNot(HaveOccurred())
 		})
 
 		// Dead/Unavailable partition
@@ -60,8 +67,7 @@ var _ = Describe("SCMode", func() {
 			}
 			aeroCluster.Spec.RackConfig = rackConf
 
-			err := deployCluster(k8sClient, ctx, aeroCluster)
-			Expect(err).ToNot(HaveOccurred())
+			Expect(DeployCluster(k8sClient, ctx, aeroCluster)).ToNot(HaveOccurred())
 
 			validateRoster(k8sClient, ctx, clusterNamespacedName, scNamespace)
 
@@ -74,8 +80,7 @@ var _ = Describe("SCMode", func() {
 			aeroCluster.Spec.AerospikeConfig = getSCAndNonSCAerospikeConfig()
 			scNamespace := scNamespace
 
-			err := deployCluster(k8sClient, ctx, aeroCluster)
-			Expect(err).ToNot(HaveOccurred())
+			Expect(DeployCluster(k8sClient, ctx, aeroCluster)).ToNot(HaveOccurred())
 
 			validateRoster(k8sClient, ctx, clusterNamespacedName, scNamespace)
 
@@ -97,8 +102,7 @@ var _ = Describe("SCMode", func() {
 			}
 			aeroCluster.Spec.RackConfig = rackConf
 
-			err := deployCluster(k8sClient, ctx, aeroCluster)
-			Expect(err).ToNot(HaveOccurred())
+			Expect(DeployCluster(k8sClient, ctx, aeroCluster)).ToNot(HaveOccurred())
 
 			validateRoster(k8sClient, ctx, clusterNamespacedName, scNamespace)
 
@@ -115,26 +119,20 @@ var _ = Describe("SCMode", func() {
 			aeroCluster.Spec.Storage.Volumes = append(
 				aeroCluster.Spec.Storage.Volumes, getStorageVolumeForAerospike(addedSCNs, path))
 
-			err := deployCluster(k8sClient, ctx, aeroCluster)
-			Expect(err).ToNot(HaveOccurred())
+			Expect(DeployCluster(k8sClient, ctx, aeroCluster)).ToNot(HaveOccurred())
 			validateRoster(k8sClient, ctx, clusterNamespacedName, scNamespace)
 
 			By("Add new SC namespace")
-			aeroCluster, err = getCluster(k8sClient, ctx, clusterNamespacedName)
-			Expect(err).ToNot(HaveOccurred())
 
 			SCConf := getSCNamespaceConfig(addedSCNs, path)
 			aeroCluster.Spec.AerospikeConfig.Value["namespaces"] =
 				append(aeroCluster.Spec.AerospikeConfig.Value["namespaces"].([]interface{}), SCConf)
 
-			err = updateCluster(k8sClient, ctx, aeroCluster)
-			Expect(err).ToNot(HaveOccurred())
+			Expect(updateCluster(k8sClient, ctx, aeroCluster)).ToNot(HaveOccurred())
 			validateRoster(k8sClient, ctx, clusterNamespacedName, scNamespace)
 			validateRoster(k8sClient, ctx, clusterNamespacedName, addedSCNs)
 
 			By("Add new non-SC namespace")
-			aeroCluster, err = getCluster(k8sClient, ctx, clusterNamespacedName)
-			Expect(err).ToNot(HaveOccurred())
 
 			addedNs := "newns"
 			conf := map[string]interface{}{
@@ -148,19 +146,15 @@ var _ = Describe("SCMode", func() {
 			aeroCluster.Spec.AerospikeConfig.Value["namespaces"] =
 				append(aeroCluster.Spec.AerospikeConfig.Value["namespaces"].([]interface{}), conf)
 
-			err = updateCluster(k8sClient, ctx, aeroCluster)
-			Expect(err).ToNot(HaveOccurred())
+			Expect(updateCluster(k8sClient, ctx, aeroCluster)).ToNot(HaveOccurred())
 			validateRoster(k8sClient, ctx, clusterNamespacedName, scNamespace)
 			validateRoster(k8sClient, ctx, clusterNamespacedName, addedSCNs)
 
 			By("Remove added namespaces")
-			aeroCluster, err = getCluster(k8sClient, ctx, clusterNamespacedName)
-			Expect(err).ToNot(HaveOccurred())
 
 			aeroCluster.Spec.AerospikeConfig = getSCAerospikeConfig()
 
-			err = updateCluster(k8sClient, ctx, aeroCluster)
-			Expect(err).ToNot(HaveOccurred())
+			Expect(updateCluster(k8sClient, ctx, aeroCluster)).ToNot(HaveOccurred())
 			validateRoster(k8sClient, ctx, clusterNamespacedName, scNamespace)
 		})
 
@@ -180,13 +174,12 @@ var _ = Describe("SCMode", func() {
 			}
 			aeroCluster.Spec.RackConfig = rackConf
 
-			err := deployCluster(k8sClient, ctx, aeroCluster)
-			Expect(err).ToNot(HaveOccurred())
+			Expect(DeployCluster(k8sClient, ctx, aeroCluster)).ToNot(HaveOccurred())
 
 			validateRoster(k8sClient, ctx, clusterNamespacedName, scNamespace)
 
 			By("RollingRestart")
-			err = rollingRestartClusterTest(logger, k8sClient, ctx, clusterNamespacedName)
+			err := rollingRestartClusterTest(logger, k8sClient, ctx, clusterNamespacedName)
 			Expect(err).ToNot(HaveOccurred())
 
 			validateRoster(k8sClient, ctx, clusterNamespacedName, scNamespace)
@@ -219,34 +212,35 @@ var _ = Describe("SCMode", func() {
 			}
 			aeroCluster.Spec.RackConfig.Racks = racks
 
-			err := deployCluster(k8sClient, ctx, aeroCluster)
-			Expect(err).ToNot(HaveOccurred())
+			Expect(DeployCluster(k8sClient, ctx, aeroCluster)).ToNot(HaveOccurred())
 		})
 	})
 
 	Context("When doing invalid operation", func() {
-		clusterName := "sc-mode-invalid"
-		clusterNamespacedName := getNamespacedName(
+		clusterName := fmt.Sprintf("sc-mode-invalid-%d", GinkgoParallelProcess())
+		clusterNamespacedName := test.GetNamespacedName(
 			clusterName, namespace,
 		)
 
-		AfterEach(func() {
-			aeroCluster, _ := getCluster(k8sClient, ctx, clusterNamespacedName)
-			if aeroCluster != nil {
-				err := deleteCluster(k8sClient, ctx, aeroCluster)
-				Expect(err).ToNot(HaveOccurred())
-			}
-		})
+		AfterEach(
+			func() {
+				aeroCluster := &asdbv1.AerospikeCluster{
+					ObjectMeta: metav1.ObjectMeta{
+						Name:      clusterName,
+						Namespace: namespace,
+					},
+				}
+
+				Expect(DeleteCluster(k8sClient, ctx, aeroCluster)).ToNot(HaveOccurred())
+				Expect(CleanupPVC(k8sClient, aeroCluster.Namespace, aeroCluster.Name)).ToNot(HaveOccurred())
+			},
+		)
 
 		// Validation: can not remove more than replica node.
 		//             not allow updating strong-consistency config
 		It("Should not allow updating strong-consistency config", func() {
 			aeroCluster := createDummyAerospikeCluster(clusterNamespacedName, 2)
-			err := deployCluster(k8sClient, ctx, aeroCluster)
-			Expect(err).ToNot(HaveOccurred())
-
-			aeroCluster, err = getCluster(k8sClient, ctx, clusterNamespacedName)
-			Expect(err).ToNot(HaveOccurred())
+			Expect(DeployCluster(k8sClient, ctx, aeroCluster)).ToNot(HaveOccurred())
 
 			namespaceConfig :=
 				aeroCluster.Spec.AerospikeConfig.Value["namespaces"].([]interface{})[0].(map[string]interface{})
@@ -259,8 +253,7 @@ var _ = Describe("SCMode", func() {
 			namespaceConfig["strong-consistency"] = !scFlagBool
 			aeroCluster.Spec.AerospikeConfig.Value["namespaces"].([]interface{})[0] = namespaceConfig
 
-			err = updateCluster(k8sClient, ctx, aeroCluster)
-			Expect(err).To(HaveOccurred())
+			Expect(updateCluster(k8sClient, ctx, aeroCluster)).To(HaveOccurred())
 		})
 
 		It("Should not allow different sc namespaces in different racks", func() {
@@ -293,8 +286,8 @@ var _ = Describe("SCMode", func() {
 			}
 
 			aeroCluster.Spec.RackConfig.Racks = racks
-			err := deployCluster(k8sClient, ctx, aeroCluster)
-			Expect(err).To(HaveOccurred())
+
+			Expect(DeployCluster(k8sClient, ctx, aeroCluster)).To(HaveOccurred())
 		})
 
 		It("Should not allow cluster size < replication factor for sc namespace", func() {
@@ -315,8 +308,7 @@ var _ = Describe("SCMode", func() {
 
 			aeroCluster.Spec.RackConfig.Racks = racks
 
-			err := deployCluster(k8sClient, ctx, aeroCluster)
-			Expect(err).To(HaveOccurred())
+			Expect(DeployCluster(k8sClient, ctx, aeroCluster)).To(HaveOccurred())
 		})
 
 		It("Should not allow in-memory sc namespace", func() {
@@ -340,8 +332,7 @@ var _ = Describe("SCMode", func() {
 			}
 
 			aeroCluster.Spec.RackConfig.Racks = racks
-			err := deployCluster(k8sClient, ctx, aeroCluster)
-			Expect(err).To(HaveOccurred())
+			Expect(DeployCluster(k8sClient, ctx, aeroCluster)).To(HaveOccurred())
 		})
 
 		It("Should not allow MRT fields in non-SC namespace", func() {
@@ -363,8 +354,7 @@ var _ = Describe("SCMode", func() {
 			}
 			aeroCluster.Spec.RackConfig.Racks = racks
 
-			err := deployCluster(k8sClient, ctx, aeroCluster)
-			Expect(err).To(HaveOccurred())
+			Expect(DeployCluster(k8sClient, ctx, aeroCluster)).To(HaveOccurred())
 		})
 
 	})

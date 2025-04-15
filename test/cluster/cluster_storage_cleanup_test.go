@@ -10,12 +10,14 @@ import (
 	. "github.com/onsi/gomega"
 	corev1 "k8s.io/api/core/v1"
 	"k8s.io/apimachinery/pkg/api/resource"
+	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 
-	asdbv1 "github.com/aerospike/aerospike-kubernetes-operator/api/v1"
-	"github.com/aerospike/aerospike-kubernetes-operator/pkg/utils"
+	asdbv1 "github.com/aerospike/aerospike-kubernetes-operator/v4/api/v1"
+	"github.com/aerospike/aerospike-kubernetes-operator/v4/pkg/utils"
+	"github.com/aerospike/aerospike-kubernetes-operator/v4/test"
 )
 
-// Test cluster cr updation
+// Test cluster cr update
 var _ = Describe(
 	"ClusterStorageCleanUp", func() {
 		ctx := goctx.TODO()
@@ -26,28 +28,29 @@ var _ = Describe(
 		// Update
 		Context(
 			"When doing valid operations", func() {
-				clusterName := "storage-cleanup"
-				clusterNamespacedName := getNamespacedName(
+				clusterName := fmt.Sprintf("storage-cleanup-%d", GinkgoParallelProcess())
+				clusterNamespacedName := test.GetNamespacedName(
 					clusterName, namespace,
 				)
 
 				BeforeEach(
 					func() {
-						// Deploy cluster with 6 racks to remove rack one by one and check for pvc
+						// Deploy cluster with 2 racks.
 						aeroCluster := createDummyAerospikeCluster(
 							clusterNamespacedName, 3,
 						)
 						racks := getDummyRackConf(1, 2)
 						aeroCluster.Spec.RackConfig = asdbv1.RackConfig{Racks: racks}
 
-						err := deployCluster(k8sClient, ctx, aeroCluster)
-						Expect(err).ToNot(HaveOccurred())
+						Expect(DeployCluster(k8sClient, ctx, aeroCluster)).ToNot(HaveOccurred())
 					},
 				)
 
 				// Check defaults
 				It(
 					"Try Defaults", func() {
+						var err error
+
 						aeroCluster, err := getCluster(
 							k8sClient, ctx, clusterNamespacedName,
 						)
@@ -78,6 +81,7 @@ var _ = Describe(
 
 				It(
 					"Try CleanupAllVolumes", func() {
+						var err error
 
 						// Set common FileSystemVolumePolicy, BlockVolumePolicy to true
 						aeroCluster, err := getCluster(
@@ -90,11 +94,6 @@ var _ = Describe(
 						aeroCluster.Spec.Storage.FileSystemVolumePolicy.InputCascadeDelete = &remove
 
 						err = updateCluster(k8sClient, ctx, aeroCluster)
-						Expect(err).ToNot(HaveOccurred())
-
-						aeroCluster, err = getCluster(
-							k8sClient, ctx, clusterNamespacedName,
-						)
 						Expect(err).ToNot(HaveOccurred())
 
 						// RackID to be used to check if pvc are removed
@@ -129,6 +128,7 @@ var _ = Describe(
 
 				It(
 					"Try CleanupSelectedVolumes", func() {
+						var err error
 						// Set common FileSystemVolumePolicy, BlockVolumePolicy to false and true for selected volumes
 						aeroCluster, err := getCluster(
 							k8sClient, ctx, clusterNamespacedName,
@@ -144,21 +144,16 @@ var _ = Describe(
 						err = updateCluster(k8sClient, ctx, aeroCluster)
 						Expect(err).ToNot(HaveOccurred())
 
-						aeroCluster, err = getCluster(
-							k8sClient, ctx, clusterNamespacedName,
-						)
-						Expect(err).ToNot(HaveOccurred())
-
 						// RackID to be used to check if pvc are removed
 						racks := aeroCluster.Spec.RackConfig.Racks
 						lastRackID := racks[len(racks)-1].ID
 						stsName := aeroCluster.Name + "-" + strconv.Itoa(lastRackID)
 						// This should not be removed
 
-						pvcName := aeroCluster.Spec.Storage.Volumes[0].Name
+						volName := aeroCluster.Spec.Storage.Volumes[0].Name
 						Expect(err).ToNot(HaveOccurred())
 
-						pvcNamePrefix := pvcName + "-" + stsName
+						pvcNamePrefix := volName + "-" + stsName
 
 						// remove Rack should remove all rack's pvc
 						aeroCluster.Spec.RackConfig.Racks = racks[:len(racks)-1]
@@ -206,12 +201,16 @@ var _ = Describe(
 
 				AfterEach(
 					func() {
+						aeroCluster := &asdbv1.AerospikeCluster{
+							ObjectMeta: metav1.ObjectMeta{
+								Name:      clusterName,
+								Namespace: namespace,
+							},
+						}
+
 						// cleanup cluster
-						aeroCluster, err := getCluster(
-							k8sClient, ctx, clusterNamespacedName,
-						)
-						Expect(err).ToNot(HaveOccurred())
-						_ = deleteCluster(k8sClient, ctx, aeroCluster)
+						Expect(DeleteCluster(k8sClient, ctx, aeroCluster)).ToNot(HaveOccurred())
+						Expect(CleanupPVC(k8sClient, aeroCluster.Namespace, aeroCluster.Name)).ToNot(HaveOccurred())
 					},
 				)
 			},
@@ -219,7 +218,7 @@ var _ = Describe(
 	},
 )
 
-// Test cluster cr updation
+// Test cluster cr update
 var _ = Describe(
 	"RackUsingLocalStorage", func() {
 		ctx := goctx.TODO()
@@ -230,8 +229,8 @@ var _ = Describe(
 		// Local storage should be used for cascadeDelete, aerospikeConfig
 		Context(
 			"When doing valid operations", func() {
-				clusterName := "rack-storage"
-				clusterNamespacedName := getNamespacedName(
+				clusterName := fmt.Sprintf("rack-storage-%d", GinkgoParallelProcess())
+				clusterNamespacedName := test.GetNamespacedName(
 					clusterName, namespace,
 				)
 
@@ -300,13 +299,14 @@ var _ = Describe(
 						)
 						aeroCluster.Spec.RackConfig = asdbv1.RackConfig{Racks: racks}
 
-						err := deployCluster(k8sClient, ctx, aeroCluster)
-						Expect(err).ToNot(HaveOccurred())
+						Expect(DeployCluster(k8sClient, ctx, aeroCluster)).ToNot(HaveOccurred())
 					},
 				)
 
 				It(
 					"UseForAerospikeConfig", func() {
+						var err error
+
 						aeroCluster, err := getCluster(
 							k8sClient, ctx, clusterNamespacedName,
 						)
@@ -345,6 +345,8 @@ var _ = Describe(
 
 				It(
 					"UseForCascadeDelete", func() {
+						var err error
+
 						aeroCluster, err := getCluster(
 							k8sClient, ctx, clusterNamespacedName,
 						)
@@ -378,11 +380,15 @@ var _ = Describe(
 
 				AfterEach(
 					func() {
-						aeroCluster, err := getCluster(
-							k8sClient, ctx, clusterNamespacedName,
-						)
-						Expect(err).ToNot(HaveOccurred())
-						_ = deleteCluster(k8sClient, ctx, aeroCluster)
+						aeroCluster := &asdbv1.AerospikeCluster{
+							ObjectMeta: metav1.ObjectMeta{
+								Name:      clusterName,
+								Namespace: namespace,
+							},
+						}
+
+						Expect(DeleteCluster(k8sClient, ctx, aeroCluster)).ToNot(HaveOccurred())
+						Expect(CleanupPVC(k8sClient, aeroCluster.Namespace, aeroCluster.Name)).ToNot(HaveOccurred())
 					},
 				)
 			},
@@ -393,9 +399,23 @@ var _ = Describe(
 		// (nil -> val), (val -> nil), (val1 -> val2)
 		Context(
 			"When doing invalid operations", func() {
-				clusterName := "rack-storage-invalid"
-				clusterNamespacedName := getNamespacedName(
+				clusterName := fmt.Sprintf("rack-storage-invalid-%d", GinkgoParallelProcess())
+				clusterNamespacedName := test.GetNamespacedName(
 					clusterName, namespace,
+				)
+
+				AfterEach(
+					func() {
+						aeroCluster := &asdbv1.AerospikeCluster{
+							ObjectMeta: metav1.ObjectMeta{
+								Name:      clusterName,
+								Namespace: namespace,
+							},
+						}
+
+						Expect(DeleteCluster(k8sClient, ctx, aeroCluster)).ToNot(HaveOccurred())
+						Expect(CleanupPVC(k8sClient, aeroCluster.Namespace, aeroCluster.Name)).ToNot(HaveOccurred())
+					},
 				)
 
 				Context(
@@ -503,13 +523,10 @@ var _ = Describe(
 								racks := getDummyRackConf(1)
 								aeroCluster.Spec.RackConfig = asdbv1.RackConfig{Racks: racks}
 
-								err := deployCluster(
-									k8sClient, ctx, aeroCluster,
-								)
-								Expect(err).ToNot(HaveOccurred())
+								Expect(DeployCluster(k8sClient, ctx, aeroCluster)).ToNot(HaveOccurred())
 
 								// Update storage
-								aeroCluster, err = getCluster(
+								aeroCluster, err := getCluster(
 									k8sClient, ctx, clusterNamespacedName,
 								)
 								Expect(err).ToNot(HaveOccurred())
@@ -541,15 +558,12 @@ var _ = Describe(
 									goctx.TODO(), aeroCluster,
 								)
 								Expect(err).Should(HaveOccurred())
-
-								_ = deleteCluster(k8sClient, ctx, aeroCluster)
 							},
 						)
 
 						It(
 							"ValueToNil: should fail for updating Storage. Cannot be updated",
 							func() {
-								// Deploy cluster with 6 racks to remove rack one by one and check for pvc
 								aeroCluster := createDummyAerospikeCluster(
 									clusterNamespacedName, 2,
 								)
@@ -577,13 +591,10 @@ var _ = Describe(
 								racks[0].InputStorage = getStorage(volumes)
 								aeroCluster.Spec.RackConfig = asdbv1.RackConfig{Racks: racks}
 
-								err := deployCluster(
-									k8sClient, ctx, aeroCluster,
-								)
-								Expect(err).ToNot(HaveOccurred())
+								Expect(DeployCluster(k8sClient, ctx, aeroCluster)).ToNot(HaveOccurred())
 
 								// Update storage
-								aeroCluster, err = getCluster(
+								aeroCluster, err := getCluster(
 									k8sClient, ctx, clusterNamespacedName,
 								)
 								Expect(err).ToNot(HaveOccurred())
@@ -596,15 +607,12 @@ var _ = Describe(
 									goctx.TODO(), aeroCluster,
 								)
 								Expect(err).Should(HaveOccurred())
-
-								_ = deleteCluster(k8sClient, ctx, aeroCluster)
 							},
 						)
 
 						It(
 							"ValueToValue: should fail for updating Storage. Cannot be updated",
 							func() {
-								// Deploy cluster with 6 racks to remove rack one by one and check for pvc
 								aeroCluster := createDummyAerospikeCluster(
 									clusterNamespacedName, 2,
 								)
@@ -633,13 +641,10 @@ var _ = Describe(
 								aeroCluster.Spec.RackConfig = asdbv1.RackConfig{Racks: racks}
 
 								// Deploy cluster
-								err := deployCluster(
-									k8sClient, ctx, aeroCluster,
-								)
-								Expect(err).ToNot(HaveOccurred())
+								Expect(DeployCluster(k8sClient, ctx, aeroCluster)).ToNot(HaveOccurred())
 
 								// Update storage
-								aeroCluster, err = getCluster(
+								aeroCluster, err := getCluster(
 									k8sClient, ctx, clusterNamespacedName,
 								)
 								Expect(err).ToNot(HaveOccurred())
@@ -671,8 +676,6 @@ var _ = Describe(
 									goctx.TODO(), aeroCluster,
 								)
 								Expect(err).Should(HaveOccurred())
-
-								_ = deleteCluster(k8sClient, ctx, aeroCluster)
 							},
 						)
 					},

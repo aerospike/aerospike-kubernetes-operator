@@ -2,12 +2,15 @@ package cluster
 
 import (
 	goctx "context"
+	"fmt"
 
 	. "github.com/onsi/ginkgo/v2"
 	. "github.com/onsi/gomega"
+	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/types"
 
-	"github.com/aerospike/aerospike-kubernetes-operator/test"
+	asdbv1 "github.com/aerospike/aerospike-kubernetes-operator/v4/api/v1"
+	"github.com/aerospike/aerospike-kubernetes-operator/v4/test"
 )
 
 var _ = Describe(
@@ -17,14 +20,14 @@ var _ = Describe(
 		Context(
 			"When DeployMultiClusterMultiNs", func() {
 				// 1st cluster
-				clusterName1 := "multicluster"
-				clusterNamespacedName1 := getNamespacedName(
+				clusterName1 := fmt.Sprintf("multicluster-%d", GinkgoParallelProcess())
+				clusterNamespacedName1 := test.GetNamespacedName(
 					clusterName1, test.MultiClusterNs1,
 				)
 
 				// 2nd cluster
-				clusterName2 := "multicluster"
-				clusterNamespacedName2 := getNamespacedName(
+				clusterName2 := fmt.Sprintf("multicluster-%d", GinkgoParallelProcess())
+				clusterNamespacedName2 := test.GetNamespacedName(
 					clusterName2, test.MultiClusterNs2,
 				)
 
@@ -48,14 +51,14 @@ var _ = Describe(
 		Context(
 			"When DeployMultiClusterSingleNsTest", func() {
 				// 1st cluster
-				clusterName1 := "multicluster1"
-				clusterNamespacedName1 := getNamespacedName(
+				clusterName1 := fmt.Sprintf("multicluster1-%d", GinkgoParallelProcess())
+				clusterNamespacedName1 := test.GetNamespacedName(
 					clusterName1, test.MultiClusterNs1,
 				)
 
 				// 2nd cluster
-				clusterName2 := "multicluster2"
-				clusterNamespacedName2 := getNamespacedName(
+				clusterName2 := fmt.Sprintf("multicluster2-%d", GinkgoParallelProcess())
+				clusterNamespacedName2 := test.GetNamespacedName(
 					clusterName2, test.MultiClusterNs1,
 				)
 
@@ -83,15 +86,32 @@ func multiClusterGenChangeTest(
 	ctx goctx.Context,
 	clusterNamespacedName1, clusterNamespacedName2 types.NamespacedName,
 ) {
-	aeroCluster1 := createDummyAerospikeCluster(clusterNamespacedName1, 2)
+	AfterEach(
+		func() {
+			aeroCluster := &asdbv1.AerospikeCluster{
+				ObjectMeta: metav1.ObjectMeta{
+					Name:      clusterNamespacedName1.Name,
+					Namespace: clusterNamespacedName1.Namespace,
+				},
+			}
+			Expect(DeleteCluster(k8sClient, ctx, aeroCluster)).ToNot(HaveOccurred())
+			Expect(CleanupPVC(k8sClient, aeroCluster.Namespace, aeroCluster.Name)).ToNot(HaveOccurred())
+
+			aeroCluster.Name = clusterNamespacedName2.Name
+			aeroCluster.Namespace = clusterNamespacedName2.Namespace
+
+			Expect(DeleteCluster(k8sClient, ctx, aeroCluster)).ToNot(HaveOccurred())
+			Expect(CleanupPVC(k8sClient, aeroCluster.Namespace, aeroCluster.Name)).ToNot(HaveOccurred())
+		},
+	)
 
 	It(
 		"multiClusterGenChangeTest", func() {
 			// Deploy 1st cluster
-			err := deployCluster(k8sClient, ctx, aeroCluster1)
-			Expect(err).ToNot(HaveOccurred())
+			aeroCluster1 := createDummyAerospikeCluster(clusterNamespacedName1, 2)
+			Expect(DeployCluster(k8sClient, ctx, aeroCluster1)).ToNot(HaveOccurred())
 
-			aeroCluster1, err = getCluster(
+			aeroCluster1, err := getCluster(
 				k8sClient, ctx, clusterNamespacedName1,
 			)
 			Expect(err).ToNot(HaveOccurred())
@@ -100,13 +120,11 @@ func multiClusterGenChangeTest(
 			aeroCluster2 := createDummyAerospikeCluster(
 				clusterNamespacedName2, 2,
 			)
-			err = deployCluster(k8sClient, ctx, aeroCluster2)
-			Expect(err).ToNot(HaveOccurred())
+			Expect(DeployCluster(k8sClient, ctx, aeroCluster2)).ToNot(HaveOccurred())
 
 			validateLifecycleOperationInRackCluster(ctx, clusterNamespacedName2)
 
-			err = deleteCluster(k8sClient, ctx, aeroCluster2)
-			Expect(err).ToNot(HaveOccurred())
+			Expect(DeleteCluster(k8sClient, ctx, aeroCluster2)).ToNot(HaveOccurred())
 
 			// Validate if there is any change in aeroCluster1
 			newaeroCluster1, err := getCluster(
@@ -116,11 +134,8 @@ func multiClusterGenChangeTest(
 
 			Expect(aeroCluster1.Generation).To(
 				Equal(newaeroCluster1.Generation),
-				"Generation for cluster1 is changed affter deleting cluster2",
+				"Generation for cluster1 is changed after deleting cluster2",
 			)
-
-			err = deleteCluster(k8sClient, ctx, aeroCluster1)
-			Expect(err).ToNot(HaveOccurred())
 		},
 	)
 }
@@ -130,18 +145,36 @@ func multiClusterPVCTest(
 	ctx goctx.Context,
 	clusterNamespacedName1, clusterNamespacedName2 types.NamespacedName,
 ) {
-	cascadeDelete := true
-	aeroCluster1 := createDummyAerospikeCluster(clusterNamespacedName1, 2)
+	AfterEach(
+		func() {
+			aeroCluster := &asdbv1.AerospikeCluster{
+				ObjectMeta: metav1.ObjectMeta{
+					Name:      clusterNamespacedName1.Name,
+					Namespace: clusterNamespacedName1.Namespace,
+				},
+			}
+
+			Expect(DeleteCluster(k8sClient, ctx, aeroCluster)).ToNot(HaveOccurred())
+			Expect(CleanupPVC(k8sClient, aeroCluster.Namespace, aeroCluster.Name)).ToNot(HaveOccurred())
+
+			aeroCluster.Name = clusterNamespacedName2.Name
+			aeroCluster.Namespace = clusterNamespacedName2.Namespace
+
+			Expect(DeleteCluster(k8sClient, ctx, aeroCluster)).ToNot(HaveOccurred())
+			Expect(CleanupPVC(k8sClient, aeroCluster.Namespace, aeroCluster.Name)).ToNot(HaveOccurred())
+		},
+	)
 
 	It(
 		"multiClusterPVCTest", func() {
 			// Deploy 1st cluster
+			cascadeDelete := true
+			aeroCluster1 := createDummyAerospikeCluster(clusterNamespacedName1, 2)
 			aeroCluster1.Spec.Storage.BlockVolumePolicy.InputCascadeDelete = &cascadeDelete
 			aeroCluster1.Spec.Storage.FileSystemVolumePolicy.InputCascadeDelete = &cascadeDelete
-			err := deployCluster(k8sClient, ctx, aeroCluster1)
-			Expect(err).ToNot(HaveOccurred())
+			Expect(DeployCluster(k8sClient, ctx, aeroCluster1)).ToNot(HaveOccurred())
 
-			aeroCluster1, err = getCluster(
+			aeroCluster1, err := getCluster(
 				k8sClient, ctx, clusterNamespacedName1,
 			)
 			Expect(err).ToNot(HaveOccurred())
@@ -157,8 +190,7 @@ func multiClusterPVCTest(
 			)
 			aeroCluster2.Spec.Storage.BlockVolumePolicy.InputCascadeDelete = &cascadeDelete
 			aeroCluster2.Spec.Storage.FileSystemVolumePolicy.InputCascadeDelete = &cascadeDelete
-			err = deployCluster(k8sClient, ctx, aeroCluster2)
-			Expect(err).ToNot(HaveOccurred())
+			Expect(DeployCluster(k8sClient, ctx, aeroCluster2)).ToNot(HaveOccurred())
 
 			// Validate 1st cluster pvc before delete
 			newAeroCluster1, err := getCluster(
@@ -175,8 +207,8 @@ func multiClusterPVCTest(
 			Expect(err).ToNot(HaveOccurred())
 
 			// Delete 2nd cluster
-			err = deleteCluster(k8sClient, ctx, aeroCluster2)
-			Expect(err).ToNot(HaveOccurred())
+			Expect(DeleteCluster(k8sClient, ctx, aeroCluster2)).ToNot(HaveOccurred())
+			Expect(CleanupPVC(k8sClient, aeroCluster2.Namespace, aeroCluster2.Name)).ToNot(HaveOccurred())
 
 			// Validate 1st cluster pvc after delete
 			newAeroCluster1, err = getCluster(
@@ -190,10 +222,6 @@ func multiClusterPVCTest(
 			Expect(err).ToNot(HaveOccurred())
 
 			err = matchPVCList(aeroClusterPVCList1, newAeroClusterPVCList1)
-			Expect(err).ToNot(HaveOccurred())
-
-			// Delete 1st cluster
-			err = deleteCluster(k8sClient, ctx, aeroCluster1)
 			Expect(err).ToNot(HaveOccurred())
 		},
 	)
