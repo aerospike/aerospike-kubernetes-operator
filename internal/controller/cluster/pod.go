@@ -714,7 +714,7 @@ func (r *SingleClusterReconciler) cleanupPods(
 			}
 		}
 
-		// Try to delete corresponding pod service if it was created
+		// Try to delete the corresponding pod service if it was created
 		if asdbv1.GetBool(r.aeroCluster.Spec.PodSpec.MultiPodPerHost) {
 			// Remove service for pod
 			// TODO: make it more robust, what if it fails

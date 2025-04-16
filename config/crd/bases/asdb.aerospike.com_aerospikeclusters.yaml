@@ -302,7 +302,7 @@ spec:
               headlessService:
                 description: |-
                   HeadlessService defines additional configuration parameters for the headless service created to discover
-                  Aerospike Cluster nodes by pod IP
+                  Aerospike Cluster nodes
                 properties:
                   metadata:
                     properties:
@@ -9294,7 +9294,7 @@ spec:
               headlessService:
                 description: |-
                   HeadlessService defines additional configuration parameters for the headless service created to discover
-                  Aerospike Cluster nodes by pod IP
+                  Aerospike Cluster nodes
                 properties:
                   metadata:
                     properties:

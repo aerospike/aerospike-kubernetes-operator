@@ -24,16 +24,16 @@ func getSTSHeadLessSvcName(aeroCluster *asdbv1.AerospikeCluster) string {
 }
 
 func (r *SingleClusterReconciler) createOrUpdateSTSHeadlessSvc() error {
-	headlessSvc := r.aeroCluster.Spec.HeadlessService
+	specHeadlessSvc := &r.aeroCluster.Spec.HeadlessService
 	serviceName := getSTSHeadLessSvcName(r.aeroCluster)
 	service := &corev1.Service{}
 
-	if headlessSvc.Metadata.Annotations == nil {
-		headlessSvc.Metadata.Annotations = make(map[string]string)
-	}
-
-	if headlessSvc.Metadata.Labels == nil {
-		headlessSvc.Metadata.Labels = make(map[string]string)
+	defaultMetadata := asdbv1.AerospikeObjectMeta{
+		Annotations: map[string]string{
+			// deprecation in 1.10, supported until at least 1.13,  breaks peer-finder/kube-dns if not used
+			"service.alpha.kubernetes.io/tolerate-unready-endpoints": "true",
+		},
+		Labels: utils.LabelsForAerospikeCluster(r.aeroCluster.Name),
 	}
 
 	err := r.Client.Get(
@@ -48,32 +48,27 @@ func (r *SingleClusterReconciler) createOrUpdateSTSHeadlessSvc() error {
 
 		r.Log.Info("Creating headless service for statefulSet")
 
-		defaultAnnotations := map[string]string{
-			// deprecation in 1.10, supported until at least 1.13,  breaks peer-finder/kube-dns if not used
-			"service.alpha.kubernetes.io/tolerate-unready-endpoints": "true",
+		if specHeadlessSvc.Metadata.Annotations != nil {
+			maps.Copy(defaultMetadata.Annotations, specHeadlessSvc.Metadata.Annotations)
 		}
-		serviceAnnotations := make(map[string]string)
-		maps.Copy(serviceAnnotations, defaultAnnotations)
-		maps.Copy(serviceAnnotations, headlessSvc.Metadata.Annotations)
 
-		aerospikeClusterLabels := utils.LabelsForAerospikeCluster(r.aeroCluster.Name)
-		serviceLabels := make(map[string]string)
-		maps.Copy(serviceLabels, aerospikeClusterLabels)
-		maps.Copy(serviceLabels, headlessSvc.Metadata.Labels)
+		if specHeadlessSvc.Metadata.Labels != nil {
+			maps.Copy(defaultMetadata.Labels, specHeadlessSvc.Metadata.Labels)
+		}
 
 		service = &corev1.Service{
 			ObjectMeta: metav1.ObjectMeta{
 				Name:        serviceName,
 				Namespace:   r.aeroCluster.Namespace,
-				Annotations: serviceAnnotations,
-				Labels:      serviceLabels,
+				Annotations: defaultMetadata.Annotations,
+				Labels:      defaultMetadata.Labels,
 			},
 			Spec: corev1.ServiceSpec{
 				// deprecates service.alpha.kubernetes.io/tolerate-unready-endpoints as of 1.
 				// 10? see: kubernetes/kubernetes#49239 Fixed in 1.11 as of #63742
 				PublishNotReadyAddresses: true,
-				ClusterIP:                "None",
-				Selector:                 aerospikeClusterLabels,
+				ClusterIP:                corev1.ClusterIPNone,
+				Selector:                 utils.LabelsForAerospikeCluster(r.aeroCluster.Name),
 			},
 		}
 
@@ -105,7 +100,12 @@ func (r *SingleClusterReconciler) createOrUpdateSTSHeadlessSvc() error {
 	r.Log.Info("Headless service already exist, checking for update",
 		"name", utils.NamespacedName(service.Namespace, service.Name))
 
-	return r.updateService(service, r.aeroCluster.Status.HeadlessService.Metadata, headlessSvc.Metadata)
+	return r.updateService(
+		service,
+		r.aeroCluster.Status.HeadlessService.Metadata,
+		specHeadlessSvc.Metadata,
+		defaultMetadata,
+	)
 }
 
 func (r *SingleClusterReconciler) createOrUpdateSTSLoadBalancerSvc() error {
@@ -228,8 +228,22 @@ func (r *SingleClusterReconciler) updateLBService(service *corev1.Service, servi
 	return nil
 }
 
+func (r *SingleClusterReconciler) reconcilePodService(rackState *RackState) error {
+	// PodService is only created if MultiPodPerHost is enabled
+	if !asdbv1.GetBool(r.aeroCluster.Spec.PodSpec.MultiPodPerHost) {
+		return nil
+	}
+
+	// Safe check to delete all dangling pod services which are no longer required
+	if !podServiceNeeded(r.aeroCluster.Spec.PodSpec.MultiPodPerHost, &r.aeroCluster.Spec.AerospikeNetworkPolicy) {
+		return r.cleanupDanglingPodServices(rackState)
+	}
+
+	return r.createOrUpdatePodServiceIfNeeded(r.getRackPodNames(rackState))
+}
+
 func (r *SingleClusterReconciler) createOrUpdatePodService(pName, pNamespace string) error {
-	podService := r.aeroCluster.Spec.PodService
+	podService := &r.aeroCluster.Spec.PodService
 	service := &corev1.Service{}
 
 	err := r.Client.Get(
@@ -288,7 +302,12 @@ func (r *SingleClusterReconciler) createOrUpdatePodService(pName, pNamespace str
 	r.Log.Info("Service already exist, checking for update",
 		"name", utils.NamespacedName(service.Namespace, service.Name))
 
-	return r.updateService(service, r.aeroCluster.Status.PodService.Metadata, podService.Metadata)
+	return r.updateService(
+		service,
+		r.aeroCluster.Status.PodService.Metadata,
+		podService.Metadata,
+		asdbv1.AerospikeObjectMeta{},
+	)
 }
 
 func (r *SingleClusterReconciler) deletePodService(pName, pNamespace string) error {
@@ -423,20 +442,21 @@ func podServiceNeeded(multiPodPerHost *bool, networkPolicy *asdbv1.AerospikeNetw
 		string(networkPolicy.TLSAlternateAccessType),
 	)
 
-	// If len of set is more than 2, it means network type different from "pod" and "customInterface" are present.
+	// If len of set is more than 2, it means the network type different from "pod" and "customInterface" are present.
 	// In that case, pod service is required
 	return networkSet.Len() > 2
 }
 
 func (r *SingleClusterReconciler) createOrUpdatePodServiceIfNeeded(pods []string) error {
-	if podServiceNeeded(r.aeroCluster.Spec.PodSpec.MultiPodPerHost, &r.aeroCluster.Spec.AerospikeNetworkPolicy) {
-		// Create services for all pods if network policy is changed and rely on nodePort service
-		for idx := range pods {
-			if err := r.createOrUpdatePodService(
-				pods[idx], r.aeroCluster.Namespace,
-			); err != nil {
-				return err
-			}
+	if !podServiceNeeded(r.aeroCluster.Spec.PodSpec.MultiPodPerHost, &r.aeroCluster.Spec.AerospikeNetworkPolicy) {
+		return nil
+	}
+	// Create services for all pods if the network policy is changed and rely on nodePort service
+	for idx := range pods {
+		if err := r.createOrUpdatePodService(
+			pods[idx], r.aeroCluster.Namespace,
+		); err != nil {
+			return err
 		}
 	}
 
@@ -459,38 +479,28 @@ func (r *SingleClusterReconciler) getServiceTLSNameAndPortIfConfigured() (tlsNam
 
 func (r *SingleClusterReconciler) isServiceMetadataUpdated(
 	service *corev1.Service,
-	statusMetadata asdbv1.AerospikeObjectMeta,
-	specMetadata asdbv1.AerospikeObjectMeta,
+	statusMetadata,
+	specMetadata,
+	defaultMetadata asdbv1.AerospikeObjectMeta,
+
 ) bool {
 	var needsUpdate bool
 
 	if !reflect.DeepEqual(statusMetadata.Annotations, specMetadata.Annotations) {
-		serviceAnnotations := make(map[string]string)
+		annotations := make(map[string]string)
 
-		if service.Spec.Type == corev1.ServiceTypeClusterIP {
-			defaultAnnotations := map[string]string{
-				// deprecation in 1.10, supported until at least 1.13,  breaks peer-finder/kube-dns if not used
-				"service.alpha.kubernetes.io/tolerate-unready-endpoints": "true",
-			}
-
-			maps.Copy(serviceAnnotations, defaultAnnotations)
-		}
-
-		maps.Copy(serviceAnnotations, specMetadata.Annotations)
-		service.ObjectMeta.Annotations = serviceAnnotations
+		maps.Copy(annotations, defaultMetadata.Annotations)
+		maps.Copy(annotations, specMetadata.Annotations)
+		service.ObjectMeta.Annotations = annotations
 		needsUpdate = true
 	}
 
 	if !reflect.DeepEqual(statusMetadata.Labels, specMetadata.Labels) {
-		serviceLabels := make(map[string]string)
+		labels := make(map[string]string)
 
-		if service.Spec.Type == corev1.ServiceTypeClusterIP {
-			aerospikeClusterLabels := utils.LabelsForAerospikeCluster(r.aeroCluster.Name)
-			maps.Copy(serviceLabels, aerospikeClusterLabels)
-		}
-
-		maps.Copy(serviceLabels, specMetadata.Labels)
-		service.ObjectMeta.Labels = serviceLabels
+		maps.Copy(labels, defaultMetadata.Labels)
+		maps.Copy(labels, specMetadata.Labels)
+		service.ObjectMeta.Labels = labels
 		needsUpdate = true
 	}
 
@@ -499,12 +509,13 @@ func (r *SingleClusterReconciler) isServiceMetadataUpdated(
 
 func (r *SingleClusterReconciler) updateService(
 	service *corev1.Service,
-	statusMetadata asdbv1.AerospikeObjectMeta,
-	specMetadata asdbv1.AerospikeObjectMeta,
+	statusMetadata,
+	specMetadata,
+	defaultMetadata asdbv1.AerospikeObjectMeta,
 ) error {
 	var needsUpdate bool
 
-	if r.isServiceMetadataUpdated(service, statusMetadata, specMetadata) {
+	if r.isServiceMetadataUpdated(service, statusMetadata, specMetadata, defaultMetadata) {
 		needsUpdate = true
 	}
 

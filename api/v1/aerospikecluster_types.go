@@ -142,7 +142,7 @@ type AerospikeClusterSpec struct { //nolint:govet // for readability
 	SeedsFinderServices SeedsFinderServices `json:"seedsFinderServices,omitempty"`
 
 	// HeadlessService defines additional configuration parameters for the headless service created to discover
-	// Aerospike Cluster nodes by pod IP
+	// Aerospike Cluster nodes
 	// +operator-sdk:csv:customresourcedefinitions:type=spec,displayName="Headless Service"
 	// +optional
 	HeadlessService ServiceSpec `json:"headlessService,omitempty"`
@@ -916,7 +916,7 @@ type AerospikeClusterStatusSpec struct { //nolint:govet // for readability
 	SeedsFinderServices SeedsFinderServices `json:"seedsFinderServices,omitempty"`
 
 	// HeadlessService defines additional configuration parameters for the headless service created to discover
-	// Aerospike Cluster nodes by pod IP
+	// Aerospike Cluster nodes
 	// +optional
 	HeadlessService ServiceSpec `json:"headlessService,omitempty"`
 
