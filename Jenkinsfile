@@ -103,7 +103,7 @@ pipeline {
 
     post {
         always {
-            junit testResults: '**/junit.xml', keepLongStdio: true
+            junit testResults: '**/junit*.xml', keepLongStdio: true
         }
         cleanup {
             script {
@@ -119,7 +119,7 @@ boolean isNightly() {
 }
 
 String getVersion() {
-    def prefix = "4.0.1"
+    def prefix = "4.0.2"
     def candidateName = ""
     if(isNightly()) {
         def timestamp = new Date().format("yyyy-MM-dd")

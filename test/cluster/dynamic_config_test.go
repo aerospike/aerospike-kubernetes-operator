@@ -13,6 +13,7 @@ import (
 	"golang.org/x/net/context"
 	v1 "k8s.io/api/core/v1"
 	"k8s.io/apimachinery/pkg/api/resource"
+	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/types"
 	"k8s.io/utils/ptr"
 	ctrl "sigs.k8s.io/controller-runtime"
@@ -43,8 +44,23 @@ var _ = Describe(
 	"DynamicConfig", func() {
 
 		ctx := goctx.Background()
-		var clusterNamespacedName = getNamespacedName(
-			clName, namespace,
+		clusterName := fmt.Sprintf(clName+"-%d", GinkgoParallelProcess())
+		clusterNamespacedName := test.GetNamespacedName(
+			clusterName, namespace,
+		)
+
+		AfterEach(
+			func() {
+				aeroCluster := &asdbv1.AerospikeCluster{
+					ObjectMeta: metav1.ObjectMeta{
+						Name:      clusterName,
+						Namespace: namespace,
+					},
+				}
+
+				Expect(DeleteCluster(k8sClient, ctx, aeroCluster)).ToNot(HaveOccurred())
+				Expect(CleanupPVC(k8sClient, aeroCluster.Namespace, aeroCluster.Name)).ToNot(HaveOccurred())
+			},
 		)
 
 		Context(
@@ -75,17 +91,7 @@ var _ = Describe(
 							},
 						}
 						aeroCluster.Spec.EnableDynamicConfigUpdate = ptr.To(true)
-						err := deployCluster(k8sClient, ctx, aeroCluster)
-						Expect(err).ToNot(HaveOccurred())
-					},
-				)
-
-				AfterEach(
-					func() {
-						aeroCluster, err := getCluster(k8sClient, ctx, clusterNamespacedName)
-						Expect(err).ToNot(HaveOccurred())
-
-						_ = deleteCluster(k8sClient, ctx, aeroCluster)
+						Expect(DeployCluster(k8sClient, ctx, aeroCluster)).ToNot(HaveOccurred())
 					},
 				)
 
@@ -132,7 +138,7 @@ var _ = Describe(
 
 						By("Fetch and verify dynamic configs")
 
-						pod := aeroCluster.Status.Pods["dynamic-config-test-0-0"]
+						pod := aeroCluster.Status.Pods[aeroCluster.Name+"-0-0"]
 
 						// Fetch and verify service section config
 						conf, err := getAerospikeConfigFromNode(logger, k8sClient, ctx, clusterNamespacedName,
@@ -167,11 +173,6 @@ var _ = Describe(
 
 						By("Modify dynamic config by removing fields")
 
-						aeroCluster, err = getCluster(
-							k8sClient, ctx, clusterNamespacedName,
-						)
-						Expect(err).ToNot(HaveOccurred())
-
 						podPIDMap, err = getPodIDs(ctx, aeroCluster)
 						Expect(err).ToNot(HaveOccurred())
 
@@ -186,7 +187,7 @@ var _ = Describe(
 
 						By("Fetch and verify dynamic configs")
 
-						pod = aeroCluster.Status.Pods["dynamic-config-test-0-0"]
+						pod = aeroCluster.Status.Pods[aeroCluster.Name+"-0-0"]
 
 						// Fetch and verify service section config
 						conf, err = getAerospikeConfigFromNode(logger, k8sClient, ctx, clusterNamespacedName,
@@ -238,7 +239,7 @@ var _ = Describe(
 
 						By("Fetch and verify static configs")
 
-						pod := aeroCluster.Status.Pods["dynamic-config-test-0-0"]
+						pod := aeroCluster.Status.Pods[aeroCluster.Name+"-0-0"]
 
 						conf, err := getAerospikeConfigFromNode(logger, k8sClient, ctx, clusterNamespacedName,
 							"security", &pod)
@@ -277,7 +278,7 @@ var _ = Describe(
 
 						By("Fetch and verify static configs")
 
-						pod := aeroCluster.Status.Pods["dynamic-config-test-0-0"]
+						pod := aeroCluster.Status.Pods[aeroCluster.Name+"-0-0"]
 
 						conf, err := getAerospikeConfigFromNode(logger, k8sClient, ctx, clusterNamespacedName,
 							"service", &pod)
@@ -323,17 +324,7 @@ var _ = Describe(
 							},
 						}
 						aeroCluster.Spec.EnableDynamicConfigUpdate = ptr.To(true)
-						err := deployCluster(k8sClient, ctx, aeroCluster)
-						Expect(err).ToNot(HaveOccurred())
-					},
-				)
-
-				AfterEach(
-					func() {
-						aeroCluster, err := getCluster(k8sClient, ctx, clusterNamespacedName)
-						Expect(err).ToNot(HaveOccurred())
-
-						_ = deleteCluster(k8sClient, ctx, aeroCluster)
+						Expect(DeployCluster(k8sClient, ctx, aeroCluster)).ToNot(HaveOccurred())
 					},
 				)
 
@@ -355,11 +346,6 @@ var _ = Describe(
 
 						err = updateClusterWithTO(k8sClient, ctx, aeroCluster, time.Minute*1)
 						Expect(err).To(HaveOccurred())
-
-						aeroCluster, err = getCluster(
-							k8sClient, ctx, clusterNamespacedName,
-						)
-						Expect(err).ToNot(HaveOccurred())
 
 						// Recovery:
 						// Update valid config value
@@ -413,11 +399,6 @@ var _ = Describe(
 
 						err = updateClusterWithTO(k8sClient, ctx, aeroCluster, time.Minute*1)
 						Expect(err).To(HaveOccurred())
-
-						aeroCluster, err = getCluster(
-							k8sClient, ctx, clusterNamespacedName,
-						)
-						Expect(err).ToNot(HaveOccurred())
 
 						// Recovery:
 						// Update valid config value
@@ -503,17 +484,7 @@ var _ = Describe(
 
 						aeroCluster.Spec.AerospikeAccessControl.Users = append(aeroCluster.Spec.AerospikeAccessControl.Users, admin2)
 
-						err := deployCluster(k8sClient, ctx, aeroCluster)
-						Expect(err).ToNot(HaveOccurred())
-					},
-				)
-
-				AfterEach(
-					func() {
-						aeroCluster, err := getCluster(k8sClient, ctx, clusterNamespacedName)
-						Expect(err).ToNot(HaveOccurred())
-
-						_ = deleteCluster(k8sClient, ctx, aeroCluster)
+						Expect(DeployCluster(k8sClient, ctx, aeroCluster)).ToNot(HaveOccurred())
 					},
 				)
 
@@ -610,6 +581,7 @@ var _ = Describe(
 
 		Context(
 			"When changing fields those need recluster", func() {
+
 				BeforeEach(
 					func() {
 						// Create a 4 node cluster
@@ -648,17 +620,7 @@ var _ = Describe(
 						nsList := aeroCluster.Spec.AerospikeConfig.Value["namespaces"].([]interface{})
 						nsList = append(nsList, getSCNamespaceConfig("test1", "/test/dev/xvdf1"))
 						aeroCluster.Spec.AerospikeConfig.Value["namespaces"] = nsList
-						err := deployCluster(k8sClient, ctx, aeroCluster)
-						Expect(err).ToNot(HaveOccurred())
-					},
-				)
-
-				AfterEach(
-					func() {
-						aeroCluster, err := getCluster(k8sClient, ctx, clusterNamespacedName)
-						Expect(err).ToNot(HaveOccurred())
-
-						_ = deleteCluster(k8sClient, ctx, aeroCluster)
+						Expect(DeployCluster(k8sClient, ctx, aeroCluster)).ToNot(HaveOccurred())
 					},
 				)
 
@@ -684,7 +646,7 @@ var _ = Describe(
 
 						By("Fetch and verify dynamic configs")
 
-						pod := aeroCluster.Status.Pods["dynamic-config-test-1-0"]
+						pod := aeroCluster.Status.Pods[aeroCluster.Name+"-1-0"]
 
 						info, err := requestInfoFromNode(logger, k8sClient, ctx, clusterNamespacedName, "namespace/test", &pod)
 						Expect(err).ToNot(HaveOccurred())

@@ -29,12 +29,12 @@ const (
 	storageInitTestClusterSize = 2
 	magicBytes                 = "aero"
 	sidecarContainerName       = "tomcat"
-	clusterName                = "storage-init"
 )
 
 var _ = Describe(
 	"StorageInit", func() {
 		ctx := goctx.TODO()
+
 		Context(
 			"When doing valid operations", func() {
 
@@ -43,6 +43,7 @@ var _ = Describe(
 				updatedCleanupThreads := 5
 
 				podSpec := asdbv1.AerospikePodSpec{
+					MultiPodPerHost: ptr.To(true),
 					Sidecars: []corev1.Container{
 						{
 							Name:  sidecarContainerName,
@@ -58,8 +59,23 @@ var _ = Describe(
 						AerospikeInitContainerSpec{},
 				}
 
-				clusterNamespacedName := getNamespacedName(
+				clusterName := fmt.Sprintf("storage-init-%d", GinkgoParallelProcess())
+				clusterNamespacedName := test.GetNamespacedName(
 					clusterName, namespace,
+				)
+
+				AfterEach(
+					func() {
+						aeroCluster := &asdbv1.AerospikeCluster{
+							ObjectMeta: metav1.ObjectMeta{
+								Name:      clusterName,
+								Namespace: namespace,
+							},
+						}
+
+						Expect(DeleteCluster(k8sClient, ctx, aeroCluster)).ToNot(HaveOccurred())
+						Expect(CleanupPVC(k8sClient, aeroCluster.Namespace, aeroCluster.Name)).ToNot(HaveOccurred())
+					},
 				)
 
 				It(
@@ -139,17 +155,11 @@ var _ = Describe(
 
 						aeroCluster.Spec.PodSpec.AerospikeInitContainerSpec.Resources = resources
 
-						By("Cleaning up previous pvc")
-
-						err := cleanupPVC(k8sClient, namespace)
-						Expect(err).ToNot(HaveOccurred())
-
 						By("Deploying the cluster")
 
-						err = deployCluster(k8sClient, ctx, aeroCluster)
-						Expect(err).ToNot(HaveOccurred())
+						Expect(DeployCluster(k8sClient, ctx, aeroCluster)).ToNot(HaveOccurred())
 
-						aeroCluster, err = getCluster(
+						aeroCluster, err := getCluster(
 							k8sClient, ctx, clusterNamespacedName,
 						)
 						Expect(err).ToNot(HaveOccurred())
@@ -159,9 +169,6 @@ var _ = Describe(
 						By("Updating the cluster")
 
 						err = k8sClient.Update(ctx, aeroCluster)
-						Expect(err).ToNot(HaveOccurred())
-
-						err = deleteCluster(k8sClient, ctx, aeroCluster)
 						Expect(err).ToNot(HaveOccurred())
 					},
 				)
@@ -188,17 +195,11 @@ var _ = Describe(
 
 						aeroCluster.Spec.PodSpec = podSpec
 
-						By("Cleaning up previous pvc")
-
-						err := cleanupPVC(k8sClient, namespace)
-						Expect(err).ToNot(HaveOccurred())
-
 						By("Deploying the cluster")
 
-						err = deployCluster(k8sClient, ctx, aeroCluster)
-						Expect(err).ToNot(HaveOccurred())
+						Expect(DeployCluster(k8sClient, ctx, aeroCluster)).ToNot(HaveOccurred())
 
-						err = checkData(
+						err := checkData(
 							aeroCluster, false, false, map[string]struct{}{},
 						)
 						Expect(err).ToNot(HaveOccurred())
@@ -226,8 +227,7 @@ var _ = Describe(
 						Expect(err).ToNot(HaveOccurred())
 
 						By("Deleting the cluster but retaining the test volumes")
-						err = deleteCluster(k8sClient, ctx, aeroCluster)
-						Expect(err).ToNot(HaveOccurred())
+						Expect(DeleteCluster(k8sClient, ctx, aeroCluster)).ToNot(HaveOccurred())
 
 						By("Recreating. Older volumes will still be around and reused")
 						aeroCluster = getStorageInitAerospikeCluster(
@@ -254,8 +254,7 @@ var _ = Describe(
 						)
 						Expect(err).ToNot(HaveOccurred())
 
-						err = deleteCluster(k8sClient, ctx, aeroCluster)
-						Expect(err).ToNot(HaveOccurred())
+						Expect(DeleteCluster(k8sClient, ctx, aeroCluster)).ToNot(HaveOccurred())
 
 						pvcs, err := getAeroClusterPVCList(
 							aeroCluster, k8sClient,
@@ -285,18 +284,9 @@ var _ = Describe(
 
 						aeroCluster.Spec.PodSpec = podSpec
 
-						By("Cleaning up previous pvc")
-
-						err := cleanupPVC(k8sClient, namespace)
-						Expect(err).ToNot(HaveOccurred())
-
 						By("Deploying the cluster")
 
-						err = deployCluster(k8sClient, ctx, aeroCluster)
-						Expect(err).ToNot(HaveOccurred())
-
-						err = deleteCluster(k8sClient, ctx, aeroCluster)
-						Expect(err).ToNot(HaveOccurred())
+						Expect(DeployCluster(k8sClient, ctx, aeroCluster)).ToNot(HaveOccurred())
 					},
 				)
 			},
@@ -306,7 +296,8 @@ var _ = Describe(
 			"When doing invalid operations", func() {
 
 				threeVar := 3
-				clusterNamespacedName := getNamespacedName(
+				clusterName := fmt.Sprintf("storage-init-%d", GinkgoParallelProcess())
+				clusterNamespacedName := test.GetNamespacedName(
 					clusterName, namespace,
 				)
 
@@ -328,15 +319,9 @@ var _ = Describe(
 							latestImage,
 						)
 
-						By("Cleaning up previous pvc")
-
-						err := cleanupPVC(k8sClient, namespace)
-						Expect(err).ToNot(HaveOccurred())
-
 						By("Deploying the cluster")
 
-						err = deployCluster(k8sClient, ctx, aeroCluster)
-						Expect(err).Should(HaveOccurred())
+						Expect(DeployCluster(k8sClient, ctx, aeroCluster)).Should(HaveOccurred())
 					},
 				)
 			},
@@ -345,7 +330,8 @@ var _ = Describe(
 		Context(
 			"When doing PVC change", func() {
 
-				clusterNamespacedName := getNamespacedName(
+				clusterName := fmt.Sprintf("storage-init-%d", GinkgoParallelProcess())
+				clusterNamespacedName := test.GetNamespacedName(
 					clusterName, namespace,
 				)
 				initVolName := "ns"
@@ -368,20 +354,21 @@ var _ = Describe(
 						aeroCluster.Labels = make(map[string]string)
 						aeroCluster.Labels["checkLabel"] = "true"
 
-						err := deployCluster(k8sClient, ctx, aeroCluster)
-						Expect(err).ToNot(HaveOccurred())
+						Expect(DeployCluster(k8sClient, ctx, aeroCluster)).ToNot(HaveOccurred())
 					},
 				)
 
 				AfterEach(
 					func() {
-						aeroCluster, err := getCluster(
-							k8sClient, ctx, clusterNamespacedName,
-						)
-						Expect(err).ToNot(HaveOccurred())
+						aeroCluster := &asdbv1.AerospikeCluster{
+							ObjectMeta: metav1.ObjectMeta{
+								Name:      clusterName,
+								Namespace: namespace,
+							},
+						}
 
-						err = deleteCluster(k8sClient, ctx, aeroCluster)
-						Expect(err).ToNot(HaveOccurred())
+						Expect(DeleteCluster(k8sClient, ctx, aeroCluster)).ToNot(HaveOccurred())
+						Expect(CleanupPVC(k8sClient, aeroCluster.Namespace, aeroCluster.Name)).ToNot(HaveOccurred())
 					},
 				)
 
@@ -409,7 +396,7 @@ var _ = Describe(
 
 						By("Cleaning up previous pvc")
 
-						pvcNamespacedName := getNamespacedName(
+						pvcNamespacedName := test.GetNamespacedName(
 							deletedPVC, namespace,
 						)
 
@@ -418,10 +405,7 @@ var _ = Describe(
 
 						By("Setting resources to schedule the pods")
 
-						aeroCluster, err = getCluster(k8sClient, ctx, clusterNamespacedName)
-						Expect(err).ToNot(HaveOccurred())
-
-						aeroCluster.Spec.PodSpec.AerospikeContainerSpec.Resources = schedulableResource("200Mi")
+						aeroCluster.Spec.PodSpec.AerospikeContainerSpec.Resources = schedulableResource("400Mi")
 
 						err = updateCluster(k8sClient, ctx, aeroCluster)
 						Expect(err).ToNot(HaveOccurred())
@@ -473,9 +457,6 @@ var _ = Describe(
 						)
 						Expect(err).ToNot(HaveOccurred())
 
-						aeroCluster, err = getCluster(k8sClient, ctx, clusterNamespacedName)
-						Expect(err).ToNot(HaveOccurred())
-
 						checkLabel := aeroCluster.Labels["checkLabel"]
 						Expect(checkLabel).To(Equal("true"))
 
@@ -508,10 +489,7 @@ var _ = Describe(
 
 						By("Setting resources to schedule the pods")
 
-						aeroCluster, err = getCluster(k8sClient, ctx, clusterNamespacedName)
-						Expect(err).ToNot(HaveOccurred())
-
-						aeroCluster.Spec.PodSpec.AerospikeContainerSpec.Resources = schedulableResource("200Mi")
+						aeroCluster.Spec.PodSpec.AerospikeContainerSpec.Resources = schedulableResource("400Mi")
 
 						err = updateCluster(k8sClient, ctx, aeroCluster)
 						Expect(err).ToNot(HaveOccurred())
@@ -603,13 +581,7 @@ func checkData(
 				continue
 			}
 
-			var volumeHasData bool
-
-			if storage.Volumes[volumeIndex].Source.PersistentVolume.VolumeMode == corev1.PersistentVolumeBlock {
-				volumeHasData = hasDataBlock(&podList.Items[podIndex], &storage.Volumes[volumeIndex])
-			} else {
-				volumeHasData = hasDataFilesystem(&podList.Items[podIndex], &storage.Volumes[volumeIndex])
-			}
+			volumeHasData := hasData(&podList.Items[podIndex], &storage.Volumes[volumeIndex])
 
 			var expectedHasData = assertHasData && wasDataWritten
 			if storage.Volumes[volumeIndex].InitMethod == asdbv1.AerospikeVolumeMethodNone {
@@ -625,7 +597,7 @@ func checkData(
 				}
 
 				return fmt.Errorf(
-					"expected volume %s %s but is not", storage.Volumes[volumeIndex].Name,
+					"expected volume %s%s but is not", storage.Volumes[volumeIndex].Name,
 					expectedStr,
 				)
 			}
@@ -734,24 +706,39 @@ func writeDataToVolumeFileSystem(
 	return nil
 }
 
-func hasDataBlock(pod *corev1.Pod, volume *asdbv1.VolumeSpec) bool {
+func hasData(pod *corev1.Pod, volume *asdbv1.VolumeSpec) bool {
 	cName, path := getContainerNameAndPath(volume)
 
-	cmd := []string{
-		"bash", "-c", fmt.Sprintf("dd if=%s count=1 status=none", path),
+	var cmd []string
+
+	switch volume.Source.PersistentVolume.VolumeMode {
+	case corev1.PersistentVolumeBlock:
+		cmd = []string{"bash", "-c", fmt.Sprintf("dd if=%s count=1 status=none", path)}
+	case corev1.PersistentVolumeFilesystem:
+		cmd = []string{"bash", "-c", fmt.Sprintf("cat %s/magic.txt", path)}
 	}
-	stdout, _, _ := utils.Exec(utils.GetNamespacedName(pod), cName, cmd, k8sClientSet, cfg)
 
-	return strings.HasPrefix(stdout, magicBytes)
-}
+	maxRetries := 15 // 5 minutes / 20 seconds = 15 retries
+	retryInterval := 20 * time.Second
 
-func hasDataFilesystem(pod *corev1.Pod, volume *asdbv1.VolumeSpec) bool {
-	cName, path := getContainerNameAndPath(volume)
+	for i := 0; i < maxRetries; i++ {
+		stdout, _, err := utils.Exec(utils.GetNamespacedName(pod), cName, cmd, k8sClientSet, cfg)
+		if err == nil {
+			return strings.HasPrefix(stdout, magicBytes)
+		}
 
-	cmd := []string{"bash", "-c", fmt.Sprintf("cat %s/magic.txt", path)}
-	stdout, _, _ := utils.Exec(utils.GetNamespacedName(pod), cName, cmd, k8sClientSet, cfg)
+		if strings.Contains(stdout, "No such file or directory") {
+			return false
+		}
 
-	return strings.HasPrefix(stdout, magicBytes)
+		// Log the error and wait before retrying
+		fmt.Printf("Attempt %d/%d failed: %v. Retrying in %v...\n", i+1, maxRetries, err, retryInterval)
+		time.Sleep(retryInterval)
+	}
+
+	fmt.Println("Max retries reached. Returning false.")
+
+	return false
 }
 
 // getStorageInitAerospikeCluster returns a spec with in memory namespaces and input storage.

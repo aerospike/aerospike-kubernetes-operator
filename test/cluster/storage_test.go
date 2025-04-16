@@ -2,11 +2,13 @@ package cluster
 
 import (
 	goctx "context"
+	"fmt"
 
 	. "github.com/onsi/ginkgo/v2"
 	. "github.com/onsi/gomega"
 	v1 "k8s.io/api/core/v1"
 	"k8s.io/apimachinery/pkg/api/resource"
+	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/types"
 
 	asdbv1 "github.com/aerospike/aerospike-kubernetes-operator/v4/api/v1"
@@ -37,14 +39,32 @@ import (
 var _ = Describe(
 	"StorageVolumes", func() {
 		ctx := goctx.Background()
-
-		clusterName := "storage"
-		clusterNamespacedName := getNamespacedName(
-			clusterName, namespace,
+		var (
+			clusterNamespacedName types.NamespacedName
+			clusterName           string
 		)
 
 		Context(
 			"When adding cluster", func() {
+				BeforeEach(func() {
+					clusterName = fmt.Sprintf("storage-%d", GinkgoParallelProcess())
+					clusterNamespacedName = test.GetNamespacedName(
+						clusterName, namespace,
+					)
+				})
+
+				AfterEach(func() {
+					aeroCluster := &asdbv1.AerospikeCluster{
+						ObjectMeta: metav1.ObjectMeta{
+							Name:      clusterNamespacedName.Name,
+							Namespace: clusterNamespacedName.Namespace,
+						},
+					}
+
+					Expect(DeleteCluster(k8sClient, ctx, aeroCluster)).ToNot(HaveOccurred())
+					Expect(CleanupPVC(k8sClient, aeroCluster.Namespace, aeroCluster.Name)).ToNot(HaveOccurred())
+				})
+
 				Context(
 					"When using volume", func() {
 						It(
@@ -58,10 +78,7 @@ var _ = Describe(
 									aeroCluster.Spec.Storage.Volumes[0],
 								)
 
-								err := deployCluster(
-									k8sClient, ctx, aeroCluster,
-								)
-								Expect(err).Should(HaveOccurred())
+								Expect(DeployCluster(k8sClient, ctx, aeroCluster)).Should(HaveOccurred())
 							},
 						)
 					},
@@ -79,10 +96,7 @@ var _ = Describe(
 									SecretName: "secret",
 								}
 
-								err := deployCluster(
-									k8sClient, ctx, aeroCluster,
-								)
-								Expect(err).Should(HaveOccurred())
+								Expect(DeployCluster(k8sClient, ctx, aeroCluster)).Should(HaveOccurred())
 							},
 						)
 
@@ -94,10 +108,7 @@ var _ = Describe(
 
 								aeroCluster.Spec.Storage.Volumes[0].Source = asdbv1.VolumeSource{}
 
-								err := deployCluster(
-									k8sClient, ctx, aeroCluster,
-								)
-								Expect(err).Should(HaveOccurred())
+								Expect(DeployCluster(k8sClient, ctx, aeroCluster)).Should(HaveOccurred())
 							},
 						)
 
@@ -111,10 +122,7 @@ var _ = Describe(
 								volumeMode := v1.PersistentVolumeMode("invalid")
 								aeroCluster.Spec.Storage.Volumes[0].Source.PersistentVolume.VolumeMode = volumeMode
 
-								err := deployCluster(
-									k8sClient, ctx, aeroCluster,
-								)
-								Expect(err).Should(HaveOccurred())
+								Expect(DeployCluster(k8sClient, ctx, aeroCluster)).Should(HaveOccurred())
 							},
 						)
 
@@ -129,10 +137,7 @@ var _ = Describe(
 								aeroCluster.Spec.Storage.Volumes[0].Source.PersistentVolume.AccessModes =
 									[]v1.PersistentVolumeAccessMode{accessMode}
 
-								err := deployCluster(
-									k8sClient, ctx, aeroCluster,
-								)
-								Expect(err).Should(HaveOccurred())
+								Expect(DeployCluster(k8sClient, ctx, aeroCluster)).Should(HaveOccurred())
 							},
 						)
 
@@ -154,10 +159,7 @@ var _ = Describe(
 										aeroCluster.Spec.Storage.Volumes[i].Source.PersistentVolume.Annotations = annotations
 									}
 								}
-								err := deployCluster(
-									k8sClient, ctx, aeroCluster,
-								)
-								Expect(err).ShouldNot(HaveOccurred())
+								Expect(DeployCluster(k8sClient, ctx, aeroCluster)).ShouldNot(HaveOccurred())
 
 								pvcs, err := getAeroClusterPVCList(
 									aeroCluster, k8sClient,
@@ -176,9 +178,6 @@ var _ = Describe(
 									Expect(ok).To(BeTrue())
 									Expect(lab).To(Equal("labels"))
 								}
-								Expect(err).ShouldNot(HaveOccurred())
-
-								err = deleteCluster(k8sClient, ctx, aeroCluster)
 								Expect(err).ShouldNot(HaveOccurred())
 							},
 						)
@@ -200,10 +199,7 @@ var _ = Describe(
 									},
 								}
 
-								err := deployCluster(
-									k8sClient, ctx, aeroCluster,
-								)
-								Expect(err).Should(HaveOccurred())
+								Expect(DeployCluster(k8sClient, ctx, aeroCluster)).Should(HaveOccurred())
 							},
 						)
 
@@ -218,10 +214,7 @@ var _ = Describe(
 								aeroCluster.Spec.Storage.Volumes[0].InitContainers = []asdbv1.VolumeAttachment{}
 								aeroCluster.Spec.Storage.Volumes[0].Aerospike = nil
 
-								err := deployCluster(
-									k8sClient, ctx, aeroCluster,
-								)
-								Expect(err).Should(HaveOccurred())
+								Expect(DeployCluster(k8sClient, ctx, aeroCluster)).Should(HaveOccurred())
 							},
 						)
 
@@ -250,10 +243,7 @@ var _ = Describe(
 									},
 								}
 
-								err := deployCluster(
-									k8sClient, ctx, aeroCluster,
-								)
-								Expect(err).Should(HaveOccurred())
+								Expect(DeployCluster(k8sClient, ctx, aeroCluster)).Should(HaveOccurred())
 							},
 						)
 
@@ -283,10 +273,7 @@ var _ = Describe(
 										Path:          "/opt/aerospike",
 									},
 								}
-								err := deployCluster(
-									k8sClient, ctx, aeroCluster,
-								)
-								Expect(err).Should(HaveOccurred())
+								Expect(DeployCluster(k8sClient, ctx, aeroCluster)).Should(HaveOccurred())
 							},
 						)
 
@@ -303,10 +290,7 @@ var _ = Describe(
 									},
 								}
 
-								err := deployCluster(
-									k8sClient, ctx, aeroCluster,
-								)
-								Expect(err).Should(HaveOccurred())
+								Expect(DeployCluster(k8sClient, ctx, aeroCluster)).Should(HaveOccurred())
 							},
 						)
 
@@ -323,10 +307,7 @@ var _ = Describe(
 									},
 								}
 
-								err := deployCluster(
-									k8sClient, ctx, aeroCluster,
-								)
-								Expect(err).Should(HaveOccurred())
+								Expect(DeployCluster(k8sClient, ctx, aeroCluster)).Should(HaveOccurred())
 							},
 						)
 					},
@@ -339,10 +320,7 @@ var _ = Describe(
 									clusterNamespacedName, "/opt/aerospike", "",
 								)
 
-								err := deployCluster(
-									k8sClient, ctx, aeroCluster,
-								)
-								Expect(err).ShouldNot(HaveOccurred())
+								Expect(DeployCluster(k8sClient, ctx, aeroCluster)).ShouldNot(HaveOccurred())
 							},
 						)
 						It(
@@ -351,10 +329,7 @@ var _ = Describe(
 									clusterNamespacedName, "/opt/aerospike/data", "/opt/aerospike/data",
 								)
 
-								err := deployCluster(
-									k8sClient, ctx, aeroCluster,
-								)
-								Expect(err).ShouldNot(HaveOccurred())
+								Expect(DeployCluster(k8sClient, ctx, aeroCluster)).ShouldNot(HaveOccurred())
 							},
 						)
 						It(
@@ -363,10 +338,7 @@ var _ = Describe(
 									clusterNamespacedName, "", "",
 								)
 
-								err := deployCluster(
-									k8sClient, ctx, aeroCluster,
-								)
-								Expect(err).ShouldNot(HaveOccurred())
+								Expect(DeployCluster(k8sClient, ctx, aeroCluster)).ShouldNot(HaveOccurred())
 							},
 						)
 						It(
@@ -375,10 +347,7 @@ var _ = Describe(
 									clusterNamespacedName, "", "/opt/aerospike",
 								)
 
-								err := deployCluster(
-									k8sClient, ctx, aeroCluster,
-								)
-								Expect(err).Should(HaveOccurred())
+								Expect(DeployCluster(k8sClient, ctx, aeroCluster)).Should(HaveOccurred())
 							},
 						)
 					},
@@ -388,25 +357,31 @@ var _ = Describe(
 
 		Context(
 			"When cluster is already deployed", func() {
+				clusterName = fmt.Sprintf("storage-%d", GinkgoParallelProcess())
+				clusterNamespacedName = test.GetNamespacedName(
+					clusterName, namespace,
+				)
+
 				BeforeEach(
 					func() {
 						aeroCluster := createDummyAerospikeCluster(
 							clusterNamespacedName, 2,
 						)
-						err := deployCluster(k8sClient, ctx, aeroCluster)
-						Expect(err).ToNot(HaveOccurred())
+						Expect(DeployCluster(k8sClient, ctx, aeroCluster)).ToNot(HaveOccurred())
 					},
 				)
 
 				AfterEach(
 					func() {
-						aeroCluster, err := getCluster(
-							k8sClient, ctx, clusterNamespacedName,
-						)
-						Expect(err).ToNot(HaveOccurred())
+						aeroCluster := &asdbv1.AerospikeCluster{
+							ObjectMeta: metav1.ObjectMeta{
+								Name:      clusterName,
+								Namespace: namespace,
+							},
+						}
 
-						err = deleteCluster(k8sClient, ctx, aeroCluster)
-						Expect(err).ToNot(HaveOccurred())
+						Expect(DeleteCluster(k8sClient, ctx, aeroCluster)).ToNot(HaveOccurred())
+						Expect(CleanupPVC(k8sClient, aeroCluster.Namespace, aeroCluster.Name)).ToNot(HaveOccurred())
 					},
 				)
 
@@ -479,10 +454,6 @@ var _ = Describe(
 								Expect(err).ToNot(HaveOccurred())
 
 								// Delete
-								aeroCluster, err = getCluster(
-									k8sClient, ctx, clusterNamespacedName,
-								)
-								Expect(err).ToNot(HaveOccurred())
 
 								newAeroCluster := createDummyAerospikeCluster(
 									clusterNamespacedName, 2,
@@ -553,10 +524,6 @@ var _ = Describe(
 								Expect(err).ToNot(HaveOccurred())
 
 								// Update
-								aeroCluster, err = getCluster(
-									k8sClient, ctx, clusterNamespacedName,
-								)
-								Expect(err).ToNot(HaveOccurred())
 
 								volumes := aeroCluster.Spec.Storage.Volumes
 								aeroCluster.Spec.Storage.Volumes[len(volumes)-1].Source = asdbv1.VolumeSource{
@@ -598,11 +565,6 @@ var _ = Describe(
 								err = updateCluster(k8sClient, ctx, aeroCluster)
 								Expect(err).ToNot(HaveOccurred())
 
-								aeroCluster, err = getCluster(
-									k8sClient, ctx, clusterNamespacedName,
-								)
-								Expect(err).ToNot(HaveOccurred())
-
 								va := asdbv1.VolumeAttachment{
 									ContainerName: containerName,
 									Path:          "/newpath",
@@ -615,20 +577,12 @@ var _ = Describe(
 								Expect(err).ToNot(HaveOccurred())
 
 								// Update
-								aeroCluster, err = getCluster(
-									k8sClient, ctx, clusterNamespacedName,
-								)
-								Expect(err).ToNot(HaveOccurred())
 
 								aeroCluster.Spec.Storage.Volumes[0].Sidecars[0].Path = "/newpath2"
 								err = updateCluster(k8sClient, ctx, aeroCluster)
 								Expect(err).ToNot(HaveOccurred())
 
 								// Delete
-								aeroCluster, err = getCluster(
-									k8sClient, ctx, clusterNamespacedName,
-								)
-								Expect(err).ToNot(HaveOccurred())
 
 								aeroCluster.Spec.Storage.Volumes[0].Sidecars = []asdbv1.VolumeAttachment{}
 								err = updateCluster(k8sClient, ctx, aeroCluster)
