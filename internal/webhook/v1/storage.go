@@ -4,6 +4,7 @@ import (
 	"fmt"
 	"path/filepath"
 	"reflect"
+	"strings"
 
 	v1 "k8s.io/api/core/v1"
 	"k8s.io/apimachinery/pkg/util/sets"
@@ -446,6 +447,10 @@ func validateStorageVolumeSource(volume *asdbv1.VolumeSpec) error {
 		sourceCount++
 	}
 
+	if source.HostPath != nil {
+		sourceCount++
+	}
+
 	if sourceCount == 0 {
 		return fmt.Errorf("no volume source found")
 	}
@@ -520,6 +525,17 @@ func validateStorageVolumeSource(volume *asdbv1.VolumeSpec) error {
 				return fmt.Errorf("invalid AccessMode `%s`. Valid AccessModes: %s, %s, %s",
 					am, v1.ReadOnlyMany, v1.ReadWriteMany, v1.ReadWriteOnce)
 			}
+		}
+	}
+
+	// Validate hostPath source
+	if source.HostPath != nil {
+		if source.HostPath.Path == "" {
+			return fmt.Errorf("hostPath.path cannot be empty")
+		}
+		// Ensure the path is absolute
+		if !strings.HasPrefix(source.HostPath.Path, "/") {
+			return fmt.Errorf("hostPath.path must be an absolute path")
 		}
 	}
 

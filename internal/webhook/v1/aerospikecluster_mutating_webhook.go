@@ -299,7 +299,7 @@ func setDefaultAerospikeConfigs(asLog logr.Logger,
 	config := configSpec.Value
 
 	// namespace conf
-	if err := setDefaultNsConf(asLog, configSpec, cluster.Spec.RackConfig.Namespaces, rackID); err != nil {
+	if err := setDefaultNsConf(asLog, configSpec, cluster.Spec.RackConfig.Namespaces, rackID, cluster); err != nil {
 		return err
 	}
 
@@ -367,7 +367,7 @@ func setNetworkNamespace(namespace string, networkPolicy *asdbv1.AerospikeNetwor
 // *****************************************************************************
 
 func setDefaultNsConf(asLog logr.Logger, configSpec asdbv1.AerospikeConfigSpec,
-	rackEnabledNsList []string, rackID *int) error {
+	rackEnabledNsList []string, rackID *int, cluster *asdbv1.AerospikeCluster) error {
 	config := configSpec.Value
 	// namespace conf
 	nsConf, ok := config["namespaces"]
@@ -392,6 +392,9 @@ func setDefaultNsConf(asLog logr.Logger, configSpec asdbv1.AerospikeConfigSpec,
 		)
 	}
 
+	// Check if dynamic rack ID is enabled
+	isDynamicRackID := asdbv1.GetBool(cluster.Spec.RackConfig.EnableDynamicRackID)
+
 	for _, nsInt := range nsList {
 		nsMap, ok := nsInt.(map[string]interface{})
 		if !ok {
@@ -408,6 +411,12 @@ func setDefaultNsConf(asLog logr.Logger, configSpec asdbv1.AerospikeConfigSpec,
 					if rackID != nil {
 						// Add rack-id only in rack specific config, not in global config
 						defaultConfs := map[string]interface{}{"rack-id": *rackID}
+
+						if isDynamicRackID {
+							// For dynamic rack ID, set a placeholder rack-id of 0
+							// This will be replaced with the actual rack ID at runtime
+							defaultConfs = map[string]interface{}{"rack-id": 0}
+						}
 
 						// rack-id was historically set to 0 for all namespaces, but since the AKO 3.3.0, it reflects actual values.
 						// During the AKO 3.3.0 upgrade rack-id for namespaces in rack specific config is set to 0.

@@ -9,5 +9,5 @@ generatorOptions:
 
 images:
 - name: controller
-  newName: docker.io/aerospike/aerospike-kubernetes-operator-nightly
-  newTag: 4.0.1
+  newName: docker.io/tanmayj10/aerospike-kubernetes-operator
+  newTag: hostpath1

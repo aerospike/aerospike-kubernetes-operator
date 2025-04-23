@@ -461,6 +461,19 @@ type RackConfig struct { //nolint:govet // for readability
 	// This makes sure that later on, all pods are properly counted when evaluating the cluster stability.
 	// +optional
 	MaxIgnorablePods *intstr.IntOrString `json:"maxIgnorablePods,omitempty"`
+
+	// EnableDynamicRackID enables dynamic rack id assignment for the pods after scheduling.
+	// This is useful when the rack id is not known before pods gets scheduled.
+	// The operator will read the rackid form hostpath mounted on aerospike init container.
+	// +optional
+	EnableDynamicRackID *bool `json:"enableDynamicRackID,omitempty"`
+
+	// RackIDVolumeName specifies the name of the volume where the operator should read the rack ID from.
+	// This volume should be configured in the storage spec and should point to a file with a single integer value
+	// representing the rack ID.
+	// Required when EnableDynamicRackID is true.
+	// +optional
+	RackIDVolumeName string `json:"rackIDVolumeName,omitempty"`
 }
 
 // Rack specifies single rack config
@@ -744,6 +757,13 @@ type VolumeSource struct {
 
 	// +optional
 	PersistentVolume *PersistentVolumeSpec `json:"persistentVolume,omitempty"`
+
+	// HostPath represents a directory on the host. It is a read-only volume by design.
+	// Provisioned by an administrator.
+	// This is useful for exposing host paths to pods in a controlled, read-only manner.
+	// More info: https://kubernetes.io/docs/concepts/storage/volumes#hostpath
+	// +optional
+	HostPath *corev1.HostPathVolumeSource `json:"hostPath,omitempty"`
 }
 
 type VolumeSpec struct {

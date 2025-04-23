@@ -462,6 +462,20 @@ func validateRackUpdate(
 		return nil
 	}
 
+	// Validate dynamic rack ID configuration changes
+	oldDynamicRackID := asdbv1.GetBool(oldObj.Spec.RackConfig.EnableDynamicRackID)
+	newDynamicRackID := asdbv1.GetBool(newObj.Spec.RackConfig.EnableDynamicRackID)
+
+	// Cannot switch between static and dynamic rack ID modes
+	if oldDynamicRackID != newDynamicRackID {
+		return fmt.Errorf("cannot change enableDynamicRackID setting after cluster creation")
+	}
+
+	// If dynamic rack ID is enabled, validate volume name changes
+	if newDynamicRackID && oldObj.Spec.RackConfig.RackIDVolumeName != newObj.Spec.RackConfig.RackIDVolumeName {
+		return fmt.Errorf("cannot change rackIDVolumeName after cluster creation when dynamic rack ID is enabled")
+	}
+
 	// Old racks cannot be updated
 	// Also need to exclude a default rack with default rack ID. No need to check here,
 	// user should not provide or update default rackID
@@ -596,6 +610,61 @@ func validateRackConfig(_ logr.Logger, cluster *asdbv1.AerospikeCluster) error {
 				"namespace name `%s` cannot have spaces, Namespaces %v", nsName,
 				cluster.Spec.RackConfig.Namespaces,
 			)
+		}
+	}
+
+	// Validate dynamic rack ID configuration
+	if asdbv1.GetBool(cluster.Spec.RackConfig.EnableDynamicRackID) {
+		// RackIDVolumeName is required when EnableDynamicRackID is true
+		if cluster.Spec.RackConfig.RackIDVolumeName == "" {
+			return fmt.Errorf("rackIDVolumeName must be specified when enableDynamicRackID is true")
+		}
+
+		// Verify the volume exists in storage spec
+		volumeFound := false
+		for _, volume := range cluster.Spec.Storage.Volumes {
+			if volume.Name == cluster.Spec.RackConfig.RackIDVolumeName {
+				volumeFound = true
+
+				// Verify it's a filesystem volume (not block device)
+				if volume.Source.HostPath == nil {
+					return fmt.Errorf("rackIDVolumeName %s must be a hostpath volume", volume.Name)
+				}
+
+				// Verify it's a directory (not a file)
+				if volume.Source.HostPath.Type != nil && *volume.Source.HostPath.Type != v1.HostPathFile {
+					return fmt.Errorf("rackIDVolumeName %s must be a file", volume.Name)
+				}
+
+				break
+			}
+		}
+
+		if !volumeFound {
+			return fmt.Errorf("rackIDVolumeName %s not found in storage spec", cluster.Spec.RackConfig.RackIDVolumeName)
+		}
+
+		// Cannot specify static racks when dynamic rack ID is enabled
+		if len(cluster.Spec.RackConfig.Racks) > 1 {
+			return fmt.Errorf("cannot specify more than 1 rack when enableDynamicRackID is true")
+		}
+
+		// Cannot specify batch operations or maxignorable pods when dynamic rack ID is enabled
+		if cluster.Spec.RackConfig.RollingUpdateBatchSize != nil {
+			return fmt.Errorf("rollingUpdateBatchSize cannot be specified when enableDynamicRackID is true")
+		}
+
+		if cluster.Spec.RackConfig.ScaleDownBatchSize != nil {
+			return fmt.Errorf("scaleDownBatchSize cannot be specified when enableDynamicRackID is true")
+		}
+
+		if cluster.Spec.RackConfig.MaxIgnorablePods != nil {
+			return fmt.Errorf("maxIgnorablePods cannot be specified when enableDynamicRackID is true")
+		}
+	} else {
+		// RackIDVolumeName should not be specified when EnableDynamicRackID is false
+		if cluster.Spec.RackConfig.RackIDVolumeName != "" {
+			return fmt.Errorf("rackIDVolumeName should not be specified when enableDynamicRackID is false")
 		}
 	}
 

@@ -5085,6 +5085,12 @@ spec:
                   RackConfig Configures the operator to deploy rack aware Aerospike cluster.
                   Pods will be deployed in given racks based on given configuration
                 properties:
+                  enableDynamicRackID:
+                    description: |-
+                      EnableDynamicRackID enables dynamic rack id assignment for the pods after scheduling.
+                      This is useful when the rack id is not known before pods gets scheduled.
+                      The operator will read the rackid form hostpath mounted on aerospike init container.
+                    type: boolean
                   maxIgnorablePods:
                     anyOf:
                     - type: integer
@@ -5106,6 +5112,13 @@ spec:
                     items:
                       type: string
                     type: array
+                  rackIDVolumeName:
+                    description: |-
+                      RackIDVolumeName specifies the name of the volume where the operator should read the rack ID from.
+                      This volume should be configured in the storage spec and should point to a file with a single integer value
+                      representing the rack ID.
+                      Required when EnableDynamicRackID is true.
+                    type: string
                   racks:
                     description: Racks is the list of all racks
                     items:
@@ -6519,6 +6532,28 @@ spec:
                                               More info: https://kubernetes.io/docs/concepts/storage/volumes#emptydir
                                             pattern: ^(\+|-)?(([0-9]+(\.[0-9]*)?)|(\.[0-9]+))(([KMGTPE]i)|[numkMGTPE]|([eE](\+|-)?(([0-9]+(\.[0-9]*)?)|(\.[0-9]+))))?$
                                             x-kubernetes-int-or-string: true
+                                        type: object
+                                      hostPath:
+                                        description: |-
+                                          HostPath represents a directory on the host. It is a read-only volume by design.
+                                          Provisioned by an administrator.
+                                          This is useful for exposing host paths to pods in a controlled, read-only manner.
+                                          More info: https://kubernetes.io/docs/concepts/storage/volumes#hostpath
+                                        properties:
+                                          path:
+                                            description: |-
+                                              path of the directory on the host.
+                                              If the path is a symlink, it will follow the link to the real path.
+                                              More info: https://kubernetes.io/docs/concepts/storage/volumes#hostpath
+                                            type: string
+                                          type:
+                                            description: |-
+                                              type for HostPath Volume
+                                              Defaults to ""
+                                              More info: https://kubernetes.io/docs/concepts/storage/volumes#hostpath
+                                            type: string
+                                        required:
+                                        - path
                                         type: object
                                       persistentVolume:
                                         description: PersistentVolumeSpec describes
@@ -8121,6 +8156,28 @@ spec:
                                             pattern: ^(\+|-)?(([0-9]+(\.[0-9]*)?)|(\.[0-9]+))(([KMGTPE]i)|[numkMGTPE]|([eE](\+|-)?(([0-9]+(\.[0-9]*)?)|(\.[0-9]+))))?$
                                             x-kubernetes-int-or-string: true
                                         type: object
+                                      hostPath:
+                                        description: |-
+                                          HostPath represents a directory on the host. It is a read-only volume by design.
+                                          Provisioned by an administrator.
+                                          This is useful for exposing host paths to pods in a controlled, read-only manner.
+                                          More info: https://kubernetes.io/docs/concepts/storage/volumes#hostpath
+                                        properties:
+                                          path:
+                                            description: |-
+                                              path of the directory on the host.
+                                              If the path is a symlink, it will follow the link to the real path.
+                                              More info: https://kubernetes.io/docs/concepts/storage/volumes#hostpath
+                                            type: string
+                                          type:
+                                            description: |-
+                                              type for HostPath Volume
+                                              Defaults to ""
+                                              More info: https://kubernetes.io/docs/concepts/storage/volumes#hostpath
+                                            type: string
+                                        required:
+                                        - path
+                                        type: object
                                       persistentVolume:
                                         description: PersistentVolumeSpec describes
                                           a persistent volume to claim and attach
@@ -8793,6 +8850,28 @@ spec:
                                     More info: https://kubernetes.io/docs/concepts/storage/volumes#emptydir
                                   pattern: ^(\+|-)?(([0-9]+(\.[0-9]*)?)|(\.[0-9]+))(([KMGTPE]i)|[numkMGTPE]|([eE](\+|-)?(([0-9]+(\.[0-9]*)?)|(\.[0-9]+))))?$
                                   x-kubernetes-int-or-string: true
+                              type: object
+                            hostPath:
+                              description: |-
+                                HostPath represents a directory on the host. It is a read-only volume by design.
+                                Provisioned by an administrator.
+                                This is useful for exposing host paths to pods in a controlled, read-only manner.
+                                More info: https://kubernetes.io/docs/concepts/storage/volumes#hostpath
+                              properties:
+                                path:
+                                  description: |-
+                                    path of the directory on the host.
+                                    If the path is a symlink, it will follow the link to the real path.
+                                    More info: https://kubernetes.io/docs/concepts/storage/volumes#hostpath
+                                  type: string
+                                type:
+                                  description: |-
+                                    type for HostPath Volume
+                                    Defaults to ""
+                                    More info: https://kubernetes.io/docs/concepts/storage/volumes#hostpath
+                                  type: string
+                              required:
+                              - path
                               type: object
                             persistentVolume:
                               description: PersistentVolumeSpec describes a persistent
@@ -14182,6 +14261,12 @@ spec:
                   Pods will be deployed in given racks based on given configuration
                 nullable: true
                 properties:
+                  enableDynamicRackID:
+                    description: |-
+                      EnableDynamicRackID enables dynamic rack id assignment for the pods after scheduling.
+                      This is useful when the rack id is not known before pods gets scheduled.
+                      The operator will read the rackid form hostpath mounted on aerospike init container.
+                    type: boolean
                   maxIgnorablePods:
                     anyOf:
                     - type: integer
@@ -14203,6 +14288,13 @@ spec:
                     items:
                       type: string
                     type: array
+                  rackIDVolumeName:
+                    description: |-
+                      RackIDVolumeName specifies the name of the volume where the operator should read the rack ID from.
+                      This volume should be configured in the storage spec and should point to a file with a single integer value
+                      representing the rack ID.
+                      Required when EnableDynamicRackID is true.
+                    type: string
                   racks:
                     description: Racks is the list of all racks
                     items:
@@ -15616,6 +15708,28 @@ spec:
                                               More info: https://kubernetes.io/docs/concepts/storage/volumes#emptydir
                                             pattern: ^(\+|-)?(([0-9]+(\.[0-9]*)?)|(\.[0-9]+))(([KMGTPE]i)|[numkMGTPE]|([eE](\+|-)?(([0-9]+(\.[0-9]*)?)|(\.[0-9]+))))?$
                                             x-kubernetes-int-or-string: true
+                                        type: object
+                                      hostPath:
+                                        description: |-
+                                          HostPath represents a directory on the host. It is a read-only volume by design.
+                                          Provisioned by an administrator.
+                                          This is useful for exposing host paths to pods in a controlled, read-only manner.
+                                          More info: https://kubernetes.io/docs/concepts/storage/volumes#hostpath
+                                        properties:
+                                          path:
+                                            description: |-
+                                              path of the directory on the host.
+                                              If the path is a symlink, it will follow the link to the real path.
+                                              More info: https://kubernetes.io/docs/concepts/storage/volumes#hostpath
+                                            type: string
+                                          type:
+                                            description: |-
+                                              type for HostPath Volume
+                                              Defaults to ""
+                                              More info: https://kubernetes.io/docs/concepts/storage/volumes#hostpath
+                                            type: string
+                                        required:
+                                        - path
                                         type: object
                                       persistentVolume:
                                         description: PersistentVolumeSpec describes
@@ -17218,6 +17332,28 @@ spec:
                                             pattern: ^(\+|-)?(([0-9]+(\.[0-9]*)?)|(\.[0-9]+))(([KMGTPE]i)|[numkMGTPE]|([eE](\+|-)?(([0-9]+(\.[0-9]*)?)|(\.[0-9]+))))?$
                                             x-kubernetes-int-or-string: true
                                         type: object
+                                      hostPath:
+                                        description: |-
+                                          HostPath represents a directory on the host. It is a read-only volume by design.
+                                          Provisioned by an administrator.
+                                          This is useful for exposing host paths to pods in a controlled, read-only manner.
+                                          More info: https://kubernetes.io/docs/concepts/storage/volumes#hostpath
+                                        properties:
+                                          path:
+                                            description: |-
+                                              path of the directory on the host.
+                                              If the path is a symlink, it will follow the link to the real path.
+                                              More info: https://kubernetes.io/docs/concepts/storage/volumes#hostpath
+                                            type: string
+                                          type:
+                                            description: |-
+                                              type for HostPath Volume
+                                              Defaults to ""
+                                              More info: https://kubernetes.io/docs/concepts/storage/volumes#hostpath
+                                            type: string
+                                        required:
+                                        - path
+                                        type: object
                                       persistentVolume:
                                         description: PersistentVolumeSpec describes
                                           a persistent volume to claim and attach
@@ -17956,6 +18092,28 @@ spec:
                                     More info: https://kubernetes.io/docs/concepts/storage/volumes#emptydir
                                   pattern: ^(\+|-)?(([0-9]+(\.[0-9]*)?)|(\.[0-9]+))(([KMGTPE]i)|[numkMGTPE]|([eE](\+|-)?(([0-9]+(\.[0-9]*)?)|(\.[0-9]+))))?$
                                   x-kubernetes-int-or-string: true
+                              type: object
+                            hostPath:
+                              description: |-
+                                HostPath represents a directory on the host. It is a read-only volume by design.
+                                Provisioned by an administrator.
+                                This is useful for exposing host paths to pods in a controlled, read-only manner.
+                                More info: https://kubernetes.io/docs/concepts/storage/volumes#hostpath
+                              properties:
+                                path:
+                                  description: |-
+                                    path of the directory on the host.
+                                    If the path is a symlink, it will follow the link to the real path.
+                                    More info: https://kubernetes.io/docs/concepts/storage/volumes#hostpath
+                                  type: string
+                                type:
+                                  description: |-
+                                    type for HostPath Volume
+                                    Defaults to ""
+                                    More info: https://kubernetes.io/docs/concepts/storage/volumes#hostpath
+                                  type: string
+                              required:
+                              - path
                               type: object
                             persistentVolume:
                               description: PersistentVolumeSpec describes a persistent

@@ -247,7 +247,7 @@ func getClientPolicy(
 		logrus.Error("Failed to get cluster auth info", "err: ", err)
 	}
 	// TODO: What should be the timeout, should make it configurable or just keep it default
-	policy.Timeout = time.Minute * 1
+	policy.Timeout = time.Minute * 2
 	policy.User = user
 	policy.Password = pass
 
