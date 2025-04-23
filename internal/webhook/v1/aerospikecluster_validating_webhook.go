@@ -1880,7 +1880,7 @@ func validateRequiredFileStorageForAerospikeConfig(
 	allPaths = append(allPaths, caPaths...)
 
 	for _, path := range allPaths {
-		volume := GetVolumeForAerospikePath(storage, filepath.Dir(path))
+		volume := asdbv1.GetVolumeForAerospikePath(storage, filepath.Dir(path))
 		if volume == nil {
 			return fmt.Errorf(
 				"feature-key-file paths or tls paths or default-password-file path "+
@@ -2009,22 +2009,11 @@ func isSecretManagerPath(path string) bool {
 // isFileStorageConfiguredForDir indicates if file storage is configured for dir.
 func isFileStorageConfiguredForDir(fileStorageList []string, dir string) bool {
 	for _, storageMount := range fileStorageList {
-		if isPathParentOrSame(storageMount, dir) {
+		if asdbv1.IsPathParentOrSame(storageMount, dir) {
 			return true
 		}
 	}
 
-	return false
-}
-
-// isPathParentOrSame indicates if dir1 is a parent or same as dir2.
-func isPathParentOrSame(dir1, dir2 string) bool {
-	if relPath, err := filepath.Rel(dir1, dir2); err == nil {
-		// If dir1 is not a parent directory then relative path will have to climb up directory hierarchy of dir1.
-		return !strings.HasPrefix(relPath, "..")
-	}
-
-	// Paths are unrelated.
 	return false
 }
 

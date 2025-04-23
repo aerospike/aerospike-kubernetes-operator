@@ -4,6 +4,7 @@ import (
 	"errors"
 	"fmt"
 	"os"
+	"path/filepath"
 	"regexp"
 	"strings"
 
@@ -624,4 +625,33 @@ func GetImageVersion(imageStr string) (string, error) {
 func IsClientCertConfigured(certSpec *AerospikeOperatorClientCertSpec) bool {
 	return (certSpec.SecretCertSource != nil && certSpec.SecretCertSource.ClientCertFilename != "") ||
 		(certSpec.CertPathInOperator != nil && certSpec.CertPathInOperator.ClientCertPath != "")
+}
+
+// GetVolumeForAerospikePath returns volume defined for given path for Aerospike server container.
+func GetVolumeForAerospikePath(storage *AerospikeStorageSpec, path string) *VolumeSpec {
+	var matchedVolume *VolumeSpec
+
+	for idx := range storage.Volumes {
+		volume := &storage.Volumes[idx]
+		if volume.Aerospike != nil && IsPathParentOrSame(
+			volume.Aerospike.Path, path,
+		) {
+			if matchedVolume == nil || matchedVolume.Aerospike.Path < volume.Aerospike.Path {
+				matchedVolume = volume
+			}
+		}
+	}
+
+	return matchedVolume
+}
+
+// IsPathParentOrSame indicates if dir1 is a parent or same as dir2.
+func IsPathParentOrSame(dir1, dir2 string) bool {
+	if relPath, err := filepath.Rel(dir1, dir2); err == nil {
+		// If dir1 is not a parent directory then relative path will have to climb up directory hierarchy of dir1.
+		return !strings.HasPrefix(relPath, "..")
+	}
+
+	// Paths are unrelated.
+	return false
 }
