@@ -1177,6 +1177,11 @@ type AerospikePodStatus struct { //nolint:govet // for readability
 	// Empty "" status means successful update.
 	// +optional
 	DynamicConfigUpdateStatus DynamicConfigUpdateStatus `json:"dynamicConfigUpdateStatus,omitempty"`
+
+	// DynamicRackIDEnabled is the status of dynamic rack id update operation.
+	// True means dynamic rack id update is enabled.
+	// +optional
+	DynamicRackIDEnabled *bool `json:"dynamicRackIDEnabled,omitempty"`
 }
 
 // +kubebuilder:object:root=true

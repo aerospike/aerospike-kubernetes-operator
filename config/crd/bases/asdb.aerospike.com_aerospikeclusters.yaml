@@ -14200,6 +14200,11 @@ spec:
                       - PartiallyFailed
                       - ""
                       type: string
+                    dynamicRackIDEnabled:
+                      description: |-
+                        DynamicRackIDEnabled is the status of dynamic rack id update operation.
+                        True means dynamic rack id update is enabled.
+                      type: boolean
                     hostExternalIP:
                       description: HostExternalIP of the K8s host this pod is scheduled
                         on.

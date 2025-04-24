@@ -137,6 +137,11 @@ func (r *SingleClusterReconciler) getRollingRestartTypeMap(rackState *RackState,
 		if podStatus.DynamicConfigUpdateStatus == asdbv1.PartiallyFailed {
 			restartTypeMap[pods[idx].Name] = mergeRestartType(restartTypeMap[pods[idx].Name], quickRestart)
 		}
+
+		// TODO: will decide if dynamic to non-dynamic support also needs
+		if podStatus.DynamicRackIDEnabled != r.aeroCluster.Spec.RackConfig.EnableDynamicRackID {
+			restartTypeMap[pods[idx].Name] = mergeRestartType(restartTypeMap[pods[idx].Name], quickRestart)
+		}
 	}
 
 	return restartTypeMap, dynamicConfDiffPerPod, nil
