@@ -645,6 +645,19 @@ func GetVolumeForAerospikePath(storage *AerospikeStorageSpec, path string) *Volu
 	return matchedVolume
 }
 
+// GetAerospikePathForVolume returns the Aerospike path for a given volume name from the list of volumes.
+// If the volume is not found or not attached to the Aerospike server container, returns an empty string.
+func GetAerospikePathForVolume(volumes []VolumeSpec, volumeName string) string {
+	for idx := range volumes {
+		volume := &volumes[idx]
+		if volume.Name == volumeName && volume.Aerospike != nil {
+			return volume.Aerospike.Path
+		}
+	}
+
+	return ""
+}
+
 // IsPathParentOrSame indicates if dir1 is a parent or same as dir2.
 func IsPathParentOrSame(dir1, dir2 string) bool {
 	if relPath, err := filepath.Rel(dir1, dir2); err == nil {

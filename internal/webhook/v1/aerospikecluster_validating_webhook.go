@@ -464,7 +464,7 @@ func validateRackUpdate(
 
 	//// Validate dynamic rack ID configuration changes
 	//oldDynamicRackID := asdbv1.GetBool(oldObj.Spec.RackConfig.EnableDynamicRackID)
-	newDynamicRackID := asdbv1.GetBool(newObj.Spec.RackConfig.EnableDynamicRackID)
+	//newDynamicRackID := asdbv1.GetBool(newObj.Spec.RackConfig.EnableDynamicRackID)
 	//
 	//// Cannot switch between static and dynamic rack ID modes
 	//if oldDynamicRackID != newDynamicRackID {
@@ -472,9 +472,9 @@ func validateRackUpdate(
 	//}
 
 	// If dynamic rack ID is enabled, validate volume name changes
-	if newDynamicRackID && oldObj.Spec.RackConfig.RackIDVolumeName != newObj.Spec.RackConfig.RackIDVolumeName {
-		return fmt.Errorf("cannot change rackIDVolumeName after cluster creation when dynamic rack ID is enabled")
-	}
+	//if newDynamicRackID && oldObj.Spec.RackConfig.RackIDVolumeName != newObj.Spec.RackConfig.RackIDVolumeName {
+	//	return fmt.Errorf("cannot change rackIDVolumeName after cluster creation when dynamic rack ID is enabled")
+	//}
 
 	// Old racks cannot be updated
 	// Also need to exclude a default rack with default rack ID. No need to check here,
