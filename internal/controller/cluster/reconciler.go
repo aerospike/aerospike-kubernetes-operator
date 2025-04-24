@@ -274,9 +274,9 @@ func (r *SingleClusterReconciler) Reconcile() (result ctrl.Result, recErr error)
 		return reconcile.Result{}, err
 	}
 
-	// Try to recover pods only when MaxIgnorablePods is set
-	if r.aeroCluster.Spec.RackConfig.MaxIgnorablePods != nil {
-		if res := r.recoverIgnorablePods(); !res.IsSuccess {
+	// Try to recover pods only when length of ignorablePodNames is greater than zero
+	if len(ignorablePodNames) > 0 {
+		if res := r.recoverIgnorablePods(ignorablePodNames); !res.IsSuccess {
 			return res.GetResult()
 		}
 	}
@@ -286,36 +286,39 @@ func (r *SingleClusterReconciler) Reconcile() (result ctrl.Result, recErr error)
 	return reconcile.Result{}, nil
 }
 
-func (r *SingleClusterReconciler) recoverIgnorablePods() common.ReconcileResult {
-	podList, gErr := r.getClusterPodList()
-	if gErr != nil {
-		r.Log.Error(gErr, "Failed to get cluster pod list")
-		return common.ReconcileError(gErr)
-	}
-
+func (r *SingleClusterReconciler) recoverIgnorablePods(ignorablePodNames sets.Set[string]) common.ReconcileResult {
 	r.Log.Info("Try to recover failed/pending pods if any")
+
+	ignorablePodNamesList := ignorablePodNames.UnsortedList()
 
 	var anyPodFailed bool
 	// Try to recover failed/pending pods by deleting them
-	for idx := range podList.Items {
-		if cErr := utils.CheckPodFailed(&podList.Items[idx]); cErr != nil {
+	for idx := range ignorablePodNamesList {
+		pod := &corev1.Pod{}
+		podNamespacedName := types.NamespacedName{Namespace: r.aeroCluster.Namespace, Name: ignorablePodNamesList[idx]}
+
+		if err := r.Client.Get(context.TODO(), podNamespacedName, pod); err != nil {
+			return common.ReconcileError(err)
+		}
+
+		if cErr := utils.CheckPodFailed(pod); cErr != nil {
 			anyPodFailed = true
 
-			if err := r.createOrUpdatePodServiceIfNeeded([]string{podList.Items[idx].Name}); err != nil {
+			if err := r.createOrUpdatePodServiceIfNeeded([]string{pod.Name}); err != nil {
 				return common.ReconcileError(err)
 			}
 
-			if err := r.Client.Delete(context.TODO(), &podList.Items[idx]); err != nil {
-				r.Log.Error(err, "Failed to delete pod", "pod", podList.Items[idx].Name)
+			if err := r.Client.Delete(context.TODO(), pod); err != nil {
+				r.Log.Error(err, "Failed to delete pod", "pod", pod.Name)
 				return common.ReconcileError(err)
 			}
 
-			r.Log.Info("Deleted pod", "pod", podList.Items[idx].Name)
+			r.Log.Info("Deleted pod", "pod", pod.Name)
 		}
 	}
 
-	if anyPodFailed {
-		r.Log.Info("Found failed/pending pod(s), requeuing")
+	if anyPodFailed || len(ignorablePodNames) > 0 {
+		r.Log.Info("Found failed/pending or ignorable pod(s), requeuing")
 		return common.ReconcileRequeueAfter(0)
 	}
 
