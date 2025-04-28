@@ -5117,11 +5117,21 @@ spec:
                       RackIDSource specifies the source from which to read the rack ID.
                       Required when EnableDynamicRackID is true.
                     properties:
-                      filePath:
-                        description: |-
-                          FilePath specifies the absolute path to a file containing the rack ID mounted in aerospike init container.
-                          The file should contain a single integer value.
-                        type: string
+                      hostPathConf:
+                        description: HostPathConf specifies the host path configuration
+                          to use for the rack ID.
+                        properties:
+                          filePath:
+                            description: |-
+                              FilePath specifies the relative path to a file containing the rack ID mounted in aerospike init container.
+                              This path should be the relative path to the mount point of hostpath.
+                              The file should contain a single integer value.
+                            type: string
+                          hostPathVolumeName:
+                            description: HostPathVolumeName specifies the name of
+                              the host path volume to use for the rack ID.
+                            type: string
+                        type: object
                       podAnnotation:
                         description: |-
                           PodAnnotation specifies the name of the pod annotation that contains the rack ID.
@@ -6268,45 +6278,6 @@ spec:
                                   aerospike:
                                     description: Aerospike attachment of this volume
                                       on Aerospike server container.
-                                    properties:
-                                      mountOptions:
-                                        properties:
-                                          mountPropagation:
-                                            description: |-
-                                              mountPropagation determines how mounts are propagated from the host
-                                              to container and the other way around.
-                                              When not set, MountPropagationNone is used.
-                                              This field is beta in 1.10.
-                                            type: string
-                                          readOnly:
-                                            description: |-
-                                              Mounted read-only if true, read-write otherwise (false or unspecified).
-                                              Defaults to false.
-                                            type: boolean
-                                          subPath:
-                                            description: |-
-                                              Path within the volume from which the container's volume should be mounted.
-                                              Defaults to "" (volume's root).
-                                            type: string
-                                          subPathExpr:
-                                            description: |-
-                                              Expanded path within the volume from which the container's volume should be mounted.
-                                              Behaves similarly to SubPath but environment variable references $(
-                                              VAR_NAME) are expanded using the container's environment.
-                                              Defaults to "" (volume's root).
-                                              SubPathExpr and SubPath are mutually exclusive.
-                                            type: string
-                                        type: object
-                                      path:
-                                        description: Path to attach the volume on
-                                          the Aerospike server container.
-                                        type: string
-                                    required:
-                                    - path
-                                    type: object
-                                  aerospikeInit:
-                                    description: AerospikeInit attachment of this
-                                      volume on Aerospike server init container.
                                     properties:
                                       mountOptions:
                                         properties:
@@ -7966,45 +7937,6 @@ spec:
                                     required:
                                     - path
                                     type: object
-                                  aerospikeInit:
-                                    description: AerospikeInit attachment of this
-                                      volume on Aerospike server init container.
-                                    properties:
-                                      mountOptions:
-                                        properties:
-                                          mountPropagation:
-                                            description: |-
-                                              mountPropagation determines how mounts are propagated from the host
-                                              to container and the other way around.
-                                              When not set, MountPropagationNone is used.
-                                              This field is beta in 1.10.
-                                            type: string
-                                          readOnly:
-                                            description: |-
-                                              Mounted read-only if true, read-write otherwise (false or unspecified).
-                                              Defaults to false.
-                                            type: boolean
-                                          subPath:
-                                            description: |-
-                                              Path within the volume from which the container's volume should be mounted.
-                                              Defaults to "" (volume's root).
-                                            type: string
-                                          subPathExpr:
-                                            description: |-
-                                              Expanded path within the volume from which the container's volume should be mounted.
-                                              Behaves similarly to SubPath but environment variable references $(
-                                              VAR_NAME) are expanded using the container's environment.
-                                              Defaults to "" (volume's root).
-                                              SubPathExpr and SubPath are mutually exclusive.
-                                            type: string
-                                        type: object
-                                      path:
-                                        description: Path to attach the volume on
-                                          the Aerospike server container.
-                                        type: string
-                                    required:
-                                    - path
-                                    type: object
                                   cascadeDelete:
                                     description: |-
                                       CascadeDelete determines if the persistent volumes are deleted after the pod this volume binds to is
@@ -8666,45 +8598,6 @@ spec:
                         aerospike:
                           description: Aerospike attachment of this volume on Aerospike
                             server container.
-                          properties:
-                            mountOptions:
-                              properties:
-                                mountPropagation:
-                                  description: |-
-                                    mountPropagation determines how mounts are propagated from the host
-                                    to container and the other way around.
-                                    When not set, MountPropagationNone is used.
-                                    This field is beta in 1.10.
-                                  type: string
-                                readOnly:
-                                  description: |-
-                                    Mounted read-only if true, read-write otherwise (false or unspecified).
-                                    Defaults to false.
-                                  type: boolean
-                                subPath:
-                                  description: |-
-                                    Path within the volume from which the container's volume should be mounted.
-                                    Defaults to "" (volume's root).
-                                  type: string
-                                subPathExpr:
-                                  description: |-
-                                    Expanded path within the volume from which the container's volume should be mounted.
-                                    Behaves similarly to SubPath but environment variable references $(
-                                    VAR_NAME) are expanded using the container's environment.
-                                    Defaults to "" (volume's root).
-                                    SubPathExpr and SubPath are mutually exclusive.
-                                  type: string
-                              type: object
-                            path:
-                              description: Path to attach the volume on the Aerospike
-                                server container.
-                              type: string
-                          required:
-                          - path
-                          type: object
-                        aerospikeInit:
-                          description: AerospikeInit attachment of this volume on
-                            Aerospike server init container.
                           properties:
                             mountOptions:
                               properties:
@@ -14424,11 +14317,21 @@ spec:
                       RackIDSource specifies the source from which to read the rack ID.
                       Required when EnableDynamicRackID is true.
                     properties:
-                      filePath:
-                        description: |-
-                          FilePath specifies the absolute path to a file containing the rack ID mounted in aerospike init container.
-                          The file should contain a single integer value.
-                        type: string
+                      hostPathConf:
+                        description: HostPathConf specifies the host path configuration
+                          to use for the rack ID.
+                        properties:
+                          filePath:
+                            description: |-
+                              FilePath specifies the relative path to a file containing the rack ID mounted in aerospike init container.
+                              This path should be the relative path to the mount point of hostpath.
+                              The file should contain a single integer value.
+                            type: string
+                          hostPathVolumeName:
+                            description: HostPathVolumeName specifies the name of
+                              the host path volume to use for the rack ID.
+                            type: string
+                        type: object
                       podAnnotation:
                         description: |-
                           PodAnnotation specifies the name of the pod annotation that contains the rack ID.
@@ -15575,45 +15478,6 @@ spec:
                                   aerospike:
                                     description: Aerospike attachment of this volume
                                       on Aerospike server container.
-                                    properties:
-                                      mountOptions:
-                                        properties:
-                                          mountPropagation:
-                                            description: |-
-                                              mountPropagation determines how mounts are propagated from the host
-                                              to container and the other way around.
-                                              When not set, MountPropagationNone is used.
-                                              This field is beta in 1.10.
-                                            type: string
-                                          readOnly:
-                                            description: |-
-                                              Mounted read-only if true, read-write otherwise (false or unspecified).
-                                              Defaults to false.
-                                            type: boolean
-                                          subPath:
-                                            description: |-
-                                              Path within the volume from which the container's volume should be mounted.
-                                              Defaults to "" (volume's root).
-                                            type: string
-                                          subPathExpr:
-                                            description: |-
-                                              Expanded path within the volume from which the container's volume should be mounted.
-                                              Behaves similarly to SubPath but environment variable references $(
-                                              VAR_NAME) are expanded using the container's environment.
-                                              Defaults to "" (volume's root).
-                                              SubPathExpr and SubPath are mutually exclusive.
-                                            type: string
-                                        type: object
-                                      path:
-                                        description: Path to attach the volume on
-                                          the Aerospike server container.
-                                        type: string
-                                    required:
-                                    - path
-                                    type: object
-                                  aerospikeInit:
-                                    description: AerospikeInit attachment of this
-                                      volume on Aerospike server init container.
                                     properties:
                                       mountOptions:
                                         properties:
@@ -17273,45 +17137,6 @@ spec:
                                     required:
                                     - path
                                     type: object
-                                  aerospikeInit:
-                                    description: AerospikeInit attachment of this
-                                      volume on Aerospike server init container.
-                                    properties:
-                                      mountOptions:
-                                        properties:
-                                          mountPropagation:
-                                            description: |-
-                                              mountPropagation determines how mounts are propagated from the host
-                                              to container and the other way around.
-                                              When not set, MountPropagationNone is used.
-                                              This field is beta in 1.10.
-                                            type: string
-                                          readOnly:
-                                            description: |-
-                                              Mounted read-only if true, read-write otherwise (false or unspecified).
-                                              Defaults to false.
-                                            type: boolean
-                                          subPath:
-                                            description: |-
-                                              Path within the volume from which the container's volume should be mounted.
-                                              Defaults to "" (volume's root).
-                                            type: string
-                                          subPathExpr:
-                                            description: |-
-                                              Expanded path within the volume from which the container's volume should be mounted.
-                                              Behaves similarly to SubPath but environment variable references $(
-                                              VAR_NAME) are expanded using the container's environment.
-                                              Defaults to "" (volume's root).
-                                              SubPathExpr and SubPath are mutually exclusive.
-                                            type: string
-                                        type: object
-                                      path:
-                                        description: Path to attach the volume on
-                                          the Aerospike server container.
-                                        type: string
-                                    required:
-                                    - path
-                                    type: object
                                   cascadeDelete:
                                     description: |-
                                       CascadeDelete determines if the persistent volumes are deleted after the pod this volume binds to is
@@ -18039,45 +17864,6 @@ spec:
                         aerospike:
                           description: Aerospike attachment of this volume on Aerospike
                             server container.
-                          properties:
-                            mountOptions:
-                              properties:
-                                mountPropagation:
-                                  description: |-
-                                    mountPropagation determines how mounts are propagated from the host
-                                    to container and the other way around.
-                                    When not set, MountPropagationNone is used.
-                                    This field is beta in 1.10.
-                                  type: string
-                                readOnly:
-                                  description: |-
-                                    Mounted read-only if true, read-write otherwise (false or unspecified).
-                                    Defaults to false.
-                                  type: boolean
-                                subPath:
-                                  description: |-
-                                    Path within the volume from which the container's volume should be mounted.
-                                    Defaults to "" (volume's root).
-                                  type: string
-                                subPathExpr:
-                                  description: |-
-                                    Expanded path within the volume from which the container's volume should be mounted.
-                                    Behaves similarly to SubPath but environment variable references $(
-                                    VAR_NAME) are expanded using the container's environment.
-                                    Defaults to "" (volume's root).
-                                    SubPathExpr and SubPath are mutually exclusive.
-                                  type: string
-                              type: object
-                            path:
-                              description: Path to attach the volume on the Aerospike
-                                server container.
-                              type: string
-                          required:
-                          - path
-                          type: object
-                        aerospikeInit:
-                          description: AerospikeInit attachment of this volume on
-                            Aerospike server init container.
                           properties:
                             mountOptions:
                               properties:

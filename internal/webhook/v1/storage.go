@@ -246,7 +246,7 @@ func validateStorage(
 			)
 		}
 
-		if volume.Aerospike == nil && len(volume.Sidecars) == 0 && len(volume.InitContainers) == 0 {
+		if volume.Source.HostPath == nil && volume.Aerospike == nil && len(volume.Sidecars) == 0 && len(volume.InitContainers) == 0 {
 			return fmt.Errorf(
 				"invalid volume, no container provided to attach the volume. "+
 					"At least one of the following must be provided: volume.Aerospike, volume.Sidecars, "+

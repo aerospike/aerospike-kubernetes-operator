@@ -1455,15 +1455,10 @@ func getFinalVolumeAttachmentsForVolume(volume *asdbv1.VolumeSpec) (
 		initContainerAttachments, volume.InitContainers...,
 	)
 
-	path := initVolumePath
-	if volume.AerospikeInit != nil {
-		path = volume.AerospikeInit.Path
-	}
-
 	initContainerAttachments = append(
 		initContainerAttachments, asdbv1.VolumeAttachment{
 			ContainerName: asdbv1.AerospikeInitContainerName,
-			Path:          path,
+			Path:          initVolumePath,
 		},
 	)
 

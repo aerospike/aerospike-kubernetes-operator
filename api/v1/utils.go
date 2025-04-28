@@ -645,24 +645,6 @@ func GetVolumeForAerospikePath(storage *AerospikeStorageSpec, path string) *Volu
 	return matchedVolume
 }
 
-// GetVolumeForAerospikeInitPath returns volume defined for given path for Aerospike server initcontainer.
-func GetVolumeForAerospikeInitPath(storage *AerospikeStorageSpec, path string) *VolumeSpec {
-	var matchedVolume *VolumeSpec
-
-	for idx := range storage.Volumes {
-		volume := &storage.Volumes[idx]
-		if volume.AerospikeInit != nil && IsPathParentOrSame(
-			volume.AerospikeInit.Path, path,
-		) {
-			if matchedVolume == nil || matchedVolume.AerospikeInit.Path < volume.AerospikeInit.Path {
-				matchedVolume = volume
-			}
-		}
-	}
-
-	return matchedVolume
-}
-
 // GetAerospikePathForVolume returns the Aerospike path for a given volume name from the list of volumes.
 // If the volume is not found or not attached to the Aerospike server container, returns an empty string.
 func GetAerospikePathForVolume(volumes []VolumeSpec, volumeName string) string {

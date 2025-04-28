@@ -1417,8 +1417,6 @@ func (r *SingleClusterReconciler) handleDynamicConfigChange(rackState *RackState
 		}
 	}
 
-	r.Log.Info("$$$$$$$$ Config changed", "specToStatusDiffs", specToStatusDiffs)
-
 	return specToStatusDiffs, nil
 }
 

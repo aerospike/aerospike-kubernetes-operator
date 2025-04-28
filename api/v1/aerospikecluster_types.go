@@ -781,10 +781,6 @@ type VolumeSpec struct {
 	// +optional
 	Aerospike *AerospikeServerVolumeAttachment `json:"aerospike,omitempty"`
 
-	// AerospikeInit attachment of this volume on Aerospike server init container.
-	// +optional
-	AerospikeInit *AerospikeServerVolumeAttachment `json:"aerospikeInit,omitempty"`
-
 	// Sidecars are side containers where this volume will be mounted
 	// +optional
 	Sidecars []VolumeAttachment `json:"sidecars,omitempty"`
@@ -1092,15 +1088,24 @@ type AerospikeNetworkPolicy struct {
 // RackIDSource specifies the source from which to read the rack ID.
 // Only one source can be specified at a time.
 type RackIDSource struct {
-	// FilePath specifies the absolute path to a file containing the rack ID mounted in aerospike init container.
-	// The file should contain a single integer value.
-	// +optional
-	FilePath *string `json:"filePath,omitempty"`
+	// HostPathConf specifies the host path configuration to use for the rack ID.
+	HostPathConf *HostPathConf `json:"hostPathConf,omitempty"`
 
 	// PodAnnotation specifies the name of the pod annotation that contains the rack ID.
 	// The annotation value should be a valid integer.
 	// +optional
 	PodAnnotation *string `json:"podAnnotation,omitempty"`
+}
+
+type HostPathConf struct {
+	// HostPathVolumeName specifies the name of the host path volume to use for the rack ID.
+	HostPathVolumeName string `json:"hostPathVolumeName,omitempty"`
+
+	// FilePath specifies the relative path to a file containing the rack ID mounted in aerospike init container.
+	// This path should be the relative path to the mount point of hostpath.
+	// The file should contain a single integer value.
+	// +optional
+	FilePath string `json:"filePath,omitempty"`
 }
 
 // AerospikeInstanceSummary defines the observed state of a pod's Aerospike Server Instance.
