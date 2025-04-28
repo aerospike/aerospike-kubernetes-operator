@@ -468,12 +468,11 @@ type RackConfig struct { //nolint:govet // for readability
 	// +optional
 	EnableDynamicRackID *bool `json:"enableDynamicRackID,omitempty"`
 
-	// RackIDVolumeName specifies the name of the volume where the operator should read the rack ID from.
-	// This volume should be configured in the storage spec and should point to a file with a single integer value
-	// representing the rack ID.
+	// RackIDSource specifies the source from which to read the rack ID.
 	// Required when EnableDynamicRackID is true.
 	// +optional
-	RackIDVolumeName string `json:"rackIDVolumeName,omitempty"`
+	RackIDSource RackIDSource `json:"rackIDSource,omitempty"`
+	//RackIDVolumeName string `json:"rackIDVolumeName,omitempty"`
 }
 
 // Rack specifies single rack config
@@ -782,6 +781,10 @@ type VolumeSpec struct {
 	// +optional
 	Aerospike *AerospikeServerVolumeAttachment `json:"aerospike,omitempty"`
 
+	// AerospikeInit attachment of this volume on Aerospike server init container.
+	// +optional
+	AerospikeInit *AerospikeServerVolumeAttachment `json:"aerospikeInit,omitempty"`
+
 	// Sidecars are side containers where this volume will be mounted
 	// +optional
 	Sidecars []VolumeAttachment `json:"sidecars,omitempty"`
@@ -1084,6 +1087,20 @@ type AerospikeNetworkPolicy struct {
 	// +kubebuilder:validation:MinItems:=1
 	// +optional
 	CustomTLSFabricNetworkNames []string `json:"customTLSFabricNetworkNames,omitempty"`
+}
+
+// RackIDSource specifies the source from which to read the rack ID.
+// Only one source can be specified at a time.
+type RackIDSource struct {
+	// FilePath specifies the absolute path to a file containing the rack ID mounted in aerospike init container.
+	// The file should contain a single integer value.
+	// +optional
+	FilePath *string `json:"filePath,omitempty"`
+
+	// PodAnnotation specifies the name of the pod annotation that contains the rack ID.
+	// The annotation value should be a valid integer.
+	// +optional
+	PodAnnotation *string `json:"podAnnotation,omitempty"`
 }
 
 // AerospikeInstanceSummary defines the observed state of a pod's Aerospike Server Instance.

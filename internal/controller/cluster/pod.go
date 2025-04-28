@@ -99,8 +99,15 @@ func (r *SingleClusterReconciler) getRollingRestartTypeMap(rackState *RackState,
 
 			continue
 		}
-
 		podStatus := r.aeroCluster.Status.Pods[pods[idx].Name]
+
+		// TODO: will decide if dynamic to non-dynamic support also needs
+		if asdbv1.GetBool(podStatus.DynamicRackIDEnabled) != asdbv1.GetBool(r.aeroCluster.Spec.RackConfig.EnableDynamicRackID) {
+			restartTypeMap[pods[idx].Name] = mergeRestartType(restartTypeMap[pods[idx].Name], podRestart)
+
+			continue
+		}
+
 		if podStatus.AerospikeConfigHash != requiredConfHash {
 			if addedNSDevices == nil {
 				// Fetching all block devices that have been added in namespaces.
@@ -135,11 +142,6 @@ func (r *SingleClusterReconciler) getRollingRestartTypeMap(rackState *RackState,
 
 		// Fallback to rolling restart in case of partial failure to recover with the desired Aerospike config
 		if podStatus.DynamicConfigUpdateStatus == asdbv1.PartiallyFailed {
-			restartTypeMap[pods[idx].Name] = mergeRestartType(restartTypeMap[pods[idx].Name], quickRestart)
-		}
-
-		// TODO: will decide if dynamic to non-dynamic support also needs
-		if podStatus.DynamicRackIDEnabled != r.aeroCluster.Spec.RackConfig.EnableDynamicRackID {
 			restartTypeMap[pods[idx].Name] = mergeRestartType(restartTypeMap[pods[idx].Name], quickRestart)
 		}
 	}
@@ -182,7 +184,7 @@ func (r *SingleClusterReconciler) getRollingRestartTypePod(
 		r.Log.Info(
 			"AerospikeConfig changed. Need rolling restart or update config dynamically",
 			"requiredHash", requiredConfHash,
-			"currentHash", podStatus.AerospikeConfigHash,
+			"currentHash", podStatus.AerospikeConfigHash, "podrestarttype", podRestartType,
 		)
 	}
 
@@ -1396,6 +1398,13 @@ func (r *SingleClusterReconciler) handleDynamicConfigChange(rackState *RackState
 	}
 
 	if len(specToStatusDiffs) > 0 {
+		// Remove rack-id from the diff
+		for key := range specToStatusDiffs {
+			if asconfig.BaseKey(key) == "rack-id" {
+				delete(specToStatusDiffs, key)
+			}
+		}
+
 		isDynamic, err := asconfig.IsAllDynamicConfig(r.Log, specToStatusDiffs, version)
 		if err != nil {
 			r.Log.Info("Failed to check if all config is dynamic, fallback to rolling restart", "error", err.Error())
@@ -1407,6 +1416,8 @@ func (r *SingleClusterReconciler) handleDynamicConfigChange(rackState *RackState
 			return nil, nil
 		}
 	}
+
+	r.Log.Info("$$$$$$$$ Config changed", "specToStatusDiffs", specToStatusDiffs)
 
 	return specToStatusDiffs, nil
 }

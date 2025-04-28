@@ -613,35 +613,38 @@ func validateRackConfig(_ logr.Logger, cluster *asdbv1.AerospikeCluster) error {
 		}
 	}
 
+	rackIDSource := cluster.Spec.RackConfig.RackIDSource
+	sourceCount := 0
+
+	if rackIDSource.FilePath != nil {
+		sourceCount++
+	}
+
+	if rackIDSource.PodAnnotation != nil {
+		sourceCount++
+	}
+
 	// Validate dynamic rack ID configuration
 	if asdbv1.GetBool(cluster.Spec.RackConfig.EnableDynamicRackID) {
-		// RackIDVolumeName is required when EnableDynamicRackID is true
-		if cluster.Spec.RackConfig.RackIDVolumeName == "" {
-			return fmt.Errorf("rackIDVolumeName must be specified when enableDynamicRackID is true")
+		// RackIDSource is required when EnableDynamicRackID is true
+		if sourceCount == 0 {
+			return fmt.Errorf("rackIDSource must be specified when enableDynamicRackID is true")
 		}
 
-		// Verify the volume exists in storage spec
-		volumeFound := false
-		for _, volume := range cluster.Spec.Storage.Volumes {
-			if volume.Name == cluster.Spec.RackConfig.RackIDVolumeName {
-				volumeFound = true
+		if sourceCount > 1 {
+			return fmt.Errorf("can not specify more than 1 source for rackID")
+		}
 
-				// Verify it's a filesystem volume (not block device)
-				if volume.Source.HostPath == nil {
-					return fmt.Errorf("rackIDVolumeName %s must be a hostpath volume", volume.Name)
-				}
-
-				// Verify it's a directory (not a file)
-				if volume.Source.HostPath.Type != nil && *volume.Source.HostPath.Type != v1.HostPathFile {
-					return fmt.Errorf("rackIDVolumeName %s must be a file", volume.Name)
-				}
-
-				break
+		if rackIDSource.FilePath != nil {
+			volume := asdbv1.GetVolumeForAerospikeInitPath(&cluster.Spec.RackConfig.Racks[0].Storage, *rackIDSource.FilePath)
+			if volume == nil {
+				return fmt.Errorf("volume not found for path %s in storage spec", *rackIDSource.FilePath)
 			}
-		}
 
-		if !volumeFound {
-			return fmt.Errorf("rackIDVolumeName %s not found in storage spec", cluster.Spec.RackConfig.RackIDVolumeName)
+			// Verify it's a filesystem volume (not block device)
+			if volume.Source.HostPath == nil {
+				return fmt.Errorf("rackIDVolumeName %s must be a hostpath volume", volume.Name)
+			}
 		}
 
 		// Cannot specify static racks when dynamic rack ID is enabled
@@ -662,9 +665,9 @@ func validateRackConfig(_ logr.Logger, cluster *asdbv1.AerospikeCluster) error {
 			return fmt.Errorf("maxIgnorablePods cannot be specified when enableDynamicRackID is true")
 		}
 	} else {
-		// RackIDVolumeName should not be specified when EnableDynamicRackID is false
-		if cluster.Spec.RackConfig.RackIDVolumeName != "" {
-			return fmt.Errorf("rackIDVolumeName should not be specified when enableDynamicRackID is false")
+		// RackIDSource should not be specified when enableDynamicRackID is false
+		if sourceCount > 0 {
+			return fmt.Errorf("rackIDSource should not be specified when enableDynamicRackID is false")
 		}
 	}
 
