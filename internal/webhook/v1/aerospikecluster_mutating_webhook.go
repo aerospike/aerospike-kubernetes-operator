@@ -392,9 +392,6 @@ func setDefaultNsConf(asLog logr.Logger, configSpec asdbv1.AerospikeConfigSpec,
 		)
 	}
 
-	// Check if dynamic rack ID is enabled
-	isDynamicRackID := asdbv1.GetBool(cluster.Spec.RackConfig.EnableDynamicRackID)
-
 	for _, nsInt := range nsList {
 		nsMap, ok := nsInt.(map[string]interface{})
 		if !ok {
@@ -412,7 +409,7 @@ func setDefaultNsConf(asLog logr.Logger, configSpec asdbv1.AerospikeConfigSpec,
 						// Add rack-id only in rack specific config, not in global config
 						defaultConfs := map[string]interface{}{"rack-id": *rackID}
 
-						if isDynamicRackID {
+						if cluster.Spec.RackConfig.RackIDSource != nil {
 							// For dynamic rack ID, set a placeholder rack-id of 0
 							// This will be replaced with the actual rack ID at runtime
 							defaultConfs = map[string]interface{}{"rack-id": 0}

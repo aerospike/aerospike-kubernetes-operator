@@ -23,12 +23,6 @@ spec:
             storageClass: ssd
             volumeMode: Filesystem
             size: 1Gi
-      - name: hostpath
-        aerospike:
-          path: /opt/hostpath
-        source:
-          hostPath:
-            path: /tmp
       - name: ns
         aerospike:
           path: /test/dev/xvdf

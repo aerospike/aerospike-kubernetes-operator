@@ -8,12 +8,15 @@ spec:
   size: 2
   image: aerospike/aerospike-server-enterprise:8.0.0.2
   rackConfig:
-    enableDynamicRackID: true
-    rackIDVolumeName: hostpath
     namespaces:
       - test
     racks:
       - id: 1
+        # Change to the zone for your k8s cluster.
+        zone: us-west1-a
+      - id: 2
+        # Change to the zone for your k8s cluster.
+        zone: us-west1-b
 
   storage:
     filesystemVolumePolicy:
@@ -44,19 +47,9 @@ spec:
             secretName: aerospike-secret
         aerospike:
           path: /etc/aerospike/secret
-      - name: hostpath
-        aerospike:
-          path: /opt/hostpath
-        source:
-          hostPath:
-            path: /tmp/rackid
-            type: File
 
   podSpec:
     multiPodPerHost: true
-    aerospikeInitContainer:
-      imageRegistryNamespace: tanmayj10
-      imageNameAndTag: aerospike-kubernetes-init:2.3.0-dev2
 
   aerospikeAccessControl:
     users:

@@ -5085,12 +5085,6 @@ spec:
                   RackConfig Configures the operator to deploy rack aware Aerospike cluster.
                   Pods will be deployed in given racks based on given configuration
                 properties:
-                  enableDynamicRackID:
-                    description: |-
-                      EnableDynamicRackID enables dynamic rack id assignment for the pods after scheduling.
-                      This is useful when the rack id is not known before pods gets scheduled.
-                      The operator will read the rackid form hostpath mounted on aerospike init container.
-                    type: boolean
                   maxIgnorablePods:
                     anyOf:
                     - type: integer
@@ -5115,6 +5109,7 @@ spec:
                   rackIDSource:
                     description: |-
                       RackIDSource specifies the source from which to read the rack ID.
+                      If not specified, the rack ID is read from the CR.
                       Required when EnableDynamicRackID is true.
                     properties:
                       hostPathConf:
@@ -14219,11 +14214,6 @@ spec:
                       - PartiallyFailed
                       - ""
                       type: string
-                    dynamicRackIDEnabled:
-                      description: |-
-                        DynamicRackIDEnabled is the status of dynamic rack id update operation.
-                        True means dynamic rack id update is enabled.
-                      type: boolean
                     hostExternalIP:
                       description: HostExternalIP of the K8s host this pod is scheduled
                         on.
@@ -14261,6 +14251,31 @@ spec:
                       description: PodSpecHash is ripemd160 hash of PodSpec used by
                         this pod
                       type: string
+                    rackIDSource:
+                      description: RackIDSource is the source from which the rack
+                        ID is read.
+                      properties:
+                        hostPathConf:
+                          description: HostPathConf specifies the host path configuration
+                            to use for the rack ID.
+                          properties:
+                            filePath:
+                              description: |-
+                                FilePath specifies the relative path to a file containing the rack ID mounted in aerospike init container.
+                                This path should be the relative path to the mount point of hostpath.
+                                The file should contain a single integer value.
+                              type: string
+                            hostPathVolumeName:
+                              description: HostPathVolumeName specifies the name of
+                                the host path volume to use for the rack ID.
+                              type: string
+                          type: object
+                        podAnnotation:
+                          description: |-
+                            PodAnnotation specifies the name of the pod annotation that contains the rack ID.
+                            The annotation value should be a valid integer.
+                          type: string
+                      type: object
                     servicePort:
                       description: ServicePort is the port Aerospike clients outside
                         K8s can connect to.
@@ -14285,12 +14300,6 @@ spec:
                   Pods will be deployed in given racks based on given configuration
                 nullable: true
                 properties:
-                  enableDynamicRackID:
-                    description: |-
-                      EnableDynamicRackID enables dynamic rack id assignment for the pods after scheduling.
-                      This is useful when the rack id is not known before pods gets scheduled.
-                      The operator will read the rackid form hostpath mounted on aerospike init container.
-                    type: boolean
                   maxIgnorablePods:
                     anyOf:
                     - type: integer
@@ -14315,6 +14324,7 @@ spec:
                   rackIDSource:
                     description: |-
                       RackIDSource specifies the source from which to read the rack ID.
+                      If not specified, the rack ID is read from the CR.
                       Required when EnableDynamicRackID is true.
                     properties:
                       hostPathConf:

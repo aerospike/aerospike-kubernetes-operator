@@ -462,17 +462,11 @@ type RackConfig struct { //nolint:govet // for readability
 	// +optional
 	MaxIgnorablePods *intstr.IntOrString `json:"maxIgnorablePods,omitempty"`
 
-	// EnableDynamicRackID enables dynamic rack id assignment for the pods after scheduling.
-	// This is useful when the rack id is not known before pods gets scheduled.
-	// The operator will read the rackid form hostpath mounted on aerospike init container.
-	// +optional
-	EnableDynamicRackID *bool `json:"enableDynamicRackID,omitempty"`
-
 	// RackIDSource specifies the source from which to read the rack ID.
+	// If not specified, the rack ID is read from the CR.
 	// Required when EnableDynamicRackID is true.
 	// +optional
-	RackIDSource RackIDSource `json:"rackIDSource,omitempty"`
-	//RackIDVolumeName string `json:"rackIDVolumeName,omitempty"`
+	RackIDSource *RackIDSource `json:"rackIDSource,omitempty"`
 }
 
 // Rack specifies single rack config
@@ -1094,7 +1088,7 @@ type RackIDSource struct {
 	// PodAnnotation specifies the name of the pod annotation that contains the rack ID.
 	// The annotation value should be a valid integer.
 	// +optional
-	PodAnnotation *string `json:"podAnnotation,omitempty"`
+	PodAnnotation string `json:"podAnnotation,omitempty"`
 }
 
 type HostPathConf struct {
@@ -1200,10 +1194,9 @@ type AerospikePodStatus struct { //nolint:govet // for readability
 	// +optional
 	DynamicConfigUpdateStatus DynamicConfigUpdateStatus `json:"dynamicConfigUpdateStatus,omitempty"`
 
-	// DynamicRackIDEnabled is the status of dynamic rack id update operation.
-	// True means dynamic rack id update is enabled.
+	// RackIDSource is the source from which the rack ID is read.
 	// +optional
-	DynamicRackIDEnabled *bool `json:"dynamicRackIDEnabled,omitempty"`
+	RackIDSource *RackIDSource `json:"rackIDSource,omitempty"`
 }
 
 // +kubebuilder:object:root=true

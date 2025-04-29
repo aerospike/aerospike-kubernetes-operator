@@ -462,20 +462,6 @@ func validateRackUpdate(
 		return nil
 	}
 
-	//// Validate dynamic rack ID configuration changes
-	//oldDynamicRackID := asdbv1.GetBool(oldObj.Spec.RackConfig.EnableDynamicRackID)
-	//newDynamicRackID := asdbv1.GetBool(newObj.Spec.RackConfig.EnableDynamicRackID)
-	//
-	//// Cannot switch between static and dynamic rack ID modes
-	//if oldDynamicRackID != newDynamicRackID {
-	//	return fmt.Errorf("cannot change enableDynamicRackID setting after cluster creation")
-	//}
-
-	// If dynamic rack ID is enabled, validate volume name changes
-	//if newDynamicRackID && oldObj.Spec.RackConfig.RackIDVolumeName != newObj.Spec.RackConfig.RackIDVolumeName {
-	//	return fmt.Errorf("cannot change rackIDVolumeName after cluster creation when dynamic rack ID is enabled")
-	//}
-
 	// Old racks cannot be updated
 	// Also need to exclude a default rack with default rack ID. No need to check here,
 	// user should not provide or update default rackID
@@ -613,22 +599,21 @@ func validateRackConfig(_ logr.Logger, cluster *asdbv1.AerospikeCluster) error {
 		}
 	}
 
-	rackIDSource := cluster.Spec.RackConfig.RackIDSource
-	sourceCount := 0
-
-	if rackIDSource.HostPathConf != nil {
-		sourceCount++
-	}
-
-	if rackIDSource.PodAnnotation != nil {
-		sourceCount++
-	}
-
 	// Validate dynamic rack ID configuration
-	if asdbv1.GetBool(cluster.Spec.RackConfig.EnableDynamicRackID) {
+	rackIDSource := cluster.Spec.RackConfig.RackIDSource
+	if rackIDSource != nil {
+		sourceCount := 0
+
+		if rackIDSource.HostPathConf != nil {
+			sourceCount++
+		}
+
+		if rackIDSource.PodAnnotation != "" {
+			sourceCount++
+		}
 		// RackIDSource is required when EnableDynamicRackID is true
 		if sourceCount == 0 {
-			return fmt.Errorf("rackIDSource must be specified when enableDynamicRackID is true")
+			return fmt.Errorf("rackIDSource must have atleast one source specified")
 		}
 
 		if sourceCount > 1 {
@@ -638,8 +623,11 @@ func validateRackConfig(_ logr.Logger, cluster *asdbv1.AerospikeCluster) error {
 		if rackIDSource.HostPathConf != nil {
 			// Verify the volume exists in storage spec
 			volumeFound := false
-			for _, volume := range cluster.Spec.Storage.Volumes {
-				if volume.Name == cluster.Spec.RackConfig.RackIDSource.HostPathConf.HostPathVolumeName {
+			hostPathVolumeName := cluster.Spec.RackConfig.RackIDSource.HostPathConf.HostPathVolumeName
+
+			for idx := range cluster.Spec.RackConfig.Racks[0].Storage.Volumes {
+				volume := &cluster.Spec.RackConfig.Racks[0].Storage.Volumes[idx]
+				if volume.Name == hostPathVolumeName {
 					volumeFound = true
 
 					// Verify it's a hostpath volume
@@ -652,31 +640,29 @@ func validateRackConfig(_ logr.Logger, cluster *asdbv1.AerospikeCluster) error {
 			}
 
 			if !volumeFound {
-				return fmt.Errorf("rackIDVolumeName %s not found in storage spec", cluster.Spec.RackConfig.RackIDSource.HostPathConf.HostPathVolumeName)
+				return fmt.Errorf("rackIDVolumeName %s not found in storage spec", hostPathVolumeName)
 			}
 		}
 
-		// Cannot specify static racks when dynamic rack ID is enabled
+		// Verify the pod annotation exists
+		// TODO: Add validation for pod annotation
+
+		// Cannot specify static racks when rackIDSource is provided
 		if len(cluster.Spec.RackConfig.Racks) > 1 {
-			return fmt.Errorf("cannot specify more than 1 rack when enableDynamicRackID is true")
+			return fmt.Errorf("cannot specify more than 1 rack when rackIDSource is provided")
 		}
 
-		// Cannot specify batch operations or maxignorable pods when dynamic rack ID is enabled
+		// Cannot specify batch operations or maxignorable pods when rackIDSource is provided
 		if cluster.Spec.RackConfig.RollingUpdateBatchSize != nil {
-			return fmt.Errorf("rollingUpdateBatchSize cannot be specified when enableDynamicRackID is true")
+			return fmt.Errorf("rollingUpdateBatchSize cannot be specified when rackIDSource is provided")
 		}
 
 		if cluster.Spec.RackConfig.ScaleDownBatchSize != nil {
-			return fmt.Errorf("scaleDownBatchSize cannot be specified when enableDynamicRackID is true")
+			return fmt.Errorf("scaleDownBatchSize cannot be specified when rackIDSource is provided")
 		}
 
 		if cluster.Spec.RackConfig.MaxIgnorablePods != nil {
-			return fmt.Errorf("maxIgnorablePods cannot be specified when enableDynamicRackID is true")
-		}
-	} else {
-		// RackIDSource should not be specified when enableDynamicRackID is false
-		if sourceCount > 0 {
-			return fmt.Errorf("rackIDSource should not be specified when enableDynamicRackID is false")
+			return fmt.Errorf("maxIgnorablePods cannot be specified when rackIDSource is provided")
 		}
 	}
 
@@ -763,11 +749,11 @@ type nsConf struct {
 	scEnabled              bool
 }
 
-func getNsConfForNamespaces(rackConfig asdbv1.RackConfig) map[string]nsConf {
+func getNsConfForNamespaces(racks []asdbv1.Rack) map[string]nsConf {
 	nsConfs := map[string]nsConf{}
 
-	for idx := range rackConfig.Racks {
-		rack := &rackConfig.Racks[idx]
+	for idx := range racks {
+		rack := &racks[idx]
 		nsList := rack.AerospikeConfig.Value["namespaces"].([]interface{})
 
 		for _, nsInterface := range nsList {
@@ -2215,7 +2201,7 @@ func validateBatchSize(batchSize *intstr.IntOrString, rollingUpdateBatch bool, c
 			return fmt.Errorf("can not use %s when number of racks is less than two", fieldPath)
 		}
 
-		nsConfsNamespaces := getNsConfForNamespaces(rackConfig)
+		nsConfsNamespaces := getNsConfForNamespaces(rackConfig.Racks)
 		for ns, nsConf := range nsConfsNamespaces {
 			if !isNameExist(rackConfig.Namespaces, ns) {
 				return fmt.Errorf(

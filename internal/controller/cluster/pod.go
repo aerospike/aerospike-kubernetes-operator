@@ -99,10 +99,11 @@ func (r *SingleClusterReconciler) getRollingRestartTypeMap(rackState *RackState,
 
 			continue
 		}
+
 		podStatus := r.aeroCluster.Status.Pods[pods[idx].Name]
 
-		// TODO: will decide if dynamic to non-dynamic support also needs
-		if asdbv1.GetBool(podStatus.DynamicRackIDEnabled) != asdbv1.GetBool(r.aeroCluster.Spec.RackConfig.EnableDynamicRackID) {
+		if !reflect.DeepEqual(podStatus.RackIDSource, r.aeroCluster.Spec.RackConfig.RackIDSource) {
+			r.Log.Info("RackIDSource changed. Need to restart pod", "podName", pods[idx].Name)
 			restartTypeMap[pods[idx].Name] = mergeRestartType(restartTypeMap[pods[idx].Name], podRestart)
 
 			continue
