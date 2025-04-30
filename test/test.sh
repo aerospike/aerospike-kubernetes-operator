@@ -30,7 +30,7 @@ done
 CRED_PATH=${CRED_PATH:-$HOME/.docker/config.json}
 REGISTRY=${REGISTRY:-568976754000.dkr.ecr.ap-south-1.amazonaws.com}
 REGISTRY_NAMESPACE=${REGISTRY_NAMESPACE:-aerospike}
-INIT_IMAGE_NAME_TAG=${INIT_IMAGE_NAME_TAG:-aerospike-kubernetes-init:2.2.4}
+INIT_IMAGE_NAME_TAG=${INIT_IMAGE_NAME_TAG:-aerospike-kubernetes-init:2.3.0-dev1}
 
 
 DIR="$( cd "$( dirname "${BASH_SOURCE[0]}" )" >/dev/null 2>&1 && pwd )"
@@ -68,4 +68,4 @@ export CUSTOM_INIT_REGISTRY_NAMESPACE="$REGISTRY_NAMESPACE"
 export CUSTOM_INIT_NAME_TAG="$INIT_IMAGE_NAME_TAG"
 export IMAGE_PULL_SECRET_NAME="$IMAGE_PULL_SECRET"
 
-make all-test FOCUS="$FOCUS" ARGS="$ARGS"
+make -k all-test FOCUS="$FOCUS" ARGS="$ARGS"

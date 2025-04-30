@@ -21,9 +21,10 @@ import (
 	"sigs.k8s.io/controller-runtime/pkg/client"
 	"sigs.k8s.io/controller-runtime/pkg/controller/controllerutil"
 
-	asdbv1 "github.com/aerospike/aerospike-kubernetes-operator/api/v1"
-	"github.com/aerospike/aerospike-kubernetes-operator/internal/controller/common"
-	"github.com/aerospike/aerospike-kubernetes-operator/pkg/utils"
+	asdbv1 "github.com/aerospike/aerospike-kubernetes-operator/v4/api/v1"
+	"github.com/aerospike/aerospike-kubernetes-operator/v4/internal/controller/common"
+	webhookv1 "github.com/aerospike/aerospike-kubernetes-operator/v4/internal/webhook/v1"
+	"github.com/aerospike/aerospike-kubernetes-operator/v4/pkg/utils"
 	lib "github.com/aerospike/aerospike-management-lib"
 )
 
@@ -251,7 +252,7 @@ func (r *SingleClusterReconciler) isReadinessPortUpdated(pod *corev1.Pod) bool {
 }
 
 func (r *SingleClusterReconciler) deleteSTS(st *appsv1.StatefulSet) error {
-	r.Log.Info("Delete statefulset")
+	r.Log.Info("Delete statefulset", "namespace", st.Namespace, "name", st.Name)
 	// No need to do cleanup pods after deleting sts
 	// It is only deleted while its creation is failed
 	// While doing rackRemove, we call scaleDown to 0 so that will do cleanup
@@ -750,7 +751,7 @@ func (r *SingleClusterReconciler) getExternalStorageMounts(
 func (r *SingleClusterReconciler) updateSTSPVStorage(
 	st *appsv1.StatefulSet, rackState *RackState,
 ) {
-	volumes := rackState.Rack.Storage.GetPVs()
+	volumes := webhookv1.GetPVsVolumesFromStorage(&rackState.Rack.Storage)
 
 	for idx := range volumes {
 		volume := &volumes[idx]
@@ -815,7 +816,7 @@ func containsElement(claims []corev1.PersistentVolumeClaim, query *corev1.Persis
 func (r *SingleClusterReconciler) updateSTSNonPVStorage(
 	st *appsv1.StatefulSet, rackState *RackState,
 ) {
-	volumes := rackState.Rack.Storage.GetNonPVs()
+	volumes := webhookv1.GetNonPVsVolumesFromStorage(&rackState.Rack.Storage)
 	initContainerVolumePathPrefix := "/workdir/filesystem-volumes"
 
 	for idx := range volumes {

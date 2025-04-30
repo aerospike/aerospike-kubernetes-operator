@@ -44,7 +44,7 @@ Run the following command with the appropriate name and version for the operator
 
 ```sh
 IMAGE_TAG_BASE=aerospike/aerospike-kubernetes-operator-nightly
-VERSION=4.0.0
+VERSION=4.0.2
 make docker-buildx IMG=${IMAGE_TAG_BASE}:${VERSION} PLATFORMS=linux/amd64
 ```
 **Note**: Change `PLATFORMS` var as per host machine or remove it to build multi-arch image
@@ -96,7 +96,7 @@ Set up the environment with image names.
 ```shell
 export ACCOUNT=aerospike
 export IMAGE_TAG_BASE=${ACCOUNT}/aerospike-kubernetes-operator
-export VERSION=4.0.0
+export VERSION=4.0.2
 export IMG=docker.io/${IMAGE_TAG_BASE}-nightly:${VERSION}
 export BUNDLE_IMG=docker.io/${IMAGE_TAG_BASE}-bundle-nightly:${VERSION}
 export CATALOG_IMG=docker.io/${IMAGE_TAG_BASE}-catalog-nightly:${VERSION}

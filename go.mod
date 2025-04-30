@@ -1,4 +1,4 @@
-module github.com/aerospike/aerospike-kubernetes-operator
+module github.com/aerospike/aerospike-kubernetes-operator/v4
 
 go 1.23
 

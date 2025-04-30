@@ -20,8 +20,8 @@ import (
 	"sigs.k8s.io/controller-runtime/pkg/client"
 
 	as "github.com/aerospike/aerospike-client-go/v8"
-	asdbv1 "github.com/aerospike/aerospike-kubernetes-operator/api/v1"
-	aerospikecluster "github.com/aerospike/aerospike-kubernetes-operator/internal/controller/cluster"
+	asdbv1 "github.com/aerospike/aerospike-kubernetes-operator/v4/api/v1"
+	aerospikecluster "github.com/aerospike/aerospike-kubernetes-operator/v4/internal/controller/cluster"
 )
 
 // FromSecretPasswordProvider provides user password from the secret provided in AerospikeUserSpec.
@@ -221,7 +221,7 @@ func getClientPolicy(
 			// InsecureSkipVerify: true,
 		}
 
-		if clientCertSpec != nil && clientCertSpec.IsClientCertConfigured() {
+		if clientCertSpec != nil && asdbv1.IsClientCertConfigured(clientCertSpec) {
 			if cert, err := getClientCertificate(
 				clientCertSpec, aeroCluster.Namespace, k8sClient,
 			); err == nil {

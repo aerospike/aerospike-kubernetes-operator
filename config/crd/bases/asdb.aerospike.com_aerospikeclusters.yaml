@@ -3,7 +3,7 @@ apiVersion: apiextensions.k8s.io/v1
 kind: CustomResourceDefinition
 metadata:
   annotations:
-    aerospike-kubernetes-operator/version: 4.0.0
+    aerospike-kubernetes-operator/version: 4.0.2
     controller-gen.kubebuilder.io/version: v0.16.1
   name: aerospikeclusters.asdb.aerospike.com
 spec:
@@ -6137,6 +6137,7 @@ spec:
                                   - none
                                   - dd
                                   - blkdiscard
+                                  - blkdiscardWithHeaderCleanup
                                   - deleteFiles
                                   type: string
                                 effectiveWipeMethod:
@@ -6146,6 +6147,7 @@ spec:
                                   - none
                                   - dd
                                   - blkdiscard
+                                  - blkdiscardWithHeaderCleanup
                                   - deleteFiles
                                   type: string
                                 initMethod:
@@ -6156,6 +6158,7 @@ spec:
                                   - none
                                   - dd
                                   - blkdiscard
+                                  - blkdiscardWithHeaderCleanup
                                   - deleteFiles
                                   type: string
                                 wipeMethod:
@@ -6166,6 +6169,7 @@ spec:
                                   - none
                                   - dd
                                   - blkdiscard
+                                  - blkdiscardWithHeaderCleanup
                                   - deleteFiles
                                   type: string
                               type: object
@@ -6193,6 +6197,7 @@ spec:
                                   - none
                                   - dd
                                   - blkdiscard
+                                  - blkdiscardWithHeaderCleanup
                                   - deleteFiles
                                   type: string
                                 effectiveWipeMethod:
@@ -6202,6 +6207,7 @@ spec:
                                   - none
                                   - dd
                                   - blkdiscard
+                                  - blkdiscardWithHeaderCleanup
                                   - deleteFiles
                                   type: string
                                 initMethod:
@@ -6212,6 +6218,7 @@ spec:
                                   - none
                                   - dd
                                   - blkdiscard
+                                  - blkdiscardWithHeaderCleanup
                                   - deleteFiles
                                   type: string
                                 wipeMethod:
@@ -6222,6 +6229,7 @@ spec:
                                   - none
                                   - dd
                                   - blkdiscard
+                                  - blkdiscardWithHeaderCleanup
                                   - deleteFiles
                                   type: string
                               type: object
@@ -6290,6 +6298,7 @@ spec:
                                     - none
                                     - dd
                                     - blkdiscard
+                                    - blkdiscardWithHeaderCleanup
                                     - deleteFiles
                                     type: string
                                   effectiveWipeMethod:
@@ -6299,6 +6308,7 @@ spec:
                                     - none
                                     - dd
                                     - blkdiscard
+                                    - blkdiscardWithHeaderCleanup
                                     - deleteFiles
                                     type: string
                                   initContainers:
@@ -6357,6 +6367,7 @@ spec:
                                     - none
                                     - dd
                                     - blkdiscard
+                                    - blkdiscardWithHeaderCleanup
                                     - deleteFiles
                                     type: string
                                   name:
@@ -6684,6 +6695,7 @@ spec:
                                     - none
                                     - dd
                                     - blkdiscard
+                                    - blkdiscardWithHeaderCleanup
                                     - deleteFiles
                                     type: string
                                 required:
@@ -7726,6 +7738,7 @@ spec:
                                   - none
                                   - dd
                                   - blkdiscard
+                                  - blkdiscardWithHeaderCleanup
                                   - deleteFiles
                                   type: string
                                 effectiveWipeMethod:
@@ -7735,6 +7748,7 @@ spec:
                                   - none
                                   - dd
                                   - blkdiscard
+                                  - blkdiscardWithHeaderCleanup
                                   - deleteFiles
                                   type: string
                                 initMethod:
@@ -7745,6 +7759,7 @@ spec:
                                   - none
                                   - dd
                                   - blkdiscard
+                                  - blkdiscardWithHeaderCleanup
                                   - deleteFiles
                                   type: string
                                 wipeMethod:
@@ -7755,6 +7770,7 @@ spec:
                                   - none
                                   - dd
                                   - blkdiscard
+                                  - blkdiscardWithHeaderCleanup
                                   - deleteFiles
                                   type: string
                               type: object
@@ -7782,6 +7798,7 @@ spec:
                                   - none
                                   - dd
                                   - blkdiscard
+                                  - blkdiscardWithHeaderCleanup
                                   - deleteFiles
                                   type: string
                                 effectiveWipeMethod:
@@ -7791,6 +7808,7 @@ spec:
                                   - none
                                   - dd
                                   - blkdiscard
+                                  - blkdiscardWithHeaderCleanup
                                   - deleteFiles
                                   type: string
                                 initMethod:
@@ -7801,6 +7819,7 @@ spec:
                                   - none
                                   - dd
                                   - blkdiscard
+                                  - blkdiscardWithHeaderCleanup
                                   - deleteFiles
                                   type: string
                                 wipeMethod:
@@ -7811,6 +7830,7 @@ spec:
                                   - none
                                   - dd
                                   - blkdiscard
+                                  - blkdiscardWithHeaderCleanup
                                   - deleteFiles
                                   type: string
                               type: object
@@ -7879,6 +7899,7 @@ spec:
                                     - none
                                     - dd
                                     - blkdiscard
+                                    - blkdiscardWithHeaderCleanup
                                     - deleteFiles
                                     type: string
                                   effectiveWipeMethod:
@@ -7888,6 +7909,7 @@ spec:
                                     - none
                                     - dd
                                     - blkdiscard
+                                    - blkdiscardWithHeaderCleanup
                                     - deleteFiles
                                     type: string
                                   initContainers:
@@ -7946,6 +7968,7 @@ spec:
                                     - none
                                     - dd
                                     - blkdiscard
+                                    - blkdiscardWithHeaderCleanup
                                     - deleteFiles
                                     type: string
                                   name:
@@ -8273,6 +8296,7 @@ spec:
                                     - none
                                     - dd
                                     - blkdiscard
+                                    - blkdiscardWithHeaderCleanup
                                     - deleteFiles
                                     type: string
                                 required:
@@ -8389,6 +8413,7 @@ spec:
                         - none
                         - dd
                         - blkdiscard
+                        - blkdiscardWithHeaderCleanup
                         - deleteFiles
                         type: string
                       effectiveWipeMethod:
@@ -8398,6 +8423,7 @@ spec:
                         - none
                         - dd
                         - blkdiscard
+                        - blkdiscardWithHeaderCleanup
                         - deleteFiles
                         type: string
                       initMethod:
@@ -8408,6 +8434,7 @@ spec:
                         - none
                         - dd
                         - blkdiscard
+                        - blkdiscardWithHeaderCleanup
                         - deleteFiles
                         type: string
                       wipeMethod:
@@ -8418,6 +8445,7 @@ spec:
                         - none
                         - dd
                         - blkdiscard
+                        - blkdiscardWithHeaderCleanup
                         - deleteFiles
                         type: string
                     type: object
@@ -8445,6 +8473,7 @@ spec:
                         - none
                         - dd
                         - blkdiscard
+                        - blkdiscardWithHeaderCleanup
                         - deleteFiles
                         type: string
                       effectiveWipeMethod:
@@ -8454,6 +8483,7 @@ spec:
                         - none
                         - dd
                         - blkdiscard
+                        - blkdiscardWithHeaderCleanup
                         - deleteFiles
                         type: string
                       initMethod:
@@ -8464,6 +8494,7 @@ spec:
                         - none
                         - dd
                         - blkdiscard
+                        - blkdiscardWithHeaderCleanup
                         - deleteFiles
                         type: string
                       wipeMethod:
@@ -8474,6 +8505,7 @@ spec:
                         - none
                         - dd
                         - blkdiscard
+                        - blkdiscardWithHeaderCleanup
                         - deleteFiles
                         type: string
                     type: object
@@ -8542,6 +8574,7 @@ spec:
                           - none
                           - dd
                           - blkdiscard
+                          - blkdiscardWithHeaderCleanup
                           - deleteFiles
                           type: string
                         effectiveWipeMethod:
@@ -8551,6 +8584,7 @@ spec:
                           - none
                           - dd
                           - blkdiscard
+                          - blkdiscardWithHeaderCleanup
                           - deleteFiles
                           type: string
                         initContainers:
@@ -8608,6 +8642,7 @@ spec:
                           - none
                           - dd
                           - blkdiscard
+                          - blkdiscardWithHeaderCleanup
                           - deleteFiles
                           type: string
                         name:
@@ -8932,6 +8967,7 @@ spec:
                           - none
                           - dd
                           - blkdiscard
+                          - blkdiscardWithHeaderCleanup
                           - deleteFiles
                           type: string
                       required:
@@ -15198,6 +15234,7 @@ spec:
                                   - none
                                   - dd
                                   - blkdiscard
+                                  - blkdiscardWithHeaderCleanup
                                   - deleteFiles
                                   type: string
                                 effectiveWipeMethod:
@@ -15207,6 +15244,7 @@ spec:
                                   - none
                                   - dd
                                   - blkdiscard
+                                  - blkdiscardWithHeaderCleanup
                                   - deleteFiles
                                   type: string
                                 initMethod:
@@ -15217,6 +15255,7 @@ spec:
                                   - none
                                   - dd
                                   - blkdiscard
+                                  - blkdiscardWithHeaderCleanup
                                   - deleteFiles
                                   type: string
                                 wipeMethod:
@@ -15227,6 +15266,7 @@ spec:
                                   - none
                                   - dd
                                   - blkdiscard
+                                  - blkdiscardWithHeaderCleanup
                                   - deleteFiles
                                   type: string
                               type: object
@@ -15254,6 +15294,7 @@ spec:
                                   - none
                                   - dd
                                   - blkdiscard
+                                  - blkdiscardWithHeaderCleanup
                                   - deleteFiles
                                   type: string
                                 effectiveWipeMethod:
@@ -15263,6 +15304,7 @@ spec:
                                   - none
                                   - dd
                                   - blkdiscard
+                                  - blkdiscardWithHeaderCleanup
                                   - deleteFiles
                                   type: string
                                 initMethod:
@@ -15273,6 +15315,7 @@ spec:
                                   - none
                                   - dd
                                   - blkdiscard
+                                  - blkdiscardWithHeaderCleanup
                                   - deleteFiles
                                   type: string
                                 wipeMethod:
@@ -15283,6 +15326,7 @@ spec:
                                   - none
                                   - dd
                                   - blkdiscard
+                                  - blkdiscardWithHeaderCleanup
                                   - deleteFiles
                                   type: string
                               type: object
@@ -15351,6 +15395,7 @@ spec:
                                     - none
                                     - dd
                                     - blkdiscard
+                                    - blkdiscardWithHeaderCleanup
                                     - deleteFiles
                                     type: string
                                   effectiveWipeMethod:
@@ -15360,6 +15405,7 @@ spec:
                                     - none
                                     - dd
                                     - blkdiscard
+                                    - blkdiscardWithHeaderCleanup
                                     - deleteFiles
                                     type: string
                                   initContainers:
@@ -15418,6 +15464,7 @@ spec:
                                     - none
                                     - dd
                                     - blkdiscard
+                                    - blkdiscardWithHeaderCleanup
                                     - deleteFiles
                                     type: string
                                   name:
@@ -15745,6 +15792,7 @@ spec:
                                     - none
                                     - dd
                                     - blkdiscard
+                                    - blkdiscardWithHeaderCleanup
                                     - deleteFiles
                                     type: string
                                 required:
@@ -16787,6 +16835,7 @@ spec:
                                   - none
                                   - dd
                                   - blkdiscard
+                                  - blkdiscardWithHeaderCleanup
                                   - deleteFiles
                                   type: string
                                 effectiveWipeMethod:
@@ -16796,6 +16845,7 @@ spec:
                                   - none
                                   - dd
                                   - blkdiscard
+                                  - blkdiscardWithHeaderCleanup
                                   - deleteFiles
                                   type: string
                                 initMethod:
@@ -16806,6 +16856,7 @@ spec:
                                   - none
                                   - dd
                                   - blkdiscard
+                                  - blkdiscardWithHeaderCleanup
                                   - deleteFiles
                                   type: string
                                 wipeMethod:
@@ -16816,6 +16867,7 @@ spec:
                                   - none
                                   - dd
                                   - blkdiscard
+                                  - blkdiscardWithHeaderCleanup
                                   - deleteFiles
                                   type: string
                               type: object
@@ -16843,6 +16895,7 @@ spec:
                                   - none
                                   - dd
                                   - blkdiscard
+                                  - blkdiscardWithHeaderCleanup
                                   - deleteFiles
                                   type: string
                                 effectiveWipeMethod:
@@ -16852,6 +16905,7 @@ spec:
                                   - none
                                   - dd
                                   - blkdiscard
+                                  - blkdiscardWithHeaderCleanup
                                   - deleteFiles
                                   type: string
                                 initMethod:
@@ -16862,6 +16916,7 @@ spec:
                                   - none
                                   - dd
                                   - blkdiscard
+                                  - blkdiscardWithHeaderCleanup
                                   - deleteFiles
                                   type: string
                                 wipeMethod:
@@ -16872,6 +16927,7 @@ spec:
                                   - none
                                   - dd
                                   - blkdiscard
+                                  - blkdiscardWithHeaderCleanup
                                   - deleteFiles
                                   type: string
                               type: object
@@ -16940,6 +16996,7 @@ spec:
                                     - none
                                     - dd
                                     - blkdiscard
+                                    - blkdiscardWithHeaderCleanup
                                     - deleteFiles
                                     type: string
                                   effectiveWipeMethod:
@@ -16949,6 +17006,7 @@ spec:
                                     - none
                                     - dd
                                     - blkdiscard
+                                    - blkdiscardWithHeaderCleanup
                                     - deleteFiles
                                     type: string
                                   initContainers:
@@ -17007,6 +17065,7 @@ spec:
                                     - none
                                     - dd
                                     - blkdiscard
+                                    - blkdiscardWithHeaderCleanup
                                     - deleteFiles
                                     type: string
                                   name:
@@ -17334,6 +17393,7 @@ spec:
                                     - none
                                     - dd
                                     - blkdiscard
+                                    - blkdiscardWithHeaderCleanup
                                     - deleteFiles
                                     type: string
                                 required:
@@ -17516,6 +17576,7 @@ spec:
                         - none
                         - dd
                         - blkdiscard
+                        - blkdiscardWithHeaderCleanup
                         - deleteFiles
                         type: string
                       effectiveWipeMethod:
@@ -17525,6 +17586,7 @@ spec:
                         - none
                         - dd
                         - blkdiscard
+                        - blkdiscardWithHeaderCleanup
                         - deleteFiles
                         type: string
                       initMethod:
@@ -17535,6 +17597,7 @@ spec:
                         - none
                         - dd
                         - blkdiscard
+                        - blkdiscardWithHeaderCleanup
                         - deleteFiles
                         type: string
                       wipeMethod:
@@ -17545,6 +17608,7 @@ spec:
                         - none
                         - dd
                         - blkdiscard
+                        - blkdiscardWithHeaderCleanup
                         - deleteFiles
                         type: string
                     type: object
@@ -17572,6 +17636,7 @@ spec:
                         - none
                         - dd
                         - blkdiscard
+                        - blkdiscardWithHeaderCleanup
                         - deleteFiles
                         type: string
                       effectiveWipeMethod:
@@ -17581,6 +17646,7 @@ spec:
                         - none
                         - dd
                         - blkdiscard
+                        - blkdiscardWithHeaderCleanup
                         - deleteFiles
                         type: string
                       initMethod:
@@ -17591,6 +17657,7 @@ spec:
                         - none
                         - dd
                         - blkdiscard
+                        - blkdiscardWithHeaderCleanup
                         - deleteFiles
                         type: string
                       wipeMethod:
@@ -17601,6 +17668,7 @@ spec:
                         - none
                         - dd
                         - blkdiscard
+                        - blkdiscardWithHeaderCleanup
                         - deleteFiles
                         type: string
                     type: object
@@ -17669,6 +17737,7 @@ spec:
                           - none
                           - dd
                           - blkdiscard
+                          - blkdiscardWithHeaderCleanup
                           - deleteFiles
                           type: string
                         effectiveWipeMethod:
@@ -17678,6 +17747,7 @@ spec:
                           - none
                           - dd
                           - blkdiscard
+                          - blkdiscardWithHeaderCleanup
                           - deleteFiles
                           type: string
                         initContainers:
@@ -17735,6 +17805,7 @@ spec:
                           - none
                           - dd
                           - blkdiscard
+                          - blkdiscardWithHeaderCleanup
                           - deleteFiles
                           type: string
                         name:
@@ -18059,6 +18130,7 @@ spec:
                           - none
                           - dd
                           - blkdiscard
+                          - blkdiscardWithHeaderCleanup
                           - deleteFiles
                           type: string
                       required:

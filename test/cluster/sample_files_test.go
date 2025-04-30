@@ -5,7 +5,6 @@ import (
 	"fmt"
 	"io/fs"
 	"os"
-	"os/exec"
 	"path/filepath"
 	"strings"
 
@@ -15,7 +14,7 @@ import (
 	"k8s.io/apimachinery/pkg/util/sets"
 	"k8s.io/apimachinery/pkg/util/yaml"
 
-	asdbv1 "github.com/aerospike/aerospike-kubernetes-operator/api/v1"
+	asdbv1 "github.com/aerospike/aerospike-kubernetes-operator/v4/api/v1"
 )
 
 const fileDir = "config/samples"
@@ -28,7 +27,8 @@ var _ = Describe("Sample files validation", func() {
 	)
 
 	AfterEach(func() {
-		Expect(deleteCluster(k8sClient, ctx, aeroCluster)).NotTo(HaveOccurred())
+		Expect(DeleteCluster(k8sClient, ctx, aeroCluster)).NotTo(HaveOccurred())
+		Expect(CleanupPVC(k8sClient, aeroCluster.Namespace, aeroCluster.Name)).NotTo(HaveOccurred())
 	})
 
 	DescribeTable("Sample files validation",
@@ -51,7 +51,7 @@ var _ = Describe("Sample files validation", func() {
 			Expect(err).NotTo(HaveOccurred())
 
 			defer func() {
-				Expect(deleteCluster(k8sClient, ctx, destCluster)).NotTo(HaveOccurred())
+				Expect(DeleteCluster(k8sClient, ctx, destCluster)).NotTo(HaveOccurred())
 			}()
 
 			By("Creating XDR source cluster")
@@ -171,14 +171,6 @@ func getSamplesFiles() ([]string, error) {
 }
 
 func deployClusterUsingFile(ctx context.Context, filePath string) (*asdbv1.AerospikeCluster, error) {
-	cmd := exec.Command("kubectl", "create", "-f", filePath)
-	cmd.Stdout = os.Stdout
-	cmd.Stderr = os.Stderr
-
-	if err := cmd.Run(); err != nil {
-		return nil, err
-	}
-
 	data, err := os.ReadFile(filePath)
 	if err != nil {
 		return nil, err
@@ -186,14 +178,17 @@ func deployClusterUsingFile(ctx context.Context, filePath string) (*asdbv1.Aeros
 
 	aeroCluster := &asdbv1.AerospikeCluster{}
 
-	if err := yaml.Unmarshal(data, aeroCluster); err != nil {
+	if err := yaml.UnmarshalStrict(data, aeroCluster); err != nil {
 		return aeroCluster, err
 	}
 
-	if err := waitForAerospikeCluster(
-		k8sClient, ctx, aeroCluster, int(aeroCluster.Spec.Size), retryInterval,
-		getTimeout(aeroCluster.Spec.Size), []asdbv1.AerospikeClusterPhase{asdbv1.AerospikeClusterCompleted},
-	); err != nil {
+	if !strings.Contains(filePath, "xdr") {
+		baseName := strings.TrimSuffix(filepath.Base(filePath), "_cr.yaml")
+		aeroCluster.Name = strings.ReplaceAll(baseName, "_", "-")
+	}
+
+	// Deploy the cluster
+	if err := DeployCluster(k8sClient, ctx, aeroCluster); err != nil {
 		return aeroCluster, err
 	}
 

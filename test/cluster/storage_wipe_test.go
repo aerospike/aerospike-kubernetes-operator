@@ -12,8 +12,8 @@ import (
 	"k8s.io/apimachinery/pkg/types"
 	"k8s.io/utils/ptr"
 
-	asdbv1 "github.com/aerospike/aerospike-kubernetes-operator/api/v1"
-	"github.com/aerospike/aerospike-kubernetes-operator/test"
+	asdbv1 "github.com/aerospike/aerospike-kubernetes-operator/v4/api/v1"
+	"github.com/aerospike/aerospike-kubernetes-operator/v4/test"
 )
 
 var (
@@ -27,6 +27,7 @@ var _ = Describe(
 
 				containerName := "tomcat"
 				podSpec := asdbv1.AerospikePodSpec{
+					MultiPodPerHost: ptr.To(true),
 					Sidecars: []corev1.Container{
 						{
 							Name:  containerName,
@@ -40,9 +41,23 @@ var _ = Describe(
 					},
 				}
 
-				clusterName := "storage-wipe"
-				clusterNamespacedName := getNamespacedName(
+				clusterName := fmt.Sprintf("storage-wipe-%d", GinkgoParallelProcess())
+				clusterNamespacedName := test.GetNamespacedName(
 					clusterName, namespace,
+				)
+
+				AfterEach(
+					func() {
+						aeroCluster := &asdbv1.AerospikeCluster{
+							ObjectMeta: metav1.ObjectMeta{
+								Name:      clusterName,
+								Namespace: namespace,
+							},
+						}
+
+						Expect(DeleteCluster(k8sClient, ctx, aeroCluster)).ToNot(HaveOccurred())
+						Expect(CleanupPVC(k8sClient, aeroCluster.Namespace, aeroCluster.Name)).ToNot(HaveOccurred())
+					},
 				)
 
 				It(
@@ -72,15 +87,13 @@ var _ = Describe(
 
 						By("Cleaning up previous pvc")
 
-						err := cleanupPVC(k8sClient, namespace)
-						Expect(err).ToNot(HaveOccurred())
+						Expect(CleanupPVC(k8sClient, namespace, aeroCluster.Name)).ToNot(HaveOccurred())
 
 						By("Deploying the cluster")
 
-						err = deployCluster(k8sClient, ctx, aeroCluster)
-						Expect(err).ToNot(HaveOccurred())
+						Expect(DeployCluster(k8sClient, ctx, aeroCluster)).ToNot(HaveOccurred())
 
-						aeroCluster, err = getCluster(
+						aeroCluster, err := getCluster(
 							k8sClient, ctx, clusterNamespacedName,
 						)
 						Expect(err).ToNot(HaveOccurred())
@@ -116,11 +129,12 @@ var _ = Describe(
 						By("Checking - unrelated volume attachments should not be wiped")
 						err = checkData(
 							aeroCluster, true, true, map[string]struct{}{
-								"test-wipe-device-dd-1":         {},
-								"test-wipe-device-blkdiscard-1": {},
-								"test-wipe-device-dd-2":         {},
-								"test-wipe-device-blkdiscard-2": {},
-								"test-wipe-files-deletefiles-2": {},
+								"test-wipe-device-dd-1":                             {},
+								"test-wipe-device-blkdiscard-1":                     {},
+								"test-wipe-device-blkdiscard-with-header-cleanup-1": {},
+								"test-wipe-device-dd-2":                             {},
+								"test-wipe-device-blkdiscard-2":                     {},
+								"test-wipe-files-deletefiles-2":                     {},
 							},
 						)
 						Expect(err).ToNot(HaveOccurred())
@@ -139,13 +153,6 @@ var _ = Describe(
 								),
 							)
 						}
-
-						err = deleteCluster(k8sClient, ctx, aeroCluster)
-						Expect(err).ToNot(HaveOccurred())
-
-						err = cleanupPVC(k8sClient, namespace)
-						Expect(err).ToNot(HaveOccurred())
-
 					},
 				)
 			},
@@ -200,11 +207,13 @@ func getAerospikeWipeStorageConfig(
 	// - recreate and check if volumes are reinitialized correctly.
 	fileDeleteMethod := asdbv1.AerospikeVolumeMethodDeleteFiles
 	ddMethod := asdbv1.AerospikeVolumeMethodDD
-	blkDiscardMethod := asdbv1.AerospikeVolumeMethodBlkdiscard
+	blkdiscardMethod := asdbv1.AerospikeVolumeMethodBlkdiscard
+	blkdiscardWithHeaderCleanupMethod := asdbv1.AerospikeVolumeMethodBlkdiscardWithHeaderCleanup
 
 	if cloudProvider == CloudProviderAWS {
-		// Blkdiscard methood is not supported in AWS, so it is initialized as DD Method
-		blkDiscardMethod = asdbv1.AerospikeVolumeMethodDD
+		// Blkdiscard method is not supported in AWS, so it is initialized as DD Method
+		blkdiscardMethod = asdbv1.AerospikeVolumeMethodDD
+		blkdiscardWithHeaderCleanupMethod = asdbv1.AerospikeVolumeMethodDD
 	}
 
 	return &asdbv1.AerospikeStorageSpec{
@@ -235,8 +244,8 @@ func getAerospikeWipeStorageConfig(
 			{
 				Name: "test-wipe-device-blkdiscard-1",
 				AerospikePersistentVolumePolicySpec: asdbv1.AerospikePersistentVolumePolicySpec{
-					InputInitMethod: &blkDiscardMethod,
-					InputWipeMethod: &blkDiscardMethod,
+					InputInitMethod: &blkdiscardMethod,
+					InputWipeMethod: &blkdiscardMethod,
 				},
 				Source: asdbv1.VolumeSource{
 					PersistentVolume: &asdbv1.PersistentVolumeSpec{
@@ -247,6 +256,23 @@ func getAerospikeWipeStorageConfig(
 				},
 				Aerospike: &asdbv1.AerospikeServerVolumeAttachment{
 					Path: "/test/wipe/blkdiscard/xvdf",
+				},
+			},
+			{
+				Name: "test-wipe-device-blkdiscard-with-header-cleanup-1",
+				AerospikePersistentVolumePolicySpec: asdbv1.AerospikePersistentVolumePolicySpec{
+					InputInitMethod: &blkdiscardWithHeaderCleanupMethod,
+					InputWipeMethod: &blkdiscardWithHeaderCleanupMethod,
+				},
+				Source: asdbv1.VolumeSource{
+					PersistentVolume: &asdbv1.PersistentVolumeSpec{
+						Size:         resource.MustParse("1Gi"),
+						StorageClass: storageClass,
+						VolumeMode:   corev1.PersistentVolumeBlock,
+					},
+				},
+				Aerospike: &asdbv1.AerospikeServerVolumeAttachment{
+					Path: "/test/wipe/blkdiscard-with-header-cleanup/xvdf",
 				},
 			},
 			{
@@ -327,7 +353,7 @@ func getAerospikeWipeStorageConfig(
 			{
 				Name: "device-blkdiscard",
 				AerospikePersistentVolumePolicySpec: asdbv1.AerospikePersistentVolumePolicySpec{
-					InputInitMethod: &blkDiscardMethod,
+					InputInitMethod: &blkdiscardMethod,
 				},
 				Source: asdbv1.VolumeSource{
 					PersistentVolume: &asdbv1.PersistentVolumeSpec{
@@ -338,6 +364,22 @@ func getAerospikeWipeStorageConfig(
 				},
 				Aerospike: &asdbv1.AerospikeServerVolumeAttachment{
 					Path: "/opt/aerospike/blockdevice-init-blkdiscard",
+				},
+			},
+			{
+				Name: "device-blkdiscard-with-header-cleanup",
+				AerospikePersistentVolumePolicySpec: asdbv1.AerospikePersistentVolumePolicySpec{
+					InputInitMethod: &blkdiscardWithHeaderCleanupMethod,
+				},
+				Source: asdbv1.VolumeSource{
+					PersistentVolume: &asdbv1.PersistentVolumeSpec{
+						Size:         resource.MustParse("1Gi"),
+						StorageClass: storageClass,
+						VolumeMode:   corev1.PersistentVolumeBlock,
+					},
+				},
+				Aerospike: &asdbv1.AerospikeServerVolumeAttachment{
+					Path: "/opt/aerospike/blockdevice-init-blkdiscard-with-header-cleanup",
 				},
 			},
 			{
@@ -409,7 +451,8 @@ func getAerospikeWipeRackStorageConfig(
 	)
 	aerospikeStorageSpec.Volumes[0].Name = "test-wipe-device-dd-2"
 	aerospikeStorageSpec.Volumes[1].Name = "test-wipe-device-blkdiscard-2"
-	aerospikeStorageSpec.Volumes[2].Name = "test-wipe-files-deletefiles-2"
+	aerospikeStorageSpec.Volumes[2].Name = "test-wipe-device-blkdiscard-with-header-cleanup-2"
+	aerospikeStorageSpec.Volumes[3].Name = "test-wipe-files-deletefiles-2"
 
 	return aerospikeStorageSpec
 }
