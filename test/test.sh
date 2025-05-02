@@ -72,9 +72,9 @@ export IMAGE_PULL_SECRET_NAME="$IMAGE_PULL_SECRET"
 if [ "$TEST_TYPE" = "cluster-test" ]; then
    make cluster-test FOCUS="$FOCUS" ARGS="$ARGS"
 elif [ "$TEST_TYPE" = "backup-test" ]; then
-   make backup-service-test FOCUS="$FOCUS" ARGS="$ARGS"
-   make backup-test FOCUS="$FOCUS" ARGS="$ARGS"
-   make restore-test FOCUS="$FOCUS" ARGS="$ARGS"
+   make backup-service-test ARGS="$ARGS"
+   make backup-test ARGS="$ARGS"
+   make restore-test ARGS="$ARGS"
 elif [ "$TEST_TYPE" = "all-test" ]; then
    make -k all-test FOCUS="$FOCUS" ARGS="$ARGS"
 fi

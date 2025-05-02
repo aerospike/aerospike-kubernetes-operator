@@ -87,23 +87,22 @@ pipeline {
                     }
                 }
 
-                stage ('Detect Changes'){
+                stage('Detect Changes') {
                     steps {
                         script {
                             dir("${env.GO_REPO}") {
-                                if(isNightly() || env.BRANCH_NAME == 'master'){
+                                if(isNightly() || env.BRANCH_NAME == 'master') {
                                     // Run all-test cases for master and nightly builds
-                                    env.RUN_NIGHTLY_OR_MASTER = 'true'
+                                    env.RUN_ALL_TEST = 'true'
                                 }
-                                else{
+                                else {
                                     // Identify changed files using git diff
                                     def changedFiles = sh(script: "git diff --name-only origin/master...HEAD", returnStdout: true).trim()
-                                    if(!changedFiles.isEmpty()){
-                                        changedFiles = changedFiles.split('\n')
+                                    if(changedFiles.isEmpty()) {
+                                        return
                                     }
-                                    else{
-                                        changedFiles = []
-                                    }
+                                    
+                                    changedFiles = changedFiles.split('\n')
                                     // clusterTest=true, if cluster related files are modified.
                                     // (e.g. internal/controller/cluster/reconciler.go)
                                     def clusterTest = changedFiles.any {
@@ -138,7 +137,7 @@ pipeline {
                                     // sampleFilesTest=true, if sample-files are modified.
                                     // (e.g. config/samples/dim_nostorage_cluster_cr.yaml)
                                     def sampleFilesTest = changedFiles.any {
-                                        it.startsWith('config/samples/') && !it.contains('openldap/') && !it.contains('secrets/') && !it.contains('storage/')
+                                        it.startsWith('config/samples/') && !it.contains('openldap/') && !it.contains('secrets/') && !it.contains('storage/') && it.endsWith('_cr.yaml')
                                     }
 
                                     env.RUN_CLUSTER_TEST = clusterTest.toString()
@@ -153,7 +152,7 @@ pipeline {
                     }
                 }
 
-                stage ('Cluster Test') {
+                stage('Cluster Test') {
                     when {
                         expression { env.RUN_CLUSTER_TEST == 'true' && env.RUN_ALL_TEST == 'false'}
                     }
@@ -168,7 +167,7 @@ pipeline {
                     }
                 }
 
-                stage ('Backup Test') {
+                stage('Backup Test') {
                     when {
                         expression { env.RUN_BACKUP_TEST == 'true' && env.RUN_ALL_TEST == 'false'}
                     }
@@ -183,9 +182,9 @@ pipeline {
                     }
                 }
 
-                stage ('All Test') {
+                stage('All Test') {
                     when {
-                        expression { env.RUN_NIGHTLY_OR_MASTER == 'true' || env.RUN_ALL_TEST == 'true'}
+                        expression { env.RUN_ALL_TEST == 'true'}
                     }
                     steps {
                         dir("${env.GO_REPO}") {
@@ -198,7 +197,7 @@ pipeline {
                     }
                 }
 
-                stage ('Smoke Test') {
+                stage('Smoke Test') {
                     when {
                         expression { (env.RUN_SMOKE_TEST == 'true' || env.RUN_SAMPLE_FILES_TEST == 'true') && env.RUN_CLUSTER_TEST == 'false' && env.RUN_ALL_TEST == 'false'}
                     }
@@ -207,10 +206,11 @@ pipeline {
                             script {
                                 sh "rsync -aK ${env.WORKSPACE}/../../aerospike-kubernetes-operator-resources/secrets/ config/samples/secrets"
 							    sh "set +x; docker login --username AWS  568976754000.dkr.ecr.ap-south-1.amazonaws.com -p \$(aws ecr get-login-password --region ap-south-1); set -x"
-                                if (env.RUN_SMOKE_TEST == 'true'){
+                                if(env.RUN_SMOKE_TEST == 'true') {
                                     // Run smoke test
                                     sh "./test/test.sh -b ${OPERATOR_BUNDLE_IMAGE_CANDIDATE_NAME} -c ${OPERATOR_CATALOG_IMAGE_CANDIDATE_NAME} -r ${AEROSPIKE_CUSTOM_INIT_REGISTRY} -n ${AEROSPIKE_CUSTOM_INIT_REGISTRY_NAMESPACE} -i ${AEROSPIKE_CUSTOM_INIT_NAME_TAG} -t cluster-test -f 'Sample files validation|UpdateAerospikeCluster'"
-                                } else if(env.RUN_SAMPLE_FILES_TEST == 'true'){
+                                } 
+                                else if(env.RUN_SAMPLE_FILES_TEST == 'true') {
                                     // Run sample-files test cases
                                     sh "./test/test.sh -b ${OPERATOR_BUNDLE_IMAGE_CANDIDATE_NAME} -c ${OPERATOR_CATALOG_IMAGE_CANDIDATE_NAME} -r ${AEROSPIKE_CUSTOM_INIT_REGISTRY} -n ${AEROSPIKE_CUSTOM_INIT_REGISTRY_NAMESPACE} -i ${AEROSPIKE_CUSTOM_INIT_NAME_TAG} -t cluster-test -f 'Sample files validation'"
                                 }
