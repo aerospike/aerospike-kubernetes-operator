@@ -74,6 +74,8 @@ func (r *SingleClusterReconciler) Reconcile() (result ctrl.Result, recErr error)
 			return reconcile.Result{}, err
 		}
 
+		r.removeClusterPhaseMetric()
+
 		r.Recorder.Eventf(
 			r.aeroCluster, corev1.EventTypeNormal, "Deleted",
 			"Deleted AerospikeCluster %s/%s", r.aeroCluster.Namespace,
@@ -454,6 +456,9 @@ func (r *SingleClusterReconciler) updateStatus() error {
 
 	r.aeroCluster = newAeroCluster
 
+	// Add the cluster phase metric
+	r.addClusterPhaseMetric()
+
 	r.Log.Info("Updated status", "status", newAeroCluster.Status)
 
 	return nil
@@ -473,6 +478,8 @@ func (r *SingleClusterReconciler) setStatusPhase(phase asdbv1.AerospikeClusterPh
 			r.Log.Error(err, fmt.Sprintf("Failed to set cluster status to %s", phase))
 			return err
 		}
+
+		r.addClusterPhaseMetric()
 	}
 
 	return nil
