@@ -16,7 +16,6 @@ import (
 
 	as "github.com/aerospike/aerospike-client-go/v7"
 	asdbv1 "github.com/aerospike/aerospike-kubernetes-operator/v4/api/v1"
-	webhookv1 "github.com/aerospike/aerospike-kubernetes-operator/v4/internal/webhook/v1"
 )
 
 // fromSecretPasswordProvider provides user password from the secret provided in AerospikeUserSpec.
@@ -64,7 +63,7 @@ func (pp fromSecretPasswordProvider) GetDefaultPassword(spec *asdbv1.AerospikeCl
 	}
 
 	// Default password file specified. Get the secret name from the volume
-	volume := webhookv1.GetVolumeForAerospikePath(&spec.Storage, *defaultPasswordFilePath)
+	volume := asdbv1.GetVolumeForAerospikePath(&spec.Storage, *defaultPasswordFilePath)
 	secretName := volume.Source.Secret.SecretName
 
 	// Get the password from the secret.
