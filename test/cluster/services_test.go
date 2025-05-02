@@ -3,10 +3,12 @@ package cluster
 import (
 	goctx "context"
 	"fmt"
+	"time"
 
 	. "github.com/onsi/ginkgo/v2"
 	. "github.com/onsi/gomega"
 	corev1 "k8s.io/api/core/v1"
+	"k8s.io/apimachinery/pkg/api/errors"
 	"k8s.io/apimachinery/pkg/types"
 
 	asdbv1 "github.com/aerospike/aerospike-kubernetes-operator/v4/api/v1"
@@ -104,6 +106,30 @@ var _ = Describe(
 
 				By("Validate")
 				validateLoadBalancerExists(aeroCluster)
+			},
+		)
+
+
+		It(
+			"Validate LB deleted", func() {
+				By("DeployCluster with LB")
+				clusterNamespacedName := test.GetNamespacedName(
+					"load-balancer-delete", namespace,
+				)
+				aeroCluster = createDummyAerospikeCluster(
+					clusterNamespacedName, 2,
+				)
+				aeroCluster.Spec.SeedsFinderServices.LoadBalancer = createLoadBalancer()
+				Expect(DeployCluster(k8sClient, ctx, aeroCluster)).ToNot(HaveOccurred())
+
+				By("Validate")
+				validateLoadBalancerExists(aeroCluster)
+
+				By("Delete LB service")
+				aeroCluster.Spec.SeedsFinderServices.LoadBalancer = nil
+				err := updateCluster(k8sClient, ctx, aeroCluster)
+				Expect(err).ToNot(HaveOccurred())
+				validateLoadBalancerSvcDeleted(aeroCluster)
 			},
 		)
 
@@ -250,4 +276,16 @@ func validateLoadBalancerExists(aeroCluster *asdbv1.AerospikeCluster) {
 	err := k8sClient.Get(goctx.TODO(), loadBalancerName(aeroCluster), service)
 	Expect(err).ToNot(HaveOccurred())
 	Expect(service.Spec.Type).To(BeEquivalentTo("LoadBalancer"))
+}
+
+func validateLoadBalancerSvcDeleted(aeroCluster *asdbv1.AerospikeCluster) {
+	Eventually(func() error {
+		service := &corev1.Service{}
+		err := k8sClient.Get(goctx.TODO(), loadBalancerName(aeroCluster), service)
+		if errors.IsNotFound(err) {
+			return nil
+		}
+
+		return fmt.Errorf("service still exists: %v", err)
+	}, 3*time.Minute, 10*time.Second).Should(Succeed())
 }
