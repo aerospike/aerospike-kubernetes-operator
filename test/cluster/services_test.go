@@ -109,7 +109,6 @@ var _ = Describe(
 			},
 		)
 
-
 		It(
 			"Validate LB deleted", func() {
 				By("DeployCluster with LB")
