@@ -104,30 +104,39 @@ pipeline {
                                     else{
                                         changedFiles = []
                                     }
-
+                                    // clusterTest=true, if cluster related files are modified.
+                                    // (e.g. internal/controller/cluster/reconciler.go)
                                     def clusterTest = changedFiles.any {
-                                        !it.startsWith('helm-charts/') &&
+                                        it.endsWith('.go') &&
                                         (it.contains('cluster/') ||
                                         it.contains('v1/'))
                                     }
+                                    // backupTest=true, if backup related files are modified.
+                                    // (e.g. internal/controller/backup/reconciler.go)
                                     def backupTest = changedFiles.any {
-                                        !it.startsWith('helm-charts/') &&
+                                        it.endsWith('.go') &&
                                         (it.contains('/backup') ||
                                         it.contains('restore/') ||
                                         it.contains('v1beta1/'))
                                     }
+                                    // allTest=true, if common files are modified.
+                                    // (e.g. cmd/main.go)
                                     def allTest = changedFiles.any {
                                         it.startsWith('cmd/') ||
                                         (it.startsWith('internal/controller/common/') && !it.contains('backup_config_util.go')) ||
                                         it.startsWith('pkg/utils/') ||
                                         it.startsWith('errors/')
                                     }
+                                    // smokeTest=true, if non-code files (excluding .go files) or some specific directories files are modified.
+                                    // (e.g. config/webhook/manifests.yaml)
                                     def smokeTest = changedFiles.any {
                                         (it.startsWith('pkg/') && !it.contains('backup-service/') && !it.contains('utils/')) ||
                                         (it.startsWith('test/') && !it.contains('cluster/') && !it.contains('backup/') &&
                                         !it.contains('restore/') && !it.contains('backup_service/')) ||
-                                        (!it.startsWith('helm-charts/') && !it.endsWith('.go'))
+                                        (!it.startsWith('helm-charts/') && !it.endsWith('.go') && !it.endsWith('_cr.yaml'))
                                     }
+                                    // sampleFilesTest=true, if sample-files are modified.
+                                    // (e.g. config/samples/dim_nostorage_cluster_cr.yaml)
                                     def sampleFilesTest = changedFiles.any {
                                         it.startsWith('config/samples/') && !it.contains('openldap/') && !it.contains('secrets/') && !it.contains('storage/')
                                     }
@@ -153,9 +162,8 @@ pipeline {
                             // Run all cluster-related test cases
                             sh "rsync -aK ${env.WORKSPACE}/../../aerospike-kubernetes-operator-resources/secrets/ config/samples/secrets"
 							sh "set +x; docker login --username AWS  568976754000.dkr.ecr.ap-south-1.amazonaws.com -p \$(aws ecr get-login-password --region ap-south-1); set -x"
-                            sh "./test/test.sh -b ${OPERATOR_BUNDLE_IMAGE_CANDIDATE_NAME} -c ${OPERATOR_CATALOG_IMAGE_CANDIDATE_NAME} -r ${AEROSPIKE_CUSTOM_INIT_REGISTRY} -n ${AEROSPIKE_CUSTOM_INIT_REGISTRY_NAMESPACE} -i ${AEROSPIKE_CUSTOM_INIT_NAME_TAG} -t cluster-test -f 'UpdateAerospikeCluster|Sample files validation'"
+                            sh "./test/test.sh -b ${OPERATOR_BUNDLE_IMAGE_CANDIDATE_NAME} -c ${OPERATOR_CATALOG_IMAGE_CANDIDATE_NAME} -r ${AEROSPIKE_CUSTOM_INIT_REGISTRY} -n ${AEROSPIKE_CUSTOM_INIT_REGISTRY_NAMESPACE} -i ${AEROSPIKE_CUSTOM_INIT_NAME_TAG} -t cluster-test"
 
-                            sh "./test/test.sh -b ${OPERATOR_BUNDLE_IMAGE_CANDIDATE_NAME} -c ${OPERATOR_CATALOG_IMAGE_CANDIDATE_NAME} -r ${AEROSPIKE_CUSTOM_INIT_REGISTRY} -n ${AEROSPIKE_CUSTOM_INIT_REGISTRY_NAMESPACE} -i ${AEROSPIKE_CUSTOM_INIT_NAME_TAG} -t cluster-test -f 'UpdateAerospikeCluster|DeployClusterDiffStorageSinglePodPerHost'"
                         }
                     }
                 }
@@ -199,12 +207,11 @@ pipeline {
                             script {
                                 sh "rsync -aK ${env.WORKSPACE}/../../aerospike-kubernetes-operator-resources/secrets/ config/samples/secrets"
 							    sh "set +x; docker login --username AWS  568976754000.dkr.ecr.ap-south-1.amazonaws.com -p \$(aws ecr get-login-password --region ap-south-1); set -x"
-                                // Run smoke test
-                                if (env.RUN_SMOKE_TEST == 'true' || env.RUN_SAMPLE_FILES_TEST == 'true'){
-                                    sh "./test/test.sh -b ${OPERATOR_BUNDLE_IMAGE_CANDIDATE_NAME} -c ${OPERATOR_CATALOG_IMAGE_CANDIDATE_NAME} -r ${AEROSPIKE_CUSTOM_INIT_REGISTRY} -n ${AEROSPIKE_CUSTOM_INIT_REGISTRY_NAMESPACE} -i ${AEROSPIKE_CUSTOM_INIT_NAME_TAG} -t cluster-test -f 'UpdateAerospikeCluster|DeployClusterDiffStorageSinglePodPerHost'"
-                                }
-                                // Run sample-files test cases
-                                if(env.RUN_SAMPLE_FILES_TEST == 'true'){
+                                if (env.RUN_SMOKE_TEST == 'true'){
+                                    // Run smoke test
+                                    sh "./test/test.sh -b ${OPERATOR_BUNDLE_IMAGE_CANDIDATE_NAME} -c ${OPERATOR_CATALOG_IMAGE_CANDIDATE_NAME} -r ${AEROSPIKE_CUSTOM_INIT_REGISTRY} -n ${AEROSPIKE_CUSTOM_INIT_REGISTRY_NAMESPACE} -i ${AEROSPIKE_CUSTOM_INIT_NAME_TAG} -t cluster-test -f 'Sample files validation|UpdateAerospikeCluster'"
+                                } else if(env.RUN_SAMPLE_FILES_TEST == 'true'){
+                                    // Run sample-files test cases
                                     sh "./test/test.sh -b ${OPERATOR_BUNDLE_IMAGE_CANDIDATE_NAME} -c ${OPERATOR_CATALOG_IMAGE_CANDIDATE_NAME} -r ${AEROSPIKE_CUSTOM_INIT_REGISTRY} -n ${AEROSPIKE_CUSTOM_INIT_REGISTRY_NAMESPACE} -i ${AEROSPIKE_CUSTOM_INIT_NAME_TAG} -t cluster-test -f 'Sample files validation'"
                                 }
                             }
