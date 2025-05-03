@@ -142,7 +142,7 @@ all-test: manifests generate fmt vet envtest cluster-test backup-service-test ba
 
 .PHONY: cluster-test
 cluster-test: manifests generate fmt vet envtest ## Run tests.
-	KUBEBUILDER_ASSETS="$(shell $(ENVTEST) use $(ENVTEST_K8S_VERSION) --bin-dir $(LOCALBIN) -p path)" cd $(shell pwd)/test/cluster; mkdir -p ../test-results; go run github.com/onsi/ginkgo/v2/ginkgo --grace-period=10m -p --procs=8 -coverprofile ascover.out -v -show-node-events -timeout=5h0m0s --junit-report=../test-results/junit-cluster.xml  -- ${ARGS}
+	KUBEBUILDER_ASSETS="$(shell $(ENVTEST) use $(ENVTEST_K8S_VERSION) --bin-dir $(LOCALBIN) -p path)" cd $(shell pwd)/test/cluster; mkdir -p ../test-results; go run github.com/onsi/ginkgo/v2/ginkgo --grace-period=10m -p --procs=8 -coverprofile ascover.out -v -show-node-events --focus="$(FOCUS)" -timeout=5h0m0s --junit-report=../test-results/junit-cluster.xml  -- ${ARGS}
 
 .PHONY: backup-service-test
 backup-service-test: manifests generate fmt vet envtest ## Run tests.
