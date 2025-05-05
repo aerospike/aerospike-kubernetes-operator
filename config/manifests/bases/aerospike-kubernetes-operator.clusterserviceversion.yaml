@@ -110,6 +110,11 @@ spec:
           In case of inconsistent state during dynamic config update, operator falls back to rolling restart.
         displayName: Enable Dynamic Config Update
         path: enableDynamicConfigUpdate
+      - description: |-
+          HeadlessService defines additional configuration parameters for the headless service created to discover
+          Aerospike Cluster nodes
+        displayName: Headless Service
+        path: headlessService
       - description: Aerospike server image
         displayName: Server Image
         path: image
@@ -135,6 +140,13 @@ spec:
       - description: Paused flag is used to pause the reconciliation for the AerospikeCluster.
         displayName: Pause Reconcile
         path: paused
+      - description: |-
+          PodService defines additional configuration parameters for the pod service created to expose the
+          Aerospike Cluster nodes outside the Kubernetes cluster. This service is created only created when
+          `multiPodPerHost` is set to `true` and `aerospikeNetworkPolicy` has one of the network types:
+          'hostInternal', 'hostExternal', 'configuredIP'
+        displayName: Pod Service
+        path: podService
       - description: Specify additional configuration for the Aerospike pods
         displayName: Pod Configuration
         path: podSpec
