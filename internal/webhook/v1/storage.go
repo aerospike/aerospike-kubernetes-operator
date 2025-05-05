@@ -214,24 +214,6 @@ func getAerospikeStorageList(storage *asdbv1.AerospikeStorageSpec, onlyPV bool) 
 	return blockStorageDeviceList, fileStorageList, nil
 }
 
-// GetVolumeForAerospikePath returns volume defined for given path for Aerospike server container.
-func GetVolumeForAerospikePath(storage *asdbv1.AerospikeStorageSpec, path string) *asdbv1.VolumeSpec {
-	var matchedVolume *asdbv1.VolumeSpec
-
-	for idx := range storage.Volumes {
-		volume := &storage.Volumes[idx]
-		if volume.Aerospike != nil && isPathParentOrSame(
-			volume.Aerospike.Path, path,
-		) {
-			if matchedVolume == nil || matchedVolume.Aerospike.Path < volume.Aerospike.Path {
-				matchedVolume = volume
-			}
-		}
-	}
-
-	return matchedVolume
-}
-
 func validateStorage(
 	storage *asdbv1.AerospikeStorageSpec, podSpec *asdbv1.AerospikePodSpec,
 ) error {
