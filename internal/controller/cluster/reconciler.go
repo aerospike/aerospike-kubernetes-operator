@@ -318,10 +318,9 @@ func (r *SingleClusterReconciler) recoverIgnorablePods(ignorablePodNames sets.Se
 
 	if anyPodFailed {
 		r.Log.Info("Found failed/pending pod(s), requeuing")
-		return common.ReconcileRequeueAfter(0)
+	} else {
+		r.Log.Info("Found ignorable pod(s), requeuing")
 	}
-
-	r.Log.Info("Found ignorable pod(s), requeuing")
 
 	return common.ReconcileRequeueAfter(0)
 }
