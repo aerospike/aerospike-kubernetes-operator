@@ -671,13 +671,8 @@ func (r *SingleClusterReconciler) reconcileRack(
 		return common.ReconcileError(err)
 	}
 
-	// Safe check to delete all dangling pod services which are no longer required
-	// There won't be any case of dangling pod service with MultiPodPerHost false, so ignore that case
-	if asdbv1.GetBool(r.aeroCluster.Spec.PodSpec.MultiPodPerHost) &&
-		!podServiceNeeded(r.aeroCluster.Spec.PodSpec.MultiPodPerHost, &r.aeroCluster.Spec.AerospikeNetworkPolicy) {
-		if err := r.cleanupDanglingPodServices(rackState); err != nil {
-			return common.ReconcileError(err)
-		}
+	if err := r.reconcilePodService(rackState); err != nil {
+		return common.ReconcileError(err)
 	}
 
 	return common.ReconcileSuccess()
@@ -699,7 +694,7 @@ func (r *SingleClusterReconciler) scaleUpRack(
 		rackState.Rack.ID, found.Namespace, found.Name, oldSz, desiredSize,
 	)
 
-	// No need for this? But if image is bad then new pod will also come up
+	// No need for this? But if the image is bad, then new pod will also come up
 	// with bad node.
 	podList, err := r.getOrderedRackPodList(rackState.Rack.ID)
 	if err != nil {
@@ -735,11 +730,6 @@ func (r *SingleClusterReconciler) scaleUpRack(
 				"failed scale up pre-check: %v", err,
 			),
 		)
-	}
-
-	// Create pod service for the scaled up pod when node network is used in network policy
-	if err = r.createOrUpdatePodServiceIfNeeded(newPodNames); err != nil {
-		return nil, common.ReconcileError(err)
 	}
 
 	// update replicas here to avoid new replicas count comparison while cleaning up dangling pods of rack
@@ -1696,6 +1686,18 @@ func (r *SingleClusterReconciler) getRackPodList(rackID int) (
 	}
 
 	return podList, nil
+}
+
+func (r *SingleClusterReconciler) getRackPodNames(rackState *RackState) []string {
+	stsName := utils.GetNamespacedNameForSTSOrConfigMap(r.aeroCluster, rackState.Rack.ID)
+
+	podNames := make([]string, 0, rackState.Size)
+
+	for i := 0; i < rackState.Size; i++ {
+		podNames = append(podNames, getSTSPodName(stsName.Name, int32(i)))
+	}
+
+	return podNames
 }
 
 func (r *SingleClusterReconciler) getOrderedRackPodList(rackID int) (
