@@ -142,7 +142,7 @@ all-test: manifests generate fmt vet envtest cluster-test backup-service-test ba
 
 .PHONY: cluster-test
 cluster-test: manifests generate fmt vet envtest ## Run tests.
-	KUBEBUILDER_ASSETS="$(shell $(ENVTEST) use $(ENVTEST_K8S_VERSION) --bin-dir $(LOCALBIN) -p path)" cd $(shell pwd)/test/cluster; mkdir -p ../test-results; go run github.com/onsi/ginkgo/v2/ginkgo --grace-period=10m -p --procs=8 -coverprofile ascover.out -v -show-node-events -timeout=5h0m0s --junit-report=../test-results/junit-cluster.xml  -- ${ARGS}
+	KUBEBUILDER_ASSETS="$(shell $(ENVTEST) use $(ENVTEST_K8S_VERSION) --bin-dir $(LOCALBIN) -p path)" cd $(shell pwd)/test/cluster; mkdir -p ../test-results; go run github.com/onsi/ginkgo/v2/ginkgo --grace-period=10m -p --procs=8 -coverprofile ascover.out -v -show-node-events --focus="$(FOCUS)" -timeout=5h0m0s --junit-report=../test-results/junit-cluster.xml  -- ${ARGS}
 
 .PHONY: backup-service-test
 backup-service-test: manifests generate fmt vet envtest ## Run tests.
@@ -243,7 +243,7 @@ GOLANGCI_LINT = $(LOCALBIN)/golangci-lint
 KUSTOMIZE_VERSION ?= v5.4.3
 CONTROLLER_TOOLS_VERSION ?= v0.16.1
 ENVTEST_VERSION ?= release-0.19
-GOLANGCI_LINT_VERSION ?= v1.59.1
+GOLANGCI_LINT_VERSION ?= v1.60.1
 # Set the Operator SDK version to use. By default, what is installed on the system is used.
 # This is useful for CI or a project to utilize a specific version of the operator-sdk toolkit.
 OPERATOR_SDK_VERSION ?= v1.39.1

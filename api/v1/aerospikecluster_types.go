@@ -141,6 +141,20 @@ type AerospikeClusterSpec struct { //nolint:govet // for readability
 	// +optional
 	SeedsFinderServices SeedsFinderServices `json:"seedsFinderServices,omitempty"`
 
+	// HeadlessService defines additional configuration parameters for the headless service created to discover
+	// Aerospike Cluster nodes
+	// +operator-sdk:csv:customresourcedefinitions:type=spec,displayName="Headless Service"
+	// +optional
+	HeadlessService ServiceSpec `json:"headlessService,omitempty"`
+
+	// PodService defines additional configuration parameters for the pod service created to expose the
+	// Aerospike Cluster nodes outside the Kubernetes cluster. This service is created only created when
+	// `multiPodPerHost` is set to `true` and `aerospikeNetworkPolicy` has one of the network types:
+	// 'hostInternal', 'hostExternal', 'configuredIP'
+	// +operator-sdk:csv:customresourcedefinitions:type=spec,displayName="Pod Service"
+	// +optional
+	PodService ServiceSpec `json:"podService,omitempty"`
+
 	// RosterNodeBlockList is a list of blocked nodeIDs from roster in a strong-consistency setup
 	// +operator-sdk:csv:customresourcedefinitions:type=spec,displayName="Roster Node BlockList"
 	// +optional
@@ -229,6 +243,14 @@ type LoadBalancerSpec struct { //nolint:govet // for readability
 
 	// +optional
 	LoadBalancerSourceRanges []string `json:"loadBalancerSourceRanges,omitempty" patchStrategy:"merge"`
+}
+
+// ServiceSpec contains specification customizations for a Kubernetes service.
+// +k8s:openapi-gen=true
+type ServiceSpec struct {
+	// +patchStrategy=merge
+	// +optional
+	Metadata AerospikeObjectMeta `json:"metadata,omitempty"`
 }
 
 type AerospikeOperatorClientCertSpec struct { //nolint:govet // for readability
@@ -906,6 +928,18 @@ type AerospikeClusterStatusSpec struct { //nolint:govet // for readability
 	// +optional
 	SeedsFinderServices SeedsFinderServices `json:"seedsFinderServices,omitempty"`
 
+	// HeadlessService defines additional configuration parameters for the headless service created to discover
+	// Aerospike Cluster nodes
+	// +optional
+	HeadlessService ServiceSpec `json:"headlessService,omitempty"`
+
+	// PodService defines additional configuration parameters for the pod service created to expose the
+	// Aerospike Cluster nodes outside the Kubernetes cluster. This service is created only created when
+	// `multiPodPerHost` is set to `true` and `aerospikeNetworkPolicy` has one of the network types:
+	// 'hostInternal', 'hostExternal', 'configuredIP'
+	// +optional
+	PodService ServiceSpec `json:"podService,omitempty"`
+
 	// RosterNodeBlockList is a list of blocked nodeIDs from roster in a strong-consistency setup
 	// +optional
 	RosterNodeBlockList []string `json:"rosterNodeBlockList,omitempty"`
@@ -1311,11 +1345,24 @@ func CopySpecToStatus(spec *AerospikeClusterSpec) (*AerospikeClusterStatusSpec, 
 	statusPodSpec := lib.DeepCopy(&spec.PodSpec).(*AerospikePodSpec)
 	status.PodSpec = *statusPodSpec
 
+	// Services
 	seedsFinderServices := lib.DeepCopy(
 		&spec.SeedsFinderServices,
 	).(*SeedsFinderServices)
 
 	status.SeedsFinderServices = *seedsFinderServices
+
+	headlessService := lib.DeepCopy(
+		&spec.HeadlessService,
+	).(*ServiceSpec)
+
+	status.HeadlessService = *headlessService
+
+	podService := lib.DeepCopy(
+		&spec.PodService,
+	).(*ServiceSpec)
+
+	status.PodService = *podService
 
 	// RosterNodeBlockList
 	if len(spec.RosterNodeBlockList) != 0 {
@@ -1417,11 +1464,24 @@ func CopyStatusToSpec(status *AerospikeClusterStatusSpec) (*AerospikeClusterSpec
 
 	spec.PodSpec = *specPodSpec
 
+	// Services
 	seedsFinderServices := lib.DeepCopy(
 		&status.SeedsFinderServices,
 	).(*SeedsFinderServices)
 
 	spec.SeedsFinderServices = *seedsFinderServices
+
+	headlessService := lib.DeepCopy(
+		&status.HeadlessService,
+	).(*ServiceSpec)
+
+	spec.HeadlessService = *headlessService
+
+	podService := lib.DeepCopy(
+		&status.PodService,
+	).(*ServiceSpec)
+
+	spec.PodService = *podService
 
 	// RosterNodeBlockList
 	if len(status.RosterNodeBlockList) != 0 {
