@@ -101,14 +101,6 @@ func (r *SingleClusterReconciler) getRollingRestartTypeMap(rackState *RackState,
 		}
 
 		podStatus := r.aeroCluster.Status.Pods[pods[idx].Name]
-
-		if !reflect.DeepEqual(podStatus.RackIDSource, r.aeroCluster.Spec.RackConfig.RackIDSource) {
-			r.Log.Info("RackIDSource changed. Need to restart pod", "podName", pods[idx].Name)
-			restartTypeMap[pods[idx].Name] = mergeRestartType(restartTypeMap[pods[idx].Name], podRestart)
-
-			continue
-		}
-
 		if podStatus.AerospikeConfigHash != requiredConfHash {
 			if addedNSDevices == nil {
 				// Fetching all block devices that have been added in namespaces.
@@ -143,6 +135,10 @@ func (r *SingleClusterReconciler) getRollingRestartTypeMap(rackState *RackState,
 
 		// Fallback to rolling restart in case of partial failure to recover with the desired Aerospike config
 		if podStatus.DynamicConfigUpdateStatus == asdbv1.PartiallyFailed {
+			restartTypeMap[pods[idx].Name] = mergeRestartType(restartTypeMap[pods[idx].Name], quickRestart)
+		}
+
+		if !reflect.DeepEqual(podStatus.RackIDSource, r.aeroCluster.Spec.RackConfig.RackIDSource) {
 			restartTypeMap[pods[idx].Name] = mergeRestartType(restartTypeMap[pods[idx].Name], quickRestart)
 		}
 	}

@@ -5156,21 +5156,11 @@ spec:
                       If not specified, the rack ID is read from the CR.
                       Required when EnableDynamicRackID is true.
                     properties:
-                      hostPathConf:
-                        description: HostPathConf specifies the host path configuration
-                          to use for the rack ID.
-                        properties:
-                          filePath:
-                            description: |-
-                              FilePath specifies the relative path to a file containing the rack ID mounted in aerospike init container.
-                              This path should be the relative path to the mount point of hostpath.
-                              The file should contain a single integer value.
-                            type: string
-                          hostPathVolumeName:
-                            description: HostPathVolumeName specifies the name of
-                              the host path volume to use for the rack ID.
-                            type: string
-                        type: object
+                      filePath:
+                        description: |-
+                          FilePath specifies the absolute path to a file containing the rack ID mounted in aerospike server.
+                          The file should contain a single integer value.
+                        type: string
                       podAnnotation:
                         description: |-
                           PodAnnotation specifies the name of the pod annotation that contains the rack ID.
@@ -14343,21 +14333,11 @@ spec:
                       description: RackIDSource is the source from which the rack
                         ID is read.
                       properties:
-                        hostPathConf:
-                          description: HostPathConf specifies the host path configuration
-                            to use for the rack ID.
-                          properties:
-                            filePath:
-                              description: |-
-                                FilePath specifies the relative path to a file containing the rack ID mounted in aerospike init container.
-                                This path should be the relative path to the mount point of hostpath.
-                                The file should contain a single integer value.
-                              type: string
-                            hostPathVolumeName:
-                              description: HostPathVolumeName specifies the name of
-                                the host path volume to use for the rack ID.
-                              type: string
-                          type: object
+                        filePath:
+                          description: |-
+                            FilePath specifies the absolute path to a file containing the rack ID mounted in aerospike server.
+                            The file should contain a single integer value.
+                          type: string
                         podAnnotation:
                           description: |-
                             PodAnnotation specifies the name of the pod annotation that contains the rack ID.
@@ -14415,21 +14395,11 @@ spec:
                       If not specified, the rack ID is read from the CR.
                       Required when EnableDynamicRackID is true.
                     properties:
-                      hostPathConf:
-                        description: HostPathConf specifies the host path configuration
-                          to use for the rack ID.
-                        properties:
-                          filePath:
-                            description: |-
-                              FilePath specifies the relative path to a file containing the rack ID mounted in aerospike init container.
-                              This path should be the relative path to the mount point of hostpath.
-                              The file should contain a single integer value.
-                            type: string
-                          hostPathVolumeName:
-                            description: HostPathVolumeName specifies the name of
-                              the host path volume to use for the rack ID.
-                            type: string
-                        type: object
+                      filePath:
+                        description: |-
+                          FilePath specifies the absolute path to a file containing the rack ID mounted in aerospike server.
+                          The file should contain a single integer value.
+                        type: string
                       podAnnotation:
                         description: |-
                           PodAnnotation specifies the name of the pod annotation that contains the rack ID.

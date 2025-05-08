@@ -246,8 +246,7 @@ func validateStorage(
 			)
 		}
 
-		if volume.Source.HostPath == nil &&
-			volume.Aerospike == nil &&
+		if volume.Aerospike == nil &&
 			len(volume.Sidecars) == 0 &&
 			len(volume.InitContainers) == 0 {
 			return fmt.Errorf(

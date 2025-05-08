@@ -1116,24 +1116,15 @@ type AerospikeNetworkPolicy struct {
 // RackIDSource specifies the source from which to read the rack ID.
 // Only one source can be specified at a time.
 type RackIDSource struct {
-	// HostPathConf specifies the host path configuration to use for the rack ID.
-	HostPathConf *HostPathConf `json:"hostPathConf,omitempty"`
+	// FilePath specifies the absolute path to a file containing the rack ID mounted in aerospike server.
+	// The file should contain a single integer value.
+	// +optional
+	FilePath string `json:"filePath,omitempty"`
 
 	// PodAnnotation specifies the name of the pod annotation that contains the rack ID.
 	// The annotation value should be a valid integer.
 	// +optional
 	PodAnnotation string `json:"podAnnotation,omitempty"`
-}
-
-type HostPathConf struct {
-	// HostPathVolumeName specifies the name of the host path volume to use for the rack ID.
-	HostPathVolumeName string `json:"hostPathVolumeName,omitempty"`
-
-	// FilePath specifies the relative path to a file containing the rack ID mounted in aerospike init container.
-	// This path should be the relative path to the mount point of hostpath.
-	// The file should contain a single integer value.
-	// +optional
-	FilePath string `json:"filePath,omitempty"`
 }
 
 // AerospikeInstanceSummary defines the observed state of a pod's Aerospike Server Instance.

@@ -604,7 +604,7 @@ func validateRackConfig(_ logr.Logger, cluster *asdbv1.AerospikeCluster) error {
 	if rackIDSource != nil {
 		sourceCount := 0
 
-		if rackIDSource.HostPathConf != nil {
+		if rackIDSource.FilePath != "" {
 			sourceCount++
 		}
 
@@ -620,27 +620,14 @@ func validateRackConfig(_ logr.Logger, cluster *asdbv1.AerospikeCluster) error {
 			return fmt.Errorf("can not specify more than 1 source for rackID")
 		}
 
-		if rackIDSource.HostPathConf != nil {
+		if rackIDSource.FilePath != "" {
 			// Verify the volume exists in storage spec
-			volumeFound := false
-			hostPathVolumeName := cluster.Spec.RackConfig.RackIDSource.HostPathConf.HostPathVolumeName
-
-			for idx := range cluster.Spec.RackConfig.Racks[0].Storage.Volumes {
-				volume := &cluster.Spec.RackConfig.Racks[0].Storage.Volumes[idx]
-				if volume.Name == hostPathVolumeName {
-					volumeFound = true
-
-					// Verify it's a hostpath volume
-					if volume.Source.HostPath == nil {
-						return fmt.Errorf("HostPathVolumeName %s must be a hostpath volume", volume.Name)
-					}
-
-					break
-				}
+			volume := asdbv1.GetVolumeForAerospikePath(&cluster.Spec.RackConfig.Racks[0].Storage, rackIDSource.FilePath)
+			if volume == nil {
+				return fmt.Errorf("volume not found in storage spec for mount path %s", rackIDSource.FilePath)
 			}
-
-			if !volumeFound {
-				return fmt.Errorf("rackIDVolumeName %s not found in storage spec", hostPathVolumeName)
+			if volume.Source.HostPath == nil {
+				return fmt.Errorf("HostPathVolumeName %s must be a hostpath volume", volume.Name)
 			}
 		}
 

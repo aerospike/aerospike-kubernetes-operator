@@ -645,7 +645,7 @@ func GetVolumeForAerospikePath(storage *AerospikeStorageSpec, path string) *Volu
 	return matchedVolume
 }
 
-// IsPathParentOrSame indicates if dir1 is a parent or same as dir2.
+// IsPathParentOrSame indicates if dir1 is a parent or the same as dir2.
 func IsPathParentOrSame(dir1, dir2 string) bool {
 	if relPath, err := filepath.Rel(dir1, dir2); err == nil {
 		// If dir1 is not a parent directory then relative path will have to climb up directory hierarchy of dir1.
