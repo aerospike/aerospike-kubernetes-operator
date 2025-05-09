@@ -522,8 +522,7 @@ func updateClusterForBatchRestart(
 	k8sClient client.Client, ctx goctx.Context,
 	aeroCluster *asdbv1.AerospikeCluster,
 ) error {
-	err := k8sClient.Update(ctx, aeroCluster)
-	if err != nil {
+	if err := updateClusterWithNoWait(k8sClient, ctx, aeroCluster); err != nil {
 		return err
 	}
 
