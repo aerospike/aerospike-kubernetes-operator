@@ -47,11 +47,19 @@ func GetBackupServiceClient(k8sClient client.Client, svc *v1beta1.BackupService)
 		return nil, err
 	}
 
+	return NewClient(
+		fmt.Sprintf("%s.%s.svc", backupSvc.Name, backupSvc.Namespace),
+		backupSvc.Status.Port,
+		backupSvc.Status.ContextPath,
+	), nil
+}
+
+func NewClient(address string, port int32, contextPath string) *Client {
 	return &Client{
-		Address:     fmt.Sprintf("%s.%s.svc", backupSvc.Name, backupSvc.Namespace),
-		Port:        backupSvc.Status.Port,
-		ContextPath: backupSvc.Status.ContextPath,
-	}, nil
+		Address:     address,
+		Port:        port,
+		ContextPath: contextPath,
+	}
 }
 
 func (c *Client) getAddress() string {
