@@ -69,8 +69,8 @@ const (
 	AerospikeInitContainerRegistryNamespaceEnvVar  = "AEROSPIKE_KUBERNETES_INIT_REGISTRY_NAMESPACE"
 	AerospikeInitContainerNameTagEnvVar            = "AEROSPIKE_KUBERNETES_INIT_NAME_TAG"
 	AerospikeInitContainerDefaultRegistry          = "docker.io"
-	AerospikeInitContainerDefaultRegistryNamespace = "aerospike"
-	AerospikeInitContainerDefaultNameAndTag        = "aerospike-kubernetes-init:2.3.0-dev2"
+	AerospikeInitContainerDefaultRegistryNamespace = "tanmay10"
+	AerospikeInitContainerDefaultNameAndTag        = "aerospike-kubernetes-init:2.3.0-dev3"
 	AerospikeAppLabel                              = "app"
 	AerospikeAppLabelValue                         = "aerospike-cluster"
 	AerospikeCustomResourceLabel                   = "aerospike.com/cr"
@@ -633,7 +633,7 @@ func GetVolumeForAerospikePath(storage *AerospikeStorageSpec, path string) *Volu
 	return matchedVolume
 }
 
-// IsPathParentOrSame indicates if dir1 is a parent or same as dir2.
+// IsPathParentOrSame indicates if dir1 is a parent or the same as dir2.
 func IsPathParentOrSame(dir1, dir2 string) bool {
 	if relPath, err := filepath.Rel(dir1, dir2); err == nil {
 		// If dir1 is not a parent directory then relative path will have to climb up directory hierarchy of dir1.

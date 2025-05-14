@@ -1431,12 +1431,13 @@ func createPVCForVolumeAttachment(
 func createVolumeForVolumeAttachment(volume *asdbv1.VolumeSpec) corev1.Volume {
 	return corev1.Volume{
 		Name: volume.Name,
-		// Add all type of source,
-		// we have already validated in webhook that only one of the source is present, rest are nil.
+		// Add all types of source;
+		// we have already validated in webhook that only one of the sources is present, the rest are nil.
 		VolumeSource: corev1.VolumeSource{
 			ConfigMap: volume.Source.ConfigMap,
 			Secret:    volume.Source.Secret,
 			EmptyDir:  volume.Source.EmptyDir,
+			HostPath:  volume.Source.HostPath,
 		},
 	}
 }

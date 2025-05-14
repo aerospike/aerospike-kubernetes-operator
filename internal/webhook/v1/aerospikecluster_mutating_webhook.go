@@ -299,7 +299,7 @@ func setDefaultAerospikeConfigs(asLog logr.Logger,
 	config := configSpec.Value
 
 	// namespace conf
-	if err := setDefaultNsConf(asLog, configSpec, cluster.Spec.RackConfig.Namespaces, rackID); err != nil {
+	if err := setDefaultNsConf(asLog, configSpec, &cluster.Spec.RackConfig, rackID); err != nil {
 		return err
 	}
 
@@ -366,8 +366,8 @@ func setNetworkNamespace(namespace string, networkPolicy *asdbv1.AerospikeNetwor
 // Helper
 // *****************************************************************************
 
-func setDefaultNsConf(asLog logr.Logger, configSpec asdbv1.AerospikeConfigSpec,
-	rackEnabledNsList []string, rackID *int) error {
+func setDefaultNsConf(asLog logr.Logger, configSpec asdbv1.AerospikeConfigSpec, rackConfig *asdbv1.RackConfig,
+	rackID *int) error {
 	config := configSpec.Value
 	// namespace conf
 	nsConf, ok := config["namespaces"]
@@ -403,14 +403,20 @@ func setDefaultNsConf(asLog logr.Logger, configSpec asdbv1.AerospikeConfigSpec,
 
 		if nsName, ok := nsMap["name"]; ok {
 			if name, ok := nsName.(string); ok {
-				if isNameExist(rackEnabledNsList, name) {
+				if isNameExist(rackConfig.Namespaces, name) {
 					// Add rack-id only for rackEnabled namespaces
 					if rackID != nil {
-						// Add rack-id only in rack specific config, not in global config
+						// Add rack-id only in rack-specific config, not in global config
 						defaultConfs := map[string]interface{}{"rack-id": *rackID}
 
+						if rackConfig.RackIDSource != nil {
+							// For dynamic rack ID, set a placeholder rack-id of 0
+							// This will be replaced with the actual rack ID at runtime
+							defaultConfs = map[string]interface{}{"rack-id": 0}
+						}
+
 						// rack-id was historically set to 0 for all namespaces, but since the AKO 3.3.0, it reflects actual values.
-						// During the AKO 3.3.0 upgrade rack-id for namespaces in rack specific config is set to 0.
+						// During the AKO 3.3.0 upgrade rack-id for namespaces in rack-specific config is set to 0.
 						// Hence, deleting this 0 rack-id so that correct rack-id will be added.
 						if id, ok := nsMap["rack-id"]; ok && id == float64(0) && *rackID != 0 {
 							delete(nsMap, "rack-id")
@@ -437,7 +443,7 @@ func setDefaultNsConf(asLog logr.Logger, configSpec asdbv1.AerospikeConfigSpec,
 						"Name aerospikeConfig.namespaces.name not found in rackEnabled namespace list. "+
 							"Namespace will not have any rackID",
 						"nsName", nsName, "rackEnabledNamespaces",
-						rackEnabledNsList,
+						rackConfig.Namespaces,
 					)
 
 					delete(nsMap, "rack-id")

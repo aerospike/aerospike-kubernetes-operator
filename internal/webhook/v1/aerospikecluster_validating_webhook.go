@@ -591,6 +591,46 @@ func validateRackConfig(_ logr.Logger, cluster *asdbv1.AerospikeCluster) error {
 		}
 	}
 
+	// Validate dynamic rack ID configuration
+	rackIDSource := cluster.Spec.RackConfig.RackIDSource
+	if rackIDSource != nil {
+		if rackIDSource.FilePath != "" {
+			if !filepath.IsAbs(rackIDSource.FilePath) {
+				return fmt.Errorf("rackIDSource file path must be absolute")
+			}
+
+			// Verify the volume exists in storage spec
+			volume := asdbv1.GetVolumeForAerospikePath(&cluster.Spec.RackConfig.Racks[0].Storage, rackIDSource.FilePath)
+			if volume == nil {
+				return fmt.Errorf("volume not found in storage spec for mount path %s", rackIDSource.FilePath)
+			}
+
+			if volume.Source.HostPath == nil {
+				return fmt.Errorf("HostPathVolumeName %s must be a hostpath volume", volume.Name)
+			}
+		} else {
+			return fmt.Errorf("filePath cannot be empty when rackIDSource is specified")
+		}
+
+		// Cannot specify static racks when rackIDSource is provided
+		if len(cluster.Spec.RackConfig.Racks) > 1 {
+			return fmt.Errorf("cannot specify more than 1 rack when rackIDSource is provided")
+		}
+
+		// Cannot specify batch operations or maxignorable pods when rackIDSource is provided
+		if cluster.Spec.RackConfig.RollingUpdateBatchSize != nil {
+			return fmt.Errorf("rollingUpdateBatchSize cannot be specified when rackIDSource is provided")
+		}
+
+		if cluster.Spec.RackConfig.ScaleDownBatchSize != nil {
+			return fmt.Errorf("scaleDownBatchSize cannot be specified when rackIDSource is provided")
+		}
+
+		if cluster.Spec.RackConfig.MaxIgnorablePods != nil {
+			return fmt.Errorf("maxIgnorablePods cannot be specified when rackIDSource is provided")
+		}
+	}
+
 	rackMap := map[int]bool{}
 	migrateFillDelaySet := sets.Set[int]{}
 
@@ -674,11 +714,11 @@ type nsConf struct {
 	scEnabled              bool
 }
 
-func getNsConfForNamespaces(rackConfig asdbv1.RackConfig) map[string]nsConf {
+func getNsConfForNamespaces(racks []asdbv1.Rack) map[string]nsConf {
 	nsConfs := map[string]nsConf{}
 
-	for idx := range rackConfig.Racks {
-		rack := &rackConfig.Racks[idx]
+	for idx := range racks {
+		rack := &racks[idx]
 		nsList := rack.AerospikeConfig.Value["namespaces"].([]interface{})
 
 		for _, nsInterface := range nsList {
@@ -1414,7 +1454,7 @@ func validateBatchSize(batchSize *intstr.IntOrString, rollingUpdateBatch bool, c
 			return fmt.Errorf("can not use %s when number of racks is less than two", fieldPath)
 		}
 
-		nsConfsNamespaces := getNsConfForNamespaces(rackConfig)
+		nsConfsNamespaces := getNsConfForNamespaces(rackConfig.Racks)
 		for ns, nsConf := range nsConfsNamespaces {
 			if !isNameExist(rackConfig.Namespaces, ns) {
 				return fmt.Errorf(

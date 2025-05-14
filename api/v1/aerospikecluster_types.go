@@ -483,6 +483,11 @@ type RackConfig struct { //nolint:govet // for readability
 	// This makes sure that later on, all pods are properly counted when evaluating the cluster stability.
 	// +optional
 	MaxIgnorablePods *intstr.IntOrString `json:"maxIgnorablePods,omitempty"`
+
+	// RackIDSource specifies the source from which to read the rack ID.
+	// If not specified, the rack ID is read from the CR.
+	// +optional
+	RackIDSource *RackIDSource `json:"rackIDSource,omitempty"`
 }
 
 // Rack specifies single rack config
@@ -766,6 +771,12 @@ type VolumeSource struct {
 
 	// +optional
 	PersistentVolume *PersistentVolumeSpec `json:"persistentVolume,omitempty"`
+
+	// HostPath represents a directory on the host provisioned by an administrator.
+	// This is useful for exposing host paths to pods in a controlled, read-only manner.
+	// More info: https://kubernetes.io/docs/concepts/storage/volumes#hostpath
+	// +optional
+	HostPath *corev1.HostPathVolumeSource `json:"hostPath,omitempty"`
 }
 
 type VolumeSpec struct {
@@ -1100,6 +1111,14 @@ type AerospikeNetworkPolicy struct {
 	CustomTLSFabricNetworkNames []string `json:"customTLSFabricNetworkNames,omitempty"`
 }
 
+// RackIDSource specifies the source from which to read the rack ID.
+type RackIDSource struct {
+	// FilePath specifies the absolute path to a file containing the rack ID mounted in aerospike server.
+	// The file should contain a single integer value.
+	// +optional
+	FilePath string `json:"filePath,omitempty"`
+}
+
 // AerospikeInstanceSummary defines the observed state of a pod's Aerospike Server Instance.
 // +k8s:openapi-gen=true
 type AerospikeInstanceSummary struct { //nolint:govet // for readability
@@ -1191,6 +1210,10 @@ type AerospikePodStatus struct { //nolint:govet // for readability
 	// Empty "" status means successful update.
 	// +optional
 	DynamicConfigUpdateStatus DynamicConfigUpdateStatus `json:"dynamicConfigUpdateStatus,omitempty"`
+
+	// RackIDSource is the source from which the rack ID is read.
+	// +optional
+	RackIDSource *RackIDSource `json:"rackIDSource,omitempty"`
 }
 
 // +kubebuilder:object:root=true

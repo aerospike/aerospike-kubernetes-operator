@@ -137,6 +137,10 @@ func (r *SingleClusterReconciler) getRollingRestartTypeMap(rackState *RackState,
 		if podStatus.DynamicConfigUpdateStatus == asdbv1.PartiallyFailed {
 			restartTypeMap[pods[idx].Name] = mergeRestartType(restartTypeMap[pods[idx].Name], quickRestart)
 		}
+
+		if !reflect.DeepEqual(podStatus.RackIDSource, r.aeroCluster.Spec.RackConfig.RackIDSource) {
+			restartTypeMap[pods[idx].Name] = mergeRestartType(restartTypeMap[pods[idx].Name], quickRestart)
+		}
 	}
 
 	return restartTypeMap, dynamicConfDiffPerPod, nil
@@ -178,6 +182,7 @@ func (r *SingleClusterReconciler) getRollingRestartTypePod(
 			"AerospikeConfig changed. Need rolling restart or update config dynamically",
 			"requiredHash", requiredConfHash,
 			"currentHash", podStatus.AerospikeConfigHash,
+			"podRestartType", podRestartType,
 		)
 	}
 
@@ -1391,6 +1396,14 @@ func (r *SingleClusterReconciler) handleDynamicConfigChange(rackState *RackState
 	}
 
 	if len(specToStatusDiffs) > 0 {
+		// rackd-id change is being handled as rack add/remove
+		// Ignoring it to eliminate rolling restart in case of dynamic rack id allocation.
+		for key := range specToStatusDiffs {
+			if asconfig.BaseKey(key) == "rack-id" {
+				delete(specToStatusDiffs, key)
+			}
+		}
+
 		isDynamic, err := asconfig.IsAllDynamicConfig(r.Log, specToStatusDiffs, version)
 		if err != nil {
 			r.Log.Info("Failed to check if all config is dynamic, fallback to rolling restart", "error", err.Error())

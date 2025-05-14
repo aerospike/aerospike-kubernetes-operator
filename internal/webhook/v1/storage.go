@@ -428,6 +428,10 @@ func validateStorageVolumeSource(volume *asdbv1.VolumeSpec) error {
 		sourceCount++
 	}
 
+	if source.HostPath != nil {
+		sourceCount++
+	}
+
 	if sourceCount == 0 {
 		return fmt.Errorf("no volume source found")
 	}
