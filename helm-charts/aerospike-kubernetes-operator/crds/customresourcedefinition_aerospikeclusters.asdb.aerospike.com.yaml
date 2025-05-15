@@ -6221,6 +6221,11 @@ spec:
                               description: CleanupThreads contains the maximum number
                                 of cleanup threads(dd or blkdiscard) per init container.
                               type: integer
+                            deleteLocalStorageOnRestart:
+                              description: |-
+                                DeleteLocalStorageOnRestart enables the deletion of local storage PVCs when a pod is restarted or rescheduled
+                                by AKO. It only considers local storage classes given in the localStorageClasses field.
+                              type: boolean
                             filesystemVolumePolicy:
                               description: FileSystemVolumePolicy contains default
                                 policies for filesystem volumes.
@@ -7822,6 +7827,11 @@ spec:
                               description: CleanupThreads contains the maximum number
                                 of cleanup threads(dd or blkdiscard) per init container.
                               type: integer
+                            deleteLocalStorageOnRestart:
+                              description: |-
+                                DeleteLocalStorageOnRestart enables the deletion of local storage PVCs when a pod is restarted or rescheduled
+                                by AKO. It only considers local storage classes given in the localStorageClasses field.
+                              type: boolean
                             filesystemVolumePolicy:
                               description: FileSystemVolumePolicy contains default
                                 policies for filesystem volumes.
@@ -8497,6 +8507,11 @@ spec:
                     description: CleanupThreads contains the maximum number of cleanup
                       threads(dd or blkdiscard) per init container.
                     type: integer
+                  deleteLocalStorageOnRestart:
+                    description: |-
+                      DeleteLocalStorageOnRestart enables the deletion of local storage PVCs when a pod is restarted or rescheduled
+                      by AKO. It only considers local storage classes given in the localStorageClasses field.
+                    type: boolean
                   filesystemVolumePolicy:
                     description: FileSystemVolumePolicy contains default policies
                       for filesystem volumes.
@@ -15362,6 +15377,11 @@ spec:
                               description: CleanupThreads contains the maximum number
                                 of cleanup threads(dd or blkdiscard) per init container.
                               type: integer
+                            deleteLocalStorageOnRestart:
+                              description: |-
+                                DeleteLocalStorageOnRestart enables the deletion of local storage PVCs when a pod is restarted or rescheduled
+                                by AKO. It only considers local storage classes given in the localStorageClasses field.
+                              type: boolean
                             filesystemVolumePolicy:
                               description: FileSystemVolumePolicy contains default
                                 policies for filesystem volumes.
@@ -16963,6 +16983,11 @@ spec:
                               description: CleanupThreads contains the maximum number
                                 of cleanup threads(dd or blkdiscard) per init container.
                               type: integer
+                            deleteLocalStorageOnRestart:
+                              description: |-
+                                DeleteLocalStorageOnRestart enables the deletion of local storage PVCs when a pod is restarted or rescheduled
+                                by AKO. It only considers local storage classes given in the localStorageClasses field.
+                              type: boolean
                             filesystemVolumePolicy:
                               description: FileSystemVolumePolicy contains default
                                 policies for filesystem volumes.
@@ -17704,6 +17729,11 @@ spec:
                     description: CleanupThreads contains the maximum number of cleanup
                       threads(dd or blkdiscard) per init container.
                     type: integer
+                  deleteLocalStorageOnRestart:
+                    description: |-
+                      DeleteLocalStorageOnRestart enables the deletion of local storage PVCs when a pod is restarted or rescheduled
+                      by AKO. It only considers local storage classes given in the localStorageClasses field.
+                    type: boolean
                   filesystemVolumePolicy:
                     description: FileSystemVolumePolicy contains default policies
                       for filesystem volumes.

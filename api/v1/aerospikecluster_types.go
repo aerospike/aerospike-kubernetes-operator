@@ -812,6 +812,11 @@ type AerospikeStorageSpec struct { //nolint:govet // for readability
 	// +optional
 	LocalStorageClasses []string `json:"localStorageClasses,omitempty"`
 
+	// DeleteLocalStorageOnRestart enables the deletion of local storage PVCs when a pod is restarted or rescheduled
+	// by AKO. It only considers local storage classes given in the localStorageClasses field.
+	// +optional
+	DeleteLocalStorageOnRestart *bool `json:"deleteLocalStorageOnRestart,omitempty"`
+
 	// Volumes list to attach to created pods.
 	// +patchMergeKey=name
 	// +patchStrategy=merge
