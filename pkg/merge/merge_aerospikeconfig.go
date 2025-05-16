@@ -3,6 +3,8 @@ package merge
 import (
 	"fmt"
 	"reflect"
+
+	asdbv1 "github.com/aerospike/aerospike-kubernetes-operator/v4/api/v1"
 )
 
 // merge (base, patch)
@@ -50,7 +52,7 @@ func Merge(base, patch map[string]interface{}) (map[string]interface{}, error) {
 
 		// Special check for key "storage-engine"
 		// Check value type and replace if it's type has changed
-		if key == "storage-engine" && isStorageEngineTypeChanged(
+		if key == asdbv1.ConfKeyStorageEngine && isStorageEngineTypeChanged(
 			baseValue, patchValue,
 		) {
 			res[key] = patchValue
