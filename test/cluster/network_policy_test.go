@@ -18,7 +18,6 @@ import (
 	"k8s.io/apimachinery/pkg/api/resource"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/types"
-	"k8s.io/client-go/util/retry"
 	"k8s.io/utils/ptr"
 
 	asdbv1 "github.com/aerospike/aerospike-kubernetes-operator/v4/api/v1"
@@ -268,7 +267,7 @@ func negativeDeployNetworkPolicyTest(ctx goctx.Context, multiPodPerHost, enableT
 
 			BeforeEach(
 				func() {
-					err := deleteNodeLabels(ctx, []string{labelAccessAddress, labelAlternateAccessAddress})
+					err := test.DeleteNodeLabels(ctx, k8sClient, []string{labelAccessAddress, labelAlternateAccessAddress})
 					Expect(err).ToNot(HaveOccurred())
 				},
 			)
@@ -289,8 +288,8 @@ func negativeDeployNetworkPolicyTest(ctx goctx.Context, multiPodPerHost, enableT
 
 			It(
 				"setting configured access-address without right label", Serial, func() {
-					err := setNodeLabels(
-						ctx,
+					err := test.SetNodeLabels(
+						ctx, k8sClient,
 						map[string]string{labelAlternateAccessAddress: valueAlternateAccessAddress},
 					)
 					Expect(err).ToNot(HaveOccurred())
@@ -310,7 +309,7 @@ func negativeDeployNetworkPolicyTest(ctx goctx.Context, multiPodPerHost, enableT
 			)
 			It(
 				"setting configured alternate-access-address without right label", Serial, func() {
-					err := setNodeLabels(ctx, map[string]string{labelAccessAddress: valueAccessAddress})
+					err := test.SetNodeLabels(ctx, k8sClient, map[string]string{labelAccessAddress: valueAccessAddress})
 					Expect(err).ToNot(HaveOccurred())
 
 					networkPolicy := &asdbv1.AerospikeNetworkPolicy{
@@ -815,14 +814,14 @@ func doTestNetworkPolicy(
 
 			BeforeEach(
 				func() {
-					err := deleteNodeLabels(ctx, []string{labelAccessAddress, labelAlternateAccessAddress})
+					err := test.DeleteNodeLabels(ctx, k8sClient, []string{labelAccessAddress, labelAlternateAccessAddress})
 					Expect(err).ToNot(HaveOccurred())
 				},
 			)
 
 			It(
 				"setting configured access-address", Serial, func() {
-					err := setNodeLabels(ctx, map[string]string{labelAccessAddress: valueAccessAddress})
+					err := test.SetNodeLabels(ctx, k8sClient, map[string]string{labelAccessAddress: valueAccessAddress})
 					Expect(err).ToNot(HaveOccurred())
 
 					networkPolicy := &asdbv1.AerospikeNetworkPolicy{
@@ -848,8 +847,8 @@ func doTestNetworkPolicy(
 
 			It(
 				"setting configured alternate-access-address", Serial, func() {
-					err := setNodeLabels(
-						ctx, map[string]string{
+					err := test.SetNodeLabels(
+						ctx, k8sClient, map[string]string{
 							labelAlternateAccessAddress: valueAlternateAccessAddress,
 						},
 					)
@@ -880,8 +879,8 @@ func doTestNetworkPolicy(
 					clusterName := fmt.Sprintf("np-configured-ip-%d", GinkgoParallelProcess())
 					clusterNamespacedName := test.GetNamespacedName(clusterName, test.MultiClusterNs1)
 
-					err := setNodeLabels(
-						ctx, map[string]string{
+					err := test.SetNodeLabels(
+						ctx, k8sClient, map[string]string{
 							labelAccessAddress:          valueAccessAddress,
 							labelAlternateAccessAddress: valueAlternateAccessAddress,
 						},
@@ -1450,60 +1449,4 @@ func getAerospikeClusterSpecWithNetworkPolicy(
 			AerospikeNetworkPolicy: *networkPolicy,
 		},
 	}
-}
-
-func setNodeLabels(ctx goctx.Context, labels map[string]string) error {
-	nodeList, err := getNodeList(ctx, k8sClient)
-	if err != nil {
-		return err
-	}
-
-	for idx := range nodeList.Items {
-		if err := retry.RetryOnConflict(retry.DefaultRetry, func() error {
-			node := &nodeList.Items[idx]
-
-			if err := k8sClient.Get(
-				ctx, types.NamespacedName{Name: node.Name}, node); err != nil {
-				return err
-			}
-
-			for key, val := range labels {
-				node.Labels[key] = val
-			}
-
-			return k8sClient.Update(ctx, node)
-		}); err != nil {
-			return err
-		}
-	}
-
-	return nil
-}
-
-func deleteNodeLabels(ctx goctx.Context, keys []string) error {
-	nodeList, err := getNodeList(ctx, k8sClient)
-	if err != nil {
-		return err
-	}
-
-	for idx := range nodeList.Items {
-		if err := retry.RetryOnConflict(retry.DefaultRetry, func() error {
-			node := &nodeList.Items[idx]
-
-			if err := k8sClient.Get(
-				ctx, types.NamespacedName{Name: node.Name}, node); err != nil {
-				return err
-			}
-
-			for _, key := range keys {
-				delete(node.Labels, key)
-			}
-
-			return k8sClient.Update(ctx, node)
-		}); err != nil {
-			return err
-		}
-	}
-
-	return nil
 }

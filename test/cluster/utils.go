@@ -27,6 +27,7 @@ import (
 	as "github.com/aerospike/aerospike-client-go/v8"
 	asdbv1 "github.com/aerospike/aerospike-kubernetes-operator/v4/api/v1"
 	operatorUtils "github.com/aerospike/aerospike-kubernetes-operator/v4/pkg/utils"
+	"github.com/aerospike/aerospike-kubernetes-operator/v4/test"
 	lib "github.com/aerospike/aerospike-management-lib"
 	"github.com/aerospike/aerospike-management-lib/info"
 )
@@ -784,7 +785,7 @@ func getCloudProvider(
 ) (CloudProvider, error) {
 	labelKeys := map[string]struct{}{}
 
-	nodes, err := getNodeList(ctx, k8sClient)
+	nodes, err := test.GetNodeList(ctx, k8sClient)
 	if err != nil {
 		return CloudProviderUnknown, err
 	}
@@ -832,7 +833,7 @@ func determineByProviderID(node *corev1.Node) CloudProvider {
 func getZones(ctx goctx.Context, k8sClient client.Client) ([]string, error) {
 	unqZones := map[string]int{}
 
-	nodes, err := getNodeList(ctx, k8sClient)
+	nodes, err := test.GetNodeList(ctx, k8sClient)
 	if err != nil {
 		return nil, err
 	}
@@ -850,19 +851,8 @@ func getZones(ctx goctx.Context, k8sClient client.Client) ([]string, error) {
 	return zones, nil
 }
 
-func getNodeList(ctx goctx.Context, k8sClient client.Client) (
-	*corev1.NodeList, error,
-) {
-	nodeList := &corev1.NodeList{}
-	if err := k8sClient.List(ctx, nodeList); err != nil {
-		return nil, err
-	}
-
-	return nodeList, nil
-}
-
 func getRegion(ctx goctx.Context, k8sClient client.Client) (string, error) {
-	nodes, err := getNodeList(ctx, k8sClient)
+	nodes, err := test.GetNodeList(ctx, k8sClient)
 	if err != nil {
 		return "", err
 	}

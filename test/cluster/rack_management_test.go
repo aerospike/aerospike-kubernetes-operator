@@ -725,7 +725,7 @@ var _ = Describe(
 
 			BeforeEach(
 				func() {
-					nodes, err := getNodeList(ctx, k8sClient)
+					nodes, err := test.GetNodeList(ctx, k8sClient)
 					Expect(err).ToNot(HaveOccurred())
 
 					aeroCluster := createDummyAerospikeCluster(clusterNamespacedName, int32(len(nodes.Items)))

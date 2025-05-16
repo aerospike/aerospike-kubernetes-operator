@@ -130,6 +130,15 @@ func updateBackupService(cl client.Client, backupService *asdbv1beta1.AerospikeB
 	return waitForBackupService(cl, backupService, timeout)
 }
 
+func updateBackupServiceWithTO(cl client.Client, backupService *asdbv1beta1.AerospikeBackupService,
+	timeout time.Duration) error {
+	if err := cl.Update(testCtx, backupService); err != nil {
+		return err
+	}
+
+	return waitForBackupService(cl, backupService, timeout)
+}
+
 func waitForBackupService(cl client.Client, backupService *asdbv1beta1.AerospikeBackupService,
 	timeout time.Duration) error {
 	namespaceName := types.NamespacedName{

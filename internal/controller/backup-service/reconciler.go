@@ -102,11 +102,11 @@ func (r *SingleBackupServiceReconciler) Reconcile() (result ctrl.Result, recErr 
 		return ctrl.Result{}, err
 	}
 
-	if err := r.reconcileDeployment(); err != nil {
-		r.Log.Error(err, "Failed to reconcile deployment",
-			"deployment", getBackupServiceName(r.aeroBackupService))
+	if err := r.reconcileService(); err != nil {
+		r.Log.Error(err, "Failed to reconcile service",
+			"service", getBackupServiceName(r.aeroBackupService))
 		r.Recorder.Eventf(r.aeroBackupService, corev1.EventTypeWarning,
-			"DeploymentReconcileFailed", "Failed to reconcile deployment %s/%s",
+			"ServiceReconcileFailed", "Failed to reconcile service %s/%s",
 			r.aeroBackupService.Namespace, r.aeroBackupService.Name)
 
 		recErr = err
@@ -114,11 +114,11 @@ func (r *SingleBackupServiceReconciler) Reconcile() (result ctrl.Result, recErr 
 		return ctrl.Result{}, err
 	}
 
-	if err := r.reconcileService(); err != nil {
-		r.Log.Error(err, "Failed to reconcile service",
-			"service", getBackupServiceName(r.aeroBackupService))
+	if err := r.reconcileDeployment(); err != nil {
+		r.Log.Error(err, "Failed to reconcile deployment",
+			"deployment", getBackupServiceName(r.aeroBackupService))
 		r.Recorder.Eventf(r.aeroBackupService, corev1.EventTypeWarning,
-			"ServiceReconcileFailed", "Failed to reconcile service %s/%s",
+			"DeploymentReconcileFailed", "Failed to reconcile deployment %s/%s",
 			r.aeroBackupService.Namespace, r.aeroBackupService.Name)
 
 		recErr = err
@@ -348,6 +348,11 @@ func (r *SingleBackupServiceReconciler) getBackupSvcDeployment() (*app.Deploymen
 }
 
 func (r *SingleBackupServiceReconciler) updateBackupSvcConfig() error {
+	if r.aeroBackupService.Status.Config.Raw == nil {
+		r.Log.Info("Skipping backup service config reload as status is empty")
+		return nil
+	}
+
 	var currentConfig, desiredConfig dto.Config
 
 	backupSvc := &asdbv1beta1.BackupService{
@@ -355,10 +360,17 @@ func (r *SingleBackupServiceReconciler) updateBackupSvcConfig() error {
 		Namespace: r.aeroBackupService.Namespace,
 	}
 
-	backupServiceClient, err := backup_service.GetBackupServiceClient(r.Client, backupSvc)
+	svcConfig, err := r.getBackupServiceConfig()
 	if err != nil {
 		return err
 	}
+
+	// Always create client with the latest config in spec
+	backupServiceClient := backup_service.NewClient(
+		fmt.Sprintf("%s.%s.svc", backupSvc.Name, backupSvc.Namespace),
+		svcConfig.portInfo[asdbv1beta1.HTTPKey],
+		svcConfig.contextPath,
+	)
 
 	apiBackupSvcConfig, err := backupServiceClient.GetBackupServiceConfig()
 	if err != nil {
