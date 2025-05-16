@@ -13,7 +13,7 @@ import (
 	corev1 "k8s.io/api/core/v1"
 	"k8s.io/client-go/tools/record"
 
-	as "github.com/aerospike/aerospike-client-go/v7"
+	as "github.com/aerospike/aerospike-client-go/v8"
 	asdbv1 "github.com/aerospike/aerospike-kubernetes-operator/v4/api/v1"
 )
 
@@ -43,11 +43,11 @@ func AerospikeAdminCredentials(
 		desiredSecurityErr error
 	)
 
-	enabled, desiredSecurityErr = asdbv1.IsSecurityEnabled(desiredState.AerospikeConfig)
+	enabled, desiredSecurityErr = asdbv1.IsSecurityEnabled(desiredState.AerospikeConfig.Value)
 	if !enabled {
 		if currentState.AerospikeConfig != nil {
 			// It is possible that this is a new cluster and the current state is empty.
-			enabled, currentSecurityErr = asdbv1.IsSecurityEnabled(currentState.AerospikeConfig)
+			enabled, currentSecurityErr = asdbv1.IsSecurityEnabled(currentState.AerospikeConfig.Value)
 		}
 
 		if currentSecurityErr != nil && desiredSecurityErr != nil {

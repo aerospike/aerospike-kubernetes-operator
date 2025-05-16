@@ -22,7 +22,7 @@ import (
 	"sigs.k8s.io/controller-runtime/pkg/client"
 	"sigs.k8s.io/controller-runtime/pkg/reconcile"
 
-	as "github.com/aerospike/aerospike-client-go/v7"
+	as "github.com/aerospike/aerospike-client-go/v8"
 	asdbv1 "github.com/aerospike/aerospike-kubernetes-operator/v4/api/v1"
 	"github.com/aerospike/aerospike-kubernetes-operator/v4/internal/controller/common"
 	"github.com/aerospike/aerospike-kubernetes-operator/v4/pkg/jsonpatch"
@@ -276,9 +276,9 @@ func (r *SingleClusterReconciler) Reconcile() (result ctrl.Result, recErr error)
 		return reconcile.Result{}, err
 	}
 
-	// Try to recover pods only when MaxIgnorablePods is set
-	if r.aeroCluster.Spec.RackConfig.MaxIgnorablePods != nil {
-		if res := r.recoverIgnorablePods(); !res.IsSuccess {
+	// Try to recover pods only if there are any ignorable pods, which may be failed or pending.
+	if len(ignorablePodNames) > 0 {
+		if res := r.recoverIgnorablePods(ignorablePodNames); !res.IsSuccess {
 			return res.GetResult()
 		}
 	}
@@ -288,7 +288,7 @@ func (r *SingleClusterReconciler) Reconcile() (result ctrl.Result, recErr error)
 	return reconcile.Result{}, nil
 }
 
-func (r *SingleClusterReconciler) recoverIgnorablePods() common.ReconcileResult {
+func (r *SingleClusterReconciler) recoverIgnorablePods(ignorablePodNames sets.Set[string]) common.ReconcileResult {
 	podList, gErr := r.getClusterPodList()
 	if gErr != nil {
 		r.Log.Error(gErr, "Failed to get cluster pod list")
@@ -300,35 +300,38 @@ func (r *SingleClusterReconciler) recoverIgnorablePods() common.ReconcileResult 
 	var anyPodFailed bool
 	// Try to recover failed/pending pods by deleting them
 	for idx := range podList.Items {
-		if cErr := utils.CheckPodFailed(&podList.Items[idx]); cErr != nil {
-			anyPodFailed = true
+		if ignorablePodNames.Has(podList.Items[idx].Name) {
+			if cErr := utils.CheckPodFailed(&podList.Items[idx]); cErr != nil {
+				anyPodFailed = true
 
-			if err := r.createOrUpdatePodServiceIfNeeded([]string{podList.Items[idx].Name}); err != nil {
-				return common.ReconcileError(err)
+				if err := r.createOrUpdatePodServiceIfNeeded([]string{podList.Items[idx].Name}); err != nil {
+					return common.ReconcileError(err)
+				}
+
+				if err := r.Client.Delete(context.TODO(), &podList.Items[idx]); err != nil {
+					r.Log.Error(err, "Failed to delete pod", "pod", podList.Items[idx].Name)
+					return common.ReconcileError(err)
+				}
+
+				r.Log.Info("Deleted pod", "pod", podList.Items[idx].Name)
 			}
-
-			if err := r.Client.Delete(context.TODO(), &podList.Items[idx]); err != nil {
-				r.Log.Error(err, "Failed to delete pod", "pod", podList.Items[idx].Name)
-				return common.ReconcileError(err)
-			}
-
-			r.Log.Info("Deleted pod", "pod", podList.Items[idx].Name)
 		}
 	}
 
 	if anyPodFailed {
 		r.Log.Info("Found failed/pending pod(s), requeuing")
-		return common.ReconcileRequeueAfter(0)
+	} else {
+		r.Log.Info("Found ignorable pod(s), requeuing")
 	}
 
-	return common.ReconcileSuccess()
+	return common.ReconcileRequeueAfter(0)
 }
 
 func (r *SingleClusterReconciler) validateAndReconcileAccessControl(
 	selectedPods []corev1.Pod,
 	ignorablePodNames sets.Set[string],
 ) error {
-	enabled, err := asdbv1.IsSecurityEnabled(r.aeroCluster.Spec.AerospikeConfig)
+	enabled, err := asdbv1.IsSecurityEnabled(r.aeroCluster.Spec.AerospikeConfig.Value)
 	if err != nil {
 		return fmt.Errorf("failed to get cluster security status: %v", err)
 	}

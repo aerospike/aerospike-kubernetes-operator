@@ -84,7 +84,7 @@ var Privileges = map[string][]PrivilegeScope{
 func IsAerospikeAccessControlValid(aerospikeClusterSpec *AerospikeClusterSpec) (
 	bool, error,
 ) {
-	enabled, err := IsSecurityEnabled(aerospikeClusterSpec.AerospikeConfig)
+	enabled, err := IsSecurityEnabled(aerospikeClusterSpec.AerospikeConfig.Value)
 	if err != nil {
 		return false, err
 	}
@@ -156,7 +156,7 @@ func validateRoleQuotaParam(
 ) error {
 	if roleSpec.ReadQuota > 0 || roleSpec.WriteQuota > 0 {
 		enabled, err := IsAttributeEnabled(
-			aerospikeConfigSpec, "security", "enable-quotas",
+			aerospikeConfigSpec.Value, "security", "enable-quotas",
 		)
 		if err != nil {
 			return err
