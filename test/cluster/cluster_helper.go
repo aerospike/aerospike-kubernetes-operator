@@ -984,7 +984,6 @@ func createDummyRackAwareWithStorageAerospikeCluster(
 	return aeroCluster
 }
 
-//nolint:unparam // generic function
 func createDummyRackAwareAerospikeCluster(
 	clusterNamespacedName types.NamespacedName, size int32,
 ) *asdbv1.AerospikeCluster {
@@ -1079,6 +1078,28 @@ func createNonSCDummyAerospikeCluster(
 	}
 
 	return aerospikeCluster
+}
+
+//nolint:unparam // generic function
+func createDummyAerospikeClusterWithHostPathVolume(clusterNamespacedName types.NamespacedName, size int32,
+	aerospikePath, hostPath string) *asdbv1.AerospikeCluster {
+	aeroCluster := createDummyRackAwareAerospikeCluster(clusterNamespacedName, size)
+
+	hostPathVolume := asdbv1.VolumeSpec{
+		Name: "hostpath",
+		Source: asdbv1.VolumeSource{
+			HostPath: &corev1.HostPathVolumeSource{
+				Path: hostPath,
+			},
+		},
+		Aerospike: &asdbv1.AerospikeServerVolumeAttachment{
+			Path: aerospikePath,
+		},
+	}
+
+	aeroCluster.Spec.Storage.Volumes = append(aeroCluster.Spec.Storage.Volumes, hostPathVolume)
+
+	return aeroCluster
 }
 
 func createDummyAerospikeCluster(

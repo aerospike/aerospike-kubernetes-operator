@@ -1344,17 +1344,7 @@ func (r *SingleClusterReconciler) isRackStorageUpdatedInAeroCluster(
 		}
 
 		// Check for Added/Updated volumeAttachments
-		var containerAttachments []asdbv1.VolumeAttachment
-		containerAttachments = append(containerAttachments, volume.Sidecars...)
-
-		if volume.Aerospike != nil {
-			containerAttachments = append(
-				containerAttachments, asdbv1.VolumeAttachment{
-					ContainerName: asdbv1.AerospikeServerContainerName,
-					Path:          volume.Aerospike.Path,
-				},
-			)
-		}
+		_, containerAttachments := getFinalVolumeAttachmentsForVolume(volume)
 
 		if r.isVolumeAttachmentAddedOrUpdated(
 			volume.Name, containerAttachments, pod.Spec.Containers,

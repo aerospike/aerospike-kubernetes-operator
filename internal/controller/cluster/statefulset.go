@@ -1454,10 +1454,19 @@ func getFinalVolumeAttachmentsForVolume(volume *asdbv1.VolumeSpec) (
 	initContainerAttachments = append(
 		initContainerAttachments, volume.InitContainers...,
 	)
+
+	readOnlyVolume := false
+	if volume.Source.HostPath != nil {
+		readOnlyVolume = true
+	}
+
 	initContainerAttachments = append(
 		initContainerAttachments, asdbv1.VolumeAttachment{
 			ContainerName: asdbv1.AerospikeInitContainerName,
 			Path:          initVolumePath,
+			AttachmentOptions: asdbv1.AttachmentOptions{
+				MountOptions: asdbv1.MountOptions{ReadOnly: readOnlyVolume},
+			},
 		},
 	)
 
@@ -1469,6 +1478,9 @@ func getFinalVolumeAttachmentsForVolume(volume *asdbv1.VolumeSpec) (
 			containerAttachments, asdbv1.VolumeAttachment{
 				ContainerName: asdbv1.AerospikeServerContainerName,
 				Path:          volume.Aerospike.Path,
+				AttachmentOptions: asdbv1.AttachmentOptions{
+					MountOptions: asdbv1.MountOptions{ReadOnly: readOnlyVolume},
+				},
 			},
 		)
 	}
@@ -1491,11 +1503,13 @@ func addVolumeMountInContainer(
 					volumeMount = corev1.VolumeMount{
 						Name:      volumeName,
 						MountPath: pathPrefix + volumeAttachment.Path,
+						ReadOnly:  volumeAttachment.AttachmentOptions.MountOptions.ReadOnly,
 					}
 				} else {
 					volumeMount = corev1.VolumeMount{
 						Name:      volumeName,
 						MountPath: volumeAttachment.Path,
+						ReadOnly:  volumeAttachment.AttachmentOptions.MountOptions.ReadOnly,
 					}
 				}
 
