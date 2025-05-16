@@ -135,7 +135,7 @@ var _ = Describe(
 		)
 
 		It(
-			"Validate headless service gets created with default metadata", func() {
+			"Validate create headless service with default metadata", func() {
 				By("Deploying cluster with headless service")
 				clusterNamespacedName := test.GetNamespacedName("headless-service-create", namespace)
 				aeroCluster = createDummyAerospikeCluster(clusterNamespacedName, 2)
@@ -155,7 +155,7 @@ var _ = Describe(
 			})
 
 		It(
-			"Validate headless service is created and updated with correct metadata", func() {
+			"Validate create and update headless service with correct metadata", func() {
 				By("Deploying cluster with headless service")
 				clusterNamespacedName := test.GetNamespacedName("headless-service-update", namespace)
 				aeroCluster = createDummyAerospikeCluster(clusterNamespacedName, 2)
@@ -206,7 +206,7 @@ var _ = Describe(
 			})
 
 		It(
-			"Validate pod service is created and updated with correct metadata", func() {
+			"Validate create and update pod service with correct metadata", func() {
 				By("Deploying cluster with pod service")
 				clusterNamespacedName := test.GetNamespacedName("pod-service-test", namespace)
 				aeroCluster = createDummyAerospikeCluster(clusterNamespacedName, 2)
