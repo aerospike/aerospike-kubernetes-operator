@@ -363,7 +363,6 @@ func (r *SingleClusterReconciler) restartPods(
 	restartedPods := make([]*corev1.Pod, 0, len(podsToRestart))
 	restartedPodNames := make([]string, 0, len(podsToRestart))
 	restartedASDPodNames := make([]string, 0, len(podsToRestart))
-	blockedK8sNodes := sets.NewString(r.aeroCluster.Spec.K8sNodeBlockList...)
 
 	for idx := range podsToRestart {
 		pod := podsToRestart[idx]
@@ -379,10 +378,7 @@ func (r *SingleClusterReconciler) restartPods(
 
 			restartedASDPodNames = append(restartedASDPodNames, pod.Name)
 		} else if restartType == podRestart {
-			if blockedK8sNodes.Has(pod.Spec.NodeName) {
-				r.Log.Info("Pod found in blocked nodes list, deleting corresponding local PVCs if any",
-					"podName", pod.Name)
-
+			if r.isLocalPVCDeletionRequired(rackState, pod) {
 				if err := r.deleteLocalPVCs(rackState, pod); err != nil {
 					return common.ReconcileError(err)
 				}
@@ -561,14 +557,9 @@ func (r *SingleClusterReconciler) deletePodAndEnsureImageUpdated(
 		return common.ReconcileError(err)
 	}
 
-	blockedK8sNodes := sets.NewString(r.aeroCluster.Spec.K8sNodeBlockList...)
-
 	// Delete pods
 	for _, pod := range podsToUpdate {
-		if blockedK8sNodes.Has(pod.Spec.NodeName) {
-			r.Log.Info("Pod found in blocked nodes list, deleting corresponding local PVCs if any",
-				"podName", pod.Name)
-
+		if r.isLocalPVCDeletionRequired(rackState, pod) {
 			if err := r.deleteLocalPVCs(rackState, pod); err != nil {
 				return common.ReconcileError(err)
 			}
@@ -586,6 +577,22 @@ func (r *SingleClusterReconciler) deletePodAndEnsureImageUpdated(
 	}
 
 	return r.ensurePodsImageUpdated(podsToUpdate)
+}
+
+func (r *SingleClusterReconciler) isLocalPVCDeletionRequired(rackState *RackState, pod *corev1.Pod) bool {
+	if utils.ContainsString(r.aeroCluster.Spec.K8sNodeBlockList, pod.Spec.NodeName) {
+		r.Log.Info("Pod found in blocked nodes list, deleting corresponding local PVCs if any",
+			"podName", pod.Name)
+		return true
+	}
+
+	if asdbv1.GetBool(rackState.Rack.Storage.DeleteLocalStorageOnRestart) {
+		r.Log.Info("deleteLocalStorageOnRestart flag is enabled, deleting corresponding local PVCs if any",
+			"podName", pod.Name)
+		return true
+	}
+
+	return false
 }
 
 func (r *SingleClusterReconciler) ensurePodsImageUpdated(podsToCheck []*corev1.Pod) common.ReconcileResult {
