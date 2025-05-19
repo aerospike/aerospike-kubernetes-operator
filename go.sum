@@ -2,10 +2,8 @@ github.com/aerospike/aerospike-backup-service/v3 v3.0.1 h1:dxehrev+L1REzygN4CN8s
 github.com/aerospike/aerospike-backup-service/v3 v3.0.1/go.mod h1:RrhpAjtA9EduQ///K53H/ATRIKIHB68qgPNooTrlhso=
 github.com/aerospike/aerospike-client-go/v8 v8.2.1 h1:Vxp+E1Sj+r5o67x+BP8FE07DVwo7x1AHWzfnQU1wzIU=
 github.com/aerospike/aerospike-client-go/v8 v8.2.1/go.mod h1:H6CzKDoHxBj1yY/oQPci1bUIbEx2ATQtJ2GtZ+N64Wg=
-github.com/aerospike/aerospike-management-lib v1.7.1-0.20250506143812-6ef5069692a3 h1:ohQbs7rmc7Fkj/WDJxbTJBP3JTPRyHFvgAk7ddDUWL4=
-github.com/aerospike/aerospike-management-lib v1.7.1-0.20250506143812-6ef5069692a3/go.mod h1:tQWtiEf/rOWJNQbYDyH5Qm/bHJiS/k/08E+IrgbgP8M=
-github.com/aerospike/aerospike-management-lib v1.7.1-0.20250506165321-ed46bec64c19 h1:Kackvn7BJLEVMPPnJZin34V0/P3KIxmL4kGdNhuawhI=
-github.com/aerospike/aerospike-management-lib v1.7.1-0.20250506165321-ed46bec64c19/go.mod h1:tQWtiEf/rOWJNQbYDyH5Qm/bHJiS/k/08E+IrgbgP8M=
+github.com/aerospike/aerospike-management-lib v1.7.1-0.20250519063642-57d55e3eddf8 h1:wNMqJ+Xdn3+UiY4t4gC5wISNrT1v5cE3GmneFrKI5XQ=
+github.com/aerospike/aerospike-management-lib v1.7.1-0.20250519063642-57d55e3eddf8/go.mod h1:lQggqSKESePgU+FmSRSBUCPcQdeiYS/RreMcHWXMWlU=
 github.com/aerospike/backup-go v0.3.2-0.20250330113002-7fb1b5be7ffc h1:Fvqeminc+omVHVCefv8Gxt8Vi1URhUKz+UaW6eSHejo=
 github.com/aerospike/backup-go v0.3.2-0.20250330113002-7fb1b5be7ffc/go.mod h1:dRqey+pMthy5o5pNExhDzMNSvediHS0vpAb5srDrhSQ=
 github.com/antlr4-go/antlr/v4 v4.13.0 h1:lxCg3LAv+EUK6t1i0y1V6/SLeUi0eKEKdhQAlS8TVTI=
