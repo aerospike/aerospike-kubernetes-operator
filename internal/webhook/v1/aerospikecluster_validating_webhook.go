@@ -616,19 +616,6 @@ func validateRackConfig(_ logr.Logger, cluster *asdbv1.AerospikeCluster) error {
 		if len(cluster.Spec.RackConfig.Racks) > 1 {
 			return fmt.Errorf("cannot specify more than 1 rack when rackIDSource is provided")
 		}
-
-		// Cannot specify batch operations or maxignorable pods when rackIDSource is provided
-		if cluster.Spec.RackConfig.RollingUpdateBatchSize != nil {
-			return fmt.Errorf("rollingUpdateBatchSize cannot be specified when rackIDSource is provided")
-		}
-
-		if cluster.Spec.RackConfig.ScaleDownBatchSize != nil {
-			return fmt.Errorf("scaleDownBatchSize cannot be specified when rackIDSource is provided")
-		}
-
-		if cluster.Spec.RackConfig.MaxIgnorablePods != nil {
-			return fmt.Errorf("maxIgnorablePods cannot be specified when rackIDSource is provided")
-		}
 	}
 
 	rackMap := map[int]bool{}
