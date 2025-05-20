@@ -7,7 +7,7 @@ toolchain go1.23.6
 require (
 	github.com/aerospike/aerospike-backup-service/v3 v3.0.1
 	github.com/aerospike/aerospike-client-go/v8 v8.2.1
-	github.com/aerospike/aerospike-management-lib v1.7.1-0.20250506143812-6ef5069692a3
+	github.com/aerospike/aerospike-management-lib v1.7.1-0.20250519063642-57d55e3eddf8
 	github.com/asaskevich/govalidator v0.0.0-20210307081110-f21760c49a8d
 	github.com/deckarep/golang-set/v2 v2.3.1
 	github.com/evanphx/json-patch v4.12.0+incompatible
