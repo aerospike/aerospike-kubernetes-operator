@@ -384,7 +384,7 @@ func clusterWithMaxIgnorablePod(ctx goctx.Context) {
 				func() {
 					var aeroCluster *asdbv1.AerospikeCluster
 
-					nodeList, err = getNodeList(ctx, k8sClient)
+					nodeList, err = test.GetNodeList(ctx, k8sClient)
 					Expect(err).ToNot(HaveOccurred())
 
 					size := len(nodeList.Items)
