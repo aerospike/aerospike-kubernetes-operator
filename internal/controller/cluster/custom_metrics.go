@@ -8,23 +8,23 @@ import (
 )
 
 const (
-	clusterLabelKey   = "cluster"
-	namespaceLabelKey = "namespace"
+	clusterLabelKey   = "cluster_name"
+	namespaceLabelKey = "cluster_namespace"
 	phaseLabelKey     = "phase"
 )
 
-// aerospikeClusterStatus is a custom metric that tracks the status of AerospikeCluster CRs.
-var aerospikeClusterStatus = prometheus.NewGaugeVec(
+// aerospikeClusterPhase is a custom metric that tracks the phase of AerospikeCluster CRs.
+var aerospikeClusterPhase = prometheus.NewGaugeVec(
 	prometheus.GaugeOpts{
-		Name: "aerospike_cluster_status",
-		Help: "Status of AerospikeCluster CRs",
+		Name: "aerospike_ako_aerospikecluster_phase",
+		Help: "Phase of AerospikeCluster CRs",
 	},
 	[]string{clusterLabelKey, namespaceLabelKey, phaseLabelKey},
 )
 
 func init() {
 	// Register custom metrics with the global prometheus registry
-	metrics.Registry.MustRegister(aerospikeClusterStatus)
+	metrics.Registry.MustRegister(aerospikeClusterPhase)
 }
 
 var phases = []asdbv1.AerospikeClusterPhase{
@@ -43,7 +43,7 @@ func (r *SingleClusterReconciler) addClusterPhaseMetric() {
 			value = 1.0
 		}
 
-		aerospikeClusterStatus.WithLabelValues(
+		aerospikeClusterPhase.WithLabelValues(
 			r.aeroCluster.Name,
 			r.aeroCluster.Namespace,
 			string(phase)).Set(value)
@@ -52,7 +52,7 @@ func (r *SingleClusterReconciler) addClusterPhaseMetric() {
 
 // It removes the metric for the AerospikeCluster CR with the specified name and namespace.
 func (r *SingleClusterReconciler) removeClusterPhaseMetric() {
-	aerospikeClusterStatus.DeletePartialMatch(
+	aerospikeClusterPhase.DeletePartialMatch(
 		prometheus.Labels{
 			clusterLabelKey:   r.aeroCluster.Name,
 			namespaceLabelKey: r.aeroCluster.Namespace,
