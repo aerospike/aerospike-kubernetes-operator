@@ -4,25 +4,32 @@ import (
 	goctx "context"
 	"fmt"
 	"strings"
+	"time"
 
-	asdbv1 "github.com/aerospike/aerospike-kubernetes-operator/v4/api/v1"
-	"github.com/aerospike/aerospike-kubernetes-operator/v4/test"
 	. "github.com/onsi/ginkgo/v2"
 	. "github.com/onsi/gomega"
 	appsv1 "k8s.io/api/apps/v1"
 	v1 "k8s.io/api/core/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
+	"k8s.io/apimachinery/pkg/types"
 	"k8s.io/apimachinery/pkg/util/intstr"
+	"k8s.io/utils/ptr"
+
+	asdbv1 "github.com/aerospike/aerospike-kubernetes-operator/v4/api/v1"
+	"github.com/aerospike/aerospike-kubernetes-operator/v4/test"
 )
 
-var _ = FDescribe(
+const aerospikePath = "/opt/hostpath"
+
+var _ = Describe(
 	"DynamicRack", func() {
 		ctx := goctx.TODO()
 		clusterName := fmt.Sprintf("dynamic-rack-%d", GinkgoParallelProcess())
 		clusterNamespacedName := test.GetNamespacedName(
 			clusterName, namespace,
 		)
-		FContext(
+
+		Context(
 			"When doing valid operations", Ordered, func() {
 				AfterEach(
 					func() {
@@ -118,8 +125,9 @@ var _ = FDescribe(
 					"When deploying cluster", func() {
 						It(
 							"Should deploy with dynamic rack", func() {
-								aeroCluster := createDummyAerospikeClusterWithHostPathVolume(clusterNamespacedName, 2, "/opt/hostpath", "/tmp")
-								aeroCluster.Spec.RackConfig.RackIDSource = &asdbv1.RackIDSource{FilePath: "/opt/hostpath/rackid"}
+
+								aeroCluster := createDummyAerospikeClusterWithHostPathVolume(clusterNamespacedName, 2, aerospikePath, "/tmp")
+								aeroCluster.Spec.RackConfig.RackIDSource = &asdbv1.RackIDSource{FilePath: aerospikePath + "/rackid"}
 								aeroCluster.Spec.RackConfig.Namespaces = []string{"test"}
 
 								Expect(DeployCluster(k8sClient, ctx, aeroCluster)).ToNot(HaveOccurred())
@@ -131,6 +139,20 @@ var _ = FDescribe(
 
 								info, err := requestInfoFromNode(logger, k8sClient, ctx, clusterNamespacedName, "namespace/test", &pod)
 								Expect(err).ToNot(HaveOccurred())
+
+								podObject := &v1.Pod{}
+								Eventually(
+									func() bool {
+										err = k8sClient.Get(
+											ctx, types.NamespacedName{
+												Name:      aeroCluster.Name + "-1-0",
+												Namespace: clusterNamespacedName.Namespace,
+											}, podObject,
+										)
+
+										return isHostPathReadOnly(podObject.Status.ContainerStatuses, aerospikePath)
+									}, time.Minute, time.Second,
+								).Should(BeTrue())
 
 								confs := strings.Split(info["namespace/test"], ";")
 								for _, conf := range confs {
@@ -158,7 +180,7 @@ var _ = FDescribe(
 
 								By("Updating cluster with dynamic rack and add hostpath volume")
 
-								aeroCluster.Spec.RackConfig.RackIDSource = &asdbv1.RackIDSource{FilePath: "/opt/hostpath/rackid"}
+								aeroCluster.Spec.RackConfig.RackIDSource = &asdbv1.RackIDSource{FilePath: aerospikePath + "/rackid"}
 								hostPathVolume := asdbv1.VolumeSpec{
 									Name: "hostpath",
 									Source: asdbv1.VolumeSource{
@@ -167,7 +189,7 @@ var _ = FDescribe(
 										},
 									},
 									Aerospike: &asdbv1.AerospikeServerVolumeAttachment{
-										Path: "/opt/hostpath",
+										Path: aerospikePath,
 									},
 								}
 
@@ -234,7 +256,7 @@ var _ = FDescribe(
 								oldPodIDs, err = getPodIDs(ctx, aeroCluster)
 								Expect(err).ToNot(HaveOccurred())
 
-								aeroCluster.Spec.RackConfig.RackIDSource = &asdbv1.RackIDSource{FilePath: "/opt/hostpath/rackid"}
+								aeroCluster.Spec.RackConfig.RackIDSource = &asdbv1.RackIDSource{FilePath: aerospikePath + "/rackid"}
 								Expect(updateCluster(k8sClient, ctx, aeroCluster)).ToNot(HaveOccurred())
 
 								operationTypeMap = map[string]asdbv1.OperationKind{
@@ -272,9 +294,9 @@ var _ = FDescribe(
 				It(
 					"Should fail if multiple racks are given along with dynamic rack", func() {
 						aeroCluster := createDummyAerospikeClusterWithHostPathVolume(clusterNamespacedName, 2,
-							"/opt/hostpath", "/dev/null")
+							aerospikePath, "/dev/null")
 						aeroCluster.Spec.RackConfig.Racks = append(aeroCluster.Spec.RackConfig.Racks, asdbv1.Rack{ID: 2})
-						aeroCluster.Spec.RackConfig.RackIDSource = &asdbv1.RackIDSource{FilePath: "/opt/hostpath/rackid"}
+						aeroCluster.Spec.RackConfig.RackIDSource = &asdbv1.RackIDSource{FilePath: aerospikePath + "/rackid"}
 
 						Expect(DeployCluster(k8sClient, ctx, aeroCluster)).Should(HaveOccurred())
 					},
@@ -283,8 +305,8 @@ var _ = FDescribe(
 				It(
 					"Should fail if RollingUpdateBatchSize is given along with dynamic rack", func() {
 						aeroCluster := createDummyAerospikeClusterWithHostPathVolume(clusterNamespacedName, 2,
-							"/opt/hostpath", "/dev/null")
-						aeroCluster.Spec.RackConfig.RackIDSource = &asdbv1.RackIDSource{FilePath: "/opt/hostpath/rackid"}
+							aerospikePath, "/dev/null")
+						aeroCluster.Spec.RackConfig.RackIDSource = &asdbv1.RackIDSource{FilePath: aerospikePath + "/rackid"}
 						aeroCluster.Spec.RackConfig.RollingUpdateBatchSize = &intstr.IntOrString{IntVal: 2}
 
 						Expect(DeployCluster(k8sClient, ctx, aeroCluster)).Should(HaveOccurred())
@@ -294,8 +316,8 @@ var _ = FDescribe(
 				It(
 					"Should fail if ScaleDownBatchSize is given along with dynamic rack", func() {
 						aeroCluster := createDummyAerospikeClusterWithHostPathVolume(clusterNamespacedName, 2,
-							"/opt/hostpath", "/dev/null")
-						aeroCluster.Spec.RackConfig.RackIDSource = &asdbv1.RackIDSource{FilePath: "/opt/hostpath/rackid"}
+							aerospikePath, "/dev/null")
+						aeroCluster.Spec.RackConfig.RackIDSource = &asdbv1.RackIDSource{FilePath: aerospikePath + "/rackid"}
 						aeroCluster.Spec.RackConfig.ScaleDownBatchSize = &intstr.IntOrString{IntVal: 2}
 
 						Expect(DeployCluster(k8sClient, ctx, aeroCluster)).Should(HaveOccurred())
@@ -305,8 +327,8 @@ var _ = FDescribe(
 				It(
 					"Should fail if MaxIgnorablePods is given along with dynamic rack", func() {
 						aeroCluster := createDummyAerospikeClusterWithHostPathVolume(clusterNamespacedName, 2,
-							"/opt/hostpath", "/dev/null")
-						aeroCluster.Spec.RackConfig.RackIDSource = &asdbv1.RackIDSource{FilePath: "/opt/hostpath/rackid"}
+							aerospikePath, "/dev/null")
+						aeroCluster.Spec.RackConfig.RackIDSource = &asdbv1.RackIDSource{FilePath: aerospikePath + "/rackid"}
 						aeroCluster.Spec.RackConfig.MaxIgnorablePods = &intstr.IntOrString{IntVal: 2}
 
 						Expect(DeployCluster(k8sClient, ctx, aeroCluster)).Should(HaveOccurred())
@@ -316,7 +338,7 @@ var _ = FDescribe(
 				It(
 					"Should fail if dynamic rackID source file path is not absolute", func() {
 						aeroCluster := createDummyAerospikeClusterWithHostPathVolume(clusterNamespacedName, 2,
-							"/opt/hostpath", "/dev/null")
+							aerospikePath, "/dev/null")
 						aeroCluster.Spec.RackConfig.RackIDSource = &asdbv1.RackIDSource{FilePath: "rackid"}
 
 						Expect(DeployCluster(k8sClient, ctx, aeroCluster)).Should(HaveOccurred())
@@ -326,7 +348,7 @@ var _ = FDescribe(
 				It(
 					"Should fail if dynamic rackID source volume is not mounted", func() {
 						aeroCluster := createDummyRackAwareAerospikeCluster(clusterNamespacedName, 2)
-						aeroCluster.Spec.RackConfig.RackIDSource = &asdbv1.RackIDSource{FilePath: "/opt/hostpath/rackid"}
+						aeroCluster.Spec.RackConfig.RackIDSource = &asdbv1.RackIDSource{FilePath: aerospikePath + "/rackid"}
 
 						Expect(DeployCluster(k8sClient, ctx, aeroCluster)).Should(HaveOccurred())
 					},
@@ -351,7 +373,48 @@ var _ = FDescribe(
 						Expect(DeployCluster(k8sClient, ctx, aeroCluster)).Should(HaveOccurred())
 					},
 				)
+
+				It(
+					"Should fail if dynamic rackID source volume is mounted  with readOnly false", func() {
+						aeroCluster := createDummyRackAwareAerospikeCluster(clusterNamespacedName, 2)
+						hostpathVolume := asdbv1.VolumeSpec{
+							Name: "hostpath",
+							Source: asdbv1.VolumeSource{
+								HostPath: &v1.HostPathVolumeSource{
+									Path: "/dev/null",
+								},
+							},
+							Aerospike: &asdbv1.AerospikeServerVolumeAttachment{
+								Path: aerospikePath,
+								AttachmentOptions: asdbv1.AttachmentOptions{
+									MountOptions: asdbv1.MountOptions{
+										ReadOnly: ptr.To(false),
+									},
+								},
+							},
+						}
+
+						aeroCluster.Spec.Storage.Volumes = append(aeroCluster.Spec.Storage.Volumes, hostpathVolume)
+						aeroCluster.Spec.RackConfig.RackIDSource = &asdbv1.RackIDSource{FilePath: aerospikePath + "/rackid"}
+
+						Expect(DeployCluster(k8sClient, ctx, aeroCluster)).Should(HaveOccurred())
+					},
+				)
 			},
 		)
 	},
 )
+
+func isHostPathReadOnly(containerStatuses []v1.ContainerStatus, mountPath string) bool {
+	if len(containerStatuses) == 0 {
+		return false
+	}
+
+	for idx := range containerStatuses[0].VolumeMounts {
+		if containerStatuses[0].VolumeMounts[idx].MountPath == mountPath {
+			return containerStatuses[0].VolumeMounts[idx].ReadOnly
+		}
+	}
+
+	return false
+}

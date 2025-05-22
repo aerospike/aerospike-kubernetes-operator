@@ -8,6 +8,7 @@ import (
 	v1 "k8s.io/api/core/v1"
 	"k8s.io/apimachinery/pkg/util/sets"
 	"k8s.io/apimachinery/pkg/util/validation"
+	"k8s.io/utils/ptr"
 
 	asdbv1 "github.com/aerospike/aerospike-kubernetes-operator/v4/api/v1"
 )
@@ -93,12 +94,26 @@ func validateAddedOrRemovedVolumes(oldStorage, newStorage *asdbv1.AerospikeStora
 }
 
 // setStorageDefaults sets default values for storage spec fields.
-func setStorageDefaults(storage *asdbv1.AerospikeStorageSpec) {
+func setStorageDefaults(storage *asdbv1.AerospikeStorageSpec) error {
+	if storage.CleanupThreads == 0 {
+		storage.CleanupThreads = asdbv1.AerospikeVolumeSingleCleanupThread
+	}
+
+	if err := setHostPathVolumeMountDefaults(storage.Volumes); err != nil {
+		return fmt.Errorf("failed to set host path volume mount defaults: %v", err)
+	}
+
+	setStoragePolicyDefaults(storage)
+
+	return nil
+}
+
+// setStoragePolicyDefaults sets default values for storage policy fields.
+func setStoragePolicyDefaults(storage *asdbv1.AerospikeStorageSpec) {
 	defaultFilesystemInitMethod := asdbv1.AerospikeVolumeMethodNone
 	defaultFilesystemWipeMethod := asdbv1.AerospikeVolumeMethodDeleteFiles
 	defaultBlockInitMethod := asdbv1.AerospikeVolumeMethodNone
 	defaultBlockWipeMethod := asdbv1.AerospikeVolumeMethodDD
-	defaultCleanupThreads := asdbv1.AerospikeVolumeSingleCleanupThread
 	// Set storage level defaults.
 	setAerospikePersistentVolumePolicyDefaults(
 		&storage.FileSystemVolumePolicy,
@@ -114,10 +129,6 @@ func setStorageDefaults(storage *asdbv1.AerospikeStorageSpec) {
 		},
 	)
 
-	if storage.CleanupThreads == 0 {
-		storage.CleanupThreads = defaultCleanupThreads
-	}
-
 	for idx := range storage.Volumes {
 		switch {
 		case storage.Volumes[idx].Source.PersistentVolume == nil:
@@ -132,6 +143,39 @@ func setStorageDefaults(storage *asdbv1.AerospikeStorageSpec) {
 				&storage.FileSystemVolumePolicy)
 		}
 	}
+}
+
+func setHostPathVolumeMountDefaults(volumes []asdbv1.VolumeSpec) error {
+	for idx := range volumes {
+		volume := &volumes[idx]
+		if volume.Source.HostPath != nil {
+			for idx := range volume.Sidecars {
+				if volume.Sidecars[idx].ReadOnly != nil && !*volume.Sidecars[idx].ReadOnly {
+					return fmt.Errorf("hostpath volumes can only be mounted as read only file system")
+				}
+
+				volume.Sidecars[idx].ReadOnly = ptr.To(true)
+			}
+
+			for idx := range volume.InitContainers {
+				if volume.InitContainers[idx].ReadOnly != nil && !*volume.InitContainers[idx].ReadOnly {
+					return fmt.Errorf("hostpath volumes can only be mounted as read only file system")
+				}
+
+				volume.InitContainers[idx].ReadOnly = ptr.To(true)
+			}
+
+			if volume.Aerospike != nil {
+				if volume.Aerospike.ReadOnly != nil && !*volume.Aerospike.ReadOnly {
+					return fmt.Errorf("hostpath volumes can only be mounted as read only file system")
+				}
+
+				volume.Aerospike.ReadOnly = ptr.To(true)
+			}
+		}
+	}
+
+	return nil
 }
 
 // setAerospikePersistentVolumePolicyDefaults applies default values to unset fields of the policy using corresponding

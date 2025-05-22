@@ -703,11 +703,11 @@ type AttachmentOptions struct {
 	MountOptions `json:"mountOptions,omitempty"`
 }
 
-type MountOptions struct { //nolint:govet // for readability
+type MountOptions struct {
 	// Mounted read-only if true, read-write otherwise (false or unspecified).
 	// Defaults to false.
 	// +optional
-	ReadOnly bool `json:"readOnly,omitempty"`
+	ReadOnly *bool `json:"readOnly,omitempty"`
 
 	// Path within the volume from which the container's volume should be mounted.
 	// Defaults to "" (volume's root).

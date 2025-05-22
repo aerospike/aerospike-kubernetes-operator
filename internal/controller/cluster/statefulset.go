@@ -18,6 +18,7 @@ import (
 	"k8s.io/apimachinery/pkg/util/intstr"
 	"k8s.io/apimachinery/pkg/util/sets"
 	"k8s.io/client-go/util/retry"
+	"k8s.io/utils/ptr"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 	"sigs.k8s.io/controller-runtime/pkg/controller/controllerutil"
 
@@ -1465,7 +1466,7 @@ func getFinalVolumeAttachmentsForVolume(volume *asdbv1.VolumeSpec) (
 			ContainerName: asdbv1.AerospikeInitContainerName,
 			Path:          initVolumePath,
 			AttachmentOptions: asdbv1.AttachmentOptions{
-				MountOptions: asdbv1.MountOptions{ReadOnly: readOnlyVolume},
+				MountOptions: asdbv1.MountOptions{ReadOnly: ptr.To(readOnlyVolume)},
 			},
 		},
 	)
@@ -1476,11 +1477,9 @@ func getFinalVolumeAttachmentsForVolume(volume *asdbv1.VolumeSpec) (
 	if volume.Aerospike != nil {
 		containerAttachments = append(
 			containerAttachments, asdbv1.VolumeAttachment{
-				ContainerName: asdbv1.AerospikeServerContainerName,
-				Path:          volume.Aerospike.Path,
-				AttachmentOptions: asdbv1.AttachmentOptions{
-					MountOptions: asdbv1.MountOptions{ReadOnly: readOnlyVolume},
-				},
+				ContainerName:     asdbv1.AerospikeServerContainerName,
+				Path:              volume.Aerospike.Path,
+				AttachmentOptions: volume.Aerospike.AttachmentOptions,
 			},
 		)
 	}
@@ -1503,13 +1502,16 @@ func addVolumeMountInContainer(
 					volumeMount = corev1.VolumeMount{
 						Name:      volumeName,
 						MountPath: pathPrefix + volumeAttachment.Path,
-						ReadOnly:  volumeAttachment.AttachmentOptions.MountOptions.ReadOnly,
+						ReadOnly:  ptr.Deref(volumeAttachment.AttachmentOptions.MountOptions.ReadOnly, false),
 					}
 				} else {
 					volumeMount = corev1.VolumeMount{
-						Name:      volumeName,
-						MountPath: volumeAttachment.Path,
-						ReadOnly:  volumeAttachment.AttachmentOptions.MountOptions.ReadOnly,
+						Name:             volumeName,
+						MountPath:        volumeAttachment.Path,
+						ReadOnly:         ptr.Deref(volumeAttachment.AttachmentOptions.MountOptions.ReadOnly, false),
+						SubPath:          volumeAttachment.AttachmentOptions.MountOptions.SubPath,
+						SubPathExpr:      volumeAttachment.AttachmentOptions.MountOptions.SubPathExpr,
+						MountPropagation: volumeAttachment.AttachmentOptions.MountOptions.MountPropagation,
 					}
 				}
 
