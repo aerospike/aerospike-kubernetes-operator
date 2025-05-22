@@ -6,6 +6,12 @@ import (
 	"strings"
 	"time"
 
+	"github.com/aerospike/aerospike-kubernetes-operator/v4/pkg/utils"
+	"golang.org/x/net/context"
+	"k8s.io/apimachinery/pkg/labels"
+	"k8s.io/apimachinery/pkg/util/wait"
+	"sigs.k8s.io/controller-runtime/pkg/client"
+
 	. "github.com/onsi/ginkgo/v2"
 	. "github.com/onsi/gomega"
 	appsv1 "k8s.io/api/apps/v1"
@@ -105,6 +111,12 @@ var _ = Describe(
 
 						err := k8sClient.Create(ctx, ds)
 						Expect(err).NotTo(HaveOccurred())
+
+						err = waitForDaemonSetPodsRunning(
+							k8sClient, ctx, namespace, "hostpath-writer", retryInterval,
+							time.Minute*2,
+						)
+						Expect(err).NotTo(HaveOccurred())
 					},
 				)
 
@@ -135,11 +147,6 @@ var _ = Describe(
 								aeroCluster, err := getCluster(k8sClient, ctx, clusterNamespacedName)
 								Expect(err).ToNot(HaveOccurred())
 
-								pod := aeroCluster.Status.Pods[aeroCluster.Name+"-1-0"]
-
-								info, err := requestInfoFromNode(logger, k8sClient, ctx, clusterNamespacedName, "namespace/test", &pod)
-								Expect(err).ToNot(HaveOccurred())
-
 								podObject := &v1.Pod{}
 								Eventually(
 									func() bool {
@@ -154,13 +161,10 @@ var _ = Describe(
 									}, time.Minute, time.Second,
 								).Should(BeTrue())
 
-								confs := strings.Split(info["namespace/test"], ";")
-								for _, conf := range confs {
-									if strings.Contains(conf, "rack-id") {
-										keyValue := strings.Split(conf, "=")
-										Expect(keyValue[1]).To(Equal("2"))
-									}
-								}
+								pod := aeroCluster.Status.Pods[aeroCluster.Name+"-1-0"]
+
+								err = validateDynamicRackID(ctx, k8sClient, &pod, clusterNamespacedName, "2")
+								Expect(err).ToNot(HaveOccurred())
 							},
 						)
 					},
@@ -210,16 +214,8 @@ var _ = Describe(
 
 								pod := aeroCluster.Status.Pods[aeroCluster.Name+"-1-0"]
 
-								info, err := requestInfoFromNode(logger, k8sClient, ctx, clusterNamespacedName, "namespace/test", &pod)
+								err = validateDynamicRackID(ctx, k8sClient, &pod, clusterNamespacedName, "2")
 								Expect(err).ToNot(HaveOccurred())
-
-								confs := strings.Split(info["namespace/test"], ";")
-								for _, conf := range confs {
-									if strings.Contains(conf, "rack-id") {
-										keyValue := strings.Split(conf, "=")
-										Expect(keyValue[1]).To(Equal("2"))
-									}
-								}
 
 								By("Updating cluster by disabling dynamic rack")
 								oldPodIDs, err = getPodIDs(ctx, aeroCluster)
@@ -241,16 +237,8 @@ var _ = Describe(
 
 								pod = aeroCluster.Status.Pods[aeroCluster.Name+"-1-0"]
 
-								info, err = requestInfoFromNode(logger, k8sClient, ctx, clusterNamespacedName, "namespace/test", &pod)
+								err = validateDynamicRackID(ctx, k8sClient, &pod, clusterNamespacedName, "1")
 								Expect(err).ToNot(HaveOccurred())
-
-								confs = strings.Split(info["namespace/test"], ";")
-								for _, conf := range confs {
-									if strings.Contains(conf, "rack-id") {
-										keyValue := strings.Split(conf, "=")
-										Expect(keyValue[1]).To(Equal("1"))
-									}
-								}
 
 								By("Updating cluster by enabling dynamic rack")
 								oldPodIDs, err = getPodIDs(ctx, aeroCluster)
@@ -272,16 +260,8 @@ var _ = Describe(
 
 								pod = aeroCluster.Status.Pods[aeroCluster.Name+"-1-0"]
 
-								info, err = requestInfoFromNode(logger, k8sClient, ctx, clusterNamespacedName, "namespace/test", &pod)
+								err = validateDynamicRackID(ctx, k8sClient, &pod, clusterNamespacedName, "2")
 								Expect(err).ToNot(HaveOccurred())
-
-								confs = strings.Split(info["namespace/test"], ";")
-								for _, conf := range confs {
-									if strings.Contains(conf, "rack-id") {
-										keyValue := strings.Split(conf, "=")
-										Expect(keyValue[1]).To(Equal("2"))
-									}
-								}
 							},
 						)
 					},
@@ -357,7 +337,7 @@ var _ = Describe(
 				It(
 					"Should fail if dynamic rackID source volume is not hostpath type", func() {
 						aeroCluster := createDummyRackAwareAerospikeCluster(clusterNamespacedName, 2)
-						emptydirVolume := asdbv1.VolumeSpec{
+						emptyDirVolume := asdbv1.VolumeSpec{
 							Name: "empty",
 							Source: asdbv1.VolumeSource{
 								EmptyDir: &v1.EmptyDirVolumeSource{},
@@ -367,7 +347,7 @@ var _ = Describe(
 							},
 						}
 
-						aeroCluster.Spec.Storage.Volumes = append(aeroCluster.Spec.Storage.Volumes, emptydirVolume)
+						aeroCluster.Spec.Storage.Volumes = append(aeroCluster.Spec.Storage.Volumes, emptyDirVolume)
 						aeroCluster.Spec.RackConfig.RackIDSource = &asdbv1.RackIDSource{FilePath: "/opt/empty/rackid"}
 
 						Expect(DeployCluster(k8sClient, ctx, aeroCluster)).Should(HaveOccurred())
@@ -375,7 +355,7 @@ var _ = Describe(
 				)
 
 				It(
-					"Should fail if dynamic rackID source volume is mounted  with readOnly false", func() {
+					"Should fail if dynamic rackID source volume is mounted with readOnly false", func() {
 						aeroCluster := createDummyRackAwareAerospikeCluster(clusterNamespacedName, 2)
 						hostpathVolume := asdbv1.VolumeSpec{
 							Name: "hostpath",
@@ -417,4 +397,70 @@ func isHostPathReadOnly(containerStatuses []v1.ContainerStatus, mountPath string
 	}
 
 	return false
+}
+
+func waitForDaemonSetPodsRunning(k8sClient client.Client, ctx goctx.Context, namespace, dsName string,
+	retryInterval, timeout time.Duration) error {
+	return wait.PollUntilContextTimeout(ctx,
+		retryInterval, timeout, true, func(ctx goctx.Context) (done bool, err error) {
+			ds := &appsv1.DaemonSet{}
+			if err := k8sClient.Get(
+				ctx, types.NamespacedName{
+					Name: dsName, Namespace: namespace,
+				}, ds,
+			); err != nil {
+				return false, err
+			}
+
+			// DaemonSet selector
+			selector := labels.Set(ds.Spec.Selector.MatchLabels).AsSelector()
+
+			podList := &v1.PodList{}
+			listOps := &client.ListOptions{
+				Namespace: namespace, LabelSelector: selector,
+			}
+
+			if err := k8sClient.List(goctx.TODO(), podList, listOps); err != nil {
+				return false, err
+			}
+
+			var runningAndReady int32
+
+			for idx := range podList.Items {
+				if utils.IsPodRunningAndReady(&podList.Items[idx]) {
+					runningAndReady++
+				}
+			}
+
+			if runningAndReady == ds.Status.DesiredNumberScheduled {
+				return true, nil
+			}
+
+			return false, nil
+		},
+	)
+}
+
+func validateDynamicRackID(
+	ctx context.Context, k8sClient client.Client, pod *asdbv1.AerospikePodStatus, namespacedName types.NamespacedName,
+	expectedValue string,
+) error {
+	info, err := requestInfoFromNode(logger, k8sClient, ctx, namespacedName, "namespace/test", pod)
+	if err != nil {
+		return err
+	}
+
+	confs := strings.Split(info["namespace/test"], ";")
+	for _, conf := range confs {
+		if strings.Contains(conf, "rack-id") {
+			keyValue := strings.Split(conf, "=")
+			if keyValue[1] != expectedValue {
+				return fmt.Errorf("expected rack-id %s, but got %s", expectedValue, keyValue[1])
+			}
+
+			return nil
+		}
+	}
+
+	return nil
 }

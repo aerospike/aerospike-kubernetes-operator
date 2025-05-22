@@ -137,10 +137,6 @@ func (r *SingleClusterReconciler) getRollingRestartTypeMap(rackState *RackState,
 		if podStatus.DynamicConfigUpdateStatus == asdbv1.PartiallyFailed {
 			restartTypeMap[pods[idx].Name] = mergeRestartType(restartTypeMap[pods[idx].Name], quickRestart)
 		}
-
-		if !reflect.DeepEqual(podStatus.RackIDSource, r.aeroCluster.Spec.RackConfig.RackIDSource) {
-			restartTypeMap[pods[idx].Name] = mergeRestartType(restartTypeMap[pods[idx].Name], quickRestart)
-		}
 	}
 
 	return restartTypeMap, dynamicConfDiffPerPod, nil
@@ -161,6 +157,7 @@ func (r *SingleClusterReconciler) getRollingRestartTypePod(
 	requiredConfHash := confMap.Data[aerospikeConfHashFileName]
 	requiredNetworkPolicyHash := confMap.Data[networkPolicyHashFileName]
 	requiredPodSpecHash := confMap.Data[podSpecHashFileName]
+	requiredRackIDSourceHash := confMap.Data[rackIDSourceHashFileName]
 
 	podStatus := r.aeroCluster.Status.Pods[pod.Name]
 
@@ -194,6 +191,17 @@ func (r *SingleClusterReconciler) getRollingRestartTypePod(
 			"Aerospike network policy changed. Need rolling restart",
 			"requiredHash", requiredNetworkPolicyHash,
 			"currentHash", podStatus.NetworkPolicyHash,
+		)
+	}
+
+	// Check if rackIDSource is updated
+	if podStatus.RackIDSourceHash != requiredRackIDSourceHash {
+		restartType = mergeRestartType(restartType, quickRestart)
+
+		r.Log.Info(
+			"Aerospike RackIDSource changed. Need rolling restart",
+			"requiredHash", requiredRackIDSourceHash,
+			"currentHash", podStatus.RackIDSourceHash,
 		)
 	}
 
@@ -1397,7 +1405,8 @@ func (r *SingleClusterReconciler) handleDynamicConfigChange(rackState *RackState
 
 	if len(specToStatusDiffs) > 0 {
 		// rackd-id change is being handled as rack add/remove
-		// Ignoring it to eliminate rolling restart in case of dynamic rack id allocation.
+		// Ignoring it to eliminate rolling restart, because webhook sets rack-id to 0 in case of dynamic rack id allocation.
+		// Due to which rack-id will always be different.
 		for key := range specToStatusDiffs {
 			if asconfig.BaseKey(key) == "rack-id" {
 				delete(specToStatusDiffs, key)

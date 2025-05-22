@@ -1113,9 +1113,8 @@ type AerospikeNetworkPolicy struct {
 
 // RackIDSource specifies the source from which to read the rack ID.
 type RackIDSource struct {
-	// FilePath specifies the absolute path to a file containing the rack ID mounted in aerospike server.
+	// FilePath specifies an absolute path to a file containing the rack ID mounted in the aerospike server container.
 	// The file should contain a single integer value.
-	// +optional
 	FilePath string `json:"filePath,omitempty"`
 }
 
@@ -1211,9 +1210,9 @@ type AerospikePodStatus struct { //nolint:govet // for readability
 	// +optional
 	DynamicConfigUpdateStatus DynamicConfigUpdateStatus `json:"dynamicConfigUpdateStatus,omitempty"`
 
-	// RackIDSource is the source from which the rack ID is read.
+	// RackIDSourceHash is ripemd160 hash of RackIDSource used by this pod
 	// +optional
-	RackIDSource *RackIDSource `json:"rackIDSource,omitempty"`
+	RackIDSourceHash string `json:"rackIDSourceHash"`
 }
 
 // +kubebuilder:object:root=true

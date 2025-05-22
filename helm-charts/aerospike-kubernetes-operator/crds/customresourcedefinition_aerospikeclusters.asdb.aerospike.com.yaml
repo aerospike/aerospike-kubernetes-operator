@@ -5157,7 +5157,7 @@ spec:
                     properties:
                       filePath:
                         description: |-
-                          FilePath specifies the absolute path to a file containing the rack ID mounted in aerospike server.
+                          FilePath specifies an absolute path to a file containing the rack ID mounted in the aerospike server container.
                           The file should contain a single integer value.
                         type: string
                     type: object
@@ -14320,16 +14320,10 @@ spec:
                       description: PodSpecHash is ripemd160 hash of PodSpec used by
                         this pod
                       type: string
-                    rackIDSource:
-                      description: RackIDSource is the source from which the rack
-                        ID is read.
-                      properties:
-                        filePath:
-                          description: |-
-                            FilePath specifies the absolute path to a file containing the rack ID mounted in aerospike server.
-                            The file should contain a single integer value.
-                          type: string
-                      type: object
+                    rackIDSourceHash:
+                      description: RackIDSourceHash is ripemd160 hash of RackIDSource
+                        used by this pod
+                      type: string
                     servicePort:
                       description: ServicePort is the port Aerospike clients outside
                         K8s can connect to.
@@ -14382,7 +14376,7 @@ spec:
                     properties:
                       filePath:
                         description: |-
-                          FilePath specifies the absolute path to a file containing the rack ID mounted in aerospike server.
+                          FilePath specifies an absolute path to a file containing the rack ID mounted in the aerospike server container.
                           The file should contain a single integer value.
                         type: string
                     type: object

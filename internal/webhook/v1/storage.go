@@ -149,20 +149,16 @@ func setHostPathVolumeMountDefaults(volumes []asdbv1.VolumeSpec) error {
 	for idx := range volumes {
 		volume := &volumes[idx]
 		if volume.Source.HostPath != nil {
-			for idx := range volume.Sidecars {
-				if volume.Sidecars[idx].ReadOnly != nil && !*volume.Sidecars[idx].ReadOnly {
+			var attachments []asdbv1.VolumeAttachment
+			attachments = append(attachments, volume.Sidecars...)
+			attachments = append(attachments, volume.InitContainers...)
+
+			for idx := range attachments {
+				if attachments[idx].ReadOnly != nil && !*attachments[idx].ReadOnly {
 					return fmt.Errorf("hostpath volumes can only be mounted as read only file system")
 				}
 
-				volume.Sidecars[idx].ReadOnly = ptr.To(true)
-			}
-
-			for idx := range volume.InitContainers {
-				if volume.InitContainers[idx].ReadOnly != nil && !*volume.InitContainers[idx].ReadOnly {
-					return fmt.Errorf("hostpath volumes can only be mounted as read only file system")
-				}
-
-				volume.InitContainers[idx].ReadOnly = ptr.To(true)
+				attachments[idx].ReadOnly = ptr.To(true)
 			}
 
 			if volume.Aerospike != nil {

@@ -596,7 +596,7 @@ func validateRackConfig(_ logr.Logger, cluster *asdbv1.AerospikeCluster) error {
 	if rackIDSource != nil {
 		if rackIDSource.FilePath != "" {
 			if !filepath.IsAbs(rackIDSource.FilePath) {
-				return fmt.Errorf("rackIDSource file path must be absolute")
+				return fmt.Errorf("rackIDSource file path %s must be absolute", rackIDSource.FilePath)
 			}
 
 			// Verify the volume exists in storage spec
@@ -606,7 +606,7 @@ func validateRackConfig(_ logr.Logger, cluster *asdbv1.AerospikeCluster) error {
 			}
 
 			if volume.Source.HostPath == nil {
-				return fmt.Errorf("HostPathVolumeName %s must be a hostpath volume", volume.Name)
+				return fmt.Errorf("volume %s for file path %s must be a hostpath volume", volume.Name, rackIDSource.FilePath)
 			}
 		} else {
 			return fmt.Errorf("filePath cannot be empty when rackIDSource is specified")
