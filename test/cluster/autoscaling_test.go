@@ -85,11 +85,11 @@ func validateScaleSubresourceOperation(currentSize, desiredSize int, clusterName
 	Expect(err).ToNot(HaveOccurred())
 
 	Eventually(
-		func() int32 {
+		func() int {
 			aeroCluster, err := getCluster(k8sClient, goctx.TODO(), clusterNamespacedName)
 			Expect(err).ToNot(HaveOccurred())
 
-			return aeroCluster.Spec.Size
+			return int(aeroCluster.Spec.Size)
 		}, time.Minute, time.Second,
-	).Should(Equal(int32(desiredSize)))
+	).Should(Equal(desiredSize))
 }

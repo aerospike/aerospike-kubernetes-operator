@@ -35,7 +35,7 @@ func percent(val string) *intstr.IntOrString {
 }
 
 func count(val int) *intstr.IntOrString {
-	v := intstr.FromInt32(int32(val))
+	v := intstr.FromInt(val)
 	return &v
 }
 
