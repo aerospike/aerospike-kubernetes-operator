@@ -714,8 +714,8 @@ func setDefaultsInConfigMap(
 ) error {
 	for k, v := range defaultConfigs {
 		// Special handling.
-		// Older baseValues are parsed to int64 but defaults are in int
-		if newV, ok := v.(int); ok {
+		// Older baseValues are parsed to int64 but defaults are in int32
+		if newV, ok := v.(int32); ok {
 			// TODO: verify this: Looks like, in new openapi schema, values are parsed in float64
 			v = float64(newV)
 		}

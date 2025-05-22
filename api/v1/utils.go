@@ -402,28 +402,28 @@ func GetDigestLogFile(aerospikeConfigSpec AerospikeConfigSpec) (
 	return nil, fmt.Errorf("xdr not configured")
 }
 
-func GetServiceTLSNameAndPort(aeroConf *AerospikeConfigSpec) (tlsName string, port *int) {
+func GetServiceTLSNameAndPort(aeroConf *AerospikeConfigSpec) (tlsName string, port *int32) {
 	return GetTLSNameAndPort(aeroConf, confKeyService)
 }
 
-func GetHeartbeatTLSNameAndPort(aeroConf *AerospikeConfigSpec) (tlsName string, port *int) {
+func GetHeartbeatTLSNameAndPort(aeroConf *AerospikeConfigSpec) (tlsName string, port *int32) {
 	return GetTLSNameAndPort(aeroConf, confKeyNetworkHeartbeat)
 }
 
-func GetFabricTLSNameAndPort(aeroConf *AerospikeConfigSpec) (tlsName string, port *int) {
+func GetFabricTLSNameAndPort(aeroConf *AerospikeConfigSpec) (tlsName string, port *int32) {
 	return GetTLSNameAndPort(aeroConf, confKeyNetworkFabric)
 }
 
 func GetTLSNameAndPort(
 	aeroConf *AerospikeConfigSpec, connectionType string,
-) (tlsName string, port *int) {
+) (tlsName string, port *int32) {
 	if networkConfTmp, ok := aeroConf.Value[ConfKeyNetwork]; ok {
 		networkConf := networkConfTmp.(map[string]interface{})
 		serviceConf := networkConf[connectionType].(map[string]interface{})
 
 		if tlsName, ok := serviceConf["tls-name"]; ok {
 			if tlsPort, portConfigured := serviceConf["tls-port"]; portConfigured {
-				intPort := int(tlsPort.(float64))
+				intPort := int32(tlsPort.(float64))
 				return tlsName.(string), &intPort
 			}
 
@@ -434,25 +434,25 @@ func GetTLSNameAndPort(
 	return "", nil
 }
 
-func GetServicePort(aeroConf *AerospikeConfigSpec) *int {
+func GetServicePort(aeroConf *AerospikeConfigSpec) *int32 {
 	return GetPortFromConfig(aeroConf, ConfKeyNetworkService, "port")
 }
 
-func GetHeartbeatPort(aeroConf *AerospikeConfigSpec) *int {
+func GetHeartbeatPort(aeroConf *AerospikeConfigSpec) *int32 {
 	return GetPortFromConfig(aeroConf, confKeyNetworkHeartbeat, "port")
 }
 
-func GetFabricPort(aeroConf *AerospikeConfigSpec) *int {
+func GetFabricPort(aeroConf *AerospikeConfigSpec) *int32 {
 	return GetPortFromConfig(aeroConf, confKeyNetworkFabric, "port")
 }
 
 func GetPortFromConfig(
 	aeroConf *AerospikeConfigSpec, connectionType string, paramName string,
-) *int {
+) *int32 {
 	if networkConf, ok := aeroConf.Value[ConfKeyNetwork]; ok {
 		if connectionConfig, ok := networkConf.(map[string]interface{})[connectionType]; ok {
 			if port, ok := connectionConfig.(map[string]interface{})[paramName]; ok {
-				intPort := int(port.(float64))
+				intPort := int32(port.(float64))
 				return &intPort
 			}
 		}
@@ -549,13 +549,13 @@ func GetDefaultPasswordFilePath(aerospikeConfigSpec *AerospikeConfigSpec) *strin
 	return &passFile
 }
 
-func DistributeItems(totalItems, totalGroups int) []int {
+func DistributeItems(totalItems, totalGroups int32) []int32 {
 	itemsPerGroup, extraItems := totalItems/totalGroups, totalItems%totalGroups
 
 	// Distributing nodes in given racks
-	var topology []int
+	var topology []int32
 
-	for groupIdx := 0; groupIdx < totalGroups; groupIdx++ {
+	for groupIdx := int32(0); groupIdx < totalGroups; groupIdx++ {
 		itemsForThisGroup := itemsPerGroup
 		if groupIdx < extraItems {
 			itemsForThisGroup++

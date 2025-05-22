@@ -124,7 +124,7 @@ var _ = Describe(
 				)
 
 				By("Create PDB")
-				err := createPDB(ctx, aeroCluster, defaultMaxUnavailable.IntValue())
+				err := createPDB(ctx, aeroCluster, defaultMaxUnavailable.IntVal)
 				Expect(err).ToNot(HaveOccurred())
 
 				By("Create cluster. It should fail as PDB is already created")
@@ -152,7 +152,7 @@ var _ = Describe(
 					clusterNamespacedName, 2,
 				)
 
-				err := createPDB(ctx, aeroCluster, defaultMaxUnavailable.IntValue())
+				err := createPDB(ctx, aeroCluster, defaultMaxUnavailable.IntVal)
 				Expect(err).ToNot(HaveOccurred())
 
 				// Create cluster with disabledPDB
@@ -201,8 +201,8 @@ func validatePDB(ctx context.Context, aerocluster *asdbv1.AerospikeCluster, expe
 	Expect(pdb.Spec.MaxUnavailable.IntValue()).To(Equal(expectedMaxUnavailable))
 	Expect(pdb.Status.ExpectedPods).To(Equal(aerocluster.Spec.Size))
 	Expect(pdb.Status.CurrentHealthy).To(Equal(aerocluster.Spec.Size))
-	Expect(pdb.Status.DisruptionsAllowed).To(Equal(int32(expectedMaxUnavailable)))
-	Expect(pdb.Status.DesiredHealthy).To(Equal(aerocluster.Spec.Size - int32(expectedMaxUnavailable)))
+	Expect(int(pdb.Status.DisruptionsAllowed)).To(Equal(expectedMaxUnavailable))
+	Expect(int(pdb.Status.DesiredHealthy)).To(Equal(int(aerocluster.Spec.Size) - expectedMaxUnavailable))
 }
 
 func getPDB(ctx context.Context, aerocluster *asdbv1.AerospikeCluster) (*policyv1.PodDisruptionBudget, error) {
@@ -215,14 +215,14 @@ func getPDB(ctx context.Context, aerocluster *asdbv1.AerospikeCluster) (*policyv
 	return pdb, err
 }
 
-func createPDB(ctx context.Context, aerocluster *asdbv1.AerospikeCluster, maxUnavailable int) error {
+func createPDB(ctx context.Context, aerocluster *asdbv1.AerospikeCluster, maxUnavailable int32) error {
 	pdb := &policyv1.PodDisruptionBudget{
 		ObjectMeta: metav1.ObjectMeta{
 			Name:      aerocluster.Name,
 			Namespace: aerocluster.Namespace,
 		},
 		Spec: policyv1.PodDisruptionBudgetSpec{
-			MaxUnavailable: &intstr.IntOrString{Type: intstr.Int, IntVal: int32(maxUnavailable)},
+			MaxUnavailable: &intstr.IntOrString{Type: intstr.Int, IntVal: maxUnavailable},
 		},
 	}
 
