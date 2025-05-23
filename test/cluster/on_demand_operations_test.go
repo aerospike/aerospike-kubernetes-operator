@@ -14,6 +14,8 @@ import (
 	"github.com/aerospike/aerospike-kubernetes-operator/v4/test"
 )
 
+const noRestart = "noRestart"
+
 var _ = Describe(
 	"OnDemandOperations", func() {
 
@@ -202,7 +204,7 @@ var _ = Describe(
 
 						operationTypeMap := map[string]asdbv1.OperationKind{
 							aeroCluster.Name + "-1-0": asdbv1.OperationPodRestart,
-							aeroCluster.Name + "-1-1": "noRestart",
+							aeroCluster.Name + "-1-1": noRestart,
 						}
 
 						err = validateOperationTypes(ctx, aeroCluster, oldPodIDs, operationTypeMap)
@@ -465,7 +467,7 @@ func validateOperationTypes(ctx goctx.Context, aeroCluster *asdbv1.AerospikeClus
 			if newPodPidMap[podName].podUID == pid[podName].podUID {
 				return fmt.Errorf("failed to restart pod %s", podName)
 			}
-		case "noRestart":
+		case noRestart:
 			if newPodPidMap[podName].podUID != pid[podName].podUID || newPodPidMap[podName].asdPID != pid[podName].asdPID {
 				return fmt.Errorf("unexpected restart pod %s", podName)
 			}

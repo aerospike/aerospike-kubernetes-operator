@@ -4,11 +4,11 @@ import (
 	goctx "context"
 	"fmt"
 
-	"github.com/aws/smithy-go/ptr"
 	. "github.com/onsi/ginkgo/v2"
 	. "github.com/onsi/gomega"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/types"
+	"k8s.io/utils/ptr"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 
 	asdbv1 "github.com/aerospike/aerospike-kubernetes-operator/v4/api/v1"
@@ -42,7 +42,7 @@ var _ = Describe(
 					aeroCluster := createDummyAerospikeCluster(
 						clusterNamespacedName, 2,
 					)
-					aeroCluster.Spec.Storage.DeleteLocalStorageOnRestart = ptr.Bool(true)
+					aeroCluster.Spec.Storage.DeleteLocalStorageOnRestart = ptr.To(true)
 					aeroCluster.Spec.Storage.LocalStorageClasses = []string{storageClass}
 					Expect(DeployCluster(k8sClient, ctx, aeroCluster)).ToNot(HaveOccurred())
 
@@ -72,7 +72,7 @@ var _ = Describe(
 					}
 					storage := lib.DeepCopy(&aeroCluster.Spec.Storage).(*asdbv1.AerospikeStorageSpec)
 					rackConfig.Racks[0].InputStorage = storage
-					rackConfig.Racks[0].InputStorage.DeleteLocalStorageOnRestart = ptr.Bool(true)
+					rackConfig.Racks[0].InputStorage.DeleteLocalStorageOnRestart = ptr.To(true)
 					rackConfig.Racks[0].InputStorage.LocalStorageClasses = []string{storageClass}
 					aeroCluster.Spec.RackConfig = rackConfig
 					Expect(DeployCluster(k8sClient, ctx, aeroCluster)).ToNot(HaveOccurred())
@@ -99,11 +99,24 @@ var _ = Describe(
 					aeroCluster := createDummyAerospikeCluster(
 						clusterNamespacedName, 2,
 					)
-					aeroCluster.Spec.Storage.DeleteLocalStorageOnRestart = ptr.Bool(true)
-					aeroCluster.Spec.Storage.LocalStorageClasses = []string{storageClass}
 					Expect(DeployCluster(k8sClient, ctx, aeroCluster)).ToNot(HaveOccurred())
 
 					oldPvcInfoPerPod, err := extractClusterPVC(ctx, k8sClient, aeroCluster)
+					Expect(err).ToNot(HaveOccurred())
+					oldPodIDs, err := getPodIDs(ctx, aeroCluster)
+					Expect(err).ToNot(HaveOccurred())
+
+					By("Enable DeleteLocalStorageOnRestart and set localStorageClasses")
+					aeroCluster.Spec.Storage.DeleteLocalStorageOnRestart = ptr.To(true)
+					aeroCluster.Spec.Storage.LocalStorageClasses = []string{storageClass}
+					Expect(updateCluster(k8sClient, ctx, aeroCluster)).ToNot(HaveOccurred())
+
+					operationTypeMap := map[string]asdbv1.OperationKind{
+						aeroCluster.Name + "-0-0": noRestart,
+						aeroCluster.Name + "-0-1": noRestart,
+					}
+
+					err = validateOperationTypes(ctx, aeroCluster, oldPodIDs, operationTypeMap)
 					Expect(err).ToNot(HaveOccurred())
 
 					By("Updating the image")
@@ -124,7 +137,7 @@ var _ = Describe(
 					}
 					storage := lib.DeepCopy(&aeroCluster.Spec.Storage).(*asdbv1.AerospikeStorageSpec)
 					rackConfig.Racks[0].InputStorage = storage
-					rackConfig.Racks[0].InputStorage.DeleteLocalStorageOnRestart = ptr.Bool(true)
+					rackConfig.Racks[0].InputStorage.DeleteLocalStorageOnRestart = ptr.To(true)
 					rackConfig.Racks[0].InputStorage.LocalStorageClasses = []string{storageClass}
 					aeroCluster.Spec.RackConfig = rackConfig
 					Expect(DeployCluster(k8sClient, ctx, aeroCluster)).ToNot(HaveOccurred())
@@ -147,7 +160,7 @@ var _ = Describe(
 				aeroCluster := createDummyAerospikeCluster(
 					clusterNamespacedName, 2,
 				)
-				aeroCluster.Spec.Storage.DeleteLocalStorageOnRestart = ptr.Bool(true)
+				aeroCluster.Spec.Storage.DeleteLocalStorageOnRestart = ptr.To(true)
 				Expect(DeployCluster(k8sClient, ctx, aeroCluster)).To(HaveOccurred())
 			})
 		})
