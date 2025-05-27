@@ -616,6 +616,11 @@ func validateRackConfig(_ logr.Logger, cluster *asdbv1.AerospikeCluster) error {
 		if len(cluster.Spec.RackConfig.Racks) > 1 {
 			return fmt.Errorf("cannot specify more than 1 rack when rackIDSource is provided")
 		}
+
+		// Cannot specify MaxIgnorablePods when rackIDSource is provided
+		if cluster.Spec.RackConfig.MaxIgnorablePods != nil {
+			return fmt.Errorf("cannot specify MaxIgnorablePods when rackIDSource is provided")
+		}
 	}
 
 	rackMap := map[int]bool{}

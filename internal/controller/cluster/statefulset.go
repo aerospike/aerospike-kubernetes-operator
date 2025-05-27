@@ -1477,9 +1477,11 @@ func getFinalVolumeAttachmentsForVolume(volume *asdbv1.VolumeSpec) (
 	if volume.Aerospike != nil {
 		containerAttachments = append(
 			containerAttachments, asdbv1.VolumeAttachment{
-				ContainerName:     asdbv1.AerospikeServerContainerName,
-				Path:              volume.Aerospike.Path,
-				AttachmentOptions: volume.Aerospike.AttachmentOptions,
+				ContainerName: asdbv1.AerospikeServerContainerName,
+				Path:          volume.Aerospike.Path,
+				AttachmentOptions: asdbv1.AttachmentOptions{
+					MountOptions: asdbv1.MountOptions{ReadOnly: ptr.To(readOnlyVolume)},
+				},
 			},
 		)
 	}
@@ -1502,13 +1504,13 @@ func addVolumeMountInContainer(
 					volumeMount = corev1.VolumeMount{
 						Name:      volumeName,
 						MountPath: pathPrefix + volumeAttachment.Path,
-						ReadOnly:  ptr.Deref(volumeAttachment.AttachmentOptions.MountOptions.ReadOnly, false),
+						ReadOnly:  asdbv1.GetBool(volumeAttachment.AttachmentOptions.MountOptions.ReadOnly),
 					}
 				} else {
 					volumeMount = corev1.VolumeMount{
 						Name:             volumeName,
 						MountPath:        volumeAttachment.Path,
-						ReadOnly:         ptr.Deref(volumeAttachment.AttachmentOptions.MountOptions.ReadOnly, false),
+						ReadOnly:         asdbv1.GetBool(volumeAttachment.AttachmentOptions.MountOptions.ReadOnly),
 						SubPath:          volumeAttachment.AttachmentOptions.MountOptions.SubPath,
 						SubPathExpr:      volumeAttachment.AttachmentOptions.MountOptions.SubPathExpr,
 						MountPropagation: volumeAttachment.AttachmentOptions.MountOptions.MountPropagation,

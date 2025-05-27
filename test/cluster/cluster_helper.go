@@ -1094,6 +1094,11 @@ func createDummyAerospikeClusterWithHostPathVolume(clusterNamespacedName types.N
 		},
 		Aerospike: &asdbv1.AerospikeServerVolumeAttachment{
 			Path: aerospikePath,
+			AttachmentOptions: asdbv1.AttachmentOptions{
+				MountOptions: asdbv1.MountOptions{
+					ReadOnly: ptr.To(true),
+				},
+			},
 		},
 	}
 
@@ -1517,6 +1522,28 @@ func getStorageVolumeForSecret() asdbv1.VolumeSpec {
 		},
 		Aerospike: &asdbv1.AerospikeServerVolumeAttachment{
 			Path: "/etc/aerospike/secret",
+		},
+	}
+}
+
+func getStorageVolumeForSidecar(volumeName, path, containerName string, readOnly bool) asdbv1.VolumeSpec {
+	return asdbv1.VolumeSpec{
+		Name: volumeName,
+		Source: asdbv1.VolumeSource{
+			HostPath: &corev1.HostPathVolumeSource{
+				Path: "/dev/null",
+			},
+		},
+		Sidecars: []asdbv1.VolumeAttachment{
+			{
+				Path:          path,
+				ContainerName: containerName,
+				AttachmentOptions: asdbv1.AttachmentOptions{
+					MountOptions: asdbv1.MountOptions{
+						ReadOnly: ptr.To(readOnly),
+					},
+				},
+			},
 		},
 	}
 }

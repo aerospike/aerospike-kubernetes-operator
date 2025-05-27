@@ -112,6 +112,30 @@ var _ = Describe("BatchScaleDown", func() {
 			err := batchScaleDownTest(k8sClient, ctx, clusterNamespacedName, count(3), 2)
 			Expect(err).Should(HaveOccurred())
 		})
+
+		It("Should fail if number of racks is less than 2 and ScaleDownBatchSize "+
+			"PCT or ScaleDownBatchSize Count is given", func() {
+			// During deployment
+			// During update. User should not be allowed to remove rack if above condition is met.
+			By("Using ScaleDownBatchSize PCT")
+			aeroCluster, err := getCluster(k8sClient, ctx, clusterNamespacedName)
+			Expect(err).ToNot(HaveOccurred())
+
+			racks := getDummyRackConf(1)
+			aeroCluster.Spec.RackConfig.Racks = racks
+			aeroCluster.Spec.RackConfig.ScaleDownBatchSize = percent("100%")
+			err = updateCluster(k8sClient, ctx, aeroCluster)
+			Expect(err).To(HaveOccurred())
+
+			By("Using ScaleDownBatchSize Count")
+			aeroCluster, err = getCluster(k8sClient, ctx, clusterNamespacedName)
+			Expect(err).ToNot(HaveOccurred())
+
+			aeroCluster.Spec.RackConfig.Racks = racks
+			aeroCluster.Spec.RackConfig.ScaleDownBatchSize = count(1)
+			err = updateCluster(k8sClient, ctx, aeroCluster)
+			Expect(err).To(HaveOccurred())
+		})
 	})
 })
 

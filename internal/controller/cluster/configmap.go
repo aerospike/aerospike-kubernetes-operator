@@ -162,20 +162,22 @@ func (r *SingleClusterReconciler) createConfigMapData(rack *asdbv1.Rack) (
 	confData[networkPolicyHashFileName] = policyHash
 
 	// Add rackIDSource hash
+	rackIDSourceStr := []byte{}
+
 	rackIDSource := r.aeroCluster.Spec.RackConfig.RackIDSource
 	if rackIDSource != nil {
-		rackIDSourceStr, rackErr := json.Marshal(rackIDSource)
-		if rackErr != nil {
-			return nil, rackErr
+		rackIDSourceStr, err = json.Marshal(*rackIDSource)
+		if err != nil {
+			return nil, err
 		}
-
-		rackIDSourceHash, rackErr := utils.GetHash(string(rackIDSourceStr))
-		if rackErr != nil {
-			return nil, rackErr
-		}
-
-		confData[rackIDSourceHashFileName] = rackIDSourceHash
 	}
+
+	rackIDSourceHash, err := utils.GetHash(string(rackIDSourceStr))
+	if err != nil {
+		return nil, err
+	}
+
+	confData[rackIDSourceHashFileName] = rackIDSourceHash
 
 	// Add podSpec hash
 	podSpec := createPodSpecForRack(r.aeroCluster, rack)

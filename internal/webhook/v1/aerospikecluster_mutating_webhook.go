@@ -89,9 +89,7 @@ func (acd *AerospikeClusterCustomDefaulter) setDefaults(asLog logr.Logger, clust
 	setNetworkPolicyDefaults(&cluster.Spec.AerospikeNetworkPolicy, cluster.Namespace)
 
 	// Set common storage defaults.
-	if err := setStorageDefaults(&cluster.Spec.Storage); err != nil {
-		return err
-	}
+	setStorageDefaults(&cluster.Spec.Storage)
 
 	// Add default rackConfig if not already given. Disallow use of defaultRackID by user.
 	// Need to set before setting defaults in aerospikeConfig.
@@ -203,9 +201,7 @@ func setDefaultRackConf(asLog logr.Logger, rackConfig *asdbv1.RackConfig) error 
 }
 
 func updateRacks(asLog logr.Logger, cluster *asdbv1.AerospikeCluster) error {
-	if err := updateRacksStorageFromGlobal(asLog, cluster); err != nil {
-		return fmt.Errorf("error updating rack storage: %v", err)
-	}
+	updateRacksStorageFromGlobal(asLog, cluster)
 
 	if err := updateRacksAerospikeConfigFromGlobal(asLog, cluster); err != nil {
 		return fmt.Errorf("error updating rack aerospike config: %v", err)
@@ -216,7 +212,7 @@ func updateRacks(asLog logr.Logger, cluster *asdbv1.AerospikeCluster) error {
 	return nil
 }
 
-func updateRacksStorageFromGlobal(asLog logr.Logger, cluster *asdbv1.AerospikeCluster) error {
+func updateRacksStorageFromGlobal(asLog logr.Logger, cluster *asdbv1.AerospikeCluster) {
 	for idx := range cluster.Spec.RackConfig.Racks {
 		rack := &cluster.Spec.RackConfig.Racks[idx]
 
@@ -231,13 +227,9 @@ func updateRacksStorageFromGlobal(asLog logr.Logger, cluster *asdbv1.AerospikeCl
 			rack.Storage = *rack.InputStorage
 		}
 
-		// Set storage defaults if rack has a storage section
-		if err := setStorageDefaults(&rack.Storage); err != nil {
-			return err
-		}
+		// Set storage defaults if rack has storage section
+		setStorageDefaults(&rack.Storage)
 	}
-
-	return nil
 }
 
 func updateRacksPodSpecFromGlobal(asLog logr.Logger, cluster *asdbv1.AerospikeCluster) {

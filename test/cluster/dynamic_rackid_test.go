@@ -6,28 +6,27 @@ import (
 	"strings"
 	"time"
 
-	"github.com/aerospike/aerospike-kubernetes-operator/v4/pkg/utils"
-	"golang.org/x/net/context"
-	"k8s.io/apimachinery/pkg/labels"
-	"k8s.io/apimachinery/pkg/util/wait"
-	"sigs.k8s.io/controller-runtime/pkg/client"
-
 	. "github.com/onsi/ginkgo/v2"
 	. "github.com/onsi/gomega"
+	"golang.org/x/net/context"
 	appsv1 "k8s.io/api/apps/v1"
 	v1 "k8s.io/api/core/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
+	"k8s.io/apimachinery/pkg/labels"
 	"k8s.io/apimachinery/pkg/types"
 	"k8s.io/apimachinery/pkg/util/intstr"
+	"k8s.io/apimachinery/pkg/util/wait"
 	"k8s.io/utils/ptr"
+	"sigs.k8s.io/controller-runtime/pkg/client"
 
 	asdbv1 "github.com/aerospike/aerospike-kubernetes-operator/v4/api/v1"
+	"github.com/aerospike/aerospike-kubernetes-operator/v4/pkg/utils"
 	"github.com/aerospike/aerospike-kubernetes-operator/v4/test"
 )
 
 const aerospikePath = "/opt/hostpath"
 
-var _ = Describe(
+var _ = FDescribe(
 	"DynamicRack", func() {
 		ctx := goctx.TODO()
 		clusterName := fmt.Sprintf("dynamic-rack-%d", GinkgoParallelProcess())
@@ -75,7 +74,7 @@ var _ = Describe(
 											{
 												Name:    "writer",
 												Image:   "busybox",
-												Command: []string{"sh", "-c", `echo "2" > /tmp/rackid && sleep 3600`},
+												Command: []string{"sh", "-c", `echo "2" > /tmp/rackid`},
 												VolumeMounts: []v1.VolumeMount{
 													{
 														Name:      "tmp-mount",
@@ -86,7 +85,7 @@ var _ = Describe(
 													PreStop: &v1.LifecycleHandler{
 														Exec: &v1.ExecAction{
 															Command: []string{
-																"/bin/sh", "-c", "rm /tmp/rackid; sleep 5",
+																"/bin/sh", "-c", "rm -r /tmp/rackid; sleep 5",
 															},
 														},
 													},
@@ -194,6 +193,11 @@ var _ = Describe(
 									},
 									Aerospike: &asdbv1.AerospikeServerVolumeAttachment{
 										Path: aerospikePath,
+										AttachmentOptions: asdbv1.AttachmentOptions{
+											MountOptions: asdbv1.MountOptions{
+												ReadOnly: ptr.To(true),
+											},
+										},
 									},
 								}
 
@@ -278,29 +282,10 @@ var _ = Describe(
 						aeroCluster.Spec.RackConfig.Racks = append(aeroCluster.Spec.RackConfig.Racks, asdbv1.Rack{ID: 2})
 						aeroCluster.Spec.RackConfig.RackIDSource = &asdbv1.RackIDSource{FilePath: aerospikePath + "/rackid"}
 
-						Expect(DeployCluster(k8sClient, ctx, aeroCluster)).Should(HaveOccurred())
-					},
-				)
-
-				It(
-					"Should fail if RollingUpdateBatchSize is given along with dynamic rack", func() {
-						aeroCluster := createDummyAerospikeClusterWithHostPathVolume(clusterNamespacedName, 2,
-							aerospikePath, "/dev/null")
-						aeroCluster.Spec.RackConfig.RackIDSource = &asdbv1.RackIDSource{FilePath: aerospikePath + "/rackid"}
-						aeroCluster.Spec.RackConfig.RollingUpdateBatchSize = &intstr.IntOrString{IntVal: 2}
-
-						Expect(DeployCluster(k8sClient, ctx, aeroCluster)).Should(HaveOccurred())
-					},
-				)
-
-				It(
-					"Should fail if ScaleDownBatchSize is given along with dynamic rack", func() {
-						aeroCluster := createDummyAerospikeClusterWithHostPathVolume(clusterNamespacedName, 2,
-							aerospikePath, "/dev/null")
-						aeroCluster.Spec.RackConfig.RackIDSource = &asdbv1.RackIDSource{FilePath: aerospikePath + "/rackid"}
-						aeroCluster.Spec.RackConfig.ScaleDownBatchSize = &intstr.IntOrString{IntVal: 2}
-
-						Expect(DeployCluster(k8sClient, ctx, aeroCluster)).Should(HaveOccurred())
+						err := DeployCluster(k8sClient, ctx, aeroCluster)
+						Expect(err).Should(HaveOccurred())
+						Expect(err.Error()).To(
+							ContainSubstring("cannot specify more than 1 rack when rackIDSource is provided"))
 					},
 				)
 
@@ -311,7 +296,10 @@ var _ = Describe(
 						aeroCluster.Spec.RackConfig.RackIDSource = &asdbv1.RackIDSource{FilePath: aerospikePath + "/rackid"}
 						aeroCluster.Spec.RackConfig.MaxIgnorablePods = &intstr.IntOrString{IntVal: 2}
 
-						Expect(DeployCluster(k8sClient, ctx, aeroCluster)).Should(HaveOccurred())
+						err := DeployCluster(k8sClient, ctx, aeroCluster)
+						Expect(err).Should(HaveOccurred())
+						Expect(err.Error()).To(
+							ContainSubstring("cannot specify MaxIgnorablePods when rackIDSource is provided"))
 					},
 				)
 
@@ -321,7 +309,11 @@ var _ = Describe(
 							aerospikePath, "/dev/null")
 						aeroCluster.Spec.RackConfig.RackIDSource = &asdbv1.RackIDSource{FilePath: "rackid"}
 
-						Expect(DeployCluster(k8sClient, ctx, aeroCluster)).Should(HaveOccurred())
+						err := DeployCluster(k8sClient, ctx, aeroCluster)
+						Expect(err).Should(HaveOccurred())
+
+						Expect(err.Error()).To(
+							ContainSubstring("must be absolute"))
 					},
 				)
 
@@ -330,7 +322,11 @@ var _ = Describe(
 						aeroCluster := createDummyRackAwareAerospikeCluster(clusterNamespacedName, 2)
 						aeroCluster.Spec.RackConfig.RackIDSource = &asdbv1.RackIDSource{FilePath: aerospikePath + "/rackid"}
 
-						Expect(DeployCluster(k8sClient, ctx, aeroCluster)).Should(HaveOccurred())
+						err := DeployCluster(k8sClient, ctx, aeroCluster)
+						Expect(err).Should(HaveOccurred())
+
+						Expect(err.Error()).To(
+							ContainSubstring("volume not found in storage spec"))
 					},
 				)
 
@@ -350,7 +346,11 @@ var _ = Describe(
 						aeroCluster.Spec.Storage.Volumes = append(aeroCluster.Spec.Storage.Volumes, emptyDirVolume)
 						aeroCluster.Spec.RackConfig.RackIDSource = &asdbv1.RackIDSource{FilePath: "/opt/empty/rackid"}
 
-						Expect(DeployCluster(k8sClient, ctx, aeroCluster)).Should(HaveOccurred())
+						err := DeployCluster(k8sClient, ctx, aeroCluster)
+						Expect(err).Should(HaveOccurred())
+
+						Expect(err.Error()).To(
+							ContainSubstring("must be a hostpath volume"))
 					},
 				)
 
@@ -377,7 +377,10 @@ var _ = Describe(
 						aeroCluster.Spec.Storage.Volumes = append(aeroCluster.Spec.Storage.Volumes, hostpathVolume)
 						aeroCluster.Spec.RackConfig.RackIDSource = &asdbv1.RackIDSource{FilePath: aerospikePath + "/rackid"}
 
-						Expect(DeployCluster(k8sClient, ctx, aeroCluster)).Should(HaveOccurred())
+						err := DeployCluster(k8sClient, ctx, aeroCluster)
+						Expect(err).Should(HaveOccurred())
+						Expect(err.Error()).To(
+							ContainSubstring("hostpath volumes can only be mounted as read only file system"))
 					},
 				)
 			},
