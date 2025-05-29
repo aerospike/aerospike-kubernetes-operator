@@ -124,7 +124,7 @@ var _ = Describe(
 				)
 
 				By("Create PDB")
-				err := createPDB(ctx, aeroCluster, defaultMaxUnavailable.IntVal)
+				err := createPDB(ctx, aeroCluster, defaultMaxUnavailable.IntValue())
 				Expect(err).ToNot(HaveOccurred())
 
 				By("Create cluster. It should fail as PDB is already created")
@@ -152,7 +152,7 @@ var _ = Describe(
 					clusterNamespacedName, 2,
 				)
 
-				err := createPDB(ctx, aeroCluster, defaultMaxUnavailable.IntVal)
+				err := createPDB(ctx, aeroCluster, defaultMaxUnavailable.IntValue())
 				Expect(err).ToNot(HaveOccurred())
 
 				// Create cluster with disabledPDB
@@ -215,14 +215,15 @@ func getPDB(ctx context.Context, aerocluster *asdbv1.AerospikeCluster) (*policyv
 	return pdb, err
 }
 
-func createPDB(ctx context.Context, aerocluster *asdbv1.AerospikeCluster, maxUnavailable int32) error {
+func createPDB(ctx context.Context, aerocluster *asdbv1.AerospikeCluster, maxUnavailable int) error {
 	pdb := &policyv1.PodDisruptionBudget{
 		ObjectMeta: metav1.ObjectMeta{
 			Name:      aerocluster.Name,
 			Namespace: aerocluster.Namespace,
 		},
 		Spec: policyv1.PodDisruptionBudgetSpec{
-			MaxUnavailable: &intstr.IntOrString{Type: intstr.Int, IntVal: maxUnavailable},
+			MaxUnavailable: &intstr.IntOrString{Type: intstr.Int,
+				IntVal: int32(maxUnavailable)}, //nolint:gosec // maxUnavailable can't exceed int32 range
 		},
 	}
 

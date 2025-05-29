@@ -720,6 +720,10 @@ func setDefaultsInConfigMap(
 			v = float64(newV)
 		}
 
+		if newV, ok := v.(int); ok {
+			v = float64(newV)
+		}
+
 		// Older baseValues are parsed to []interface{} but defaults are in []string
 		// Can make default as []interface{} but then we have to remember it there.
 		// []string looks make natural there. So lets handle it here only

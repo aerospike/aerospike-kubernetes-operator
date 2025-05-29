@@ -59,7 +59,7 @@ var _ = Describe("AutoScaler", func() {
 	})
 })
 
-func validateScaleSubresourceOperation(currentSize, desiredSize int, clusterNamespacedName types.NamespacedName) {
+func validateScaleSubresourceOperation(currentSize, desiredSize int32, clusterNamespacedName types.NamespacedName) {
 	gvr := schema.GroupVersionResource{
 		Group:    "asdb.aerospike.com", // Replace with your CRD group
 		Version:  "v1",                 // API version
@@ -85,11 +85,11 @@ func validateScaleSubresourceOperation(currentSize, desiredSize int, clusterName
 	Expect(err).ToNot(HaveOccurred())
 
 	Eventually(
-		func() int {
+		func() int32 {
 			aeroCluster, err := getCluster(k8sClient, goctx.TODO(), clusterNamespacedName)
 			Expect(err).ToNot(HaveOccurred())
 
-			return int(aeroCluster.Spec.Size)
+			return aeroCluster.Spec.Size
 		}, time.Minute, time.Second,
 	).Should(Equal(desiredSize))
 }
