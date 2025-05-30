@@ -732,6 +732,11 @@ func (r *SingleClusterReconciler) scaleUpRack(
 		)
 	}
 
+	// Create pod service for the scaled up pod when node network is used in network policy
+	if err = r.createOrUpdatePodServiceIfNeeded(newPodNames); err != nil {
+		return nil, common.ReconcileError(err)
+	}
+
 	// update replicas here to avoid new replicas count comparison while cleaning up dangling pods of rack
 	found.Spec.Replicas = &desiredSize
 

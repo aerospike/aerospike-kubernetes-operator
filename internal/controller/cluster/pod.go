@@ -1428,48 +1428,10 @@ func (r *SingleClusterReconciler) handleDynamicConfigChange(rackState *RackState
 	return specToStatusDiffs, nil
 }
 
-// mapping functions get mapped to each key value pair in a management lib Stats map
-// m is the map that k and v came from
-type mapping func(k string, v any, m asconfig.Conf)
-
-// mutateMap maps functions to each key value pair in the management lib's Stats map
-// the functions are applied sequentially to each k,v pair.
-func mutateMap(in asconfig.Conf, funcs []mapping) {
-	for k, v := range in {
-		switch v := v.(type) {
-		case asconfig.Conf:
-			mutateMap(v, funcs)
-		case []asconfig.Conf:
-			for _, lv := range v {
-				mutateMap(lv, funcs)
-			}
-		}
-
-		for _, f := range funcs {
-			f(k, in[k], in)
-		}
-	}
-}
-
 func getFlatConfig(log logger, confStr string) (*asconfig.Conf, error) {
-	asConf, err := asconfig.FromConfFile(log, strings.NewReader(confStr))
+	asConf, err := asconfig.NewASConfigFromBytes(log, []byte(confStr), asconfig.AeroConfig)
 	if err != nil {
 		return nil, fmt.Errorf("failed to load config map by lib: %v", err)
-	}
-
-	cmap := *asConf.ToMap()
-
-	mutateMap(cmap, []mapping{
-		asconfig.ToPlural,
-	})
-
-	asConf, err = asconfig.NewMapAsConfig(
-		log,
-		cmap,
-	)
-
-	if err != nil {
-		return nil, err
 	}
 
 	return asConf.GetFlatMap(), nil

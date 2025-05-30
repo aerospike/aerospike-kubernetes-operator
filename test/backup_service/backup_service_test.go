@@ -331,7 +331,7 @@ var _ = Describe(
 				Expect(err).ToNot(HaveOccurred())
 			})
 
-			It("Should add/update custom annotations and labels in the backup service deployement pods", func() {
+			It("Should add/update custom annotations and labels in the backup service deployment pods", func() {
 				labels := map[string]string{"label-test-1": "test-1"}
 				annotations := map[string]string{"annotation-test-1": "test-1"}
 
@@ -466,7 +466,105 @@ var _ = Describe(
 
 				validateSA(asdbv1beta1.AerospikeBackupServiceKey)
 			})
+		})
 
+		Context("When doing recovery", func() {
+			nodeLabelKey := fmt.Sprintf("test-key-%d", GinkgoParallelProcess())
+			nodeLabelValue := "test-value"
+
+			AfterEach(func() {
+				err = test.DeleteLabelsAllNodes(testCtx, k8sClient, []string{nodeLabelKey})
+				Expect(err).ToNot(HaveOccurred())
+			})
+
+			It("Should recover when pod is in pending state during create operation "+
+				"and infra is made available later", func() {
+				backupService, err = NewBackupService(backupServiceNamespacedName)
+				Expect(err).ToNot(HaveOccurred())
+
+				affinity := &corev1.Affinity{}
+				nodeSelector := &corev1.NodeSelector{
+					NodeSelectorTerms: []corev1.NodeSelectorTerm{
+						{
+							MatchExpressions: []corev1.NodeSelectorRequirement{
+								{
+									Key:      nodeLabelKey,
+									Operator: corev1.NodeSelectorOpIn,
+									Values:   []string{nodeLabelValue},
+								},
+							},
+						},
+					},
+				}
+
+				nodeAffinity := &corev1.NodeAffinity{
+					RequiredDuringSchedulingIgnoredDuringExecution: nodeSelector,
+				}
+				affinity.NodeAffinity = nodeAffinity
+				backupService.Spec.PodSpec.Affinity = affinity
+				err = deployBackupServiceWithTO(k8sClient, backupService, 1*time.Minute)
+				Expect(err).To(HaveOccurred())
+
+				By("Adding node labels to make infra available")
+				err = test.SetLabelsAllNodes(testCtx, k8sClient,
+					map[string]string{
+						nodeLabelKey: nodeLabelValue,
+					})
+				Expect(err).ToNot(HaveOccurred())
+
+				err = waitForBackupService(k8sClient, backupService, timeout)
+				Expect(err).ToNot(HaveOccurred())
+			})
+
+			It("Should recover when pod is in pending state during update operation "+
+				"and infra is made available later", func() {
+				backupService, err = NewBackupService(backupServiceNamespacedName)
+				Expect(err).ToNot(HaveOccurred())
+
+				err = DeployBackupService(k8sClient, backupService)
+				Expect(err).ToNot(HaveOccurred())
+
+				// Get backup service object
+				backupService, err = getBackupServiceObj(k8sClient, backupServiceNamespacedName)
+				Expect(err).ToNot(HaveOccurred())
+
+				By("Update Aerospike backup service port and node affinity")
+				backupService.Spec.Config.Raw = []byte(`{"service":{"http":{"port":8080}}}`)
+
+				affinity := &corev1.Affinity{}
+				nodeSelector := &corev1.NodeSelector{
+					NodeSelectorTerms: []corev1.NodeSelectorTerm{
+						{
+							MatchExpressions: []corev1.NodeSelectorRequirement{
+								{
+									Key:      nodeLabelKey,
+									Operator: corev1.NodeSelectorOpIn,
+									Values:   []string{nodeLabelValue},
+								},
+							},
+						},
+					},
+				}
+
+				nodeAffinity := &corev1.NodeAffinity{
+					RequiredDuringSchedulingIgnoredDuringExecution: nodeSelector,
+				}
+				affinity.NodeAffinity = nodeAffinity
+				backupService.Spec.PodSpec.Affinity = affinity
+
+				err = updateBackupServiceWithTO(k8sClient, backupService, 1*time.Minute)
+				Expect(err).To(HaveOccurred())
+
+				By("Adding node labels to make infra available")
+				err := test.SetLabelsAllNodes(testCtx, k8sClient,
+					map[string]string{
+						nodeLabelKey: nodeLabelValue,
+					})
+				Expect(err).ToNot(HaveOccurred())
+
+				err = waitForBackupService(k8sClient, backupService, timeout)
+				Expect(err).ToNot(HaveOccurred())
+			})
 		})
 	},
 )
@@ -491,7 +589,7 @@ func validateBackupServiceResources(k8sClient client.Client, backupServiceNamesp
 		return err
 	}
 
-	// res can not be null in deploy spec
+	// res cannot be null in deploy spec
 	if res == nil {
 		res = &corev1.ResourceRequirements{}
 	}

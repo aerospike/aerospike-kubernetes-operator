@@ -132,7 +132,7 @@ var _ = Describe(
 							return ds
 						}
 
-						nodeList, err = getNodeList(ctx, k8sClient)
+						nodeList, err = test.GetNodeList(ctx, k8sClient)
 						Expect(err).NotTo(HaveOccurred())
 						Expect(nodeList.Items).NotTo(BeEmpty(), "No nodes found in the cluster")
 
@@ -151,9 +151,9 @@ var _ = Describe(
 							Items: append([]v1.Node{}, nodeList.Items[half:]...),
 						}
 
-						err = setNodeLabels(ctx, k8sClient, firstHalfNodeList, map[string]string{rackLabelKey: rack1LabelValue})
+						err = test.SetNodeLabels(ctx, k8sClient, firstHalfNodeList, map[string]string{rackLabelKey: rack1LabelValue})
 						Expect(err).NotTo(HaveOccurred())
-						err = setNodeLabels(ctx, k8sClient, secondHalfNodeList, map[string]string{rackLabelKey: rack2LabelValue})
+						err = test.SetNodeLabels(ctx, k8sClient, secondHalfNodeList, map[string]string{rackLabelKey: rack2LabelValue})
 						Expect(err).NotTo(HaveOccurred())
 
 						ds1 := createDaemonSet(ds1Name, rackLabelKey, rack1LabelValue)
@@ -192,7 +192,7 @@ var _ = Describe(
 						err = k8sClient.Delete(ctx, ds)
 						Expect(err).NotTo(HaveOccurred())
 
-						err = deleteLabelsAllNodes(ctx, []string{rackLabelKey})
+						err = test.DeleteLabelsAllNodes(ctx, k8sClient, []string{rackLabelKey})
 						Expect(err).NotTo(HaveOccurred())
 					})
 

@@ -22,12 +22,12 @@ import (
 	"k8s.io/apimachinery/pkg/types"
 	"k8s.io/apimachinery/pkg/util/wait"
 	"k8s.io/client-go/kubernetes"
-	"k8s.io/client-go/util/retry"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 
 	as "github.com/aerospike/aerospike-client-go/v8"
 	asdbv1 "github.com/aerospike/aerospike-kubernetes-operator/v4/api/v1"
 	operatorUtils "github.com/aerospike/aerospike-kubernetes-operator/v4/pkg/utils"
+	"github.com/aerospike/aerospike-kubernetes-operator/v4/test"
 	lib "github.com/aerospike/aerospike-management-lib"
 	"github.com/aerospike/aerospike-management-lib/info"
 )
@@ -177,7 +177,7 @@ func isClusterStateValid(
 }
 
 func getTimeout(nodes int32) time.Duration {
-	return 4 * time.Minute * time.Duration(nodes)
+	return 5 * time.Minute * time.Duration(nodes)
 }
 
 func getPodLogs(
@@ -785,7 +785,7 @@ func getCloudProvider(
 ) (CloudProvider, error) {
 	labelKeys := map[string]struct{}{}
 
-	nodes, err := getNodeList(ctx, k8sClient)
+	nodes, err := test.GetNodeList(ctx, k8sClient)
 	if err != nil {
 		return CloudProviderUnknown, err
 	}
@@ -833,7 +833,7 @@ func determineByProviderID(node *corev1.Node) CloudProvider {
 func getZones(ctx goctx.Context, k8sClient client.Client) ([]string, error) {
 	unqZones := map[string]int{}
 
-	nodes, err := getNodeList(ctx, k8sClient)
+	nodes, err := test.GetNodeList(ctx, k8sClient)
 	if err != nil {
 		return nil, err
 	}
@@ -851,65 +851,8 @@ func getZones(ctx goctx.Context, k8sClient client.Client) ([]string, error) {
 	return zones, nil
 }
 
-func getNodeList(ctx goctx.Context, k8sClient client.Client) (
-	*corev1.NodeList, error,
-) {
-	nodeList := &corev1.NodeList{}
-	if err := k8sClient.List(ctx, nodeList); err != nil {
-		return nil, err
-	}
-
-	return nodeList, nil
-}
-
-func setNodeLabels(ctx goctx.Context, k8sClient client.Client, nodeList *corev1.NodeList, l map[string]string) error {
-	for idx := range nodeList.Items {
-		if err := retry.RetryOnConflict(retry.DefaultRetry, func() error {
-			node := &nodeList.Items[idx]
-
-			if err := k8sClient.Get(
-				ctx, types.NamespacedName{Name: node.Name}, node); err != nil {
-				return err
-			}
-
-			for key, val := range l {
-				node.Labels[key] = val
-			}
-
-			return k8sClient.Update(ctx, node)
-		}); err != nil {
-			return err
-		}
-	}
-
-	return nil
-}
-
-func deleteNodeLabels(ctx goctx.Context, k8sClient client.Client, nodeList *corev1.NodeList, keys []string) error {
-	for idx := range nodeList.Items {
-		if err := retry.RetryOnConflict(retry.DefaultRetry, func() error {
-			node := &nodeList.Items[idx]
-
-			if err := k8sClient.Get(
-				ctx, types.NamespacedName{Name: node.Name}, node); err != nil {
-				return err
-			}
-
-			for _, key := range keys {
-				delete(node.Labels, key)
-			}
-
-			return k8sClient.Update(ctx, node)
-		}); err != nil {
-			return err
-		}
-	}
-
-	return nil
-}
-
 func getRegion(ctx goctx.Context, k8sClient client.Client) (string, error) {
-	nodes, err := getNodeList(ctx, k8sClient)
+	nodes, err := test.GetNodeList(ctx, k8sClient)
 	if err != nil {
 		return "", err
 	}

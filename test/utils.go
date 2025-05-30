@@ -1,15 +1,18 @@
 package test
 
 import (
+	goctx "context"
 	"fmt"
 
 	admissionv1 "k8s.io/api/admission/v1"
+	corev1 "k8s.io/api/core/v1"
 	"k8s.io/apimachinery/pkg/runtime"
 	"k8s.io/apimachinery/pkg/types"
 	utilRuntime "k8s.io/apimachinery/pkg/util/runtime"
 	"k8s.io/client-go/kubernetes"
 	clientgoscheme "k8s.io/client-go/kubernetes/scheme"
 	"k8s.io/client-go/rest"
+	"k8s.io/client-go/util/retry"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 	"sigs.k8s.io/controller-runtime/pkg/envtest"
 
@@ -73,4 +76,79 @@ func StartTestEnvironment() (testEnv *envtest.Environment, cfg *rest.Config, err
 	}
 
 	return testEnv, cfg, nil
+}
+
+func SetLabelsAllNodes(ctx goctx.Context, k8sClient client.Client, labels map[string]string) error {
+	nodeList, err := GetNodeList(ctx, k8sClient)
+	if err != nil {
+		return err
+	}
+
+	return SetNodeLabels(ctx, k8sClient, nodeList, labels)
+}
+
+func DeleteLabelsAllNodes(ctx goctx.Context, k8sClient client.Client, keys []string) error {
+	nodeList, err := GetNodeList(ctx, k8sClient)
+	if err != nil {
+		return err
+	}
+
+	return DeleteNodeLabels(ctx, k8sClient, nodeList, keys)
+}
+
+func GetNodeList(ctx goctx.Context, k8sClient client.Client) (
+	*corev1.NodeList, error,
+) {
+	nodeList := &corev1.NodeList{}
+	if err := k8sClient.List(ctx, nodeList); err != nil {
+		return nil, err
+	}
+
+	return nodeList, nil
+}
+
+func SetNodeLabels(ctx goctx.Context, k8sClient client.Client, nodeList *corev1.NodeList, l map[string]string) error {
+	for idx := range nodeList.Items {
+		if err := retry.RetryOnConflict(retry.DefaultRetry, func() error {
+			node := &nodeList.Items[idx]
+
+			if err := k8sClient.Get(
+				ctx, types.NamespacedName{Name: node.Name}, node); err != nil {
+				return err
+			}
+
+			for key, val := range l {
+				node.Labels[key] = val
+			}
+
+			return k8sClient.Update(ctx, node)
+		}); err != nil {
+			return err
+		}
+	}
+
+	return nil
+}
+
+func DeleteNodeLabels(ctx goctx.Context, k8sClient client.Client, nodeList *corev1.NodeList, keys []string) error {
+	for idx := range nodeList.Items {
+		if err := retry.RetryOnConflict(retry.DefaultRetry, func() error {
+			node := &nodeList.Items[idx]
+
+			if err := k8sClient.Get(
+				ctx, types.NamespacedName{Name: node.Name}, node); err != nil {
+				return err
+			}
+
+			for _, key := range keys {
+				delete(node.Labels, key)
+			}
+
+			return k8sClient.Update(ctx, node)
+		}); err != nil {
+			return err
+		}
+	}
+
+	return nil
 }

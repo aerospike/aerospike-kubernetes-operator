@@ -267,7 +267,7 @@ func negativeDeployNetworkPolicyTest(ctx goctx.Context, multiPodPerHost, enableT
 
 			BeforeEach(
 				func() {
-					err := deleteLabelsAllNodes(ctx, []string{labelAccessAddress, labelAlternateAccessAddress})
+					err := test.DeleteLabelsAllNodes(ctx, k8sClient, []string{labelAccessAddress, labelAlternateAccessAddress})
 					Expect(err).ToNot(HaveOccurred())
 				},
 			)
@@ -288,8 +288,8 @@ func negativeDeployNetworkPolicyTest(ctx goctx.Context, multiPodPerHost, enableT
 
 			It(
 				"setting configured access-address without right label", Serial, func() {
-					err := setLabelsAllNodes(
-						ctx,
+					err := test.SetLabelsAllNodes(
+						ctx, k8sClient,
 						map[string]string{labelAlternateAccessAddress: valueAlternateAccessAddress},
 					)
 					Expect(err).ToNot(HaveOccurred())
@@ -309,7 +309,7 @@ func negativeDeployNetworkPolicyTest(ctx goctx.Context, multiPodPerHost, enableT
 			)
 			It(
 				"setting configured alternate-access-address without right label", Serial, func() {
-					err := setLabelsAllNodes(ctx, map[string]string{labelAccessAddress: valueAccessAddress})
+					err := test.SetLabelsAllNodes(ctx, k8sClient, map[string]string{labelAccessAddress: valueAccessAddress})
 					Expect(err).ToNot(HaveOccurred())
 
 					networkPolicy := &asdbv1.AerospikeNetworkPolicy{
@@ -814,14 +814,14 @@ func doTestNetworkPolicy(
 
 			BeforeEach(
 				func() {
-					err := deleteLabelsAllNodes(ctx, []string{labelAccessAddress, labelAlternateAccessAddress})
+					err := test.DeleteLabelsAllNodes(ctx, k8sClient, []string{labelAccessAddress, labelAlternateAccessAddress})
 					Expect(err).ToNot(HaveOccurred())
 				},
 			)
 
 			It(
 				"setting configured access-address", Serial, func() {
-					err := setLabelsAllNodes(ctx, map[string]string{labelAccessAddress: valueAccessAddress})
+					err := test.SetLabelsAllNodes(ctx, k8sClient, map[string]string{labelAccessAddress: valueAccessAddress})
 					Expect(err).ToNot(HaveOccurred())
 
 					networkPolicy := &asdbv1.AerospikeNetworkPolicy{
@@ -847,8 +847,8 @@ func doTestNetworkPolicy(
 
 			It(
 				"setting configured alternate-access-address", Serial, func() {
-					err := setLabelsAllNodes(
-						ctx, map[string]string{
+					err := test.SetLabelsAllNodes(
+						ctx, k8sClient, map[string]string{
 							labelAlternateAccessAddress: valueAlternateAccessAddress,
 						},
 					)
@@ -879,8 +879,8 @@ func doTestNetworkPolicy(
 					clusterName := fmt.Sprintf("np-configured-ip-%d", GinkgoParallelProcess())
 					clusterNamespacedName := test.GetNamespacedName(clusterName, test.MultiClusterNs1)
 
-					err := setLabelsAllNodes(
-						ctx, map[string]string{
+					err := test.SetLabelsAllNodes(
+						ctx, k8sClient, map[string]string{
 							labelAccessAddress:          valueAccessAddress,
 							labelAlternateAccessAddress: valueAlternateAccessAddress,
 						},
@@ -1449,22 +1449,4 @@ func getAerospikeClusterSpecWithNetworkPolicy(
 			AerospikeNetworkPolicy: *networkPolicy,
 		},
 	}
-}
-
-func setLabelsAllNodes(ctx goctx.Context, labels map[string]string) error {
-	nodeList, err := getNodeList(ctx, k8sClient)
-	if err != nil {
-		return err
-	}
-
-	return setNodeLabels(ctx, k8sClient, nodeList, labels)
-}
-
-func deleteLabelsAllNodes(ctx goctx.Context, keys []string) error {
-	nodeList, err := getNodeList(ctx, k8sClient)
-	if err != nil {
-		return err
-	}
-
-	return deleteNodeLabels(ctx, k8sClient, nodeList, keys)
 }
