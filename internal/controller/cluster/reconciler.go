@@ -331,20 +331,25 @@ func (r *SingleClusterReconciler) validateAndReconcileAccessControl(
 	selectedPods []corev1.Pod,
 	ignorablePodNames sets.Set[string],
 ) error {
-	enabled, err := asdbv1.IsSecurityEnabled(r.aeroCluster.Spec.AerospikeConfig.Value)
-	if err != nil {
-		return fmt.Errorf("failed to get cluster security status: %v", err)
-	}
+	r.Log.Info("Reconcile access control for AerospikeCluster", "selectedPods", selectedPods)
 
-	if !enabled {
-		r.Log.Info("Cluster is not security enabled, please enable security for this cluster.")
-		return nil
-	}
-
-	var conns []*deployment.HostConn
+	var (
+		err   error
+		conns []*deployment.HostConn
+	)
 
 	// Create client
 	if selectedPods == nil {
+		enabled, err := asdbv1.IsSecurityEnabled(r.aeroCluster.Spec.AerospikeConfig.Value)
+		if err != nil {
+			return fmt.Errorf("failed to get cluster security status: %v", err)
+		}
+
+		if !enabled {
+			r.Log.Info("Cluster is not security enabled, please enable security for this cluster.")
+			return nil
+		}
+
 		conns, err = r.newAllHostConnWithOption(ignorablePodNames)
 		if err != nil {
 			return fmt.Errorf("failed to get host info: %v", err)

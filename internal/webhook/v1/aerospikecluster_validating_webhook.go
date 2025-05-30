@@ -63,6 +63,15 @@ func (acv *AerospikeClusterCustomValidator) ValidateCreate(_ context.Context, ob
 
 	aslog.Info("Validate create")
 
+	enabled, err := asdbv1.IsSecurityEnabled(aerospikeCluster.Spec.AerospikeConfig.Value)
+	if err != nil {
+		return nil, err
+	}
+
+	if !enabled && aerospikeCluster.Spec.AerospikeAccessControl != nil {
+		return nil, fmt.Errorf("aerospikeAccessControl cannot be set when security is not enabled")
+	}
+
 	return validate(aslog, aerospikeCluster)
 }
 
@@ -147,6 +156,10 @@ func (acv *AerospikeClusterCustomValidator) ValidateUpdate(_ context.Context, ol
 		return warnings, err
 	}
 
+	if err := validateAccessControlUpdate(oldObject, aerospikeCluster); err != nil {
+		return warnings, fmt.Errorf("failed to validate access control update: %v", err)
+	}
+
 	// Validate AerospikeConfig update
 	if err := validateAerospikeConfigUpdate(
 		aslog, aerospikeCluster.Spec.AerospikeConfig, oldObject.Spec.AerospikeConfig,
@@ -157,6 +170,19 @@ func (acv *AerospikeClusterCustomValidator) ValidateUpdate(_ context.Context, ol
 
 	// Validate RackConfig update
 	return warnings, validateRackUpdate(aslog, oldObject, aerospikeCluster)
+}
+
+func validateAccessControlUpdate(oldCluster *asdbv1.AerospikeCluster, newCluster *asdbv1.AerospikeCluster) error {
+	enabled, err := asdbv1.IsSecurityEnabled(newCluster.Spec.AerospikeConfig.Value)
+	if err != nil {
+		return fmt.Errorf("failed to check security enabled: %v", err)
+	}
+
+	if !(enabled || reflect.DeepEqual(oldCluster.Spec.AerospikeAccessControl, newCluster.Spec.AerospikeAccessControl)) {
+		return fmt.Errorf("aerospikeAccessControl cannot be modified when security is not enabled")
+	}
+
+	return nil
 }
 
 func validate(aslog logr.Logger, cluster *asdbv1.AerospikeCluster) (admission.Warnings, error) {
@@ -926,26 +952,6 @@ func validateNamespaceConfig(
 	return nil
 }
 
-func validateSecurityConfigUpdateFromStatus(newSpec, currentStatus *asdbv1.AerospikeConfigSpec) error {
-	if currentStatus != nil {
-		currentSecurityEnabled, err := asdbv1.IsSecurityEnabled(currentStatus.Value)
-		if err != nil {
-			return err
-		}
-
-		desiredSecurityEnabled, err := asdbv1.IsSecurityEnabled(newSpec.Value)
-		if err != nil {
-			return err
-		}
-
-		if currentSecurityEnabled && !desiredSecurityEnabled {
-			return fmt.Errorf("cannot disable cluster security in running cluster")
-		}
-	}
-
-	return nil
-}
-
 func validateAerospikeConfigUpdate(
 	aslog logr.Logger,
 	incomingSpec, outgoingSpec, currentStatus *asdbv1.AerospikeConfigSpec,
@@ -956,10 +962,6 @@ func validateAerospikeConfigUpdate(
 	oldConf := outgoingSpec.Value
 
 	if err := validation.ValidateAerospikeConfigUpdateWithoutSchema(oldConf, newConf); err != nil {
-		return err
-	}
-
-	if err := validateSecurityConfigUpdateFromStatus(incomingSpec, currentStatus); err != nil {
 		return err
 	}
 

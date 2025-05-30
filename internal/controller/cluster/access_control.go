@@ -37,26 +37,10 @@ func AerospikeAdminCredentials(
 	desiredState, currentState *asdbv1.AerospikeClusterSpec,
 	passwordProvider AerospikeUserPasswordProvider,
 ) (user, pass string, err error) {
-	var (
-		enabled            bool
-		currentSecurityErr error
-		desiredSecurityErr error
-	)
-
-	enabled, desiredSecurityErr = asdbv1.IsSecurityEnabled(desiredState.AerospikeConfig.Value)
-	if !enabled {
-		if currentState.AerospikeConfig != nil {
-			// It is possible that this is a new cluster and the current state is empty.
-			enabled, currentSecurityErr = asdbv1.IsSecurityEnabled(currentState.AerospikeConfig.Value)
-		}
-
-		if currentSecurityErr != nil && desiredSecurityErr != nil {
-			return "", "", desiredSecurityErr
-		}
-	}
-
-	if !enabled {
-		// Return zero strings if this is not a security enabled cluster.
+	// point 1: if annotation is not there then what??
+	// lets get this info from annotation
+	// This will only work if user is not removing aerospike access control while disabling security.
+	if desiredState.AerospikeAccessControl == nil {
 		return "", "", nil
 	}
 

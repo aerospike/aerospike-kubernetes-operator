@@ -1781,8 +1781,10 @@ func (r *SingleClusterReconciler) handleEnableSecurity(rackState *RackState, ign
 		return nil
 	}
 
+	r.Log.Info("Enabling security", "rack", rackState.Rack.ID)
+
 	// Get pods where security-enabled config is applied
-	securityEnabledPods, err := r.getPodsWithUpdatedConfigForRack(rackState)
+	securityEnabledPods, err := r.getPodsWithEnabledSecurityForRack(rackState)
 	if err != nil {
 		return err
 	}
@@ -1811,7 +1813,7 @@ func (r *SingleClusterReconciler) enablingSecurity() bool {
 	return r.aeroCluster.Spec.AerospikeAccessControl != nil && r.aeroCluster.Status.AerospikeAccessControl == nil
 }
 
-func (r *SingleClusterReconciler) getPodsWithUpdatedConfigForRack(rackState *RackState) ([]corev1.Pod, error) {
+func (r *SingleClusterReconciler) getPodsWithEnabledSecurityForRack(rackState *RackState) ([]corev1.Pod, error) {
 	pods, err := r.getOrderedRackPodList(rackState.Rack.ID)
 	if err != nil {
 		return nil, fmt.Errorf("failed to list pods: %v", err)
@@ -1822,26 +1824,27 @@ func (r *SingleClusterReconciler) getPodsWithUpdatedConfigForRack(rackState *Rac
 		return nil, nil
 	}
 
-	confMap, err := r.getConfigMap(rackState.Rack.ID)
-	if err != nil {
-		return nil, err
-	}
-
-	requiredConfHash := confMap.Data[aerospikeConfHashFileName]
-
-	updatedPods := make([]corev1.Pod, 0, len(pods))
+	securityEnabledPods := make([]corev1.Pod, 0, len(pods))
 
 	for idx := range pods {
-		podName := pods[idx].Name
-		podStatus := r.aeroCluster.Status.Pods[podName]
+		statusFromAnnotation := pods[idx].Annotations["aerospikeConf"]
+		asConfStatus, err := getFlatConfig(r.Log, statusFromAnnotation)
+		if err != nil {
+			return nil, fmt.Errorf("failed to load config map by lib: %v", err)
+		}
 
-		if podStatus.AerospikeConfigHash == requiredConfHash {
-			// Config hash is matching, it means config has been applied
-			updatedPods = append(updatedPods, *pods[idx])
+		r.Log.Info("Checking pod for security enabled", "asConfStatus", asConfStatus)
+		enabled, err := asdbv1.IsSecurityEnabled(*asConfStatus)
+		if err != nil {
+			return nil, fmt.Errorf("failed to get cluster security status: %v", err)
+		}
+
+		if enabled {
+			securityEnabledPods = append(securityEnabledPods, *pods[idx])
 		}
 	}
 
-	return updatedPods, nil
+	return securityEnabledPods, nil
 }
 
 func isContainerNameInStorageVolumeAttachments(
