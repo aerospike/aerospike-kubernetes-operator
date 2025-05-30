@@ -27,7 +27,7 @@ import (
 
 const aerospikePath = "/opt/hostpath"
 
-var _ = FDescribe(
+var _ = Describe(
 	"DynamicRack", func() {
 		ctx := goctx.TODO()
 		clusterName := fmt.Sprintf("dynamic-rack-%d", GinkgoParallelProcess())
