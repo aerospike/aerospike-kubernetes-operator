@@ -576,7 +576,7 @@ var _ = Describe(
 								)
 
 								aeroCluster.Spec.Storage.Volumes = append(aeroCluster.Spec.Storage.Volumes,
-									getStorageVolumeForSidecar("sidecar-volume",
+									getHostPathStorageVolumeForSidecar("sidecar-volume",
 										"/para/tomcat1", containerName, true))
 
 								err = updateCluster(k8sClient, ctx, aeroCluster)

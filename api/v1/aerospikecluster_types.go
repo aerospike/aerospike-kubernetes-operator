@@ -1115,7 +1115,7 @@ type AerospikeNetworkPolicy struct {
 type RackIDSource struct {
 	// FilePath specifies an absolute path to a file containing the rack ID mounted in the aerospike server container.
 	// The file should contain a single integer value.
-	FilePath string `json:"filePath,omitempty"`
+	FilePath string `json:"filePath"`
 }
 
 // AerospikeInstanceSummary defines the observed state of a pod's Aerospike Server Instance.

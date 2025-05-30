@@ -5160,6 +5160,8 @@ spec:
                           FilePath specifies an absolute path to a file containing the rack ID mounted in the aerospike server container.
                           The file should contain a single integer value.
                         type: string
+                    required:
+                    - filePath
                     type: object
                   racks:
                     description: Racks is the list of all racks
@@ -14379,6 +14381,8 @@ spec:
                           FilePath specifies an absolute path to a file containing the rack ID mounted in the aerospike server container.
                           The file should contain a single integer value.
                         type: string
+                    required:
+                    - filePath
                     type: object
                   racks:
                     description: Racks is the list of all racks

@@ -5,10 +5,11 @@ import (
 	"path/filepath"
 	"reflect"
 
-	asdbv1 "github.com/aerospike/aerospike-kubernetes-operator/v4/api/v1"
 	v1 "k8s.io/api/core/v1"
 	"k8s.io/apimachinery/pkg/util/sets"
 	"k8s.io/apimachinery/pkg/util/validation"
+
+	asdbv1 "github.com/aerospike/aerospike-kubernetes-operator/v4/api/v1"
 )
 
 // validateStorageSpecChange indicates if a change to storage spec is safe to apply.
@@ -141,13 +142,13 @@ func validateHostPathVolumeReadOnly(volume *asdbv1.VolumeSpec) error {
 
 		for idx := range attachments {
 			if attachments[idx].ReadOnly == nil || !*attachments[idx].ReadOnly {
-				return fmt.Errorf("hostpath volumes can only be mounted as read only file system")
+				return fmt.Errorf("hostpath volumes can only be mounted as read-only filesystem")
 			}
 		}
 
 		if volume.Aerospike != nil {
 			if volume.Aerospike.ReadOnly == nil || !*volume.Aerospike.ReadOnly {
-				return fmt.Errorf("hostpath volumes can only be mounted as read only file system")
+				return fmt.Errorf("hostpath volumes can only be mounted as read-only filesystem")
 			}
 		}
 	}

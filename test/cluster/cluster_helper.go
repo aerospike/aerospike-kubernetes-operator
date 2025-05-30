@@ -1526,7 +1526,7 @@ func getStorageVolumeForSecret() asdbv1.VolumeSpec {
 	}
 }
 
-func getStorageVolumeForSidecar(volumeName, path, containerName string, readOnly bool) asdbv1.VolumeSpec {
+func getHostPathStorageVolumeForSidecar(volumeName, path, containerName string, readOnly bool) asdbv1.VolumeSpec {
 	return asdbv1.VolumeSpec{
 		Name: volumeName,
 		Source: asdbv1.VolumeSource{

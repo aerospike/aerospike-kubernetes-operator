@@ -22,6 +22,7 @@ import (
 	"k8s.io/apimachinery/pkg/types"
 	"k8s.io/apimachinery/pkg/util/wait"
 	"k8s.io/client-go/kubernetes"
+	"k8s.io/client-go/util/retry"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 
 	as "github.com/aerospike/aerospike-client-go/v8"
@@ -859,6 +860,52 @@ func getNodeList(ctx goctx.Context, k8sClient client.Client) (
 	}
 
 	return nodeList, nil
+}
+
+func setNodeLabels(ctx goctx.Context, k8sClient client.Client, nodeList *corev1.NodeList, l map[string]string) error {
+	for idx := range nodeList.Items {
+		if err := retry.RetryOnConflict(retry.DefaultRetry, func() error {
+			node := &nodeList.Items[idx]
+
+			if err := k8sClient.Get(
+				ctx, types.NamespacedName{Name: node.Name}, node); err != nil {
+				return err
+			}
+
+			for key, val := range l {
+				node.Labels[key] = val
+			}
+
+			return k8sClient.Update(ctx, node)
+		}); err != nil {
+			return err
+		}
+	}
+
+	return nil
+}
+
+func deleteNodeLabels(ctx goctx.Context, k8sClient client.Client, nodeList *corev1.NodeList, keys []string) error {
+	for idx := range nodeList.Items {
+		if err := retry.RetryOnConflict(retry.DefaultRetry, func() error {
+			node := &nodeList.Items[idx]
+
+			if err := k8sClient.Get(
+				ctx, types.NamespacedName{Name: node.Name}, node); err != nil {
+				return err
+			}
+
+			for _, key := range keys {
+				delete(node.Labels, key)
+			}
+
+			return k8sClient.Update(ctx, node)
+		}); err != nil {
+			return err
+		}
+	}
+
+	return nil
 }
 
 func getRegion(ctx goctx.Context, k8sClient client.Client) (string, error) {
