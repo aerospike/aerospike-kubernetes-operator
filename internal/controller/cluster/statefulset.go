@@ -18,6 +18,7 @@ import (
 	"k8s.io/apimachinery/pkg/util/intstr"
 	"k8s.io/apimachinery/pkg/util/sets"
 	"k8s.io/client-go/util/retry"
+	"k8s.io/utils/ptr"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 	"sigs.k8s.io/controller-runtime/pkg/controller/controllerutil"
 
@@ -1431,12 +1432,13 @@ func createPVCForVolumeAttachment(
 func createVolumeForVolumeAttachment(volume *asdbv1.VolumeSpec) corev1.Volume {
 	return corev1.Volume{
 		Name: volume.Name,
-		// Add all type of source,
-		// we have already validated in webhook that only one of the source is present, rest are nil.
+		// Add all types of source;
+		// we have already validated in webhook that only one of the sources is present, the rest are nil.
 		VolumeSource: corev1.VolumeSource{
 			ConfigMap: volume.Source.ConfigMap,
 			Secret:    volume.Source.Secret,
 			EmptyDir:  volume.Source.EmptyDir,
+			HostPath:  volume.Source.HostPath,
 		},
 	}
 }
@@ -1453,10 +1455,19 @@ func getFinalVolumeAttachmentsForVolume(volume *asdbv1.VolumeSpec) (
 	initContainerAttachments = append(
 		initContainerAttachments, volume.InitContainers...,
 	)
+
+	readOnlyVolume := false
+	if volume.Source.HostPath != nil {
+		readOnlyVolume = true
+	}
+
 	initContainerAttachments = append(
 		initContainerAttachments, asdbv1.VolumeAttachment{
 			ContainerName: asdbv1.AerospikeInitContainerName,
 			Path:          initVolumePath,
+			AttachmentOptions: asdbv1.AttachmentOptions{
+				MountOptions: asdbv1.MountOptions{ReadOnly: ptr.To(readOnlyVolume)},
+			},
 		},
 	)
 
@@ -1468,6 +1479,9 @@ func getFinalVolumeAttachmentsForVolume(volume *asdbv1.VolumeSpec) (
 			containerAttachments, asdbv1.VolumeAttachment{
 				ContainerName: asdbv1.AerospikeServerContainerName,
 				Path:          volume.Aerospike.Path,
+				AttachmentOptions: asdbv1.AttachmentOptions{
+					MountOptions: asdbv1.MountOptions{ReadOnly: ptr.To(readOnlyVolume)},
+				},
 			},
 		)
 	}
@@ -1490,11 +1504,16 @@ func addVolumeMountInContainer(
 					volumeMount = corev1.VolumeMount{
 						Name:      volumeName,
 						MountPath: pathPrefix + volumeAttachment.Path,
+						ReadOnly:  asdbv1.GetBool(volumeAttachment.AttachmentOptions.MountOptions.ReadOnly),
 					}
 				} else {
 					volumeMount = corev1.VolumeMount{
-						Name:      volumeName,
-						MountPath: volumeAttachment.Path,
+						Name:             volumeName,
+						MountPath:        volumeAttachment.Path,
+						ReadOnly:         asdbv1.GetBool(volumeAttachment.AttachmentOptions.MountOptions.ReadOnly),
+						SubPath:          volumeAttachment.AttachmentOptions.MountOptions.SubPath,
+						SubPathExpr:      volumeAttachment.AttachmentOptions.MountOptions.SubPathExpr,
+						MountPropagation: volumeAttachment.AttachmentOptions.MountOptions.MountPropagation,
 					}
 				}
 

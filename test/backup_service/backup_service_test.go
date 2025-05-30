@@ -473,7 +473,7 @@ var _ = Describe(
 			nodeLabelValue := "test-value"
 
 			AfterEach(func() {
-				err = test.DeleteNodeLabels(testCtx, k8sClient, []string{nodeLabelKey})
+				err = test.DeleteLabelsAllNodes(testCtx, k8sClient, []string{nodeLabelKey})
 				Expect(err).ToNot(HaveOccurred())
 			})
 
@@ -506,7 +506,7 @@ var _ = Describe(
 				Expect(err).To(HaveOccurred())
 
 				By("Adding node labels to make infra available")
-				err = test.SetNodeLabels(testCtx, k8sClient,
+				err = test.SetLabelsAllNodes(testCtx, k8sClient,
 					map[string]string{
 						nodeLabelKey: nodeLabelValue,
 					})
@@ -556,7 +556,7 @@ var _ = Describe(
 				Expect(err).To(HaveOccurred())
 
 				By("Adding node labels to make infra available")
-				err := test.SetNodeLabels(testCtx, k8sClient,
+				err := test.SetLabelsAllNodes(testCtx, k8sClient,
 					map[string]string{
 						nodeLabelKey: nodeLabelValue,
 					})
