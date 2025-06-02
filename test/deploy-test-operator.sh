@@ -13,7 +13,7 @@ CATALOG_IMG=$2
 case $(kubectl get nodes -o yaml) in
   *"attachable-volumes-gce-pd"*)
     echo "Installing ssd storage class for GKE."
-    kubectl apply -f config/samples/storage/gce_ssd_storage_class.yaml
+    kubectl apply -f config/samples/storage/gke_ssd_storage_class.yaml
     ;;
   *"attachable-volumes-aws-ebs"*)
     echo "Installing ssd storage class for EKS."

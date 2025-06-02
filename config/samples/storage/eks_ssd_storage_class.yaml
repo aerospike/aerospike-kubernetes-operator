@@ -1,11 +1,11 @@
+# Storage class for EKS with gp3
 kind: StorageClass
 apiVersion: storage.k8s.io/v1
 metadata:
   name: ssd
-  annotations:
-    storageclass.kubernetes.io/is-default-class: "true"
-provisioner: kubernetes.io/aws-ebs
+provisioner: ebs.csi.aws.com
 parameters:
-  type: gp2
+  type: gp3
   fsType: ext4
+reclaimPolicy: Delete
 volumeBindingMode: WaitForFirstConsumer
