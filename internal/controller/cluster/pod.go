@@ -117,15 +117,31 @@ func (r *SingleClusterReconciler) getRollingRestartTypeMap(rackState *RackState,
 				return nil, nil, err
 			}
 
-			// If EnableDynamicConfigUpdate is set and dynamic config command exec partially failed in previous try
-			// then skip dynamic config update and fall back to rolling restart.
-			// Continue with dynamic config update in case of Failed DynamicConfigUpdateStatus
-			if asdbv1.GetBool(r.aeroCluster.Spec.EnableDynamicConfigUpdate) &&
-				podStatus.DynamicConfigUpdateStatus != asdbv1.PartiallyFailed {
-				// Fetching all dynamic config change.
-				dynamicConfDiffPerPod[pods[idx].Name], err = r.handleDynamicConfigChange(rackState, pods[idx], version)
-				if err != nil {
-					return nil, nil, err
+			specToStatusDiffs, err := r.getConfDiff(rackState, pods[idx], version)
+			if err != nil {
+				return nil, nil, err
+			}
+
+			if len(specToStatusDiffs) != 0 {
+				for key := range specToStatusDiffs {
+					if strings.HasSuffix(key, ".storage-engine.data-size") {
+						restartTypeMap[pods[idx].Name] = mergeRestartType(restartTypeMap[pods[idx].Name], podRestart)
+
+						break
+					}
+				}
+
+				if restartTypeMap[pods[idx].Name] == podRestart {
+					continue
+				}
+
+				// If EnableDynamicConfigUpdate is set and dynamic config command exec partially failed in previous try
+				// then skip dynamic config update and fall back to rolling restart.
+				// Continue with dynamic config update in case of Failed DynamicConfigUpdateStatus
+				if asdbv1.GetBool(r.aeroCluster.Spec.EnableDynamicConfigUpdate) &&
+					podStatus.DynamicConfigUpdateStatus != asdbv1.PartiallyFailed &&
+					isAllDynamicConfig(r.Log, specToStatusDiffs, version) {
+					dynamicConfDiffPerPod[pods[idx].Name] = specToStatusDiffs
 				}
 			}
 		}
@@ -1358,9 +1374,36 @@ func (r *SingleClusterReconciler) getConfigMap(rackID int) (*corev1.ConfigMap, e
 	return confMap, nil
 }
 
-func (r *SingleClusterReconciler) handleDynamicConfigChange(rackState *RackState, pod *corev1.Pod, version string) (
-	asconfig.DynamicConfigMap, error) {
-	statusFromAnnotation := pod.Annotations["aerospikeConf"]
+func isAllDynamicConfig(log logger, specToStatusDiffs asconfig.DynamicConfigMap, version string) bool {
+	isDynamic, err := asconfig.IsAllDynamicConfig(log, specToStatusDiffs, version)
+	if err != nil {
+		log.Info("Failed to check if all config is dynamic, fallback to rolling restart", "error", err.Error())
+		return false
+	}
+
+	if !isDynamic {
+		log.Info("Static field has been modified, cannot change config dynamically")
+		return false
+	}
+
+	return true
+}
+
+func getFlatConfig(log logger, confStr string) (*asconfig.Conf, error) {
+	asConf, err := asconfig.NewASConfigFromBytes(log, []byte(confStr), asconfig.AeroConfig)
+	if err != nil {
+		return nil, fmt.Errorf("failed to load config map by lib: %v", err)
+	}
+
+	return asConf.GetFlatMap(), nil
+}
+
+func (r *SingleClusterReconciler) getConfDiff(rackState *RackState, pod *corev1.Pod,
+	version string) (asconfig.DynamicConfigMap, error) {
+	statusFromAnnotation, ok := pod.Annotations["aerospikeConf"]
+	if !ok {
+		return nil, nil
+	}
 
 	asConfStatus, err := getFlatConfig(r.Log, statusFromAnnotation)
 	if err != nil {
@@ -1390,29 +1433,7 @@ func (r *SingleClusterReconciler) handleDynamicConfigChange(rackState *RackState
 		return nil, nil
 	}
 
-	if len(specToStatusDiffs) > 0 {
-		isDynamic, err := asconfig.IsAllDynamicConfig(r.Log, specToStatusDiffs, version)
-		if err != nil {
-			r.Log.Info("Failed to check if all config is dynamic, fallback to rolling restart", "error", err.Error())
-			return nil, nil
-		}
-
-		if !isDynamic {
-			r.Log.Info("Static field has been modified, cannot change config dynamically")
-			return nil, nil
-		}
-	}
-
 	return specToStatusDiffs, nil
-}
-
-func getFlatConfig(log logger, confStr string) (*asconfig.Conf, error) {
-	asConf, err := asconfig.NewASConfigFromBytes(log, []byte(confStr), asconfig.AeroConfig)
-	if err != nil {
-		return nil, fmt.Errorf("failed to load config map by lib: %v", err)
-	}
-
-	return asConf.GetFlatMap(), nil
 }
 
 func (r *SingleClusterReconciler) patchPodStatus(ctx context.Context, patches []jsonpatch.PatchOperation) error {
