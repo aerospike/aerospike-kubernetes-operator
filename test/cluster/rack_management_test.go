@@ -13,6 +13,7 @@ import (
 	"k8s.io/utils/ptr"
 
 	asdbv1 "github.com/aerospike/aerospike-kubernetes-operator/v4/api/v1"
+	"github.com/aerospike/aerospike-kubernetes-operator/v4/pkg/utils"
 	"github.com/aerospike/aerospike-kubernetes-operator/v4/test"
 )
 
@@ -728,7 +729,7 @@ var _ = Describe(
 					nodes, err := getNodeList(ctx, k8sClient)
 					Expect(err).ToNot(HaveOccurred())
 
-					aeroCluster := createDummyAerospikeCluster(clusterNamespacedName, int32(len(nodes.Items)))
+					aeroCluster := createDummyAerospikeCluster(clusterNamespacedName, utils.Len32(nodes.Items))
 					racks := getDummyRackConf(1, 2)
 					aeroCluster.Spec.RackConfig = asdbv1.RackConfig{Racks: racks}
 					aeroCluster.Spec.PodSpec.MultiPodPerHost = ptr.To(false)

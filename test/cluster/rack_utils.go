@@ -406,7 +406,7 @@ func validateSTSPodsForRack(
 
 func getConfiguredRackStateList(aeroCluster *asdbv1.AerospikeCluster) []RackState {
 	topology := splitRacks(
-		aeroCluster.Spec.Size, int32(len(aeroCluster.Spec.RackConfig.Racks)), //nolint:gosec // racks can't exceed int32 range
+		aeroCluster.Spec.Size, utils.Len32(aeroCluster.Spec.RackConfig.Racks),
 	)
 
 	rackStateList := make([]RackState, 0, len(topology))

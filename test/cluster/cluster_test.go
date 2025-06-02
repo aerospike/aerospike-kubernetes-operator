@@ -387,7 +387,7 @@ func clusterWithMaxIgnorablePod(ctx goctx.Context) {
 					nodeList, err = getNodeList(ctx, k8sClient)
 					Expect(err).ToNot(HaveOccurred())
 
-					size := len(nodeList.Items)
+					size := utils.Len32(nodeList.Items)
 
 					deployClusterForMaxIgnorablePods(ctx, clusterNamespacedName, size)
 
@@ -622,11 +622,10 @@ func clusterWithMaxIgnorablePod(ctx goctx.Context) {
 	)
 }
 
-func deployClusterForMaxIgnorablePods(ctx goctx.Context, clusterNamespacedName types.NamespacedName, size int) {
+func deployClusterForMaxIgnorablePods(ctx goctx.Context, clusterNamespacedName types.NamespacedName, size int32) {
 	By("Deploying cluster")
 
-	aeroCluster := createDummyAerospikeCluster(clusterNamespacedName,
-		int32(size)) //nolint:gosec // cluster size can't exceed int32 range
+	aeroCluster := createDummyAerospikeCluster(clusterNamespacedName, size)
 
 	// Add a nonsc namespace. This will be used to test dirty volumes
 	nsList := aeroCluster.Spec.AerospikeConfig.Value["namespaces"].([]interface{})

@@ -972,7 +972,7 @@ func (r *SingleClusterReconciler) scaleDownRack(
 	}
 
 	// Update new object with new size
-	newSize := *found.Spec.Replicas - int32(len(podsBatch)) //nolint:gosec // len(podsBatch) can't exceed int32 range
+	newSize := *found.Spec.Replicas - utils.Len32(podsBatch)
 	found.Spec.Replicas = &newSize
 
 	if err = r.Client.Update(
@@ -1003,7 +1003,7 @@ func (r *SingleClusterReconciler) scaleDownRack(
 		// In case of rolling restart, no pod cleanup happens, therefore rolling config back is left to the user.
 		if err = r.validateSCClusterState(policy, ignorablePodNames); err != nil {
 			// reset cluster size
-			newSize := *found.Spec.Replicas + int32(len(podsBatch)) //nolint:gosec // len(podsBatch) can't exceed int32 range
+			newSize := *found.Spec.Replicas + utils.Len32(podsBatch)
 			found.Spec.Replicas = &newSize
 
 			r.Log.Error(
@@ -1853,7 +1853,7 @@ func isContainerNameInStorageVolumeAttachments(
 
 func getConfiguredRackStateList(aeroCluster *asdbv1.AerospikeCluster) []RackState {
 	topology := asdbv1.DistributeItems(
-		aeroCluster.Spec.Size, int32(len(aeroCluster.Spec.RackConfig.Racks)), //nolint:gosec // racks can't exceed int32 range
+		aeroCluster.Spec.Size, utils.Len32(aeroCluster.Spec.RackConfig.Racks),
 	)
 
 	rackStateList := make([]RackState, 0, len(aeroCluster.Spec.RackConfig.Racks))

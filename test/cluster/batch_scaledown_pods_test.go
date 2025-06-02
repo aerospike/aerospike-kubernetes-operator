@@ -15,6 +15,7 @@ import (
 	"sigs.k8s.io/controller-runtime/pkg/client"
 
 	asdbv1 "github.com/aerospike/aerospike-kubernetes-operator/v4/api/v1"
+	"github.com/aerospike/aerospike-kubernetes-operator/v4/pkg/utils"
 	"github.com/aerospike/aerospike-kubernetes-operator/v4/test"
 )
 
@@ -145,9 +146,9 @@ func batchScaleDownTest(
 
 func validateBatchScaleDown(aeroCluster *asdbv1.AerospikeCluster, batchSize *intstr.IntOrString) {
 	oldPodsPerRack := podsPerRack(aeroCluster.Status.Size,
-		int32(len(aeroCluster.Status.RackConfig.Racks))) //nolint:gosec // racks can't exceed int32 range
+		utils.Len32(aeroCluster.Status.RackConfig.Racks))
 	newPodsPerRack := podsPerRack(aeroCluster.Spec.Size,
-		int32(len(aeroCluster.Spec.RackConfig.Racks))) //nolint:gosec // racks can't exceed int32 range
+		utils.Len32(aeroCluster.Spec.RackConfig.Racks))
 
 	rackTested := set.NewSet[int]()
 

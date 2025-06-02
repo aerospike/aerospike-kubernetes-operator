@@ -224,3 +224,8 @@ func RemoveString(slice []string, s string) (result []string) {
 
 	return
 }
+
+// Len32 returns length of slice in int32 range.
+func Len32[T any](v []T) int32 {
+	return int32(len(v)) //nolint:gosec // length can't exceed int32 range
+}
