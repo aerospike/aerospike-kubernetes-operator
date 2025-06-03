@@ -117,13 +117,16 @@ func (r *SingleClusterReconciler) getRollingRestartTypeMap(rackState *RackState,
 				return nil, nil, err
 			}
 
-			specToStatusDiffs, err := r.getConfDiff(rackState, pods[idx], version)
+			specToStatusDiffs, err := getConfDiff(r.Log, rackState.Rack.AerospikeConfig.Value, pods[idx].Annotations, version)
 			if err != nil {
 				return nil, nil, err
 			}
 
 			if len(specToStatusDiffs) != 0 {
 				for key := range specToStatusDiffs {
+					// To update in-memory namespace data-size, we need to restart the pod.
+					// Just warm restart is not enough.
+					// https://support.aerospike.com/s/article/How-to-change-data-size-config-in-a-running-cluster
 					if strings.HasSuffix(key, ".storage-engine.data-size") {
 						restartTypeMap[pods[idx].Name] = mergeRestartType(restartTypeMap[pods[idx].Name], podRestart)
 
@@ -1374,6 +1377,7 @@ func (r *SingleClusterReconciler) getConfigMap(rackID int) (*corev1.ConfigMap, e
 	return confMap, nil
 }
 
+// isAllDynamicConfig checks if all the configuration changes can be applied dynamically
 func isAllDynamicConfig(log logger, specToStatusDiffs asconfig.DynamicConfigMap, version string) bool {
 	isDynamic, err := asconfig.IsAllDynamicConfig(log, specToStatusDiffs, version)
 	if err != nil {
@@ -1382,7 +1386,7 @@ func isAllDynamicConfig(log logger, specToStatusDiffs asconfig.DynamicConfigMap,
 	}
 
 	if !isDynamic {
-		log.Info("Static field has been modified, cannot change config dynamically")
+		log.Info("Config contains static field changes; dynamic update not possible.")
 		return false
 	}
 
@@ -1398,19 +1402,21 @@ func getFlatConfig(log logger, confStr string) (*asconfig.Conf, error) {
 	return asConf.GetFlatMap(), nil
 }
 
-func (r *SingleClusterReconciler) getConfDiff(rackState *RackState, pod *corev1.Pod,
+// getConfDiff retrieves the configuration differences between the spec and status Aerospike configurations.
+func getConfDiff(log logger, specConfig map[string]interface{}, podAnnotations map[string]string,
 	version string) (asconfig.DynamicConfigMap, error) {
-	statusFromAnnotation, ok := pod.Annotations["aerospikeConf"]
+	statusFromAnnotation, ok := podAnnotations["aerospikeConf"]
 	if !ok {
+		log.Info("Pod annotation 'aerospikeConf' missing")
 		return nil, nil
 	}
 
-	asConfStatus, err := getFlatConfig(r.Log, statusFromAnnotation)
+	asConfStatus, err := getFlatConfig(log, statusFromAnnotation)
 	if err != nil {
 		return nil, fmt.Errorf("failed to load config map by lib: %v", err)
 	}
 
-	asConf, err := asconfig.NewMapAsConfig(r.Log, rackState.Rack.AerospikeConfig.Value)
+	asConf, err := asconfig.NewMapAsConfig(log, specConfig)
 	if err != nil {
 		return nil, fmt.Errorf("failed to load config map by lib: %v", err)
 	}
@@ -1420,15 +1426,15 @@ func (r *SingleClusterReconciler) getConfDiff(rackState *RackState, pod *corev1.
 	specConfFile = strings.ReplaceAll(specConfFile, "$${_DNE}{un}", "${un}")
 	specConfFile = strings.ReplaceAll(specConfFile, "$${_DNE}{dn}", "${dn}")
 
-	asConfSpec, err := getFlatConfig(r.Log, specConfFile)
+	asConfSpec, err := getFlatConfig(log, specConfFile)
 	if err != nil {
 		return nil, fmt.Errorf("failed to load config map by lib: %v", err)
 	}
 
-	specToStatusDiffs, err := asconfig.ConfDiff(r.Log, *asConfSpec, *asConfStatus,
+	specToStatusDiffs, err := asconfig.ConfDiff(log, *asConfSpec, *asConfStatus,
 		true, version)
 	if err != nil {
-		r.Log.Info("Failed to get config diff to change config dynamically, fallback to rolling restart",
+		log.Info("Failed to get config diff to change config dynamically, fallback to rolling restart",
 			"error", err.Error())
 		return nil, nil
 	}
