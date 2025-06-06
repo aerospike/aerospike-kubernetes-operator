@@ -1,9 +1,10 @@
-# Storage classes for gce
+# Storage class for AKS with SSD
 apiVersion: storage.k8s.io/v1
 kind: StorageClass
 metadata:
   name: ssd
-provisioner: kubernetes.io/gce-pd
+provisioner: disk.csi.azure.com
 parameters:
-  type: pd-ssd
+  skuname: StandardSSD_LRS
+reclaimPolicy: Delete
 volumeBindingMode: WaitForFirstConsumer
