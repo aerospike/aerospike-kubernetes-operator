@@ -713,17 +713,20 @@ func setDefaultsInConfigMap(
 	_ logr.Logger, baseConfigs, defaultConfigs map[string]interface{},
 ) error {
 	for k, v := range defaultConfigs {
+		switch newV := v.(type) {
 		// Special handling.
-		// Older baseValues are parsed to int64 but defaults are in int
-		if newV, ok := v.(int); ok {
+		// Older baseValues are parsed to int64 but defaults are in int32 and int
+		case int32:
 			// TODO: verify this: Looks like, in new openapi schema, values are parsed in float64
 			v = float64(newV)
-		}
+
+		case int:
+			v = float64(newV)
 
 		// Older baseValues are parsed to []interface{} but defaults are in []string
 		// Can make default as []interface{} but then we have to remember it there.
 		// []string looks make natural there. So lets handle it here only
-		if newV, ok := v.([]string); ok {
+		case []string:
 			v = toInterfaceList(newV)
 		}
 

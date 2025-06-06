@@ -23,7 +23,7 @@ import (
 
 type RackState struct {
 	Rack asdbv1.Rack
-	Size int
+	Size int32
 }
 
 func addRack(
@@ -250,10 +250,10 @@ func validateRackEnabledCluster(
 		}
 
 		// Match size
-		if int(*found.Spec.Replicas) != rackStateList[rackStateIndex].Size {
+		if *found.Spec.Replicas != rackStateList[rackStateIndex].Size {
 			return fmt.Errorf(
 				"statefulset replica size %d, want %d",
-				int(*found.Spec.Replicas), rackStateList[rackStateIndex].Size,
+				*found.Spec.Replicas, rackStateList[rackStateIndex].Size,
 			)
 		}
 		// If Label key are changed for zone, region.. then those should be changed here also
@@ -406,7 +406,7 @@ func validateSTSPodsForRack(
 
 func getConfiguredRackStateList(aeroCluster *asdbv1.AerospikeCluster) []RackState {
 	topology := splitRacks(
-		int(aeroCluster.Spec.Size), len(aeroCluster.Spec.RackConfig.Racks),
+		aeroCluster.Spec.Size, utils.Len32(aeroCluster.Spec.RackConfig.Racks),
 	)
 
 	rackStateList := make([]RackState, 0, len(topology))
@@ -438,12 +438,12 @@ func getRackID(pod *corev1.Pod) (int, error) {
 }
 
 // TODO: Update this
-func splitRacks(nodeCount, rackCount int) []int {
+func splitRacks(nodeCount, rackCount int32) []int32 {
 	nodesPerRack, extraNodes := nodeCount/rackCount, nodeCount%rackCount
 
-	var topology []int
+	var topology []int32
 
-	for rackIdx := 0; rackIdx < rackCount; rackIdx++ {
+	for rackIdx := int32(0); rackIdx < rackCount; rackIdx++ {
 		nodesForThisRack := nodesPerRack
 		if rackIdx < extraNodes {
 			nodesForThisRack++

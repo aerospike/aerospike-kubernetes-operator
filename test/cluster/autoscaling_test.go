@@ -59,7 +59,7 @@ var _ = Describe("AutoScaler", func() {
 	})
 })
 
-func validateScaleSubresourceOperation(currentSize, desiredSize int, clusterNamespacedName types.NamespacedName) {
+func validateScaleSubresourceOperation(currentSize, desiredSize int32, clusterNamespacedName types.NamespacedName) {
 	gvr := schema.GroupVersionResource{
 		Group:    "asdb.aerospike.com", // Replace with your CRD group
 		Version:  "v1",                 // API version
@@ -91,5 +91,5 @@ func validateScaleSubresourceOperation(currentSize, desiredSize int, clusterName
 
 			return aeroCluster.Spec.Size
 		}, time.Minute, time.Second,
-	).Should(Equal(int32(desiredSize)))
+	).Should(Equal(desiredSize))
 }

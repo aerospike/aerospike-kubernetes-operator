@@ -385,7 +385,7 @@ func (r *SingleClusterReconciler) getServicePorts() []corev1.ServicePort {
 		servicePorts = append(
 			servicePorts, corev1.ServicePort{
 				Name: asdbv1.ServicePortName,
-				Port: int32(*svcPort),
+				Port: *svcPort,
 			},
 		)
 	}
@@ -396,7 +396,7 @@ func (r *SingleClusterReconciler) getServicePorts() []corev1.ServicePort {
 		servicePorts = append(
 			servicePorts, corev1.ServicePort{
 				Name: asdbv1.ServiceTLSPortName,
-				Port: int32(*tlsPort),
+				Port: *tlsPort,
 			},
 		)
 	}
@@ -412,9 +412,9 @@ func (r *SingleClusterReconciler) getLBServicePort(loadBalancer *asdbv1.LoadBala
 	} else if tlsName, tlsPort := asdbv1.GetServiceTLSNameAndPort(
 		r.aeroCluster.Spec.AerospikeConfig,
 	); tlsName != "" && tlsPort != nil {
-		targetPort = int32(*tlsPort)
+		targetPort = *tlsPort
 	} else {
-		targetPort = int32(*asdbv1.GetServicePort(r.aeroCluster.Spec.AerospikeConfig))
+		targetPort = *asdbv1.GetServicePort(r.aeroCluster.Spec.AerospikeConfig)
 	}
 
 	var port int32
@@ -482,7 +482,7 @@ func (r *SingleClusterReconciler) createOrUpdatePodServiceIfNeeded(pods []string
 	return nil
 }
 
-func (r *SingleClusterReconciler) getServiceTLSNameAndPortIfConfigured() (tlsName string, port *int) {
+func (r *SingleClusterReconciler) getServiceTLSNameAndPortIfConfigured() (tlsName string, port *int32) {
 	tlsName, port = asdbv1.GetServiceTLSNameAndPort(r.aeroCluster.Spec.AerospikeConfig)
 	if tlsName != "" && r.aeroCluster.Status.AerospikeConfig != nil {
 		statusTLSName, _ := asdbv1.GetServiceTLSNameAndPort(r.aeroCluster.Status.AerospikeConfig)

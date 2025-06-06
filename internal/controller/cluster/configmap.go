@@ -253,32 +253,32 @@ func (r *SingleClusterReconciler) getBaseConfData(rack *asdbv1.Rack) (map[string
 
 	var serviceTLSPortParam int32
 	if _, serviceTLSPort := asdbv1.GetServiceTLSNameAndPort(asConfig); serviceTLSPort != nil {
-		serviceTLSPortParam = int32(*serviceTLSPort)
+		serviceTLSPortParam = *serviceTLSPort
 	}
 
 	var servicePortParam int32
 	if servicePort := asdbv1.GetServicePort(asConfig); servicePort != nil {
-		servicePortParam = int32(*servicePort)
+		servicePortParam = *servicePort
 	}
 
 	var hbTLSPortParam int32
 	if _, hbTLSPort := asdbv1.GetHeartbeatTLSNameAndPort(asConfig); hbTLSPort != nil {
-		hbTLSPortParam = int32(*hbTLSPort)
+		hbTLSPortParam = *hbTLSPort
 	}
 
 	var hbPortParam int32
 	if hbPort := asdbv1.GetHeartbeatPort(asConfig); hbPort != nil {
-		hbPortParam = int32(*hbPort)
+		hbPortParam = *hbPort
 	}
 
 	var fabricTLSPortParam int32
 	if _, fabricTLSPort := asdbv1.GetFabricTLSNameAndPort(asConfig); fabricTLSPort != nil {
-		fabricTLSPortParam = int32(*fabricTLSPort)
+		fabricTLSPortParam = *fabricTLSPort
 	}
 
 	var fabricPortParam int32
 	if fabricPort := asdbv1.GetFabricPort(asConfig); fabricPort != nil {
-		fabricPortParam = int32(*fabricPort)
+		fabricPortParam = *fabricPort
 	}
 
 	initTemplateInput := initializeTemplateInput{
@@ -340,8 +340,8 @@ func (r *SingleClusterReconciler) getFQDNsForCluster() ([]string, error) {
 		size := rackState.Size
 		stsName := utils.GetNamespacedNameForSTSOrConfigMap(r.aeroCluster, rackState.Rack.ID)
 
-		for i := 0; i < size; i++ {
-			fqdn := getFQDNForPod(r.aeroCluster, getSTSPodName(stsName.Name, int32(i)))
+		for i := int32(0); i < size; i++ {
+			fqdn := getFQDNForPod(r.aeroCluster, getSTSPodName(stsName.Name, i))
 			podNameSet.Insert(fqdn)
 		}
 	}

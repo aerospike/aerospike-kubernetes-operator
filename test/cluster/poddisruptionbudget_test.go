@@ -201,8 +201,8 @@ func validatePDB(ctx context.Context, aerocluster *asdbv1.AerospikeCluster, expe
 	Expect(pdb.Spec.MaxUnavailable.IntValue()).To(Equal(expectedMaxUnavailable))
 	Expect(pdb.Status.ExpectedPods).To(Equal(aerocluster.Spec.Size))
 	Expect(pdb.Status.CurrentHealthy).To(Equal(aerocluster.Spec.Size))
-	Expect(pdb.Status.DisruptionsAllowed).To(Equal(int32(expectedMaxUnavailable)))
-	Expect(pdb.Status.DesiredHealthy).To(Equal(aerocluster.Spec.Size - int32(expectedMaxUnavailable)))
+	Expect(int(pdb.Status.DisruptionsAllowed)).To(Equal(expectedMaxUnavailable))
+	Expect(int(pdb.Status.DesiredHealthy)).To(Equal(int(aerocluster.Spec.Size) - expectedMaxUnavailable))
 }
 
 func getPDB(ctx context.Context, aerocluster *asdbv1.AerospikeCluster) (*policyv1.PodDisruptionBudget, error) {
@@ -222,7 +222,8 @@ func createPDB(ctx context.Context, aerocluster *asdbv1.AerospikeCluster, maxUna
 			Namespace: aerocluster.Namespace,
 		},
 		Spec: policyv1.PodDisruptionBudgetSpec{
-			MaxUnavailable: &intstr.IntOrString{Type: intstr.Int, IntVal: int32(maxUnavailable)},
+			MaxUnavailable: &intstr.IntOrString{Type: intstr.Int,
+				IntVal: int32(maxUnavailable)}, //nolint:gosec // maxUnavailable can't exceed int32 range
 		},
 	}
 

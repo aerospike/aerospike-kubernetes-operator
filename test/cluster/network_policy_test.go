@@ -1154,7 +1154,7 @@ func validateNetworkPolicy(
 			err = validatePodEndpoint(
 				ctx, &podList.Items[podIndex], current, networkPolicy.FabricType, false,
 				aerospikecluster.GetEndpointsFromInfo("fabric", "", endpointsMap),
-				[]string{customNetIPVlanThree}, "", int32(*asdbv1.GetFabricPort(desired.Spec.AerospikeConfig)))
+				[]string{customNetIPVlanThree}, "", *asdbv1.GetFabricPort(desired.Spec.AerospikeConfig))
 			if err != nil {
 				return err
 			}
@@ -1182,7 +1182,7 @@ func validateNetworkPolicy(
 				if err := validatePodEndpoint(
 					ctx, &podList.Items[podIndex], current, networkPolicy.TLSFabricType, false,
 					aerospikecluster.GetEndpointsFromInfo("fabric", "tls", endpointsMap),
-					[]string{customNetIPVlanThree}, "", int32(*port)); err != nil {
+					[]string{customNetIPVlanThree}, "", *port); err != nil {
 					return err
 				}
 			}
@@ -1297,10 +1297,10 @@ func getExpectedServicePortForPod(
 		}
 	} else {
 		if !isTLS {
-			port = int32(*asdbv1.GetServicePort(aeroCluster.Spec.AerospikeConfig))
+			port = *asdbv1.GetServicePort(aeroCluster.Spec.AerospikeConfig)
 		} else {
 			_, tlsPort := asdbv1.GetServiceTLSNameAndPort(aeroCluster.Spec.AerospikeConfig)
-			port = int32(*tlsPort)
+			port = *tlsPort
 		}
 	}
 
