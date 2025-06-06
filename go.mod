@@ -9,6 +9,7 @@ require (
 	github.com/aerospike/aerospike-client-go/v8 v8.2.1
 	github.com/aerospike/aerospike-management-lib v1.7.1-0.20250519063642-57d55e3eddf8
 	github.com/asaskevich/govalidator v0.0.0-20210307081110-f21760c49a8d
+	github.com/aws/smithy-go v1.22.3
 	github.com/deckarep/golang-set/v2 v2.3.1
 	github.com/evanphx/json-patch v4.12.0+incompatible
 	github.com/go-logr/logr v1.4.2
@@ -30,7 +31,6 @@ require (
 require (
 	github.com/aerospike/backup-go v0.3.2-0.20250330113002-7fb1b5be7ffc // indirect
 	github.com/antlr4-go/antlr/v4 v4.13.0 // indirect
-	github.com/aws/smithy-go v1.22.3 // indirect
 	github.com/beorn7/perks v1.0.1 // indirect
 	github.com/blang/semver/v4 v4.0.0 // indirect
 	github.com/cenkalti/backoff/v4 v4.3.0 // indirect
