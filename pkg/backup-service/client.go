@@ -731,7 +731,9 @@ func (c *Client) CancelRestoreJob(jobID int64) (int, error) {
 
 	defer resp.Body.Close()
 
-	if resp.StatusCode != http.StatusOK {
+	// Check if the response status code is 200 OK or 202 Accepted
+	// 200 OK is for ABS < 3.1.0 and 202 Accepted is for ABS >= 3.1.0
+	if resp.StatusCode != http.StatusOK && resp.StatusCode != http.StatusAccepted {
 		body, err := io.ReadAll(resp.Body)
 		if err != nil {
 			return 0, err
