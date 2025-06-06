@@ -483,6 +483,11 @@ type RackConfig struct { //nolint:govet // for readability
 	// This makes sure that later on, all pods are properly counted when evaluating the cluster stability.
 	// +optional
 	MaxIgnorablePods *intstr.IntOrString `json:"maxIgnorablePods,omitempty"`
+
+	// RackIDSource specifies the source from which to read the rack ID.
+	// If not specified, the rack ID is read from the CR.
+	// +optional
+	RackIDSource *RackIDSource `json:"rackIDSource,omitempty"`
 }
 
 // Rack specifies single rack config
@@ -698,11 +703,11 @@ type AttachmentOptions struct {
 	MountOptions `json:"mountOptions,omitempty"`
 }
 
-type MountOptions struct { //nolint:govet // for readability
+type MountOptions struct {
 	// Mounted read-only if true, read-write otherwise (false or unspecified).
 	// Defaults to false.
 	// +optional
-	ReadOnly bool `json:"readOnly,omitempty"`
+	ReadOnly *bool `json:"readOnly,omitempty"`
 
 	// Path within the volume from which the container's volume should be mounted.
 	// Defaults to "" (volume's root).
@@ -766,6 +771,12 @@ type VolumeSource struct {
 
 	// +optional
 	PersistentVolume *PersistentVolumeSpec `json:"persistentVolume,omitempty"`
+
+	// HostPath represents a directory on the host provisioned by an administrator.
+	// This is useful for exposing host paths to pods in a controlled, read-only manner.
+	// More info: https://kubernetes.io/docs/concepts/storage/volumes#hostpath
+	// +optional
+	HostPath *corev1.HostPathVolumeSource `json:"hostPath,omitempty"`
 }
 
 type VolumeSpec struct {
@@ -1100,6 +1111,13 @@ type AerospikeNetworkPolicy struct {
 	CustomTLSFabricNetworkNames []string `json:"customTLSFabricNetworkNames,omitempty"`
 }
 
+// RackIDSource specifies the source from which to read the rack ID.
+type RackIDSource struct {
+	// FilePath specifies an absolute path to a file containing the rack ID mounted in the aerospike server container.
+	// The file should contain a single integer value.
+	FilePath string `json:"filePath"`
+}
+
 // AerospikeInstanceSummary defines the observed state of a pod's Aerospike Server Instance.
 // +k8s:openapi-gen=true
 type AerospikeInstanceSummary struct { //nolint:govet // for readability
@@ -1191,6 +1209,10 @@ type AerospikePodStatus struct { //nolint:govet // for readability
 	// Empty "" status means successful update.
 	// +optional
 	DynamicConfigUpdateStatus DynamicConfigUpdateStatus `json:"dynamicConfigUpdateStatus,omitempty"`
+
+	// RackIDSourceHash is ripemd160 hash of RackIDSource used by this pod
+	// +optional
+	RackIDSourceHash string `json:"rackIDSourceHash"`
 }
 
 // +kubebuilder:object:root=true

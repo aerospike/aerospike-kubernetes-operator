@@ -39,6 +39,9 @@ const (
 
 	// aerospikeConfHashFileName stores the Aerospike config hash
 	aerospikeConfHashFileName = "aerospikeConfHash"
+
+	// rackIDSourceHashFileName stores the rack ID source hash
+	rackIDSourceHashFileName = "rackIDSourceHash"
 )
 
 type initializeTemplateInput struct {
@@ -157,6 +160,24 @@ func (r *SingleClusterReconciler) createConfigMapData(rack *asdbv1.Rack) (
 	}
 
 	confData[networkPolicyHashFileName] = policyHash
+
+	// Add rackIDSource hash
+	rackIDSourceStr := []byte{}
+
+	rackIDSource := r.aeroCluster.Spec.RackConfig.RackIDSource
+	if rackIDSource != nil {
+		rackIDSourceStr, err = json.Marshal(*rackIDSource)
+		if err != nil {
+			return nil, err
+		}
+	}
+
+	rackIDSourceHash, err := utils.GetHash(string(rackIDSourceStr))
+	if err != nil {
+		return nil, err
+	}
+
+	confData[rackIDSourceHashFileName] = rackIDSourceHash
 
 	// Add podSpec hash
 	podSpec := createPodSpecForRack(r.aeroCluster, rack)

@@ -1349,17 +1349,7 @@ func (r *SingleClusterReconciler) isRackStorageUpdatedInAeroCluster(
 		}
 
 		// Check for Added/Updated volumeAttachments
-		var containerAttachments []asdbv1.VolumeAttachment
-		containerAttachments = append(containerAttachments, volume.Sidecars...)
-
-		if volume.Aerospike != nil {
-			containerAttachments = append(
-				containerAttachments, asdbv1.VolumeAttachment{
-					ContainerName: asdbv1.AerospikeServerContainerName,
-					Path:          volume.Aerospike.Path,
-				},
-			)
-		}
+		_, containerAttachments := getFinalVolumeAttachmentsForVolume(volume)
 
 		if r.isVolumeAttachmentAddedOrUpdated(
 			volume.Name, containerAttachments, pod.Spec.Containers,
@@ -1512,7 +1502,7 @@ func (r *SingleClusterReconciler) isVolumeAttachmentAddedOrUpdated(
 		if volumeMount != nil {
 			// Found, check for updated
 			if getOriginalPath(volumeMount.MountPath) != attachment.Path ||
-				volumeMount.ReadOnly != attachment.ReadOnly ||
+				volumeMount.ReadOnly != asdbv1.GetBool(attachment.ReadOnly) ||
 				volumeMount.SubPath != attachment.SubPath ||
 				volumeMount.SubPathExpr != attachment.SubPathExpr ||
 				!reflect.DeepEqual(
