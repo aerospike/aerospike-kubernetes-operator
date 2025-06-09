@@ -11,11 +11,11 @@ CATALOG_IMG=$2
 
 # Create storage classes.
 case $(kubectl get nodes -o yaml) in
-  *"attachable-volumes-gce-pd"*)
+  *"cloud.google.com"*)
     echo "Installing ssd storage class for GKE."
-    kubectl apply -f config/samples/storage/gce_ssd_storage_class.yaml
+    kubectl apply -f config/samples/storage/gke_ssd_storage_class.yaml
     ;;
-  *"attachable-volumes-aws-ebs"*)
+  *"eks.amazonaws.com"*)
     echo "Installing ssd storage class for EKS."
     kubectl apply -f config/samples/storage/eks_ssd_storage_class.yaml
     ;;
