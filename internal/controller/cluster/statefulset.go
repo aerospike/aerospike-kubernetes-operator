@@ -86,7 +86,7 @@ var defaultContainerPorts = map[string]PortInfo{
 func (r *SingleClusterReconciler) createSTS(
 	namespacedName types.NamespacedName, rackState *RackState,
 ) (*appsv1.StatefulSet, error) {
-	replicas := int32(rackState.Size)
+	replicas := rackState.Size
 
 	r.Log.Info("Create statefulset for AerospikeCluster", "size", replicas)
 
@@ -207,7 +207,7 @@ func (r *SingleClusterReconciler) createSTS(
 }
 
 func (r *SingleClusterReconciler) getReadinessProbe() *corev1.Probe {
-	var readinessPort *int
+	var readinessPort *int32
 
 	if _, tlsPort := asdbv1.GetTLSNameAndPort(r.aeroCluster.Spec.AerospikeConfig, asdbv1.ServicePortName); tlsPort != nil {
 		readinessPort = tlsPort
@@ -220,7 +220,7 @@ func (r *SingleClusterReconciler) getReadinessProbe() *corev1.Probe {
 			TCPSocket: &corev1.TCPSocketAction{
 				Port: intstr.IntOrString{
 					Type:   intstr.Int,
-					IntVal: int32(*readinessPort),
+					IntVal: *readinessPort,
 				},
 			},
 		},
@@ -1579,7 +1579,7 @@ func getSTSContainerPort(
 
 		containerPort := corev1.ContainerPort{
 			Name:          portName,
-			ContainerPort: int32(*configPort),
+			ContainerPort: *configPort,
 		}
 		// Single pod per host. Enable hostPort setting
 		// when pod only network is not defined.
@@ -1606,7 +1606,7 @@ func getSTSPodOrdinal(podName string) (*int32, error) {
 		return nil, err
 	}
 
-	result := int32(ordinal)
+	result := int32(ordinal) //nolint:gosec // ordinal can't exceed int32 range
 
 	return &result, nil
 }

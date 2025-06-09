@@ -155,7 +155,7 @@ func (r *SingleClusterReconciler) tipClearHostname(
 	if heartbeatTLSPort != nil {
 		if err := asConn.TipClearHostname(
 			r.getClientPolicy(), getFQDNForPod(r.aeroCluster, clearPodName),
-			*heartbeatTLSPort,
+			int(*heartbeatTLSPort),
 		); err != nil {
 			return err
 		}
@@ -165,7 +165,7 @@ func (r *SingleClusterReconciler) tipClearHostname(
 	if heartbeatPort != nil {
 		if err := asConn.TipClearHostname(
 			r.getClientPolicy(), getFQDNForPod(r.aeroCluster, clearPodName),
-			*heartbeatPort,
+			int(*heartbeatPort),
 		); err != nil {
 			return err
 		}
@@ -244,7 +244,7 @@ func (r *SingleClusterReconciler) newAsConn(pod *corev1.Pod) *deployment.ASConn 
 	host := pod.Status.PodIP
 	asConn := &deployment.ASConn{
 		AerospikeHostName: host,
-		AerospikePort:     *port,
+		AerospikePort:     int(*port),
 		AerospikeTLSName:  tlsName,
 		Log:               r.Log.WithValues("host", pod.Name),
 	}
