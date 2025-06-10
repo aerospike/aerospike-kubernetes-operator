@@ -125,7 +125,7 @@ func (r *SingleClusterReconciler) getRollingRestartTypeMap(rackState *RackState,
 			if len(specToStatusDiffs) != 0 {
 				for key := range specToStatusDiffs {
 					// To update in-memory namespace data-size, we need to restart the pod.
-					// Just warm restart is not enough.
+					// Just a warm restart is not enough.
 					// https://support.aerospike.com/s/article/How-to-change-data-size-config-in-a-running-cluster
 					if strings.HasSuffix(key, ".storage-engine.data-size") {
 						restartTypeMap[pods[idx].Name] = mergeRestartType(restartTypeMap[pods[idx].Name], podRestart)
