@@ -53,7 +53,7 @@ helm install aerospike-backup-service aerospike/aerospike-backup-service \
 | Name                  | Description                                                                   | Default                              |
 |-----------------------|-------------------------------------------------------------------------------|--------------------------------------|
 | `image.repository`    | Aerospike backup service container image repository                           | `aerospike/aerospike-backup-service` |
-| `image.tag`           | Aerospike backup service container image tag                                  | `3.0.0`                              |
+| `image.tag`           | Aerospike backup service container image tag                                  | `3.1.0`                              |
 | `customLabels`        | Custom labels to add on the Aerospike backup service resource                 | `{}` (nil)                           |
 | `backupServiceConfig` | Aerospike backup service configuration                                        | `{}` (nil)                           |
 | `secrets`             | Secrets to be mounted in the Aerospike backup service pod like aws creds etc. | `[]` (nil)                           |
