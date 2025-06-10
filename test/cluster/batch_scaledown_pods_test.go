@@ -15,6 +15,7 @@ import (
 	"sigs.k8s.io/controller-runtime/pkg/client"
 
 	asdbv1 "github.com/aerospike/aerospike-kubernetes-operator/v4/api/v1"
+	"github.com/aerospike/aerospike-kubernetes-operator/v4/pkg/utils"
 	"github.com/aerospike/aerospike-kubernetes-operator/v4/test"
 )
 
@@ -144,8 +145,10 @@ func batchScaleDownTest(
 }
 
 func validateBatchScaleDown(aeroCluster *asdbv1.AerospikeCluster, batchSize *intstr.IntOrString) {
-	oldPodsPerRack := podsPerRack(int(aeroCluster.Status.Size), len(aeroCluster.Status.RackConfig.Racks))
-	newPodsPerRack := podsPerRack(int(aeroCluster.Spec.Size), len(aeroCluster.Spec.RackConfig.Racks))
+	oldPodsPerRack := podsPerRack(aeroCluster.Status.Size,
+		utils.Len32(aeroCluster.Status.RackConfig.Racks))
+	newPodsPerRack := podsPerRack(aeroCluster.Spec.Size,
+		utils.Len32(aeroCluster.Spec.RackConfig.Racks))
 
 	rackTested := set.NewSet[int]()
 
@@ -157,14 +160,14 @@ func validateBatchScaleDown(aeroCluster *asdbv1.AerospikeCluster, batchSize *int
 
 			scaleDownBatchSize := oldPodsPerRack[idx] - newPodsPerRack[idx]
 
-			if batchSize != nil && batchSize.IntVal > 0 && batchSize.IntVal < int32(scaleDownBatchSize) {
-				scaleDownBatchSize = int(batchSize.IntVal)
+			if batchSize != nil && batchSize.IntVal > 0 && batchSize.IntVal < scaleDownBatchSize {
+				scaleDownBatchSize = batchSize.IntVal
 			}
 
 			sts, err := getSTSFromRackID(aeroCluster, aeroCluster.Spec.RackConfig.Racks[idx].ID)
 			Expect(err).ToNot(HaveOccurred())
 
-			currentSize := int(*sts.Spec.Replicas)
+			currentSize := *sts.Spec.Replicas
 
 			pkgLog.Info("Waiting for batch scale-down",
 				"rack", aeroCluster.Spec.RackConfig.Racks[idx].ID,
@@ -224,13 +227,13 @@ func validateRackBatchDelete(aeroCluster *asdbv1.AerospikeCluster, scaleDownBatc
 	}, getTimeout(aeroCluster.Spec.Size), 20*time.Second).Should(BeTrue())
 }
 
-func podsPerRack(size, racks int) []int {
+func podsPerRack(size, racks int32) []int32 {
 	nodesPerRack, extraNodes := size/racks, size%racks
 
 	// Distributing nodes in given racks
-	var topology []int
+	var topology []int32
 
-	for rackIdx := 0; rackIdx < racks; rackIdx++ {
+	for rackIdx := int32(0); rackIdx < racks; rackIdx++ {
 		nodesForThisRack := nodesPerRack
 		if rackIdx < extraNodes {
 			nodesForThisRack++

@@ -100,7 +100,7 @@ var _ = Describe(
 
 					err = createRestore(k8sClient, restore)
 					Expect(err).To(HaveOccurred())
-					Expect(err.Error()).To(ContainSubstring("restore point in time should be positive"))
+					Expect(err.Error()).To(ContainSubstring("should be positive number"))
 				})
 
 				It("Should fail when source field is given for Timestamp restore type", func() {

@@ -158,7 +158,7 @@ func (r *SingleClusterReconciler) reconcileRacks() common.ReconcileResult {
 		}
 
 		// Get list of scaled down racks
-		if *found.Spec.Replicas > int32(state.Size) {
+		if *found.Spec.Replicas > state.Size {
 			scaledDownRackList = append(scaledDownRackList, scaledDownRack{rackSTS: found, rackState: state})
 		} else {
 			// Reconcile other statefulset
@@ -587,7 +587,7 @@ func (r *SingleClusterReconciler) reconcileRack(
 		found.Name,
 	)
 
-	desiredSize := int32(rackState.Size)
+	desiredSize := rackState.Size
 	currentSize := *found.Spec.Replicas
 
 	// Scale down
@@ -683,7 +683,7 @@ func (r *SingleClusterReconciler) scaleUpRack(
 ) (
 	*appsv1.StatefulSet, common.ReconcileResult,
 ) {
-	desiredSize := int32(rackState.Size)
+	desiredSize := rackState.Size
 
 	oldSz := *found.Spec.Replicas
 
@@ -893,7 +893,7 @@ func (r *SingleClusterReconciler) upgradeRack(
 func (r *SingleClusterReconciler) scaleDownRack(
 	found *appsv1.StatefulSet, rackState *RackState, ignorablePodNames sets.Set[string],
 ) (*appsv1.StatefulSet, common.ReconcileResult) {
-	desiredSize := int32(rackState.Size)
+	desiredSize := rackState.Size
 
 	// Continue if scaleDown is not needed
 	if *found.Spec.Replicas <= desiredSize {
@@ -977,7 +977,7 @@ func (r *SingleClusterReconciler) scaleDownRack(
 	}
 
 	// Update new object with new size
-	newSize := *found.Spec.Replicas - int32(len(podsBatch))
+	newSize := *found.Spec.Replicas - utils.Len32(podsBatch)
 	found.Spec.Replicas = &newSize
 
 	if err = r.Client.Update(
@@ -1008,7 +1008,7 @@ func (r *SingleClusterReconciler) scaleDownRack(
 		// In case of rolling restart, no pod cleanup happens, therefore rolling config back is left to the user.
 		if err = r.validateSCClusterState(policy, ignorablePodNames); err != nil {
 			// reset cluster size
-			newSize := *found.Spec.Replicas + int32(len(podsBatch))
+			newSize := *found.Spec.Replicas + utils.Len32(podsBatch)
 			found.Spec.Replicas = &newSize
 
 			r.Log.Error(
@@ -1698,8 +1698,8 @@ func (r *SingleClusterReconciler) getRackPodNames(rackState *RackState) []string
 
 	podNames := make([]string, 0, rackState.Size)
 
-	for i := 0; i < rackState.Size; i++ {
-		podNames = append(podNames, getSTSPodName(stsName.Name, int32(i)))
+	for i := int32(0); i < rackState.Size; i++ {
+		podNames = append(podNames, getSTSPodName(stsName.Name, i))
 	}
 
 	return podNames
@@ -1858,7 +1858,7 @@ func isContainerNameInStorageVolumeAttachments(
 
 func getConfiguredRackStateList(aeroCluster *asdbv1.AerospikeCluster) []RackState {
 	topology := asdbv1.DistributeItems(
-		int(aeroCluster.Spec.Size), len(aeroCluster.Spec.RackConfig.Racks),
+		aeroCluster.Spec.Size, utils.Len32(aeroCluster.Spec.RackConfig.Racks),
 	)
 
 	rackStateList := make([]RackState, 0, len(aeroCluster.Spec.RackConfig.Racks))
