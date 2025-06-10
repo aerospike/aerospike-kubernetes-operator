@@ -224,7 +224,7 @@ var _ = Describe(
 					},
 				)
 
-				FIt(
+				It(
 					"Should update config statically", func() {
 
 						By("Modify static config to do warm restart")
