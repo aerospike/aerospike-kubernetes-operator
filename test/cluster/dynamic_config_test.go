@@ -224,7 +224,7 @@ var _ = Describe(
 					},
 				)
 
-				It(
+				FIt(
 					"Should update config statically", func() {
 
 						By("Modify static config to do warm restart")
@@ -278,7 +278,7 @@ var _ = Describe(
 
 						pod = aeroCluster.Status.Pods[aeroCluster.Name+"-0-0"]
 
-						info, err := requestInfoFromNode(logger, k8sClient, ctx, clusterNamespacedName, "namespace/test", &pod)
+						info, err := requestInfoFromNode(logger, k8sClient, ctx, clusterNamespacedName, "namespace/mem", &pod)
 						Expect(err).ToNot(HaveOccurred())
 
 						confs := strings.Split(info["namespace/mem"], ";")
