@@ -14,8 +14,6 @@ import (
 	"github.com/aerospike/aerospike-kubernetes-operator/v4/test"
 )
 
-const noRestart = "noRestart"
-
 var _ = Describe(
 	"OnDemandOperations", func() {
 
