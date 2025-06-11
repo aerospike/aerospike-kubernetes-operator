@@ -23,8 +23,8 @@ for namespace in $namespaces; do
   echo "Removing Aerospike backup from namespace: $namespace"
   kubectl -n "$namespace" delete aerospikebackup --all
 
-    echo "Removing Aerospike backup service from namespace: $namespace"
-    kubectl -n "$namespace" delete aerospikebackupservice --all
+  echo "Removing Aerospike backup service from namespace: $namespace"
+  kubectl -n "$namespace" delete aerospikebackupservice --all
 
   # Force delete pods
   kubectl -n "$namespace" delete pod --selector 'app=aerospike-cluster' --grace-period=0 --force --ignore-not-found
