@@ -32,7 +32,10 @@ type podID struct {
 	asdPID string
 }
 
-const clName = "dynamic-config-test"
+const (
+	clName    = "dynamic-config-test"
+	noRestart = "noRestart"
+)
 
 var (
 	configWithMaxDefaultVal = mapset.NewSet("info-max-ms", "flush-max-ms")
@@ -72,6 +75,8 @@ var _ = Describe(
 						aeroCluster := createDummyAerospikeCluster(
 							clusterNamespacedName, 2,
 						)
+						aeroCluster.Spec.AerospikeConfig.Value["namespaces"] = append(
+							aeroCluster.Spec.AerospikeConfig.Value["namespaces"].([]interface{}), getNonSCInMemoryNamespaceConfig("mem"))
 						aeroCluster.Spec.AerospikeConfig.Value["xdr"] = map[string]interface{}{
 							"dcs": []map[string]interface{}{
 								{
@@ -169,7 +174,7 @@ var _ = Describe(
 
 						By("Verify no warm/cold restarts in Pods")
 
-						validateServerRestart(ctx, aeroCluster, podPIDMap, false)
+						validateServerRestart(ctx, aeroCluster, podPIDMap, noRestart)
 
 						By("Modify dynamic config by removing fields")
 
@@ -215,14 +220,14 @@ var _ = Describe(
 
 						By("Verify no warm/cold restarts in Pods")
 
-						validateServerRestart(ctx, aeroCluster, podPIDMap, false)
+						validateServerRestart(ctx, aeroCluster, podPIDMap, noRestart)
 					},
 				)
 
 				It(
 					"Should update config statically", func() {
 
-						By("Modify static config")
+						By("Modify static config to do warm restart")
 
 						aeroCluster, err := getCluster(
 							k8sClient, ctx, clusterNamespacedName,
@@ -251,8 +256,41 @@ var _ = Describe(
 						Expect(enableQuotas).To(BeTrue())
 
 						By("Verify warm restarts in Pods")
+						validateServerRestart(ctx, aeroCluster, podPIDMap, asdbv1.OperationWarmRestart)
 
-						validateServerRestart(ctx, aeroCluster, podPIDMap, true)
+						By("Modify static config to do pod restart")
+
+						aeroCluster, err = getCluster(
+							k8sClient, ctx, clusterNamespacedName,
+						)
+						Expect(err).ToNot(HaveOccurred())
+
+						podPIDMap, err = getPodIDs(ctx, aeroCluster)
+						Expect(err).ToNot(HaveOccurred())
+
+						nsList := aeroCluster.Spec.AerospikeConfig.Value["namespaces"].([]interface{})
+						nsList[1].(map[string]interface{})["storage-engine"].(map[string]interface{})["data-size"] = 2073741824
+
+						err = updateCluster(k8sClient, ctx, aeroCluster)
+						Expect(err).ToNot(HaveOccurred())
+
+						By("Fetch and verify static configs")
+
+						pod = aeroCluster.Status.Pods[aeroCluster.Name+"-0-0"]
+
+						info, err := requestInfoFromNode(logger, k8sClient, ctx, clusterNamespacedName, "namespace/mem", &pod)
+						Expect(err).ToNot(HaveOccurred())
+
+						confs := strings.Split(info["namespace/mem"], ";")
+						for _, conf := range confs {
+							if strings.Contains(conf, "data-size") {
+								keyValue := strings.Split(conf, "=")
+								Expect(keyValue[1]).To(Equal("2073741824"))
+							}
+						}
+
+						By("Verify pod restarts in Pods")
+						validateServerRestart(ctx, aeroCluster, podPIDMap, asdbv1.OperationPodRestart)
 					},
 				)
 
@@ -290,7 +328,7 @@ var _ = Describe(
 						Expect(cv).To(Equal(int64(19000)))
 
 						By("Verify warm restarts in Pods")
-						validateServerRestart(ctx, aeroCluster, podPIDMap, true)
+						validateServerRestart(ctx, aeroCluster, podPIDMap, asdbv1.OperationWarmRestart)
 					},
 				)
 			},
@@ -357,8 +395,8 @@ var _ = Describe(
 
 						// As there was no full config update failure,
 						// expectation is that pods will not be restarted.
-						By("Verify cold restarts in Pods")
-						validateServerRestart(ctx, aeroCluster, podPIDMap, false)
+						By("Verify no restarts in Pods")
+						validateServerRestart(ctx, aeroCluster, podPIDMap, noRestart)
 					},
 				)
 
@@ -409,8 +447,14 @@ var _ = Describe(
 						Expect(err).ToNot(HaveOccurred())
 
 						// As pods were failed, expectation is that pods will be cold restarted.
-						By("Verify cold restarts in Pods")
-						validateServerRestart(ctx, aeroCluster, podPIDMap, true)
+						By("Verify partial cold restart in Pods")
+						operationTypeMap := map[string]asdbv1.OperationKind{
+							aeroCluster.Name + "-0-0": noRestart,
+							aeroCluster.Name + "-0-1": asdbv1.OperationPodRestart,
+						}
+
+						err = validateOperationTypes(ctx, aeroCluster, podPIDMap, operationTypeMap)
+						Expect(err).ToNot(HaveOccurred())
 
 					},
 				)
@@ -524,7 +568,7 @@ var _ = Describe(
 						Expect(err).ToNot(HaveOccurred())
 
 						By("Verify no warm/cold restarts in Pods")
-						validateServerRestart(ctx, aeroCluster, podPIDMap, false)
+						validateServerRestart(ctx, aeroCluster, podPIDMap, noRestart)
 
 						By("Verify Network Context configs dynamically")
 						err = validateNetworkContextDynamically(ctx, flatServer, flatSpec, aeroCluster, dynamic)
@@ -536,7 +580,7 @@ var _ = Describe(
 						Expect(err).ToNot(HaveOccurred())
 
 						By("Verify no warm/cold restarts in Pods")
-						validateServerRestart(ctx, aeroCluster, podPIDMap, false)
+						validateServerRestart(ctx, aeroCluster, podPIDMap, noRestart)
 
 						By("Verify Namespace Context configs dynamically")
 						err = validateNamespaceContextDynamically(ctx, flatServer, flatSpec, aeroCluster, dynamic)
@@ -548,7 +592,7 @@ var _ = Describe(
 						Expect(err).ToNot(HaveOccurred())
 
 						By("Verify no warm/cold restarts in Pods")
-						validateServerRestart(ctx, aeroCluster, podPIDMap, false)
+						validateServerRestart(ctx, aeroCluster, podPIDMap, noRestart)
 
 						By("Verify Security Context configs dynamically")
 						err = validateSecurityContextDynamically(ctx, flatServer, flatSpec, aeroCluster, dynamic)
@@ -560,7 +604,7 @@ var _ = Describe(
 						Expect(err).ToNot(HaveOccurred())
 
 						By("Verify no warm/cold restarts in Pods")
-						validateServerRestart(ctx, aeroCluster, podPIDMap, false)
+						validateServerRestart(ctx, aeroCluster, podPIDMap, noRestart)
 
 						By("Verify XDR Context configs dynamically")
 						err = validateXDRContextDynamically(clusterNamespacedName,
@@ -573,7 +617,7 @@ var _ = Describe(
 						Expect(err).ToNot(HaveOccurred())
 
 						By("Verify no warm/cold restarts in Pods")
-						validateServerRestart(ctx, aeroCluster, podPIDMap, false)
+						validateServerRestart(ctx, aeroCluster, podPIDMap, noRestart)
 					},
 				)
 			},
@@ -671,8 +715,7 @@ var _ = Describe(
 						}
 
 						By("Verify no warm/cold restarts in Pods")
-
-						validateServerRestart(ctx, aeroCluster, podPIDMap, false)
+						validateServerRestart(ctx, aeroCluster, podPIDMap, noRestart)
 					},
 				)
 			},
@@ -680,21 +723,16 @@ var _ = Describe(
 	},
 )
 
-func validateServerRestart(ctx goctx.Context, cluster *asdbv1.AerospikeCluster, pidMap map[string]podID,
-	shouldRestart bool) {
-	restarted := false
+func validateServerRestart(ctx goctx.Context, aeroCluster *asdbv1.AerospikeCluster, pidMap map[string]podID,
+	restartType asdbv1.OperationKind) {
+	operationTypeMap := make(map[string]asdbv1.OperationKind)
 
-	newPodPidMap, err := getPodIDs(ctx, cluster)
-	Expect(err).ToNot(HaveOccurred())
-
-	for podName, pid := range pidMap {
-		if newPodPidMap[podName].podUID != pid.podUID || newPodPidMap[podName].asdPID != pid.asdPID {
-			restarted = true
-			break
-		}
+	for podName := range pidMap {
+		operationTypeMap[podName] = restartType
 	}
 
-	Expect(restarted).To(Equal(shouldRestart))
+	err := validateOperationTypes(ctx, aeroCluster, pidMap, operationTypeMap)
+	Expect(err).ToNot(HaveOccurred())
 }
 
 func getPodIDs(ctx context.Context, aeroCluster *asdbv1.AerospikeCluster) (map[string]podID, error) {
