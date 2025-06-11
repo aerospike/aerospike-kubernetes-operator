@@ -217,6 +217,12 @@ func getAerospikeStorageList(storage *asdbv1.AerospikeStorageSpec, onlyPV bool) 
 func validateStorage(
 	storage *asdbv1.AerospikeStorageSpec, podSpec *asdbv1.AerospikePodSpec,
 ) error {
+	if asdbv1.GetBool(storage.DeleteLocalStorageOnRestart) && len(storage.LocalStorageClasses) == 0 {
+		return fmt.Errorf(
+			"deleteLocalStorageOnRestart is set to true, but no local storage classes are defined",
+		)
+	}
+
 	reservedPaths := map[string]int{
 		// Reserved mount paths for the operator.
 		"/etc/aerospike": 1,
