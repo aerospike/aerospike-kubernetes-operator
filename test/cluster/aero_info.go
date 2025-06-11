@@ -50,18 +50,16 @@ func newAsConn(
 		}
 	} else {
 		if tlsName == "" {
-			port = int32(
-				*asdbv1.GetServicePort(
-					aeroCluster.Spec.
-						AerospikeConfig,
-				),
+			port = *asdbv1.GetServicePort(
+				aeroCluster.Spec.
+					AerospikeConfig,
 			)
 		} else {
 			_, portP := asdbv1.GetServiceTLSNameAndPort(
 				aeroCluster.Spec.
 					AerospikeConfig,
 			)
-			port = int32(*portP)
+			port = *portP
 		}
 	}
 

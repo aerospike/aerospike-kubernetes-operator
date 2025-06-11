@@ -7,7 +7,7 @@ import (
 	"strconv"
 	"strings"
 
-	"golang.org/x/crypto/ripemd160" //nolint:staticcheck // this ripemd160 legacy hash is only used for diff comparison not for security purpose
+	"golang.org/x/crypto/ripemd160" //nolint:staticcheck,gosec // this ripemd160 legacy hash is only used for diff comparison not for security purpose
 	corev1 "k8s.io/api/core/v1"
 	meta "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/types"
@@ -170,7 +170,7 @@ func MergeLabels(operatorLabels, userLabels map[string]string) map[string]string
 func GetHash(str string) (string, error) {
 	var digest []byte
 
-	hash := ripemd160.New()
+	hash := ripemd160.New() //nolint:gosec // ripemd160 hash is only used for diff comparison not for security purpose
 	hash.Reset()
 
 	if _, err := hash.Write([]byte(str)); err != nil {
@@ -223,4 +223,9 @@ func RemoveString(slice []string, s string) (result []string) {
 	}
 
 	return
+}
+
+// Len32 returns length of slice in int32 range.
+func Len32[T any](v []T) int32 {
+	return int32(len(v)) //nolint:gosec // length can't exceed int32 range
 }
