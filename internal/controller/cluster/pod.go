@@ -23,6 +23,7 @@ import (
 	"github.com/aerospike/aerospike-kubernetes-operator/v4/internal/controller/common"
 	"github.com/aerospike/aerospike-kubernetes-operator/v4/pkg/jsonpatch"
 	"github.com/aerospike/aerospike-kubernetes-operator/v4/pkg/utils"
+	"github.com/aerospike/aerospike-kubernetes-operator/v4/pkg/validation"
 	lib "github.com/aerospike/aerospike-management-lib"
 	"github.com/aerospike/aerospike-management-lib/asconfig"
 )
@@ -268,8 +269,36 @@ func (r *SingleClusterReconciler) rollingRestartPods(
 			return res
 		}
 
+		clientPolicy := r.getClientPolicy()
+		setMigrateFillDelay := r.shouldSetMigrateFillDelay(rackState, podsToRestart, restartTypeMap)
+
+		r.Log.Info("Migrate-fill-delay", "needed", setMigrateFillDelay)
+
+		// Revert migrate-fill-delay to the original value before restarting active pods.
+		// This will be a no-op in the first reconcile
+		if setMigrateFillDelay {
+			// Add an optimisation check to only run set MFD in case of cold restart.
+			if res := r.setMigrateFillDelay(clientPolicy, &rackState.Rack.AerospikeConfig, false,
+				ignorablePodNames,
+			); !res.IsSuccess {
+				r.Log.Error(res.Err, "Failed to set migrate-fill-delay before restarting active pods")
+				return res
+			}
+		}
+
 		if res := r.restartPods(rackState, activePods, restartTypeMap); !res.IsSuccess {
 			return res
+		}
+
+		// Set migrate-fill-delay O to immediately start the migration. Will be reverted back to the original value
+		// in the next reconcile.
+		if setMigrateFillDelay {
+			if res := r.setMigrateFillDelay(clientPolicy, &rackState.Rack.AerospikeConfig, true,
+				ignorablePodNames,
+			); !res.IsSuccess {
+				r.Log.Error(res.Err, "Failed to revert migrate-fill-delay after restarting active pods")
+				return res
+			}
 		}
 	}
 
@@ -559,8 +588,34 @@ func (r *SingleClusterReconciler) safelyDeletePodsAndEnsureImageUpdated(
 			return res
 		}
 
+		clientPolicy := r.getClientPolicy()
+		setMigrateFillDelay := r.shouldSetMigrateFillDelay(rackState, podsToUpdate, nil)
+
+		r.Log.Info("Migrate-fill-delay", "needed", setMigrateFillDelay)
+		// Revert migrate-fill-delay to the original value before restarting active pods.
+		// This will be a no-op in the first reconcile
+		if setMigrateFillDelay {
+			if res := r.setMigrateFillDelay(clientPolicy, &rackState.Rack.AerospikeConfig, false,
+				ignorablePodNames,
+			); !res.IsSuccess {
+				r.Log.Error(res.Err, "Failed to set migrate-fill-delay before upgrade")
+				return res
+			}
+		}
+
 		if res := r.deletePodAndEnsureImageUpdated(rackState, activePods); !res.IsSuccess {
 			return res
+		}
+
+		// Set migrate-fill-delay O to immediately start the migration. Will be reverted back to the original value
+		// in the next reconcile.
+		if setMigrateFillDelay {
+			if res := r.setMigrateFillDelay(clientPolicy, &rackState.Rack.AerospikeConfig, true,
+				ignorablePodNames,
+			); !res.IsSuccess {
+				r.Log.Error(res.Err, "Failed to rever migrate-fill-delay before upgrade")
+				return res
+			}
 		}
 	}
 
@@ -1657,4 +1712,55 @@ func (r *SingleClusterReconciler) podsToRestart() (quickRestarts, podRestarts se
 	}
 
 	return quickRestarts, podRestarts
+}
+
+// shouldSetMigrateFillDelay determines if migrate-fill-delay should be set based on local persistent storage
+// or in-memory namespace.
+func (r *SingleClusterReconciler) shouldSetMigrateFillDelay(rackState *RackState,
+	podsToRestart []*corev1.Pod, restartTypeMap map[string]RestartType) bool {
+
+	var podRestartNeeded bool
+
+	// If restartTypeMap is nil, we assume that a pod restart is needed.
+	if restartTypeMap == nil {
+		podRestartNeeded = true
+	} else {
+		for idx := range podsToRestart {
+			pod := podsToRestart[idx]
+			restartType := restartTypeMap[pod.Name]
+
+			if restartType == podRestart {
+				podRestartNeeded = true
+				break
+			}
+		}
+	}
+
+	if !podRestartNeeded {
+		return false
+
+	}
+
+	localStorageClassSet := sets.NewString(rackState.Rack.Storage.LocalStorageClasses...)
+
+	// TODO: Are these checks enough to determine persistence with local-storage?
+	// Do we need this kind of check for all mounts?
+	// Or just checking the volume SC against localStorageClassSet is enough? Will skip scenarios where volume is added
+	// for future ref but not actually used in the namespace.
+	for idx := range rackState.Rack.Storage.Volumes {
+		volume := &rackState.Rack.Storage.Volumes[idx]
+		if volume.Source.PersistentVolume != nil &&
+			localStorageClassSet.Has(volume.Source.PersistentVolume.StorageClass) {
+			return true
+		}
+	}
+
+	for _, namespace := range rackState.Rack.AerospikeConfig.Value["namespaces"].([]interface{}) {
+		if validation.IsInMemoryNamespace(namespace.(map[string]interface{})) {
+			return true
+		}
+	}
+
+	return false
+
 }
