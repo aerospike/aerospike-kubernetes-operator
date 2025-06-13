@@ -1718,7 +1718,6 @@ func (r *SingleClusterReconciler) podsToRestart() (quickRestarts, podRestarts se
 // or in-memory namespace.
 func (r *SingleClusterReconciler) shouldSetMigrateFillDelay(rackState *RackState,
 	podsToRestart []*corev1.Pod, restartTypeMap map[string]RestartType) bool {
-
 	var podRestartNeeded bool
 
 	// If restartTypeMap is nil, we assume that a pod restart is needed.
@@ -1738,7 +1737,6 @@ func (r *SingleClusterReconciler) shouldSetMigrateFillDelay(rackState *RackState
 
 	if !podRestartNeeded {
 		return false
-
 	}
 
 	localStorageClassSet := sets.NewString(rackState.Rack.Storage.LocalStorageClasses...)
@@ -1762,5 +1760,4 @@ func (r *SingleClusterReconciler) shouldSetMigrateFillDelay(rackState *RackState
 	}
 
 	return false
-
 }
