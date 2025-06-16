@@ -23,7 +23,6 @@ import (
 	"github.com/aerospike/aerospike-kubernetes-operator/v4/internal/controller/common"
 	"github.com/aerospike/aerospike-kubernetes-operator/v4/pkg/jsonpatch"
 	"github.com/aerospike/aerospike-kubernetes-operator/v4/pkg/utils"
-	"github.com/aerospike/aerospike-kubernetes-operator/v4/pkg/validation"
 	lib "github.com/aerospike/aerospike-management-lib"
 	"github.com/aerospike/aerospike-management-lib/asconfig"
 )
@@ -1714,10 +1713,17 @@ func (r *SingleClusterReconciler) podsToRestart() (quickRestarts, podRestarts se
 	return quickRestarts, podRestarts
 }
 
-// shouldSetMigrateFillDelay determines if migrate-fill-delay should be set based on local persistent storage
-// or in-memory namespace.
+// shouldSetMigrateFillDelay determines if migrate-fill-delay should be set.
+// It only returns true if the following conditions are met:
+// 1. DeleteLocalStorageOnRestart is set to true.
+// 2. At least one pod needs to be restarted.
+// 3. At least one persistent volume is using a local storage class.
 func (r *SingleClusterReconciler) shouldSetMigrateFillDelay(rackState *RackState,
 	podsToRestart []*corev1.Pod, restartTypeMap map[string]RestartType) bool {
+	if !asdbv1.GetBool(rackState.Rack.Storage.DeleteLocalStorageOnRestart) {
+		return false
+	}
+
 	var podRestartNeeded bool
 
 	// If restartTypeMap is nil, we assume that a pod restart is needed.
@@ -1741,20 +1747,10 @@ func (r *SingleClusterReconciler) shouldSetMigrateFillDelay(rackState *RackState
 
 	localStorageClassSet := sets.NewString(rackState.Rack.Storage.LocalStorageClasses...)
 
-	// TODO: Are these checks enough to determine persistence with local-storage?
-	// Do we need this kind of check for all mounts?
-	// Or just checking the volume SC against localStorageClassSet is enough? Will skip scenarios where volume is added
-	// for future ref but not actually used in the namespace.
 	for idx := range rackState.Rack.Storage.Volumes {
 		volume := &rackState.Rack.Storage.Volumes[idx]
 		if volume.Source.PersistentVolume != nil &&
 			localStorageClassSet.Has(volume.Source.PersistentVolume.StorageClass) {
-			return true
-		}
-	}
-
-	for _, namespace := range rackState.Rack.AerospikeConfig.Value["namespaces"].([]interface{}) {
-		if validation.IsInMemoryNamespace(namespace.(map[string]interface{})) {
 			return true
 		}
 	}
