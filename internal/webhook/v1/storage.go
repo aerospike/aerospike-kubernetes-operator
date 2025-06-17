@@ -219,7 +219,7 @@ func validateStorage(
 ) error {
 	if asdbv1.GetBool(storage.DeleteLocalStorageOnRestart) && len(storage.LocalStorageClasses) == 0 {
 		return fmt.Errorf(
-			"deleteLocalStorageOnRestart is set to true, but no local storage classes are defined",
+			"localStorageClasses cannot be empty if deleteLocalStorageOnRestart is set",
 		)
 	}
 

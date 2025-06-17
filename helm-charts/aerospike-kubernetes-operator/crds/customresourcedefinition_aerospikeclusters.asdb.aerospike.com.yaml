@@ -6576,8 +6576,8 @@ spec:
                                         properties:
                                           accessModes:
                                             description: |-
-                                              Name for creating PVC for this volume, Name or path should be given
-                                              Name string `json:"name"`
+                                              AccessModes contains the desired access modes the volume should have.
+                                              More info: https://kubernetes.io/docs/concepts/storage/persistent-volumes/#access-modes
                                             items:
                                               type: string
                                             type: array
@@ -8182,8 +8182,8 @@ spec:
                                         properties:
                                           accessModes:
                                             description: |-
-                                              Name for creating PVC for this volume, Name or path should be given
-                                              Name string `json:"name"`
+                                              AccessModes contains the desired access modes the volume should have.
+                                              More info: https://kubernetes.io/docs/concepts/storage/persistent-volumes/#access-modes
                                             items:
                                               type: string
                                             type: array
@@ -8859,8 +8859,8 @@ spec:
                               properties:
                                 accessModes:
                                   description: |-
-                                    Name for creating PVC for this volume, Name or path should be given
-                                    Name string `json:"name"`
+                                    AccessModes contains the desired access modes the volume should have.
+                                    More info: https://kubernetes.io/docs/concepts/storage/persistent-volumes/#access-modes
                                   items:
                                     type: string
                                   type: array
@@ -15732,8 +15732,8 @@ spec:
                                         properties:
                                           accessModes:
                                             description: |-
-                                              Name for creating PVC for this volume, Name or path should be given
-                                              Name string `json:"name"`
+                                              AccessModes contains the desired access modes the volume should have.
+                                              More info: https://kubernetes.io/docs/concepts/storage/persistent-volumes/#access-modes
                                             items:
                                               type: string
                                             type: array
@@ -17338,8 +17338,8 @@ spec:
                                         properties:
                                           accessModes:
                                             description: |-
-                                              Name for creating PVC for this volume, Name or path should be given
-                                              Name string `json:"name"`
+                                              AccessModes contains the desired access modes the volume should have.
+                                              More info: https://kubernetes.io/docs/concepts/storage/persistent-volumes/#access-modes
                                             items:
                                               type: string
                                             type: array
@@ -18081,8 +18081,8 @@ spec:
                               properties:
                                 accessModes:
                                   description: |-
-                                    Name for creating PVC for this volume, Name or path should be given
-                                    Name string `json:"name"`
+                                    AccessModes contains the desired access modes the volume should have.
+                                    More info: https://kubernetes.io/docs/concepts/storage/persistent-volumes/#access-modes
                                   items:
                                     type: string
                                   type: array

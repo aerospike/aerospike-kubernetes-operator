@@ -739,8 +739,8 @@ type PersistentVolumeSpec struct { //nolint:govet // for readability
 	// Size of volume.
 	Size resource.Quantity `json:"size"`
 
-	// Name for creating PVC for this volume, Name or path should be given
-	// Name string `json:"name"`
+	// AccessModes contains the desired access modes the volume should have.
+	// More info: https://kubernetes.io/docs/concepts/storage/persistent-volumes/#access-modes
 	// +optional
 	AccessModes []corev1.PersistentVolumeAccessMode `json:"accessModes,omitempty" protobuf:"bytes,1,rep,name=accessModes,casttype=PersistentVolumeAccessMode"` //nolint:lll // for readability
 
