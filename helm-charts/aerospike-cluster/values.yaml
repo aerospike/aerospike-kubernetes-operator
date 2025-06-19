@@ -66,12 +66,14 @@ aerospikeNetworkPolicy: {}
 podSpec: {}
 ##  Multi pod per host
 #   multiPodPerHost: true
-#    sidecars:
-#      - name: aerospike-prometheus-exporter
-#        image: aerospike/aerospike-prometheus-exporter:1.24.0
-#        ports:
-#          - containerPort: 9145
-#            name: exporter
+
+## Sidecars (example: Aerospike Prometheus Exporter)
+#   sidecars:
+#     - name: aerospike-prometheus-exporter
+#       image: aerospike/aerospike-prometheus-exporter:1.24.0
+#       ports:
+#         - containerPort: 9145
+#           name: exporter
 
 ## Rack configuration
 rackConfig: {}
