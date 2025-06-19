@@ -68,7 +68,7 @@ podSpec: {}
 #   multiPodPerHost: true
 #    sidecars:
 #      - name: aerospike-prometheus-exporter
-#        image: aerospike/aerospike-prometheus-exporter:v1.18.0
+#        image: aerospike/aerospike-prometheus-exporter:1.24.0
 #        ports:
 #          - containerPort: 9145
 #            name: exporter
