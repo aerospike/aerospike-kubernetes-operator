@@ -573,7 +573,9 @@ func validateMigrateFillDelay(
 	if retryInt != nil {
 		interval = *retryInt
 	}
+
 	asinfo := info.NewAsInfo(log, host, getClientPolicy(aeroCluster, k8sClient))
+
 	err = wait.PollUntilContextTimeout(ctx,
 		interval, getTimeout(1), true, func(goctx.Context) (done bool, err error) {
 			confs, err := getAsConfig(asinfo, "service")
@@ -1720,7 +1722,8 @@ func getReadyPods(aeroCluster *asdbv1.AerospikeCluster, k8sClient client.Client)
 	return readyPods, nil
 }
 
-func waitForOperatorToStartPodRestart(ctx goctx.Context, k8sClient client.Client, aeroCluster *asdbv1.AerospikeCluster) error {
+func waitForOperatorToStartPodRestart(ctx goctx.Context, k8sClient client.Client,
+	aeroCluster *asdbv1.AerospikeCluster) error {
 	// Wait for starting the pod restart process
 	return wait.PollUntilContextTimeout(ctx,
 		1*time.Second, getTimeout(aeroCluster.Spec.Size), true, func(goctx.Context) (done bool, err error) {

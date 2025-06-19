@@ -271,7 +271,9 @@ func (r *SingleClusterReconciler) rollingRestartPods(
 		clientPolicy := r.getClientPolicy()
 		setMigrateFillDelay := r.shouldSetMigrateFillDelay(rackState, podsToRestart, restartTypeMap)
 
-		r.Log.Info("Migrate-fill-delay", "needed", setMigrateFillDelay)
+		r.Log.Info(
+			fmt.Sprintf("Adjust migrate-fill-delay prior to pod restart: %t", setMigrateFillDelay),
+		)
 
 		// Revert migrate-fill-delay to the original value before restarting active pods.
 		// This will be a no-op in the first reconcile
@@ -280,7 +282,8 @@ func (r *SingleClusterReconciler) rollingRestartPods(
 			if res := r.setMigrateFillDelay(clientPolicy, &rackState.Rack.AerospikeConfig, false,
 				ignorablePodNames,
 			); !res.IsSuccess {
-				r.Log.Error(res.Err, "Failed to set migrate-fill-delay before restarting active pods")
+				r.Log.Error(res.Err,
+					"Failed to set migrate-fill-delay to original value before restarting the running pods")
 				return res
 			}
 		}
@@ -295,7 +298,7 @@ func (r *SingleClusterReconciler) rollingRestartPods(
 			if res := r.setMigrateFillDelay(clientPolicy, &rackState.Rack.AerospikeConfig, true,
 				ignorablePodNames,
 			); !res.IsSuccess {
-				r.Log.Error(res.Err, "Failed to revert migrate-fill-delay after restarting active pods")
+				r.Log.Error(res.Err, "Failed to set migrate-fill-delay to `0` after restarting the running pods")
 				return res
 			}
 		}
@@ -590,14 +593,17 @@ func (r *SingleClusterReconciler) safelyDeletePodsAndEnsureImageUpdated(
 		clientPolicy := r.getClientPolicy()
 		setMigrateFillDelay := r.shouldSetMigrateFillDelay(rackState, podsToUpdate, nil)
 
-		r.Log.Info("Migrate-fill-delay", "needed", setMigrateFillDelay)
+		r.Log.Info(
+			fmt.Sprintf("Adjust migrate-fill-delay prior to pod restart: %t", setMigrateFillDelay))
+
 		// Revert migrate-fill-delay to the original value before restarting active pods.
 		// This will be a no-op in the first reconcile
 		if setMigrateFillDelay {
 			if res := r.setMigrateFillDelay(clientPolicy, &rackState.Rack.AerospikeConfig, false,
 				ignorablePodNames,
 			); !res.IsSuccess {
-				r.Log.Error(res.Err, "Failed to set migrate-fill-delay before upgrade")
+				r.Log.Error(res.Err,
+					"Failed to set migrate-fill-delay to original value before upgrading the running pods")
 				return res
 			}
 		}
@@ -612,7 +618,7 @@ func (r *SingleClusterReconciler) safelyDeletePodsAndEnsureImageUpdated(
 			if res := r.setMigrateFillDelay(clientPolicy, &rackState.Rack.AerospikeConfig, true,
 				ignorablePodNames,
 			); !res.IsSuccess {
-				r.Log.Error(res.Err, "Failed to rever migrate-fill-delay before upgrade")
+				r.Log.Error(res.Err, "Failed to set migrate-fill-delay to `0` after upgrading the running pods")
 				return res
 			}
 		}

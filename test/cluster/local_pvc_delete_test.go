@@ -218,15 +218,21 @@ func updateAndValidateIntermediateMFD(ctx goctx.Context, k8sClient client.Client
 	Expect(err).ToNot(HaveOccurred())
 
 	By("Validating the migrate-fill-delay is set to given value before the restart")
-	err = validateMigrateFillDelay(ctx, k8sClient, logger, clusterNamespacedName, expectedMigFillDelay, &shortRetryInterval)
+
+	err = validateMigrateFillDelay(ctx, k8sClient, logger, clusterNamespacedName, expectedMigFillDelay,
+		&shortRetryInterval)
 	Expect(err).ToNot(HaveOccurred())
 
 	By("Validating the migrate-fill-delay is set to 0 after the restart (pod is running)")
-	err = validateMigrateFillDelay(ctx, k8sClient, logger, clusterNamespacedName, 0, &shortRetryInterval)
+
+	err = validateMigrateFillDelay(ctx, k8sClient, logger, clusterNamespacedName, 0,
+		&shortRetryInterval)
 	Expect(err).ToNot(HaveOccurred())
 
 	By("Validating the migrate-fill-delay is set to given value before the restart of next pod")
-	err = validateMigrateFillDelay(ctx, k8sClient, logger, clusterNamespacedName, expectedMigFillDelay, &shortRetryInterval)
+
+	err = validateMigrateFillDelay(ctx, k8sClient, logger, clusterNamespacedName, expectedMigFillDelay,
+		&shortRetryInterval)
 	Expect(err).ToNot(HaveOccurred())
 
 	err = waitForAerospikeCluster(
@@ -236,6 +242,8 @@ func updateAndValidateIntermediateMFD(ctx goctx.Context, k8sClient client.Client
 	Expect(err).ToNot(HaveOccurred())
 
 	By("Validating the migrate-fill-delay is set to given value after the operation is completed")
-	err = validateMigrateFillDelay(ctx, k8sClient, logger, clusterNamespacedName, expectedMigFillDelay, &shortRetryInterval)
+
+	err = validateMigrateFillDelay(ctx, k8sClient, logger, clusterNamespacedName, expectedMigFillDelay,
+		&shortRetryInterval)
 	Expect(err).ToNot(HaveOccurred())
 }
