@@ -68,7 +68,7 @@ spec:
           value: aerospike
         - name: AEROSPIKE_KUBERNETES_INIT_NAME_TAG
           # this is the name and tag of aerospike-init image
-          value: aerospike-kubernetes-init:2.3.0-dev3
+          value: aerospike-kubernetes-init:2.3.0-dev4
       volumes: []
       serviceAccountName: controller-manager
 
