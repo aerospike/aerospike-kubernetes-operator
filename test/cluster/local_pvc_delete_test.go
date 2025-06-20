@@ -21,6 +21,7 @@ var _ = Describe(
 	"LocalPVCDelete", func() {
 		ctx := goctx.TODO()
 		clusterName := fmt.Sprintf("local-pvc-%d", GinkgoParallelProcess())
+		migrateFillDelay := int64(300)
 		clusterNamespacedName := test.GetNamespacedName(clusterName, namespace)
 
 		Context("When doing valid operations", func() {
@@ -38,32 +39,33 @@ var _ = Describe(
 			)
 
 			Context("When doing rolling restart", func() {
-				It("Should delete the local PVCs when deleteLocalStorageOnRestart is set", func() {
-					aeroCluster := createDummyAerospikeCluster(
-						clusterNamespacedName, 2,
-					)
-					aeroCluster.Spec.Storage.DeleteLocalStorageOnRestart = ptr.To(true)
-					aeroCluster.Spec.Storage.LocalStorageClasses = []string{storageClass}
-					Expect(DeployCluster(k8sClient, ctx, aeroCluster)).ToNot(HaveOccurred())
+				It("Should delete the local PVCs when deleteLocalStorageOnRestart is set and set MFD dynamically",
+					func() {
+						aeroCluster := createDummyAerospikeCluster(
+							clusterNamespacedName, 2,
+						)
+						aeroCluster.Spec.Storage.DeleteLocalStorageOnRestart = ptr.To(true)
+						aeroCluster.Spec.Storage.LocalStorageClasses = []string{storageClass}
+						Expect(DeployCluster(k8sClient, ctx, aeroCluster)).ToNot(HaveOccurred())
 
-					oldPvcInfoPerPod, err := extractClusterPVC(ctx, k8sClient, aeroCluster)
-					Expect(err).ToNot(HaveOccurred())
+						oldPvcInfoPerPod, err := extractClusterPVC(ctx, k8sClient, aeroCluster)
+						Expect(err).ToNot(HaveOccurred())
 
-					By("Updating pod metadata to trigger rolling restart")
-					aeroCluster.Spec.PodSpec.AerospikeObjectMeta = asdbv1.AerospikeObjectMeta{
-						Labels: map[string]string{
-							"test-label": "test-value",
-						},
-					}
+						By("Updating pod metadata to trigger rolling restart")
+						aeroCluster.Spec.PodSpec.AerospikeObjectMeta = asdbv1.AerospikeObjectMeta{
+							Labels: map[string]string{
+								"test-label": "test-value",
+							},
+						}
 
-					Expect(updateCluster(k8sClient, ctx, aeroCluster)).ToNot(HaveOccurred())
+						updateAndValidateIntermediateMFD(ctx, k8sClient, aeroCluster, migrateFillDelay)
 
-					By("Validating PVCs deletion")
-					validateClusterPVCDeletion(ctx, oldPvcInfoPerPod)
-				})
+						By("Validating PVCs deletion")
+						validateClusterPVCDeletion(ctx, oldPvcInfoPerPod)
+					})
 
 				It("Should delete the local PVCs of only 1 rack when deleteLocalStorageOnRestart is set "+
-					"at the rack level", func() {
+					"at the rack level and set MFD dynamically", func() {
 					aeroCluster := createDummyAerospikeCluster(
 						clusterNamespacedName, 2,
 					)
@@ -87,7 +89,7 @@ var _ = Describe(
 						},
 					}
 
-					Expect(updateCluster(k8sClient, ctx, aeroCluster)).ToNot(HaveOccurred())
+					updateAndValidateIntermediateMFD(ctx, k8sClient, aeroCluster, migrateFillDelay)
 
 					By("Validating PVCs deletion")
 					validateClusterPVCDeletion(ctx, oldPvcInfoPerPod, clusterName+"-2-0")
@@ -95,40 +97,42 @@ var _ = Describe(
 			})
 
 			Context("When doing upgrade", func() {
-				It("Should delete the local PVCs when deleteLocalStorageOnRestart is set", func() {
-					aeroCluster := createDummyAerospikeCluster(
-						clusterNamespacedName, 2,
-					)
-					Expect(DeployCluster(k8sClient, ctx, aeroCluster)).ToNot(HaveOccurred())
+				It("Should delete the local PVCs when deleteLocalStorageOnRestart is set and set MFD dynamically",
+					func() {
+						aeroCluster := createDummyAerospikeCluster(
+							clusterNamespacedName, 2,
+						)
+						Expect(DeployCluster(k8sClient, ctx, aeroCluster)).ToNot(HaveOccurred())
 
-					oldPvcInfoPerPod, err := extractClusterPVC(ctx, k8sClient, aeroCluster)
-					Expect(err).ToNot(HaveOccurred())
-					oldPodIDs, err := getPodIDs(ctx, aeroCluster)
-					Expect(err).ToNot(HaveOccurred())
+						oldPvcInfoPerPod, err := extractClusterPVC(ctx, k8sClient, aeroCluster)
+						Expect(err).ToNot(HaveOccurred())
+						oldPodIDs, err := getPodIDs(ctx, aeroCluster)
+						Expect(err).ToNot(HaveOccurred())
 
-					By("Enable DeleteLocalStorageOnRestart and set localStorageClasses")
-					aeroCluster.Spec.Storage.DeleteLocalStorageOnRestart = ptr.To(true)
-					aeroCluster.Spec.Storage.LocalStorageClasses = []string{storageClass}
-					Expect(updateCluster(k8sClient, ctx, aeroCluster)).ToNot(HaveOccurred())
+						By("Enable DeleteLocalStorageOnRestart and set localStorageClasses")
+						aeroCluster.Spec.Storage.DeleteLocalStorageOnRestart = ptr.To(true)
+						aeroCluster.Spec.Storage.LocalStorageClasses = []string{storageClass}
+						Expect(updateCluster(k8sClient, ctx, aeroCluster)).ToNot(HaveOccurred())
 
-					operationTypeMap := map[string]asdbv1.OperationKind{
-						aeroCluster.Name + "-0-0": noRestart,
-						aeroCluster.Name + "-0-1": noRestart,
-					}
+						operationTypeMap := map[string]asdbv1.OperationKind{
+							aeroCluster.Name + "-0-0": noRestart,
+							aeroCluster.Name + "-0-1": noRestart,
+						}
 
-					err = validateOperationTypes(ctx, aeroCluster, oldPodIDs, operationTypeMap)
-					Expect(err).ToNot(HaveOccurred())
+						err = validateOperationTypes(ctx, aeroCluster, oldPodIDs, operationTypeMap)
+						Expect(err).ToNot(HaveOccurred())
 
-					By("Updating the image")
-					Expect(UpdateClusterImage(aeroCluster, nextImage)).ToNot(HaveOccurred())
-					Expect(updateCluster(k8sClient, ctx, aeroCluster)).ToNot(HaveOccurred())
+						By("Updating the image")
+						Expect(UpdateClusterImage(aeroCluster, nextImage)).ToNot(HaveOccurred())
 
-					By("Validating PVCs deletion")
-					validateClusterPVCDeletion(ctx, oldPvcInfoPerPod)
-				})
+						updateAndValidateIntermediateMFD(ctx, k8sClient, aeroCluster, migrateFillDelay)
+
+						By("Validating PVCs deletion")
+						validateClusterPVCDeletion(ctx, oldPvcInfoPerPod)
+					})
 
 				It("Should delete the local PVCs of only 1 rack when deleteLocalStorageOnRestart is set "+
-					"at the rack level", func() {
+					"at the rack level and set MFD dynamically", func() {
 					aeroCluster := createDummyAerospikeCluster(
 						clusterNamespacedName, 2,
 					)
@@ -147,7 +151,8 @@ var _ = Describe(
 
 					By("Updating the image")
 					Expect(UpdateClusterImage(aeroCluster, nextImage)).ToNot(HaveOccurred())
-					Expect(updateCluster(k8sClient, ctx, aeroCluster)).ToNot(HaveOccurred())
+
+					updateAndValidateIntermediateMFD(ctx, k8sClient, aeroCluster, migrateFillDelay)
 
 					By("Validating PVCs deletion")
 					validateClusterPVCDeletion(ctx, oldPvcInfoPerPod, clusterName+"-2-0")
@@ -199,4 +204,46 @@ func extractClusterPVC(ctx goctx.Context, k8sClient client.Client, aeroCluster *
 	}
 
 	return oldPvcInfoPerPod, nil
+}
+
+func updateAndValidateIntermediateMFD(ctx goctx.Context, k8sClient client.Client, aeroCluster *asdbv1.AerospikeCluster,
+	expectedMigFillDelay int64) {
+	aeroCluster.Spec.AerospikeConfig.Value["service"].(map[string]interface{})["migrate-fill-delay"] =
+		expectedMigFillDelay
+	Expect(updateClusterWithNoWait(k8sClient, ctx, aeroCluster)).ToNot(HaveOccurred())
+
+	clusterNamespacedName := utils.GetNamespacedName(aeroCluster)
+
+	err := waitForOperatorToStartPodRestart(ctx, k8sClient, aeroCluster)
+	Expect(err).ToNot(HaveOccurred())
+
+	By("Validating the migrate-fill-delay is set to given value before the restart")
+
+	err = validateMigrateFillDelay(ctx, k8sClient, logger, clusterNamespacedName, expectedMigFillDelay,
+		&shortRetryInterval)
+	Expect(err).ToNot(HaveOccurred())
+
+	By("Validating the migrate-fill-delay is set to 0 after the restart (pod is running)")
+
+	err = validateMigrateFillDelay(ctx, k8sClient, logger, clusterNamespacedName, 0,
+		&shortRetryInterval)
+	Expect(err).ToNot(HaveOccurred())
+
+	By("Validating the migrate-fill-delay is set to given value before the restart of next pod")
+
+	err = validateMigrateFillDelay(ctx, k8sClient, logger, clusterNamespacedName, expectedMigFillDelay,
+		&shortRetryInterval)
+	Expect(err).ToNot(HaveOccurred())
+
+	err = waitForAerospikeCluster(
+		k8sClient, ctx, aeroCluster, int(aeroCluster.Spec.Size), retryInterval,
+		getTimeout(2), []asdbv1.AerospikeClusterPhase{asdbv1.AerospikeClusterCompleted},
+	)
+	Expect(err).ToNot(HaveOccurred())
+
+	By("Validating the migrate-fill-delay is set to given value after the operation is completed")
+
+	err = validateMigrateFillDelay(ctx, k8sClient, logger, clusterNamespacedName, expectedMigFillDelay,
+		&shortRetryInterval)
+	Expect(err).ToNot(HaveOccurred())
 }
