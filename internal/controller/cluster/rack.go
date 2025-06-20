@@ -614,10 +614,10 @@ func (r *SingleClusterReconciler) reconcileRack(
 	}
 
 	if failedPods == nil {
-		// Revert migrate-fill-delay to original value if it was set to 0 during scale down.
+		// Revert migrate-fill-delay to the original value if it was set to 0 during scale down.
 		// Reset will be done if there is scale-down or Rack redistribution.
-		// This check won't cover a scenario where scale-down operation was done and then reverted to previous value
-		// before the scale down could complete.
+		// This check won't cover a scenario where a scale-down operation was done and then reverted to the previous
+		// value before the scale down could complete.
 		if (r.aeroCluster.Status.Size > r.aeroCluster.Spec.Size) ||
 			(!r.IsStatusEmpty() && len(r.aeroCluster.Status.RackConfig.Racks) != len(r.aeroCluster.Spec.RackConfig.Racks)) {
 			if res = r.setMigrateFillDelay(

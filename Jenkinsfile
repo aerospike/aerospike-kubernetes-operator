@@ -240,7 +240,7 @@ boolean isNightly() {
 }
 
 String getVersion() {
-    def prefix = "4.0.2"
+    def prefix = "4.1.0-preview"
     def candidateName = ""
     if(isNightly()) {
         def timestamp = new Date().format("yyyy-MM-dd")
