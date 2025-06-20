@@ -452,6 +452,7 @@ func validateStorageVolumeSource(volume *asdbv1.VolumeSpec) error {
 			// Validate the initialization method for the volume
 			validInitMethods := sets.New(
 				asdbv1.AerospikeVolumeMethodDD,
+				asdbv1.AerospikeVolumeMethodDDHeaderOnly,
 				asdbv1.AerospikeVolumeMethodBlkdiscard,
 				asdbv1.AerospikeVolumeMethodNone,
 				asdbv1.AerospikeVolumeMethodBlkdiscardWithHeaderCleanup,
