@@ -97,7 +97,7 @@ pipeline {
                                 }
                                 else {
                                     // Identify changed files using git diff
-                                    def changedFiles = sh(script: "git diff --name-only origin/master...HEAD", returnStdout: true).trim()
+                                    def changedFiles = sh(script: "git diff --name-only origin/${env.CHANGE_TARGET}...HEAD", returnStdout: true).trim()
                                     if(changedFiles.isEmpty()) {
                                         return
                                     }
