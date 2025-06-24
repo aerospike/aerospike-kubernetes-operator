@@ -105,7 +105,7 @@ var _ = Describe(
 						Expect(err).ToNot(HaveOccurred())
 
 						By("Verifying if the pod is migrated to other nodes and pod pvcs are not deleted")
-						validatePodAndPVCMigration(ctx, podName, oldK8sNode, oldPvcInfo, true)
+						validatePodAndPVCMigration(ctx, podName, oldK8sNode, oldPvcInfo, false)
 					},
 				)
 
@@ -123,7 +123,7 @@ var _ = Describe(
 						Expect(err).ToNot(HaveOccurred())
 
 						By("Verifying if the pod is migrated to other nodes and pod pvcs are not deleted")
-						validatePodAndPVCMigration(ctx, podName, oldK8sNode, oldPvcInfo, true)
+						validatePodAndPVCMigration(ctx, podName, oldK8sNode, oldPvcInfo, false)
 					},
 				)
 
@@ -139,7 +139,7 @@ var _ = Describe(
 						Expect(err).ToNot(HaveOccurred())
 
 						By("Verifying if the pod is migrated to other nodes and pod pvcs are not deleted")
-						validatePodAndPVCMigration(ctx, podName, oldK8sNode, oldPvcInfo, true)
+						validatePodAndPVCMigration(ctx, podName, oldK8sNode, oldPvcInfo, false)
 					},
 				)
 
@@ -155,7 +155,7 @@ var _ = Describe(
 						Expect(err).ToNot(HaveOccurred())
 
 						By("Verifying if the pod is migrated to other nodes and pod local pvcs are deleted")
-						validatePodAndPVCMigration(ctx, podName, oldK8sNode, oldPvcInfo, false)
+						validatePodAndPVCMigration(ctx, podName, oldK8sNode, oldPvcInfo, true)
 					},
 				)
 
@@ -181,7 +181,7 @@ var _ = Describe(
 						Expect(err).ToNot(HaveOccurred())
 
 						By("Verifying if the failed pod is migrated to other nodes and pod pvcs are not deleted")
-						validatePodAndPVCMigration(ctx, podName, oldK8sNode, oldPvcInfo, true)
+						validatePodAndPVCMigration(ctx, podName, oldK8sNode, oldPvcInfo, false)
 					},
 				)
 			},
@@ -210,7 +210,7 @@ func extractPodPVC(pod *corev1.Pod) (map[string]types.UID, error) {
 	return pvcUIDMap, nil
 }
 
-func validatePVCDeletion(ctx context.Context, pvcUIDMap map[string]types.UID, shouldDelete bool) error {
+func validatePVCDeletion(ctx context.Context, pvcUIDMap map[string]types.UID, shouldDeletePVC bool) error {
 	pvc := &corev1.PersistentVolumeClaim{}
 
 	for pvcName, pvcUID := range pvcUIDMap {
@@ -222,12 +222,14 @@ func validatePVCDeletion(ctx context.Context, pvcUIDMap map[string]types.UID, sh
 			return err
 		}
 
-		if shouldDelete && pvc.UID != pvcUID {
-			return fmt.Errorf("PVC %s is unintentionally deleted", pvcName)
-		}
-
-		if !shouldDelete && pvc.UID == pvcUID {
-			return fmt.Errorf("PVC %s is not deleted", pvcName)
+		if shouldDeletePVC {
+			if pvc.UID == pvcUID {
+				return fmt.Errorf("PVC %s is not deleted", pvcName)
+			}
+		} else {
+			if pvc.UID != pvcUID {
+				return fmt.Errorf("PVC %s is unintentionally deleted", pvcName)
+			}
 		}
 	}
 
@@ -235,12 +237,12 @@ func validatePVCDeletion(ctx context.Context, pvcUIDMap map[string]types.UID, sh
 }
 
 func validatePodAndPVCMigration(ctx context.Context, podName, oldK8sNode string,
-	oldPvcInfo map[string]types.UID, shouldDelete bool) {
+	oldPvcInfo map[string]types.UID, shouldDeletePVC bool) {
 	pod := &corev1.Pod{}
 	err := k8sClient.Get(ctx, test.GetNamespacedName(podName, namespace), pod)
 	Expect(err).ToNot(HaveOccurred())
 	Expect(pod.Spec.NodeName).ToNot(Equal(oldK8sNode))
 
-	err = validatePVCDeletion(ctx, oldPvcInfo, shouldDelete)
+	err = validatePVCDeletion(ctx, oldPvcInfo, shouldDeletePVC)
 	Expect(err).ToNot(HaveOccurred())
 }
