@@ -246,7 +246,7 @@ String getVersion() {
         def timestamp = new Date().format("yyyy-MM-dd")
         candidateName =  "nightly-${timestamp}"
     } else {
-        candidateName =  "candidate-${env.BRANCH_NAME}"
+        candidateName =  "${env.BRANCH_NAME}"
     }
 
     def candidateNameMax = 30 - prefix.length()
