@@ -926,26 +926,6 @@ func validateNamespaceConfig(
 	return nil
 }
 
-func validateSecurityConfigUpdateFromStatus(newSpec, currentStatus *asdbv1.AerospikeConfigSpec) error {
-	if currentStatus != nil {
-		currentSecurityEnabled, err := asdbv1.IsSecurityEnabled(currentStatus.Value)
-		if err != nil {
-			return err
-		}
-
-		desiredSecurityEnabled, err := asdbv1.IsSecurityEnabled(newSpec.Value)
-		if err != nil {
-			return err
-		}
-
-		if currentSecurityEnabled && !desiredSecurityEnabled {
-			return fmt.Errorf("cannot disable cluster security in running cluster")
-		}
-	}
-
-	return nil
-}
-
 func validateAerospikeConfigUpdate(
 	aslog logr.Logger,
 	incomingSpec, outgoingSpec, currentStatus *asdbv1.AerospikeConfigSpec,
@@ -956,10 +936,6 @@ func validateAerospikeConfigUpdate(
 	oldConf := outgoingSpec.Value
 
 	if err := validation.ValidateAerospikeConfigUpdateWithoutSchema(oldConf, newConf); err != nil {
-		return err
-	}
-
-	if err := validateSecurityConfigUpdateFromStatus(incomingSpec, currentStatus); err != nil {
 		return err
 	}
 

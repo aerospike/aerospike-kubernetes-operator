@@ -390,7 +390,7 @@ func (r *SingleClusterReconciler) upgradeOrRollingRestartRack(
 	// This code will run only when security is being enabled in an existing cluster
 	// Update for security is verified by checking the config hash of the pod with the
 	// config hash present in config map
-	if err := r.handleEnableSecurity(rackState, ignorablePodNames); err != nil {
+	if err := r.handleClusterSecurity(rackState, ignorablePodNames); err != nil {
 		return found, common.ReconcileError(err)
 	}
 
@@ -1775,14 +1775,15 @@ func (r *SingleClusterReconciler) getCurrentRackList() (
 	return rackList, nil
 }
 
-func (r *SingleClusterReconciler) handleEnableSecurity(rackState *RackState, ignorablePodNames sets.Set[string]) error {
-	if !r.enablingSecurity() {
+func (r *SingleClusterReconciler) handleClusterSecurity(rackState *RackState,
+	ignorablePodNames sets.Set[string]) error {
+	if !r.needACLReconcile() {
 		// No need to proceed if security is not to be enabling
 		return nil
 	}
 
 	// Get pods where security-enabled config is applied
-	securityEnabledPods, err := r.getPodsWithUpdatedConfigForRack(rackState)
+	securityEnabledPods, err := r.getPodsWithEnabledSecurityForRack(rackState)
 	if err != nil {
 		return err
 	}
@@ -1807,11 +1808,14 @@ func (r *SingleClusterReconciler) handleEnableSecurity(rackState *RackState, ign
 	return nil
 }
 
-func (r *SingleClusterReconciler) enablingSecurity() bool {
-	return r.aeroCluster.Spec.AerospikeAccessControl != nil && r.aeroCluster.Status.AerospikeAccessControl == nil
+func (r *SingleClusterReconciler) needACLReconcile() bool {
+	specEnabled := r.aeroCluster.Spec.AerospikeAccessControl == nil
+	statusEnabled := r.aeroCluster.Status.AerospikeAccessControl == nil
+
+	return specEnabled || statusEnabled
 }
 
-func (r *SingleClusterReconciler) getPodsWithUpdatedConfigForRack(rackState *RackState) ([]corev1.Pod, error) {
+func (r *SingleClusterReconciler) getPodsWithEnabledSecurityForRack(rackState *RackState) ([]corev1.Pod, error) {
 	pods, err := r.getOrderedRackPodList(rackState.Rack.ID)
 	if err != nil {
 		return nil, fmt.Errorf("failed to list pods: %v", err)
@@ -1822,26 +1826,27 @@ func (r *SingleClusterReconciler) getPodsWithUpdatedConfigForRack(rackState *Rac
 		return nil, nil
 	}
 
-	confMap, err := r.getConfigMap(rackState.Rack.ID)
-	if err != nil {
-		return nil, err
-	}
-
-	requiredConfHash := confMap.Data[aerospikeConfHashFileName]
-
-	updatedPods := make([]corev1.Pod, 0, len(pods))
+	securityEnabledPods := make([]corev1.Pod, 0, len(pods))
 
 	for idx := range pods {
-		podName := pods[idx].Name
-		podStatus := r.aeroCluster.Status.Pods[podName]
+		statusFromAnnotation := pods[idx].Annotations["aerospikeConf"]
 
-		if podStatus.AerospikeConfigHash == requiredConfHash {
-			// Config hash is matching, it means config has been applied
-			updatedPods = append(updatedPods, *pods[idx])
+		asConfStatus, err := getFlatConfig(r.Log, statusFromAnnotation)
+		if err != nil {
+			return nil, fmt.Errorf("failed to load config map by lib: %v", err)
+		}
+
+		enabled, err := asdbv1.IsSecurityEnabled(*asConfStatus)
+		if err != nil {
+			return nil, fmt.Errorf("failed to get cluster security status: %v", err)
+		}
+
+		if enabled {
+			securityEnabledPods = append(securityEnabledPods, *pods[idx])
 		}
 	}
 
-	return updatedPods, nil
+	return securityEnabledPods, nil
 }
 
 func isContainerNameInStorageVolumeAttachments(

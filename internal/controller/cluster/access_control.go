@@ -37,29 +37,6 @@ func AerospikeAdminCredentials(
 	desiredState, currentState *asdbv1.AerospikeClusterSpec,
 	passwordProvider AerospikeUserPasswordProvider,
 ) (user, pass string, err error) {
-	var (
-		enabled            bool
-		currentSecurityErr error
-		desiredSecurityErr error
-	)
-
-	enabled, desiredSecurityErr = asdbv1.IsSecurityEnabled(desiredState.AerospikeConfig.Value)
-	if !enabled {
-		if currentState.AerospikeConfig != nil {
-			// It is possible that this is a new cluster and the current state is empty.
-			enabled, currentSecurityErr = asdbv1.IsSecurityEnabled(currentState.AerospikeConfig.Value)
-		}
-
-		if currentSecurityErr != nil && desiredSecurityErr != nil {
-			return "", "", desiredSecurityErr
-		}
-	}
-
-	if !enabled {
-		// Return zero strings if this is not a security enabled cluster.
-		return "", "", nil
-	}
-
 	if currentState.AerospikeAccessControl == nil {
 		// We haven't yet set up access control. Use default password.
 		return asdbv1.AdminUsername, passwordProvider.GetDefaultPassword(desiredState), nil
@@ -190,6 +167,13 @@ func (r *SingleClusterReconciler) reconcileUsers(
 		currentUserNames = append(currentUserNames, userName)
 	}
 
+	if len(desired) == 0 {
+		// If no users are desired, do not drop admin user.
+		desired[asdbv1.AdminUsername] = asdbv1.AerospikeUserSpec{
+			Roles: []string{"user-admin", "sys-admin"},
+		}
+	}
+
 	// List users needed in the desired list.
 	requiredUserNames := make([]string, 0, len(desired))
 	for userName := range desired {
@@ -213,9 +197,18 @@ func (r *SingleClusterReconciler) reconcileUsers(
 	for userName := range desired {
 		userSpec := desired[userName]
 
-		password, err := passwordProvider.Get(userName, &userSpec)
-		if err != nil {
-			return err
+		var (
+			password string
+			err      error
+		)
+
+		if userName == asdbv1.AdminUsername && userSpec.SecretName == "" {
+			password = passwordProvider.GetDefaultPassword(&r.aeroCluster.Spec)
+		} else {
+			password, err = passwordProvider.Get(userName, &userSpec)
+			if err != nil {
+				return err
+			}
 		}
 
 		cmd := aerospikeUserCreateUpdate{
