@@ -138,6 +138,13 @@ func (r *SingleClusterReconciler) reconcileRacks() common.ReconcileResult {
 		}
 	}
 
+	// Handle enable security just after updating configMap.
+	// This code will run only when security is being enabled in an existing cluster
+	// Update for security is verified by checking the aerospike.conf annotation of the pod.
+	if err = r.handleClusterSecurity(ignorablePodNames); err != nil {
+		return common.ReconcileError(err)
+	}
+
 	for idx := range rackStateList {
 		state := &rackStateList[idx]
 		found := &appsv1.StatefulSet{}
@@ -383,14 +390,6 @@ func (r *SingleClusterReconciler) upgradeOrRollingRestartRack(
 			found.Name,
 		)
 
-		return found, common.ReconcileError(err)
-	}
-
-	// Handle enable security just after updating configMap.
-	// This code will run only when security is being enabled in an existing cluster
-	// Update for security is verified by checking the config hash of the pod with the
-	// config hash present in config map
-	if err := r.handleClusterSecurity(rackState, ignorablePodNames); err != nil {
 		return found, common.ReconcileError(err)
 	}
 
@@ -1775,7 +1774,7 @@ func (r *SingleClusterReconciler) getCurrentRackList() (
 	return rackList, nil
 }
 
-func (r *SingleClusterReconciler) handleClusterSecurity(rackState *RackState,
+func (r *SingleClusterReconciler) handleClusterSecurity(
 	ignorablePodNames sets.Set[string]) error {
 	if !r.needACLReconcile() {
 		// No need to proceed if security is not to be enabling
@@ -1783,18 +1782,18 @@ func (r *SingleClusterReconciler) handleClusterSecurity(rackState *RackState,
 	}
 
 	// Get pods where security-enabled config is applied
-	securityEnabledPods, err := r.getPodsWithEnabledSecurityForRack(rackState)
+	securityEnabledPod, err := r.getAnyPodWithEnabledSecurity(ignorablePodNames)
 	if err != nil {
 		return err
 	}
 
-	if len(securityEnabledPods) == 0 {
-		// No security-enabled pods found
+	if securityEnabledPod == nil {
+		// No security-enabled pod found
 		return nil
 	}
 
 	// Setup access control.
-	if err := r.validateAndReconcileAccessControl(securityEnabledPods, ignorablePodNames); err != nil {
+	if err := r.validateAndReconcileAccessControl(securityEnabledPod, ignorablePodNames); err != nil {
 		r.Log.Error(err, "Failed to Reconcile access control")
 		r.Recorder.Eventf(
 			r.aeroCluster, corev1.EventTypeWarning, "ACLUpdateFailed",
@@ -1815,21 +1814,25 @@ func (r *SingleClusterReconciler) needACLReconcile() bool {
 	return specEnabled || statusEnabled
 }
 
-func (r *SingleClusterReconciler) getPodsWithEnabledSecurityForRack(rackState *RackState) ([]corev1.Pod, error) {
-	pods, err := r.getOrderedRackPodList(rackState.Rack.ID)
+func (r *SingleClusterReconciler) getAnyPodWithEnabledSecurity(
+	ignorablePodNames sets.Set[string]) (*corev1.Pod, error) {
+	podList, err := r.getClusterPodList()
 	if err != nil {
 		return nil, fmt.Errorf("failed to list pods: %v", err)
 	}
 
-	if len(pods) == 0 {
+	if len(podList.Items) == 0 {
 		// No pod found for the rack
 		return nil, nil
 	}
 
-	securityEnabledPods := make([]corev1.Pod, 0, len(pods))
+	for idx := range podList.Items {
+		pod := &podList.Items[idx]
+		if ignorablePodNames.Has(pod.Name) {
+			continue
+		}
 
-	for idx := range pods {
-		statusFromAnnotation := pods[idx].Annotations["aerospikeConf"]
+		statusFromAnnotation := pod.Annotations["aerospikeConf"]
 
 		asConfStatus, err := getFlatConfig(r.Log, statusFromAnnotation)
 		if err != nil {
@@ -1842,11 +1845,11 @@ func (r *SingleClusterReconciler) getPodsWithEnabledSecurityForRack(rackState *R
 		}
 
 		if enabled {
-			securityEnabledPods = append(securityEnabledPods, *pods[idx])
+			return pod, nil
 		}
 	}
 
-	return securityEnabledPods, nil
+	return nil, nil
 }
 
 func isContainerNameInStorageVolumeAttachments(

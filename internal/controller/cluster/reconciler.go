@@ -328,7 +328,7 @@ func (r *SingleClusterReconciler) recoverIgnorablePods(ignorablePodNames sets.Se
 }
 
 func (r *SingleClusterReconciler) validateAndReconcileAccessControl(
-	selectedPods []corev1.Pod,
+	selectedPod *corev1.Pod,
 	ignorablePodNames sets.Set[string],
 ) error {
 	var (
@@ -337,7 +337,7 @@ func (r *SingleClusterReconciler) validateAndReconcileAccessControl(
 	)
 
 	// Create client
-	if selectedPods == nil {
+	if selectedPod == nil {
 		var enabled bool
 
 		enabled, err = asdbv1.IsSecurityEnabled(r.aeroCluster.Spec.AerospikeConfig.Value)
@@ -355,13 +355,11 @@ func (r *SingleClusterReconciler) validateAndReconcileAccessControl(
 			return fmt.Errorf("failed to get host info: %v", err)
 		}
 	} else {
-		conns, err = r.newPodsHostConnWithOption(selectedPods, ignorablePodNames)
+		conns, err = r.newPodsHostConnWithOption([]corev1.Pod{*selectedPod}, ignorablePodNames)
 		if err != nil {
 			return fmt.Errorf("failed to get host info: %v", err)
 		}
 	}
-
-	r.Log.Info("Reconcile access control for AerospikeCluster, created conn")
 
 	hosts := make([]*as.Host, 0, len(conns))
 
