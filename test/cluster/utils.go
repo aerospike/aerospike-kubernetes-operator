@@ -420,7 +420,7 @@ func getAerospikeStorageConfig(
 	// - recreate and check if volumes are reinitialized correctly.
 	fileDeleteInitMethod := asdbv1.AerospikeVolumeMethodDeleteFiles
 	ddInitMethod := asdbv1.AerospikeVolumeMethodDD
-	ddHeaderOnlyInitMethod := asdbv1.AerospikeVolumeMethodDDHeaderOnly
+	headerCleanupInitMethod := asdbv1.AerospikeVolumeMethodHeaderCleanup
 	blkDiscardInitMethod := asdbv1.AerospikeVolumeMethodBlkdiscard
 	blkDiscardWithHeaderCleanupInitMethod := asdbv1.AerospikeVolumeMethodBlkdiscardWithHeaderCleanup
 	blkDiscardWipeMethod := asdbv1.AerospikeVolumeMethodBlkdiscard
@@ -499,9 +499,9 @@ func getAerospikeStorageConfig(
 				},
 			},
 			{
-				Name: "device-dd-with-only-header-cleanup",
+				Name: "device-header-cleanup",
 				AerospikePersistentVolumePolicySpec: asdbv1.AerospikePersistentVolumePolicySpec{
-					InputInitMethod: &ddHeaderOnlyInitMethod,
+					InputInitMethod: &headerCleanupInitMethod,
 				},
 				Source: asdbv1.VolumeSource{
 					PersistentVolume: &asdbv1.PersistentVolumeSpec{
@@ -511,7 +511,7 @@ func getAerospikeStorageConfig(
 					},
 				},
 				Aerospike: &asdbv1.AerospikeServerVolumeAttachment{
-					Path: "/opt/aerospike/blockdevice-init-dd-with-only-header-cleanup",
+					Path: "/opt/aerospike/blockdevice-init-header-cleanup",
 				},
 			},
 			{

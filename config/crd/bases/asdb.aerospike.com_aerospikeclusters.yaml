@@ -6180,7 +6180,7 @@ spec:
                                   enum:
                                   - none
                                   - dd
-                                  - ddHeaderOnly
+                                  - headerCleanup
                                   - blkdiscard
                                   - blkdiscardWithHeaderCleanup
                                   - deleteFiles
@@ -6191,7 +6191,7 @@ spec:
                                   enum:
                                   - none
                                   - dd
-                                  - ddHeaderOnly
+                                  - headerCleanup
                                   - blkdiscard
                                   - blkdiscardWithHeaderCleanup
                                   - deleteFiles
@@ -6203,7 +6203,7 @@ spec:
                                   enum:
                                   - none
                                   - dd
-                                  - ddHeaderOnly
+                                  - headerCleanup
                                   - blkdiscard
                                   - blkdiscardWithHeaderCleanup
                                   - deleteFiles
@@ -6215,7 +6215,7 @@ spec:
                                   enum:
                                   - none
                                   - dd
-                                  - ddHeaderOnly
+                                  - headerCleanup
                                   - blkdiscard
                                   - blkdiscardWithHeaderCleanup
                                   - deleteFiles
@@ -6244,7 +6244,7 @@ spec:
                                   enum:
                                   - none
                                   - dd
-                                  - ddHeaderOnly
+                                  - headerCleanup
                                   - blkdiscard
                                   - blkdiscardWithHeaderCleanup
                                   - deleteFiles
@@ -6255,7 +6255,7 @@ spec:
                                   enum:
                                   - none
                                   - dd
-                                  - ddHeaderOnly
+                                  - headerCleanup
                                   - blkdiscard
                                   - blkdiscardWithHeaderCleanup
                                   - deleteFiles
@@ -6267,7 +6267,7 @@ spec:
                                   enum:
                                   - none
                                   - dd
-                                  - ddHeaderOnly
+                                  - headerCleanup
                                   - blkdiscard
                                   - blkdiscardWithHeaderCleanup
                                   - deleteFiles
@@ -6279,7 +6279,7 @@ spec:
                                   enum:
                                   - none
                                   - dd
-                                  - ddHeaderOnly
+                                  - headerCleanup
                                   - blkdiscard
                                   - blkdiscardWithHeaderCleanup
                                   - deleteFiles
@@ -6349,7 +6349,7 @@ spec:
                                     enum:
                                     - none
                                     - dd
-                                    - ddHeaderOnly
+                                    - headerCleanup
                                     - blkdiscard
                                     - blkdiscardWithHeaderCleanup
                                     - deleteFiles
@@ -6360,7 +6360,7 @@ spec:
                                     enum:
                                     - none
                                     - dd
-                                    - ddHeaderOnly
+                                    - headerCleanup
                                     - blkdiscard
                                     - blkdiscardWithHeaderCleanup
                                     - deleteFiles
@@ -6420,7 +6420,7 @@ spec:
                                     enum:
                                     - none
                                     - dd
-                                    - ddHeaderOnly
+                                    - headerCleanup
                                     - blkdiscard
                                     - blkdiscardWithHeaderCleanup
                                     - deleteFiles
@@ -6749,7 +6749,7 @@ spec:
                                     enum:
                                     - none
                                     - dd
-                                    - ddHeaderOnly
+                                    - headerCleanup
                                     - blkdiscard
                                     - blkdiscardWithHeaderCleanup
                                     - deleteFiles
@@ -7793,7 +7793,7 @@ spec:
                                   enum:
                                   - none
                                   - dd
-                                  - ddHeaderOnly
+                                  - headerCleanup
                                   - blkdiscard
                                   - blkdiscardWithHeaderCleanup
                                   - deleteFiles
@@ -7804,7 +7804,7 @@ spec:
                                   enum:
                                   - none
                                   - dd
-                                  - ddHeaderOnly
+                                  - headerCleanup
                                   - blkdiscard
                                   - blkdiscardWithHeaderCleanup
                                   - deleteFiles
@@ -7816,7 +7816,7 @@ spec:
                                   enum:
                                   - none
                                   - dd
-                                  - ddHeaderOnly
+                                  - headerCleanup
                                   - blkdiscard
                                   - blkdiscardWithHeaderCleanup
                                   - deleteFiles
@@ -7828,7 +7828,7 @@ spec:
                                   enum:
                                   - none
                                   - dd
-                                  - ddHeaderOnly
+                                  - headerCleanup
                                   - blkdiscard
                                   - blkdiscardWithHeaderCleanup
                                   - deleteFiles
@@ -7857,7 +7857,7 @@ spec:
                                   enum:
                                   - none
                                   - dd
-                                  - ddHeaderOnly
+                                  - headerCleanup
                                   - blkdiscard
                                   - blkdiscardWithHeaderCleanup
                                   - deleteFiles
@@ -7868,7 +7868,7 @@ spec:
                                   enum:
                                   - none
                                   - dd
-                                  - ddHeaderOnly
+                                  - headerCleanup
                                   - blkdiscard
                                   - blkdiscardWithHeaderCleanup
                                   - deleteFiles
@@ -7880,7 +7880,7 @@ spec:
                                   enum:
                                   - none
                                   - dd
-                                  - ddHeaderOnly
+                                  - headerCleanup
                                   - blkdiscard
                                   - blkdiscardWithHeaderCleanup
                                   - deleteFiles
@@ -7892,7 +7892,7 @@ spec:
                                   enum:
                                   - none
                                   - dd
-                                  - ddHeaderOnly
+                                  - headerCleanup
                                   - blkdiscard
                                   - blkdiscardWithHeaderCleanup
                                   - deleteFiles
@@ -7962,7 +7962,7 @@ spec:
                                     enum:
                                     - none
                                     - dd
-                                    - ddHeaderOnly
+                                    - headerCleanup
                                     - blkdiscard
                                     - blkdiscardWithHeaderCleanup
                                     - deleteFiles
@@ -7973,7 +7973,7 @@ spec:
                                     enum:
                                     - none
                                     - dd
-                                    - ddHeaderOnly
+                                    - headerCleanup
                                     - blkdiscard
                                     - blkdiscardWithHeaderCleanup
                                     - deleteFiles
@@ -8033,7 +8033,7 @@ spec:
                                     enum:
                                     - none
                                     - dd
-                                    - ddHeaderOnly
+                                    - headerCleanup
                                     - blkdiscard
                                     - blkdiscardWithHeaderCleanup
                                     - deleteFiles
@@ -8362,7 +8362,7 @@ spec:
                                     enum:
                                     - none
                                     - dd
-                                    - ddHeaderOnly
+                                    - headerCleanup
                                     - blkdiscard
                                     - blkdiscardWithHeaderCleanup
                                     - deleteFiles
@@ -8480,7 +8480,7 @@ spec:
                         enum:
                         - none
                         - dd
-                        - ddHeaderOnly
+                        - headerCleanup
                         - blkdiscard
                         - blkdiscardWithHeaderCleanup
                         - deleteFiles
@@ -8491,7 +8491,7 @@ spec:
                         enum:
                         - none
                         - dd
-                        - ddHeaderOnly
+                        - headerCleanup
                         - blkdiscard
                         - blkdiscardWithHeaderCleanup
                         - deleteFiles
@@ -8503,7 +8503,7 @@ spec:
                         enum:
                         - none
                         - dd
-                        - ddHeaderOnly
+                        - headerCleanup
                         - blkdiscard
                         - blkdiscardWithHeaderCleanup
                         - deleteFiles
@@ -8515,7 +8515,7 @@ spec:
                         enum:
                         - none
                         - dd
-                        - ddHeaderOnly
+                        - headerCleanup
                         - blkdiscard
                         - blkdiscardWithHeaderCleanup
                         - deleteFiles
@@ -8544,7 +8544,7 @@ spec:
                         enum:
                         - none
                         - dd
-                        - ddHeaderOnly
+                        - headerCleanup
                         - blkdiscard
                         - blkdiscardWithHeaderCleanup
                         - deleteFiles
@@ -8555,7 +8555,7 @@ spec:
                         enum:
                         - none
                         - dd
-                        - ddHeaderOnly
+                        - headerCleanup
                         - blkdiscard
                         - blkdiscardWithHeaderCleanup
                         - deleteFiles
@@ -8567,7 +8567,7 @@ spec:
                         enum:
                         - none
                         - dd
-                        - ddHeaderOnly
+                        - headerCleanup
                         - blkdiscard
                         - blkdiscardWithHeaderCleanup
                         - deleteFiles
@@ -8579,7 +8579,7 @@ spec:
                         enum:
                         - none
                         - dd
-                        - ddHeaderOnly
+                        - headerCleanup
                         - blkdiscard
                         - blkdiscardWithHeaderCleanup
                         - deleteFiles
@@ -8649,7 +8649,7 @@ spec:
                           enum:
                           - none
                           - dd
-                          - ddHeaderOnly
+                          - headerCleanup
                           - blkdiscard
                           - blkdiscardWithHeaderCleanup
                           - deleteFiles
@@ -8660,7 +8660,7 @@ spec:
                           enum:
                           - none
                           - dd
-                          - ddHeaderOnly
+                          - headerCleanup
                           - blkdiscard
                           - blkdiscardWithHeaderCleanup
                           - deleteFiles
@@ -8719,7 +8719,7 @@ spec:
                           enum:
                           - none
                           - dd
-                          - ddHeaderOnly
+                          - headerCleanup
                           - blkdiscard
                           - blkdiscardWithHeaderCleanup
                           - deleteFiles
@@ -9045,7 +9045,7 @@ spec:
                           enum:
                           - none
                           - dd
-                          - ddHeaderOnly
+                          - headerCleanup
                           - blkdiscard
                           - blkdiscardWithHeaderCleanup
                           - deleteFiles
@@ -15357,7 +15357,7 @@ spec:
                                   enum:
                                   - none
                                   - dd
-                                  - ddHeaderOnly
+                                  - headerCleanup
                                   - blkdiscard
                                   - blkdiscardWithHeaderCleanup
                                   - deleteFiles
@@ -15368,7 +15368,7 @@ spec:
                                   enum:
                                   - none
                                   - dd
-                                  - ddHeaderOnly
+                                  - headerCleanup
                                   - blkdiscard
                                   - blkdiscardWithHeaderCleanup
                                   - deleteFiles
@@ -15380,7 +15380,7 @@ spec:
                                   enum:
                                   - none
                                   - dd
-                                  - ddHeaderOnly
+                                  - headerCleanup
                                   - blkdiscard
                                   - blkdiscardWithHeaderCleanup
                                   - deleteFiles
@@ -15392,7 +15392,7 @@ spec:
                                   enum:
                                   - none
                                   - dd
-                                  - ddHeaderOnly
+                                  - headerCleanup
                                   - blkdiscard
                                   - blkdiscardWithHeaderCleanup
                                   - deleteFiles
@@ -15421,7 +15421,7 @@ spec:
                                   enum:
                                   - none
                                   - dd
-                                  - ddHeaderOnly
+                                  - headerCleanup
                                   - blkdiscard
                                   - blkdiscardWithHeaderCleanup
                                   - deleteFiles
@@ -15432,7 +15432,7 @@ spec:
                                   enum:
                                   - none
                                   - dd
-                                  - ddHeaderOnly
+                                  - headerCleanup
                                   - blkdiscard
                                   - blkdiscardWithHeaderCleanup
                                   - deleteFiles
@@ -15444,7 +15444,7 @@ spec:
                                   enum:
                                   - none
                                   - dd
-                                  - ddHeaderOnly
+                                  - headerCleanup
                                   - blkdiscard
                                   - blkdiscardWithHeaderCleanup
                                   - deleteFiles
@@ -15456,7 +15456,7 @@ spec:
                                   enum:
                                   - none
                                   - dd
-                                  - ddHeaderOnly
+                                  - headerCleanup
                                   - blkdiscard
                                   - blkdiscardWithHeaderCleanup
                                   - deleteFiles
@@ -15526,7 +15526,7 @@ spec:
                                     enum:
                                     - none
                                     - dd
-                                    - ddHeaderOnly
+                                    - headerCleanup
                                     - blkdiscard
                                     - blkdiscardWithHeaderCleanup
                                     - deleteFiles
@@ -15537,7 +15537,7 @@ spec:
                                     enum:
                                     - none
                                     - dd
-                                    - ddHeaderOnly
+                                    - headerCleanup
                                     - blkdiscard
                                     - blkdiscardWithHeaderCleanup
                                     - deleteFiles
@@ -15597,7 +15597,7 @@ spec:
                                     enum:
                                     - none
                                     - dd
-                                    - ddHeaderOnly
+                                    - headerCleanup
                                     - blkdiscard
                                     - blkdiscardWithHeaderCleanup
                                     - deleteFiles
@@ -15926,7 +15926,7 @@ spec:
                                     enum:
                                     - none
                                     - dd
-                                    - ddHeaderOnly
+                                    - headerCleanup
                                     - blkdiscard
                                     - blkdiscardWithHeaderCleanup
                                     - deleteFiles
@@ -16970,7 +16970,7 @@ spec:
                                   enum:
                                   - none
                                   - dd
-                                  - ddHeaderOnly
+                                  - headerCleanup
                                   - blkdiscard
                                   - blkdiscardWithHeaderCleanup
                                   - deleteFiles
@@ -16981,7 +16981,7 @@ spec:
                                   enum:
                                   - none
                                   - dd
-                                  - ddHeaderOnly
+                                  - headerCleanup
                                   - blkdiscard
                                   - blkdiscardWithHeaderCleanup
                                   - deleteFiles
@@ -16993,7 +16993,7 @@ spec:
                                   enum:
                                   - none
                                   - dd
-                                  - ddHeaderOnly
+                                  - headerCleanup
                                   - blkdiscard
                                   - blkdiscardWithHeaderCleanup
                                   - deleteFiles
@@ -17005,7 +17005,7 @@ spec:
                                   enum:
                                   - none
                                   - dd
-                                  - ddHeaderOnly
+                                  - headerCleanup
                                   - blkdiscard
                                   - blkdiscardWithHeaderCleanup
                                   - deleteFiles
@@ -17034,7 +17034,7 @@ spec:
                                   enum:
                                   - none
                                   - dd
-                                  - ddHeaderOnly
+                                  - headerCleanup
                                   - blkdiscard
                                   - blkdiscardWithHeaderCleanup
                                   - deleteFiles
@@ -17045,7 +17045,7 @@ spec:
                                   enum:
                                   - none
                                   - dd
-                                  - ddHeaderOnly
+                                  - headerCleanup
                                   - blkdiscard
                                   - blkdiscardWithHeaderCleanup
                                   - deleteFiles
@@ -17057,7 +17057,7 @@ spec:
                                   enum:
                                   - none
                                   - dd
-                                  - ddHeaderOnly
+                                  - headerCleanup
                                   - blkdiscard
                                   - blkdiscardWithHeaderCleanup
                                   - deleteFiles
@@ -17069,7 +17069,7 @@ spec:
                                   enum:
                                   - none
                                   - dd
-                                  - ddHeaderOnly
+                                  - headerCleanup
                                   - blkdiscard
                                   - blkdiscardWithHeaderCleanup
                                   - deleteFiles
@@ -17139,7 +17139,7 @@ spec:
                                     enum:
                                     - none
                                     - dd
-                                    - ddHeaderOnly
+                                    - headerCleanup
                                     - blkdiscard
                                     - blkdiscardWithHeaderCleanup
                                     - deleteFiles
@@ -17150,7 +17150,7 @@ spec:
                                     enum:
                                     - none
                                     - dd
-                                    - ddHeaderOnly
+                                    - headerCleanup
                                     - blkdiscard
                                     - blkdiscardWithHeaderCleanup
                                     - deleteFiles
@@ -17210,7 +17210,7 @@ spec:
                                     enum:
                                     - none
                                     - dd
-                                    - ddHeaderOnly
+                                    - headerCleanup
                                     - blkdiscard
                                     - blkdiscardWithHeaderCleanup
                                     - deleteFiles
@@ -17539,7 +17539,7 @@ spec:
                                     enum:
                                     - none
                                     - dd
-                                    - ddHeaderOnly
+                                    - headerCleanup
                                     - blkdiscard
                                     - blkdiscardWithHeaderCleanup
                                     - deleteFiles
@@ -17723,7 +17723,7 @@ spec:
                         enum:
                         - none
                         - dd
-                        - ddHeaderOnly
+                        - headerCleanup
                         - blkdiscard
                         - blkdiscardWithHeaderCleanup
                         - deleteFiles
@@ -17734,7 +17734,7 @@ spec:
                         enum:
                         - none
                         - dd
-                        - ddHeaderOnly
+                        - headerCleanup
                         - blkdiscard
                         - blkdiscardWithHeaderCleanup
                         - deleteFiles
@@ -17746,7 +17746,7 @@ spec:
                         enum:
                         - none
                         - dd
-                        - ddHeaderOnly
+                        - headerCleanup
                         - blkdiscard
                         - blkdiscardWithHeaderCleanup
                         - deleteFiles
@@ -17758,7 +17758,7 @@ spec:
                         enum:
                         - none
                         - dd
-                        - ddHeaderOnly
+                        - headerCleanup
                         - blkdiscard
                         - blkdiscardWithHeaderCleanup
                         - deleteFiles
@@ -17787,7 +17787,7 @@ spec:
                         enum:
                         - none
                         - dd
-                        - ddHeaderOnly
+                        - headerCleanup
                         - blkdiscard
                         - blkdiscardWithHeaderCleanup
                         - deleteFiles
@@ -17798,7 +17798,7 @@ spec:
                         enum:
                         - none
                         - dd
-                        - ddHeaderOnly
+                        - headerCleanup
                         - blkdiscard
                         - blkdiscardWithHeaderCleanup
                         - deleteFiles
@@ -17810,7 +17810,7 @@ spec:
                         enum:
                         - none
                         - dd
-                        - ddHeaderOnly
+                        - headerCleanup
                         - blkdiscard
                         - blkdiscardWithHeaderCleanup
                         - deleteFiles
@@ -17822,7 +17822,7 @@ spec:
                         enum:
                         - none
                         - dd
-                        - ddHeaderOnly
+                        - headerCleanup
                         - blkdiscard
                         - blkdiscardWithHeaderCleanup
                         - deleteFiles
@@ -17892,7 +17892,7 @@ spec:
                           enum:
                           - none
                           - dd
-                          - ddHeaderOnly
+                          - headerCleanup
                           - blkdiscard
                           - blkdiscardWithHeaderCleanup
                           - deleteFiles
@@ -17903,7 +17903,7 @@ spec:
                           enum:
                           - none
                           - dd
-                          - ddHeaderOnly
+                          - headerCleanup
                           - blkdiscard
                           - blkdiscardWithHeaderCleanup
                           - deleteFiles
@@ -17962,7 +17962,7 @@ spec:
                           enum:
                           - none
                           - dd
-                          - ddHeaderOnly
+                          - headerCleanup
                           - blkdiscard
                           - blkdiscardWithHeaderCleanup
                           - deleteFiles
@@ -18288,7 +18288,7 @@ spec:
                           enum:
                           - none
                           - dd
-                          - ddHeaderOnly
+                          - headerCleanup
                           - blkdiscard
                           - blkdiscardWithHeaderCleanup
                           - deleteFiles
