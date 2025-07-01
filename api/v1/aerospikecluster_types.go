@@ -623,7 +623,8 @@ const (
 	// AerospikeVolumeMethodDD specifies the block volume should be zeroed using dd command.
 	AerospikeVolumeMethodDD AerospikeVolumeMethod = "dd"
 
-	// AerospikeVolumeMethodHeaderCleanup specifies the first 8MiB of the block volume header should be zeroed using the dd command.
+	// AerospikeVolumeMethodHeaderCleanup specifies the first 8MiB of the block volume header
+	// should be zeroed using the dd command.
 	// Use this method only if the underlying device does not contain old Aerospike data.
 	AerospikeVolumeMethodHeaderCleanup AerospikeVolumeMethod = "headerCleanup"
 
