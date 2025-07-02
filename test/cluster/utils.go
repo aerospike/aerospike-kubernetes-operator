@@ -339,7 +339,6 @@ func NewAerospikeConfSpec(image string) (*AerospikeConfSpec, error) {
 
 	service := map[string]interface{}{
 		"feature-key-file": "/etc/aerospike/secret/features.conf",
-		"proto-fd-max":     1024,
 	}
 	network := getNetworkConfig()
 	namespaces := []interface{}{

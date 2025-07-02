@@ -1493,7 +1493,7 @@ var _ = Describe(
 						)
 					},
 				)
-				FContext(
+				Context(
 					"When cluster is deployed", func() {
 						clusterName := fmt.Sprintf("ac-lifecycle-%d", GinkgoParallelProcess())
 						clusterNamespacedName := test.GetNamespacedName(
