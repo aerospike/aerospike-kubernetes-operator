@@ -81,7 +81,7 @@ func (acv *AerospikeClusterCustomValidator) ValidateDelete(_ context.Context, ob
 	return nil, nil
 }
 
-// ValidateUpdate implements webhook.CustomValidator so a webhook will be registered for the type
+// ValidateUpdate implement webhook.CustomValidator so a webhook will be registered for the type
 func (acv *AerospikeClusterCustomValidator) ValidateUpdate(_ context.Context, oldObj, newObj runtime.Object,
 ) (admission.Warnings, error) {
 	aerospikeCluster, ok := newObj.(*asdbv1.AerospikeCluster)
@@ -147,6 +147,10 @@ func (acv *AerospikeClusterCustomValidator) ValidateUpdate(_ context.Context, ol
 		return warnings, err
 	}
 
+	if err := validateAccessControlUpdate(&oldObject.Spec, &aerospikeCluster.Spec, &aerospikeCluster.Status); err != nil {
+		return warnings, err
+	}
+
 	// Validate AerospikeConfig update
 	if err := validateAerospikeConfigUpdate(
 		aslog, aerospikeCluster.Spec.AerospikeConfig, oldObject.Spec.AerospikeConfig,
@@ -157,6 +161,22 @@ func (acv *AerospikeClusterCustomValidator) ValidateUpdate(_ context.Context, ol
 
 	// Validate RackConfig update
 	return warnings, validateRackUpdate(aslog, oldObject, aerospikeCluster)
+}
+
+func validateAccessControlUpdate(
+	oldSpec *asdbv1.AerospikeClusterSpec,
+	newSpec *asdbv1.AerospikeClusterSpec,
+	status *asdbv1.AerospikeClusterStatus,
+) error {
+	// Prevent removal of access control before status is updated
+	if oldSpec.AerospikeAccessControl != nil &&
+		newSpec.AerospikeAccessControl == nil &&
+		status.AerospikeAccessControl == nil {
+		return fmt.Errorf(
+			"cannot remove AerospikeAccessControl: status has not yet been updated with the current configuration")
+	}
+
+	return nil
 }
 
 func validate(aslog logr.Logger, cluster *asdbv1.AerospikeCluster) (admission.Warnings, error) {

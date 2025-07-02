@@ -138,13 +138,6 @@ func (r *SingleClusterReconciler) reconcileRacks() common.ReconcileResult {
 		}
 	}
 
-	// Handle enable security just after updating configMap.
-	// This code will run only when security is being enabled in an existing cluster
-	// Update for security is verified by checking the aerospike.conf annotation of the pod.
-	if err = r.handleClusterSecurity(ignorablePodNames); err != nil {
-		return common.ReconcileError(err)
-	}
-
 	for idx := range rackStateList {
 		state := &rackStateList[idx]
 		found := &appsv1.StatefulSet{}
@@ -390,6 +383,10 @@ func (r *SingleClusterReconciler) upgradeOrRollingRestartRack(
 			found.Name,
 		)
 
+		return found, common.ReconcileError(err)
+	}
+
+	if err := r.handleClusterSecurity(ignorablePodNames); err != nil {
 		return found, common.ReconcileError(err)
 	}
 
@@ -1811,12 +1808,12 @@ func (r *SingleClusterReconciler) needACLReconcile() bool {
 	specEnabled := r.aeroCluster.Spec.AerospikeAccessControl == nil
 	statusEnabled := r.aeroCluster.Status.AerospikeAccessControl == nil
 
-	return specEnabled || statusEnabled
+	return specEnabled != statusEnabled
 }
 
 func (r *SingleClusterReconciler) getAnyPodWithEnabledSecurity(
 	ignorablePodNames sets.Set[string]) (*corev1.Pod, error) {
-	podList, err := r.getClusterPodList()
+	podList, err := r.getOrderedClusterPodList()
 	if err != nil {
 		return nil, fmt.Errorf("failed to list pods: %v", err)
 	}

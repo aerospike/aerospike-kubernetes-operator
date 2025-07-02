@@ -1742,9 +1742,7 @@ var _ = Describe(
 											Name:       "profileUser",
 											SecretName: test.AuthSecretNameForUpdate,
 											Roles: []string{
-												"data-admin",
-												"read-write-udf",
-												"write",
+												"profiler",
 											},
 										},
 									},
@@ -1770,8 +1768,6 @@ var _ = Describe(
 								err = updateClusterWithNoWait(k8sClient, ctx, aeroCluster)
 								Expect(err).ToNot(HaveOccurred())
 
-								time.Sleep(time.Second * 3)
-
 								aerospikeConfigSpec.setEnableSecurity(false)
 								accessControl = nil
 
@@ -1784,6 +1780,22 @@ var _ = Describe(
 								err = testAccessControlReconcile(
 									aeroCluster, ctx,
 								)
+
+								Expect(err).To(HaveOccurred())
+								Expect(err.Error()).Should(ContainSubstring(
+									"status has not yet been updated with the current configuration"))
+
+								time.Sleep(time.Minute * 1)
+
+								aeroCluster = getAerospikeClusterSpecWithAccessControl(
+									clusterNamespacedName, accessControl,
+									aerospikeConfigSpec,
+								)
+
+								err = testAccessControlReconcile(
+									aeroCluster, ctx,
+								)
+
 								Expect(err).To(HaveOccurred())
 								Expect(err.Error()).Should(ContainSubstring("SECURITY_NOT_ENABLED"))
 							},
