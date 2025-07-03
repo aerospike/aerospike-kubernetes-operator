@@ -49,6 +49,18 @@ var (
 	setupLog = ctrl.Log.WithName("setup")
 )
 
+// nonLeaderCertWatcher is a wrapper around certwatcher.CertWatcher
+// that doesn't require leader election.
+type nonLeaderCertWatcher struct {
+	*certwatcher.CertWatcher
+}
+
+// NeedLeaderElection returns false,
+// which indicates the watcher doesn't need leader election.
+func (*nonLeaderCertWatcher) NeedLeaderElection() bool {
+	return false
+}
+
 func init() {
 	// +kubebuilder:scaffold:scheme
 	utilRuntime.Must(asdbv1.AddToScheme(scheme))
@@ -346,7 +358,7 @@ func main() {
 	if metricsCertWatcher != nil {
 		setupLog.Info("Adding metrics certificate watcher to manager")
 
-		if err := mgr.Add(metricsCertWatcher); err != nil {
+		if err := mgr.Add(&nonLeaderCertWatcher{metricsCertWatcher}); err != nil {
 			setupLog.Error(err, "unable to add metrics certificate watcher to manager")
 			os.Exit(1)
 		}
@@ -355,7 +367,7 @@ func main() {
 	if webhookCertWatcher != nil {
 		setupLog.Info("Adding webhook certificate watcher to manager")
 
-		if err := mgr.Add(webhookCertWatcher); err != nil {
+		if err := mgr.Add(&nonLeaderCertWatcher{webhookCertWatcher}); err != nil {
 			setupLog.Error(err, "unable to add webhook certificate watcher to manager")
 			os.Exit(1)
 		}
