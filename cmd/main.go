@@ -49,6 +49,18 @@ var (
 	setupLog = ctrl.Log.WithName("setup")
 )
 
+// nonLeaderCertWatcher is a wrapper around certwatcher.CertWatcher
+// that doesn't require leader election.
+type nonLeaderCertWatcher struct {
+	*certwatcher.CertWatcher
+}
+
+// NeedLeaderElection returns false,
+// which indicates the watcher doesn't need leader election.
+func (*nonLeaderCertWatcher) NeedLeaderElection() bool {
+	return false
+}
+
 func init() {
 	// +kubebuilder:scaffold:scheme
 	utilRuntime.Must(asdbv1.AddToScheme(scheme))
@@ -111,10 +123,6 @@ func main() {
 		tlsOpts = append(tlsOpts, disableHTTP2)
 	}
 
-	// Create context for the manager and cert watchers.
-	// This context will be used to handle graceful shutdowns and signal handling.
-	ctx := ctrl.SetupSignalHandler()
-
 	// Create watchers for metrics and webhooks certificates
 	var metricsCertWatcher, webhookCertWatcher *certwatcher.CertWatcher
 
@@ -136,14 +144,6 @@ func main() {
 			setupLog.Error(err, "Failed to initialize webhook certificate watcher")
 			os.Exit(1)
 		}
-
-		// Start the webhook certificate watcher
-		go func() {
-			if err := webhookCertWatcher.Start(ctx); err != nil {
-				setupLog.Error(err, "Failed to start webhook certificate watcher")
-				os.Exit(1)
-			}
-		}()
 
 		webhookTLSOpts = append(webhookTLSOpts, func(config *tls.Config) {
 			config.GetCertificate = webhookCertWatcher.GetCertificate
@@ -195,14 +195,6 @@ func main() {
 			setupLog.Error(err, "to initialize metrics certificate watcher", "error", err)
 			os.Exit(1)
 		}
-
-		// Start the metrics certificate watcher
-		go func() {
-			if err := metricsCertWatcher.Start(ctx); err != nil {
-				setupLog.Error(err, "Failed to start metrics certificate watcher")
-				os.Exit(1)
-			}
-		}()
 
 		metricsServerOptions.TLSOpts = append(metricsServerOptions.TLSOpts, func(config *tls.Config) {
 			config.GetCertificate = metricsCertWatcher.GetCertificate
@@ -363,6 +355,24 @@ func main() {
 
 	// +kubebuilder:scaffold:builder
 
+	if metricsCertWatcher != nil {
+		setupLog.Info("Adding metrics certificate watcher to manager")
+
+		if err := mgr.Add(&nonLeaderCertWatcher{metricsCertWatcher}); err != nil {
+			setupLog.Error(err, "unable to add metrics certificate watcher to manager")
+			os.Exit(1)
+		}
+	}
+
+	if webhookCertWatcher != nil {
+		setupLog.Info("Adding webhook certificate watcher to manager")
+
+		if err := mgr.Add(&nonLeaderCertWatcher{webhookCertWatcher}); err != nil {
+			setupLog.Error(err, "unable to add webhook certificate watcher to manager")
+			os.Exit(1)
+		}
+	}
+
 	if err := mgr.AddHealthzCheck("health", healthz.Ping); err != nil {
 		setupLog.Error(err, "unable to set up health check")
 		os.Exit(1)
@@ -374,7 +384,8 @@ func main() {
 	}
 
 	setupLog.Info("Starting manager")
-	if err := mgr.Start(ctx); err != nil {
+
+	if err := mgr.Start(ctrl.SetupSignalHandler()); err != nil {
 		setupLog.Error(err, "problem running manager")
 		os.Exit(1)
 	}
