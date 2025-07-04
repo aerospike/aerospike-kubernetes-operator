@@ -268,8 +268,39 @@ func (r *SingleClusterReconciler) rollingRestartPods(
 			return res
 		}
 
+		clientPolicy := r.getClientPolicy()
+		setMigrateFillDelay := r.shouldSetMigrateFillDelay(rackState, podsToRestart, restartTypeMap)
+
+		r.Log.Info(
+			fmt.Sprintf("Adjust migrate-fill-delay prior to pod restart: %t", setMigrateFillDelay),
+		)
+
+		// Revert migrate-fill-delay to the original value before restarting active pods.
+		// This will be a no-op in the first reconcile
+		if setMigrateFillDelay {
+			// Add an optimisation check to only run set MFD in case of cold restart.
+			if res := r.setMigrateFillDelay(clientPolicy, &rackState.Rack.AerospikeConfig, false,
+				ignorablePodNames,
+			); !res.IsSuccess {
+				r.Log.Error(res.Err,
+					"Failed to set migrate-fill-delay to original value before restarting the running pods")
+				return res
+			}
+		}
+
 		if res := r.restartPods(rackState, activePods, restartTypeMap); !res.IsSuccess {
 			return res
+		}
+
+		// Set migrate-fill-delay O to immediately start the migration. Will be reverted back to the original value
+		// in the next reconcile.
+		if setMigrateFillDelay {
+			if res := r.setMigrateFillDelay(clientPolicy, &rackState.Rack.AerospikeConfig, true,
+				ignorablePodNames,
+			); !res.IsSuccess {
+				r.Log.Error(res.Err, "Failed to set migrate-fill-delay to `0` after restarting the running pods")
+				return res
+			}
 		}
 	}
 
@@ -382,7 +413,6 @@ func (r *SingleClusterReconciler) restartPods(
 	restartedPods := make([]*corev1.Pod, 0, len(podsToRestart))
 	restartedPodNames := make([]string, 0, len(podsToRestart))
 	restartedASDPodNames := make([]string, 0, len(podsToRestart))
-	blockedK8sNodes := sets.NewString(r.aeroCluster.Spec.K8sNodeBlockList...)
 
 	for idx := range podsToRestart {
 		pod := podsToRestart[idx]
@@ -398,10 +428,7 @@ func (r *SingleClusterReconciler) restartPods(
 
 			restartedASDPodNames = append(restartedASDPodNames, pod.Name)
 		} else if restartType == podRestart {
-			if blockedK8sNodes.Has(pod.Spec.NodeName) {
-				r.Log.Info("Pod found in blocked nodes list, deleting corresponding local PVCs if any",
-					"podName", pod.Name)
-
+			if r.isLocalPVCDeletionRequired(rackState, pod) {
 				if err := r.deleteLocalPVCs(rackState, pod); err != nil {
 					return common.ReconcileError(err)
 				}
@@ -563,8 +590,37 @@ func (r *SingleClusterReconciler) safelyDeletePodsAndEnsureImageUpdated(
 			return res
 		}
 
+		clientPolicy := r.getClientPolicy()
+		setMigrateFillDelay := r.shouldSetMigrateFillDelay(rackState, podsToUpdate, nil)
+
+		r.Log.Info(
+			fmt.Sprintf("Adjust migrate-fill-delay prior to pod restart: %t", setMigrateFillDelay))
+
+		// Revert migrate-fill-delay to the original value before restarting active pods.
+		// This will be a no-op in the first reconcile
+		if setMigrateFillDelay {
+			if res := r.setMigrateFillDelay(clientPolicy, &rackState.Rack.AerospikeConfig, false,
+				ignorablePodNames,
+			); !res.IsSuccess {
+				r.Log.Error(res.Err,
+					"Failed to set migrate-fill-delay to original value before upgrading the running pods")
+				return res
+			}
+		}
+
 		if res := r.deletePodAndEnsureImageUpdated(rackState, activePods); !res.IsSuccess {
 			return res
+		}
+
+		// Set migrate-fill-delay O to immediately start the migration. Will be reverted back to the original value
+		// in the next reconcile.
+		if setMigrateFillDelay {
+			if res := r.setMigrateFillDelay(clientPolicy, &rackState.Rack.AerospikeConfig, true,
+				ignorablePodNames,
+			); !res.IsSuccess {
+				r.Log.Error(res.Err, "Failed to set migrate-fill-delay to `0` after upgrading the running pods")
+				return res
+			}
 		}
 	}
 
@@ -580,14 +636,9 @@ func (r *SingleClusterReconciler) deletePodAndEnsureImageUpdated(
 		return common.ReconcileError(err)
 	}
 
-	blockedK8sNodes := sets.NewString(r.aeroCluster.Spec.K8sNodeBlockList...)
-
 	// Delete pods
 	for _, pod := range podsToUpdate {
-		if blockedK8sNodes.Has(pod.Spec.NodeName) {
-			r.Log.Info("Pod found in blocked nodes list, deleting corresponding local PVCs if any",
-				"podName", pod.Name)
-
+		if r.isLocalPVCDeletionRequired(rackState, pod) {
 			if err := r.deleteLocalPVCs(rackState, pod); err != nil {
 				return common.ReconcileError(err)
 			}
@@ -605,6 +656,22 @@ func (r *SingleClusterReconciler) deletePodAndEnsureImageUpdated(
 	}
 
 	return r.ensurePodsImageUpdated(podsToUpdate)
+}
+
+func (r *SingleClusterReconciler) isLocalPVCDeletionRequired(rackState *RackState, pod *corev1.Pod) bool {
+	if utils.ContainsString(r.aeroCluster.Spec.K8sNodeBlockList, pod.Spec.NodeName) {
+		r.Log.Info("Pod found in blocked nodes list, deleting corresponding local PVCs if any",
+			"podName", pod.Name)
+		return true
+	}
+
+	if asdbv1.GetBool(rackState.Rack.Storage.DeleteLocalStorageOnRestart) {
+		r.Log.Info("deleteLocalStorageOnRestart flag is enabled, deleting corresponding local PVCs if any",
+			"podName", pod.Name)
+		return true
+	}
+
+	return false
 }
 
 func (r *SingleClusterReconciler) ensurePodsImageUpdated(podsToCheck []*corev1.Pod) common.ReconcileResult {
@@ -1650,4 +1717,49 @@ func (r *SingleClusterReconciler) podsToRestart() (quickRestarts, podRestarts se
 	}
 
 	return quickRestarts, podRestarts
+}
+
+// shouldSetMigrateFillDelay determines if migrate-fill-delay should be set.
+// It only returns true if the following conditions are met:
+// 1. DeleteLocalStorageOnRestart is set to true.
+// 2. At least one pod needs to be restarted.
+// 3. At least one persistent volume is using a local storage class.
+func (r *SingleClusterReconciler) shouldSetMigrateFillDelay(rackState *RackState,
+	podsToRestart []*corev1.Pod, restartTypeMap map[string]RestartType) bool {
+	if !asdbv1.GetBool(rackState.Rack.Storage.DeleteLocalStorageOnRestart) {
+		return false
+	}
+
+	var podRestartNeeded bool
+
+	// If restartTypeMap is nil, we assume that a pod restart is needed.
+	if restartTypeMap == nil {
+		podRestartNeeded = true
+	} else {
+		for idx := range podsToRestart {
+			pod := podsToRestart[idx]
+			restartType := restartTypeMap[pod.Name]
+
+			if restartType == podRestart {
+				podRestartNeeded = true
+				break
+			}
+		}
+	}
+
+	if !podRestartNeeded {
+		return false
+	}
+
+	localStorageClassSet := sets.NewString(rackState.Rack.Storage.LocalStorageClasses...)
+
+	for idx := range rackState.Rack.Storage.Volumes {
+		volume := &rackState.Rack.Storage.Volumes[idx]
+		if volume.Source.PersistentVolume != nil &&
+			localStorageClassSet.Has(volume.Source.PersistentVolume.StorageClass) {
+			return true
+		}
+	}
+
+	return false
 }
