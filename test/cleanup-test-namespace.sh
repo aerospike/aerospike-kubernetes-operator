@@ -54,7 +54,7 @@ OPERATOR_NS=test
 kubectl delete subscription -n $OPERATOR_NS $(kubectl get subscription -n $OPERATOR_NS | grep aerospike-kubernetes-operator | cut -f 1 -d ' ') --ignore-not-found
 kubectl delete clusterserviceversion -n $OPERATOR_NS $(kubectl get clusterserviceversion -n $OPERATOR_NS | grep aerospike-kubernetes-operator | cut -f 1 -d ' ') --ignore-not-found
 kubectl delete job $(kubectl get job -o=jsonpath='{.items[?(@.status.succeeded==1)].metadata.name}' -n $OPERATOR_NS) -n $OPERATOR_NS --ignore-not-found
-kubectl delete CatalogSource $(kubectl get CatalogSource -n $OPERATOR_NS | grep aerospike-kubernetes-operator | cut -f 1 -d ' ') --ignore-not-found
+kubectl delete CatalogSource -n $OPERATOR_NS $(kubectl get CatalogSource -n $OPERATOR_NS | grep aerospike-kubernetes-operator | cut -f 1 -d ' ') --ignore-not-found
 kubectl delete crd aerospikeclusters.asdb.aerospike.com --ignore-not-found
 kubectl delete crd aerospikerestores.asdb.aerospike.com --ignore-not-found
 kubectl delete crd aerospikebackups.asdb.aerospike.com --ignore-not-found

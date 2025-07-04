@@ -612,7 +612,7 @@ type AerospikeAccessControlSpec struct {
 }
 
 // AerospikeVolumeMethod specifies how block volumes should be initialized.
-// +kubebuilder:validation:Enum=none;dd;blkdiscard;blkdiscardWithHeaderCleanup;deleteFiles
+// +kubebuilder:validation:Enum=none;dd;headerCleanup;blkdiscard;blkdiscardWithHeaderCleanup;deleteFiles
 // +k8s:openapi-gen=true
 type AerospikeVolumeMethod string
 
@@ -622,6 +622,11 @@ const (
 
 	// AerospikeVolumeMethodDD specifies the block volume should be zeroed using dd command.
 	AerospikeVolumeMethodDD AerospikeVolumeMethod = "dd"
+
+	// AerospikeVolumeMethodHeaderCleanup specifies the first 8MiB of the block volume header
+	// should be zeroed using the dd command.
+	// Use this method only if the underlying device does not contain old Aerospike data.
+	AerospikeVolumeMethodHeaderCleanup AerospikeVolumeMethod = "headerCleanup"
 
 	// AerospikeVolumeMethodBlkdiscard specifies that block volume should be discarded using the blkdiscard command.
 	AerospikeVolumeMethodBlkdiscard AerospikeVolumeMethod = "blkdiscard"
