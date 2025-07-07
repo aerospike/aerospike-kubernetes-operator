@@ -49,15 +49,16 @@ var (
 	setupLog = ctrl.Log.WithName("setup")
 )
 
-// nonLeaderCertWatcher is a wrapper around certwatcher.CertWatcher
-// that doesn't require leader election.
-type nonLeaderCertWatcher struct {
+// customCertWatcher wraps certwatcher.CertWatcher and implements NeedLeaderElection()
+// to return false. This allows the certificate watcher to run on all pods,
+// including standby replicas.
+type customCertWatcher struct {
 	*certwatcher.CertWatcher
 }
 
 // NeedLeaderElection returns false,
-// which indicates the watcher doesn't need leader election.
-func (*nonLeaderCertWatcher) NeedLeaderElection() bool {
+// which indicates the customCertWatcher doesn't need leader election.
+func (*customCertWatcher) NeedLeaderElection() bool {
 	return false
 }
 
@@ -358,7 +359,7 @@ func main() {
 	if metricsCertWatcher != nil {
 		setupLog.Info("Adding metrics certificate watcher to manager")
 
-		if err := mgr.Add(&nonLeaderCertWatcher{metricsCertWatcher}); err != nil {
+		if err := mgr.Add(&customCertWatcher{metricsCertWatcher}); err != nil {
 			setupLog.Error(err, "unable to add metrics certificate watcher to manager")
 			os.Exit(1)
 		}
@@ -367,7 +368,7 @@ func main() {
 	if webhookCertWatcher != nil {
 		setupLog.Info("Adding webhook certificate watcher to manager")
 
-		if err := mgr.Add(&nonLeaderCertWatcher{webhookCertWatcher}); err != nil {
+		if err := mgr.Add(&customCertWatcher{webhookCertWatcher}); err != nil {
 			setupLog.Error(err, "unable to add webhook certificate watcher to manager")
 			os.Exit(1)
 		}
