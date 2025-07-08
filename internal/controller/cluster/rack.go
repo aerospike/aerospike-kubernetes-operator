@@ -386,8 +386,10 @@ func (r *SingleClusterReconciler) upgradeOrRollingRestartRack(
 		return found, common.ReconcileError(err)
 	}
 
-	if err := r.handleClusterSecurity(ignorablePodNames); err != nil {
-		return found, common.ReconcileError(err)
+	if failedPods == nil {
+		if err := r.handleClusterSecurity(ignorablePodNames); err != nil {
+			return found, common.ReconcileError(err)
+		}
 	}
 
 	// Upgrade
@@ -1808,41 +1810,32 @@ func (r *SingleClusterReconciler) needACLReconcile() bool {
 	specEnabled := r.aeroCluster.Spec.AerospikeAccessControl == nil
 	statusEnabled := r.aeroCluster.Status.AerospikeAccessControl == nil
 
-	return specEnabled != statusEnabled
+	return !r.IsStatusEmpty() && specEnabled != statusEnabled
 }
 
 func (r *SingleClusterReconciler) getAnyPodWithEnabledSecurity(
 	ignorablePodNames sets.Set[string]) (*corev1.Pod, error) {
-	podList, err := r.getOrderedClusterPodList()
+	podList, err := r.getClusterPodList()
 	if err != nil {
-		return nil, fmt.Errorf("failed to list pods: %v", err)
+		return nil, err
 	}
 
 	if len(podList.Items) == 0 {
-		// No pod found for the rack
 		return nil, nil
 	}
 
+	securityConfigs, err := r.getClusterSecurityConfig(r.getClientPolicy(), podList, ignorablePodNames)
+	if err != nil {
+		return nil, fmt.Errorf("failed to get security config: %v", err)
+	}
+
 	for idx := range podList.Items {
-		pod := &podList.Items[idx]
-		if ignorablePodNames.Has(pod.Name) {
-			continue
-		}
+		_, port := r.getResolvedTLSNameAndPort()
 
-		statusFromAnnotation := pod.Annotations["aerospikeConf"]
-
-		asConfStatus, err := getFlatConfig(r.Log, statusFromAnnotation)
-		if err != nil {
-			return nil, fmt.Errorf("failed to load config map by lib: %v", err)
-		}
-
-		enabled, err := asdbv1.IsSecurityEnabled(*asConfStatus)
-		if err != nil {
-			return nil, fmt.Errorf("failed to get cluster security status: %v", err)
-		}
-
-		if enabled {
-			return pod, nil
+		if security, ok := securityConfigs[hostID(podList.Items[idx].Status.PodIP, int(*port))]; ok {
+			if securityEnabled, ok := security["enable-security"]; ok && securityEnabled == "true" {
+				return &podList.Items[idx], nil
+			}
 		}
 	}
 

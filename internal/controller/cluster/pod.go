@@ -6,7 +6,6 @@ import (
 	"fmt"
 	"net"
 	"reflect"
-	"sort"
 	"strconv"
 	"strings"
 	"time"
@@ -929,37 +928,6 @@ func (r *SingleClusterReconciler) getClusterPodList() (
 	if err := r.Client.List(context.TODO(), podList, listOps); err != nil {
 		return nil, err
 	}
-
-	return podList, nil
-}
-
-func (r *SingleClusterReconciler) getOrderedClusterPodList() (*corev1.PodList, error) {
-	podList, err := r.getClusterPodList()
-	if err != nil {
-		return nil, fmt.Errorf("failed to get cluster pod list: %v", err)
-	}
-
-	sort.Slice(podList.Items, func(i, j int) bool {
-		// Split strings into parts
-		partsI := strings.Split(podList.Items[i].Name, "-")
-		partsJ := strings.Split(podList.Items[i].Name, "-")
-
-		// Get the last two elements as integers
-		n := len(partsI)
-		firstI, _ := strconv.Atoi(partsI[n-2])
-		secondI, _ := strconv.Atoi(partsI[n-1])
-
-		n = len(partsJ)
-		firstJ, _ := strconv.Atoi(partsJ[n-2])
-		secondJ, _ := strconv.Atoi(partsJ[n-1])
-
-		// Sort by first number ascending
-		if firstI != firstJ {
-			return firstI < firstJ
-		}
-		// Then by second number descending
-		return secondI > secondJ
-	})
 
 	return podList, nil
 }

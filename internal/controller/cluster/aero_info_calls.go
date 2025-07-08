@@ -104,6 +104,17 @@ func (r *SingleClusterReconciler) quiescePods(
 	return deployment.InfoQuiesce(r.Log, policy, allHostConns, selectedHostConns, r.removedNamespaces(nodesNamespaces))
 }
 
+func (r *SingleClusterReconciler) getClusterSecurityConfig(
+	policy *as.ClientPolicy, podList *corev1.PodList, ignorablePodNames sets.Set[string],
+) (map[string]deployment.InfoResult, error) {
+	hostConns, err := r.newPodsHostConnWithOption(podList.Items, ignorablePodNames)
+	if err != nil {
+		return nil, err
+	}
+
+	return deployment.GetInfoOnHosts(r.Log, policy, hostConns, "get-config:context=security")
+}
+
 // TODO: Check only for migration
 func (r *SingleClusterReconciler) waitForClusterStability(
 	policy *as.ClientPolicy, allHostConns []*deployment.HostConn,
@@ -235,11 +246,7 @@ func (r *SingleClusterReconciler) newPodsHostConnWithOption(pods []corev1.Pod, i
 
 func (r *SingleClusterReconciler) newAsConn(pod *corev1.Pod) *deployment.ASConn {
 	// Use pod IP and direct service port from within the operator for info calls.
-	tlsName, port := r.getServiceTLSNameAndPortIfConfigured()
-
-	if tlsName == "" || port == nil {
-		port = asdbv1.GetServicePort(r.aeroCluster.Spec.AerospikeConfig)
-	}
+	tlsName, port := r.getResolvedTLSNameAndPort()
 
 	host := pod.Status.PodIP
 	asConn := &deployment.ASConn{

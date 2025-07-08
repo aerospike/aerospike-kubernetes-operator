@@ -496,6 +496,16 @@ func (r *SingleClusterReconciler) getServiceTLSNameAndPortIfConfigured() (tlsNam
 	return tlsName, port
 }
 
+func (r *SingleClusterReconciler) getResolvedTLSNameAndPort() (tlsName string, port *int32) {
+	tlsName, port = r.getServiceTLSNameAndPortIfConfigured()
+
+	if tlsName == "" || port == nil {
+		port = asdbv1.GetServicePort(r.aeroCluster.Spec.AerospikeConfig)
+	}
+
+	return tlsName, port
+}
+
 func (r *SingleClusterReconciler) isServiceMetadataUpdated(
 	service *corev1.Service,
 	statusMetadata,
