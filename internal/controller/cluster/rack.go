@@ -1807,10 +1807,10 @@ func (r *SingleClusterReconciler) handleClusterSecurity(
 }
 
 func (r *SingleClusterReconciler) needACLReconcile() bool {
-	specEnabled := r.aeroCluster.Spec.AerospikeAccessControl == nil
-	statusEnabled := r.aeroCluster.Status.AerospikeAccessControl == nil
+	isAccessControlSpecNil := r.aeroCluster.Spec.AerospikeAccessControl == nil
+	isAccessControlStatusNil := r.aeroCluster.Status.AerospikeAccessControl == nil
 
-	return !r.IsStatusEmpty() && specEnabled != statusEnabled
+	return !r.IsStatusEmpty() && isAccessControlSpecNil != isAccessControlStatusNil
 }
 
 func (r *SingleClusterReconciler) getAnyPodWithEnabledSecurity(
