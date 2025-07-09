@@ -49,6 +49,19 @@ var (
 	setupLog = ctrl.Log.WithName("setup")
 )
 
+// customCertWatcher wraps certwatcher.CertWatcher and implements NeedLeaderElection()
+// to return false. This allows the certificate watcher to run on all pods,
+// including standby replicas.
+type customCertWatcher struct {
+	*certwatcher.CertWatcher
+}
+
+// NeedLeaderElection returns false,
+// which indicates the customCertWatcher doesn't need leader election.
+func (*customCertWatcher) NeedLeaderElection() bool {
+	return false
+}
+
 func init() {
 	// +kubebuilder:scaffold:scheme
 	utilRuntime.Must(asdbv1.AddToScheme(scheme))
@@ -346,7 +359,7 @@ func main() {
 	if metricsCertWatcher != nil {
 		setupLog.Info("Adding metrics certificate watcher to manager")
 
-		if err := mgr.Add(metricsCertWatcher); err != nil {
+		if err := mgr.Add(&customCertWatcher{metricsCertWatcher}); err != nil {
 			setupLog.Error(err, "unable to add metrics certificate watcher to manager")
 			os.Exit(1)
 		}
@@ -355,7 +368,7 @@ func main() {
 	if webhookCertWatcher != nil {
 		setupLog.Info("Adding webhook certificate watcher to manager")
 
-		if err := mgr.Add(webhookCertWatcher); err != nil {
+		if err := mgr.Add(&customCertWatcher{webhookCertWatcher}); err != nil {
 			setupLog.Error(err, "unable to add webhook certificate watcher to manager")
 			os.Exit(1)
 		}
