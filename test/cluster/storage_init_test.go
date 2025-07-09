@@ -568,6 +568,7 @@ func checkData(
 			for rackIndex := range aeroCluster.Spec.RackConfig.Racks {
 				if aeroCluster.Spec.RackConfig.Racks[rackIndex].ID == rackID {
 					storage = aeroCluster.Spec.RackConfig.Racks[rackIndex].Storage
+					break
 				}
 			}
 		}
@@ -625,6 +626,7 @@ func writeDataToVolumes(aeroCluster *asdbv1.AerospikeCluster) error {
 			for rackIndex := range aeroCluster.Spec.RackConfig.Racks {
 				if aeroCluster.Spec.RackConfig.Racks[rackIndex].ID == rackID {
 					storage = aeroCluster.Spec.RackConfig.Racks[rackIndex].Storage
+					break
 				}
 			}
 		}
