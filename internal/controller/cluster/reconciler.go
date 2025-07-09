@@ -221,9 +221,9 @@ func (r *SingleClusterReconciler) Reconcile() (result ctrl.Result, recErr error)
 	// Use policy from spec after setting up access control
 	policy := r.getClientPolicy()
 
-	// Revert migrate-fill-delay to original value if it was set to 0 during scale down.
+	// Revert migrate-fill-delay to the original value if it was set to a different value while processing racks.
 	// Passing the first rack from the list as all the racks will have the same migrate-fill-delay
-	// Redundant safe check to revert migrate-fill-delay if previous revert operation missed/skipped somehow
+	// Redundant safe check to revert migrate-fill-delay if the previous revert operation missed/skipped somehow
 	if res := r.setMigrateFillDelay(
 		policy, &r.aeroCluster.Spec.RackConfig.Racks[0].AerospikeConfig,
 		false, ignorablePodNames,
