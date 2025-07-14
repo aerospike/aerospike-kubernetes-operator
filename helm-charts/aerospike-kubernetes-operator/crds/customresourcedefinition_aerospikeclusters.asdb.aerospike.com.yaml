@@ -7798,6 +7798,8 @@ spec:
                             RackLabel for setting rack affinity.
                             Rack pods will be deployed in k8s nodes having rackLabel {aerospike.com/rack-label: <rack-label>}
                           type: string
+                        rackSuffix:
+                          type: string
                         region:
                           description: Region name for setting rack affinity. Rack
                             pods will be deployed to given Region
@@ -17006,6 +17008,8 @@ spec:
                           description: |-
                             RackLabel for setting rack affinity.
                             Rack pods will be deployed in k8s nodes having rackLabel {aerospike.com/rack-label: <rack-label>}
+                          type: string
+                        rackSuffix:
                           type: string
                         region:
                           description: Region name for setting rack affinity. Rack

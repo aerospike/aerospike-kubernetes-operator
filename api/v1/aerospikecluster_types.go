@@ -503,6 +503,8 @@ type Rack struct { //nolint:govet // for readability
 	// +optional
 	RackLabel string `json:"rackLabel,omitempty"`
 
+	RackSuffix string `json:"rackSuffix,omitempty"`
+
 	// K8s Node name for setting rack affinity. Rack pods will be deployed in given k8s Node
 	// +optional
 	NodeName string `json:"nodeName,omitempty"`

@@ -63,7 +63,8 @@ func (r *SingleClusterReconciler) reconcileRacks() common.ReconcileResult {
 
 		state := &rackStateList[idx]
 		found := &appsv1.StatefulSet{}
-		stsName := utils.GetNamespacedNameForSTSOrConfigMap(r.aeroCluster, state.Rack.ID)
+		stsName := utils.GetNamespacedNameForSTSOrConfigMap(r.aeroCluster,
+			utils.GetRackIdentifier(state.Rack.ID, state.Rack.RackSuffix))
 
 		if err = r.Client.Get(context.TODO(), stsName, found); err != nil {
 			if !errors.IsNotFound(err) {
@@ -141,7 +142,8 @@ func (r *SingleClusterReconciler) reconcileRacks() common.ReconcileResult {
 	for idx := range rackStateList {
 		state := &rackStateList[idx]
 		found := &appsv1.StatefulSet{}
-		stsName := utils.GetNamespacedNameForSTSOrConfigMap(r.aeroCluster, state.Rack.ID)
+		stsName := utils.GetNamespacedNameForSTSOrConfigMap(r.aeroCluster,
+			utils.GetRackIdentifier(state.Rack.ID, state.Rack.RackSuffix))
 
 		if err = r.Client.Get(context.TODO(), stsName, found); err != nil {
 			if !errors.IsNotFound(err) {
@@ -201,7 +203,8 @@ func (r *SingleClusterReconciler) reconcileRacks() common.ReconcileResult {
 	for idx := range rackStateList {
 		state := &rackStateList[idx]
 		found := &appsv1.StatefulSet{}
-		stsName := utils.GetNamespacedNameForSTSOrConfigMap(r.aeroCluster, state.Rack.ID)
+		stsName := utils.GetNamespacedNameForSTSOrConfigMap(r.aeroCluster,
+			utils.GetRackIdentifier(state.Rack.ID, state.Rack.RackSuffix))
 
 		if err := r.Client.Get(context.TODO(), stsName, found); err != nil {
 			if !errors.IsNotFound(err) {
@@ -247,13 +250,15 @@ func (r *SingleClusterReconciler) createEmptyRack(rackState *RackState) (
 	r.Log.Info("AerospikeCluster", "Spec", r.aeroCluster.Spec)
 
 	// Bad config should not come here. It should be validated in validation hook
-	cmName := utils.GetNamespacedNameForSTSOrConfigMap(r.aeroCluster, rackState.Rack.ID)
+	cmName := utils.GetNamespacedNameForSTSOrConfigMap(r.aeroCluster,
+		utils.GetRackIdentifier(rackState.Rack.ID, rackState.Rack.RackSuffix))
 	if err := r.buildSTSConfigMap(cmName, rackState.Rack); err != nil {
 		r.Log.Error(err, "Failed to create configMap from AerospikeConfig")
 		return nil, common.ReconcileError(err)
 	}
 
-	stsName := utils.GetNamespacedNameForSTSOrConfigMap(r.aeroCluster, rackState.Rack.ID)
+	stsName := utils.GetNamespacedNameForSTSOrConfigMap(r.aeroCluster,
+		utils.GetRackIdentifier(rackState.Rack.ID, rackState.Rack.RackSuffix))
 
 	found, err := r.createSTS(stsName, rackState)
 	if err != nil {
@@ -310,7 +315,7 @@ func (r *SingleClusterReconciler) deleteRacks(
 	for idx := range racksToDelete {
 		rack := &racksToDelete[idx]
 		found := &appsv1.StatefulSet{}
-		stsName := utils.GetNamespacedNameForSTSOrConfigMap(r.aeroCluster, rack.ID)
+		stsName := utils.GetNamespacedNameForSTSOrConfigMap(r.aeroCluster, utils.GetRackIdentifier(rack.ID, rack.RackSuffix))
 
 		err := r.Client.Get(context.TODO(), stsName, found)
 		if err != nil {
@@ -342,7 +347,8 @@ func (r *SingleClusterReconciler) deleteRacks(
 		}
 
 		// Delete configMap
-		cmName := utils.GetNamespacedNameForSTSOrConfigMap(r.aeroCluster, rack.ID)
+		cmName := utils.GetNamespacedNameForSTSOrConfigMap(r.aeroCluster,
+			utils.GetRackIdentifier(rackState.Rack.ID, rackState.Rack.RackSuffix))
 		if err = r.deleteRackConfigMap(cmName); err != nil {
 			return common.ReconcileError(err)
 		}
@@ -375,7 +381,7 @@ func (r *SingleClusterReconciler) upgradeOrRollingRestartRack(
 	// Hence, a rolling restart of pod will never bring pod to desired config
 	if err := r.updateSTSConfigMap(
 		utils.GetNamespacedNameForSTSOrConfigMap(
-			r.aeroCluster, rackState.Rack.ID,
+			r.aeroCluster, utils.GetRackIdentifier(rackState.Rack.ID, rackState.Rack.RackSuffix),
 		), rackState.Rack,
 	); err != nil {
 		r.Log.Error(
@@ -1694,7 +1700,8 @@ func (r *SingleClusterReconciler) getRackPodList(rackID int) (
 }
 
 func (r *SingleClusterReconciler) getRackPodNames(rackState *RackState) []string {
-	stsName := utils.GetNamespacedNameForSTSOrConfigMap(r.aeroCluster, rackState.Rack.ID)
+	stsName := utils.GetNamespacedNameForSTSOrConfigMap(r.aeroCluster,
+		utils.GetRackIdentifier(rackState.Rack.ID, rackState.Rack.RackSuffix))
 
 	podNames := make([]string, 0, rackState.Size)
 
@@ -1822,7 +1829,7 @@ func (r *SingleClusterReconciler) getPodsWithUpdatedConfigForRack(rackState *Rac
 		return nil, nil
 	}
 
-	confMap, err := r.getConfigMap(rackState.Rack.ID)
+	confMap, err := r.getConfigMap(utils.GetRackIdentifier(rackState.Rack.ID, rackState.Rack.RackSuffix))
 	if err != nil {
 		return nil, err
 	}
