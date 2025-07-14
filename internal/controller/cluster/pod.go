@@ -75,7 +75,7 @@ func (r *SingleClusterReconciler) getRollingRestartTypeMap(rackState *RackState,
 		return nil, nil, fmt.Errorf("failed to list pods: %v", err)
 	}
 
-	confMap, err := r.getConfigMap(rackState.Rack.ID)
+	confMap, err := r.getConfigMap(utils.GetRackIdentifier(rackState.Rack.ID, rackState.Rack.RackSuffix))
 	if err != nil {
 		return nil, nil, err
 	}
@@ -278,7 +278,7 @@ func (r *SingleClusterReconciler) rollingRestartPods(
 
 func (r *SingleClusterReconciler) restartASDOrUpdateAerospikeConf(podName string,
 	operation RestartType) error {
-	rackID, err := utils.GetRackIDFromPodName(podName)
+	rackID, rackSuffix, err := utils.GetRackIDFromPodName(podName)
 	if err != nil {
 		return fmt.Errorf(
 			"failed to get rackID for the pod %s", podName,
@@ -290,7 +290,7 @@ func (r *SingleClusterReconciler) restartASDOrUpdateAerospikeConf(podName string
 		Namespace: r.aeroCluster.Namespace,
 	}
 
-	cmName := utils.GetNamespacedNameForSTSOrConfigMap(r.aeroCluster, *rackID)
+	cmName := utils.GetNamespacedNameForSTSOrConfigMap(r.aeroCluster, utils.GetRackIdentifier(rackID, rackSuffix))
 	initBinary := "/etc/aerospike/akoinit"
 
 	var subCommand string
@@ -356,13 +356,13 @@ func (r *SingleClusterReconciler) restartASDOrUpdateAerospikeConf(podName string
 	if subCommand == "quick-restart" {
 		r.Recorder.Eventf(
 			r.aeroCluster, corev1.EventTypeNormal, "PodWarmRestarted",
-			"[rack-%d] Restarted Pod %s", *rackID, podNamespacedName.Name,
+			"[rack-%d] Restarted Pod %s", rackID, podNamespacedName.Name,
 		)
 		r.Log.V(1).Info("Pod warm restarted", "podName", podNamespacedName.Name)
 	} else {
 		r.Recorder.Eventf(
 			r.aeroCluster, corev1.EventTypeNormal, "PodConfUpdated",
-			"[rack-%d] Updated Pod %s", *rackID, podNamespacedName.Name,
+			"[rack-%d] Updated Pod %s", rackID, podNamespacedName.Name,
 		)
 		r.Log.V(1).Info("Pod conf updated", "podName", podNamespacedName.Name)
 	}
@@ -788,14 +788,14 @@ func (r *SingleClusterReconciler) cleanupDanglingPodsRack(sts *appsv1.StatefulSe
 
 	// Find dangling pods in pods
 	for podName := range r.aeroCluster.Status.Pods {
-		rackID, err := utils.GetRackIDFromPodName(podName)
+		rackID, _, err := utils.GetRackIDFromPodName(podName)
 		if err != nil {
 			return fmt.Errorf(
 				"failed to get rackID for the pod %s", podName,
 			)
 		}
 
-		if *rackID != rackState.Rack.ID {
+		if rackID != rackState.Rack.ID {
 			// This pod is from other rack, so skip it
 			continue
 		}
@@ -1366,8 +1366,8 @@ func (r *SingleClusterReconciler) deleteFileStorage(podName, fileName string) er
 	return nil
 }
 
-func (r *SingleClusterReconciler) getConfigMap(rackID int) (*corev1.ConfigMap, error) {
-	cmName := utils.GetNamespacedNameForSTSOrConfigMap(r.aeroCluster, rackID)
+func (r *SingleClusterReconciler) getConfigMap(rackIdentifier string) (*corev1.ConfigMap, error) {
+	cmName := utils.GetNamespacedNameForSTSOrConfigMap(r.aeroCluster, rackIdentifier)
 	confMap := &corev1.ConfigMap{}
 
 	if err := r.Client.Get(context.TODO(), cmName, confMap); err != nil {

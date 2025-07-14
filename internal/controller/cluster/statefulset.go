@@ -151,7 +151,7 @@ func (r *SingleClusterReconciler) createSTS(
 									{
 										Name: "CONFIG_MAP_NAME",
 										Value: utils.GetNamespacedNameForSTSOrConfigMap(
-											r.aeroCluster, rackState.Rack.ID,
+											r.aeroCluster, utils.GetRackIdentifier(rackState.Rack.ID, rackState.Rack.RackSuffix),
 										).Name,
 									},
 								}...,
@@ -383,7 +383,8 @@ func (r *SingleClusterReconciler) getSTS(rackState *RackState) (*appsv1.Stateful
 	found := &appsv1.StatefulSet{}
 	if err := r.Client.Get(
 		context.TODO(),
-		utils.GetNamespacedNameForSTSOrConfigMap(r.aeroCluster, rackState.Rack.ID),
+		utils.GetNamespacedNameForSTSOrConfigMap(r.aeroCluster,
+			utils.GetRackIdentifier(rackState.Rack.ID, rackState.Rack.RackSuffix)),
 		found,
 	); err != nil {
 		return nil, err
@@ -1079,22 +1080,22 @@ func updateSTSContainers(
 func (r *SingleClusterReconciler) waitForAllSTSToBeReady(ignorablePodNames sets.Set[string]) error {
 	r.Log.Info("Waiting for cluster to be ready")
 
-	allRackIDs := sets.NewInt()
+	allRackIdentifier := sets.NewString()
 
 	statusRacks := r.aeroCluster.Status.RackConfig.Racks
 	for idx := range statusRacks {
-		allRackIDs.Insert(statusRacks[idx].ID)
+		allRackIdentifier.Insert(utils.GetRackIdentifier(statusRacks[idx].ID, statusRacks[idx].RackSuffix))
 	}
 
 	// Check for newly added racks also because we do not check for these racks just after they are added
 	specRacks := r.aeroCluster.Spec.RackConfig.Racks
 	for idx := range specRacks {
-		allRackIDs.Insert(specRacks[idx].ID)
+		allRackIdentifier.Insert(utils.GetRackIdentifier(specRacks[idx].ID, specRacks[idx].RackSuffix))
 	}
 
-	for rackID := range allRackIDs {
+	for rackIdentifier := range allRackIdentifier {
 		st := &appsv1.StatefulSet{}
-		stsName := utils.GetNamespacedNameForSTSOrConfigMap(r.aeroCluster, rackID)
+		stsName := utils.GetNamespacedNameForSTSOrConfigMap(r.aeroCluster, rackIdentifier)
 
 		if err := r.Client.Get(context.TODO(), stsName, st); err != nil {
 			if !errors.IsNotFound(err) {
@@ -1290,7 +1291,7 @@ func getDefaultSTSVolumes(
 				ConfigMap: &corev1.ConfigMapVolumeSource{
 					LocalObjectReference: corev1.LocalObjectReference{
 						Name: utils.GetNamespacedNameForSTSOrConfigMap(
-							aeroCluster, rackState.Rack.ID,
+							aeroCluster, utils.GetRackIdentifier(rackState.Rack.ID, rackState.Rack.RackSuffix),
 						).Name,
 					},
 				},

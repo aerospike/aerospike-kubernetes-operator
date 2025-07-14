@@ -47,10 +47,10 @@ func GetNamespacedName(obj meta.Object) types.NamespacedName {
 }
 
 func GetNamespacedNameForSTSOrConfigMap(
-	aeroCluster *asdbv1.AerospikeCluster, rackID int,
+	aeroCluster *asdbv1.AerospikeCluster, rackIdentifier string,
 ) types.NamespacedName {
 	return types.NamespacedName{
-		Name:      aeroCluster.Name + "-" + strconv.Itoa(rackID),
+		Name:      aeroCluster.Name + "-" + rackIdentifier,
 		Namespace: aeroCluster.Namespace,
 	}
 }
@@ -228,4 +228,14 @@ func RemoveString(slice []string, s string) (result []string) {
 // Len32 returns length of slice in int32 range.
 func Len32[T any](v []T) int32 {
 	return int32(len(v)) //nolint:gosec // length can't exceed int32 range
+}
+
+func GetRackIdentifier(rackID int, rackSuffix string) string {
+	rackIDStr := strconv.Itoa(rackID)
+
+	if rackSuffix != "" {
+		return fmt.Sprintf("%s-%s", rackIDStr, rackSuffix)
+	}
+
+	return rackIDStr
 }

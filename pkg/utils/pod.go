@@ -124,21 +124,31 @@ func IsPodTerminating(pod *corev1.Pod) bool {
 }
 
 // GetRackIDFromPodName returns the rack id given a pod name.
-func GetRackIDFromPodName(podName string) (*int, error) {
+func GetRackIDFromPodName(podName string) (rackID int, rackSuffix string, err error) {
 	parts := strings.Split(podName, "-")
 	if len(parts) < 3 {
-		return nil, fmt.Errorf("failed to get rackID from podName %s", podName)
+		return 0, "", fmt.Errorf("failed to get rackID from podName %s", podName)
 	}
+
+	var rackStr string
+
 	// Podname format stsname-ordinal
-	// stsname ==> clustername-rackid
-	rackStr := parts[len(parts)-2]
-
-	rackID, err := strconv.Atoi(rackStr)
-	if err != nil {
-		return nil, err
+	// stsname ==> clustername-rackId or clustername-rackId-rackSuffix
+	if len(parts) == 4 {
+		// Podname format stsname-rackId-suffix-ordinal
+		rackStr = parts[len(parts)-3]
+		rackSuffix = parts[len(parts)-2]
+	} else {
+		// Podname format stsname--rackId-ordinal
+		rackStr = parts[len(parts)-2]
 	}
 
-	return &rackID, nil
+	rackID, err = strconv.Atoi(rackStr)
+	if err != nil {
+		return rackID, rackSuffix, err
+	}
+
+	return rackID, rackSuffix, nil
 }
 
 // Exec executes a non-interactive command on a pod.
