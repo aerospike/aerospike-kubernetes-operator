@@ -490,6 +490,11 @@ type Rack struct { //nolint:govet // for readability
 	// Identifier for the rack
 	ID int `json:"id"`
 
+	// RackSuffix to use along with rack id. This can be used to provision a new rack with same id but different spec.
+	// This suffix will be appended to the rackID for Rack resource naming.
+	// +optional
+	RackSuffix string `json:"rackSuffix,omitempty"`
+
 	// Zone name for setting rack affinity. Rack pods will be deployed to given Zone
 	// +optional
 	Zone string `json:"zone,omitempty"`

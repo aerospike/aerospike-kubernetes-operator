@@ -71,12 +71,12 @@ func (r *SingleClusterReconciler) getRollingRestartTypeMap(rackState *RackState,
 	restartTypeMap = make(map[string]RestartType)
 	dynamicConfDiffPerPod = make(map[string]asconfig.DynamicConfigMap)
 
-	pods, err := r.getOrderedRackPodList(rackState.Rack.ID)
+	pods, err := r.getOrderedRackPodList(rackState.Rack.ID, rackState.Rack.RackSuffix)
 	if err != nil {
 		return nil, nil, fmt.Errorf("failed to list pods: %v", err)
 	}
 
-	confMap, err := r.getConfigMap(rackState.Rack.ID)
+	confMap, err := r.getConfigMap(utils.GetRackIdentifier(rackState.Rack.ID, rackState.Rack.RackSuffix))
 	if err != nil {
 		return nil, nil, err
 	}
@@ -321,7 +321,7 @@ func (r *SingleClusterReconciler) rollingRestartPods(
 
 func (r *SingleClusterReconciler) restartASDOrUpdateAerospikeConf(podName string,
 	operation RestartType) error {
-	rackID, err := utils.GetRackIDFromPodName(podName)
+	rackID, rackSuffix, err := utils.GetRackIDAndSuffixFromPodName(r.aeroCluster.Name, podName)
 	if err != nil {
 		return fmt.Errorf(
 			"failed to get rackID for the pod %s", podName,
@@ -333,7 +333,7 @@ func (r *SingleClusterReconciler) restartASDOrUpdateAerospikeConf(podName string
 		Namespace: r.aeroCluster.Namespace,
 	}
 
-	cmName := utils.GetNamespacedNameForSTSOrConfigMap(r.aeroCluster, *rackID)
+	cmName := utils.GetNamespacedNameForSTSOrConfigMap(r.aeroCluster, utils.GetRackIdentifier(rackID, rackSuffix))
 	initBinary := "/etc/aerospike/akoinit"
 
 	var subCommand string
@@ -399,13 +399,13 @@ func (r *SingleClusterReconciler) restartASDOrUpdateAerospikeConf(podName string
 	if subCommand == "quick-restart" {
 		r.Recorder.Eventf(
 			r.aeroCluster, corev1.EventTypeNormal, "PodWarmRestarted",
-			"[rack-%d] Restarted Pod %s", *rackID, podNamespacedName.Name,
+			"[rack-%d] Restarted Pod %s", rackID, podNamespacedName.Name,
 		)
 		r.Log.V(1).Info("Pod warm restarted", "podName", podNamespacedName.Name)
 	} else {
 		r.Recorder.Eventf(
 			r.aeroCluster, corev1.EventTypeNormal, "PodConfUpdated",
-			"[rack-%d] Updated Pod %s", *rackID, podNamespacedName.Name,
+			"[rack-%d] Updated Pod %s", rackID, podNamespacedName.Name,
 		)
 		r.Log.V(1).Info("Pod conf updated", "podName", podNamespacedName.Name)
 	}
@@ -753,10 +753,14 @@ func (r *SingleClusterReconciler) ensurePodsImageUpdated(podsToCheck []*corev1.P
 func (r *SingleClusterReconciler) cleanupPods(
 	podNames []string, rackState *RackState,
 ) error {
+	if len(podNames) == 0 {
+		return nil
+	}
+
 	r.Log.Info("Removing pvc for removed pods", "pods", podNames)
 
 	// Delete PVCs if cascadeDelete
-	pvcItems, err := r.getPodsPVCList(podNames, rackState.Rack.ID)
+	pvcItems, err := r.getPodsPVCList(podNames, rackState.Rack.ID, rackState.Rack.RackSuffix)
 	if err != nil {
 		return fmt.Errorf("could not find pvc for pods %v: %v", podNames, err)
 	}
@@ -868,16 +872,16 @@ func (r *SingleClusterReconciler) cleanupDanglingPodsRack(sts *appsv1.StatefulSe
 	// is scaled down.
 	var danglingPods []string
 
-	// Find dangling pods in pods
+	// Find dangling pods in the status of the cluster.
 	for podName := range r.aeroCluster.Status.Pods {
-		rackID, err := utils.GetRackIDFromPodName(podName)
+		rackID, rackSuffix, err := utils.GetRackIDAndSuffixFromPodName(r.aeroCluster.Name, podName)
 		if err != nil {
 			return fmt.Errorf(
 				"failed to get rackID for the pod %s", podName,
 			)
 		}
 
-		if *rackID != rackState.Rack.ID {
+		if rackID != rackState.Rack.ID || rackSuffix != rackState.Rack.RackSuffix {
 			// This pod is from other rack, so skip it
 			continue
 		}
@@ -911,11 +915,13 @@ func (r *SingleClusterReconciler) getIgnorablePods(racksToDelete []asdbv1.Rack, 
 	ignorablePodNames := sets.Set[string]{}
 
 	for rackIdx := range racksToDelete {
-		rackPods, err := r.getRackPodList(racksToDelete[rackIdx].ID)
+		r.Log.Info("Rack to delete found", "rackID", racksToDelete[rackIdx].ID, "rackSuffix", racksToDelete[rackIdx].RackSuffix)
+		rackPods, err := r.getRackPodList(racksToDelete[rackIdx].ID, racksToDelete[rackIdx].RackSuffix)
 		if err != nil {
 			return nil, err
 		}
 
+		r.Log.Info("Pods found in rack to delete", "podList", rackPods)
 		for podIdx := range rackPods.Items {
 			pod := rackPods.Items[podIdx]
 			if !utils.IsPodRunningAndReady(&pod) {
@@ -931,7 +937,7 @@ func (r *SingleClusterReconciler) getIgnorablePods(racksToDelete []asdbv1.Rack, 
 			r.aeroCluster.Spec.RackConfig.MaxIgnorablePods, int(rack.Size), false,
 		)
 
-		podList, err := r.getRackPodList(rack.Rack.ID)
+		podList, err := r.getRackPodList(rack.Rack.ID, rack.Rack.RackSuffix)
 		if err != nil {
 			return nil, err
 		}
@@ -971,9 +977,9 @@ func (r *SingleClusterReconciler) getIgnorablePods(racksToDelete []asdbv1.Rack, 
 	return ignorablePodNames, nil
 }
 func (r *SingleClusterReconciler) getPodsPVCList(
-	podNames []string, rackID int,
+	podNames []string, rackID int, rackSuffix string,
 ) ([]corev1.PersistentVolumeClaim, error) {
-	pvcListItems, err := r.getRackPVCList(rackID)
+	pvcListItems, err := r.getRackPVCList(rackID, rackSuffix)
 	if err != nil {
 		return nil, err
 	}
@@ -981,19 +987,19 @@ func (r *SingleClusterReconciler) getPodsPVCList(
 	// https://github.com/kubernetes/kubernetes/issues/72196
 	// No regex support in field-selector
 	// Can not get pvc having matching podName. Need to check more.
-	var newPVCItems []corev1.PersistentVolumeClaim
+	var podPVCs []corev1.PersistentVolumeClaim
 
 	for idx := range pvcListItems {
 		pvc := pvcListItems[idx]
 		for _, podName := range podNames {
 			// Get PVC belonging to pod only
 			if strings.HasSuffix(pvc.Name, podName) {
-				newPVCItems = append(newPVCItems, pvc)
+				podPVCs = append(podPVCs, pvc)
 			}
 		}
 	}
 
-	return newPVCItems, nil
+	return podPVCs, nil
 }
 
 func (r *SingleClusterReconciler) getClusterPodList() (
@@ -1448,8 +1454,8 @@ func (r *SingleClusterReconciler) deleteFileStorage(podName, fileName string) er
 	return nil
 }
 
-func (r *SingleClusterReconciler) getConfigMap(rackID int) (*corev1.ConfigMap, error) {
-	cmName := utils.GetNamespacedNameForSTSOrConfigMap(r.aeroCluster, rackID)
+func (r *SingleClusterReconciler) getConfigMap(rackIdentifier string) (*corev1.ConfigMap, error) {
+	cmName := utils.GetNamespacedNameForSTSOrConfigMap(r.aeroCluster, rackIdentifier)
 	confMap := &corev1.ConfigMap{}
 
 	if err := r.Client.Get(context.TODO(), cmName, confMap); err != nil {
