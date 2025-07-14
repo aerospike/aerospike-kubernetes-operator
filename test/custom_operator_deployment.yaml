@@ -40,3 +40,4 @@ spec:
   name: aerospike-kubernetes-operator
   source: aerospike-kubernetes-operator
   sourceNamespace: test
+  startingCSV: aerospike-kubernetes-operator.v4.0.2-candidate-pr-389-12
