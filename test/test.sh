@@ -5,16 +5,15 @@ set -e
 # Should be run from repository root
 ####################################
 
-# Usage test.sh <operator-bundle-image> [<test-args>]
+# Usage test.sh <operator-catalog-image> [<test-args>]
 # e.g.
-#  test.sh -c aerospike/aerospike-kubernetes-operator-bundle:1.1.0
-#  test.sh -c aerospike/aerospike-kubernetes-operator-bundle:1.1.0 -f ".*RackManagement.*" -a "--connect-through-network-type=hostInternal"
+#  test.sh -c aerospike/aerospike-kubernetes-operator-catalog:1.1.0
+#  test.sh -c aerospike/aerospike-kubernetes-operator-catalog:1.1.0 -f ".*RackManagement.*" -a "--connect-through-network-type=hostInternal"
 #  test.sh -c <IMAGE> -f "<GINKGO-FOCUS-REGEXP>" -a "<PASS-THROUGHS>"
 
-while getopts "b:c:f:a:r:p:n:i:t:" opt
+while getopts "c:f:a:r:p:n:i:t:" opt
 do
    case "$opt" in
-      b ) BUNDLE="$OPTARG" ;;
       c ) CATALOG="$OPTARG" ;;
       f ) FOCUS="$OPTARG" ;;
       a ) ARGS="$OPTARG" ;;
@@ -46,7 +45,7 @@ echo "---------------------------------------"
 echo "------------------------------"
 echo "| Deploying the operator.... |"
 echo "------------------------------"
-"$DIR"/deploy-test-operator.sh "$BUNDLE" "$CATALOG"
+"$DIR"/deploy-test-operator.sh "$CATALOG"
 
 # Deploy LDAP
 echo "------------------------------"

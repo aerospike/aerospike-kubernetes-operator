@@ -6,8 +6,7 @@ set -e
 ####################################
 
 # Use the input operator image for testing if provided
-BUNDLE_IMG=$1
-CATALOG_IMG=$2
+CATALOG_IMG=$1
 
 # Create storage classes.
 case $(kubectl get nodes -o yaml) in
@@ -48,7 +47,15 @@ for namespace in $namespaces; do
   fi
 done
 
-sed -i "s@CATALOG_IMG@${CATALOG_IMG}@g" test/custom_operator_deployment.yaml
+version=""
+if [[ "$CATALOG_IMG" == *:* ]]; then
+  version="${CATALOG_IMG#*:}"
+else
+  echo "Error: incorrect catalog image" >&2
+  exit 1
+fi
+
+sed -i "s@CATALOG_IMG@${CATALOG_IMG}@g; s@CSV_VERSION@${version}@g" test/custom_operator_deployment.yaml
 kubectl apply -f test/custom_operator_deployment.yaml
 
 for namespace in $namespaces; do

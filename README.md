@@ -239,13 +239,13 @@ The operator tests create and use 4 namespaces
 Run the entire test suite
 
 ```shell
-./test/test.sh -b $BUNDLE_IMG -c $CATALOG_IMG
+./test/test.sh -c $CATALOG_IMG
 ```
 
 Run tests matching a regex
 
 ```shell
-./test/test.sh -b $BUNDLE_IMG -c $CATALOG_IMG '-ginkgo.focus=".*MultiCluster.*"'
+./test/test.sh -c $CATALOG_IMG '-ginkgo.focus=".*MultiCluster.*"'
 ```
 
 ## Architecture
