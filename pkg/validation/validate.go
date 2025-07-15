@@ -13,7 +13,7 @@ import (
 	"github.com/aerospike/aerospike-management-lib/asconfig"
 )
 
-var networkConnectionTypes = []string{"service", "heartbeat", "fabric"}
+var networkConnectionTypes = []string{"service", "heartbeat", "fabric", "admin"}
 
 // ValidateAerospikeConfig validates the aerospikeConfig.
 // It validates the schema, service, network, logging and namespace configurations.

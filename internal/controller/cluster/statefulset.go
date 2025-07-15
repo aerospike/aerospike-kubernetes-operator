@@ -81,6 +81,14 @@ var defaultContainerPorts = map[string]PortInfo{
 		configParam:    "port",
 		exposedOnHost:  true,
 	},
+	asdbv1.AdminPortName: {
+		connectionType: "admin",
+		configParam:    "port",
+	},
+	asdbv1.AdminTLSPortName: {
+		connectionType: "admin",
+		configParam:    "tls-port",
+	},
 }
 
 func (r *SingleClusterReconciler) createSTS(

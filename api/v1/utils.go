@@ -31,6 +31,9 @@ const (
 	FabricTLSPortName = "tls-fabric"
 	FabricPortName    = "fabric"
 
+	AdminTLSPortName = "tls-admin"
+	AdminPortName    = "admin"
+
 	InfoPortName = "info"
 )
 
@@ -45,6 +48,7 @@ const (
 	ConfKeyNetworkService   = "service"
 	confKeyNetworkHeartbeat = "heartbeat"
 	confKeyNetworkFabric    = "fabric"
+	confKeyNetworkAdmin     = "admin"
 
 	// XDR keys.
 	confKeyXdr         = "xdr"
@@ -414,6 +418,10 @@ func GetFabricTLSNameAndPort(aeroConf *AerospikeConfigSpec) (tlsName string, por
 	return GetTLSNameAndPort(aeroConf, confKeyNetworkFabric)
 }
 
+func GetAdminTLSNameAndPort(aeroConf *AerospikeConfigSpec) (tlsName string, port *int32) {
+	return GetTLSNameAndPort(aeroConf, confKeyNetworkAdmin)
+}
+
 func GetTLSNameAndPort(
 	aeroConf *AerospikeConfigSpec, connectionType string,
 ) (tlsName string, port *int32) {
@@ -444,6 +452,10 @@ func GetHeartbeatPort(aeroConf *AerospikeConfigSpec) *int32 {
 
 func GetFabricPort(aeroConf *AerospikeConfigSpec) *int32 {
 	return GetPortFromConfig(aeroConf, confKeyNetworkFabric, "port")
+}
+
+func GetAdminPort(aeroConf *AerospikeConfigSpec) *int32 {
+	return GetPortFromConfig(aeroConf, confKeyNetworkAdmin, "port")
 }
 
 func GetPortFromConfig(

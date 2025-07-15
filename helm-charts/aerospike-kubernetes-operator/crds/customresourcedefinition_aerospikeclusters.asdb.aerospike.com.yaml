@@ -14178,6 +14178,11 @@ spec:
                     AerospikePodStatus contains the Aerospike specific status of the Aerospike
                     server pods.
                   properties:
+                    adminPort:
+                      description: AdminPort is the port Aerospike clients outside
+                        K8s can connect to.
+                      format: int32
+                      type: integer
                     aerospike:
                       description: Aerospike server instance summary for this pod.
                       properties:

@@ -50,6 +50,8 @@ type initializeTemplateInput struct {
 	HeartBeatPort    int32
 	HeartBeatTLSPort int32
 	FabricTLSPort    int32
+	AdminPort        int32
+	AdminTLSPort     int32
 	MultiPodPerHost  bool
 	HostNetwork      bool
 }
@@ -281,6 +283,16 @@ func (r *SingleClusterReconciler) getBaseConfData(rack *asdbv1.Rack) (map[string
 		fabricPortParam = *fabricPort
 	}
 
+	var adminTLSPortParam int32
+	if _, adminTLSPort := asdbv1.GetAdminTLSNameAndPort(asConfig); adminTLSPort != nil {
+		adminTLSPortParam = *adminTLSPort
+	}
+
+	var adminPortParam int32
+	if adminPort := asdbv1.GetAdminPort(asConfig); adminPort != nil {
+		adminPortParam = *adminPort
+	}
+
 	initTemplateInput := initializeTemplateInput{
 		WorkDir:          workDir,
 		MultiPodPerHost:  asdbv1.GetBool(r.aeroCluster.Spec.PodSpec.MultiPodPerHost),
@@ -291,6 +303,8 @@ func (r *SingleClusterReconciler) getBaseConfData(rack *asdbv1.Rack) (map[string
 		HeartBeatTLSPort: hbTLSPortParam,
 		FabricPort:       fabricPortParam,
 		FabricTLSPort:    fabricTLSPortParam,
+		AdminPort:        adminPortParam,
+		AdminTLSPort:     adminTLSPortParam,
 		HostNetwork:      r.aeroCluster.Spec.PodSpec.HostNetwork,
 	}
 
