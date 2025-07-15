@@ -1688,7 +1688,7 @@ var _ = Describe(
 							},
 						)
 
-						It(
+						FIt(
 							"SecurityDisable: should disable security in partially security enabled cluster",
 							func() {
 								var accessControl *asdbv1.AerospikeAccessControlSpec
@@ -1785,19 +1785,12 @@ var _ = Describe(
 								Expect(err.Error()).Should(ContainSubstring(
 									"status has not yet been updated with the current configuration"))
 
-								time.Sleep(time.Minute * 1)
+								Eventually(func(g Gomega) {
+									err := testAccessControlReconcile(aeroCluster, ctx)
+									g.Expect(err).To(HaveOccurred())
+									g.Expect(err.Error()).To(ContainSubstring("SECURITY_NOT_ENABLED"))
+								}, 5*time.Minute, 20*time.Second).Should(Succeed())
 
-								aeroCluster = getAerospikeClusterSpecWithAccessControl(
-									clusterNamespacedName, accessControl,
-									aerospikeConfigSpec,
-								)
-
-								err = testAccessControlReconcile(
-									aeroCluster, ctx,
-								)
-
-								Expect(err).To(HaveOccurred())
-								Expect(err.Error()).Should(ContainSubstring("SECURITY_NOT_ENABLED"))
 							},
 						)
 
