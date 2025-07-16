@@ -753,6 +753,10 @@ func (r *SingleClusterReconciler) ensurePodsImageUpdated(podsToCheck []*corev1.P
 func (r *SingleClusterReconciler) cleanupPods(
 	podNames []string, rackState *RackState,
 ) error {
+	if len(podNames) == 0 {
+		return nil
+	}
+
 	r.Log.Info("Removing pvc for removed pods", "pods", podNames)
 
 	// Delete PVCs if cascadeDelete
@@ -911,11 +915,13 @@ func (r *SingleClusterReconciler) getIgnorablePods(racksToDelete []asdbv1.Rack, 
 	ignorablePodNames := sets.Set[string]{}
 
 	for rackIdx := range racksToDelete {
+		r.Log.Info("Rack to delete found", "rackID", racksToDelete[rackIdx].ID, "rackSuffix", racksToDelete[rackIdx].RackSuffix)
 		rackPods, err := r.getRackPodList(racksToDelete[rackIdx].ID, racksToDelete[rackIdx].RackSuffix)
 		if err != nil {
 			return nil, err
 		}
 
+		r.Log.Info("Pods found in rack to delete", "podList", rackPods)
 		for podIdx := range rackPods.Items {
 			pod := rackPods.Items[podIdx]
 			if !utils.IsPodRunningAndReady(&pod) {

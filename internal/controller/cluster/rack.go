@@ -10,7 +10,6 @@ import (
 	appsv1 "k8s.io/api/apps/v1"
 	corev1 "k8s.io/api/core/v1"
 	"k8s.io/apimachinery/pkg/api/errors"
-	"k8s.io/apimachinery/pkg/labels"
 	"k8s.io/apimachinery/pkg/util/intstr"
 	"k8s.io/apimachinery/pkg/util/sets"
 	"sigs.k8s.io/controller-runtime/pkg/client"
@@ -43,8 +42,11 @@ func (r *SingleClusterReconciler) reconcileRacks() common.ReconcileResult {
 	}
 
 	rackIDsToDelete := make([]int, 0, len(racksToDelete))
+	rackIDsToSuffix := make([]string, 0, len(racksToDelete))
+
 	for idx := range racksToDelete {
 		rackIDsToDelete = append(rackIDsToDelete, racksToDelete[idx].ID)
+		rackIDsToSuffix = append(rackIDsToSuffix, racksToDelete[idx].RackSuffix)
 	}
 
 	ignorablePodNames, err := r.getIgnorablePods(racksToDelete, rackStateList)
@@ -53,7 +55,8 @@ func (r *SingleClusterReconciler) reconcileRacks() common.ReconcileResult {
 	}
 
 	r.Log.Info(
-		"Rack changes", "racksToDelete", rackIDsToDelete, "ignorablePods",
+		"Rack changes", "racksToDelete", rackIDsToDelete,
+		"racksToDeleteSuffix", rackIDsToSuffix, "ignorablePods",
 		ignorablePodNames.UnsortedList(),
 	)
 
@@ -909,7 +912,7 @@ func (r *SingleClusterReconciler) scaleDownRack(
 
 	r.Log.Info(
 		"ScaleDown AerospikeCluster statefulset", "desiredSize", desiredSize,
-		"currentSize", *found.Spec.Replicas,
+		"currentSize", *found.Spec.Replicas, "rackID", rackState.Rack.ID, "rackSuffix", rackState.Rack.RackSuffix,
 	)
 	r.Recorder.Eventf(
 		r.aeroCluster, corev1.EventTypeNormal, "RackScaleDown",
@@ -1683,11 +1686,9 @@ func (r *SingleClusterReconciler) getRackPodList(rackID int, rackSuffix string) 
 ) {
 	// List the pods for this aeroCluster's statefulset
 	podList := &corev1.PodList{}
-	labelSelector := labels.SelectorFromSet(
-		utils.LabelsForAerospikeClusterRack(r.aeroCluster.Name, rackID, rackSuffix),
-	)
 	listOps := &client.ListOptions{
-		Namespace: r.aeroCluster.Namespace, LabelSelector: labelSelector,
+		Namespace:     r.aeroCluster.Namespace,
+		LabelSelector: utils.GetAerospikeClusterRackLabelSelector(r.aeroCluster.Name, rackID, rackSuffix),
 	}
 
 	// TODO: Should we add check to get only non-terminating pod? What if it is rolling restart
