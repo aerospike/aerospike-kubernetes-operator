@@ -128,11 +128,14 @@ func LabelsForAerospikeCluster(clName string) map[string]string {
 
 // LabelsForAerospikeClusterRack returns the labels for specific rack
 func LabelsForAerospikeClusterRack(
-	clName string, rackID int,
+	clName string, rackID int, rackSuffix string,
 ) map[string]string {
 	labels := LabelsForAerospikeCluster(clName)
 	labels[asdbv1.AerospikeRackIDLabel] = strconv.Itoa(rackID)
 
+	if rackSuffix != "" {
+		labels[asdbv1.AerospikeRackSuffixLabel] = rackSuffix
+	}
 	return labels
 }
 
@@ -182,23 +185,32 @@ func GetHash(str string) (string, error) {
 	return hex.EncodeToString(res), nil
 }
 
-func GetRackIDFromSTSName(statefulSetName string) (*int, error) {
+// GetRackIDAndSuffixFromSTSName gets rackID and rackSuffix from the statefulset name.
+// It assumes statefulset name is of format <cluster-name>-<rack-id> or <cluster-name>-<rack-id>-<rack-suffix>
+func GetRackIDAndSuffixFromSTSName(statefulSetName string) (rackID int, rackSuffix string, err error) {
 	parts := strings.Split(statefulSetName, "-")
 	if len(parts) < 2 {
-		return nil, fmt.Errorf(
-			"failed to get rackID from statefulSetName %s", statefulSetName,
-		)
+		return 0, "", fmt.Errorf("failed to get rackID from stsName %s", statefulSetName)
 	}
 
-	// stsname ==> clustername-rackid
-	rackStr := parts[len(parts)-1]
+	var rackStr string
 
-	rackID, err := strconv.Atoi(rackStr)
+	// stsName ==> clusterName-rackId or clusterName-rackId-rackSuffix
+	if len(parts) == 3 {
+		// stsName format stsName-rackId-rackSuffix
+		rackStr = parts[len(parts)-2]
+		rackSuffix = parts[len(parts)-1]
+	} else {
+		// podName format stsName-rackId
+		rackStr = parts[len(parts)-1]
+	}
+
+	rackID, err = strconv.Atoi(rackStr)
 	if err != nil {
-		return nil, err
+		return rackID, rackSuffix, err
 	}
 
-	return &rackID, nil
+	return rackID, rackSuffix, nil
 }
 
 // ContainsString returns true if a string exists in a slice of strings.

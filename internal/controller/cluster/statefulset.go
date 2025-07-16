@@ -97,7 +97,7 @@ func (r *SingleClusterReconciler) createSTS(
 	)
 
 	operatorDefinedLabels := utils.LabelsForAerospikeClusterRack(
-		r.aeroCluster.Name, rackState.Rack.ID,
+		r.aeroCluster.Name, rackState.Rack.ID, rackState.Rack.RackSuffix,
 	)
 
 	tlsName, _ := asdbv1.GetServiceTLSNameAndPort(r.aeroCluster.Spec.AerospikeConfig)
@@ -988,7 +988,7 @@ func (r *SingleClusterReconciler) updateSTSFromPodSpec(
 	st *appsv1.StatefulSet, rackState *RackState,
 ) {
 	defaultLabels := utils.LabelsForAerospikeClusterRack(
-		r.aeroCluster.Name, rackState.Rack.ID,
+		r.aeroCluster.Name, rackState.Rack.ID, rackState.Rack.RackSuffix,
 	)
 
 	r.updateSTSSchedulingPolicy(st, rackState)

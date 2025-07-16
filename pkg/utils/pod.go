@@ -123,8 +123,8 @@ func IsPodTerminating(pod *corev1.Pod) bool {
 	return pod.DeletionTimestamp != nil
 }
 
-// GetRackIDFromPodName returns the rack id given a pod name.
-func GetRackIDFromPodName(podName string) (rackID int, rackSuffix string, err error) {
+// GetRackIDAndSuffixFromPodName returns the rack id given a pod name.
+func GetRackIDAndSuffixFromPodName(podName string) (rackID int, rackSuffix string, err error) {
 	parts := strings.Split(podName, "-")
 	if len(parts) < 3 {
 		return 0, "", fmt.Errorf("failed to get rackID from podName %s", podName)
@@ -132,14 +132,14 @@ func GetRackIDFromPodName(podName string) (rackID int, rackSuffix string, err er
 
 	var rackStr string
 
-	// Podname format stsname-ordinal
-	// stsname ==> clustername-rackId or clustername-rackId-rackSuffix
+	// podName format stsName-ordinal
+	// stsName ==> clusterName-rackId or clusterName-rackId-rackSuffix
 	if len(parts) == 4 {
-		// Podname format stsname-rackId-suffix-ordinal
+		// podname format stsName-rackId-rackSuffix-ordinal
 		rackStr = parts[len(parts)-3]
 		rackSuffix = parts[len(parts)-2]
 	} else {
-		// Podname format stsname--rackId-ordinal
+		// podName format stsName-rackId-ordinal
 		rackStr = parts[len(parts)-2]
 	}
 
