@@ -124,28 +124,39 @@ func IsPodTerminating(pod *corev1.Pod) bool {
 }
 
 // GetRackIDAndSuffixFromPodName returns the rack id given a pod name.
-func GetRackIDAndSuffixFromPodName(podName string) (rackID int, rackSuffix string, err error) {
-	parts := strings.Split(podName, "-")
-	if len(parts) < 3 {
-		return 0, "", fmt.Errorf("failed to get rackID from podName %s", podName)
+func GetRackIDAndSuffixFromPodName(clusterName, podName string) (rackID int, rackSuffix string, err error) {
+	prefix := clusterName + "-"
+
+	rackAndPodIndexPart := strings.TrimPrefix(podName, prefix)
+	// parts contains only the rack-id, rack-suffix (optional) pod-index.
+	parts := strings.Split(rackAndPodIndexPart, "-")
+
+	if len(parts) < 2 {
+		// Needs at least rack-id and pod-index.
+		return 0, "", fmt.Errorf(
+			"invalid pod name format %q: expected at least <rack-id>-<pod-index> after cluster name", podName,
+		)
 	}
 
-	var rackStr string
+	// The pod index is always the last part. We don't need it here, but we use its position.
+	// The rack ID is always the first part.
+	rackIDStr := parts[0]
 
-	// podName format stsName-ordinal
-	// stsName ==> clusterName-rackId or clusterName-rackId-rackSuffix
-	if len(parts) == 4 {
-		// podname format stsName-rackId-rackSuffix-ordinal
-		rackStr = parts[len(parts)-3]
-		rackSuffix = parts[len(parts)-2]
+	// The rack suffix is everything in between the rack ID and the pod index.
+	if len(parts) == 2 {
+		// Format: <cluster-name>-<rack-id>-<pod-index>
+		// Example: parts is ["0", "0"]
+		rackSuffix = ""
 	} else {
-		// podName format stsName-rackId-ordinal
-		rackStr = parts[len(parts)-2]
+		// Format: <cluster-name>-<rack-id>-<rack-suffix>-<pod-index>
+		// Example: parts is ["0", "a", "0"]
+		// Suffix should be "a"
+		rackSuffix = strings.Join(parts[1:len(parts)-1], "-")
 	}
 
-	rackID, err = strconv.Atoi(rackStr)
+	rackID, err = strconv.Atoi(rackIDStr)
 	if err != nil {
-		return rackID, rackSuffix, err
+		return 0, "", fmt.Errorf("failed to parse rackID from pod name %q: %w", podName, err)
 	}
 
 	return rackID, rackSuffix, nil

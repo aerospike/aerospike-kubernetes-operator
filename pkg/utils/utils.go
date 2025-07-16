@@ -3,6 +3,8 @@ package utils
 import (
 	"encoding/hex"
 	"fmt"
+	"k8s.io/apimachinery/pkg/labels"
+	"k8s.io/apimachinery/pkg/selection"
 	"regexp"
 	"strconv"
 	"strings"
@@ -139,6 +141,21 @@ func LabelsForAerospikeClusterRack(
 	return labels
 }
 
+func GetAerospikeClusterRackLabelSelector(
+	clName string, rackID int, rackSuffix string,
+) labels.Selector {
+	labelSelector := labels.SelectorFromSet(LabelsForAerospikeClusterRack(clName, rackID, rackSuffix))
+
+	if rackSuffix == "" {
+		// rack-suffix DoesNotExist
+		reqRackSuffix, _ := labels.NewRequirement(asdbv1.AerospikeRackSuffixLabel, selection.DoesNotExist, nil)
+
+		labelSelector = labelSelector.Add(*reqRackSuffix)
+	}
+
+	return labelSelector
+}
+
 // LabelsForPodAntiAffinity returns the labels to use for setting pod
 // anti-affinity.
 func LabelsForPodAntiAffinity(clName string) map[string]string {
@@ -187,27 +204,35 @@ func GetHash(str string) (string, error) {
 
 // GetRackIDAndSuffixFromSTSName gets rackID and rackSuffix from the statefulset name.
 // It assumes statefulset name is of format <cluster-name>-<rack-id> or <cluster-name>-<rack-id>-<rack-suffix>
-func GetRackIDAndSuffixFromSTSName(statefulSetName string) (rackID int, rackSuffix string, err error) {
-	parts := strings.Split(statefulSetName, "-")
-	if len(parts) < 2 {
-		return 0, "", fmt.Errorf("failed to get rackID from stsName %s", statefulSetName)
+func GetRackIDAndSuffixFromSTSName(clusterName, stsName string) (rackID int, rackSuffix string, err error) {
+	prefix := clusterName + "-"
+
+	rackPart := strings.TrimPrefix(stsName, prefix)
+	parts := strings.Split(rackPart, "-")
+
+	if len(parts) < 1 {
+		return 0, "", fmt.Errorf(
+			"invalid sts name format %q: expected at least <rack-id> after cluster name", stsName,
+		)
 	}
 
-	var rackStr string
+	// The rack ID is always the first part.
+	rackIDStr := parts[0]
 
-	// stsName ==> clusterName-rackId or clusterName-rackId-rackSuffix
-	if len(parts) == 3 {
-		// stsName format stsName-rackId-rackSuffix
-		rackStr = parts[len(parts)-2]
-		rackSuffix = parts[len(parts)-1]
+	// The rack suffix is everything after the rack ID.
+	if len(parts) == 1 {
+		// Format: <cluster-name>-<rack-id>
+		rackSuffix = ""
 	} else {
-		// podName format stsName-rackId
-		rackStr = parts[len(parts)-1]
+		// Format: <cluster-name>-<rack-id>-<rack-suffix>
+		// Example: parts is ["0", "a"]
+		// Suffix should be "a"
+		rackSuffix = strings.Join(parts[1:], "-")
 	}
 
-	rackID, err = strconv.Atoi(rackStr)
+	rackID, err = strconv.Atoi(rackIDStr)
 	if err != nil {
-		return rackID, rackSuffix, err
+		return 0, "", fmt.Errorf("failed to parse rackID from sts name %q: %w", stsName, err)
 	}
 
 	return rackID, rackSuffix, nil

@@ -208,13 +208,9 @@ func (r *SingleClusterReconciler) getRackPVCList(rackID int, rackSuffix string) 
 ) {
 	// List the pvc for this aeroCluster's statefulset
 	pvcList := &corev1.PersistentVolumeClaimList{}
-	labelSelector := labels.SelectorFromSet(
-		utils.LabelsForAerospikeClusterRack(
-			r.aeroCluster.Name, rackID, rackSuffix,
-		),
-	)
 	listOps := &client.ListOptions{
-		Namespace: r.aeroCluster.Namespace, LabelSelector: labelSelector,
+		Namespace:     r.aeroCluster.Namespace,
+		LabelSelector: utils.GetAerospikeClusterRackLabelSelector(r.aeroCluster.Name, rackID, rackSuffix),
 	}
 
 	if err := r.Client.List(context.TODO(), pvcList, listOps); err != nil {
