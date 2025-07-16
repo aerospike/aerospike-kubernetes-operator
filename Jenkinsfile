@@ -162,7 +162,7 @@ pipeline {
                             // Run all cluster-related test cases
                             sh "rsync -aK ${env.WORKSPACE}/../../aerospike-kubernetes-operator-resources/secrets/ config/samples/secrets"
 							sh "set +x; docker login --username AWS  568976754000.dkr.ecr.ap-south-1.amazonaws.com -p \$(aws ecr get-login-password --region ap-south-1); set -x"
-                            sh "./test/test.sh -c ${OPERATOR_CATALOG_IMAGE_CANDIDATE_NAME} -r ${AEROSPIKE_CUSTOM_INIT_REGISTRY} -n ${AEROSPIKE_CUSTOM_INIT_REGISTRY_NAMESPACE} -i ${AEROSPIKE_CUSTOM_INIT_NAME_TAG} -t cluster-test"
+                            sh "./test/test.sh -b ${OPERATOR_BUNDLE_IMAGE_CANDIDATE_NAME} -r ${AEROSPIKE_CUSTOM_INIT_REGISTRY} -n ${AEROSPIKE_CUSTOM_INIT_REGISTRY_NAMESPACE} -i ${AEROSPIKE_CUSTOM_INIT_NAME_TAG} -t cluster-test"
 
                         }
                     }
@@ -177,7 +177,7 @@ pipeline {
                             // Run all backup-related test cases, including backup, backup-service, and restore test suites
                             sh "rsync -aK ${env.WORKSPACE}/../../aerospike-kubernetes-operator-resources/secrets/ config/samples/secrets"
 							sh "set +x; docker login --username AWS  568976754000.dkr.ecr.ap-south-1.amazonaws.com -p \$(aws ecr get-login-password --region ap-south-1); set -x"
-                            sh "./test/test.sh -c ${OPERATOR_CATALOG_IMAGE_CANDIDATE_NAME} -r ${AEROSPIKE_CUSTOM_INIT_REGISTRY} -n ${AEROSPIKE_CUSTOM_INIT_REGISTRY_NAMESPACE} -i ${AEROSPIKE_CUSTOM_INIT_NAME_TAG} -t backup-test"
+                            sh "./test/test.sh -b ${OPERATOR_BUNDLE_IMAGE_CANDIDATE_NAME} -r ${AEROSPIKE_CUSTOM_INIT_REGISTRY} -n ${AEROSPIKE_CUSTOM_INIT_REGISTRY_NAMESPACE} -i ${AEROSPIKE_CUSTOM_INIT_NAME_TAG} -t backup-test"
 
                         }
                     }
@@ -192,7 +192,7 @@ pipeline {
                             // Run all-test cases
                             sh "rsync -aK ${env.WORKSPACE}/../../aerospike-kubernetes-operator-resources/secrets/ config/samples/secrets"
 							sh "set +x; docker login --username AWS  568976754000.dkr.ecr.ap-south-1.amazonaws.com -p \$(aws ecr get-login-password --region ap-south-1); set -x"
-                            sh "./test/test.sh -c ${OPERATOR_CATALOG_IMAGE_CANDIDATE_NAME} -r ${AEROSPIKE_CUSTOM_INIT_REGISTRY} -n ${AEROSPIKE_CUSTOM_INIT_REGISTRY_NAMESPACE} -i ${AEROSPIKE_CUSTOM_INIT_NAME_TAG} -t all-test"
+                            sh "./test/test.sh -b ${OPERATOR_BUNDLE_IMAGE_CANDIDATE_NAME} -r ${AEROSPIKE_CUSTOM_INIT_REGISTRY} -n ${AEROSPIKE_CUSTOM_INIT_REGISTRY_NAMESPACE} -i ${AEROSPIKE_CUSTOM_INIT_NAME_TAG} -t all-test"
 
                         }
                     }
@@ -209,11 +209,11 @@ pipeline {
 							    sh "set +x; docker login --username AWS  568976754000.dkr.ecr.ap-south-1.amazonaws.com -p \$(aws ecr get-login-password --region ap-south-1); set -x"
                                 if(env.RUN_SMOKE_TEST == 'true') {
                                     // Run smoke test
-                                    sh "./test/test.sh -c ${OPERATOR_CATALOG_IMAGE_CANDIDATE_NAME} -r ${AEROSPIKE_CUSTOM_INIT_REGISTRY} -n ${AEROSPIKE_CUSTOM_INIT_REGISTRY_NAMESPACE} -i ${AEROSPIKE_CUSTOM_INIT_NAME_TAG} -t cluster-test -f 'Sample files validation|UpdateAerospikeCluster'"
+                                    sh "./test/test.sh -b ${OPERATOR_BUNDLE_IMAGE_CANDIDATE_NAME} -r ${AEROSPIKE_CUSTOM_INIT_REGISTRY} -n ${AEROSPIKE_CUSTOM_INIT_REGISTRY_NAMESPACE} -i ${AEROSPIKE_CUSTOM_INIT_NAME_TAG} -t cluster-test -f 'Sample files validation|UpdateAerospikeCluster'"
                                 } 
                                 else if(env.RUN_SAMPLE_FILES_TEST == 'true') {
                                     // Run sample-files test cases
-                                    sh "./test/test.sh -c ${OPERATOR_CATALOG_IMAGE_CANDIDATE_NAME} -r ${AEROSPIKE_CUSTOM_INIT_REGISTRY} -n ${AEROSPIKE_CUSTOM_INIT_REGISTRY_NAMESPACE} -i ${AEROSPIKE_CUSTOM_INIT_NAME_TAG} -t cluster-test -f 'Sample files validation'"
+                                    sh "./test/test.sh -b ${OPERATOR_BUNDLE_IMAGE_CANDIDATE_NAME} -r ${AEROSPIKE_CUSTOM_INIT_REGISTRY} -n ${AEROSPIKE_CUSTOM_INIT_REGISTRY_NAMESPACE} -i ${AEROSPIKE_CUSTOM_INIT_NAME_TAG} -t cluster-test -f 'Sample files validation'"
                                 }
                             }
                         }
