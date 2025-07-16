@@ -427,10 +427,13 @@ func GetTLSNameAndPort(
 ) (tlsName string, port *int32) {
 	if networkConfTmp, ok := aeroConf.Value[ConfKeyNetwork]; ok {
 		networkConf := networkConfTmp.(map[string]interface{})
-		serviceConf := networkConf[connectionType].(map[string]interface{})
+		if _, ok := networkConf[connectionType]; !ok {
+			return "", nil
+		}
 
-		if tlsName, ok := serviceConf["tls-name"]; ok {
-			if tlsPort, portConfigured := serviceConf["tls-port"]; portConfigured {
+		connConf := networkConf[connectionType].(map[string]interface{})
+		if tlsName, ok := connConf["tls-name"]; ok {
+			if tlsPort, portConfigured := connConf["tls-port"]; portConfigured {
 				intPort := int32(tlsPort.(float64))
 				return tlsName.(string), &intPort
 			}

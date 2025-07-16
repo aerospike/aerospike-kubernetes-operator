@@ -822,13 +822,21 @@ func validateNsConfUpdate(oldConf, newConf map[string]interface{}) error {
 }
 
 func validateNetworkConnectionUpdate(oldConf, newConf map[string]interface{}, connectionType string) error {
-	var networkPorts = []string{
-		"port", "access-port",
-		"alternate-access-port",
+	var (
+		networkPorts = []string{
+			"port", "access-port",
+			"alternate-access-port",
+		}
+		oldConnectionConfig, newConnectionConfig map[string]interface{}
+	)
+
+	if _, ok := newConf["network"].(map[string]interface{})[connectionType]; ok {
+		oldConnectionConfig = oldConf["network"].(map[string]interface{})[connectionType].(map[string]interface{})
 	}
 
-	oldConnectionConfig := oldConf["network"].(map[string]interface{})[connectionType].(map[string]interface{})
-	newConnectionConfig := newConf["network"].(map[string]interface{})[connectionType].(map[string]interface{})
+	if _, ok := newConf["network"].(map[string]interface{})[connectionType]; ok {
+		newConnectionConfig = newConf["network"].(map[string]interface{})[connectionType].(map[string]interface{})
+	}
 
 	oldTLSName, oldTLSNameOk := oldConnectionConfig["tls-name"]
 	newTLSName, newTLSNameOk := newConnectionConfig["tls-name"]
