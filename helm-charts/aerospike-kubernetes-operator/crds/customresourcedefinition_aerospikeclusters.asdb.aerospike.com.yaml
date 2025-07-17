@@ -14178,11 +14178,6 @@ spec:
                     AerospikePodStatus contains the Aerospike specific status of the Aerospike
                     server pods.
                   properties:
-                    adminPort:
-                      description: AdminPort is the port Aerospike clients outside
-                        K8s can connect to.
-                      format: int32
-                      type: integer
                     aerospike:
                       description: Aerospike server instance summary for this pod.
                       properties:
@@ -14276,6 +14271,11 @@ spec:
                       description: NetworkPolicyHash is ripemd160 hash of NetworkPolicy
                         used by this pod
                       type: string
+                    podAdminPort:
+                      description: podAdminPort is the port K8s internal Aerospike
+                        clients can connect to.
+                      format: int32
+                      type: integer
                     podIP:
                       description: PodIP in the K8s network.
                       type: string
@@ -14287,6 +14287,11 @@ spec:
                       description: PodSpecHash is ripemd160 hash of PodSpec used by
                         this pod
                       type: string
+                    serviceAdminPort:
+                      description: ServiceAdminPort is the port Aerospike clients
+                        outside K8s can connect to.
+                      format: int32
+                      type: integer
                     servicePort:
                       description: ServicePort is the port Aerospike clients outside
                         K8s can connect to.

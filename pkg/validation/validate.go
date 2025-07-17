@@ -830,7 +830,7 @@ func validateNetworkConnectionUpdate(oldConf, newConf map[string]interface{}, co
 		oldConnectionConfig, newConnectionConfig map[string]interface{}
 	)
 
-	if _, ok := newConf["network"].(map[string]interface{})[connectionType]; ok {
+	if _, ok := oldConf["network"].(map[string]interface{})[connectionType]; ok {
 		oldConnectionConfig = oldConf["network"].(map[string]interface{})[connectionType].(map[string]interface{})
 	}
 
