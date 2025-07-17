@@ -3,8 +3,6 @@ package utils
 import (
 	"encoding/hex"
 	"fmt"
-	"k8s.io/apimachinery/pkg/labels"
-	"k8s.io/apimachinery/pkg/selection"
 	"regexp"
 	"strconv"
 	"strings"
@@ -12,6 +10,8 @@ import (
 	"golang.org/x/crypto/ripemd160" //nolint:staticcheck,gosec // this ripemd160 legacy hash is only used for diff comparison not for security purpose
 	corev1 "k8s.io/api/core/v1"
 	meta "k8s.io/apimachinery/pkg/apis/meta/v1"
+	"k8s.io/apimachinery/pkg/labels"
+	"k8s.io/apimachinery/pkg/selection"
 	"k8s.io/apimachinery/pkg/types"
 
 	asdbv1 "github.com/aerospike/aerospike-kubernetes-operator/v4/api/v1"
@@ -204,35 +204,19 @@ func GetHash(str string) (string, error) {
 
 // GetRackIDAndSuffixFromSTSName gets rackID and rackSuffix from the statefulset name.
 // It assumes statefulset name is of format <cluster-name>-<rack-id> or <cluster-name>-<rack-id>-<rack-suffix>
-func GetRackIDAndSuffixFromSTSName(clusterName, stsName string) (rackID int, rackSuffix string, err error) {
-	prefix := clusterName + "-"
-
-	rackPart := strings.TrimPrefix(stsName, prefix)
-	parts := strings.Split(rackPart, "-")
-
-	if len(parts) < 1 {
-		return 0, "", fmt.Errorf(
-			"invalid sts name format %q: expected at least <rack-id> after cluster name", stsName,
-		)
-	}
-
-	// The rack ID is always the first part.
-	rackIDStr := parts[0]
-
-	// The rack suffix is everything after the rack ID.
-	if len(parts) == 1 {
-		// Format: <cluster-name>-<rack-id>
-		rackSuffix = ""
-	} else {
-		// Format: <cluster-name>-<rack-id>-<rack-suffix>
-		// Example: parts is ["0", "a"]
-		// Suffix should be "a"
-		rackSuffix = strings.Join(parts[1:], "-")
-	}
-
-	rackID, err = strconv.Atoi(rackIDStr)
+func GetRackIDAndSuffixFromSTSName(clusterName, statefulSetName string) (int, string, error) {
+	rackIdentifier := strings.TrimPrefix(statefulSetName, clusterName+"-")
+	// Split the rackIdentifier into parts: rack-id and rack-suffix (optional).
+	parts := strings.SplitN(rackIdentifier, "-", 2)
+	rackID, err := strconv.Atoi(parts[0])
 	if err != nil {
-		return 0, "", fmt.Errorf("failed to parse rackID from sts name %q: %w", stsName, err)
+		return 0, "", fmt.Errorf(
+			"could not get rack id from rackIdentifier %s for sts %s: %v", rackIdentifier, statefulSetName, err)
+	}
+
+	var rackSuffix string
+	if len(parts) > 1 {
+		rackSuffix = parts[1]
 	}
 
 	return rackID, rackSuffix, nil
