@@ -278,7 +278,7 @@ func (r *SingleClusterReconciler) rollingRestartPods(
 
 func (r *SingleClusterReconciler) restartASDOrUpdateAerospikeConf(podName string,
 	operation RestartType) error {
-	rackID, rackSuffix, err := utils.GetRackIDAndSuffixFromPodName(podName)
+	rackID, rackSuffix, err := utils.GetRackIDAndSuffixFromPodName(r.aeroCluster.Name, podName)
 	if err != nil {
 		return fmt.Errorf(
 			"failed to get rackID for the pod %s", podName,
@@ -792,7 +792,7 @@ func (r *SingleClusterReconciler) cleanupDanglingPodsRack(sts *appsv1.StatefulSe
 
 	// Find dangling pods in the status of the cluster.
 	for podName := range r.aeroCluster.Status.Pods {
-		rackID, rackSuffix, err := utils.GetRackIDAndSuffixFromPodName(podName)
+		rackID, rackSuffix, err := utils.GetRackIDAndSuffixFromPodName(r.aeroCluster.Name, podName)
 		if err != nil {
 			return fmt.Errorf(
 				"failed to get rackID for the pod %s", podName,

@@ -1750,7 +1750,7 @@ func (r *SingleClusterReconciler) getCurrentRackList() (
 
 	for stsIdx := range statefulSetList.Items {
 		stsName := statefulSetList.Items[stsIdx].Name
-		rackID, rackSuffix, err := utils.GetRackIDAndSuffixFromSTSName(stsName)
+		rackID, rackSuffix, err := utils.GetRackIDAndSuffixFromSTSName(r.aeroCluster.Name, stsName)
 		if err != nil {
 			return nil, err
 		}
