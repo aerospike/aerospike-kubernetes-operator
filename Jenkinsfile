@@ -15,13 +15,11 @@ pipeline {
         OPERATOR_VERSION = getVersion()
         OPERATOR_CONTAINER_IMAGE_CANDIDATE_NAME = "${env.DOCKER_REGISTRY}/${DOCKER_ACCOUNT}/${env.OPERATOR_NAME}-nightly:${env.OPERATOR_VERSION}"
         OPERATOR_BUNDLE_IMAGE_CANDIDATE_NAME = "${env.DOCKER_REGISTRY}/${DOCKER_ACCOUNT}/${env.OPERATOR_NAME}-bundle-nightly:${env.OPERATOR_VERSION}"
-        OPERATOR_CATALOG_IMAGE_CANDIDATE_NAME = "${env.DOCKER_REGISTRY}/${DOCKER_ACCOUNT}/${env.OPERATOR_NAME}-catalog-nightly:${env.OPERATOR_VERSION}"
 
         // Variable names used in the operator make file.
         VERSION="${env.OPERATOR_VERSION}"
         IMG="${OPERATOR_CONTAINER_IMAGE_CANDIDATE_NAME}"
         BUNDLE_IMG="${OPERATOR_BUNDLE_IMAGE_CANDIDATE_NAME}"
-        CATALOG_IMG="${OPERATOR_CATALOG_IMAGE_CANDIDATE_NAME}"
 
         AEROSPIKE_CUSTOM_INIT_REGISTRY="568976754000.dkr.ecr.ap-south-1.amazonaws.com"
         AEROSPIKE_CUSTOM_INIT_REGISTRY_NAMESPACE="aerospike"
@@ -63,7 +61,6 @@ pipeline {
                             sh "cd ${GO_REPO} && make docker-buildx"
                             sh "cd ${GO_REPO} && make bundle"
                             sh "cd ${GO_REPO} && make bundle-build bundle-push"
-                            sh "cd ${GO_REPO} && make docker-buildx-catalog"
                         }
                     }
                 }

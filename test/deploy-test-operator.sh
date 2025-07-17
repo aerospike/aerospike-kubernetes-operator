@@ -46,14 +46,6 @@ for namespace in $namespaces; do
   fi
 done
 
-version=""
-if [[ "$CATALOG_IMG" == *:* ]]; then
-  version="${CATALOG_IMG#*:}"
-else
-  echo "Error: incorrect catalog image" >&2
-  exit 1
-fi
-
 operator-sdk run bundle "$BUNDLE_IMG"  --namespace=test --install-mode MultiNamespace=$(echo "$namespaces" | tr " " ",") --timeout=10m0s
 
 for namespace in $namespaces; do

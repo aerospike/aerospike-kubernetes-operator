@@ -114,12 +114,6 @@ make bundle
 make bundle-build bundle-push
 ```
 
-### Build catalog image and publish
-
-```shell
-make docker-buildx-catalog
-```
-
 ### Deploy operator with OLM
 
 Install OLM if not already done
