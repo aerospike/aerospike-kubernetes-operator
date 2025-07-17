@@ -114,12 +114,6 @@ make bundle
 make bundle-build bundle-push
 ```
 
-### Build catalog image and publish
-
-```shell
-make docker-buildx-catalog
-```
-
 ### Deploy operator with OLM
 
 Install OLM if not already done
@@ -134,78 +128,19 @@ Create **aerospike** namespace if it does not exist
 kubectl create namespace aerospike
 ```
 
-### Deploy the operator using custom CatalogSource:
+### Deploy the operator targeting a single namespace
 
-#### Deploy custom CatalogSource:
+Run the operator bundle
 
 ```shell
-kubectl apply -f - <<EOF
-apiVersion: operators.coreos.com/v1alpha1
-kind: CatalogSource
-metadata:
-  name: aerospike
-  namespace: aerospike
-spec:
-  displayName: Aerospike operator
-  publisher: Aerospike operator
-  sourceType: grpc
-  image: "${CATALOG_IMG}"
-  updateStrategy:
-    registryPoll:
-      interval: 10m
-EOF
+operator-sdk run bundle $BUNDLE_IMG --namespace=aerospike
 ```
 
-#### Create Operator Group for the targeted namespaces:
+### Deploy the operator targeting multiple namespaces
+Assuming you want the operator to target two other namespaces ns1 and ns2, deploy the operator with MultiNamespace install mode.
 
-- Targeting single namespace
 ```shell
-kubectl apply -f - <<EOF
-apiVersion: operators.coreos.com/v1
-kind: OperatorGroup
-metadata:
-  name: test-operator-group
-  namespace: test
-spec:
-  targetNamespaces:
-    - aerospike
-  upgradeStrategy: Default
-EOF
-```
-
-- Targeting multiple namespaces
-  Assuming you want the operator to target two other namespaces ns1 and ns2, create operator group with MultiNamespace install mode.
-```shell
-```shell
-kubectl apply -f - <<EOF
-apiVersion: operators.coreos.com/v1
-kind: OperatorGroup
-metadata:
-  name: test-operator-group
-  namespace: test
-spec:
-  targetNamespaces:
-    - ns1
-    - ns2
-  upgradeStrategy: Default
-EOF
-```
-
-#### Create Subscription to deploy operator:
-```shell
-kubectl apply -f - <<EOF
-apiVersion: operators.coreos.com/v1alpha1
-kind: Subscription
-metadata:
-  name: aerospike-kubernetes-operator
-  namespace: test
-spec:
-  channel: stable
-  installPlanApproval: Automatic
-  name: aerospike-kubernetes-operator
-  source: aerospike
-  sourceNamespace: aerospike
-EOF
+operator-sdk run bundle $BUNDLE_IMG --namespace=aerospike --install-mode MultiNamespace=ns1,ns2
 ```
 
 ### Deploy your Aerospike clusters
@@ -239,13 +174,13 @@ The operator tests create and use 4 namespaces
 Run the entire test suite
 
 ```shell
-./test/test.sh -b $BUNDLE_IMG -c $CATALOG_IMG
+./test/test.sh -b $BUNDLE_IMG
 ```
 
 Run tests matching a regex
 
 ```shell
-./test/test.sh -b $BUNDLE_IMG -c $CATALOG_IMG '-ginkgo.focus=".*MultiCluster.*"'
+./test/test.sh -b $BUNDLE_IMG '-ginkgo.focus=".*MultiCluster.*"'
 ```
 
 ## Architecture

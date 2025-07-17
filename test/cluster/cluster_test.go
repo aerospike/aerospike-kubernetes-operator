@@ -236,11 +236,8 @@ func ValidateAerospikeBenchmarkConfigs(ctx goctx.Context) {
 
 					By("Validating benchmarking is disabled")
 
-					aeroCluster, err := getCluster(k8sClient, ctx, clusterNamespacedName)
-					Expect(err).ToNot(HaveOccurred())
-
-					pod := aeroCluster.Status.Pods["deploy-cluster-benchmark-0-0"]
-					nsConfs, err := getAerospikeConfigFromNode(logger, k8sClient, ctx, clusterNamespacedName, "namespaces", &pod)
+					nsConfs, err := getAerospikeConfigFromNode(logger, k8sClient, ctx, clusterNamespacedName,
+						"namespaces", aeroCluster.Name+"-0-0")
 					Expect(err).ToNot(HaveOccurred())
 					Expect(nsConfs["test"].(lib.Stats)["enable-benchmarks-read"]).To(BeFalse())
 
@@ -254,7 +251,8 @@ func ValidateAerospikeBenchmarkConfigs(ctx goctx.Context) {
 					err = updateCluster(k8sClient, ctx, aeroCluster)
 					Expect(err).ToNot(HaveOccurred())
 
-					nsConfs, err = getAerospikeConfigFromNode(logger, k8sClient, ctx, clusterNamespacedName, "namespaces", &pod)
+					nsConfs, err = getAerospikeConfigFromNode(logger, k8sClient, ctx, clusterNamespacedName,
+						"namespaces", aeroCluster.Name+"-0-0")
 					Expect(err).ToNot(HaveOccurred())
 					Expect(nsConfs["test"].(lib.Stats)["enable-benchmarks-read"]).To(BeTrue())
 
@@ -266,7 +264,8 @@ func ValidateAerospikeBenchmarkConfigs(ctx goctx.Context) {
 					err = updateCluster(k8sClient, ctx, aeroCluster)
 					Expect(err).ToNot(HaveOccurred())
 
-					nsConfs, err = getAerospikeConfigFromNode(logger, k8sClient, ctx, clusterNamespacedName, "namespaces", &pod)
+					nsConfs, err = getAerospikeConfigFromNode(logger, k8sClient, ctx, clusterNamespacedName,
+						"namespaces", aeroCluster.Name+"-0-0")
 					Expect(err).ToNot(HaveOccurred())
 					Expect(nsConfs["test"].(lib.Stats)["enable-benchmarks-read"]).To(BeTrue())
 
@@ -281,7 +280,8 @@ func ValidateAerospikeBenchmarkConfigs(ctx goctx.Context) {
 					err = updateCluster(k8sClient, ctx, aeroCluster)
 					Expect(err).ToNot(HaveOccurred())
 
-					nsConfs, err = getAerospikeConfigFromNode(logger, k8sClient, ctx, clusterNamespacedName, "namespaces", &pod)
+					nsConfs, err = getAerospikeConfigFromNode(logger, k8sClient, ctx, clusterNamespacedName,
+						"namespaces", aeroCluster.Name+"-0-0")
 					Expect(err).ToNot(HaveOccurred())
 					Expect(nsConfs["test"].(lib.Stats)["enable-benchmarks-read"]).To(BeFalse())
 				},
