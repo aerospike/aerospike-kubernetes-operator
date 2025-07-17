@@ -173,7 +173,8 @@ func validateAccessControlUpdate(
 		newSpec.AerospikeAccessControl == nil &&
 		status.AerospikeAccessControl == nil {
 		return fmt.Errorf(
-			"cannot remove AerospikeAccessControl: status has not yet been updated with the current configuration")
+			"cannot remove aerospikeAccessControl: " +
+				"security enablement is in progress and status has not yet been updated to reflect the current configuration")
 	}
 
 	return nil

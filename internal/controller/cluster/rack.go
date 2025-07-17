@@ -1829,9 +1829,9 @@ func (r *SingleClusterReconciler) getAnyPodWithEnabledSecurity(
 		return nil, fmt.Errorf("failed to get security config: %v", err)
 	}
 
-	for idx := range podList.Items {
-		_, port := r.getResolvedTLSNameAndPort()
+	_, port := r.getResolvedTLSNameAndPort()
 
+	for idx := range podList.Items {
 		if security, ok := securityConfigs[hostID(podList.Items[idx].Status.PodIP, int(*port))]; ok {
 			if securityEnabled, ok := security["enable-security"]; ok && securityEnabled == "true" {
 				return &podList.Items[idx], nil

@@ -1275,7 +1275,7 @@ var _ = Describe(
 									)
 								}
 
-								aerospikeConfigSpec.setEnableSecurity(false)
+								aerospikeConfigSpec.setSecurity(false)
 
 								aeroCluster := getAerospikeClusterSpecWithAccessControl(
 									clusterNamespacedName, &accessControl,
@@ -1359,7 +1359,7 @@ var _ = Describe(
 									)
 								}
 
-								aerospikeConfigSpec.setEnableSecurity(true)
+								aerospikeConfigSpec.setSecurity(true)
 
 								aeroCluster := getAerospikeClusterSpecWithAccessControl(
 									clusterNamespacedName, &accessControl,
@@ -1529,7 +1529,7 @@ var _ = Describe(
 									)
 								}
 
-								aerospikeConfigSpec.setEnableSecurity(false)
+								aerospikeConfigSpec.setSecurity(false)
 
 								// Save cluster variable as well for cleanup.
 								aeroCluster := getAerospikeClusterSpecWithAccessControl(
@@ -1586,7 +1586,7 @@ var _ = Describe(
 									)
 								}
 
-								aerospikeConfigSpec.setEnableSecurity(true)
+								aerospikeConfigSpec.setSecurity(true)
 
 								aeroCluster = getAerospikeClusterSpecWithAccessControl(
 									clusterNamespacedName, accessControl,
@@ -1649,7 +1649,7 @@ var _ = Describe(
 									)
 								}
 
-								aerospikeConfigSpec.setEnableSecurity(true)
+								aerospikeConfigSpec.setSecurity(true)
 
 								aeroCluster := getAerospikeClusterSpecWithAccessControl(
 									clusterNamespacedName, accessControl,
@@ -1672,7 +1672,7 @@ var _ = Describe(
 									)
 								}
 
-								aerospikeConfigSpec.setEnableSecurity(false)
+								aerospikeConfigSpec.setSecurity(false)
 								accessControl = nil
 
 								// Save cluster variable as well for cleanup.
@@ -1688,7 +1688,7 @@ var _ = Describe(
 							},
 						)
 
-						FIt(
+						It(
 							"SecurityDisable: should disable security in partially security enabled cluster",
 							func() {
 								var accessControl *asdbv1.AerospikeAccessControlSpec
@@ -1703,7 +1703,7 @@ var _ = Describe(
 									)
 								}
 
-								aerospikeConfigSpec.setEnableSecurity(false)
+								aerospikeConfigSpec.setSecurity(false)
 
 								// Save cluster variable as well for cleanup.
 								aeroCluster := getAerospikeClusterSpecWithAccessControl(
@@ -1758,7 +1758,7 @@ var _ = Describe(
 									)
 								}
 
-								aerospikeConfigSpec.setEnableSecurity(true)
+								aerospikeConfigSpec.setSecurity(true)
 
 								aeroCluster = getAerospikeClusterSpecWithAccessControl(
 									clusterNamespacedName, accessControl,
@@ -1768,7 +1768,7 @@ var _ = Describe(
 								err = updateClusterWithNoWait(k8sClient, ctx, aeroCluster)
 								Expect(err).ToNot(HaveOccurred())
 
-								aerospikeConfigSpec.setEnableSecurity(false)
+								aerospikeConfigSpec.setSecurity(false)
 								accessControl = nil
 
 								// Save cluster variable as well for cleanup.
@@ -1857,7 +1857,7 @@ var _ = Describe(
 									)
 								}
 
-								aerospikeConfigSpec.setEnableSecurity(true)
+								aerospikeConfigSpec.setSecurity(true)
 
 								aeroCluster := getAerospikeClusterSpecWithAccessControl(
 									clusterNamespacedName, &accessControl,
@@ -1977,7 +1977,7 @@ var _ = Describe(
 									)
 								}
 
-								aerospikeConfigSpec.setEnableSecurity(true)
+								aerospikeConfigSpec.setSecurity(true)
 								aerospikeConfigSpec.setEnableQuotas(true)
 
 								aeroCluster = getAerospikeClusterSpecWithAccessControl(
@@ -2049,7 +2049,7 @@ var _ = Describe(
 										),
 									)
 								}
-								aerospikeConfigSpec.setEnableSecurity(true)
+								aerospikeConfigSpec.setSecurity(true)
 								aerospikeConfigSpec.setEnableQuotas(false)
 
 								aeroCluster = getAerospikeClusterSpecWithAccessControl(
@@ -2123,7 +2123,7 @@ var _ = Describe(
 										),
 									)
 								}
-								aerospikeConfigSpec.setEnableSecurity(true)
+								aerospikeConfigSpec.setSecurity(true)
 								aerospikeConfigSpec.setEnableQuotas(false)
 
 								aeroCluster = getAerospikeClusterSpecWithAccessControl(
