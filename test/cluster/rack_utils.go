@@ -92,7 +92,7 @@ func validateAerospikeConfigServiceUpdate(
 		// TODO:
 		// We may need to check for all keys in aerospikeConfig in rack
 		// but we know that we are changing for service only for now
-		svcConfs, err := getAerospikeConfigFromNode(log, k8sClient, ctx, clusterNamespacedName, "service", &pod)
+		svcConfs, err := getAerospikeConfigFromNode(log, k8sClient, ctx, clusterNamespacedName, "service", podName)
 		if err != nil {
 			return err
 		}
