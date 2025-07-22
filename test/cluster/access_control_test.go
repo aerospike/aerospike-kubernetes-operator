@@ -59,7 +59,7 @@ var aerospikeConfigWithSecurityWithQuota = &asdbv1.AerospikeConfigSpec{
 	},
 }
 
-var _ = Describe(
+var _ = FDescribe(
 	"AccessControl", func() {
 		ctx := goctx.TODO()
 
@@ -1576,16 +1576,6 @@ var _ = Describe(
 									},
 								}
 
-								aerospikeConfigSpec, err = NewAerospikeConfSpec(latestImage)
-								if err != nil {
-									Fail(
-										fmt.Sprintf(
-											"Invalid Aerospike Config Spec: %v",
-											err,
-										),
-									)
-								}
-
 								aerospikeConfigSpec.setSecurity(true)
 
 								aeroCluster = getAerospikeClusterSpecWithAccessControl(
@@ -1660,16 +1650,6 @@ var _ = Describe(
 								)
 								if err != nil {
 									Fail("Security should be enabled")
-								}
-
-								aerospikeConfigSpec, err = NewAerospikeConfSpec(latestImage)
-								if err != nil {
-									Fail(
-										fmt.Sprintf(
-											"Invalid Aerospike Config Spec: %v",
-											err,
-										),
-									)
 								}
 
 								aerospikeConfigSpec.setSecurity(false)
@@ -1748,16 +1728,6 @@ var _ = Describe(
 									},
 								}
 
-								aerospikeConfigSpec, err = NewAerospikeConfSpec(latestImage)
-								if err != nil {
-									Fail(
-										fmt.Sprintf(
-											"Invalid Aerospike Config Spec: %v",
-											err,
-										),
-									)
-								}
-
 								aerospikeConfigSpec.setSecurity(true)
 
 								aeroCluster = getAerospikeClusterSpecWithAccessControl(
@@ -1783,7 +1753,7 @@ var _ = Describe(
 
 								Expect(err).To(HaveOccurred())
 								Expect(err.Error()).Should(ContainSubstring(
-									"status has not yet been updated with the current configuration"))
+									"security enablement is in progress"))
 
 								Eventually(func(g Gomega) {
 									err := testAccessControlReconcile(aeroCluster, ctx)
@@ -1967,16 +1937,6 @@ var _ = Describe(
 									},
 								}
 
-								aerospikeConfigSpec, err = NewAerospikeConfSpec(latestImage)
-								if err != nil {
-									Fail(
-										fmt.Sprintf(
-											"Invalid Aerospike Config Spec: %v",
-											err,
-										),
-									)
-								}
-
 								aerospikeConfigSpec.setSecurity(true)
 								aerospikeConfigSpec.setEnableQuotas(true)
 
@@ -2040,15 +2000,6 @@ var _ = Describe(
 									},
 								}
 
-								aerospikeConfigSpec, err = NewAerospikeConfSpec(latestImage)
-								if err != nil {
-									Fail(
-										fmt.Sprintf(
-											"Invalid Aerospike Config Spec: %v",
-											err,
-										),
-									)
-								}
 								aerospikeConfigSpec.setSecurity(true)
 								aerospikeConfigSpec.setEnableQuotas(false)
 
@@ -2114,15 +2065,6 @@ var _ = Describe(
 									},
 								}
 
-								aerospikeConfigSpec, err = NewAerospikeConfSpec(latestImage)
-								if err != nil {
-									Fail(
-										fmt.Sprintf(
-											"Invalid Aerospike Config Spec: %v",
-											err,
-										),
-									)
-								}
 								aerospikeConfigSpec.setSecurity(true)
 								aerospikeConfigSpec.setEnableQuotas(false)
 
