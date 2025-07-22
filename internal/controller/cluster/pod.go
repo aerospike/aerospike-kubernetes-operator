@@ -915,13 +915,16 @@ func (r *SingleClusterReconciler) getIgnorablePods(racksToDelete []asdbv1.Rack, 
 	ignorablePodNames := sets.Set[string]{}
 
 	for rackIdx := range racksToDelete {
-		r.Log.Info("Rack to delete found", "rackID", racksToDelete[rackIdx].ID, "rackSuffix", racksToDelete[rackIdx].RackSuffix)
+		r.Log.Info("Rack to delete found", "rackID",
+			racksToDelete[rackIdx].ID, "rackSuffix", racksToDelete[rackIdx].RackSuffix)
+
 		rackPods, err := r.getRackPodList(racksToDelete[rackIdx].ID, racksToDelete[rackIdx].RackSuffix)
 		if err != nil {
 			return nil, err
 		}
 
 		r.Log.Info("Pods found in rack to delete", "podList", rackPods)
+
 		for podIdx := range rackPods.Items {
 			pod := rackPods.Items[podIdx]
 			if !utils.IsPodRunningAndReady(&pod) {
@@ -937,6 +940,7 @@ func (r *SingleClusterReconciler) getIgnorablePods(racksToDelete []asdbv1.Rack, 
 			r.aeroCluster.Spec.RackConfig.MaxIgnorablePods, int(rack.Size), false,
 		)
 
+		// TODO: In case of renamed rack, we should consider all the for that rack (old as well new pods)
 		podList, err := r.getRackPodList(rack.Rack.ID, rack.Rack.RackSuffix)
 		if err != nil {
 			return nil, err

@@ -381,7 +381,7 @@ func (r *SingleClusterReconciler) getSTS(rackState *RackState) (*appsv1.Stateful
 	return found, nil
 }
 
-func (r *SingleClusterReconciler) buildSTSConfigMap(
+func (r *SingleClusterReconciler) createSTSConfigMap(
 	namespacedName types.NamespacedName, rack *asdbv1.Rack,
 ) error {
 	r.Log.Info("Creating a new ConfigMap for statefulSet")

@@ -10,7 +10,7 @@ import (
 	"golang.org/x/crypto/ripemd160" //nolint:staticcheck,gosec // this ripemd160 legacy hash is only used for diff comparison not for security purpose
 	corev1 "k8s.io/api/core/v1"
 	meta "k8s.io/apimachinery/pkg/apis/meta/v1"
-	"k8s.io/apimachinery/pkg/labels"
+	ls "k8s.io/apimachinery/pkg/labels"
 	"k8s.io/apimachinery/pkg/selection"
 	"k8s.io/apimachinery/pkg/types"
 
@@ -138,17 +138,18 @@ func LabelsForAerospikeClusterRack(
 	if rackSuffix != "" {
 		labels[asdbv1.AerospikeRackSuffixLabel] = rackSuffix
 	}
+
 	return labels
 }
 
 func GetAerospikeClusterRackLabelSelector(
 	clName string, rackID int, rackSuffix string,
-) labels.Selector {
-	labelSelector := labels.SelectorFromSet(LabelsForAerospikeClusterRack(clName, rackID, rackSuffix))
+) ls.Selector {
+	labelSelector := ls.SelectorFromSet(LabelsForAerospikeClusterRack(clName, rackID, rackSuffix))
 
 	if rackSuffix == "" {
 		// rack-suffix DoesNotExist
-		reqRackSuffix, _ := labels.NewRequirement(asdbv1.AerospikeRackSuffixLabel, selection.DoesNotExist, nil)
+		reqRackSuffix, _ := ls.NewRequirement(asdbv1.AerospikeRackSuffixLabel, selection.DoesNotExist, nil)
 
 		labelSelector = labelSelector.Add(*reqRackSuffix)
 	}
@@ -204,17 +205,17 @@ func GetHash(str string) (string, error) {
 
 // GetRackIDAndSuffixFromSTSName gets rackID and rackSuffix from the statefulset name.
 // It assumes statefulset name is of format <cluster-name>-<rack-id> or <cluster-name>-<rack-id>-<rack-suffix>
-func GetRackIDAndSuffixFromSTSName(clusterName, statefulSetName string) (int, string, error) {
+func GetRackIDAndSuffixFromSTSName(clusterName, statefulSetName string) (rackID int, rackSuffix string, err error) {
 	rackIdentifier := strings.TrimPrefix(statefulSetName, clusterName+"-")
 	// Split the rackIdentifier into parts: rack-id and rack-suffix (optional).
 	parts := strings.SplitN(rackIdentifier, "-", 2)
-	rackID, err := strconv.Atoi(parts[0])
+
+	rackID, err = strconv.Atoi(parts[0])
 	if err != nil {
 		return 0, "", fmt.Errorf(
 			"could not get rack id from rackIdentifier %s for sts %s: %v", rackIdentifier, statefulSetName, err)
 	}
 
-	var rackSuffix string
 	if len(parts) > 1 {
 		rackSuffix = parts[1]
 	}
