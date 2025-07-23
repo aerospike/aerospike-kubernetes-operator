@@ -130,28 +130,28 @@ func LabelsForAerospikeCluster(clName string) map[string]string {
 
 // LabelsForAerospikeClusterRack returns the labels for specific rack
 func LabelsForAerospikeClusterRack(
-	clName string, rackID int, rackSuffix string,
+	clName string, rackID int, rackRevision string,
 ) map[string]string {
 	labels := LabelsForAerospikeCluster(clName)
 	labels[asdbv1.AerospikeRackIDLabel] = strconv.Itoa(rackID)
 
-	if rackSuffix != "" {
-		labels[asdbv1.AerospikeRackSuffixLabel] = rackSuffix
+	if rackRevision != "" {
+		labels[asdbv1.AerospikeRackRevisionLabel] = rackRevision
 	}
 
 	return labels
 }
 
 func GetAerospikeClusterRackLabelSelector(
-	clName string, rackID int, rackSuffix string,
+	clName string, rackID int, rackRevision string,
 ) ls.Selector {
-	labelSelector := ls.SelectorFromSet(LabelsForAerospikeClusterRack(clName, rackID, rackSuffix))
+	labelSelector := ls.SelectorFromSet(LabelsForAerospikeClusterRack(clName, rackID, rackRevision))
 
-	if rackSuffix == "" {
-		// rack-suffix DoesNotExist
-		reqRackSuffix, _ := ls.NewRequirement(asdbv1.AerospikeRackSuffixLabel, selection.DoesNotExist, nil)
+	if rackRevision == "" {
+		// rack-revision DoesNotExist
+		reqRackRevision, _ := ls.NewRequirement(asdbv1.AerospikeRackRevisionLabel, selection.DoesNotExist, nil)
 
-		labelSelector = labelSelector.Add(*reqRackSuffix)
+		labelSelector = labelSelector.Add(*reqRackRevision)
 	}
 
 	return labelSelector
@@ -203,11 +203,11 @@ func GetHash(str string) (string, error) {
 	return hex.EncodeToString(res), nil
 }
 
-// GetRackIDAndSuffixFromSTSName gets rackID and rackSuffix from the statefulset name.
-// It assumes statefulset name is of format <cluster-name>-<rack-id> or <cluster-name>-<rack-id>-<rack-suffix>
-func GetRackIDAndSuffixFromSTSName(clusterName, statefulSetName string) (rackID int, rackSuffix string, err error) {
+// GetRackIDAndRevisionFromSTSName gets rackID and rackRevision from the statefulset name.
+// It assumes statefulset name is of format <cluster-name>-<rack-id> or <cluster-name>-<rack-id>-<rack-revision>
+func GetRackIDAndRevisionFromSTSName(clusterName, statefulSetName string) (rackID int, rackRevision string, err error) {
 	rackIdentifier := strings.TrimPrefix(statefulSetName, clusterName+"-")
-	// Split the rackIdentifier into parts: rack-id and rack-suffix (optional).
+	// Split the rackIdentifier into parts: rack-id and rack-revision (optional).
 	parts := strings.SplitN(rackIdentifier, "-", 2)
 
 	rackID, err = strconv.Atoi(parts[0])
@@ -217,10 +217,10 @@ func GetRackIDAndSuffixFromSTSName(clusterName, statefulSetName string) (rackID 
 	}
 
 	if len(parts) > 1 {
-		rackSuffix = parts[1]
+		rackRevision = parts[1]
 	}
 
-	return rackID, rackSuffix, nil
+	return rackID, rackRevision, nil
 }
 
 // ContainsString returns true if a string exists in a slice of strings.
@@ -252,11 +252,11 @@ func Len32[T any](v []T) int32 {
 	return int32(len(v)) //nolint:gosec // length can't exceed int32 range
 }
 
-func GetRackIdentifier(rackID int, rackSuffix string) string {
+func GetRackIdentifier(rackID int, rackRevision string) string {
 	rackIDStr := strconv.Itoa(rackID)
 
-	if rackSuffix != "" {
-		return fmt.Sprintf("%s-%s", rackIDStr, rackSuffix)
+	if rackRevision != "" {
+		return fmt.Sprintf("%s-%s", rackIDStr, rackRevision)
 	}
 
 	return rackIDStr

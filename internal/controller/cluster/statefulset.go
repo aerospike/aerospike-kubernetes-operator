@@ -97,7 +97,7 @@ func (r *SingleClusterReconciler) createSTS(
 	)
 
 	operatorDefinedLabels := utils.LabelsForAerospikeClusterRack(
-		r.aeroCluster.Name, rackState.Rack.ID, rackState.Rack.RackSuffix,
+		r.aeroCluster.Name, rackState.Rack.ID, rackState.Rack.RackRevision,
 	)
 
 	tlsName, _ := asdbv1.GetServiceTLSNameAndPort(r.aeroCluster.Spec.AerospikeConfig)
@@ -151,7 +151,7 @@ func (r *SingleClusterReconciler) createSTS(
 									{
 										Name: "CONFIG_MAP_NAME",
 										Value: utils.GetNamespacedNameForSTSOrConfigMap(
-											r.aeroCluster, utils.GetRackIdentifier(rackState.Rack.ID, rackState.Rack.RackSuffix),
+											r.aeroCluster, utils.GetRackIdentifier(rackState.Rack.ID, rackState.Rack.RackRevision),
 										).Name,
 									},
 								}...,
@@ -384,7 +384,7 @@ func (r *SingleClusterReconciler) getSTS(rackState *RackState) (*appsv1.Stateful
 	if err := r.Client.Get(
 		context.TODO(),
 		utils.GetNamespacedNameForSTSOrConfigMap(r.aeroCluster,
-			utils.GetRackIdentifier(rackState.Rack.ID, rackState.Rack.RackSuffix)),
+			utils.GetRackIdentifier(rackState.Rack.ID, rackState.Rack.RackRevision)),
 		found,
 	); err != nil {
 		return nil, err
@@ -988,7 +988,7 @@ func (r *SingleClusterReconciler) updateSTSFromPodSpec(
 	st *appsv1.StatefulSet, rackState *RackState,
 ) {
 	defaultLabels := utils.LabelsForAerospikeClusterRack(
-		r.aeroCluster.Name, rackState.Rack.ID, rackState.Rack.RackSuffix,
+		r.aeroCluster.Name, rackState.Rack.ID, rackState.Rack.RackRevision,
 	)
 
 	r.updateSTSSchedulingPolicy(st, rackState)
@@ -1084,13 +1084,13 @@ func (r *SingleClusterReconciler) waitForAllSTSToBeReady(ignorablePodNames sets.
 
 	statusRacks := r.aeroCluster.Status.RackConfig.Racks
 	for idx := range statusRacks {
-		allRackIdentifier.Insert(utils.GetRackIdentifier(statusRacks[idx].ID, statusRacks[idx].RackSuffix))
+		allRackIdentifier.Insert(utils.GetRackIdentifier(statusRacks[idx].ID, statusRacks[idx].RackRevision))
 	}
 
 	// Check for newly added racks also because we do not check for these racks just after they are added
 	specRacks := r.aeroCluster.Spec.RackConfig.Racks
 	for idx := range specRacks {
-		allRackIdentifier.Insert(utils.GetRackIdentifier(specRacks[idx].ID, specRacks[idx].RackSuffix))
+		allRackIdentifier.Insert(utils.GetRackIdentifier(specRacks[idx].ID, specRacks[idx].RackRevision))
 	}
 
 	for rackIdentifier := range allRackIdentifier {
@@ -1291,7 +1291,7 @@ func getDefaultSTSVolumes(
 				ConfigMap: &corev1.ConfigMapVolumeSource{
 					LocalObjectReference: corev1.LocalObjectReference{
 						Name: utils.GetNamespacedNameForSTSOrConfigMap(
-							aeroCluster, utils.GetRackIdentifier(rackState.Rack.ID, rackState.Rack.RackSuffix),
+							aeroCluster, utils.GetRackIdentifier(rackState.Rack.ID, rackState.Rack.RackRevision),
 						).Name,
 					},
 				},
