@@ -46,7 +46,7 @@ var _ = Describe(
 			},
 		)
 		It(
-			"Validate create LB create", func() {
+			"Validate create LB", func() {
 				By("DeployCluster with LB")
 				clusterNamespacedName := test.GetNamespacedName(
 					"load-balancer-create", namespace,

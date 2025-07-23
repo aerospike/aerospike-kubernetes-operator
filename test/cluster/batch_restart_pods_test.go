@@ -15,7 +15,6 @@ import (
 	"sigs.k8s.io/controller-runtime/pkg/client"
 
 	asdbv1 "github.com/aerospike/aerospike-kubernetes-operator/v4/api/v1"
-	"github.com/aerospike/aerospike-kubernetes-operator/v4/pkg/utils"
 	"github.com/aerospike/aerospike-kubernetes-operator/v4/test"
 )
 
@@ -479,20 +478,14 @@ func BatchUpgrade(ctx goctx.Context, clusterNamespacedName types.NamespacedName)
 	})
 }
 
-func isBatchRestart(aeroCluster *asdbv1.AerospikeCluster) bool {
-	// Wait for starting the pod restart process
-	for {
-		readyPods := getReadyPods(aeroCluster)
+func isBatchRestart(ctx goctx.Context, aeroCluster *asdbv1.AerospikeCluster) bool {
+	err := waitForOperatorToStartPodRestart(ctx, k8sClient, aeroCluster)
+	Expect(err).ToNot(HaveOccurred())
 
-		unreadyPods := int(aeroCluster.Spec.Size) - len(readyPods)
-		if unreadyPods > 0 {
-			break
-		}
-	}
-
-	// Operator should restart batch of pods which will make multiple pods unready
+	// Operator should restart a batch of pods which will make multiple pods unready
 	for i := 0; i < 100; i++ {
-		readyPods := getReadyPods(aeroCluster)
+		readyPods, err := getReadyPods(aeroCluster, k8sClient)
+		Expect(err).ToNot(HaveOccurred())
 
 		unreadyPods := int(aeroCluster.Spec.Size) - len(readyPods)
 		if unreadyPods > 1 {
@@ -503,21 +496,6 @@ func isBatchRestart(aeroCluster *asdbv1.AerospikeCluster) bool {
 	return false
 }
 
-func getReadyPods(aeroCluster *asdbv1.AerospikeCluster) []string {
-	podList, err := getPodList(aeroCluster, k8sClient)
-	Expect(err).ToNot(HaveOccurred())
-
-	var readyPods []string
-
-	for podIndex := range podList.Items {
-		if utils.IsPodRunningAndReady(&podList.Items[podIndex]) {
-			readyPods = append(readyPods, podList.Items[podIndex].Name)
-		}
-	}
-
-	return readyPods
-}
-
 func updateClusterForBatchRestart(
 	k8sClient client.Client, ctx goctx.Context,
 	aeroCluster *asdbv1.AerospikeCluster,
@@ -526,7 +504,7 @@ func updateClusterForBatchRestart(
 		return err
 	}
 
-	if !isBatchRestart(aeroCluster) {
+	if !isBatchRestart(ctx, aeroCluster) {
 		return fmt.Errorf("looks like pods are not restarting in batch")
 	}
 

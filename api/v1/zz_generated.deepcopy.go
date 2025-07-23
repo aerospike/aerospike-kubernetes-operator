@@ -734,6 +734,11 @@ func (in *AerospikeStorageSpec) DeepCopyInto(out *AerospikeStorageSpec) {
 		*out = make([]string, len(*in))
 		copy(*out, *in)
 	}
+	if in.DeleteLocalStorageOnRestart != nil {
+		in, out := &in.DeleteLocalStorageOnRestart, &out.DeleteLocalStorageOnRestart
+		*out = new(bool)
+		**out = **in
+	}
 	if in.Volumes != nil {
 		in, out := &in.Volumes, &out.Volumes
 		*out = make([]VolumeSpec, len(*in))

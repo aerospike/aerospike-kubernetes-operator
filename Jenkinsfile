@@ -238,13 +238,13 @@ boolean isNightly() {
 }
 
 String getVersion() {
-    def prefix = "4.0.2"
+    def prefix = "4.1.0-preview"
     def candidateName = ""
     if(isNightly()) {
         def timestamp = new Date().format("yyyy-MM-dd")
         candidateName =  "nightly-${timestamp}"
     } else {
-        candidateName =  "candidate-${env.BRANCH_NAME}"
+        candidateName =  "${env.BRANCH_NAME}"
     }
 
     def candidateNameMax = 30 - prefix.length()
