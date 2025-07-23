@@ -339,7 +339,7 @@ func (r *SingleClusterReconciler) getFQDNsForCluster() ([]string, error) {
 		rackState := &rackStateList[idx]
 		size := rackState.Size
 		stsName := utils.GetNamespacedNameForSTSOrConfigMap(r.aeroCluster,
-			utils.GetRackIdentifier(rackState.Rack.ID, rackState.Rack.RackSuffix))
+			utils.GetRackIdentifier(rackState.Rack.ID, rackState.Rack.RackRevision))
 
 		for i := int32(0); i < size; i++ {
 			fqdn := getFQDNForPod(r.aeroCluster, getSTSPodName(stsName.Name, i))
