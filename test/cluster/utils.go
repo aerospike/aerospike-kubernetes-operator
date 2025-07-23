@@ -602,13 +602,15 @@ func contains(elems []string, v string) bool {
 }
 
 func getAerospikeConfigFromNode(log logr.Logger, k8sClient client.Client, ctx goctx.Context,
-	clusterNamespacedName types.NamespacedName, configContext string, pod *asdbv1.AerospikePodStatus) (lib.Stats, error) {
+	clusterNamespacedName types.NamespacedName, configContext, podName string) (lib.Stats, error) {
 	aeroCluster, err := getCluster(k8sClient, ctx, clusterNamespacedName)
 	if err != nil {
 		return nil, err
 	}
 
-	host, err := createHost(pod)
+	pod := aeroCluster.Status.Pods[podName]
+
+	host, err := createHost(&pod)
 	if err != nil {
 		return nil, err
 	}
@@ -626,13 +628,15 @@ func getAerospikeConfigFromNode(log logr.Logger, k8sClient client.Client, ctx go
 }
 
 func requestInfoFromNode(log logr.Logger, k8sClient client.Client, ctx goctx.Context,
-	clusterNamespacedName types.NamespacedName, cmd string, pod *asdbv1.AerospikePodStatus) (map[string]string, error) {
+	clusterNamespacedName types.NamespacedName, cmd, podName string) (map[string]string, error) {
 	aeroCluster, err := getCluster(k8sClient, ctx, clusterNamespacedName)
 	if err != nil {
 		return nil, err
 	}
 
-	host, err := createHost(pod)
+	pod := aeroCluster.Status.Pods[podName]
+
+	host, err := createHost(&pod)
 	if err != nil {
 		return nil, err
 	}
