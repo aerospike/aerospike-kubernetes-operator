@@ -71,12 +71,12 @@ func (r *SingleClusterReconciler) getRollingRestartTypeMap(rackState *RackState,
 	restartTypeMap = make(map[string]RestartType)
 	dynamicConfDiffPerPod = make(map[string]asconfig.DynamicConfigMap)
 
-	pods, err := r.getOrderedRackPodList(rackState.Rack.ID, rackState.Rack.RackSuffix)
+	pods, err := r.getOrderedRackPodList(rackState.Rack.ID, rackState.Rack.RackRevision)
 	if err != nil {
 		return nil, nil, fmt.Errorf("failed to list pods: %v", err)
 	}
 
-	confMap, err := r.getConfigMap(utils.GetRackIdentifier(rackState.Rack.ID, rackState.Rack.RackSuffix))
+	confMap, err := r.getConfigMap(utils.GetRackIdentifier(rackState.Rack.ID, rackState.Rack.RackRevision))
 	if err != nil {
 		return nil, nil, err
 	}
@@ -321,7 +321,7 @@ func (r *SingleClusterReconciler) rollingRestartPods(
 
 func (r *SingleClusterReconciler) restartASDOrUpdateAerospikeConf(podName string,
 	operation RestartType) error {
-	rackID, rackSuffix, err := utils.GetRackIDAndSuffixFromPodName(r.aeroCluster.Name, podName)
+	rackID, rackRevision, err := utils.GetRackIDAndRevisionFromPodName(r.aeroCluster.Name, podName)
 	if err != nil {
 		return fmt.Errorf(
 			"failed to get rackID for the pod %s", podName,
@@ -333,7 +333,7 @@ func (r *SingleClusterReconciler) restartASDOrUpdateAerospikeConf(podName string
 		Namespace: r.aeroCluster.Namespace,
 	}
 
-	cmName := utils.GetNamespacedNameForSTSOrConfigMap(r.aeroCluster, utils.GetRackIdentifier(rackID, rackSuffix))
+	cmName := utils.GetNamespacedNameForSTSOrConfigMap(r.aeroCluster, utils.GetRackIdentifier(rackID, rackRevision))
 	initBinary := "/etc/aerospike/akoinit"
 
 	var subCommand string
@@ -760,7 +760,7 @@ func (r *SingleClusterReconciler) cleanupPods(
 	r.Log.Info("Removing pvc for removed pods", "pods", podNames)
 
 	// Delete PVCs if cascadeDelete
-	pvcItems, err := r.getPodsPVCList(podNames, rackState.Rack.ID, rackState.Rack.RackSuffix)
+	pvcItems, err := r.getPodsPVCList(podNames, rackState.Rack.ID, rackState.Rack.RackRevision)
 	if err != nil {
 		return fmt.Errorf("could not find pvc for pods %v: %v", podNames, err)
 	}
@@ -874,14 +874,14 @@ func (r *SingleClusterReconciler) cleanupDanglingPodsRack(sts *appsv1.StatefulSe
 
 	// Find dangling pods in the status of the cluster.
 	for podName := range r.aeroCluster.Status.Pods {
-		rackID, rackSuffix, err := utils.GetRackIDAndSuffixFromPodName(r.aeroCluster.Name, podName)
+		rackID, rackRevision, err := utils.GetRackIDAndRevisionFromPodName(r.aeroCluster.Name, podName)
 		if err != nil {
 			return fmt.Errorf(
 				"failed to get rackID for the pod %s", podName,
 			)
 		}
 
-		if rackID != rackState.Rack.ID || rackSuffix != rackState.Rack.RackSuffix {
+		if rackID != rackState.Rack.ID || rackRevision != rackState.Rack.RackRevision {
 			// This pod is from other rack, so skip it
 			continue
 		}
@@ -916,9 +916,9 @@ func (r *SingleClusterReconciler) getIgnorablePods(racksToDelete []asdbv1.Rack, 
 
 	for rackIdx := range racksToDelete {
 		r.Log.Info("Rack to delete found", "rackID",
-			racksToDelete[rackIdx].ID, "rackSuffix", racksToDelete[rackIdx].RackSuffix)
+			racksToDelete[rackIdx].ID, "rackRevision", racksToDelete[rackIdx].RackRevision)
 
-		rackPods, err := r.getRackPodList(racksToDelete[rackIdx].ID, racksToDelete[rackIdx].RackSuffix)
+		rackPods, err := r.getRackPodList(racksToDelete[rackIdx].ID, racksToDelete[rackIdx].RackRevision)
 		if err != nil {
 			return nil, err
 		}
@@ -941,7 +941,7 @@ func (r *SingleClusterReconciler) getIgnorablePods(racksToDelete []asdbv1.Rack, 
 		)
 
 		// TODO: In case of renamed rack, we should consider all the for that rack (old as well new pods)
-		podList, err := r.getRackPodList(rack.Rack.ID, rack.Rack.RackSuffix)
+		podList, err := r.getRackPodList(rack.Rack.ID, rack.Rack.RackRevision)
 		if err != nil {
 			return nil, err
 		}
@@ -981,9 +981,9 @@ func (r *SingleClusterReconciler) getIgnorablePods(racksToDelete []asdbv1.Rack, 
 	return ignorablePodNames, nil
 }
 func (r *SingleClusterReconciler) getPodsPVCList(
-	podNames []string, rackID int, rackSuffix string,
+	podNames []string, rackID int, rackRevision string,
 ) ([]corev1.PersistentVolumeClaim, error) {
-	pvcListItems, err := r.getRackPVCList(rackID, rackSuffix)
+	pvcListItems, err := r.getRackPVCList(rackID, rackRevision)
 	if err != nil {
 		return nil, err
 	}

@@ -123,12 +123,12 @@ func IsPodTerminating(pod *corev1.Pod) bool {
 	return pod.DeletionTimestamp != nil
 }
 
-// GetRackIDAndSuffixFromPodName returns the rack id given a pod name.
-func GetRackIDAndSuffixFromPodName(clusterName, podName string) (rackID int, rackSuffix string, err error) {
+// GetRackIDAndRevisionFromPodName returns the rack id and revision from a given pod name.
+func GetRackIDAndRevisionFromPodName(clusterName, podName string) (rackID int, rackRevision string, err error) {
 	prefix := clusterName + "-"
 
 	rackAndPodIndexPart := strings.TrimPrefix(podName, prefix)
-	// parts contains only the rack-id, rack-suffix (optional) pod-index.
+	// parts contain only the rack-id, rack-revision (optional) pod-index.
 	parts := strings.Split(rackAndPodIndexPart, "-")
 
 	if len(parts) < 2 {
@@ -142,16 +142,16 @@ func GetRackIDAndSuffixFromPodName(clusterName, podName string) (rackID int, rac
 	// The rack ID is always the first part.
 	rackIDStr := parts[0]
 
-	// The rack suffix is everything in between the rack ID and the pod index.
+	// The rack-revision is everything in between the rack ID and the pod index.
 	if len(parts) == 2 {
 		// Format: <cluster-name>-<rack-id>-<pod-index>
 		// Example: parts is ["0", "0"]
-		rackSuffix = ""
+		rackRevision = ""
 	} else {
-		// Format: <cluster-name>-<rack-id>-<rack-suffix>-<pod-index>
+		// Format: <cluster-name>-<rack-id>-<rack-revision>-<pod-index>
 		// Example: parts is ["0", "a", "0"]
-		// Suffix should be "a"
-		rackSuffix = strings.Join(parts[1:len(parts)-1], "-")
+		// Revision should be "a"
+		rackRevision = strings.Join(parts[1:len(parts)-1], "-")
 	}
 
 	rackID, err = strconv.Atoi(rackIDStr)
@@ -159,7 +159,7 @@ func GetRackIDAndSuffixFromPodName(clusterName, podName string) (rackID int, rac
 		return 0, "", fmt.Errorf("failed to parse rackID from pod name %q: %w", podName, err)
 	}
 
-	return rackID, rackSuffix, nil
+	return rackID, rackRevision, nil
 }
 
 // Exec executes a non-interactive command on a pod.

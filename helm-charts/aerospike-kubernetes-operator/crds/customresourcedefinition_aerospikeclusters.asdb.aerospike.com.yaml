@@ -7819,10 +7819,10 @@ spec:
                             RackLabel for setting rack affinity.
                             Rack pods will be deployed in k8s nodes having rackLabel {aerospike.com/rack-label: <rack-label>}
                           type: string
-                        rackSuffix:
+                        rackRevision:
                           description: |-
-                            RackSuffix to use along with rack id. This can be used to provision a new rack with same id but different spec.
-                            This suffix will be appended to the rackID for Rack resource naming.
+                            RackRevision to use along with rack id. This can be used to provision a new rack with same id but different spec.
+                            This revision will be appended to the rackID for Rack resource naming.
                           type: string
                         region:
                           description: Region name for setting rack affinity. Rack
@@ -17096,10 +17096,10 @@ spec:
                             RackLabel for setting rack affinity.
                             Rack pods will be deployed in k8s nodes having rackLabel {aerospike.com/rack-label: <rack-label>}
                           type: string
-                        rackSuffix:
+                        rackRevision:
                           description: |-
-                            RackSuffix to use along with rack id. This can be used to provision a new rack with same id but different spec.
-                            This suffix will be appended to the rackID for Rack resource naming.
+                            RackRevision to use along with rack id. This can be used to provision a new rack with same id but different spec.
+                            This revision will be appended to the rackID for Rack resource naming.
                           type: string
                         region:
                           description: Region name for setting rack affinity. Rack

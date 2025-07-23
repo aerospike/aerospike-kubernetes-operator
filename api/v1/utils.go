@@ -84,7 +84,7 @@ const (
 	AerospikeAppLabelValue                         = "aerospike-cluster"
 	AerospikeCustomResourceLabel                   = "aerospike.com/cr"
 	AerospikeRackIDLabel                           = "aerospike.com/rack-id"
-	AerospikeRackSuffixLabel                       = "aerospike.com/rack-suffix"
+	AerospikeRackRevisionLabel                     = "aerospike.com/rack-revision"
 	AerospikeAPIVersionLabel                       = "aerospike.com/api-version"
 	AerospikeAPIVersion                            = "v1"
 )

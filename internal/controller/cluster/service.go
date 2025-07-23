@@ -456,7 +456,7 @@ func (r *SingleClusterReconciler) getLBServicePort(loadBalancer *asdbv1.LoadBala
 }
 
 func (r *SingleClusterReconciler) cleanupDanglingPodServices(rackState *RackState) error {
-	podList, err := r.getRackPodList(rackState.Rack.ID, rackState.Rack.RackSuffix)
+	podList, err := r.getRackPodList(rackState.Rack.ID, rackState.Rack.RackRevision)
 	if err != nil {
 		return err
 	}
