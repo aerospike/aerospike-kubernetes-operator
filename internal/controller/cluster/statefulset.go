@@ -239,28 +239,6 @@ func (r *SingleClusterReconciler) getReadinessProbe() *corev1.Probe {
 	}
 }
 
-func (r *SingleClusterReconciler) isReadinessPortUpdated(pod *corev1.Pod) bool {
-	for idx := range pod.Spec.Containers {
-		container := &pod.Spec.Containers[idx]
-
-		if container.Name != asdbv1.AerospikeServerContainerName {
-			continue
-		}
-
-		// ignore if readiness probe is not set. Avoid rolling restart for old versions of operator
-		if container.ReadinessProbe == nil {
-			return false
-		}
-
-		if container.ReadinessProbe.TCPSocket != nil &&
-			container.ReadinessProbe.TCPSocket.String() != r.getReadinessProbe().TCPSocket.String() {
-			return true
-		}
-	}
-
-	return false
-}
-
 func (r *SingleClusterReconciler) deleteSTS(st *appsv1.StatefulSet) error {
 	r.Log.Info("Delete statefulset", "namespace", st.Namespace, "name", st.Name)
 	// No need to do cleanup pods after deleting sts

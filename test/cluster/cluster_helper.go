@@ -498,7 +498,7 @@ func validateAerospikeConfigServiceClusterUpdate(
 		// TODO:
 		// We may need to check for all keys in aerospikeConfig in rack
 		// but we know that we are changing for service only for now
-		host, err := createHost(&pod)
+		host, err := createHost(&pod, "service")
 		if err != nil {
 			return err
 		}
@@ -563,7 +563,7 @@ func validateMigrateFillDelay(
 		return fmt.Errorf("pod %s missing from the status", firstPodName)
 	}
 
-	host, err := createHost(&firstPod)
+	host, err := createHost(&firstPod, "service")
 	if err != nil {
 		return err
 	}

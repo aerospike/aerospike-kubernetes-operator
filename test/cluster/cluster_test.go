@@ -20,7 +20,7 @@ import (
 	lib "github.com/aerospike/aerospike-management-lib"
 )
 
-var _ = Describe(
+var _ = FDescribe(
 	"AerospikeCluster", func() {
 
 		ctx := goctx.TODO()
@@ -95,206 +95,169 @@ var _ = Describe(
 						NetworkValidationTest(ctx)
 					},
 				)
-				//Context(
-				//	"AdminPort", func() {
-				//		adminPortTests(ctx)
-				//	},
-				//)
+				Context(
+					"AdminPort", func() {
+						adminPortTests(ctx)
+					},
+				)
 			},
 		)
 	},
 )
 
-//func adminPortTests(ctx goctx.Context) {
-//	Context(
-//		"AdminPort", func() {
-//			It(
-//				"Should create cluster with admin port and connect successfully",
-//				func() {
-//					clusterName := fmt.Sprintf("admin-port-cluster-%d", GinkgoParallelProcess())
-//					clusterNamespacedName := test.GetNamespacedName(
-//						clusterName, namespace,
-//					)
-//
-//					// Create cluster with admin port configuration
-//					aeroCluster := createDummyAerospikeCluster(clusterNamespacedName, 2)
-//
-//					// Add admin port configuration to network
-//					networkConf := aeroCluster.Spec.AerospikeConfig.Value["network"].(map[string]interface{})
-//					networkConf["admin"] = map[string]interface{}{
-//						"port": 3003,
-//					}
-//					aeroCluster.Spec.AerospikeConfig.Value["network"] = networkConf
-//
-//					Expect(DeployCluster(k8sClient, ctx, aeroCluster)).ToNot(HaveOccurred())
-//
-//					// Wait for cluster to be ready
-//					err := waitForAerospikeCluster(
-//						k8sClient, ctx, aeroCluster, int(aeroCluster.Spec.Size), retryInterval,
-//						getTimeout(2), []asdbv1.AerospikeClusterPhase{asdbv1.AerospikeClusterCompleted},
-//					)
-//					Expect(err).ToNot(HaveOccurred())
-//
-//					// Verify admin port is configured in Aerospike
-//					aeroCluster, err = getCluster(k8sClient, ctx, clusterNamespacedName)
-//					Expect(err).ToNot(HaveOccurred())
-//
-//					// Get a pod to check admin port configuration
-//					pod := aeroCluster.Status.Pods["admin-port-cluster-0-0"]
-//					adminConfig, err := getAerospikeConfigFromNode(logger, k8sClient, ctx, clusterNamespacedName, "network", &pod)
-//					Expect(err).ToNot(HaveOccurred())
-//
-//					// Verify admin port is set to 8080
-//					adminSection := adminConfig["admin"].(map[string]interface{})
-//					Expect(adminSection["port"]).To(Equal(float64(3003)))
-//
-//					// Test connection using client policy with admin port
-//					// Note: This would require a client library to actually test the connection
-//					// For now, we'll verify the configuration is correct
-//					By("Verifying admin port configuration is correct")cccc
-//					Expect(adminSection["port"]).To(Equal(float64(8080)))
-//
-//					// Cleanup
-//					Expect(DeleteCluster(k8sClient, ctx, aeroCluster)).ToNot(HaveOccurred())
-//					Expect(CleanupPVC(k8sClient, aeroCluster.Namespace, aeroCluster.Name)).ToNot(HaveOccurred())
-//				},
-//			)
-//
-//			It(
-//				"Should update cluster by adding admin connection",
-//				func() {
-//					clusterName := fmt.Sprintf("admin-port-update-cluster-%d", GinkgoParallelProcess())
-//					clusterNamespacedName := test.GetNamespacedName(
-//						clusterName, namespace,
-//					)
-//
-//					// Create cluster without admin port initially
-//					aeroCluster := createDummyAerospikeCluster(clusterNamespacedName, 2)
-//					Expect(DeployCluster(k8sClient, ctx, aeroCluster)).ToNot(HaveOccurred())
-//
-//					// Wait for cluster to be ready
-//					err := waitForAerospikeCluster(
-//						k8sClient, ctx, aeroCluster, int(aeroCluster.Spec.Size), retryInterval,
-//						getTimeout(2), []asdbv1.AerospikeClusterPhase{asdbv1.AerospikeClusterCompleted},
-//					)
-//					Expect(err).ToNot(HaveOccurred())
-//
-//					// Update cluster to add admin port
-//					aeroCluster, err = getCluster(k8sClient, ctx, clusterNamespacedName)
-//					Expect(err).ToNot(HaveOccurred())
-//
-//					networkConf := aeroCluster.Spec.AerospikeConfig.Value["network"].(map[string]interface{})
-//					networkConf["admin"] = map[string]interface{}{
-//						"port": 3003,
-//					}
-//					aeroCluster.Spec.AerospikeConfig.Value["network"] = networkConf
-//
-//					err = updateCluster(k8sClient, ctx, aeroCluster)
-//					Expect(err).ToNot(HaveOccurred())
-//
-//					// Wait for cluster to be ready after update
-//					err = waitForAerospikeCluster(
-//						k8sClient, ctx, aeroCluster, int(aeroCluster.Spec.Size), retryInterval,
-//						getTimeout(2), []asdbv1.AerospikeClusterPhase{asdbv1.AerospikeClusterCompleted},
-//					)
-//					Expect(err).ToNot(HaveOccurred())
-//
-//					// Verify admin port is now configured
-//					aeroCluster, err = getCluster(k8sClient, ctx, clusterNamespacedName)
-//					Expect(err).ToNot(HaveOccurred())
-//
-//					pod := aeroCluster.Status.Pods["admin-port-update-cluster-0-0"]
-//					adminConfig, err := getAerospikeConfigFromNode(logger, k8sClient, ctx, clusterNamespacedName, "network", &pod)
-//					Expect(err).ToNot(HaveOccurred())
-//
-//					// Verify admin port is set to 3003
-//					adminSection := adminConfig["admin"].(map[string]interface{})
-//					Expect(adminSection["port"]).To(Equal(float64(3003)))
-//
-//					By("Verifying admin port was added successfully")cccc
-//					Expect(adminSection["port"]).To(Equal(float64(8080)))
-//
-//					// Cleanup
-//					Expect(DeleteCluster(k8sClient, ctx, aeroCluster)).ToNot(HaveOccurred())
-//					Expect(CleanupPVC(k8sClient, aeroCluster.Namespace, aeroCluster.Name)).ToNot(HaveOccurred())
-//				},
-//			)
-//
-//			It(
-//				"Should update cluster by removing admin connection",
-//				func() {
-//					clusterName := fmt.Sprintf("admin-port-remove-cluster-%d", GinkgoParallelProcess())
-//					clusterNamespacedName := test.GetNamespacedName(
-//						clusterName, namespace,
-//					)
-//
-//					// Create cluster with admin port initially
-//					aeroCluster := createDummyAerospikeCluster(clusterNamespacedName, 2)
-//
-//					networkConf := aeroCluster.Spec.AerospikeConfig.Value["network"].(map[string]interface{})
-//					networkConf["admin"] = map[string]interface{}{
-//						"port": 3003,
-//					}
-//					aeroCluster.Spec.AerospikeConfig.Value["network"] = networkConf
-//
-//					Expect(DeployCluster(k8sClient, ctx, aeroCluster)).ToNot(HaveOccurred())
-//
-//					// Wait for cluster to be ready
-//					err := waitForAerospikeCluster(
-//						k8sClient, ctx, aeroCluster, int(aeroCluster.Spec.Size), retryInterval,
-//						getTimeout(2), []asdbv1.AerospikeClusterPhase{asdbv1.AerospikeClusterCompleted},
-//					)
-//					Expect(err).ToNot(HaveOccurred())
-//
-//					// Verify admin port is initially configured
-//					aeroCluster, err = getCluster(k8sClient, ctx, clusterNamespacedName)
-//					Expect(err).ToNot(HaveOccurred())
-//
-//					pod := aeroCluster.Status.Pods["admin-port-remove-cluster-0-0"]
-//					adminConfig, err := getAerospikeConfigFromNode(logger, k8sClient, ctx, clusterNamespacedName, "network", &pod)
-//					Expect(err).ToNot(HaveOccurred())
-//
-//					adminSection := adminConfig["admin"].(map[string]interface{})
-//					Expect(adminSection["port"]).To(Equal(float64(3003)))
-//
-//					// Update cluster to remove admin port
-//					networkConf = aeroCluster.Spec.AerospikeConfig.Value["network"].(map[string]interface{})
-//					delete(networkConf, "admin")
-//					aeroCluster.Spec.AerospikeConfig.Value["network"] = networkConf
-//
-//					err = updateCluster(k8sClient, ctx, aeroCluster)
-//					Expect(err).ToNot(HaveOccurred())
-//
-//					// Wait for cluster to be ready after update
-//					err = waitForAerospikeCluster(
-//						k8sClient, ctx, aeroCluster, int(aeroCluster.Spec.Size), retryInterval,
-//						getTimeout(2), []asdbv1.AerospikeClusterPhase{asdbv1.AerospikeClusterCompleted},
-//					)
-//					Expect(err).ToNot(HaveOccurred())
-//
-//					// Verify admin port is now removed
-//					aeroCluster, err = getCluster(k8sClient, ctx, clusterNamespacedName)
-//					Expect(err).ToNot(HaveOccurred())
-//
-//					pod = aeroCluster.Status.Pods["admin-port-remove-cluster-0-0"]
-//					adminConfig, err = getAerospikeConfigFromNode(logger, k8sClient, ctx, clusterNamespacedName, "network", &pod)
-//					Expect(err).ToNot(HaveOccurred())
-//
-//					// Verify admin section is not present
-//					_, adminExists := adminConfig["admin"]
-//					Expect(adminExists).To(BeFalse())
-//
-//					By("Verifying admin port was removed successfully")
-//					Expect(adminExists).To(BeFalse())ccccc
-//
-//					// Cleanup
-//					Expect(DeleteCluster(k8sClient, ctx, aeroCluster)).ToNot(HaveOccurred())
-//					Expect(CleanupPVC(k8sClient, aeroCluster.Namespace, aeroCluster.Name)).ToNot(HaveOccurred())
-//				},
-//			)
-//		},
-//	)
-//}
+func adminPortTests(ctx goctx.Context) {
+	Context(
+		"AdminPort", func() {
+			aeroCluster := &asdbv1.AerospikeCluster{}
+
+			AfterEach(
+				func() {
+					Expect(DeleteCluster(k8sClient, ctx, aeroCluster)).ToNot(HaveOccurred())
+					Expect(CleanupPVC(k8sClient, aeroCluster.Namespace, aeroCluster.Name)).ToNot(HaveOccurred())
+				},
+			)
+			It(
+				"Should create cluster with admin port and connect successfully",
+				func() {
+					clusterName := fmt.Sprintf("admin-port-cluster-%d", GinkgoParallelProcess())
+					clusterNamespacedName := test.GetNamespacedName(
+						clusterName, namespace,
+					)
+
+					// Create cluster with admin port configuration
+					aeroCluster = createDummyAerospikeCluster(clusterNamespacedName, 2)
+					aeroCluster.Spec.PodSpec.AerospikeInitContainerSpec.ImageRegistryNamespace = ptr.To("tanmayj10")
+					aeroCluster.Spec.PodSpec.AerospikeInitContainerSpec.ImageNameAndTag = "aerospike-kubernetes-init:2.3.0-dev56"
+					aeroCluster.Spec.PodSpec.MultiPodPerHost = ptr.To(false)
+
+					// Add admin port configuration to network
+					networkConf := aeroCluster.Spec.AerospikeConfig.Value["network"].(map[string]interface{})
+					networkConf["admin"] = map[string]interface{}{
+						"port": 3003,
+					}
+					aeroCluster.Spec.AerospikeConfig.Value["network"] = networkConf
+
+					Expect(DeployCluster(k8sClient, ctx, aeroCluster)).ToNot(HaveOccurred())
+
+					// Verify admin port is configured in Aerospike
+					By("Verifying admin port configuration")
+
+					asinfo, err := getASInfo(logger, k8sClient, ctx, clusterNamespacedName, clusterNamespacedName.Name+"-0-0", "admin")
+					Expect(err).ToNot(HaveOccurred())
+
+					confs, err := getAsConfig(asinfo, "network")
+					Expect(err).ToNot(HaveOccurred())
+
+					// Verify admin port is set to 3003
+					network := confs["network"].(lib.Stats)
+					Expect(network["admin.port"]).To(Equal(int64(3003)))
+				},
+			)
+
+			It(
+				"Should update cluster by adding admin connection",
+				func() {
+					var err error
+
+					clusterName := fmt.Sprintf("admin-port-update-cluster-%d", GinkgoParallelProcess())
+					clusterNamespacedName := test.GetNamespacedName(
+						clusterName, namespace,
+					)
+
+					// Create cluster without admin port initially
+					aeroCluster = createDummyAerospikeCluster(clusterNamespacedName, 2)
+					aeroCluster.Spec.PodSpec.AerospikeInitContainerSpec.ImageRegistryNamespace = ptr.To("tanmayj10")
+					aeroCluster.Spec.PodSpec.AerospikeInitContainerSpec.ImageNameAndTag = "aerospike-kubernetes-init:2.3.0-dev56"
+					aeroCluster.Spec.PodSpec.MultiPodPerHost = ptr.To(false)
+					Expect(DeployCluster(k8sClient, ctx, aeroCluster)).ToNot(HaveOccurred())
+
+					// Update cluster to add admin port
+					aeroCluster, err = getCluster(k8sClient, ctx, clusterNamespacedName)
+					Expect(err).ToNot(HaveOccurred())
+
+					networkConf := aeroCluster.Spec.AerospikeConfig.Value["network"].(map[string]interface{})
+					networkConf["admin"] = map[string]interface{}{
+						"port": 3003,
+					}
+					aeroCluster.Spec.AerospikeConfig.Value["network"] = networkConf
+
+					err = updateCluster(k8sClient, ctx, aeroCluster)
+					Expect(err).ToNot(HaveOccurred())
+
+					// Verify admin port is configured in Aerospike
+					By("Verifying admin port configuration")
+
+					asinfo, err := getASInfo(logger, k8sClient, ctx, clusterNamespacedName, clusterNamespacedName.Name+"-0-0", "admin")
+					Expect(err).ToNot(HaveOccurred())
+
+					confs, err := getAsConfig(asinfo, "network")
+					Expect(err).ToNot(HaveOccurred())
+
+					// Verify admin port is set to 3003
+					network := confs["network"].(lib.Stats)
+					Expect(network["admin.port"]).To(Equal(int64(3003)))
+				},
+			)
+
+			It(
+				"Should update cluster by removing admin connection",
+				func() {
+					clusterName := fmt.Sprintf("admin-port-remove-cluster-%d", GinkgoParallelProcess())
+					clusterNamespacedName := test.GetNamespacedName(
+						clusterName, namespace,
+					)
+
+					// Create cluster with admin port initially
+					aeroCluster = createDummyAerospikeCluster(clusterNamespacedName, 2)
+					aeroCluster.Spec.PodSpec.AerospikeInitContainerSpec.ImageRegistryNamespace = ptr.To("tanmayj10")
+					aeroCluster.Spec.PodSpec.AerospikeInitContainerSpec.ImageNameAndTag = "aerospike-kubernetes-init:2.3.0-dev56"
+
+					networkConf := aeroCluster.Spec.AerospikeConfig.Value["network"].(map[string]interface{})
+					networkConf["admin"] = map[string]interface{}{
+						"port": 3003,
+					}
+					aeroCluster.Spec.AerospikeConfig.Value["network"] = networkConf
+
+					Expect(DeployCluster(k8sClient, ctx, aeroCluster)).ToNot(HaveOccurred())
+
+					// Verify admin port is initially configured
+					By("Verifying admin port configuration")
+
+					asinfo, err := getASInfo(logger, k8sClient, ctx, clusterNamespacedName, clusterNamespacedName.Name+"-0-0", "admin")
+					Expect(err).ToNot(HaveOccurred())
+
+					confs, err := getAsConfig(asinfo, "network")
+					Expect(err).ToNot(HaveOccurred())
+
+					// Verify admin port is set to 3003
+					network := confs["network"].(lib.Stats)
+					Expect(network["admin.port"]).To(Equal(int64(3003)))
+
+					// Update cluster to remove admin port
+					networkConf = aeroCluster.Spec.AerospikeConfig.Value["network"].(map[string]interface{})
+					delete(networkConf, "admin")
+					aeroCluster.Spec.AerospikeConfig.Value["network"] = networkConf
+
+					err = updateCluster(k8sClient, ctx, aeroCluster)
+					Expect(err).ToNot(HaveOccurred())
+
+					// Verify admin port
+					By("Verifying admin port configuration")
+
+					asinfo, err = getASInfo(logger, k8sClient, ctx, clusterNamespacedName,
+						clusterNamespacedName.Name+"-0-0", "service")
+					Expect(err).ToNot(HaveOccurred())
+
+					confs, err = getAsConfig(asinfo, "network")
+					Expect(err).ToNot(HaveOccurred())
+					// Verify admin port is removed
+					network = confs["network"].(lib.Stats)
+					Expect(network["admin.port"]).To(Equal(int64(0)))
+				},
+			)
+		},
+	)
+}
 
 // Network-related validation tests
 func NetworkValidationTest(ctx goctx.Context) {

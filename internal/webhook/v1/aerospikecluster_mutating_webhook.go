@@ -595,7 +595,7 @@ func setDefaultNetworkConf(
 	)
 
 	// Fabric section
-	if _, ok := networkConf["fabric"]; !ok {
+	if _, ok = networkConf["fabric"]; !ok {
 		return fmt.Errorf("aerospikeConfig.network.fabric cannot be nil")
 	}
 

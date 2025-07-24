@@ -1075,7 +1075,7 @@ func getAerospikeConfigFromNodeAndSpec(aeroCluster *asdbv1.AerospikeCluster) (fl
 
 	pod := aeroCluster.Status.Pods[pods.Items[0].Name]
 
-	host, err := createHost(&pod)
+	host, err := createHost(&pod, "service")
 	if err != nil {
 		return nil, nil, err
 	}

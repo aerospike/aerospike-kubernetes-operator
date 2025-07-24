@@ -833,6 +833,7 @@ func validateNetworkConnectionUpdate(oldConf, newConf map[string]interface{}, co
 	// Extract network configs safely
 	oldNetwork, oldOk := oldConf["network"].(map[string]interface{})
 	newNetwork, newOk := newConf["network"].(map[string]interface{})
+
 	if !oldOk || !newOk {
 		return fmt.Errorf("invalid network configuration structure")
 	}
