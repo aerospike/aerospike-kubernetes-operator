@@ -34,7 +34,7 @@ import (
 const (
 	baseImage           = "aerospike/aerospike-server-enterprise"
 	nextServerVersion   = "8.0.0.2_1"
-	latestServerVersion = "8.1.0.0-rc3"
+	latestServerVersion = "8.0.0.2"
 	invalidVersion      = "3.0.0.4"
 
 	post6Version = "7.0.0.0"
