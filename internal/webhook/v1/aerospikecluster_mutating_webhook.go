@@ -599,6 +599,17 @@ func setDefaultNetworkConf(
 		return fmt.Errorf("aerospikeConfig.network.fabric cannot be nil")
 	}
 
+	// Admin section is optional, so it can be nil
+	if _, ok = networkConf["admin"]; ok {
+		_, ok := networkConf["admin"].(map[string]interface{})
+		if !ok {
+			return fmt.Errorf(
+				"aerospikeConfig.network.admin not a valid map %v",
+				networkConf["admin"],
+			)
+		}
+	}
+
 	return addOperatorClientNameIfNeeded(
 		asLog, serviceConf, configSpec,
 		clientCertSpec,

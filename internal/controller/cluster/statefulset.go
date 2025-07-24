@@ -84,10 +84,12 @@ var defaultContainerPorts = map[string]PortInfo{
 	asdbv1.AdminPortName: {
 		connectionType: "admin",
 		configParam:    "port",
+		exposedOnHost:  true,
 	},
 	asdbv1.AdminTLSPortName: {
 		connectionType: "admin",
 		configParam:    "tls-port",
+		exposedOnHost:  true,
 	},
 }
 
@@ -146,7 +148,7 @@ func (r *SingleClusterReconciler) createSTS(
 						{
 							Name:            asdbv1.AerospikeInitContainerName,
 							Image:           asdbv1.GetAerospikeInitContainerImage(r.aeroCluster),
-							ImagePullPolicy: corev1.PullIfNotPresent,
+							ImagePullPolicy: corev1.PullAlways,
 							VolumeMounts:    getDefaultAerospikeInitContainerVolumeMounts(),
 							Env: append(
 								envVarList, []corev1.EnvVar{

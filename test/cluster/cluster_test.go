@@ -63,11 +63,6 @@ var _ = Describe(
 			},
 		)
 		Context(
-			"UpdateTLSCluster", func() {
-				UpdateTLSClusterTest(ctx)
-			},
-		)
-		Context(
 			"UpdateAerospikeCluster", func() {
 				UpdateClusterTest(ctx)
 			},
@@ -87,8 +82,547 @@ var _ = Describe(
 				ValidateAerospikeBenchmarkConfigs(ctx)
 			},
 		)
+		// Network-related tests
+		Context(
+			"Network", func() {
+				Context(
+					"UpdateTLSCluster", func() {
+						UpdateTLSClusterTest(ctx)
+					},
+				)
+				Context(
+					"NetworkValidation", func() {
+						NetworkValidationTest(ctx)
+					},
+				)
+				//Context(
+				//	"AdminPort", func() {
+				//		adminPortTests(ctx)
+				//	},
+				//)
+			},
+		)
 	},
 )
+
+//func adminPortTests(ctx goctx.Context) {
+//	Context(
+//		"AdminPort", func() {
+//			It(
+//				"Should create cluster with admin port and connect successfully",
+//				func() {
+//					clusterName := fmt.Sprintf("admin-port-cluster-%d", GinkgoParallelProcess())
+//					clusterNamespacedName := test.GetNamespacedName(
+//						clusterName, namespace,
+//					)
+//
+//					// Create cluster with admin port configuration
+//					aeroCluster := createDummyAerospikeCluster(clusterNamespacedName, 2)
+//
+//					// Add admin port configuration to network
+//					networkConf := aeroCluster.Spec.AerospikeConfig.Value["network"].(map[string]interface{})
+//					networkConf["admin"] = map[string]interface{}{
+//						"port": 3003,
+//					}
+//					aeroCluster.Spec.AerospikeConfig.Value["network"] = networkConf
+//
+//					Expect(DeployCluster(k8sClient, ctx, aeroCluster)).ToNot(HaveOccurred())
+//
+//					// Wait for cluster to be ready
+//					err := waitForAerospikeCluster(
+//						k8sClient, ctx, aeroCluster, int(aeroCluster.Spec.Size), retryInterval,
+//						getTimeout(2), []asdbv1.AerospikeClusterPhase{asdbv1.AerospikeClusterCompleted},
+//					)
+//					Expect(err).ToNot(HaveOccurred())
+//
+//					// Verify admin port is configured in Aerospike
+//					aeroCluster, err = getCluster(k8sClient, ctx, clusterNamespacedName)
+//					Expect(err).ToNot(HaveOccurred())
+//
+//					// Get a pod to check admin port configuration
+//					pod := aeroCluster.Status.Pods["admin-port-cluster-0-0"]
+//					adminConfig, err := getAerospikeConfigFromNode(logger, k8sClient, ctx, clusterNamespacedName, "network", &pod)
+//					Expect(err).ToNot(HaveOccurred())
+//
+//					// Verify admin port is set to 8080
+//					adminSection := adminConfig["admin"].(map[string]interface{})
+//					Expect(adminSection["port"]).To(Equal(float64(3003)))
+//
+//					// Test connection using client policy with admin port
+//					// Note: This would require a client library to actually test the connection
+//					// For now, we'll verify the configuration is correct
+//					By("Verifying admin port configuration is correct")cccc
+//					Expect(adminSection["port"]).To(Equal(float64(8080)))
+//
+//					// Cleanup
+//					Expect(DeleteCluster(k8sClient, ctx, aeroCluster)).ToNot(HaveOccurred())
+//					Expect(CleanupPVC(k8sClient, aeroCluster.Namespace, aeroCluster.Name)).ToNot(HaveOccurred())
+//				},
+//			)
+//
+//			It(
+//				"Should update cluster by adding admin connection",
+//				func() {
+//					clusterName := fmt.Sprintf("admin-port-update-cluster-%d", GinkgoParallelProcess())
+//					clusterNamespacedName := test.GetNamespacedName(
+//						clusterName, namespace,
+//					)
+//
+//					// Create cluster without admin port initially
+//					aeroCluster := createDummyAerospikeCluster(clusterNamespacedName, 2)
+//					Expect(DeployCluster(k8sClient, ctx, aeroCluster)).ToNot(HaveOccurred())
+//
+//					// Wait for cluster to be ready
+//					err := waitForAerospikeCluster(
+//						k8sClient, ctx, aeroCluster, int(aeroCluster.Spec.Size), retryInterval,
+//						getTimeout(2), []asdbv1.AerospikeClusterPhase{asdbv1.AerospikeClusterCompleted},
+//					)
+//					Expect(err).ToNot(HaveOccurred())
+//
+//					// Update cluster to add admin port
+//					aeroCluster, err = getCluster(k8sClient, ctx, clusterNamespacedName)
+//					Expect(err).ToNot(HaveOccurred())
+//
+//					networkConf := aeroCluster.Spec.AerospikeConfig.Value["network"].(map[string]interface{})
+//					networkConf["admin"] = map[string]interface{}{
+//						"port": 3003,
+//					}
+//					aeroCluster.Spec.AerospikeConfig.Value["network"] = networkConf
+//
+//					err = updateCluster(k8sClient, ctx, aeroCluster)
+//					Expect(err).ToNot(HaveOccurred())
+//
+//					// Wait for cluster to be ready after update
+//					err = waitForAerospikeCluster(
+//						k8sClient, ctx, aeroCluster, int(aeroCluster.Spec.Size), retryInterval,
+//						getTimeout(2), []asdbv1.AerospikeClusterPhase{asdbv1.AerospikeClusterCompleted},
+//					)
+//					Expect(err).ToNot(HaveOccurred())
+//
+//					// Verify admin port is now configured
+//					aeroCluster, err = getCluster(k8sClient, ctx, clusterNamespacedName)
+//					Expect(err).ToNot(HaveOccurred())
+//
+//					pod := aeroCluster.Status.Pods["admin-port-update-cluster-0-0"]
+//					adminConfig, err := getAerospikeConfigFromNode(logger, k8sClient, ctx, clusterNamespacedName, "network", &pod)
+//					Expect(err).ToNot(HaveOccurred())
+//
+//					// Verify admin port is set to 3003
+//					adminSection := adminConfig["admin"].(map[string]interface{})
+//					Expect(adminSection["port"]).To(Equal(float64(3003)))
+//
+//					By("Verifying admin port was added successfully")cccc
+//					Expect(adminSection["port"]).To(Equal(float64(8080)))
+//
+//					// Cleanup
+//					Expect(DeleteCluster(k8sClient, ctx, aeroCluster)).ToNot(HaveOccurred())
+//					Expect(CleanupPVC(k8sClient, aeroCluster.Namespace, aeroCluster.Name)).ToNot(HaveOccurred())
+//				},
+//			)
+//
+//			It(
+//				"Should update cluster by removing admin connection",
+//				func() {
+//					clusterName := fmt.Sprintf("admin-port-remove-cluster-%d", GinkgoParallelProcess())
+//					clusterNamespacedName := test.GetNamespacedName(
+//						clusterName, namespace,
+//					)
+//
+//					// Create cluster with admin port initially
+//					aeroCluster := createDummyAerospikeCluster(clusterNamespacedName, 2)
+//
+//					networkConf := aeroCluster.Spec.AerospikeConfig.Value["network"].(map[string]interface{})
+//					networkConf["admin"] = map[string]interface{}{
+//						"port": 3003,
+//					}
+//					aeroCluster.Spec.AerospikeConfig.Value["network"] = networkConf
+//
+//					Expect(DeployCluster(k8sClient, ctx, aeroCluster)).ToNot(HaveOccurred())
+//
+//					// Wait for cluster to be ready
+//					err := waitForAerospikeCluster(
+//						k8sClient, ctx, aeroCluster, int(aeroCluster.Spec.Size), retryInterval,
+//						getTimeout(2), []asdbv1.AerospikeClusterPhase{asdbv1.AerospikeClusterCompleted},
+//					)
+//					Expect(err).ToNot(HaveOccurred())
+//
+//					// Verify admin port is initially configured
+//					aeroCluster, err = getCluster(k8sClient, ctx, clusterNamespacedName)
+//					Expect(err).ToNot(HaveOccurred())
+//
+//					pod := aeroCluster.Status.Pods["admin-port-remove-cluster-0-0"]
+//					adminConfig, err := getAerospikeConfigFromNode(logger, k8sClient, ctx, clusterNamespacedName, "network", &pod)
+//					Expect(err).ToNot(HaveOccurred())
+//
+//					adminSection := adminConfig["admin"].(map[string]interface{})
+//					Expect(adminSection["port"]).To(Equal(float64(3003)))
+//
+//					// Update cluster to remove admin port
+//					networkConf = aeroCluster.Spec.AerospikeConfig.Value["network"].(map[string]interface{})
+//					delete(networkConf, "admin")
+//					aeroCluster.Spec.AerospikeConfig.Value["network"] = networkConf
+//
+//					err = updateCluster(k8sClient, ctx, aeroCluster)
+//					Expect(err).ToNot(HaveOccurred())
+//
+//					// Wait for cluster to be ready after update
+//					err = waitForAerospikeCluster(
+//						k8sClient, ctx, aeroCluster, int(aeroCluster.Spec.Size), retryInterval,
+//						getTimeout(2), []asdbv1.AerospikeClusterPhase{asdbv1.AerospikeClusterCompleted},
+//					)
+//					Expect(err).ToNot(HaveOccurred())
+//
+//					// Verify admin port is now removed
+//					aeroCluster, err = getCluster(k8sClient, ctx, clusterNamespacedName)
+//					Expect(err).ToNot(HaveOccurred())
+//
+//					pod = aeroCluster.Status.Pods["admin-port-remove-cluster-0-0"]
+//					adminConfig, err = getAerospikeConfigFromNode(logger, k8sClient, ctx, clusterNamespacedName, "network", &pod)
+//					Expect(err).ToNot(HaveOccurred())
+//
+//					// Verify admin section is not present
+//					_, adminExists := adminConfig["admin"]
+//					Expect(adminExists).To(BeFalse())
+//
+//					By("Verifying admin port was removed successfully")
+//					Expect(adminExists).To(BeFalse())ccccc
+//
+//					// Cleanup
+//					Expect(DeleteCluster(k8sClient, ctx, aeroCluster)).ToNot(HaveOccurred())
+//					Expect(CleanupPVC(k8sClient, aeroCluster.Namespace, aeroCluster.Name)).ToNot(HaveOccurred())
+//				},
+//			)
+//		},
+//	)
+//}
+
+// Network-related validation tests
+func NetworkValidationTest(ctx goctx.Context) {
+	Context(
+		"NetworkValidation", func() {
+			Context(
+				"DeployValidation", func() {
+					networkDeployValidationTest(ctx)
+				},
+			)
+			Context(
+				"UpdateValidation", func() {
+					networkUpdateValidationTest(ctx)
+				},
+			)
+		},
+	)
+}
+
+func networkDeployValidationTest(ctx goctx.Context) {
+	Context(
+		"Validation", func() {
+			clusterName := fmt.Sprintf("invalid-network-cluster-%d", GinkgoParallelProcess())
+			clusterNamespacedName := test.GetNamespacedName(
+				clusterName, namespace,
+			)
+
+			It(
+				"NetworkConf: should fail for setting network conf/tls network conf",
+				func() {
+					// Network conf
+					// "port"
+					// "access-port"
+					// "access-addresses"
+					// "alternate-access-port"
+					// "alternate-access-addresses"
+					aeroCluster := createDummyAerospikeCluster(
+						clusterNamespacedName, 1,
+					)
+					networkConf := map[string]interface{}{
+						"service": map[string]interface{}{
+							"port":             serviceNonTLSPort,
+							"access-addresses": []string{"<access_addresses>"},
+						},
+					}
+					aeroCluster.Spec.AerospikeConfig.Value["network"] = networkConf
+					Expect(DeployCluster(k8sClient, ctx, aeroCluster)).Should(HaveOccurred())
+
+					// if "tls-name" in conf
+					// "tls-port"
+					// "tls-access-port"
+					// "tls-access-addresses"
+					// "tls-alternate-access-port"
+					// "tls-alternate-access-addresses"
+					aeroCluster = createDummyAerospikeCluster(
+						clusterNamespacedName, 1,
+					)
+					networkConf = map[string]interface{}{
+						"service": map[string]interface{}{
+							"tls-name":             "aerospike-a-0.test-runner",
+							"tls-port":             3001,
+							"tls-access-addresses": []string{"<tls-access-addresses>"},
+						},
+					}
+					aeroCluster.Spec.AerospikeConfig.Value["network"] = networkConf
+					Expect(DeployCluster(k8sClient, ctx, aeroCluster)).Should(HaveOccurred())
+				},
+			)
+
+			It(
+				"WhenTLSExist: should fail for no tls path in storage volume",
+				func() {
+					aeroCluster := createAerospikeClusterPost640(
+						clusterNamespacedName, 1, latestImage,
+					)
+					aeroCluster.Spec.AerospikeConfig.Value["network"] = map[string]interface{}{
+						"tls": []interface{}{
+							map[string]interface{}{
+								"name":      "aerospike-a-0.test-runner",
+								"cert-file": "/randompath/svc_cluster_chain.pem",
+							},
+						},
+					}
+					Expect(DeployCluster(k8sClient, ctx, aeroCluster)).Should(HaveOccurred())
+				},
+			)
+
+			It(
+				"WhenTLSExist: should fail for both ca-file and ca-path in tls",
+				func() {
+					aeroCluster := createAerospikeClusterPost640(
+						clusterNamespacedName, 1, latestImage,
+					)
+					aeroCluster.Spec.AerospikeConfig.Value["network"] = map[string]interface{}{
+						"tls": []interface{}{
+							map[string]interface{}{
+								"name":      "aerospike-a-0.test-runner",
+								"cert-file": "/etc/aerospike/secret/svc_cluster_chain.pem",
+								"key-file":  "/etc/aerospike/secret/svc_key.pem",
+								"ca-file":   "/etc/aerospike/secret/cacert.pem",
+								"ca-path":   "/etc/aerospike/secret/cacerts",
+							},
+						},
+					}
+					Expect(DeployCluster(k8sClient, ctx, aeroCluster)).Should(HaveOccurred())
+				},
+			)
+
+			It(
+				"WhenTLSExist: should fail for ca-file path pointing to Secret Manager",
+				func() {
+					aeroCluster := createAerospikeClusterPost640(
+						clusterNamespacedName, 1, latestImage,
+					)
+					aeroCluster.Spec.AerospikeConfig.Value["network"] = map[string]interface{}{
+						"tls": []interface{}{
+							map[string]interface{}{
+								"name":      "aerospike-a-0.test-runner",
+								"cert-file": "/etc/aerospike/secret/svc_cluster_chain.pem",
+								"key-file":  "/etc/aerospike/secret/svc_key.pem",
+								"ca-file":   "secrets:Test-secret:Key",
+							},
+						},
+					}
+					Expect(DeployCluster(k8sClient, ctx, aeroCluster)).Should(HaveOccurred())
+				},
+			)
+
+			It(
+				"WhenTLSExist: should fail for ca-path pointing to Secret Manager",
+				func() {
+					aeroCluster := createAerospikeClusterPost640(
+						clusterNamespacedName, 1, latestImage,
+					)
+					aeroCluster.Spec.AerospikeConfig.Value["network"] = map[string]interface{}{
+						"tls": []interface{}{
+							map[string]interface{}{
+								"name":      "aerospike-a-0.test-runner",
+								"cert-file": "/etc/aerospike/secret/svc_cluster_chain.pem",
+								"key-file":  "/etc/aerospike/secret/svc_key.pem",
+								"ca-path":   "secrets:Test-secret:Key",
+							},
+						},
+					}
+					Expect(DeployCluster(k8sClient, ctx, aeroCluster)).Should(HaveOccurred())
+				},
+			)
+
+			It(
+				"ServiceConf: should fail for setting node-id/cluster-name",
+				func() {
+					// Service conf
+					// 	"node-id"
+					// 	"cluster-name"
+					aeroCluster := createDummyAerospikeCluster(
+						clusterNamespacedName, 1,
+					)
+					aeroCluster.Spec.AerospikeConfig.Value["service"].(map[string]interface{})["node-id"] = "a1"
+					Expect(DeployCluster(k8sClient, ctx, aeroCluster)).Should(HaveOccurred())
+
+					aeroCluster = createDummyAerospikeCluster(
+						clusterNamespacedName, 1,
+					)
+					aeroCluster.Spec.AerospikeConfig.Value["service"].(map[string]interface{})["cluster-name"] = "cluster-name"
+					Expect(DeployCluster(k8sClient, ctx, aeroCluster)).Should(HaveOccurred())
+				},
+			)
+		},
+	)
+}
+
+func networkUpdateValidationTest(ctx goctx.Context) {
+	Context(
+		"Validation", func() {
+			clusterName := fmt.Sprintf("invalid-network-cluster-%d", GinkgoParallelProcess())
+			clusterNamespacedName := test.GetNamespacedName(
+				clusterName, namespace,
+			)
+
+			BeforeEach(
+				func() {
+					aeroCluster := createDummyAerospikeCluster(
+						clusterNamespacedName, 3,
+					)
+
+					Expect(DeployCluster(k8sClient, ctx, aeroCluster)).ToNot(HaveOccurred())
+				},
+			)
+
+			AfterEach(
+				func() {
+					aeroCluster := &asdbv1.AerospikeCluster{
+						ObjectMeta: metav1.ObjectMeta{
+							Name:      clusterName,
+							Namespace: namespace,
+						},
+					}
+
+					Expect(DeleteCluster(k8sClient, ctx, aeroCluster)).ToNot(HaveOccurred())
+					Expect(CleanupPVC(k8sClient, aeroCluster.Namespace, aeroCluster.Name)).ToNot(HaveOccurred())
+				},
+			)
+
+			It(
+				"UpdateService: should fail for updating non-tls to tls in single step. Cannot be updated",
+				func() {
+					aeroCluster, err := getCluster(
+						k8sClient, ctx, clusterNamespacedName,
+					)
+					Expect(err).ToNot(HaveOccurred())
+
+					network := getNetworkTLSConfig()
+					serviceNetwork := network[asdbv1.ServicePortName].(map[string]interface{})
+					delete(serviceNetwork, "port")
+					network[asdbv1.ServicePortName] = serviceNetwork
+					aeroCluster.Spec.AerospikeConfig.Value["network"] = network
+					aeroCluster.Spec.OperatorClientCertSpec = &asdbv1.AerospikeOperatorClientCertSpec{
+						AerospikeOperatorCertSource: asdbv1.AerospikeOperatorCertSource{
+							SecretCertSource: &asdbv1.AerospikeSecretCertSource{
+								SecretName:         test.AerospikeSecretName,
+								CaCertsFilename:    "cacert.pem",
+								ClientCertFilename: "svc_cluster_chain.pem",
+								ClientKeyFilename:  "svc_key.pem",
+							},
+						},
+					}
+					err = updateCluster(k8sClient, ctx, aeroCluster)
+					Expect(err).Should(HaveOccurred())
+				},
+			)
+
+			It(
+				"NetworkConf: should fail for setting network conf, should fail for setting tls network conf",
+				func() {
+					// Network conf
+					// "port"
+					// "access-port"
+					// "access-addresses"
+					// "alternate-access-port"
+					// "alternate-access-addresses"
+					aeroCluster, err := getCluster(
+						k8sClient, ctx, clusterNamespacedName,
+					)
+					Expect(err).ToNot(HaveOccurred())
+
+					networkConf := map[string]interface{}{
+						"service": map[string]interface{}{
+							"port":             serviceNonTLSPort,
+							"access-addresses": []string{"<access_addresses>"},
+						},
+					}
+					aeroCluster.Spec.AerospikeConfig.Value["network"] = networkConf
+					err = k8sClient.Update(ctx, aeroCluster)
+					Expect(err).Should(HaveOccurred())
+
+					// if "tls-name" in conf
+					// "tls-port"
+					// "tls-access-port"
+					// "tls-access-addresses"
+					// "tls-alternate-access-port"
+					// "tls-alternate-access-addresses"
+					aeroCluster, err = getCluster(
+						k8sClient, ctx, clusterNamespacedName,
+					)
+					Expect(err).ToNot(HaveOccurred())
+
+					networkConf = map[string]interface{}{
+						"service": map[string]interface{}{
+							"tls-name":             "aerospike-a-0.test-runner",
+							"tls-port":             3001,
+							"tls-access-addresses": []string{"<tls-access-addresses>"},
+						},
+					}
+					aeroCluster.Spec.AerospikeConfig.Value["network"] = networkConf
+					err = k8sClient.Update(ctx, aeroCluster)
+					Expect(err).Should(HaveOccurred())
+				},
+			)
+
+			It(
+				"WhenTLSExist: should fail for no tls path in storage volumes",
+				func() {
+					aeroCluster, err := getCluster(
+						k8sClient, ctx, clusterNamespacedName,
+					)
+					Expect(err).ToNot(HaveOccurred())
+
+					aeroCluster.Spec.AerospikeConfig.Value["network"] = map[string]interface{}{
+						"tls": []interface{}{
+							map[string]interface{}{
+								"name":      "aerospike-a-0.test-runner",
+								"cert-file": "/randompath/svc_cluster_chain.pem",
+							},
+						},
+					}
+					err = k8sClient.Update(ctx, aeroCluster)
+					Expect(err).Should(HaveOccurred())
+				},
+			)
+
+			It(
+				"ServiceConf: should fail for setting node-id, should fail for setting cluster-name",
+				func() {
+					// Service conf
+					// 	"node-id"
+					// 	"cluster-name"
+					aeroCluster, err := getCluster(
+						k8sClient, ctx, clusterNamespacedName,
+					)
+					Expect(err).ToNot(HaveOccurred())
+
+					aeroCluster.Spec.AerospikeConfig.Value["service"].(map[string]interface{})["node-id"] = "a10"
+					err = k8sClient.Update(ctx, aeroCluster)
+					Expect(err).Should(HaveOccurred())
+
+					aeroCluster, err = getCluster(
+						k8sClient, ctx, clusterNamespacedName,
+					)
+					Expect(err).ToNot(HaveOccurred())
+
+					aeroCluster.Spec.AerospikeConfig.Value["service"].(map[string]interface{})["cluster-name"] = "cluster-name"
+					err = k8sClient.Update(ctx, aeroCluster)
+					Expect(err).Should(HaveOccurred())
+				},
+			)
+		},
+	)
+}
 
 func PauseReconcileTest(ctx goctx.Context) {
 	clusterNamespacedName := test.GetNamespacedName(
@@ -1359,93 +1893,55 @@ func UpdateClusterTest(ctx goctx.Context) {
 					)
 
 					Context(
-						"AerospikeConfig", func() {
-							Context(
-								"Namespace", func() {
-									It(
-										"UpdateReplicationFactor: should fail for updating namespace"+
-											"replication-factor on SC namespace. Cannot be updated",
-										func() {
-											aeroCluster, err := getCluster(
-												k8sClient, ctx,
-												clusterNamespacedName,
-											)
-											Expect(err).ToNot(HaveOccurred())
-
-											namespaceConfig :=
-												aeroCluster.Spec.AerospikeConfig.Value["namespaces"].([]interface{})[0].(map[string]interface{})
-											namespaceConfig["replication-factor"] = 5
-											aeroCluster.Spec.AerospikeConfig.Value["namespaces"].([]interface{})[0] = namespaceConfig
-
-											err = k8sClient.Update(
-												ctx, aeroCluster,
-											)
-											Expect(err).Should(HaveOccurred())
-										},
+						"Namespaces", func() {
+							It(
+								"UpdateReplicationFactor: should fail for updating namespace"+
+									"replication-factor on SC namespace. Cannot be updated",
+								func() {
+									aeroCluster, err := getCluster(
+										k8sClient, ctx,
+										clusterNamespacedName,
 									)
+									Expect(err).ToNot(HaveOccurred())
 
-									It(
-										"UpdateReplicationFactor: should fail for updating namespace"+
-											"replication-factor on non-SC namespace. Cannot be updated",
-										func() {
-											By("RollingRestart By Adding Namespace Dynamically")
+									namespaceConfig :=
+										aeroCluster.Spec.AerospikeConfig.Value["namespaces"].([]interface{})[0].(map[string]interface{})
+									namespaceConfig["replication-factor"] = 5
+									aeroCluster.Spec.AerospikeConfig.Value["namespaces"].([]interface{})[0] = namespaceConfig
 
-											err := rollingRestartClusterByAddingNamespaceDynamicallyTest(
-												k8sClient, ctx, dynamicNs, clusterNamespacedName,
-											)
-											Expect(err).ToNot(HaveOccurred())
-
-											aeroCluster, err := getCluster(
-												k8sClient, ctx,
-												clusterNamespacedName,
-											)
-											Expect(err).ToNot(HaveOccurred())
-
-											nsList := aeroCluster.Spec.AerospikeConfig.Value["namespaces"].([]interface{})
-											namespaceConfig := nsList[len(nsList)-1].(map[string]interface{})
-											namespaceConfig["replication-factor"] = 3
-											aeroCluster.Spec.AerospikeConfig.Value["namespaces"].([]interface{})[len(nsList)-1] = namespaceConfig
-
-											err = k8sClient.Update(
-												ctx, aeroCluster,
-											)
-											Expect(err).Should(HaveOccurred())
-										},
+									err = k8sClient.Update(
+										ctx, aeroCluster,
 									)
+									Expect(err).Should(HaveOccurred())
 								},
 							)
 
-							Context(
-								"Network", func() {
-									// Should fail when changing network config from non-tls to tls in a single step.
-									// Ideally first tls and non-tls config both has to set and then remove non-tls config.
-									It(
-										"UpdateService: should fail for updating non-tls to tls in single step. Cannot be updated",
-										func() {
-											aeroCluster, err := getCluster(
-												k8sClient, ctx, clusterNamespacedName,
-											)
-											Expect(err).ToNot(HaveOccurred())
+							It(
+								"UpdateReplicationFactor: should fail for updating namespace"+
+									"replication-factor on non-SC namespace. Cannot be updated",
+								func() {
+									By("RollingRestart By Adding Namespace Dynamically")
 
-											network := getNetworkTLSConfig()
-											serviceNetwork := network[asdbv1.ServicePortName].(map[string]interface{})
-											delete(serviceNetwork, "port")
-											network[asdbv1.ServicePortName] = serviceNetwork
-											aeroCluster.Spec.AerospikeConfig.Value["network"] = network
-											aeroCluster.Spec.OperatorClientCertSpec = &asdbv1.AerospikeOperatorClientCertSpec{
-												AerospikeOperatorCertSource: asdbv1.AerospikeOperatorCertSource{
-													SecretCertSource: &asdbv1.AerospikeSecretCertSource{
-														SecretName:         test.AerospikeSecretName,
-														CaCertsFilename:    "cacert.pem",
-														ClientCertFilename: "svc_cluster_chain.pem",
-														ClientKeyFilename:  "svc_key.pem",
-													},
-												},
-											}
-											err = updateCluster(k8sClient, ctx, aeroCluster)
-											Expect(err).Should(HaveOccurred())
-										},
+									err := rollingRestartClusterByAddingNamespaceDynamicallyTest(
+										k8sClient, ctx, dynamicNs, clusterNamespacedName,
 									)
+									Expect(err).ToNot(HaveOccurred())
+
+									aeroCluster, err := getCluster(
+										k8sClient, ctx,
+										clusterNamespacedName,
+									)
+									Expect(err).ToNot(HaveOccurred())
+
+									nsList := aeroCluster.Spec.AerospikeConfig.Value["namespaces"].([]interface{})
+									namespaceConfig := nsList[len(nsList)-1].(map[string]interface{})
+									namespaceConfig["replication-factor"] = 3
+									aeroCluster.Spec.AerospikeConfig.Value["namespaces"].([]interface{})[len(nsList)-1] = namespaceConfig
+
+									err = k8sClient.Update(
+										ctx, aeroCluster,
+									)
+									Expect(err).Should(HaveOccurred())
 								},
 							)
 						},
@@ -1848,48 +2344,6 @@ func negativeDeployClusterValidationTest(
 									Expect(DeployCluster(k8sClient, ctx, aeroCluster)).Should(HaveOccurred())
 								},
 							)
-
-							It(
-								"NetworkConf: should fail for setting network conf/tls network conf",
-								func() {
-									// Network conf
-									// "port"
-									// "access-port"
-									// "access-addresses"
-									// "alternate-access-port"
-									// "alternate-access-addresses"
-									aeroCluster := createDummyAerospikeCluster(
-										clusterNamespacedName, 1,
-									)
-									networkConf := map[string]interface{}{
-										"service": map[string]interface{}{
-											"port":             serviceNonTLSPort,
-											"access-addresses": []string{"<access_addresses>"},
-										},
-									}
-									aeroCluster.Spec.AerospikeConfig.Value["network"] = networkConf
-									Expect(DeployCluster(k8sClient, ctx, aeroCluster)).Should(HaveOccurred())
-
-									// if "tls-name" in conf
-									// "tls-port"
-									// "tls-access-port"
-									// "tls-access-addresses"
-									// "tls-alternate-access-port"
-									// "tls-alternate-access-addresses"
-									aeroCluster = createDummyAerospikeCluster(
-										clusterNamespacedName, 1,
-									)
-									networkConf = map[string]interface{}{
-										"service": map[string]interface{}{
-											"tls-name":             "aerospike-a-0.test-runner",
-											"tls-port":             3001,
-											"tls-access-addresses": []string{"<tls-access-addresses>"},
-										},
-									}
-									aeroCluster.Spec.AerospikeConfig.Value["network"] = networkConf
-									Expect(DeployCluster(k8sClient, ctx, aeroCluster)).Should(HaveOccurred())
-								},
-							)
 						},
 					)
 				},
@@ -1905,85 +2359,6 @@ func negativeDeployClusterValidationTest(
 							)
 							aeroCluster.Spec.AerospikeConfig.Value["service"] = map[string]interface{}{
 								"feature-key-file": "/randompath/features.conf",
-							}
-							Expect(DeployCluster(k8sClient, ctx, aeroCluster)).Should(HaveOccurred())
-						},
-					)
-
-					It(
-						"WhenTLSExist: should fail for no tls path in storage volume",
-						func() {
-							aeroCluster := createAerospikeClusterPost640(
-								clusterNamespacedName, 1, latestImage,
-							)
-							aeroCluster.Spec.AerospikeConfig.Value["network"] = map[string]interface{}{
-								"tls": []interface{}{
-									map[string]interface{}{
-										"name":      "aerospike-a-0.test-runner",
-										"cert-file": "/randompath/svc_cluster_chain.pem",
-									},
-								},
-							}
-							Expect(DeployCluster(k8sClient, ctx, aeroCluster)).Should(HaveOccurred())
-						},
-					)
-
-					It(
-						"WhenTLSExist: should fail for both ca-file and ca-path in tls",
-						func() {
-							aeroCluster := createAerospikeClusterPost640(
-								clusterNamespacedName, 1, latestImage,
-							)
-							aeroCluster.Spec.AerospikeConfig.Value["network"] = map[string]interface{}{
-								"tls": []interface{}{
-									map[string]interface{}{
-										"name":      "aerospike-a-0.test-runner",
-										"cert-file": "/etc/aerospike/secret/svc_cluster_chain.pem",
-										"key-file":  "/etc/aerospike/secret/svc_key.pem",
-										"ca-file":   "/etc/aerospike/secret/cacert.pem",
-										"ca-path":   "/etc/aerospike/secret/cacerts",
-									},
-								},
-							}
-							Expect(DeployCluster(k8sClient, ctx, aeroCluster)).Should(HaveOccurred())
-						},
-					)
-
-					It(
-						"WhenTLSExist: should fail for ca-file path pointing to Secret Manager",
-						func() {
-							aeroCluster := createAerospikeClusterPost640(
-								clusterNamespacedName, 1, latestImage,
-							)
-							aeroCluster.Spec.AerospikeConfig.Value["network"] = map[string]interface{}{
-								"tls": []interface{}{
-									map[string]interface{}{
-										"name":      "aerospike-a-0.test-runner",
-										"cert-file": "/etc/aerospike/secret/svc_cluster_chain.pem",
-										"key-file":  "/etc/aerospike/secret/svc_key.pem",
-										"ca-file":   "secrets:Test-secret:Key",
-									},
-								},
-							}
-							Expect(DeployCluster(k8sClient, ctx, aeroCluster)).Should(HaveOccurred())
-						},
-					)
-
-					It(
-						"WhenTLSExist: should fail for ca-path pointing to Secret Manager",
-						func() {
-							aeroCluster := createAerospikeClusterPost640(
-								clusterNamespacedName, 1, latestImage,
-							)
-							aeroCluster.Spec.AerospikeConfig.Value["network"] = map[string]interface{}{
-								"tls": []interface{}{
-									map[string]interface{}{
-										"name":      "aerospike-a-0.test-runner",
-										"cert-file": "/etc/aerospike/secret/svc_cluster_chain.pem",
-										"key-file":  "/etc/aerospike/secret/svc_key.pem",
-										"ca-path":   "secrets:Test-secret:Key",
-									},
-								},
 							}
 							Expect(DeployCluster(k8sClient, ctx, aeroCluster)).Should(HaveOccurred())
 						},
@@ -2368,54 +2743,6 @@ func negativeUpdateClusterValidationTest(
 									Expect(err).Should(HaveOccurred())
 								},
 							)
-
-							It(
-								"NetworkConf: should fail for setting network conf, should fail for setting tls network conf",
-								func() {
-									// Network conf
-									// "port"
-									// "access-port"
-									// "access-addresses"
-									// "alternate-access-port"
-									// "alternate-access-addresses"
-									aeroCluster, err := getCluster(
-										k8sClient, ctx, clusterNamespacedName,
-									)
-									Expect(err).ToNot(HaveOccurred())
-
-									networkConf := map[string]interface{}{
-										"service": map[string]interface{}{
-											"port":             serviceNonTLSPort,
-											"access-addresses": []string{"<access_addresses>"},
-										},
-									}
-									aeroCluster.Spec.AerospikeConfig.Value["network"] = networkConf
-									err = k8sClient.Update(ctx, aeroCluster)
-									Expect(err).Should(HaveOccurred())
-
-									// if "tls-name" in conf
-									// "tls-port"
-									// "tls-access-port"
-									// "tls-access-addresses"
-									// "tls-alternate-access-port"
-									// "tls-alternate-access-addresses"
-									aeroCluster, err = getCluster(
-										k8sClient, ctx, clusterNamespacedName,
-									)
-									Expect(err).ToNot(HaveOccurred())
-
-									networkConf = map[string]interface{}{
-										"service": map[string]interface{}{
-											"tls-name":             "aerospike-a-0.test-runner",
-											"tls-port":             3001,
-											"tls-access-addresses": []string{"<tls-access-addresses>"},
-										},
-									}
-									aeroCluster.Spec.AerospikeConfig.Value["network"] = networkConf
-									err = k8sClient.Update(ctx, aeroCluster)
-									Expect(err).Should(HaveOccurred())
-								},
-							)
 						},
 					)
 				},
@@ -2486,27 +2813,6 @@ func negativeUpdateClusterValidationTest(
 
 					aeroCluster.Spec.AerospikeConfig.Value["service"] = map[string]interface{}{
 						"feature-key-file": "/randompath/features.conf",
-					}
-					err = k8sClient.Update(ctx, aeroCluster)
-					Expect(err).Should(HaveOccurred())
-				},
-			)
-
-			It(
-				"WhenTLSExist: should fail for no tls path in storage volumes",
-				func() {
-					aeroCluster, err := getCluster(
-						k8sClient, ctx, clusterNamespacedName,
-					)
-					Expect(err).ToNot(HaveOccurred())
-
-					aeroCluster.Spec.AerospikeConfig.Value["network"] = map[string]interface{}{
-						"tls": []interface{}{
-							map[string]interface{}{
-								"name":      "aerospike-a-0.test-runner",
-								"cert-file": "/randompath/svc_cluster_chain.pem",
-							},
-						},
 					}
 					err = k8sClient.Update(ctx, aeroCluster)
 					Expect(err).Should(HaveOccurred())

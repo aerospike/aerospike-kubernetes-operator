@@ -83,9 +83,6 @@ func (r *SingleClusterReconciler) getRollingRestartTypeMap(rackState *RackState,
 	blockedK8sNodes := sets.NewString(r.aeroCluster.Spec.K8sNodeBlockList...)
 	requiredConfHash := confMap.Data[aerospikeConfHashFileName]
 
-	// Fetching all pods requested for on-demand operations.
-	onDemandQuickRestarts, onDemandPodRestarts := r.podsToRestart()
-
 	for idx := range pods {
 		if ignorablePodNames.Has(pods[idx].Name) {
 			continue
@@ -102,15 +99,18 @@ func (r *SingleClusterReconciler) getRollingRestartTypeMap(rackState *RackState,
 
 		podStatus := r.aeroCluster.Status.Pods[pods[idx].Name]
 		if podStatus.AerospikeConfigHash != requiredConfHash {
-			if addedNSDevices == nil {
-				// Fetching all block devices that have been added in namespaces.
-				addedNSDevices, err = r.getNSAddedDevices(rackState)
-				if err != nil {
-					return nil, nil, err
-				}
+			serverContainer := getContainer(pods[idx].Spec.Containers, asdbv1.AerospikeServerContainerName)
+
+			podSpecUpdated, err := r.isAnyPodSpecUpdated(rackState, serverContainer)
+			if err != nil {
+				return nil, nil, fmt.Errorf("failed to check if pod spec is updated: %v", err)
 			}
 
-			serverContainer := getContainer(pods[idx].Spec.Containers, asdbv1.AerospikeServerContainerName)
+			if podSpecUpdated {
+				// If pod spec is updated, then we need to restart the pod.
+				restartTypeMap[pods[idx].Name] = podRestart
+				continue
+			}
 
 			version, err := asdbv1.GetImageVersion(serverContainer.Image)
 			if err != nil {
@@ -147,7 +147,18 @@ func (r *SingleClusterReconciler) getRollingRestartTypeMap(rackState *RackState,
 					dynamicConfDiffPerPod[pods[idx].Name] = specToStatusDiffs
 				}
 			}
+
+			if addedNSDevices == nil {
+				// Fetching all block devices that have been added in namespaces.
+				addedNSDevices, err = r.getNSAddedDevices(rackState)
+				if err != nil {
+					return nil, nil, err
+				}
+			}
 		}
+
+		// Fetching all pods requested for on-demand operations.
+		onDemandQuickRestarts, onDemandPodRestarts := r.podsToRestart()
 
 		restartTypeMap[pods[idx].Name] = r.getRollingRestartTypePod(rackState, pods[idx], confMap, addedNSDevices,
 			len(dynamicConfDiffPerPod[pods[idx].Name]) > 0, onDemandQuickRestarts, onDemandPodRestarts)
@@ -227,13 +238,6 @@ func (r *SingleClusterReconciler) getRollingRestartTypePod(
 		restartType = mergeRestartType(restartType, podRestart)
 
 		r.Log.Info("Aerospike rack storage changed. Need rolling restart")
-	}
-
-	if r.isReadinessPortUpdated(pod) {
-		restartType = mergeRestartType(restartType, podRestart)
-
-		r.Log.Info("Aerospike readiness tcp port changed. Need rolling restart",
-			"newTCPPort", r.getReadinessProbe().TCPSocket.String())
 	}
 
 	if opType := r.onDemandOperationType(pod.Name, onDemandQuickRestarts, onDemandPodRestarts); opType != noRestart {

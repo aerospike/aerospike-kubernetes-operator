@@ -830,12 +830,19 @@ func validateNetworkConnectionUpdate(oldConf, newConf map[string]interface{}, co
 		oldConnectionConfig, newConnectionConfig map[string]interface{}
 	)
 
-	if _, ok := oldConf["network"].(map[string]interface{})[connectionType]; ok {
-		oldConnectionConfig = oldConf["network"].(map[string]interface{})[connectionType].(map[string]interface{})
+	// Extract network configs safely
+	oldNetwork, oldOk := oldConf["network"].(map[string]interface{})
+	newNetwork, newOk := newConf["network"].(map[string]interface{})
+	if !oldOk || !newOk {
+		return fmt.Errorf("invalid network configuration structure")
 	}
 
-	if _, ok := newConf["network"].(map[string]interface{})[connectionType]; ok {
-		newConnectionConfig = newConf["network"].(map[string]interface{})[connectionType].(map[string]interface{})
+	oldConnectionConfig, oldConnOk := oldNetwork[connectionType].(map[string]interface{})
+	newConnectionConfig, newConnOk := newNetwork[connectionType].(map[string]interface{})
+
+	// If the connectionType is missing in either old or new config, assume it's an admin and skip validation
+	if !oldConnOk || !newConnOk {
+		return nil
 	}
 
 	oldTLSName, oldTLSNameOk := oldConnectionConfig["tls-name"]
