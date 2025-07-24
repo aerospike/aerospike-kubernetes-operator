@@ -7,13 +7,14 @@ toolchain go1.23.6
 require (
 	github.com/aerospike/aerospike-backup-service/v3 v3.1.1-0.20250519123935-790c268a2f06
 	github.com/aerospike/aerospike-client-go/v8 v8.2.2
-	github.com/aerospike/aerospike-management-lib v1.7.1-0.20250519063642-57d55e3eddf8
+	github.com/aerospike/aerospike-management-lib v1.7.1-0.20250709120612-377d0ff87581
 	github.com/asaskevich/govalidator v0.0.0-20210307081110-f21760c49a8d
 	github.com/deckarep/golang-set/v2 v2.8.0
 	github.com/evanphx/json-patch v4.12.0+incompatible
 	github.com/go-logr/logr v1.4.2
 	github.com/onsi/ginkgo/v2 v2.22.2
 	github.com/onsi/gomega v1.36.2
+	github.com/prometheus/client_golang v1.21.1
 	github.com/sirupsen/logrus v1.9.3
 	github.com/stretchr/testify v1.10.0
 	golang.org/x/crypto v0.38.0
@@ -73,7 +74,6 @@ require (
 	github.com/mxk/go-flowrate v0.0.0-20140419014527-cca7078d478f // indirect
 	github.com/pkg/errors v0.9.1 // indirect
 	github.com/pmezard/go-difflib v1.0.1-0.20181226105442-5d4384ee4fb2 // indirect
-	github.com/prometheus/client_golang v1.21.1 // indirect
 	github.com/prometheus/client_model v0.6.1 // indirect
 	github.com/prometheus/common v0.63.0 // indirect
 	github.com/prometheus/procfs v0.16.0 // indirect

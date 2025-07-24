@@ -3,7 +3,7 @@ apiVersion: apiextensions.k8s.io/v1
 kind: CustomResourceDefinition
 metadata:
   annotations:
-    aerospike-kubernetes-operator/version: 4.0.2
+    aerospike-kubernetes-operator/version: 4.1.0-preview
     controller-gen.kubebuilder.io/version: v0.16.1
   name: aerospikeclusters.asdb.aerospike.com
 spec:
@@ -6225,6 +6225,11 @@ spec:
                               description: CleanupThreads contains the maximum number
                                 of cleanup threads(dd or blkdiscard) per init container.
                               type: integer
+                            deleteLocalStorageOnRestart:
+                              description: |-
+                                DeleteLocalStorageOnRestart enables the deletion of local storage PVCs when a pod is restarted or rescheduled
+                                by AKO. It only considers local storage classes given in the localStorageClasses field.
+                              type: boolean
                             filesystemVolumePolicy:
                               description: FileSystemVolumePolicy contains default
                                 policies for filesystem volumes.
@@ -6582,8 +6587,8 @@ spec:
                                         properties:
                                           accessModes:
                                             description: |-
-                                              Name for creating PVC for this volume, Name or path should be given
-                                              Name string `json:"name"`
+                                              AccessModes contains the desired access modes the volume should have.
+                                              More info: https://kubernetes.io/docs/concepts/storage/persistent-volumes/#access-modes
                                             items:
                                               type: string
                                             type: array
@@ -7838,6 +7843,11 @@ spec:
                               description: CleanupThreads contains the maximum number
                                 of cleanup threads(dd or blkdiscard) per init container.
                               type: integer
+                            deleteLocalStorageOnRestart:
+                              description: |-
+                                DeleteLocalStorageOnRestart enables the deletion of local storage PVCs when a pod is restarted or rescheduled
+                                by AKO. It only considers local storage classes given in the localStorageClasses field.
+                              type: boolean
                             filesystemVolumePolicy:
                               description: FileSystemVolumePolicy contains default
                                 policies for filesystem volumes.
@@ -8195,8 +8205,8 @@ spec:
                                         properties:
                                           accessModes:
                                             description: |-
-                                              Name for creating PVC for this volume, Name or path should be given
-                                              Name string `json:"name"`
+                                              AccessModes contains the desired access modes the volume should have.
+                                              More info: https://kubernetes.io/docs/concepts/storage/persistent-volumes/#access-modes
                                             items:
                                               type: string
                                             type: array
@@ -8525,6 +8535,11 @@ spec:
                     description: CleanupThreads contains the maximum number of cleanup
                       threads(dd or blkdiscard) per init container.
                     type: integer
+                  deleteLocalStorageOnRestart:
+                    description: |-
+                      DeleteLocalStorageOnRestart enables the deletion of local storage PVCs when a pod is restarted or rescheduled
+                      by AKO. It only considers local storage classes given in the localStorageClasses field.
+                    type: boolean
                   filesystemVolumePolicy:
                     description: FileSystemVolumePolicy contains default policies
                       for filesystem volumes.
@@ -8879,8 +8894,8 @@ spec:
                               properties:
                                 accessModes:
                                   description: |-
-                                    Name for creating PVC for this volume, Name or path should be given
-                                    Name string `json:"name"`
+                                    AccessModes contains the desired access modes the volume should have.
+                                    More info: https://kubernetes.io/docs/concepts/storage/persistent-volumes/#access-modes
                                   items:
                                     type: string
                                   type: array
@@ -15412,6 +15427,11 @@ spec:
                               description: CleanupThreads contains the maximum number
                                 of cleanup threads(dd or blkdiscard) per init container.
                               type: integer
+                            deleteLocalStorageOnRestart:
+                              description: |-
+                                DeleteLocalStorageOnRestart enables the deletion of local storage PVCs when a pod is restarted or rescheduled
+                                by AKO. It only considers local storage classes given in the localStorageClasses field.
+                              type: boolean
                             filesystemVolumePolicy:
                               description: FileSystemVolumePolicy contains default
                                 policies for filesystem volumes.
@@ -15769,8 +15789,8 @@ spec:
                                         properties:
                                           accessModes:
                                             description: |-
-                                              Name for creating PVC for this volume, Name or path should be given
-                                              Name string `json:"name"`
+                                              AccessModes contains the desired access modes the volume should have.
+                                              More info: https://kubernetes.io/docs/concepts/storage/persistent-volumes/#access-modes
                                             items:
                                               type: string
                                             type: array
@@ -17025,6 +17045,11 @@ spec:
                               description: CleanupThreads contains the maximum number
                                 of cleanup threads(dd or blkdiscard) per init container.
                               type: integer
+                            deleteLocalStorageOnRestart:
+                              description: |-
+                                DeleteLocalStorageOnRestart enables the deletion of local storage PVCs when a pod is restarted or rescheduled
+                                by AKO. It only considers local storage classes given in the localStorageClasses field.
+                              type: boolean
                             filesystemVolumePolicy:
                               description: FileSystemVolumePolicy contains default
                                 policies for filesystem volumes.
@@ -17382,8 +17407,8 @@ spec:
                                         properties:
                                           accessModes:
                                             description: |-
-                                              Name for creating PVC for this volume, Name or path should be given
-                                              Name string `json:"name"`
+                                              AccessModes contains the desired access modes the volume should have.
+                                              More info: https://kubernetes.io/docs/concepts/storage/persistent-volumes/#access-modes
                                             items:
                                               type: string
                                             type: array
@@ -17778,6 +17803,11 @@ spec:
                     description: CleanupThreads contains the maximum number of cleanup
                       threads(dd or blkdiscard) per init container.
                     type: integer
+                  deleteLocalStorageOnRestart:
+                    description: |-
+                      DeleteLocalStorageOnRestart enables the deletion of local storage PVCs when a pod is restarted or rescheduled
+                      by AKO. It only considers local storage classes given in the localStorageClasses field.
+                    type: boolean
                   filesystemVolumePolicy:
                     description: FileSystemVolumePolicy contains default policies
                       for filesystem volumes.
@@ -18132,8 +18162,8 @@ spec:
                               properties:
                                 accessModes:
                                   description: |-
-                                    Name for creating PVC for this volume, Name or path should be given
-                                    Name string `json:"name"`
+                                    AccessModes contains the desired access modes the volume should have.
+                                    More info: https://kubernetes.io/docs/concepts/storage/persistent-volumes/#access-modes
                                   items:
                                     type: string
                                   type: array

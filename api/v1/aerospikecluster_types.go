@@ -744,8 +744,8 @@ type PersistentVolumeSpec struct { //nolint:govet // for readability
 	// Size of volume.
 	Size resource.Quantity `json:"size"`
 
-	// Name for creating PVC for this volume, Name or path should be given
-	// Name string `json:"name"`
+	// AccessModes contains the desired access modes the volume should have.
+	// More info: https://kubernetes.io/docs/concepts/storage/persistent-volumes/#access-modes
 	// +optional
 	AccessModes []corev1.PersistentVolumeAccessMode `json:"accessModes,omitempty" protobuf:"bytes,1,rep,name=accessModes,casttype=PersistentVolumeAccessMode"` //nolint:lll // for readability
 
@@ -816,6 +816,11 @@ type AerospikeStorageSpec struct { //nolint:govet // for readability
 	// LocalStorageClasses contains a list of storage classes which provisions local volumes.
 	// +optional
 	LocalStorageClasses []string `json:"localStorageClasses,omitempty"`
+
+	// DeleteLocalStorageOnRestart enables the deletion of local storage PVCs when a pod is restarted or rescheduled
+	// by AKO. It only considers local storage classes given in the localStorageClasses field.
+	// +optional
+	DeleteLocalStorageOnRestart *bool `json:"deleteLocalStorageOnRestart,omitempty"`
 
 	// Volumes list to attach to created pods.
 	// +patchMergeKey=name
@@ -1219,7 +1224,7 @@ type AerospikePodStatus struct { //nolint:govet // for readability
 
 // AerospikeCluster is the schema for the AerospikeCluster API
 // +operator-sdk:csv:customresourcedefinitions:displayName="Aerospike Cluster",resources={{Service, v1},{Pod,v1},{StatefulSet,v1}}
-// +kubebuilder:metadata:annotations="aerospike-kubernetes-operator/version=4.0.2"
+// +kubebuilder:metadata:annotations="aerospike-kubernetes-operator/version=4.1.0-preview"
 //
 //nolint:lll // for readability
 type AerospikeCluster struct { //nolint:govet // for readability

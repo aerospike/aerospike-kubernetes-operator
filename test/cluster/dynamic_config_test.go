@@ -143,11 +143,9 @@ var _ = Describe(
 
 						By("Fetch and verify dynamic configs")
 
-						pod := aeroCluster.Status.Pods[aeroCluster.Name+"-0-0"]
-
 						// Fetch and verify service section config
 						conf, err := getAerospikeConfigFromNode(logger, k8sClient, ctx, clusterNamespacedName,
-							"service", &pod)
+							"service", aeroCluster.Name+"-0-0")
 						Expect(err).ToNot(HaveOccurred())
 
 						cv, ok := conf["proto-fd-max"]
@@ -157,7 +155,7 @@ var _ = Describe(
 
 						// Fetch and verify security section config
 						conf, err = getAerospikeConfigFromNode(logger, k8sClient, ctx, clusterNamespacedName,
-							"security", &pod)
+							"security", aeroCluster.Name+"-0-0")
 						Expect(err).ToNot(HaveOccurred())
 
 						reportDataOp, ok := conf["log.report-data-op[0]"].(string)
@@ -167,7 +165,7 @@ var _ = Describe(
 
 						// Fetch and verify xdr section config
 						conf, err = getAerospikeConfigFromNode(logger, k8sClient, ctx, clusterNamespacedName,
-							"xdr", &pod)
+							"xdr", aeroCluster.Name+"-0-0")
 						Expect(err).ToNot(HaveOccurred())
 
 						Expect(conf["dcs"]).To(HaveLen(2))
@@ -192,11 +190,9 @@ var _ = Describe(
 
 						By("Fetch and verify dynamic configs")
 
-						pod = aeroCluster.Status.Pods[aeroCluster.Name+"-0-0"]
-
 						// Fetch and verify service section config
 						conf, err = getAerospikeConfigFromNode(logger, k8sClient, ctx, clusterNamespacedName,
-							"service", &pod)
+							"service", aeroCluster.Name+"-0-0")
 						Expect(err).ToNot(HaveOccurred())
 						cv, ok = conf["proto-fd-max"]
 						Expect(ok).To(BeTrue())
@@ -205,7 +201,7 @@ var _ = Describe(
 
 						// Fetch and verify security section config
 						conf, err = getAerospikeConfigFromNode(logger, k8sClient, ctx, clusterNamespacedName,
-							"security", &pod)
+							"security", aeroCluster.Name+"-0-0")
 						Expect(err).ToNot(HaveOccurred())
 
 						_, ok = conf["log.report-data-op[0]"].(string)
@@ -213,7 +209,7 @@ var _ = Describe(
 
 						// Fetch and verify xdr section config
 						conf, err = getAerospikeConfigFromNode(logger, k8sClient, ctx, clusterNamespacedName,
-							"xdr", &pod)
+							"xdr", aeroCluster.Name+"-0-0")
 						Expect(err).ToNot(HaveOccurred())
 
 						Expect(conf["dcs"]).To(HaveLen(1))
@@ -244,10 +240,8 @@ var _ = Describe(
 
 						By("Fetch and verify static configs")
 
-						pod := aeroCluster.Status.Pods[aeroCluster.Name+"-0-0"]
-
 						conf, err := getAerospikeConfigFromNode(logger, k8sClient, ctx, clusterNamespacedName,
-							"security", &pod)
+							"security", aeroCluster.Name+"-0-0")
 						Expect(err).ToNot(HaveOccurred())
 
 						enableQuotas, ok := conf["enable-quotas"].(bool)
@@ -276,9 +270,8 @@ var _ = Describe(
 
 						By("Fetch and verify static configs")
 
-						pod = aeroCluster.Status.Pods[aeroCluster.Name+"-0-0"]
-
-						info, err := requestInfoFromNode(logger, k8sClient, ctx, clusterNamespacedName, "namespace/mem", &pod)
+						info, err := requestInfoFromNode(logger, k8sClient, ctx, clusterNamespacedName,
+							"namespace/mem", aeroCluster.Name+"-0-0")
 						Expect(err).ToNot(HaveOccurred())
 
 						confs := strings.Split(info["namespace/mem"], ";")
@@ -316,10 +309,8 @@ var _ = Describe(
 
 						By("Fetch and verify static configs")
 
-						pod := aeroCluster.Status.Pods[aeroCluster.Name+"-0-0"]
-
 						conf, err := getAerospikeConfigFromNode(logger, k8sClient, ctx, clusterNamespacedName,
-							"service", &pod)
+							"service", aeroCluster.Name+"-0-0")
 						Expect(err).ToNot(HaveOccurred())
 
 						cv, ok := conf["proto-fd-max"]
@@ -690,9 +681,8 @@ var _ = Describe(
 
 						By("Fetch and verify dynamic configs")
 
-						pod := aeroCluster.Status.Pods[aeroCluster.Name+"-1-0"]
-
-						info, err := requestInfoFromNode(logger, k8sClient, ctx, clusterNamespacedName, "namespace/test", &pod)
+						info, err := requestInfoFromNode(logger, k8sClient, ctx, clusterNamespacedName,
+							"namespace/test", aeroCluster.Name+"-1-0")
 						Expect(err).ToNot(HaveOccurred())
 
 						confs := strings.Split(info["namespace/test"], ";")
@@ -703,7 +693,8 @@ var _ = Describe(
 							}
 						}
 
-						info, err = requestInfoFromNode(logger, k8sClient, ctx, clusterNamespacedName, "namespace/test1", &pod)
+						info, err = requestInfoFromNode(logger, k8sClient, ctx, clusterNamespacedName,
+							"namespace/test1", aeroCluster.Name+"-1-0")
 						Expect(err).ToNot(HaveOccurred())
 
 						confs = strings.Split(info["namespace/test1"], ";")
