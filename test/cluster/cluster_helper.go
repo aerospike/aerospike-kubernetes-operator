@@ -66,6 +66,7 @@ var aerospikeVolumeInitMethodDeleteFiles = asdbv1.AerospikeVolumeMethodDeleteFil
 
 var (
 	retryInterval      = time.Second * 30
+	shortRetryInterval = time.Second * 1
 	cascadeDeleteFalse = false
 	cascadeDeleteTrue  = true
 	logger             = logr.Discard()
@@ -547,7 +548,7 @@ func validateAerospikeConfigServiceClusterUpdate(
 
 func validateMigrateFillDelay(
 	ctx goctx.Context, k8sClient client.Client, log logr.Logger,
-	clusterNamespacedName types.NamespacedName, expectedMigFillDelay int64,
+	clusterNamespacedName types.NamespacedName, expectedMigFillDelay int64, retryInt *time.Duration,
 ) error {
 	aeroCluster, err := getCluster(k8sClient, ctx, clusterNamespacedName)
 	if err != nil {
@@ -567,9 +568,16 @@ func validateMigrateFillDelay(
 		return err
 	}
 
+	interval := retryInterval
+
+	if retryInt != nil {
+		interval = *retryInt
+	}
+
 	asinfo := info.NewAsInfo(log, host, getClientPolicy(aeroCluster, k8sClient))
+
 	err = wait.PollUntilContextTimeout(ctx,
-		retryInterval, getTimeout(1), true, func(goctx.Context) (done bool, err error) {
+		interval, getTimeout(1), true, func(goctx.Context) (done bool, err error) {
 			confs, err := getAsConfig(asinfo, "service")
 			if err != nil {
 				return false, err
@@ -1688,4 +1696,41 @@ func CheckDataInCluster(
 	}
 
 	return data, nil
+}
+
+func getReadyPods(aeroCluster *asdbv1.AerospikeCluster, k8sClient client.Client) ([]string, error) {
+	podList, err := getPodList(aeroCluster, k8sClient)
+	if err != nil {
+		return nil, err
+	}
+
+	var readyPods []string
+
+	for podIndex := range podList.Items {
+		if utils.IsPodRunningAndReady(&podList.Items[podIndex]) {
+			readyPods = append(readyPods, podList.Items[podIndex].Name)
+		}
+	}
+
+	return readyPods, nil
+}
+
+func waitForOperatorToStartPodRestart(ctx goctx.Context, k8sClient client.Client,
+	aeroCluster *asdbv1.AerospikeCluster) error {
+	// Wait for starting the pod restart process
+	return wait.PollUntilContextTimeout(ctx,
+		1*time.Second, getTimeout(aeroCluster.Spec.Size), true, func(goctx.Context) (done bool, err error) {
+			readyPods, err := getReadyPods(aeroCluster, k8sClient)
+			if err != nil {
+				return false, err
+			}
+
+			unreadyPods := int(aeroCluster.Spec.Size) - len(readyPods)
+			if unreadyPods > 0 {
+				return true, nil
+			}
+
+			return false, nil
+		},
+	)
 }
