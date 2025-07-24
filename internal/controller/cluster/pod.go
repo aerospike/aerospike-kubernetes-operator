@@ -1767,3 +1767,17 @@ func (r *SingleClusterReconciler) shouldSetMigrateFillDelay(rackState *RackState
 
 	return false
 }
+
+func (r *SingleClusterReconciler) isAnyPodSpecUpdated(rackState *RackState,
+	serverContainer *corev1.Container) (bool, error) {
+	sts, err := r.getSTS(rackState)
+	if err != nil {
+		return false, err
+	}
+
+	// Creating a local copy of the statefulset to avoid modifying the original object
+	// Currently just checking the server container ports, but can be extended to other fields as needed
+	r.updateSTSPorts(sts)
+
+	return !reflect.DeepEqual(serverContainer.Ports, sts.Spec.Template.Spec.Containers[0].Ports), nil
+}

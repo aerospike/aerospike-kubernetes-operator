@@ -20,6 +20,11 @@ import (
 	lib "github.com/aerospike/aerospike-management-lib"
 )
 
+const (
+	clusterNameConfig = "cluster-name"
+	serviceConfig     = "service"
+)
+
 var _ = FDescribe(
 	"AerospikeCluster", func() {
 
@@ -109,6 +114,7 @@ func adminPortTests(ctx goctx.Context) {
 	Context(
 		"AdminPort", func() {
 			aeroCluster := &asdbv1.AerospikeCluster{}
+			customInitImage := "aerospike-kubernetes-init:2.3.0-dev56"
 
 			AfterEach(
 				func() {
@@ -127,7 +133,7 @@ func adminPortTests(ctx goctx.Context) {
 					// Create cluster with admin port configuration
 					aeroCluster = createDummyAerospikeCluster(clusterNamespacedName, 2)
 					aeroCluster.Spec.PodSpec.AerospikeInitContainerSpec.ImageRegistryNamespace = ptr.To("tanmayj10")
-					aeroCluster.Spec.PodSpec.AerospikeInitContainerSpec.ImageNameAndTag = "aerospike-kubernetes-init:2.3.0-dev56"
+					aeroCluster.Spec.PodSpec.AerospikeInitContainerSpec.ImageNameAndTag = customInitImage
 					aeroCluster.Spec.PodSpec.MultiPodPerHost = ptr.To(false)
 
 					// Add admin port configuration to network
@@ -167,7 +173,7 @@ func adminPortTests(ctx goctx.Context) {
 					// Create cluster without admin port initially
 					aeroCluster = createDummyAerospikeCluster(clusterNamespacedName, 2)
 					aeroCluster.Spec.PodSpec.AerospikeInitContainerSpec.ImageRegistryNamespace = ptr.To("tanmayj10")
-					aeroCluster.Spec.PodSpec.AerospikeInitContainerSpec.ImageNameAndTag = "aerospike-kubernetes-init:2.3.0-dev56"
+					aeroCluster.Spec.PodSpec.AerospikeInitContainerSpec.ImageNameAndTag = customInitImage
 					aeroCluster.Spec.PodSpec.MultiPodPerHost = ptr.To(false)
 					Expect(DeployCluster(k8sClient, ctx, aeroCluster)).ToNot(HaveOccurred())
 
@@ -210,7 +216,7 @@ func adminPortTests(ctx goctx.Context) {
 					// Create cluster with admin port initially
 					aeroCluster = createDummyAerospikeCluster(clusterNamespacedName, 2)
 					aeroCluster.Spec.PodSpec.AerospikeInitContainerSpec.ImageRegistryNamespace = ptr.To("tanmayj10")
-					aeroCluster.Spec.PodSpec.AerospikeInitContainerSpec.ImageNameAndTag = "aerospike-kubernetes-init:2.3.0-dev56"
+					aeroCluster.Spec.PodSpec.AerospikeInitContainerSpec.ImageNameAndTag = customInitImage
 
 					networkConf := aeroCluster.Spec.AerospikeConfig.Value["network"].(map[string]interface{})
 					networkConf["admin"] = map[string]interface{}{
@@ -245,7 +251,7 @@ func adminPortTests(ctx goctx.Context) {
 					By("Verifying admin port configuration")
 
 					asinfo, err = getASInfo(logger, k8sClient, ctx, clusterNamespacedName,
-						clusterNamespacedName.Name+"-0-0", "service")
+						clusterNamespacedName.Name+"-0-0", serviceConfig)
 					Expect(err).ToNot(HaveOccurred())
 
 					confs, err = getAsConfig(asinfo, "network")
@@ -298,7 +304,7 @@ func networkDeployValidationTest(ctx goctx.Context) {
 						clusterNamespacedName, 1,
 					)
 					networkConf := map[string]interface{}{
-						"service": map[string]interface{}{
+						serviceConfig: map[string]interface{}{
 							"port":             serviceNonTLSPort,
 							"access-addresses": []string{"<access_addresses>"},
 						},
@@ -316,7 +322,7 @@ func networkDeployValidationTest(ctx goctx.Context) {
 						clusterNamespacedName, 1,
 					)
 					networkConf = map[string]interface{}{
-						"service": map[string]interface{}{
+						serviceConfig: map[string]interface{}{
 							"tls-name":             "aerospike-a-0.test-runner",
 							"tls-port":             3001,
 							"tls-access-addresses": []string{"<tls-access-addresses>"},
@@ -409,19 +415,17 @@ func networkDeployValidationTest(ctx goctx.Context) {
 			It(
 				"ServiceConf: should fail for setting node-id/cluster-name",
 				func() {
-					// Service conf
-					// 	"node-id"
-					// 	"cluster-name"
 					aeroCluster := createDummyAerospikeCluster(
 						clusterNamespacedName, 1,
 					)
-					aeroCluster.Spec.AerospikeConfig.Value["service"].(map[string]interface{})["node-id"] = "a1"
+					aeroCluster.Spec.AerospikeConfig.Value[serviceConfig].(map[string]interface{})["node-id"] = "a1"
 					Expect(DeployCluster(k8sClient, ctx, aeroCluster)).Should(HaveOccurred())
 
 					aeroCluster = createDummyAerospikeCluster(
 						clusterNamespacedName, 1,
 					)
-					aeroCluster.Spec.AerospikeConfig.Value["service"].(map[string]interface{})["cluster-name"] = "cluster-name"
+					aeroCluster.Spec.AerospikeConfig.
+						Value[serviceConfig].(map[string]interface{})[clusterNameConfig] = clusterNameConfig
 					Expect(DeployCluster(k8sClient, ctx, aeroCluster)).Should(HaveOccurred())
 				},
 			)
@@ -504,7 +508,7 @@ func networkUpdateValidationTest(ctx goctx.Context) {
 					Expect(err).ToNot(HaveOccurred())
 
 					networkConf := map[string]interface{}{
-						"service": map[string]interface{}{
+						serviceConfig: map[string]interface{}{
 							"port":             serviceNonTLSPort,
 							"access-addresses": []string{"<access_addresses>"},
 						},
@@ -525,7 +529,7 @@ func networkUpdateValidationTest(ctx goctx.Context) {
 					Expect(err).ToNot(HaveOccurred())
 
 					networkConf = map[string]interface{}{
-						"service": map[string]interface{}{
+						serviceConfig: map[string]interface{}{
 							"tls-name":             "aerospike-a-0.test-runner",
 							"tls-port":             3001,
 							"tls-access-addresses": []string{"<tls-access-addresses>"},
@@ -561,15 +565,12 @@ func networkUpdateValidationTest(ctx goctx.Context) {
 			It(
 				"ServiceConf: should fail for setting node-id, should fail for setting cluster-name",
 				func() {
-					// Service conf
-					// 	"node-id"
-					// 	"cluster-name"
 					aeroCluster, err := getCluster(
 						k8sClient, ctx, clusterNamespacedName,
 					)
 					Expect(err).ToNot(HaveOccurred())
 
-					aeroCluster.Spec.AerospikeConfig.Value["service"].(map[string]interface{})["node-id"] = "a10"
+					aeroCluster.Spec.AerospikeConfig.Value[serviceConfig].(map[string]interface{})["node-id"] = "a10"
 					err = k8sClient.Update(ctx, aeroCluster)
 					Expect(err).Should(HaveOccurred())
 
@@ -578,7 +579,8 @@ func networkUpdateValidationTest(ctx goctx.Context) {
 					)
 					Expect(err).ToNot(HaveOccurred())
 
-					aeroCluster.Spec.AerospikeConfig.Value["service"].(map[string]interface{})["cluster-name"] = "cluster-name"
+					aeroCluster.Spec.AerospikeConfig.
+						Value[serviceConfig].(map[string]interface{})[clusterNameConfig] = clusterNameConfig
 					err = k8sClient.Update(ctx, aeroCluster)
 					Expect(err).Should(HaveOccurred())
 				},
@@ -798,7 +800,7 @@ func ScaleDownWithMigrateFillDelay(ctx goctx.Context) {
 			BeforeEach(
 				func() {
 					aeroCluster := createDummyAerospikeCluster(clusterNamespacedName, 4)
-					aeroCluster.Spec.AerospikeConfig.Value["service"].(map[string]interface{})["migrate-fill-delay"] =
+					aeroCluster.Spec.AerospikeConfig.Value[serviceConfig].(map[string]interface{})["migrate-fill-delay"] =
 						migrateFillDelay
 					Expect(DeployCluster(k8sClient, ctx, aeroCluster)).ToNot(HaveOccurred())
 				},
@@ -2070,7 +2072,7 @@ func negativeDeployClusterValidationTest(
 							aeroCluster := createDummyAerospikeCluster(
 								clusterNamespacedName, 1,
 							)
-							aeroCluster.Spec.AerospikeConfig.Value["service"].(map[string]interface{})["advertise-ipv6"] = true
+							aeroCluster.Spec.AerospikeConfig.Value[serviceConfig].(map[string]interface{})["advertise-ipv6"] = true
 							Expect(DeployCluster(k8sClient, ctx, aeroCluster)).Should(HaveOccurred())
 						},
 					)
@@ -2297,13 +2299,13 @@ func negativeDeployClusterValidationTest(
 									aeroCluster := createDummyAerospikeCluster(
 										clusterNamespacedName, 1,
 									)
-									aeroCluster.Spec.AerospikeConfig.Value["service"].(map[string]interface{})["node-id"] = "a1"
+									aeroCluster.Spec.AerospikeConfig.Value[serviceConfig].(map[string]interface{})["node-id"] = "a1"
 									Expect(DeployCluster(k8sClient, ctx, aeroCluster)).Should(HaveOccurred())
 
 									aeroCluster = createDummyAerospikeCluster(
 										clusterNamespacedName, 1,
 									)
-									aeroCluster.Spec.AerospikeConfig.Value["service"].(map[string]interface{})["cluster-name"] = "cluster-name"
+									aeroCluster.Spec.AerospikeConfig.Value[serviceConfig].(map[string]interface{})["cluster-name"] = "cluster-name"
 									Expect(DeployCluster(k8sClient, ctx, aeroCluster)).Should(HaveOccurred())
 								},
 							)
@@ -2320,7 +2322,7 @@ func negativeDeployClusterValidationTest(
 							aeroCluster := createAerospikeClusterPost640(
 								clusterNamespacedName, 1, latestImage,
 							)
-							aeroCluster.Spec.AerospikeConfig.Value["service"] = map[string]interface{}{
+							aeroCluster.Spec.AerospikeConfig.Value[serviceConfig] = map[string]interface{}{
 								"feature-key-file": "/randompath/features.conf",
 							}
 							Expect(DeployCluster(k8sClient, ctx, aeroCluster)).Should(HaveOccurred())
@@ -2692,7 +2694,7 @@ func negativeUpdateClusterValidationTest(
 									)
 									Expect(err).ToNot(HaveOccurred())
 
-									aeroCluster.Spec.AerospikeConfig.Value["service"].(map[string]interface{})["node-id"] = "a10"
+									aeroCluster.Spec.AerospikeConfig.Value[serviceConfig].(map[string]interface{})["node-id"] = "a10"
 									err = k8sClient.Update(ctx, aeroCluster)
 									Expect(err).Should(HaveOccurred())
 
@@ -2701,7 +2703,8 @@ func negativeUpdateClusterValidationTest(
 									)
 									Expect(err).ToNot(HaveOccurred())
 
-									aeroCluster.Spec.AerospikeConfig.Value["service"].(map[string]interface{})["cluster-name"] = "cluster-name"
+									aeroCluster.Spec.AerospikeConfig.
+										Value[serviceConfig].(map[string]interface{})[clusterNameConfig] = clusterNameConfig
 									err = k8sClient.Update(ctx, aeroCluster)
 									Expect(err).Should(HaveOccurred())
 								},
@@ -2774,7 +2777,7 @@ func negativeUpdateClusterValidationTest(
 					)
 					Expect(err).ToNot(HaveOccurred())
 
-					aeroCluster.Spec.AerospikeConfig.Value["service"] = map[string]interface{}{
+					aeroCluster.Spec.AerospikeConfig.Value[serviceConfig] = map[string]interface{}{
 						"feature-key-file": "/randompath/features.conf",
 					}
 					err = k8sClient.Update(ctx, aeroCluster)
