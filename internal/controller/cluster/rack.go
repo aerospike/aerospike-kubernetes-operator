@@ -386,12 +386,10 @@ func (r *SingleClusterReconciler) upgradeOrRollingRestartRack(
 		return found, common.ReconcileError(err)
 	}
 
-	// Handle enable security just after updating configMap.
-	// This code will run only when security is being enabled in an existing cluster
-	// Update for security is verified by checking the config hash of the pod with the
-	// config hash present in config map
-	if err := r.handleEnableSecurity(rackState, ignorablePodNames); err != nil {
-		return found, common.ReconcileError(err)
+	if failedPods == nil {
+		if err := r.handleClusterSecurity(ignorablePodNames); err != nil {
+			return found, common.ReconcileError(err)
+		}
 	}
 
 	// Upgrade
@@ -1775,25 +1773,26 @@ func (r *SingleClusterReconciler) getCurrentRackList() (
 	return rackList, nil
 }
 
-func (r *SingleClusterReconciler) handleEnableSecurity(rackState *RackState, ignorablePodNames sets.Set[string]) error {
-	if !r.enablingSecurity() {
+func (r *SingleClusterReconciler) handleClusterSecurity(
+	ignorablePodNames sets.Set[string]) error {
+	if !r.needACLReconcile() {
 		// No need to proceed if security is not to be enabling
 		return nil
 	}
 
 	// Get pods where security-enabled config is applied
-	securityEnabledPods, err := r.getPodsWithUpdatedConfigForRack(rackState)
+	securityEnabledPod, err := r.getAnyPodWithEnabledSecurity(ignorablePodNames)
 	if err != nil {
 		return err
 	}
 
-	if len(securityEnabledPods) == 0 {
-		// No security-enabled pods found
+	if securityEnabledPod == nil {
+		// No security-enabled pod found
 		return nil
 	}
 
 	// Setup access control.
-	if err := r.validateAndReconcileAccessControl(securityEnabledPods, ignorablePodNames); err != nil {
+	if err := r.validateAndReconcileAccessControl(securityEnabledPod, ignorablePodNames); err != nil {
 		r.Log.Error(err, "Failed to Reconcile access control")
 		r.Recorder.Eventf(
 			r.aeroCluster, corev1.EventTypeWarning, "ACLUpdateFailed",
@@ -1807,41 +1806,40 @@ func (r *SingleClusterReconciler) handleEnableSecurity(rackState *RackState, ign
 	return nil
 }
 
-func (r *SingleClusterReconciler) enablingSecurity() bool {
-	return r.aeroCluster.Spec.AerospikeAccessControl != nil && r.aeroCluster.Status.AerospikeAccessControl == nil
+func (r *SingleClusterReconciler) needACLReconcile() bool {
+	isAccessControlSpecNil := r.aeroCluster.Spec.AerospikeAccessControl == nil
+	isAccessControlStatusNil := r.aeroCluster.Status.AerospikeAccessControl == nil
+
+	return !r.IsStatusEmpty() && isAccessControlSpecNil != isAccessControlStatusNil
 }
 
-func (r *SingleClusterReconciler) getPodsWithUpdatedConfigForRack(rackState *RackState) ([]corev1.Pod, error) {
-	pods, err := r.getOrderedRackPodList(rackState.Rack.ID)
-	if err != nil {
-		return nil, fmt.Errorf("failed to list pods: %v", err)
-	}
-
-	if len(pods) == 0 {
-		// No pod found for the rack
-		return nil, nil
-	}
-
-	confMap, err := r.getConfigMap(rackState.Rack.ID)
+func (r *SingleClusterReconciler) getAnyPodWithEnabledSecurity(
+	ignorablePodNames sets.Set[string]) (*corev1.Pod, error) {
+	podList, err := r.getClusterPodList()
 	if err != nil {
 		return nil, err
 	}
 
-	requiredConfHash := confMap.Data[aerospikeConfHashFileName]
+	if len(podList.Items) == 0 {
+		return nil, nil
+	}
 
-	updatedPods := make([]corev1.Pod, 0, len(pods))
+	securityConfigs, err := r.getClusterSecurityConfig(r.getClientPolicy(), podList, ignorablePodNames)
+	if err != nil {
+		return nil, fmt.Errorf("failed to get security config: %v", err)
+	}
 
-	for idx := range pods {
-		podName := pods[idx].Name
-		podStatus := r.aeroCluster.Status.Pods[podName]
+	_, port := r.getResolvedTLSNameAndPort()
 
-		if podStatus.AerospikeConfigHash == requiredConfHash {
-			// Config hash is matching, it means config has been applied
-			updatedPods = append(updatedPods, *pods[idx])
+	for idx := range podList.Items {
+		if security, ok := securityConfigs[hostID(podList.Items[idx].Status.PodIP, int(*port))]; ok {
+			if securityEnabled, ok := security["enable-security"]; ok && securityEnabled == "true" {
+				return &podList.Items[idx], nil
+			}
 		}
 	}
 
-	return updatedPods, nil
+	return nil, nil
 }
 
 func isContainerNameInStorageVolumeAttachments(
