@@ -1779,5 +1779,7 @@ func (r *SingleClusterReconciler) isAnyPodSpecUpdated(rackState *RackState,
 	// Currently just checking the server container ports, but can be extended to other fields as needed
 	r.updateSTSPorts(sts)
 
-	return !reflect.DeepEqual(serverContainer.Ports, sts.Spec.Template.Spec.Containers[0].Ports), nil
+	stsServerContainer := getContainer(sts.Spec.Template.Spec.Containers, asdbv1.AerospikeServerContainerName)
+
+	return !reflect.DeepEqual(serverContainer.Ports, stsServerContainer.Ports), nil
 }
