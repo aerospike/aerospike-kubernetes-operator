@@ -81,6 +81,16 @@ var defaultContainerPorts = map[string]PortInfo{
 		configParam:    "port",
 		exposedOnHost:  true,
 	},
+	asdbv1.AdminPortName: {
+		connectionType: "admin",
+		configParam:    "port",
+		exposedOnHost:  true,
+	},
+	asdbv1.AdminTLSPortName: {
+		connectionType: "admin",
+		configParam:    "tls-port",
+		exposedOnHost:  true,
+	},
 }
 
 func (r *SingleClusterReconciler) createSTS(
@@ -227,28 +237,6 @@ func (r *SingleClusterReconciler) getReadinessProbe() *corev1.Probe {
 		InitialDelaySeconds: 2,
 		PeriodSeconds:       5,
 	}
-}
-
-func (r *SingleClusterReconciler) isReadinessPortUpdated(pod *corev1.Pod) bool {
-	for idx := range pod.Spec.Containers {
-		container := &pod.Spec.Containers[idx]
-
-		if container.Name != asdbv1.AerospikeServerContainerName {
-			continue
-		}
-
-		// ignore if readiness probe is not set. Avoid rolling restart for old versions of operator
-		if container.ReadinessProbe == nil {
-			return false
-		}
-
-		if container.ReadinessProbe.TCPSocket != nil &&
-			container.ReadinessProbe.TCPSocket.String() != r.getReadinessProbe().TCPSocket.String() {
-			return true
-		}
-	}
-
-	return false
 }
 
 func (r *SingleClusterReconciler) deleteSTS(st *appsv1.StatefulSet) error {

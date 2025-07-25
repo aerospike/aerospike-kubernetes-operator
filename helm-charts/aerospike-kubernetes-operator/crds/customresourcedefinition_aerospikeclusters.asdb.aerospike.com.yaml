@@ -14286,6 +14286,11 @@ spec:
                       description: NetworkPolicyHash is ripemd160 hash of NetworkPolicy
                         used by this pod
                       type: string
+                    podAdminPort:
+                      description: PodAdminPort is the port users inside K8s can connect
+                        to.
+                      format: int32
+                      type: integer
                     podIP:
                       description: PodIP in the K8s network.
                       type: string
@@ -14297,6 +14302,11 @@ spec:
                       description: PodSpecHash is ripemd160 hash of PodSpec used by
                         this pod
                       type: string
+                    serviceAdminPort:
+                      description: ServiceAdminPort is the port users outside K8s
+                        can connect to.
+                      format: int32
+                      type: integer
                     servicePort:
                       description: ServicePort is the port Aerospike clients outside
                         K8s can connect to.

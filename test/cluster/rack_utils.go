@@ -146,7 +146,7 @@ func isNamespaceRackEnabled(
 		pod = aeroCluster.Status.Pods[podName]
 	}
 
-	host, err := createHost(&pod)
+	host, err := createHost(&pod, "service")
 	if err != nil {
 		return false, err
 	}

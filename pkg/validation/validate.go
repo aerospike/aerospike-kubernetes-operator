@@ -13,7 +13,7 @@ import (
 	"github.com/aerospike/aerospike-management-lib/asconfig"
 )
 
-var networkConnectionTypes = []string{"service", "heartbeat", "fabric"}
+var networkConnectionTypes = []string{"service", "heartbeat", "fabric", "admin"}
 
 // ValidateAerospikeConfig validates the aerospikeConfig.
 // It validates the schema, service, network, logging and namespace configurations.
@@ -822,13 +822,29 @@ func validateNsConfUpdate(oldConf, newConf map[string]interface{}) error {
 }
 
 func validateNetworkConnectionUpdate(oldConf, newConf map[string]interface{}, connectionType string) error {
-	var networkPorts = []string{
-		"port", "access-port",
-		"alternate-access-port",
+	var (
+		networkPorts = []string{
+			"port", "access-port",
+			"alternate-access-port",
+		}
+		oldConnectionConfig, newConnectionConfig map[string]interface{}
+	)
+
+	// Extract network configs safely
+	oldNetwork, oldOk := oldConf["network"].(map[string]interface{})
+	newNetwork, newOk := newConf["network"].(map[string]interface{})
+
+	if !oldOk || !newOk {
+		return fmt.Errorf("invalid network configuration structure")
 	}
 
-	oldConnectionConfig := oldConf["network"].(map[string]interface{})[connectionType].(map[string]interface{})
-	newConnectionConfig := newConf["network"].(map[string]interface{})[connectionType].(map[string]interface{})
+	oldConnectionConfig, oldConnOk := oldNetwork[connectionType].(map[string]interface{})
+	newConnectionConfig, newConnOk := newNetwork[connectionType].(map[string]interface{})
+
+	// If the connectionType is missing in either old or new config, assume it's an admin and skip validation
+	if !oldConnOk || !newConnOk {
+		return nil
+	}
 
 	oldTLSName, oldTLSNameOk := oldConnectionConfig["tls-name"]
 	newTLSName, newTLSNameOk := newConnectionConfig["tls-name"]

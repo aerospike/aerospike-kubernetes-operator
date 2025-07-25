@@ -31,13 +31,15 @@ const (
 	FabricTLSPortName = "tls-fabric"
 	FabricPortName    = "fabric"
 
+	AdminTLSPortName = "tls-admin"
+	AdminPortName    = "admin"
+
 	InfoPortName = "info"
 )
 
 const (
 	// Namespace keys.
 	confKeyNamespace     = "namespaces"
-	ConfKeyTLSName       = "tls-name"
 	ConfKeyStorageEngine = "storage-engine"
 
 	// Network section keys.
@@ -45,6 +47,12 @@ const (
 	ConfKeyNetworkService   = "service"
 	confKeyNetworkHeartbeat = "heartbeat"
 	confKeyNetworkFabric    = "fabric"
+	confKeyNetworkAdmin     = "admin"
+
+	// Ports and TLS keys.
+	ConfKeyTLSName = "tls-name"
+	ConfKeyTLSPort = "tls-port"
+	ConfKeyPort    = "port"
 
 	// XDR keys.
 	confKeyXdr         = "xdr"
@@ -414,36 +422,47 @@ func GetFabricTLSNameAndPort(aeroConf *AerospikeConfigSpec) (tlsName string, por
 	return GetTLSNameAndPort(aeroConf, confKeyNetworkFabric)
 }
 
+func GetAdminTLSNameAndPort(aeroConf *AerospikeConfigSpec) (tlsName string, port *int32) {
+	return GetTLSNameAndPort(aeroConf, confKeyNetworkAdmin)
+}
+
 func GetTLSNameAndPort(
 	aeroConf *AerospikeConfigSpec, connectionType string,
 ) (tlsName string, port *int32) {
 	if networkConfTmp, ok := aeroConf.Value[ConfKeyNetwork]; ok {
 		networkConf := networkConfTmp.(map[string]interface{})
-		serviceConf := networkConf[connectionType].(map[string]interface{})
+		if _, ok := networkConf[connectionType]; !ok {
+			return tlsName, port
+		}
 
-		if tlsName, ok := serviceConf["tls-name"]; ok {
-			if tlsPort, portConfigured := serviceConf["tls-port"]; portConfigured {
+		connConf := networkConf[connectionType].(map[string]interface{})
+		if name, ok := connConf[ConfKeyTLSName]; ok {
+			tlsName = name.(string)
+
+			if tlsPort, tlsPortConfigured := connConf[ConfKeyTLSPort]; tlsPortConfigured {
 				intPort := int32(tlsPort.(float64))
-				return tlsName.(string), &intPort
+				port = &intPort
 			}
-
-			return tlsName.(string), nil
 		}
 	}
 
-	return "", nil
+	return tlsName, port
 }
 
 func GetServicePort(aeroConf *AerospikeConfigSpec) *int32 {
-	return GetPortFromConfig(aeroConf, ConfKeyNetworkService, "port")
+	return GetPortFromConfig(aeroConf, ConfKeyNetworkService, ConfKeyPort)
 }
 
 func GetHeartbeatPort(aeroConf *AerospikeConfigSpec) *int32 {
-	return GetPortFromConfig(aeroConf, confKeyNetworkHeartbeat, "port")
+	return GetPortFromConfig(aeroConf, confKeyNetworkHeartbeat, ConfKeyPort)
 }
 
 func GetFabricPort(aeroConf *AerospikeConfigSpec) *int32 {
-	return GetPortFromConfig(aeroConf, confKeyNetworkFabric, "port")
+	return GetPortFromConfig(aeroConf, confKeyNetworkFabric, ConfKeyPort)
+}
+
+func GetAdminPort(aeroConf *AerospikeConfigSpec) *int32 {
+	return GetPortFromConfig(aeroConf, confKeyNetworkAdmin, ConfKeyPort)
 }
 
 func GetPortFromConfig(
