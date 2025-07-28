@@ -456,14 +456,14 @@ func setDefaultServiceConf(
 ) error {
 	config := configSpec.Value
 
-	if _, ok := config["service"]; !ok {
-		config["service"] = map[string]interface{}{}
+	if _, ok := config[asdbv1.ConfKeyService]; !ok {
+		config[asdbv1.ConfKeyService] = map[string]interface{}{}
 	}
 
-	serviceConf, ok := config["service"].(map[string]interface{})
+	serviceConf, ok := config[asdbv1.ConfKeyService].(map[string]interface{})
 	if !ok {
 		return fmt.Errorf(
-			"aerospikeConfig.service not a valid map %v", config["service"],
+			"aerospikeConfig.service not a valid map %v", config[asdbv1.ConfKeyService],
 		)
 	}
 
@@ -507,15 +507,15 @@ func setDefaultNetworkConf(
 	}
 
 	// Service section
-	if _, ok = networkConf["service"]; !ok {
+	if _, ok = networkConf[asdbv1.ConfKeyNetworkService]; !ok {
 		return fmt.Errorf("aerospikeConfig.network.service cannot be nil")
 	}
 
-	serviceConf, ok := networkConf["service"].(map[string]interface{})
+	serviceConf, ok := networkConf[asdbv1.ConfKeyNetworkService].(map[string]interface{})
 	if !ok {
 		return fmt.Errorf(
 			"aerospikeConfig.network.service not a valid map %v",
-			networkConf["service"],
+			networkConf[asdbv1.ConfKeyNetworkService],
 		)
 	}
 	// Override these sections

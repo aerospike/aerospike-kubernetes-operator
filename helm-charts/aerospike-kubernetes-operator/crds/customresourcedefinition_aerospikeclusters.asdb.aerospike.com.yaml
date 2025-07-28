@@ -14287,8 +14287,8 @@ spec:
                         used by this pod
                       type: string
                     podAdminPort:
-                      description: PodAdminPort is the port users inside K8s can connect
-                        to.
+                      description: PodAdminPort is the admin port K8s internal Aerospike
+                        clients can connect to.
                       format: int32
                       type: integer
                     podIP:
@@ -14303,8 +14303,8 @@ spec:
                         this pod
                       type: string
                     serviceAdminPort:
-                      description: ServiceAdminPort is the port users outside K8s
-                        can connect to.
+                      description: ServiceAdminPort is the admin port Aerospike clients
+                        outside K8s can connect to.
                       format: int32
                       type: integer
                     servicePort:

@@ -195,7 +195,7 @@ func createHost(pod *asdbv1.AerospikePodStatus, network string) (*as.Host, error
 	}
 
 	port := pod.ServicePort
-	if network == "admin" {
+	if network == asdbv1.ConfKeyNetworkAdmin {
 		port = pod.ServiceAdminPort
 	}
 

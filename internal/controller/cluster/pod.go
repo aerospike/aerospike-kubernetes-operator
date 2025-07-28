@@ -83,6 +83,9 @@ func (r *SingleClusterReconciler) getRollingRestartTypeMap(rackState *RackState,
 	blockedK8sNodes := sets.NewString(r.aeroCluster.Spec.K8sNodeBlockList...)
 	requiredConfHash := confMap.Data[aerospikeConfHashFileName]
 
+	// Fetching all pods requested for on-demand operations.
+	onDemandQuickRestarts, onDemandPodRestarts := r.podsToRestart()
+
 	for idx := range pods {
 		if ignorablePodNames.Has(pods[idx].Name) {
 			continue
@@ -101,7 +104,7 @@ func (r *SingleClusterReconciler) getRollingRestartTypeMap(rackState *RackState,
 		if podStatus.AerospikeConfigHash != requiredConfHash {
 			serverContainer := getContainer(pods[idx].Spec.Containers, asdbv1.AerospikeServerContainerName)
 
-			podSpecUpdated, err := r.isAnyPodSpecUpdated(rackState, serverContainer)
+			podSpecUpdated, err := r.isAnyPodSpecUpdated(rackState, pods[idx])
 			if err != nil {
 				return nil, nil, fmt.Errorf("failed to check if pod spec is updated: %v", err)
 			}
@@ -156,9 +159,6 @@ func (r *SingleClusterReconciler) getRollingRestartTypeMap(rackState *RackState,
 				}
 			}
 		}
-
-		// Fetching all pods requested for on-demand operations.
-		onDemandQuickRestarts, onDemandPodRestarts := r.podsToRestart()
 
 		restartTypeMap[pods[idx].Name] = r.getRollingRestartTypePod(rackState, pods[idx], confMap, addedNSDevices,
 			len(dynamicConfDiffPerPod[pods[idx].Name]) > 0, onDemandQuickRestarts, onDemandPodRestarts)
@@ -1769,7 +1769,7 @@ func (r *SingleClusterReconciler) shouldSetMigrateFillDelay(rackState *RackState
 }
 
 func (r *SingleClusterReconciler) isAnyPodSpecUpdated(rackState *RackState,
-	serverContainer *corev1.Container) (bool, error) {
+	pod *corev1.Pod) (bool, error) {
 	sts, err := r.getSTS(rackState)
 	if err != nil {
 		return false, err
@@ -1780,6 +1780,7 @@ func (r *SingleClusterReconciler) isAnyPodSpecUpdated(rackState *RackState,
 	r.updateSTSPorts(sts)
 
 	stsServerContainer := getContainer(sts.Spec.Template.Spec.Containers, asdbv1.AerospikeServerContainerName)
+	serverContainer := getContainer(pod.Spec.Containers, asdbv1.AerospikeServerContainerName)
 
 	return !reflect.DeepEqual(serverContainer.Ports, stsServerContainer.Ports), nil
 }

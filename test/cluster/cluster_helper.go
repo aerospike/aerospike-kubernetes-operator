@@ -54,6 +54,8 @@ const aerospikeConfigSecret string = "aerospike-config-secret" //nolint:gosec //
 const serviceTLSPort = 4333
 const serviceNonTLSPort = 3000
 
+const serviceConfig = "service"
+
 // constants for writing data to aerospike
 const (
 	setName  = "test"
@@ -99,7 +101,7 @@ func rollingRestartClusterByEnablingTLS(
 			},
 		},
 	}
-	aeroCluster.Spec.AerospikeConfig.Value["network"] = getNetworkTLSConfig()
+	aeroCluster.Spec.AerospikeConfig.Value[asdbv1.ConfKeyNetwork] = getNetworkTLSConfig()
 
 	err = updateCluster(k8sClient, ctx, aeroCluster)
 	if err != nil {
@@ -117,19 +119,19 @@ func rollingRestartClusterByEnablingTLS(
 		return err
 	}
 
-	network := aeroCluster.Spec.AerospikeConfig.Value["network"].(map[string]interface{})
+	network := aeroCluster.Spec.AerospikeConfig.Value[asdbv1.ConfKeyNetwork].(map[string]interface{})
 	serviceNetwork := network[asdbv1.ServicePortName].(map[string]interface{})
 	fabricNetwork := network[asdbv1.FabricPortName].(map[string]interface{})
 	heartbeartNetwork := network[asdbv1.HeartbeatPortName].(map[string]interface{})
 
-	delete(serviceNetwork, "port")
-	delete(fabricNetwork, "port")
-	delete(heartbeartNetwork, "port")
+	delete(serviceNetwork, asdbv1.ConfKeyPort)
+	delete(fabricNetwork, asdbv1.ConfKeyPort)
+	delete(heartbeartNetwork, asdbv1.ConfKeyPort)
 
 	network[asdbv1.ServicePortName] = serviceNetwork
 	network[asdbv1.FabricPortName] = fabricNetwork
 	network[asdbv1.HeartbeatPortName] = heartbeartNetwork
-	aeroCluster.Spec.AerospikeConfig.Value["network"] = network
+	aeroCluster.Spec.AerospikeConfig.Value[asdbv1.ConfKeyNetwork] = network
 
 	err = updateCluster(k8sClient, ctx, aeroCluster)
 	if err != nil {
@@ -153,7 +155,7 @@ func rollingRestartClusterByDisablingTLS(
 		return err
 	}
 
-	aeroCluster.Spec.AerospikeConfig.Value["network"] = getNetworkTLSConfig()
+	aeroCluster.Spec.AerospikeConfig.Value[asdbv1.ConfKeyNetwork] = getNetworkTLSConfig()
 
 	err = updateCluster(k8sClient, ctx, aeroCluster)
 	if err != nil {
@@ -171,7 +173,7 @@ func rollingRestartClusterByDisablingTLS(
 		return err
 	}
 
-	aeroCluster.Spec.AerospikeConfig.Value["network"] = getNetworkConfig()
+	aeroCluster.Spec.AerospikeConfig.Value[asdbv1.ConfKeyNetwork] = getNetworkConfig()
 	aeroCluster.Spec.OperatorClientCertSpec = nil
 
 	err = updateCluster(k8sClient, ctx, aeroCluster)
@@ -198,10 +200,11 @@ func scaleUpClusterTestWithNSDeviceHandling(
 	}
 
 	aeroCluster.Spec.Size += increaseBy
-	namespaceConfig := aeroCluster.Spec.AerospikeConfig.Value["namespaces"].([]interface{})[1].(map[string]interface{})
-	oldDeviceList := namespaceConfig["storage-engine"].(map[string]interface{})["devices"]
-	namespaceConfig["storage-engine"].(map[string]interface{})["devices"] = []interface{}{"/test/dev/dynamicns"}
-	aeroCluster.Spec.AerospikeConfig.Value["namespaces"].([]interface{})[1] = namespaceConfig
+	namespaceConfig := aeroCluster.Spec.AerospikeConfig.
+		Value[asdbv1.ConfKeyNamespace].([]interface{})[1].(map[string]interface{})
+	oldDeviceList := namespaceConfig[asdbv1.ConfKeyStorageEngine].(map[string]interface{})["devices"]
+	namespaceConfig[asdbv1.ConfKeyStorageEngine].(map[string]interface{})["devices"] = []interface{}{"/test/dev/dynamicns"}
+	aeroCluster.Spec.AerospikeConfig.Value[asdbv1.ConfKeyNamespace].([]interface{})[1] = namespaceConfig
 
 	err = updateCluster(k8sClient, ctx, aeroCluster)
 	if err != nil {
@@ -227,8 +230,8 @@ func scaleUpClusterTestWithNSDeviceHandling(
 	}
 
 	aeroCluster.Spec.Size += increaseBy
-	namespaceConfig["storage-engine"].(map[string]interface{})["devices"] = oldDeviceList
-	aeroCluster.Spec.AerospikeConfig.Value["namespaces"].([]interface{})[1] = namespaceConfig
+	namespaceConfig[asdbv1.ConfKeyStorageEngine].(map[string]interface{})["devices"] = oldDeviceList
+	aeroCluster.Spec.AerospikeConfig.Value[asdbv1.ConfKeyNamespace].([]interface{})[1] = namespaceConfig
 
 	err = updateCluster(k8sClient, ctx, aeroCluster)
 	if err != nil {
@@ -275,10 +278,11 @@ func scaleDownClusterTestWithNSDeviceHandling(
 	}
 
 	aeroCluster.Spec.Size -= decreaseBy
-	namespaceConfig := aeroCluster.Spec.AerospikeConfig.Value["namespaces"].([]interface{})[1].(map[string]interface{})
-	oldDeviceList := namespaceConfig["storage-engine"].(map[string]interface{})["devices"]
-	namespaceConfig["storage-engine"].(map[string]interface{})["devices"] = []interface{}{"/test/dev/dynamicns"}
-	aeroCluster.Spec.AerospikeConfig.Value["namespaces"].([]interface{})[1] = namespaceConfig
+	namespaceConfig := aeroCluster.Spec.AerospikeConfig.
+		Value[asdbv1.ConfKeyNamespace].([]interface{})[1].(map[string]interface{})
+	oldDeviceList := namespaceConfig[asdbv1.ConfKeyStorageEngine].(map[string]interface{})["devices"]
+	namespaceConfig[asdbv1.ConfKeyStorageEngine].(map[string]interface{})["devices"] = []interface{}{"/test/dev/dynamicns"}
+	aeroCluster.Spec.AerospikeConfig.Value[asdbv1.ConfKeyNamespace].([]interface{})[1] = namespaceConfig
 
 	err = updateCluster(k8sClient, ctx, aeroCluster)
 	if err != nil {
@@ -299,8 +303,8 @@ func scaleDownClusterTestWithNSDeviceHandling(
 	}
 
 	aeroCluster.Spec.Size -= decreaseBy
-	namespaceConfig["storage-engine"].(map[string]interface{})["devices"] = oldDeviceList
-	aeroCluster.Spec.AerospikeConfig.Value["namespaces"].([]interface{})[1] = namespaceConfig
+	namespaceConfig[asdbv1.ConfKeyStorageEngine].(map[string]interface{})["devices"] = oldDeviceList
+	aeroCluster.Spec.AerospikeConfig.Value[asdbv1.ConfKeyNamespace].([]interface{})[1] = namespaceConfig
 
 	err = updateCluster(k8sClient, ctx, aeroCluster)
 	if err != nil {
@@ -347,11 +351,11 @@ func rollingRestartClusterTest(
 	}
 
 	// Change config
-	if _, ok := aeroCluster.Spec.AerospikeConfig.Value["service"]; !ok {
-		aeroCluster.Spec.AerospikeConfig.Value["service"] = map[string]interface{}{}
+	if _, ok := aeroCluster.Spec.AerospikeConfig.Value[asdbv1.ConfKeyService]; !ok {
+		aeroCluster.Spec.AerospikeConfig.Value[asdbv1.ConfKeyService] = map[string]interface{}{}
 	}
 
-	aeroCluster.Spec.AerospikeConfig.Value["service"].(map[string]interface{})["indent-allocations"] = true
+	aeroCluster.Spec.AerospikeConfig.Value[asdbv1.ConfKeyService].(map[string]interface{})["indent-allocations"] = true
 
 	err = updateCluster(k8sClient, ctx, aeroCluster)
 	if err != nil {
@@ -374,9 +378,10 @@ func rollingRestartClusterByUpdatingNamespaceStorageTest(
 	}
 
 	// Change namespace storage-engine
-	namespaceConfig := aeroCluster.Spec.AerospikeConfig.Value["namespaces"].([]interface{})[0].(map[string]interface{})
-	namespaceConfig["storage-engine"].(map[string]interface{})["filesize"] = 2000000000
-	aeroCluster.Spec.AerospikeConfig.Value["namespaces"].([]interface{})[0] = namespaceConfig
+	namespaceConfig := aeroCluster.Spec.AerospikeConfig.
+		Value[asdbv1.ConfKeyNamespace].([]interface{})[0].(map[string]interface{})
+	namespaceConfig[asdbv1.ConfKeyStorageEngine].(map[string]interface{})["filesize"] = 2000000000
+	aeroCluster.Spec.AerospikeConfig.Value[asdbv1.ConfKeyNamespace].([]interface{})[0] = namespaceConfig
 
 	return updateCluster(k8sClient, ctx, aeroCluster)
 }
@@ -398,14 +403,15 @@ func rollingRestartClusterByReusingNamespaceStorageTest(
 	}
 
 	// Change namespace storage-engine
-	namespaceConfig := aeroCluster.Spec.AerospikeConfig.Value["namespaces"].([]interface{})[1].(map[string]interface{})
-	namespaceConfig["storage-engine"].(map[string]interface{})["devices"] = []interface{}{"/test/dev/dynamicns"}
-	aeroCluster.Spec.AerospikeConfig.Value["namespaces"].([]interface{})[1] = namespaceConfig
+	namespaceConfig := aeroCluster.Spec.AerospikeConfig.
+		Value[asdbv1.ConfKeyNamespace].([]interface{})[1].(map[string]interface{})
+	namespaceConfig[asdbv1.ConfKeyStorageEngine].(map[string]interface{})["devices"] = []interface{}{"/test/dev/dynamicns"}
+	aeroCluster.Spec.AerospikeConfig.Value[asdbv1.ConfKeyNamespace].([]interface{})[1] = namespaceConfig
 
 	dynamicNs1 := getNonSCNamespaceConfig("dynamicns1", "/test/dev/dynamicns1")
-	nsList := aeroCluster.Spec.AerospikeConfig.Value["namespaces"].([]interface{})
+	nsList := aeroCluster.Spec.AerospikeConfig.Value[asdbv1.ConfKeyNamespace].([]interface{})
 	nsList = append(nsList, dynamicNs1)
-	aeroCluster.Spec.AerospikeConfig.Value["namespaces"] = nsList
+	aeroCluster.Spec.AerospikeConfig.Value[asdbv1.ConfKeyNamespace] = nsList
 
 	return k8sClient.Update(ctx, aeroCluster)
 }
@@ -421,9 +427,9 @@ func rollingRestartClusterByAddingNamespaceDynamicallyTest(
 	}
 
 	// Change namespace list
-	nsList := aeroCluster.Spec.AerospikeConfig.Value["namespaces"].([]interface{})
+	nsList := aeroCluster.Spec.AerospikeConfig.Value[asdbv1.ConfKeyNamespace].([]interface{})
 	nsList = append(nsList, dynamicNs)
-	aeroCluster.Spec.AerospikeConfig.Value["namespaces"] = nsList
+	aeroCluster.Spec.AerospikeConfig.Value[asdbv1.ConfKeyNamespace] = nsList
 
 	return updateCluster(k8sClient, ctx, aeroCluster)
 }
@@ -438,9 +444,9 @@ func rollingRestartClusterByRemovingNamespaceDynamicallyTest(
 	}
 
 	// Change namespace list
-	nsList := aeroCluster.Spec.AerospikeConfig.Value["namespaces"].([]interface{})
+	nsList := aeroCluster.Spec.AerospikeConfig.Value[asdbv1.ConfKeyNamespace].([]interface{})
 	nsList = nsList[:len(nsList)-1]
-	aeroCluster.Spec.AerospikeConfig.Value["namespaces"] = nsList
+	aeroCluster.Spec.AerospikeConfig.Value[asdbv1.ConfKeyNamespace] = nsList
 
 	return updateCluster(k8sClient, ctx, aeroCluster)
 }
@@ -484,6 +490,40 @@ func validateServiceUpdate(k8sClient client.Client, ctx goctx.Context,
 	return nil
 }
 
+func validatePodPortsUpdate(k8sClient client.Client, ctx goctx.Context,
+	clusterNamespacedName types.NamespacedName, ports []int32) error {
+	aeroCluster, err := getCluster(k8sClient, ctx, clusterNamespacedName)
+	if err != nil {
+		return err
+	}
+
+	for podName := range aeroCluster.Status.Pods {
+		podNamespaceName := test.GetNamespacedName(podName, aeroCluster.Namespace)
+		pod := &corev1.Pod{}
+
+		err = k8sClient.Get(ctx, podNamespaceName, pod)
+		if err != nil {
+			return err
+		}
+
+		portSet := sets.NewInt32(ports...)
+
+		println(fmt.Sprintf("pod %s, ports: %v", podName, pod.Spec.Containers[0].Ports))
+
+		for _, p := range pod.Spec.Containers[0].Ports {
+			if portSet.Has(p.ContainerPort) {
+				portSet.Delete(p.ContainerPort)
+			}
+		}
+
+		if portSet.Len() > 0 {
+			return fmt.Errorf("pod %s port not configured correctly", podNamespaceName.Name)
+		}
+	}
+
+	return nil
+}
+
 func validateAerospikeConfigServiceClusterUpdate(
 	log logr.Logger, k8sClient client.Client, ctx goctx.Context,
 	clusterNamespacedName types.NamespacedName, updatedKeys []string,
@@ -498,7 +538,7 @@ func validateAerospikeConfigServiceClusterUpdate(
 		// TODO:
 		// We may need to check for all keys in aerospikeConfig in rack
 		// but we know that we are changing for service only for now
-		host, err := createHost(&pod, "service")
+		host, err := createHost(&pod, asdbv1.ServicePortName)
 		if err != nil {
 			return err
 		}
@@ -507,14 +547,14 @@ func validateAerospikeConfigServiceClusterUpdate(
 			log, host, getClientPolicy(aeroCluster, k8sClient),
 		)
 
-		confs, err := getAsConfig(asinfo, "service")
+		confs, err := getAsConfig(asinfo, serviceConfig)
 		if err != nil {
 			return err
 		}
 
-		svcConfs := confs["service"].(lib.Stats)
+		svcConfs := confs[serviceConfig].(lib.Stats)
 
-		inputSvcConf := aeroCluster.Spec.AerospikeConfig.Value["service"].(map[string]interface{})
+		inputSvcConf := aeroCluster.Spec.AerospikeConfig.Value[asdbv1.ConfKeyService].(map[string]interface{})
 		for _, k := range updatedKeys {
 			v, ok := inputSvcConf[k]
 			if !ok {
@@ -563,7 +603,7 @@ func validateMigrateFillDelay(
 		return fmt.Errorf("pod %s missing from the status", firstPodName)
 	}
 
-	host, err := createHost(&firstPod, "service")
+	host, err := createHost(&firstPod, asdbv1.ServicePortName)
 	if err != nil {
 		return err
 	}
@@ -578,12 +618,12 @@ func validateMigrateFillDelay(
 
 	err = wait.PollUntilContextTimeout(ctx,
 		interval, getTimeout(1), true, func(goctx.Context) (done bool, err error) {
-			confs, err := getAsConfig(asinfo, "service")
+			confs, err := getAsConfig(asinfo, serviceConfig)
 			if err != nil {
 				return false, err
 			}
 
-			svcConfs := confs["service"].(lib.Stats)
+			svcConfs := confs[serviceConfig].(lib.Stats)
 
 			current, exists := svcConfs["migrate-fill-delay"]
 			if !exists {
@@ -943,12 +983,12 @@ func createAerospikeClusterPost570(
 			AerospikeConfig: &asdbv1.AerospikeConfigSpec{
 				Value: map[string]interface{}{
 
-					"service": map[string]interface{}{
+					asdbv1.ConfKeyService: map[string]interface{}{
 						"feature-key-file": "/etc/aerospike/secret/features.conf",
 					},
-					"security": map[string]interface{}{},
-					"network":  getNetworkTLSConfig(),
-					"namespaces": []interface{}{
+					asdbv1.ConfKeySecurity: map[string]interface{}{},
+					asdbv1.ConfKeyNetwork:  getNetworkTLSConfig(),
+					asdbv1.ConfKeyNamespace: []interface{}{
 						getNonSCNamespaceConfigPre700("test", "/test/dev/xvdf"),
 					},
 				},
@@ -967,7 +1007,7 @@ func createAerospikeClusterPost640(
 ) *asdbv1.AerospikeCluster {
 	// create Aerospike custom resource
 	aeroCluster := createAerospikeClusterPost570(clusterNamespacedName, size, image)
-	aeroCluster.Spec.AerospikeConfig.Value["namespaces"] = []interface{}{
+	aeroCluster.Spec.AerospikeConfig.Value[asdbv1.ConfKeyNamespace] = []interface{}{
 		getNonSCNamespaceConfig("test", "/test/dev/xvdf"),
 	}
 
@@ -1058,13 +1098,13 @@ func createDummyAerospikeClusterWithRFAndStorage(
 
 			AerospikeConfig: &asdbv1.AerospikeConfigSpec{
 				Value: map[string]interface{}{
-					"service": map[string]interface{}{
+					asdbv1.ConfKeyService: map[string]interface{}{
 						"feature-key-file": "/etc/aerospike/secret/features.conf",
 						"proto-fd-max":     defaultProtofdmax,
 					},
-					"security": map[string]interface{}{},
-					"network":  getNetworkConfig(),
-					"namespaces": []interface{}{
+					asdbv1.ConfKeySecurity: map[string]interface{}{},
+					asdbv1.ConfKeyNetwork:  getNetworkConfig(),
+					asdbv1.ConfKeyNamespace: []interface{}{
 						getNonSCNamespaceConfigWithRF("test", "/test/dev/xvdf", rf),
 					},
 				},
@@ -1082,11 +1122,27 @@ func createNonSCDummyAerospikeCluster(
 	clusterNamespacedName types.NamespacedName, size int32,
 ) *asdbv1.AerospikeCluster {
 	aerospikeCluster := createDummyAerospikeCluster(clusterNamespacedName, size)
-	aerospikeCluster.Spec.AerospikeConfig.Value["namespaces"] = []interface{}{
+	aerospikeCluster.Spec.AerospikeConfig.Value[asdbv1.ConfKeyNamespace] = []interface{}{
 		getNonSCNamespaceConfig("test", "/test/dev/xvdf"),
 	}
 
 	return aerospikeCluster
+}
+
+func createDummyAerospikeClusterWithAdminPort(clusterNamespacedName types.NamespacedName, size, adminPort int32,
+) *asdbv1.AerospikeCluster {
+	aeroCluster := createDummyAerospikeCluster(clusterNamespacedName, size)
+	aeroCluster.Spec.Image = fmt.Sprintf("%s:%s", baseImage, "8.1.0.0-rc3")
+	aeroCluster.Spec.PodSpec.AerospikeInitContainerSpec.ImageRegistryNamespace = ptr.To("tanmayj10")
+	aeroCluster.Spec.PodSpec.AerospikeInitContainerSpec.ImageNameAndTag = "aerospike-kubernetes-init:2.3.0-dev56"
+
+	networkConf := aeroCluster.Spec.AerospikeConfig.Value[asdbv1.ConfKeyNetwork].(map[string]interface{})
+	networkConf[asdbv1.ConfKeyNetworkAdmin] = map[string]interface{}{
+		asdbv1.ConfKeyPort: adminPort,
+	}
+	aeroCluster.Spec.AerospikeConfig.Value[asdbv1.ConfKeyNetwork] = networkConf
+
+	return aeroCluster
 }
 
 func createDummyAerospikeCluster(
@@ -1126,14 +1182,14 @@ func createDummyAerospikeCluster(
 
 			AerospikeConfig: &asdbv1.AerospikeConfigSpec{
 				Value: map[string]interface{}{
-					"service": map[string]interface{}{
+					asdbv1.ConfKeyService: map[string]interface{}{
 						"feature-key-file": "/etc/aerospike/secret/features.conf",
 						"proto-fd-max":     defaultProtofdmax,
 						"auto-pin":         "none",
 					},
-					"security": map[string]interface{}{},
-					"network":  getNetworkConfig(),
-					"namespaces": []interface{}{
+					asdbv1.ConfKeySecurity: map[string]interface{}{},
+					asdbv1.ConfKeyNetwork:  getNetworkConfig(),
+					asdbv1.ConfKeyNamespace: []interface{}{
 						getSCNamespaceConfig("test", "/test/dev/xvdf"),
 					},
 				},
@@ -1183,15 +1239,15 @@ func UpdateClusterImage(
 	case nv >= 0 && ov < 0:
 		aerocluster.Spec.Image = image
 
-		namespaces := aerocluster.Spec.AerospikeConfig.Value["namespaces"].([]interface{})
+		namespaces := aerocluster.Spec.AerospikeConfig.Value[asdbv1.ConfKeyNamespace].([]interface{})
 		for idx := range namespaces {
 			ns := namespaces[idx].(map[string]interface{})
 			delete(ns, "memory-size")
 
-			storageEngine := ns["storage-engine"].(map[string]interface{})
+			storageEngine := ns[asdbv1.ConfKeyStorageEngine].(map[string]interface{})
 			if storageEngine["type"] == "memory" {
 				storageEngine["data-size"] = 1073741824
-				ns["storage-engine"] = storageEngine
+				ns[asdbv1.ConfKeyStorageEngine] = storageEngine
 			}
 
 			namespaces[idx] = ns
@@ -1200,15 +1256,15 @@ func UpdateClusterImage(
 	default:
 		aerocluster.Spec.Image = image
 
-		namespaces := aerocluster.Spec.AerospikeConfig.Value["namespaces"].([]interface{})
+		namespaces := aerocluster.Spec.AerospikeConfig.Value[asdbv1.ConfKeyNamespace].([]interface{})
 		for idx := range namespaces {
 			ns := namespaces[idx].(map[string]interface{})
 			ns["memory-size"] = 1073741824
 
-			storageEngine := ns["storage-engine"].(map[string]interface{})
+			storageEngine := ns[asdbv1.ConfKeyStorageEngine].(map[string]interface{})
 			if storageEngine["type"] == "memory" {
 				delete(storageEngine, "data-size")
-				ns["storage-engine"] = storageEngine
+				ns[asdbv1.ConfKeyStorageEngine] = storageEngine
 			}
 
 			namespaces[idx] = ns
@@ -1286,11 +1342,11 @@ func createBasicTLSCluster(
 			AerospikeConfig: &asdbv1.AerospikeConfigSpec{
 				Value: map[string]interface{}{
 
-					"service": map[string]interface{}{
+					asdbv1.ConfKeyService: map[string]interface{}{
 						"feature-key-file": "/etc/aerospike/secret/features.conf",
 					},
-					"security": map[string]interface{}{},
-					"network":  getNetworkTLSConfig(),
+					asdbv1.ConfKeySecurity: map[string]interface{}{},
+					asdbv1.ConfKeyNetwork:  getNetworkTLSConfig(),
 				},
 			},
 		},
@@ -1323,7 +1379,7 @@ func createSSDStorageCluster(
 		}...,
 	)
 
-	aeroCluster.Spec.AerospikeConfig.Value["namespaces"] = []interface{}{
+	aeroCluster.Spec.AerospikeConfig.Value[asdbv1.ConfKeyNamespace] = []interface{}{
 		getNonSCNamespaceConfigWithRF("test", "/test/dev/xvdf", int(repFact)),
 	}
 
@@ -1354,11 +1410,11 @@ func createHDDAndDataInMemStorageCluster(
 		}...,
 	)
 
-	aeroCluster.Spec.AerospikeConfig.Value["namespaces"] = []interface{}{
+	aeroCluster.Spec.AerospikeConfig.Value[asdbv1.ConfKeyNamespace] = []interface{}{
 		map[string]interface{}{
 			"name":               "test",
 			"replication-factor": repFact,
-			"storage-engine": map[string]interface{}{
+			asdbv1.ConfKeyStorageEngine: map[string]interface{}{
 				"type":     "memory",
 				"files":    []interface{}{"/opt/aerospike/data/test.dat"},
 				"filesize": 2000955200,
@@ -1375,11 +1431,11 @@ func createDataInMemWithoutPersistentStorageCluster(
 ) *asdbv1.AerospikeCluster {
 	aeroCluster := createBasicTLSCluster(clusterNamespacedName, size)
 	aeroCluster.Spec.PodSpec.MultiPodPerHost = &multiPodPerHost
-	aeroCluster.Spec.AerospikeConfig.Value["namespaces"] = []interface{}{
+	aeroCluster.Spec.AerospikeConfig.Value[asdbv1.ConfKeyNamespace] = []interface{}{
 		map[string]interface{}{
 			"name":               "test",
 			"replication-factor": repFact,
-			"storage-engine": map[string]interface{}{
+			asdbv1.ConfKeyStorageEngine: map[string]interface{}{
 				"type":      "memory",
 				"data-size": 1073741824,
 			},
@@ -1513,7 +1569,7 @@ func getSCNamespaceConfig(name, path string) map[string]interface{} {
 		"name":               name,
 		"replication-factor": 2,
 		"strong-consistency": true,
-		"storage-engine": map[string]interface{}{
+		asdbv1.ConfKeyStorageEngine: map[string]interface{}{
 			"type":    "device",
 			"devices": []interface{}{path},
 		},
@@ -1525,7 +1581,7 @@ func getSCNamespaceConfigWithSet(name, path string) map[string]interface{} {
 		"name":               name,
 		"replication-factor": 2,
 		"strong-consistency": true,
-		"storage-engine": map[string]interface{}{
+		asdbv1.ConfKeyStorageEngine: map[string]interface{}{
 			"type":    "device",
 			"devices": []interface{}{path},
 		},
@@ -1541,7 +1597,7 @@ func getNonSCInMemoryNamespaceConfig(name string) map[string]interface{} {
 	return map[string]interface{}{
 		"name":               name,
 		"replication-factor": 2,
-		"storage-engine": map[string]interface{}{
+		asdbv1.ConfKeyStorageEngine: map[string]interface{}{
 			"type":      "memory",
 			"data-size": 1073741824,
 		},
@@ -1553,7 +1609,7 @@ func getNonSCInMemoryNamespaceConfigPre700(name string) map[string]interface{} {
 		"name":               name,
 		"replication-factor": 2,
 		"memory-size":        1073741824,
-		"storage-engine": map[string]interface{}{
+		asdbv1.ConfKeyStorageEngine: map[string]interface{}{
 			"type": "memory",
 		},
 	}
@@ -1575,7 +1631,7 @@ func getNonSCNamespaceConfigWithRF(name, path string, rf int) map[string]interfa
 	return map[string]interface{}{
 		"name":               name,
 		"replication-factor": rf,
-		"storage-engine": map[string]interface{}{
+		asdbv1.ConfKeyStorageEngine: map[string]interface{}{
 			"type":    "device",
 			"devices": []interface{}{path},
 		},

@@ -39,15 +39,16 @@ const (
 
 const (
 	// Namespace keys.
-	confKeyNamespace     = "namespaces"
+	ConfKeyNamespace     = "namespaces"
 	ConfKeyStorageEngine = "storage-engine"
 
 	// Network section keys.
 	ConfKeyNetwork          = "network"
 	ConfKeyNetworkService   = "service"
-	confKeyNetworkHeartbeat = "heartbeat"
-	confKeyNetworkFabric    = "fabric"
-	confKeyNetworkAdmin     = "admin"
+	ConfKeyNetworkHeartbeat = "heartbeat"
+	ConfKeyNetworkFabric    = "fabric"
+	ConfKeyNetworkAdmin     = "admin"
+	ConfKeyNetworkInfo      = "info"
 
 	// Ports and TLS keys.
 	ConfKeyTLSName = "tls-name"
@@ -59,11 +60,11 @@ const (
 	confKeyXdrDlogPath = "xdr-digestlog-path"
 
 	// Security keys.
-	confKeySecurity                    = "security"
+	ConfKeySecurity                    = "security"
 	confKeySecurityDefaultPasswordFile = "default-password-file"
 
 	// Service section keys.
-	confKeyService       = "service"
+	ConfKeyService       = "service"
 	confKeyWorkDirectory = "work-directory"
 
 	// Defaults.
@@ -92,7 +93,7 @@ func GetConfiguredWorkDirectory(aerospikeConfigSpec AerospikeConfigSpec) string 
 	// Get namespace config.
 	aerospikeConfig := aerospikeConfigSpec.Value
 
-	serviceTmp := aerospikeConfig[confKeyService]
+	serviceTmp := aerospikeConfig[ConfKeyService]
 	if serviceTmp != nil {
 		serviceConf := serviceTmp.(map[string]interface{})
 
@@ -312,7 +313,7 @@ func IsAerospikeNamespacePresent(
 	aerospikeConfig := aerospikeConfigSpec.Value
 
 	// Get namespace config.
-	if confs, ok := aerospikeConfig[confKeyNamespace].([]interface{}); ok {
+	if confs, ok := aerospikeConfig[ConfKeyNamespace].([]interface{}); ok {
 		for _, nsConf := range confs {
 			namespaceConf, ok := nsConf.(map[string]interface{})
 			if !ok {
@@ -411,19 +412,19 @@ func GetDigestLogFile(aerospikeConfigSpec AerospikeConfigSpec) (
 }
 
 func GetServiceTLSNameAndPort(aeroConf *AerospikeConfigSpec) (tlsName string, port *int32) {
-	return GetTLSNameAndPort(aeroConf, confKeyService)
+	return GetTLSNameAndPort(aeroConf, ConfKeyNetworkService)
 }
 
 func GetHeartbeatTLSNameAndPort(aeroConf *AerospikeConfigSpec) (tlsName string, port *int32) {
-	return GetTLSNameAndPort(aeroConf, confKeyNetworkHeartbeat)
+	return GetTLSNameAndPort(aeroConf, ConfKeyNetworkHeartbeat)
 }
 
 func GetFabricTLSNameAndPort(aeroConf *AerospikeConfigSpec) (tlsName string, port *int32) {
-	return GetTLSNameAndPort(aeroConf, confKeyNetworkFabric)
+	return GetTLSNameAndPort(aeroConf, ConfKeyNetworkFabric)
 }
 
 func GetAdminTLSNameAndPort(aeroConf *AerospikeConfigSpec) (tlsName string, port *int32) {
-	return GetTLSNameAndPort(aeroConf, confKeyNetworkAdmin)
+	return GetTLSNameAndPort(aeroConf, ConfKeyNetworkAdmin)
 }
 
 func GetTLSNameAndPort(
@@ -454,15 +455,15 @@ func GetServicePort(aeroConf *AerospikeConfigSpec) *int32 {
 }
 
 func GetHeartbeatPort(aeroConf *AerospikeConfigSpec) *int32 {
-	return GetPortFromConfig(aeroConf, confKeyNetworkHeartbeat, ConfKeyPort)
+	return GetPortFromConfig(aeroConf, ConfKeyNetworkHeartbeat, ConfKeyPort)
 }
 
 func GetFabricPort(aeroConf *AerospikeConfigSpec) *int32 {
-	return GetPortFromConfig(aeroConf, confKeyNetworkFabric, ConfKeyPort)
+	return GetPortFromConfig(aeroConf, ConfKeyNetworkFabric, ConfKeyPort)
 }
 
 func GetAdminPort(aeroConf *AerospikeConfigSpec) *int32 {
-	return GetPortFromConfig(aeroConf, confKeyNetworkAdmin, ConfKeyPort)
+	return GetPortFromConfig(aeroConf, ConfKeyNetworkAdmin, ConfKeyPort)
 }
 
 func GetPortFromConfig(
@@ -496,7 +497,7 @@ func GetIntType(value interface{}) (int, error) {
 
 // GetMigrateFillDelay returns the migrate-fill-delay from the Aerospike configuration
 func GetMigrateFillDelay(asConfig *AerospikeConfigSpec) (int, error) {
-	serviceConfig := asConfig.Value["service"].(map[string]interface{})
+	serviceConfig := asConfig.Value[ConfKeyService].(map[string]interface{})
 
 	fillDelayIFace, exists := serviceConfig["migrate-fill-delay"]
 	if !exists {
@@ -546,7 +547,7 @@ func GetDefaultPasswordFilePath(aerospikeConfigSpec *AerospikeConfigSpec) *strin
 	aerospikeConfig := aerospikeConfigSpec.Value
 
 	// Get security config.
-	securityConfTmp, ok := aerospikeConfig[confKeySecurity]
+	securityConfTmp, ok := aerospikeConfig[ConfKeySecurity]
 	if !ok {
 		return nil
 	}

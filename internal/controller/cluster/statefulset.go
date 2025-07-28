@@ -51,44 +51,44 @@ type PortInfo struct {
 
 var defaultContainerPorts = map[string]PortInfo{
 	asdbv1.ServicePortName: {
-		connectionType: "service",
-		configParam:    "port",
+		connectionType: asdbv1.ConfKeyNetworkService,
+		configParam:    asdbv1.ConfKeyPort,
 		exposedOnHost:  true,
 	},
 	asdbv1.ServiceTLSPortName: {
-		connectionType: "service",
-		configParam:    "tls-port",
+		connectionType: asdbv1.ConfKeyNetworkService,
+		configParam:    asdbv1.ConfKeyTLSPort,
 		exposedOnHost:  true,
 	},
 	asdbv1.FabricPortName: {
-		connectionType: "fabric",
-		configParam:    "port",
+		connectionType: asdbv1.ConfKeyNetworkFabric,
+		configParam:    asdbv1.ConfKeyPort,
 	},
 	asdbv1.FabricTLSPortName: {
-		connectionType: "fabric",
-		configParam:    "tls-port",
+		connectionType: asdbv1.ConfKeyNetworkFabric,
+		configParam:    asdbv1.ConfKeyTLSPort,
 	},
 	asdbv1.HeartbeatPortName: {
-		connectionType: "heartbeat",
-		configParam:    "port",
+		connectionType: asdbv1.ConfKeyNetworkHeartbeat,
+		configParam:    asdbv1.ConfKeyPort,
 	},
 	asdbv1.HeartbeatTLSPortName: {
-		connectionType: "heartbeat",
-		configParam:    "tls-port",
+		connectionType: asdbv1.ConfKeyNetworkHeartbeat,
+		configParam:    asdbv1.ConfKeyTLSPort,
 	},
 	asdbv1.InfoPortName: {
-		connectionType: "info",
-		configParam:    "port",
+		connectionType: asdbv1.ConfKeyNetworkInfo,
+		configParam:    asdbv1.ConfKeyPort,
 		exposedOnHost:  true,
 	},
 	asdbv1.AdminPortName: {
-		connectionType: "admin",
-		configParam:    "port",
+		connectionType: asdbv1.ConfKeyNetworkAdmin,
+		configParam:    asdbv1.ConfKeyPort,
 		exposedOnHost:  true,
 	},
 	asdbv1.AdminTLSPortName: {
-		connectionType: "admin",
-		configParam:    "tls-port",
+		connectionType: asdbv1.ConfKeyNetworkAdmin,
+		configParam:    asdbv1.ConfKeyTLSPort,
 		exposedOnHost:  true,
 	},
 }
