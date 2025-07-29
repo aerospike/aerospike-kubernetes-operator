@@ -145,7 +145,7 @@ var _ = Describe(
 
 						// Fetch and verify service section config
 						conf, err := getAerospikeConfigFromNode(logger, k8sClient, ctx, clusterNamespacedName,
-							serviceConfig, aeroCluster.Name+"-0-0")
+							asdbv1.ConfKeyService, aeroCluster.Name+"-0-0")
 						Expect(err).ToNot(HaveOccurred())
 
 						cv, ok := conf["proto-fd-max"]
@@ -192,7 +192,7 @@ var _ = Describe(
 
 						// Fetch and verify service section config
 						conf, err = getAerospikeConfigFromNode(logger, k8sClient, ctx, clusterNamespacedName,
-							serviceConfig, aeroCluster.Name+"-0-0")
+							asdbv1.ConfKeyService, aeroCluster.Name+"-0-0")
 						Expect(err).ToNot(HaveOccurred())
 						cv, ok = conf["proto-fd-max"]
 						Expect(ok).To(BeTrue())
@@ -310,7 +310,7 @@ var _ = Describe(
 						By("Fetch and verify static configs")
 
 						conf, err := getAerospikeConfigFromNode(logger, k8sClient, ctx, clusterNamespacedName,
-							serviceConfig, aeroCluster.Name+"-0-0")
+							asdbv1.ConfKeyService, aeroCluster.Name+"-0-0")
 						Expect(err).ToNot(HaveOccurred())
 
 						cv, ok := conf["proto-fd-max"]
@@ -814,7 +814,7 @@ func validateServiceContextDynamically(
 	ignoredConf := mapset.NewSet("cluster-name", "microsecond-histograms", "advertise-ipv6")
 
 	for confKey, val := range *flatServer {
-		if asconfig.ContextKey(confKey) != serviceConfig {
+		if asconfig.ContextKey(confKey) != asdbv1.ConfKeyService {
 			continue
 		}
 
@@ -1075,7 +1075,7 @@ func getAerospikeConfigFromNodeAndSpec(aeroCluster *asdbv1.AerospikeCluster) (fl
 
 	pod := aeroCluster.Status.Pods[pods.Items[0].Name]
 
-	host, err := createHost(&pod, asdbv1.ServicePortName)
+	host, err := createHost(&pod, asdbv1.ConfKeyNetworkService)
 	if err != nil {
 		return nil, nil, err
 	}

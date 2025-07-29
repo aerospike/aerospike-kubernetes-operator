@@ -1174,10 +1174,12 @@ type AerospikePodStatus struct { //nolint:govet // for readability
 	ServicePort int32 `json:"servicePort,omitempty"`
 
 	// PodAdminPort is the admin port K8s internal Aerospike clients can connect to.
+	// Admin port is a reserved port for administrative tools, ensuring cluster accessibility even during application overload scenarios.
 	// +optional
 	PodAdminPort int32 `json:"podAdminPort,omitempty"`
 
 	// ServiceAdminPort is the admin port Aerospike clients outside K8s can connect to.
+	// Admin port is a reserved port for administrative tools, ensuring cluster accessibility even during application overload scenarios.
 	// +optional
 	ServiceAdminPort int32 `json:"serviceAdminPort,omitempty"`
 

@@ -263,7 +263,7 @@ func networkDeployValidationTest(ctx goctx.Context) {
 						clusterNamespacedName, 1,
 					)
 					networkConf := map[string]interface{}{
-						serviceConfig: map[string]interface{}{
+						asdbv1.ConfKeyNetworkService: map[string]interface{}{
 							asdbv1.ConfKeyPort: serviceNonTLSPort,
 							"access-addresses": []string{"<access_addresses>"},
 						},
@@ -281,7 +281,7 @@ func networkDeployValidationTest(ctx goctx.Context) {
 						clusterNamespacedName, 1,
 					)
 					networkConf = map[string]interface{}{
-						serviceConfig: map[string]interface{}{
+						asdbv1.ConfKeyNetworkService: map[string]interface{}{
 							asdbv1.ConfKeyTLSName:  "aerospike-a-0.test-runner",
 							asdbv1.ConfKeyTLSPort:  3001,
 							"tls-access-addresses": []string{"<tls-access-addresses>"},
@@ -415,9 +415,9 @@ func networkUpdateValidationTest(ctx goctx.Context) {
 					Expect(err).ToNot(HaveOccurred())
 
 					network := getNetworkTLSConfig()
-					serviceNetwork := network[asdbv1.ServicePortName].(map[string]interface{})
+					serviceNetwork := network[asdbv1.ConfKeyNetworkService].(map[string]interface{})
 					delete(serviceNetwork, asdbv1.ConfKeyPort)
-					network[asdbv1.ServicePortName] = serviceNetwork
+					network[asdbv1.ConfKeyNetworkService] = serviceNetwork
 					aeroCluster.Spec.AerospikeConfig.Value[asdbv1.ConfKeyNetwork] = network
 					aeroCluster.Spec.OperatorClientCertSpec = &asdbv1.AerospikeOperatorClientCertSpec{
 						AerospikeOperatorCertSource: asdbv1.AerospikeOperatorCertSource{
@@ -449,7 +449,7 @@ func networkUpdateValidationTest(ctx goctx.Context) {
 					Expect(err).ToNot(HaveOccurred())
 
 					networkConf := map[string]interface{}{
-						serviceConfig: map[string]interface{}{
+						asdbv1.ConfKeyNetworkService: map[string]interface{}{
 							asdbv1.ConfKeyPort: serviceNonTLSPort,
 							"access-addresses": []string{"<access_addresses>"},
 						},
@@ -470,7 +470,7 @@ func networkUpdateValidationTest(ctx goctx.Context) {
 					Expect(err).ToNot(HaveOccurred())
 
 					networkConf = map[string]interface{}{
-						serviceConfig: map[string]interface{}{
+						asdbv1.ConfKeyNetworkService: map[string]interface{}{
 							asdbv1.ConfKeyTLSName:  "aerospike-a-0.test-runner",
 							asdbv1.ConfKeyTLSPort:  3001,
 							"tls-access-addresses": []string{"<tls-access-addresses>"},
@@ -717,7 +717,7 @@ func ScaleDownWithMigrateFillDelay(ctx goctx.Context) {
 			BeforeEach(
 				func() {
 					aeroCluster := createDummyAerospikeCluster(clusterNamespacedName, 4)
-					aeroCluster.Spec.AerospikeConfig.Value[serviceConfig].(map[string]interface{})["migrate-fill-delay"] =
+					aeroCluster.Spec.AerospikeConfig.Value[asdbv1.ConfKeyService].(map[string]interface{})["migrate-fill-delay"] =
 						migrateFillDelay
 					Expect(DeployCluster(k8sClient, ctx, aeroCluster)).ToNot(HaveOccurred())
 				},
@@ -1469,9 +1469,9 @@ func UpdateTLSClusterTest(ctx goctx.Context) {
 					By("Updating tls-name in service network config")
 
 					network = aeroCluster.Spec.AerospikeConfig.Value[asdbv1.ConfKeyNetwork].(map[string]interface{})
-					serviceNetwork := network[asdbv1.ServicePortName].(map[string]interface{})
+					serviceNetwork := network[asdbv1.ConfKeyNetworkService].(map[string]interface{})
 					serviceNetwork["tls-name"] = "unknown-tls"
-					network[asdbv1.ServicePortName] = serviceNetwork
+					network[asdbv1.ConfKeyNetworkService] = serviceNetwork
 					aeroCluster.Spec.AerospikeConfig.Value[asdbv1.ConfKeyNetwork] = network
 					err = updateCluster(k8sClient, ctx, aeroCluster)
 					Expect(err).Should(HaveOccurred())
@@ -1479,9 +1479,9 @@ func UpdateTLSClusterTest(ctx goctx.Context) {
 					By("Updating tls-port in service network config")
 
 					network = aeroCluster.Spec.AerospikeConfig.Value[asdbv1.ConfKeyNetwork].(map[string]interface{})
-					serviceNetwork = network[asdbv1.ServicePortName].(map[string]interface{})
+					serviceNetwork = network[asdbv1.ConfKeyNetworkService].(map[string]interface{})
 					serviceNetwork["tls-port"] = float64(4000)
-					network[asdbv1.ServicePortName] = serviceNetwork
+					network[asdbv1.ConfKeyNetworkService] = serviceNetwork
 					aeroCluster.Spec.AerospikeConfig.Value[asdbv1.ConfKeyNetwork] = network
 					err = updateCluster(k8sClient, ctx, aeroCluster)
 					Expect(err).Should(HaveOccurred())
@@ -1496,20 +1496,20 @@ func UpdateTLSClusterTest(ctx goctx.Context) {
 					Expect(err).ToNot(HaveOccurred())
 
 					network = aeroCluster.Spec.AerospikeConfig.Value[asdbv1.ConfKeyNetwork].(map[string]interface{})
-					serviceNetwork = network[asdbv1.ServicePortName].(map[string]interface{})
+					serviceNetwork = network[asdbv1.ConfKeyNetworkService].(map[string]interface{})
 					delete(serviceNetwork, asdbv1.ConfKeyPort)
-					network[asdbv1.ServicePortName] = serviceNetwork
+					network[asdbv1.ConfKeyNetworkService] = serviceNetwork
 					aeroCluster.Spec.AerospikeConfig.Value[asdbv1.ConfKeyNetwork] = network
 					err = updateCluster(k8sClient, ctx, aeroCluster)
 					Expect(err).ToNot(HaveOccurred())
 
 					network = aeroCluster.Spec.AerospikeConfig.Value[asdbv1.ConfKeyNetwork].(map[string]interface{})
-					serviceNetwork = network[asdbv1.ServicePortName].(map[string]interface{})
+					serviceNetwork = network[asdbv1.ConfKeyNetworkService].(map[string]interface{})
 					delete(serviceNetwork, "tls-port")
 					delete(serviceNetwork, "tls-name")
 					delete(serviceNetwork, "tls-authenticate-client")
 					serviceNetwork[asdbv1.ConfKeyPort] = float64(serviceNonTLSPort)
-					network[asdbv1.ServicePortName] = serviceNetwork
+					network[asdbv1.ConfKeyNetworkService] = serviceNetwork
 					aeroCluster.Spec.AerospikeConfig.Value[asdbv1.ConfKeyNetwork] = network
 					err = updateCluster(k8sClient, ctx, aeroCluster)
 					Expect(err).Should(HaveOccurred())
@@ -1996,7 +1996,7 @@ func negativeDeployClusterValidationTest(
 							aeroCluster := createDummyAerospikeCluster(
 								clusterNamespacedName, 1,
 							)
-							aeroCluster.Spec.AerospikeConfig.Value[serviceConfig].(map[string]interface{})["advertise-ipv6"] = true
+							aeroCluster.Spec.AerospikeConfig.Value[asdbv1.ConfKeyService].(map[string]interface{})["advertise-ipv6"] = true
 							Expect(DeployCluster(k8sClient, ctx, aeroCluster)).Should(HaveOccurred())
 						},
 					)
@@ -2223,14 +2223,14 @@ func negativeDeployClusterValidationTest(
 									aeroCluster := createDummyAerospikeCluster(
 										clusterNamespacedName, 1,
 									)
-									aeroCluster.Spec.AerospikeConfig.Value[serviceConfig].(map[string]interface{})["node-id"] = "a1"
+									aeroCluster.Spec.AerospikeConfig.Value[asdbv1.ConfKeyService].(map[string]interface{})["node-id"] = "a1"
 									Expect(DeployCluster(k8sClient, ctx, aeroCluster)).Should(HaveOccurred())
 
 									aeroCluster = createDummyAerospikeCluster(
 										clusterNamespacedName, 1,
 									)
 									aeroCluster.Spec.AerospikeConfig.
-										Value[serviceConfig].(map[string]interface{})[clusterNameConfig] = clusterNameConfig
+										Value[asdbv1.ConfKeyService].(map[string]interface{})[clusterNameConfig] = clusterNameConfig
 									Expect(DeployCluster(k8sClient, ctx, aeroCluster)).Should(HaveOccurred())
 								},
 							)
@@ -2247,7 +2247,7 @@ func negativeDeployClusterValidationTest(
 							aeroCluster := createAerospikeClusterPost640(
 								clusterNamespacedName, 1, latestImage,
 							)
-							aeroCluster.Spec.AerospikeConfig.Value[serviceConfig] = map[string]interface{}{
+							aeroCluster.Spec.AerospikeConfig.Value[asdbv1.ConfKeyService] = map[string]interface{}{
 								"feature-key-file": "/randompath/features.conf",
 							}
 							Expect(DeployCluster(k8sClient, ctx, aeroCluster)).Should(HaveOccurred())
@@ -2619,7 +2619,7 @@ func negativeUpdateClusterValidationTest(
 									)
 									Expect(err).ToNot(HaveOccurred())
 
-									aeroCluster.Spec.AerospikeConfig.Value[serviceConfig].(map[string]interface{})["node-id"] = "a10"
+									aeroCluster.Spec.AerospikeConfig.Value[asdbv1.ConfKeyService].(map[string]interface{})["node-id"] = "a10"
 									err = k8sClient.Update(ctx, aeroCluster)
 									Expect(err).Should(HaveOccurred())
 
@@ -2629,7 +2629,7 @@ func negativeUpdateClusterValidationTest(
 									Expect(err).ToNot(HaveOccurred())
 
 									aeroCluster.Spec.AerospikeConfig.
-										Value[serviceConfig].(map[string]interface{})[clusterNameConfig] = clusterNameConfig
+										Value[asdbv1.ConfKeyService].(map[string]interface{})[clusterNameConfig] = clusterNameConfig
 									err = k8sClient.Update(ctx, aeroCluster)
 									Expect(err).Should(HaveOccurred())
 								},
@@ -2702,7 +2702,7 @@ func negativeUpdateClusterValidationTest(
 					)
 					Expect(err).ToNot(HaveOccurred())
 
-					aeroCluster.Spec.AerospikeConfig.Value[serviceConfig] = map[string]interface{}{
+					aeroCluster.Spec.AerospikeConfig.Value[asdbv1.ConfKeyService] = map[string]interface{}{
 						"feature-key-file": "/randompath/features.conf",
 					}
 					err = k8sClient.Update(ctx, aeroCluster)

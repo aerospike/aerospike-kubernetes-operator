@@ -54,8 +54,6 @@ const aerospikeConfigSecret string = "aerospike-config-secret" //nolint:gosec //
 const serviceTLSPort = 4333
 const serviceNonTLSPort = 3000
 
-const serviceConfig = "service"
-
 // constants for writing data to aerospike
 const (
 	setName  = "test"
@@ -120,17 +118,17 @@ func rollingRestartClusterByEnablingTLS(
 	}
 
 	network := aeroCluster.Spec.AerospikeConfig.Value[asdbv1.ConfKeyNetwork].(map[string]interface{})
-	serviceNetwork := network[asdbv1.ServicePortName].(map[string]interface{})
-	fabricNetwork := network[asdbv1.FabricPortName].(map[string]interface{})
-	heartbeartNetwork := network[asdbv1.HeartbeatPortName].(map[string]interface{})
+	serviceNetwork := network[asdbv1.ConfKeyNetworkService].(map[string]interface{})
+	fabricNetwork := network[asdbv1.ConfKeyNetworkFabric].(map[string]interface{})
+	heartbeartNetwork := network[asdbv1.ConfKeyNetworkHeartbeat].(map[string]interface{})
 
 	delete(serviceNetwork, asdbv1.ConfKeyPort)
 	delete(fabricNetwork, asdbv1.ConfKeyPort)
 	delete(heartbeartNetwork, asdbv1.ConfKeyPort)
 
-	network[asdbv1.ServicePortName] = serviceNetwork
-	network[asdbv1.FabricPortName] = fabricNetwork
-	network[asdbv1.HeartbeatPortName] = heartbeartNetwork
+	network[asdbv1.ConfKeyNetworkService] = serviceNetwork
+	network[asdbv1.ConfKeyNetworkFabric] = fabricNetwork
+	network[asdbv1.ConfKeyNetworkHeartbeat] = heartbeartNetwork
 	aeroCluster.Spec.AerospikeConfig.Value[asdbv1.ConfKeyNetwork] = network
 
 	err = updateCluster(k8sClient, ctx, aeroCluster)
@@ -538,7 +536,7 @@ func validateAerospikeConfigServiceClusterUpdate(
 		// TODO:
 		// We may need to check for all keys in aerospikeConfig in rack
 		// but we know that we are changing for service only for now
-		host, err := createHost(&pod, asdbv1.ServicePortName)
+		host, err := createHost(&pod, asdbv1.ConfKeyNetworkService)
 		if err != nil {
 			return err
 		}
@@ -547,12 +545,12 @@ func validateAerospikeConfigServiceClusterUpdate(
 			log, host, getClientPolicy(aeroCluster, k8sClient),
 		)
 
-		confs, err := getAsConfig(asinfo, serviceConfig)
+		confs, err := getAsConfig(asinfo, asdbv1.ConfKeyService)
 		if err != nil {
 			return err
 		}
 
-		svcConfs := confs[serviceConfig].(lib.Stats)
+		svcConfs := confs[asdbv1.ConfKeyService].(lib.Stats)
 
 		inputSvcConf := aeroCluster.Spec.AerospikeConfig.Value[asdbv1.ConfKeyService].(map[string]interface{})
 		for _, k := range updatedKeys {
@@ -603,7 +601,7 @@ func validateMigrateFillDelay(
 		return fmt.Errorf("pod %s missing from the status", firstPodName)
 	}
 
-	host, err := createHost(&firstPod, asdbv1.ServicePortName)
+	host, err := createHost(&firstPod, asdbv1.ConfKeyNetworkService)
 	if err != nil {
 		return err
 	}
@@ -618,12 +616,12 @@ func validateMigrateFillDelay(
 
 	err = wait.PollUntilContextTimeout(ctx,
 		interval, getTimeout(1), true, func(goctx.Context) (done bool, err error) {
-			confs, err := getAsConfig(asinfo, serviceConfig)
+			confs, err := getAsConfig(asinfo, asdbv1.ConfKeyService)
 			if err != nil {
 				return false, err
 			}
 
-			svcConfs := confs[serviceConfig].(lib.Stats)
+			svcConfs := confs[asdbv1.ConfKeyService].(lib.Stats)
 
 			current, exists := svcConfs["migrate-fill-delay"]
 			if !exists {

@@ -102,8 +102,6 @@ func (r *SingleClusterReconciler) getRollingRestartTypeMap(rackState *RackState,
 
 		podStatus := r.aeroCluster.Status.Pods[pods[idx].Name]
 		if podStatus.AerospikeConfigHash != requiredConfHash {
-			serverContainer := getContainer(pods[idx].Spec.Containers, asdbv1.AerospikeServerContainerName)
-
 			podSpecUpdated, err := r.isAnyPodSpecUpdated(rackState, pods[idx])
 			if err != nil {
 				return nil, nil, fmt.Errorf("failed to check if pod spec is updated: %v", err)
@@ -114,6 +112,8 @@ func (r *SingleClusterReconciler) getRollingRestartTypeMap(rackState *RackState,
 				restartTypeMap[pods[idx].Name] = podRestart
 				continue
 			}
+
+			serverContainer := getContainer(pods[idx].Spec.Containers, asdbv1.AerospikeServerContainerName)
 
 			version, err := asdbv1.GetImageVersion(serverContainer.Image)
 			if err != nil {
