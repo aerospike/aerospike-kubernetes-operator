@@ -251,7 +251,7 @@ var _ = Describe(
 					config[asdbv1beta1.StorageKey] = map[string]interface{}{
 						"local": map[string]interface{}{
 							"local-storage": map[string]interface{}{
-								"path": "/localStorage",
+								"path": "/tmp/localStorage",
 							},
 						},
 					}

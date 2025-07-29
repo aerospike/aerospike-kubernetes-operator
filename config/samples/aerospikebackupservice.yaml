@@ -4,7 +4,7 @@ metadata:
   name: aerospikebackupservice-sample
   namespace: aerospike
 spec:
-  image: aerospike/aerospike-backup-service:3.1.0
+  image: aerospike/aerospike-backup-service:3.2.0
   config:
     service:
       http:
@@ -17,7 +17,7 @@ spec:
     storage:
       local:
         local-storage:
-          path: /localStorage
+          path: /tmp/localStorage
       s3Storage:
         s3-storage:
           bucket: aerospike-kubernetes-operator-test
