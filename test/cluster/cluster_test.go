@@ -195,6 +195,8 @@ func adminPortTests(ctx goctx.Context) {
 			validateAdminPort(ctx, clusterNamespacedName, clusterNamespacedName.Name+"-0-0", 3003)
 
 			// Update cluster to remove admin port
+			By("Removing admin port configuration")
+
 			networkConf := aeroCluster.Spec.AerospikeConfig.Value[asdbv1.ConfKeyNetwork].(map[string]interface{})
 			delete(networkConf, asdbv1.ConfKeyNetworkAdmin)
 			aeroCluster.Spec.AerospikeConfig.Value[asdbv1.ConfKeyNetwork] = networkConf
@@ -210,7 +212,12 @@ func adminPortTests(ctx goctx.Context) {
 }
 
 func validateAdminPort(ctx goctx.Context, clusterNamespacedName types.NamespacedName, podName string, adminPort int) {
-	asinfo, err := getASInfo(logger, k8sClient, ctx, clusterNamespacedName, podName, asdbv1.ConfKeyNetworkAdmin)
+	networkPort := asdbv1.ConfKeyNetworkAdmin
+	if adminPort == 0 {
+		networkPort = asdbv1.ConfKeyNetworkService
+	}
+
+	asinfo, err := getASInfo(logger, k8sClient, ctx, clusterNamespacedName, podName, networkPort)
 	Expect(err).ToNot(HaveOccurred())
 
 	confs, err := getAsConfig(asinfo, asdbv1.ConfKeyNetwork)

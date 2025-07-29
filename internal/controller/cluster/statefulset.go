@@ -1568,6 +1568,7 @@ func getSTSContainerPort(
 		containerPort := corev1.ContainerPort{
 			Name:          portName,
 			ContainerPort: *configPort,
+			Protocol:      corev1.ProtocolTCP,
 		}
 		// Single pod per host. Enable hostPort setting
 		// when pod only network is not defined.
