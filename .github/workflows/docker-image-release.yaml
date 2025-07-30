@@ -52,10 +52,11 @@ jobs:
           image: ${{ env.IMG_BASE }}:${{ env.TAG }}
           args: --file=Dockerfile --severity-threshold=high --fail-on=all # fail on vulnerabilities with fix available
 
-      - name: Upload result to GitHub Code Scanning
-        uses: github/codeql-action/upload-sarif@v2
-        with:
-          sarif_file: snyk.sarif
+# https://github.blog/changelog/2024-05-06-code-scanning-will-stop-combining-runs-from-a-single-upload/
+#      - name: Upload result to GitHub Code Scanning
+#        uses: github/codeql-action/upload-sarif@v2
+#        with:
+#          sarif_file: snyk.sarif
 
       - name: Check docker image scan status
         if: ${{ steps.docker-image-scan.outcome == 'failure' }}
