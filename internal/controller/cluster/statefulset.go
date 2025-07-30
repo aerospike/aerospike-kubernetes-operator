@@ -51,34 +51,44 @@ type PortInfo struct {
 
 var defaultContainerPorts = map[string]PortInfo{
 	asdbv1.ServicePortName: {
-		connectionType: "service",
-		configParam:    "port",
+		connectionType: asdbv1.ConfKeyNetworkService,
+		configParam:    asdbv1.ConfKeyPort,
 		exposedOnHost:  true,
 	},
 	asdbv1.ServiceTLSPortName: {
-		connectionType: "service",
-		configParam:    "tls-port",
+		connectionType: asdbv1.ConfKeyNetworkService,
+		configParam:    asdbv1.ConfKeyTLSPort,
 		exposedOnHost:  true,
 	},
 	asdbv1.FabricPortName: {
-		connectionType: "fabric",
-		configParam:    "port",
+		connectionType: asdbv1.ConfKeyNetworkFabric,
+		configParam:    asdbv1.ConfKeyPort,
 	},
 	asdbv1.FabricTLSPortName: {
-		connectionType: "fabric",
-		configParam:    "tls-port",
+		connectionType: asdbv1.ConfKeyNetworkFabric,
+		configParam:    asdbv1.ConfKeyTLSPort,
 	},
 	asdbv1.HeartbeatPortName: {
-		connectionType: "heartbeat",
-		configParam:    "port",
+		connectionType: asdbv1.ConfKeyNetworkHeartbeat,
+		configParam:    asdbv1.ConfKeyPort,
 	},
 	asdbv1.HeartbeatTLSPortName: {
-		connectionType: "heartbeat",
-		configParam:    "tls-port",
+		connectionType: asdbv1.ConfKeyNetworkHeartbeat,
+		configParam:    asdbv1.ConfKeyTLSPort,
 	},
 	asdbv1.InfoPortName: {
-		connectionType: "info",
-		configParam:    "port",
+		connectionType: asdbv1.ConfKeyNetworkInfo,
+		configParam:    asdbv1.ConfKeyPort,
+		exposedOnHost:  true,
+	},
+	asdbv1.AdminPortName: {
+		connectionType: asdbv1.ConfKeyNetworkAdmin,
+		configParam:    asdbv1.ConfKeyPort,
+		exposedOnHost:  true,
+	},
+	asdbv1.AdminTLSPortName: {
+		connectionType: asdbv1.ConfKeyNetworkAdmin,
+		configParam:    asdbv1.ConfKeyTLSPort,
 		exposedOnHost:  true,
 	},
 }
@@ -227,28 +237,6 @@ func (r *SingleClusterReconciler) getReadinessProbe() *corev1.Probe {
 		InitialDelaySeconds: 2,
 		PeriodSeconds:       5,
 	}
-}
-
-func (r *SingleClusterReconciler) isReadinessPortUpdated(pod *corev1.Pod) bool {
-	for idx := range pod.Spec.Containers {
-		container := &pod.Spec.Containers[idx]
-
-		if container.Name != asdbv1.AerospikeServerContainerName {
-			continue
-		}
-
-		// ignore if readiness probe is not set. Avoid rolling restart for old versions of operator
-		if container.ReadinessProbe == nil {
-			return false
-		}
-
-		if container.ReadinessProbe.TCPSocket != nil &&
-			container.ReadinessProbe.TCPSocket.String() != r.getReadinessProbe().TCPSocket.String() {
-			return true
-		}
-	}
-
-	return false
 }
 
 func (r *SingleClusterReconciler) deleteSTS(st *appsv1.StatefulSet) error {
@@ -1580,6 +1568,7 @@ func getSTSContainerPort(
 		containerPort := corev1.ContainerPort{
 			Name:          portName,
 			ContainerPort: *configPort,
+			Protocol:      corev1.ProtocolTCP,
 		}
 		// Single pod per host. Enable hostPort setting
 		// when pod only network is not defined.

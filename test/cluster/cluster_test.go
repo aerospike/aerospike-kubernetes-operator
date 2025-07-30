@@ -20,6 +20,10 @@ import (
 	lib "github.com/aerospike/aerospike-management-lib"
 )
 
+const (
+	clusterNameConfig = "cluster-name"
+)
+
 var _ = Describe(
 	"AerospikeCluster", func() {
 
@@ -63,11 +67,6 @@ var _ = Describe(
 			},
 		)
 		Context(
-			"UpdateTLSCluster", func() {
-				UpdateTLSClusterTest(ctx)
-			},
-		)
-		Context(
 			"UpdateAerospikeCluster", func() {
 				UpdateClusterTest(ctx)
 			},
@@ -87,8 +86,425 @@ var _ = Describe(
 				ValidateAerospikeBenchmarkConfigs(ctx)
 			},
 		)
+		// Network-related tests
+		Context(
+			asdbv1.ConfKeyNetwork, func() {
+				Context(
+					"UpdateTLSCluster", func() {
+						UpdateTLSClusterTest(ctx)
+					},
+				)
+				Context(
+					"NetworkValidation", func() {
+						NetworkValidationTest(ctx)
+					},
+				)
+				Context(
+					"AdminPort", func() {
+						adminPortTests(ctx)
+					},
+				)
+			},
+		)
 	},
 )
+
+func adminPortTests(ctx goctx.Context) {
+	aeroCluster := &asdbv1.AerospikeCluster{}
+	customInitImage := "aerospike-kubernetes-init:2.3.0-dev56"
+
+	AfterEach(
+		func() {
+			Expect(DeleteCluster(k8sClient, ctx, aeroCluster)).ToNot(HaveOccurred())
+			Expect(CleanupPVC(k8sClient, aeroCluster.Namespace, aeroCluster.Name)).ToNot(HaveOccurred())
+		},
+	)
+	It(
+		"Should create cluster with admin port and connect successfully",
+		func() {
+			clusterName := fmt.Sprintf("admin-port-cluster-%d", GinkgoParallelProcess())
+			clusterNamespacedName := test.GetNamespacedName(
+				clusterName, namespace,
+			)
+
+			// Create cluster with admin port configuration
+			aeroCluster = createDummyAerospikeClusterWithAdminPort(clusterNamespacedName, 2, 3003)
+
+			aeroCluster.Spec.PodSpec.MultiPodPerHost = ptr.To(false)
+
+			Expect(DeployCluster(k8sClient, ctx, aeroCluster)).ToNot(HaveOccurred())
+
+			// Verify admin port is configured in Aerospike
+			By("Verifying admin port configuration")
+			validateAdminPort(ctx, clusterNamespacedName, clusterNamespacedName.Name+"-0-0", 3003)
+		},
+	)
+
+	It(
+		"Should update cluster by adding admin connection",
+		func() {
+			var err error
+
+			clusterName := fmt.Sprintf("admin-port-update-cluster-%d", GinkgoParallelProcess())
+			clusterNamespacedName := test.GetNamespacedName(
+				clusterName, namespace,
+			)
+
+			// Create cluster without admin port initially
+			aeroCluster = createDummyAerospikeCluster(clusterNamespacedName, 2)
+			aeroCluster.Spec.Image = fmt.Sprintf("%s:%s", baseImage, "8.1.0.0-rc3")
+			aeroCluster.Spec.PodSpec.AerospikeInitContainerSpec.ImageRegistryNamespace = ptr.To("tanmayj10")
+			aeroCluster.Spec.PodSpec.AerospikeInitContainerSpec.ImageNameAndTag = customInitImage
+			aeroCluster.Spec.PodSpec.MultiPodPerHost = ptr.To(false)
+			Expect(DeployCluster(k8sClient, ctx, aeroCluster)).ToNot(HaveOccurred())
+
+			// Update cluster to add admin port
+			aeroCluster, err = getCluster(k8sClient, ctx, clusterNamespacedName)
+			Expect(err).ToNot(HaveOccurred())
+
+			networkConf := aeroCluster.Spec.AerospikeConfig.Value[asdbv1.ConfKeyNetwork].(map[string]interface{})
+			networkConf[asdbv1.ConfKeyNetworkAdmin] = map[string]interface{}{
+				asdbv1.ConfKeyPort: 3003,
+			}
+			aeroCluster.Spec.AerospikeConfig.Value[asdbv1.ConfKeyNetwork] = networkConf
+
+			err = updateCluster(k8sClient, ctx, aeroCluster)
+			Expect(err).ToNot(HaveOccurred())
+
+			// Verify admin port is configured in Aerospike
+			By("Verifying admin port configuration")
+			validateAdminPort(ctx, clusterNamespacedName, clusterNamespacedName.Name+"-0-0", 3003)
+		},
+	)
+
+	It(
+		"Should update cluster by removing admin connection",
+		func() {
+			clusterName := fmt.Sprintf("admin-port-remove-cluster-%d", GinkgoParallelProcess())
+			clusterNamespacedName := test.GetNamespacedName(
+				clusterName, namespace,
+			)
+
+			// Create cluster with admin port initially
+			aeroCluster = createDummyAerospikeClusterWithAdminPort(clusterNamespacedName, 2, 3003)
+
+			Expect(DeployCluster(k8sClient, ctx, aeroCluster)).ToNot(HaveOccurred())
+
+			// Verify admin port is initially configured
+			By("Verifying admin port configuration")
+			validateAdminPort(ctx, clusterNamespacedName, clusterNamespacedName.Name+"-0-0", 3003)
+
+			// Update cluster to remove admin port
+			By("Removing admin port configuration")
+
+			networkConf := aeroCluster.Spec.AerospikeConfig.Value[asdbv1.ConfKeyNetwork].(map[string]interface{})
+			delete(networkConf, asdbv1.ConfKeyNetworkAdmin)
+			aeroCluster.Spec.AerospikeConfig.Value[asdbv1.ConfKeyNetwork] = networkConf
+
+			err := updateCluster(k8sClient, ctx, aeroCluster)
+			Expect(err).ToNot(HaveOccurred())
+
+			// Verify admin port
+			By("Verifying admin port configuration")
+			validateAdminPort(ctx, clusterNamespacedName, clusterNamespacedName.Name+"-0-0", 0)
+		},
+	)
+}
+
+func validateAdminPort(ctx goctx.Context, clusterNamespacedName types.NamespacedName, podName string, adminPort int) {
+	networkPort := asdbv1.ConfKeyNetworkAdmin
+	if adminPort == 0 {
+		networkPort = asdbv1.ConfKeyNetworkService
+	}
+
+	asinfo, err := getASInfo(logger, k8sClient, ctx, clusterNamespacedName, podName, networkPort)
+	Expect(err).ToNot(HaveOccurred())
+
+	confs, err := getAsConfig(asinfo, asdbv1.ConfKeyNetwork)
+	Expect(err).ToNot(HaveOccurred())
+
+	// Verify admin port is set to adminPort
+	network := confs[asdbv1.ConfKeyNetwork].(lib.Stats)
+	Expect(network["admin.port"]).To(Equal(int64(adminPort)))
+}
+
+// Network-related validation tests
+func NetworkValidationTest(ctx goctx.Context) {
+	Context(
+		"DeployValidation", func() {
+			networkDeployValidationTest(ctx)
+		},
+	)
+	Context(
+		"UpdateValidation", func() {
+			networkUpdateValidationTest(ctx)
+		},
+	)
+}
+
+func networkDeployValidationTest(ctx goctx.Context) {
+	Context(
+		"Validation", func() {
+			clusterName := fmt.Sprintf("invalid-network-cluster-%d", GinkgoParallelProcess())
+			clusterNamespacedName := test.GetNamespacedName(
+				clusterName, namespace,
+			)
+
+			It(
+				"NetworkConf: should fail for setting network conf/tls network conf",
+				func() {
+					// Network conf
+					// asdbv1.ConfKeyPort
+					// "access-port"
+					// "access-addresses"
+					// "alternate-access-port"
+					// "alternate-access-addresses"
+					aeroCluster := createDummyAerospikeCluster(
+						clusterNamespacedName, 1,
+					)
+					networkConf := map[string]interface{}{
+						asdbv1.ConfKeyNetworkService: map[string]interface{}{
+							asdbv1.ConfKeyPort: serviceNonTLSPort,
+							"access-addresses": []string{"<access_addresses>"},
+						},
+					}
+					aeroCluster.Spec.AerospikeConfig.Value[asdbv1.ConfKeyNetwork] = networkConf
+					Expect(DeployCluster(k8sClient, ctx, aeroCluster)).Should(HaveOccurred())
+
+					// if "tls-name" in conf
+					// "tls-port"
+					// "tls-access-port"
+					// "tls-access-addresses"
+					// "tls-alternate-access-port"
+					// "tls-alternate-access-addresses"
+					aeroCluster = createDummyAerospikeCluster(
+						clusterNamespacedName, 1,
+					)
+					networkConf = map[string]interface{}{
+						asdbv1.ConfKeyNetworkService: map[string]interface{}{
+							asdbv1.ConfKeyTLSName:  "aerospike-a-0.test-runner",
+							asdbv1.ConfKeyTLSPort:  3001,
+							"tls-access-addresses": []string{"<tls-access-addresses>"},
+						},
+					}
+					aeroCluster.Spec.AerospikeConfig.Value[asdbv1.ConfKeyNetwork] = networkConf
+					Expect(DeployCluster(k8sClient, ctx, aeroCluster)).Should(HaveOccurred())
+				},
+			)
+
+			It(
+				"WhenTLSExist: should fail for no tls path in storage volume",
+				func() {
+					aeroCluster := createAerospikeClusterPost640(
+						clusterNamespacedName, 1, latestImage,
+					)
+					aeroCluster.Spec.AerospikeConfig.Value[asdbv1.ConfKeyNetwork] = map[string]interface{}{
+						"tls": []interface{}{
+							map[string]interface{}{
+								"name":      "aerospike-a-0.test-runner",
+								"cert-file": "/randompath/svc_cluster_chain.pem",
+							},
+						},
+					}
+					Expect(DeployCluster(k8sClient, ctx, aeroCluster)).Should(HaveOccurred())
+				},
+			)
+
+			It(
+				"WhenTLSExist: should fail for both ca-file and ca-path in tls",
+				func() {
+					aeroCluster := createAerospikeClusterPost640(
+						clusterNamespacedName, 1, latestImage,
+					)
+					aeroCluster.Spec.AerospikeConfig.Value[asdbv1.ConfKeyNetwork] = map[string]interface{}{
+						"tls": []interface{}{
+							map[string]interface{}{
+								"name":      "aerospike-a-0.test-runner",
+								"cert-file": "/etc/aerospike/secret/svc_cluster_chain.pem",
+								"key-file":  "/etc/aerospike/secret/svc_key.pem",
+								"ca-file":   "/etc/aerospike/secret/cacert.pem",
+								"ca-path":   "/etc/aerospike/secret/cacerts",
+							},
+						},
+					}
+					Expect(DeployCluster(k8sClient, ctx, aeroCluster)).Should(HaveOccurred())
+				},
+			)
+
+			It(
+				"WhenTLSExist: should fail for ca-file path pointing to Secret Manager",
+				func() {
+					aeroCluster := createAerospikeClusterPost640(
+						clusterNamespacedName, 1, latestImage,
+					)
+					aeroCluster.Spec.AerospikeConfig.Value[asdbv1.ConfKeyNetwork] = map[string]interface{}{
+						"tls": []interface{}{
+							map[string]interface{}{
+								"name":      "aerospike-a-0.test-runner",
+								"cert-file": "/etc/aerospike/secret/svc_cluster_chain.pem",
+								"key-file":  "/etc/aerospike/secret/svc_key.pem",
+								"ca-file":   "secrets:Test-secret:Key",
+							},
+						},
+					}
+					Expect(DeployCluster(k8sClient, ctx, aeroCluster)).Should(HaveOccurred())
+				},
+			)
+
+			It(
+				"WhenTLSExist: should fail for ca-path pointing to Secret Manager",
+				func() {
+					aeroCluster := createAerospikeClusterPost640(
+						clusterNamespacedName, 1, latestImage,
+					)
+					aeroCluster.Spec.AerospikeConfig.Value[asdbv1.ConfKeyNetwork] = map[string]interface{}{
+						"tls": []interface{}{
+							map[string]interface{}{
+								"name":      "aerospike-a-0.test-runner",
+								"cert-file": "/etc/aerospike/secret/svc_cluster_chain.pem",
+								"key-file":  "/etc/aerospike/secret/svc_key.pem",
+								"ca-path":   "secrets:Test-secret:Key",
+							},
+						},
+					}
+					Expect(DeployCluster(k8sClient, ctx, aeroCluster)).Should(HaveOccurred())
+				},
+			)
+		},
+	)
+}
+
+func networkUpdateValidationTest(ctx goctx.Context) {
+	Context(
+		"Validation", func() {
+			clusterName := fmt.Sprintf("invalid-network-cluster-%d", GinkgoParallelProcess())
+			clusterNamespacedName := test.GetNamespacedName(
+				clusterName, namespace,
+			)
+
+			BeforeEach(
+				func() {
+					aeroCluster := createDummyAerospikeCluster(
+						clusterNamespacedName, 3,
+					)
+
+					Expect(DeployCluster(k8sClient, ctx, aeroCluster)).ToNot(HaveOccurred())
+				},
+			)
+
+			AfterEach(
+				func() {
+					aeroCluster := &asdbv1.AerospikeCluster{
+						ObjectMeta: metav1.ObjectMeta{
+							Name:      clusterName,
+							Namespace: namespace,
+						},
+					}
+
+					Expect(DeleteCluster(k8sClient, ctx, aeroCluster)).ToNot(HaveOccurred())
+					Expect(CleanupPVC(k8sClient, aeroCluster.Namespace, aeroCluster.Name)).ToNot(HaveOccurred())
+				},
+			)
+
+			It(
+				"UpdateService: should fail for updating non-tls to tls in single step. Cannot be updated",
+				func() {
+					aeroCluster, err := getCluster(
+						k8sClient, ctx, clusterNamespacedName,
+					)
+					Expect(err).ToNot(HaveOccurred())
+
+					network := getNetworkTLSConfig()
+					serviceNetwork := network[asdbv1.ConfKeyNetworkService].(map[string]interface{})
+					delete(serviceNetwork, asdbv1.ConfKeyPort)
+					network[asdbv1.ConfKeyNetworkService] = serviceNetwork
+					aeroCluster.Spec.AerospikeConfig.Value[asdbv1.ConfKeyNetwork] = network
+					aeroCluster.Spec.OperatorClientCertSpec = &asdbv1.AerospikeOperatorClientCertSpec{
+						AerospikeOperatorCertSource: asdbv1.AerospikeOperatorCertSource{
+							SecretCertSource: &asdbv1.AerospikeSecretCertSource{
+								SecretName:         test.AerospikeSecretName,
+								CaCertsFilename:    "cacert.pem",
+								ClientCertFilename: "svc_cluster_chain.pem",
+								ClientKeyFilename:  "svc_key.pem",
+							},
+						},
+					}
+					err = updateCluster(k8sClient, ctx, aeroCluster)
+					Expect(err).Should(HaveOccurred())
+				},
+			)
+
+			It(
+				"NetworkConf: should fail for setting network conf, should fail for setting tls network conf",
+				func() {
+					// Network conf
+					// asdbv1.ConfKeyPort
+					// "access-port"
+					// "access-addresses"
+					// "alternate-access-port"
+					// "alternate-access-addresses"
+					aeroCluster, err := getCluster(
+						k8sClient, ctx, clusterNamespacedName,
+					)
+					Expect(err).ToNot(HaveOccurred())
+
+					networkConf := map[string]interface{}{
+						asdbv1.ConfKeyNetworkService: map[string]interface{}{
+							asdbv1.ConfKeyPort: serviceNonTLSPort,
+							"access-addresses": []string{"<access_addresses>"},
+						},
+					}
+					aeroCluster.Spec.AerospikeConfig.Value[asdbv1.ConfKeyNetwork] = networkConf
+					err = k8sClient.Update(ctx, aeroCluster)
+					Expect(err).Should(HaveOccurred())
+
+					// if "tls-name" in conf
+					// "tls-port"
+					// "tls-access-port"
+					// "tls-access-addresses"
+					// "tls-alternate-access-port"
+					// "tls-alternate-access-addresses"
+					aeroCluster, err = getCluster(
+						k8sClient, ctx, clusterNamespacedName,
+					)
+					Expect(err).ToNot(HaveOccurred())
+
+					networkConf = map[string]interface{}{
+						asdbv1.ConfKeyNetworkService: map[string]interface{}{
+							asdbv1.ConfKeyTLSName:  "aerospike-a-0.test-runner",
+							asdbv1.ConfKeyTLSPort:  3001,
+							"tls-access-addresses": []string{"<tls-access-addresses>"},
+						},
+					}
+					aeroCluster.Spec.AerospikeConfig.Value[asdbv1.ConfKeyNetwork] = networkConf
+					err = k8sClient.Update(ctx, aeroCluster)
+					Expect(err).Should(HaveOccurred())
+				},
+			)
+
+			It(
+				"WhenTLSExist: should fail for no tls path in storage volumes",
+				func() {
+					aeroCluster, err := getCluster(
+						k8sClient, ctx, clusterNamespacedName,
+					)
+					Expect(err).ToNot(HaveOccurred())
+
+					aeroCluster.Spec.AerospikeConfig.Value[asdbv1.ConfKeyNetwork] = map[string]interface{}{
+						"tls": []interface{}{
+							map[string]interface{}{
+								"name":      "aerospike-a-0.test-runner",
+								"cert-file": "/randompath/svc_cluster_chain.pem",
+							},
+						},
+					}
+					err = k8sClient.Update(ctx, aeroCluster)
+					Expect(err).Should(HaveOccurred())
+				},
+			)
+		},
+	)
+}
 
 func PauseReconcileTest(ctx goctx.Context) {
 	clusterNamespacedName := test.GetNamespacedName(
@@ -229,30 +645,30 @@ func ValidateAerospikeBenchmarkConfigs(ctx goctx.Context) {
 					imageBeforeFix := fmt.Sprintf("%s:%s", baseImage, "7.1.0.2")
 					aeroCluster := createAerospikeClusterPost640(clusterNamespacedName, 2, imageBeforeFix)
 					namespaceConfig :=
-						aeroCluster.Spec.AerospikeConfig.Value["namespaces"].([]interface{})[0].(map[string]interface{})
+						aeroCluster.Spec.AerospikeConfig.Value[asdbv1.ConfKeyNamespace].([]interface{})[0].(map[string]interface{})
 					namespaceConfig["enable-benchmarks-read"] = false
-					aeroCluster.Spec.AerospikeConfig.Value["namespaces"].([]interface{})[0] = namespaceConfig
+					aeroCluster.Spec.AerospikeConfig.Value[asdbv1.ConfKeyNamespace].([]interface{})[0] = namespaceConfig
 					Expect(DeployCluster(k8sClient, ctx, aeroCluster)).ToNot(HaveOccurred())
 
 					By("Validating benchmarking is disabled")
 
 					nsConfs, err := getAerospikeConfigFromNode(logger, k8sClient, ctx, clusterNamespacedName,
-						"namespaces", aeroCluster.Name+"-0-0")
+						asdbv1.ConfKeyNamespace, aeroCluster.Name+"-0-0")
 					Expect(err).ToNot(HaveOccurred())
 					Expect(nsConfs["test"].(lib.Stats)["enable-benchmarks-read"]).To(BeFalse())
 
 					By("Updating cluster to enable benchmarking")
 
 					namespaceConfig =
-						aeroCluster.Spec.AerospikeConfig.Value["namespaces"].([]interface{})[0].(map[string]interface{})
+						aeroCluster.Spec.AerospikeConfig.Value[asdbv1.ConfKeyNamespace].([]interface{})[0].(map[string]interface{})
 					namespaceConfig["enable-benchmarks-read"] = true
-					aeroCluster.Spec.AerospikeConfig.Value["namespaces"].([]interface{})[0] = namespaceConfig
+					aeroCluster.Spec.AerospikeConfig.Value[asdbv1.ConfKeyNamespace].([]interface{})[0] = namespaceConfig
 
 					err = updateCluster(k8sClient, ctx, aeroCluster)
 					Expect(err).ToNot(HaveOccurred())
 
 					nsConfs, err = getAerospikeConfigFromNode(logger, k8sClient, ctx, clusterNamespacedName,
-						"namespaces", aeroCluster.Name+"-0-0")
+						asdbv1.ConfKeyNamespace, aeroCluster.Name+"-0-0")
 					Expect(err).ToNot(HaveOccurred())
 					Expect(nsConfs["test"].(lib.Stats)["enable-benchmarks-read"]).To(BeTrue())
 
@@ -265,23 +681,23 @@ func ValidateAerospikeBenchmarkConfigs(ctx goctx.Context) {
 					Expect(err).ToNot(HaveOccurred())
 
 					nsConfs, err = getAerospikeConfigFromNode(logger, k8sClient, ctx, clusterNamespacedName,
-						"namespaces", aeroCluster.Name+"-0-0")
+						asdbv1.ConfKeyNamespace, aeroCluster.Name+"-0-0")
 					Expect(err).ToNot(HaveOccurred())
 					Expect(nsConfs["test"].(lib.Stats)["enable-benchmarks-read"]).To(BeTrue())
 
 					By("Updating cluster to disable benchmarking")
 
 					namespaceConfig =
-						aeroCluster.Spec.AerospikeConfig.Value["namespaces"].([]interface{})[0].(map[string]interface{})
+						aeroCluster.Spec.AerospikeConfig.Value[asdbv1.ConfKeyNamespace].([]interface{})[0].(map[string]interface{})
 
 					namespaceConfig["enable-benchmarks-read"] = false
-					aeroCluster.Spec.AerospikeConfig.Value["namespaces"].([]interface{})[0] = namespaceConfig
+					aeroCluster.Spec.AerospikeConfig.Value[asdbv1.ConfKeyNamespace].([]interface{})[0] = namespaceConfig
 
 					err = updateCluster(k8sClient, ctx, aeroCluster)
 					Expect(err).ToNot(HaveOccurred())
 
 					nsConfs, err = getAerospikeConfigFromNode(logger, k8sClient, ctx, clusterNamespacedName,
-						"namespaces", aeroCluster.Name+"-0-0")
+						asdbv1.ConfKeyNamespace, aeroCluster.Name+"-0-0")
 					Expect(err).ToNot(HaveOccurred())
 					Expect(nsConfs["test"].(lib.Stats)["enable-benchmarks-read"]).To(BeFalse())
 				},
@@ -301,7 +717,7 @@ func ScaleDownWithMigrateFillDelay(ctx goctx.Context) {
 			BeforeEach(
 				func() {
 					aeroCluster := createDummyAerospikeCluster(clusterNamespacedName, 4)
-					aeroCluster.Spec.AerospikeConfig.Value["service"].(map[string]interface{})["migrate-fill-delay"] =
+					aeroCluster.Spec.AerospikeConfig.Value[asdbv1.ConfKeyService].(map[string]interface{})["migrate-fill-delay"] =
 						migrateFillDelay
 					Expect(DeployCluster(k8sClient, ctx, aeroCluster)).ToNot(HaveOccurred())
 				},
@@ -416,7 +832,7 @@ func clusterWithMaxIgnorablePod(ctx goctx.Context) {
 							Expect(err).ToNot(HaveOccurred())
 							val := intstr.FromInt32(1)
 							aeroCluster.Spec.RackConfig.MaxIgnorablePods = &val
-							aeroCluster.Spec.AerospikeConfig.Value["security"].(map[string]interface{})["enable-quotas"] = true
+							aeroCluster.Spec.AerospikeConfig.Value[asdbv1.ConfKeySecurity].(map[string]interface{})["enable-quotas"] = true
 
 							// As pod is in pending state, CR object won't reach the final phase.
 							// So expectedPhases can be InProgress or Completed
@@ -599,9 +1015,9 @@ func clusterWithMaxIgnorablePod(ctx goctx.Context) {
 
 					val := intstr.FromInt32(1)
 					aeroCluster.Spec.RackConfig.MaxIgnorablePods = &val
-					nsList := aeroCluster.Spec.AerospikeConfig.Value["namespaces"].([]interface{})
+					nsList := aeroCluster.Spec.AerospikeConfig.Value[asdbv1.ConfKeyNamespace].([]interface{})
 					nsList = nsList[:len(nsList)-1]
-					aeroCluster.Spec.AerospikeConfig.Value["namespaces"] = nsList
+					aeroCluster.Spec.AerospikeConfig.Value[asdbv1.ConfKeyNamespace] = nsList
 					err = updateCluster(k8sClient, ctx, aeroCluster)
 					Expect(err).ToNot(HaveOccurred())
 
@@ -610,9 +1026,9 @@ func clusterWithMaxIgnorablePod(ctx goctx.Context) {
 
 					By("RollingRestart by re-using previously removed namespace storage")
 
-					nsList = aeroCluster.Spec.AerospikeConfig.Value["namespaces"].([]interface{})
+					nsList = aeroCluster.Spec.AerospikeConfig.Value[asdbv1.ConfKeyNamespace].([]interface{})
 					nsList = append(nsList, getNonSCNamespaceConfig("barnew", "/test/dev/xvdf1"))
-					aeroCluster.Spec.AerospikeConfig.Value["namespaces"] = nsList
+					aeroCluster.Spec.AerospikeConfig.Value[asdbv1.ConfKeyNamespace] = nsList
 
 					err = updateCluster(k8sClient, ctx, aeroCluster)
 					Expect(err).ToNot(HaveOccurred())
@@ -628,9 +1044,9 @@ func deployClusterForMaxIgnorablePods(ctx goctx.Context, clusterNamespacedName t
 	aeroCluster := createDummyAerospikeCluster(clusterNamespacedName, size)
 
 	// Add a nonsc namespace. This will be used to test dirty volumes
-	nsList := aeroCluster.Spec.AerospikeConfig.Value["namespaces"].([]interface{})
+	nsList := aeroCluster.Spec.AerospikeConfig.Value[asdbv1.ConfKeyNamespace].([]interface{})
 	nsList = append(nsList, getNonSCNamespaceConfig("bar", "/test/dev/xvdf1"))
-	aeroCluster.Spec.AerospikeConfig.Value["namespaces"] = nsList
+	aeroCluster.Spec.AerospikeConfig.Value[asdbv1.ConfKeyNamespace] = nsList
 
 	aeroCluster.Spec.Storage.Volumes = append(
 		aeroCluster.Spec.Storage.Volumes,
@@ -898,7 +1314,7 @@ func UpdateTLSClusterTest(ctx goctx.Context) {
 	BeforeEach(
 		func() {
 			aeroCluster := createBasicTLSCluster(clusterNamespacedName, 3)
-			aeroCluster.Spec.AerospikeConfig.Value["namespaces"] = []interface{}{
+			aeroCluster.Spec.AerospikeConfig.Value[asdbv1.ConfKeyNamespace] = []interface{}{
 				getSCNamespaceConfig("test", "/test/dev/xvdf"),
 			}
 			aeroCluster.Spec.Storage = getBasicStorageSpecObject()
@@ -932,7 +1348,7 @@ func UpdateTLSClusterTest(ctx goctx.Context) {
 					)
 					Expect(err).ToNot(HaveOccurred())
 
-					network := aeroCluster.Spec.AerospikeConfig.Value["network"].(map[string]interface{})
+					network := aeroCluster.Spec.AerospikeConfig.Value[asdbv1.ConfKeyNetwork].(map[string]interface{})
 					tlsList := network["tls"].([]interface{})
 					tlsList = append(
 						tlsList, map[string]interface{}{
@@ -943,42 +1359,42 @@ func UpdateTLSClusterTest(ctx goctx.Context) {
 						},
 					)
 					network["tls"] = tlsList
-					aeroCluster.Spec.AerospikeConfig.Value["network"] = network
+					aeroCluster.Spec.AerospikeConfig.Value[asdbv1.ConfKeyNetwork] = network
 					err = updateCluster(k8sClient, ctx, aeroCluster)
 					Expect(err).ToNot(HaveOccurred())
 
 					By("Modifying unused TLS configuration")
 
-					network = aeroCluster.Spec.AerospikeConfig.Value["network"].(map[string]interface{})
+					network = aeroCluster.Spec.AerospikeConfig.Value[asdbv1.ConfKeyNetwork].(map[string]interface{})
 					tlsList = network["tls"].([]interface{})
 					unusedTLS := tlsList[1].(map[string]interface{})
 					unusedTLS["name"] = "aerospike-a-0.test-runner2"
 					unusedTLS["ca-file"] = "/etc/aerospike/secret/fb_cert.pem"
 					tlsList[1] = unusedTLS
 					network["tls"] = tlsList
-					aeroCluster.Spec.AerospikeConfig.Value["network"] = network
+					aeroCluster.Spec.AerospikeConfig.Value[asdbv1.ConfKeyNetwork] = network
 					err = updateCluster(k8sClient, ctx, aeroCluster)
 					Expect(err).ToNot(HaveOccurred())
 
 					By("Removing unused TLS configuration")
 
-					network = aeroCluster.Spec.AerospikeConfig.Value["network"].(map[string]interface{})
+					network = aeroCluster.Spec.AerospikeConfig.Value[asdbv1.ConfKeyNetwork].(map[string]interface{})
 					tlsList = network["tls"].([]interface{})
 					network["tls"] = tlsList[:1]
-					aeroCluster.Spec.AerospikeConfig.Value["network"] = network
+					aeroCluster.Spec.AerospikeConfig.Value[asdbv1.ConfKeyNetwork] = network
 					err = updateCluster(k8sClient, ctx, aeroCluster)
 					Expect(err).ToNot(HaveOccurred())
 
 					By("Changing ca-file to ca-path in TLS configuration")
 
-					network = aeroCluster.Spec.AerospikeConfig.Value["network"].(map[string]interface{})
+					network = aeroCluster.Spec.AerospikeConfig.Value[asdbv1.ConfKeyNetwork].(map[string]interface{})
 					tlsList = network["tls"].([]interface{})
 					usedTLS := tlsList[0].(map[string]interface{})
 					usedTLS["ca-path"] = "/etc/aerospike/secret/cacerts"
 					delete(usedTLS, "ca-file")
 					tlsList[0] = usedTLS
 					network["tls"] = tlsList
-					aeroCluster.Spec.AerospikeConfig.Value["network"] = network
+					aeroCluster.Spec.AerospikeConfig.Value[asdbv1.ConfKeyNetwork] = network
 					secretVolume := asdbv1.VolumeSpec{
 						Name: test.TLSCacertSecretName,
 						Source: asdbv1.VolumeSource{
@@ -1016,57 +1432,57 @@ func UpdateTLSClusterTest(ctx goctx.Context) {
 					)
 					Expect(err).ToNot(HaveOccurred())
 
-					network := aeroCluster.Spec.AerospikeConfig.Value["network"].(map[string]interface{})
+					network := aeroCluster.Spec.AerospikeConfig.Value[asdbv1.ConfKeyNetwork].(map[string]interface{})
 					tlsList := network["tls"].([]interface{})
 					usedTLS := tlsList[0].(map[string]interface{})
 					usedTLS["name"] = "aerospike-a-0.test-runner2"
 					tlsList[0] = usedTLS
 					network["tls"] = tlsList
-					aeroCluster.Spec.AerospikeConfig.Value["network"] = network
+					aeroCluster.Spec.AerospikeConfig.Value[asdbv1.ConfKeyNetwork] = network
 					err = updateCluster(k8sClient, ctx, aeroCluster)
 					Expect(err).Should(HaveOccurred())
 
 					By("Modifying ca-file of used TLS configuration")
 
-					network = aeroCluster.Spec.AerospikeConfig.Value["network"].(map[string]interface{})
+					network = aeroCluster.Spec.AerospikeConfig.Value[asdbv1.ConfKeyNetwork].(map[string]interface{})
 					tlsList = network["tls"].([]interface{})
 					usedTLS = tlsList[0].(map[string]interface{})
 					usedTLS["ca-file"] = "/etc/aerospike/secret/fb_cert.pem"
 					tlsList[0] = usedTLS
 					network["tls"] = tlsList
-					aeroCluster.Spec.AerospikeConfig.Value["network"] = network
+					aeroCluster.Spec.AerospikeConfig.Value[asdbv1.ConfKeyNetwork] = network
 					err = updateCluster(k8sClient, ctx, aeroCluster)
 					Expect(err).Should(HaveOccurred())
 
 					By("Updating both ca-file and ca-path in TLS configuration")
 
-					network = aeroCluster.Spec.AerospikeConfig.Value["network"].(map[string]interface{})
+					network = aeroCluster.Spec.AerospikeConfig.Value[asdbv1.ConfKeyNetwork].(map[string]interface{})
 					tlsList = network["tls"].([]interface{})
 					usedTLS = tlsList[0].(map[string]interface{})
 					usedTLS["ca-path"] = "/etc/aerospike/secret/cacerts"
 					tlsList[0] = usedTLS
 					network["tls"] = tlsList
-					aeroCluster.Spec.AerospikeConfig.Value["network"] = network
+					aeroCluster.Spec.AerospikeConfig.Value[asdbv1.ConfKeyNetwork] = network
 					err = updateCluster(k8sClient, ctx, aeroCluster)
 					Expect(err).Should(HaveOccurred())
 
 					By("Updating tls-name in service network config")
 
-					network = aeroCluster.Spec.AerospikeConfig.Value["network"].(map[string]interface{})
-					serviceNetwork := network[asdbv1.ServicePortName].(map[string]interface{})
+					network = aeroCluster.Spec.AerospikeConfig.Value[asdbv1.ConfKeyNetwork].(map[string]interface{})
+					serviceNetwork := network[asdbv1.ConfKeyNetworkService].(map[string]interface{})
 					serviceNetwork["tls-name"] = "unknown-tls"
-					network[asdbv1.ServicePortName] = serviceNetwork
-					aeroCluster.Spec.AerospikeConfig.Value["network"] = network
+					network[asdbv1.ConfKeyNetworkService] = serviceNetwork
+					aeroCluster.Spec.AerospikeConfig.Value[asdbv1.ConfKeyNetwork] = network
 					err = updateCluster(k8sClient, ctx, aeroCluster)
 					Expect(err).Should(HaveOccurred())
 
 					By("Updating tls-port in service network config")
 
-					network = aeroCluster.Spec.AerospikeConfig.Value["network"].(map[string]interface{})
-					serviceNetwork = network[asdbv1.ServicePortName].(map[string]interface{})
+					network = aeroCluster.Spec.AerospikeConfig.Value[asdbv1.ConfKeyNetwork].(map[string]interface{})
+					serviceNetwork = network[asdbv1.ConfKeyNetworkService].(map[string]interface{})
 					serviceNetwork["tls-port"] = float64(4000)
-					network[asdbv1.ServicePortName] = serviceNetwork
-					aeroCluster.Spec.AerospikeConfig.Value["network"] = network
+					network[asdbv1.ConfKeyNetworkService] = serviceNetwork
+					aeroCluster.Spec.AerospikeConfig.Value[asdbv1.ConfKeyNetwork] = network
 					err = updateCluster(k8sClient, ctx, aeroCluster)
 					Expect(err).Should(HaveOccurred())
 
@@ -1079,22 +1495,22 @@ func UpdateTLSClusterTest(ctx goctx.Context) {
 					)
 					Expect(err).ToNot(HaveOccurred())
 
-					network = aeroCluster.Spec.AerospikeConfig.Value["network"].(map[string]interface{})
-					serviceNetwork = network[asdbv1.ServicePortName].(map[string]interface{})
-					delete(serviceNetwork, "port")
-					network[asdbv1.ServicePortName] = serviceNetwork
-					aeroCluster.Spec.AerospikeConfig.Value["network"] = network
+					network = aeroCluster.Spec.AerospikeConfig.Value[asdbv1.ConfKeyNetwork].(map[string]interface{})
+					serviceNetwork = network[asdbv1.ConfKeyNetworkService].(map[string]interface{})
+					delete(serviceNetwork, asdbv1.ConfKeyPort)
+					network[asdbv1.ConfKeyNetworkService] = serviceNetwork
+					aeroCluster.Spec.AerospikeConfig.Value[asdbv1.ConfKeyNetwork] = network
 					err = updateCluster(k8sClient, ctx, aeroCluster)
 					Expect(err).ToNot(HaveOccurred())
 
-					network = aeroCluster.Spec.AerospikeConfig.Value["network"].(map[string]interface{})
-					serviceNetwork = network[asdbv1.ServicePortName].(map[string]interface{})
+					network = aeroCluster.Spec.AerospikeConfig.Value[asdbv1.ConfKeyNetwork].(map[string]interface{})
+					serviceNetwork = network[asdbv1.ConfKeyNetworkService].(map[string]interface{})
 					delete(serviceNetwork, "tls-port")
 					delete(serviceNetwork, "tls-name")
 					delete(serviceNetwork, "tls-authenticate-client")
-					serviceNetwork["port"] = float64(serviceNonTLSPort)
-					network[asdbv1.ServicePortName] = serviceNetwork
-					aeroCluster.Spec.AerospikeConfig.Value["network"] = network
+					serviceNetwork[asdbv1.ConfKeyPort] = float64(serviceNonTLSPort)
+					network[asdbv1.ConfKeyNetworkService] = serviceNetwork
+					aeroCluster.Spec.AerospikeConfig.Value[asdbv1.ConfKeyNetwork] = network
 					err = updateCluster(k8sClient, ctx, aeroCluster)
 					Expect(err).Should(HaveOccurred())
 				},
@@ -1254,6 +1670,9 @@ func UpdateClusterTest(ctx goctx.Context) {
 					err = validateServiceUpdate(k8sClient, ctx, clusterNamespacedName, []int32{serviceTLSPort})
 					Expect(err).ToNot(HaveOccurred())
 
+					err = validatePodPortsUpdate(k8sClient, ctx, clusterNamespacedName, []int32{serviceTLSPort})
+					Expect(err).ToNot(HaveOccurred())
+
 					By("RollingRestart By changing tls to non-tls")
 
 					err = rollingRestartClusterByDisablingTLS(
@@ -1262,6 +1681,9 @@ func UpdateClusterTest(ctx goctx.Context) {
 					Expect(err).ToNot(HaveOccurred())
 
 					err = validateServiceUpdate(k8sClient, ctx, clusterNamespacedName, []int32{serviceNonTLSPort})
+					Expect(err).ToNot(HaveOccurred())
+
+					err = validatePodPortsUpdate(k8sClient, ctx, clusterNamespacedName, []int32{serviceNonTLSPort})
 					Expect(err).ToNot(HaveOccurred())
 
 					By("Upgrade/Downgrade")
@@ -1359,93 +1781,56 @@ func UpdateClusterTest(ctx goctx.Context) {
 					)
 
 					Context(
-						"AerospikeConfig", func() {
-							Context(
-								"Namespace", func() {
-									It(
-										"UpdateReplicationFactor: should fail for updating namespace"+
-											"replication-factor on SC namespace. Cannot be updated",
-										func() {
-											aeroCluster, err := getCluster(
-												k8sClient, ctx,
-												clusterNamespacedName,
-											)
-											Expect(err).ToNot(HaveOccurred())
-
-											namespaceConfig :=
-												aeroCluster.Spec.AerospikeConfig.Value["namespaces"].([]interface{})[0].(map[string]interface{})
-											namespaceConfig["replication-factor"] = 5
-											aeroCluster.Spec.AerospikeConfig.Value["namespaces"].([]interface{})[0] = namespaceConfig
-
-											err = k8sClient.Update(
-												ctx, aeroCluster,
-											)
-											Expect(err).Should(HaveOccurred())
-										},
+						asdbv1.ConfKeyNamespace, func() {
+							It(
+								"UpdateReplicationFactor: should fail for updating namespace"+
+									"replication-factor on SC namespace. Cannot be updated",
+								func() {
+									aeroCluster, err := getCluster(
+										k8sClient, ctx,
+										clusterNamespacedName,
 									)
+									Expect(err).ToNot(HaveOccurred())
 
-									It(
-										"UpdateReplicationFactor: should fail for updating namespace"+
-											"replication-factor on non-SC namespace. Cannot be updated",
-										func() {
-											By("RollingRestart By Adding Namespace Dynamically")
+									namespaceConfig :=
+										aeroCluster.Spec.AerospikeConfig.Value[asdbv1.ConfKeyNamespace].([]interface{})[0].(map[string]interface{})
+									namespaceConfig["replication-factor"] = 5
+									aeroCluster.Spec.AerospikeConfig.Value[asdbv1.ConfKeyNamespace].([]interface{})[0] = namespaceConfig
 
-											err := rollingRestartClusterByAddingNamespaceDynamicallyTest(
-												k8sClient, ctx, dynamicNs, clusterNamespacedName,
-											)
-											Expect(err).ToNot(HaveOccurred())
-
-											aeroCluster, err := getCluster(
-												k8sClient, ctx,
-												clusterNamespacedName,
-											)
-											Expect(err).ToNot(HaveOccurred())
-
-											nsList := aeroCluster.Spec.AerospikeConfig.Value["namespaces"].([]interface{})
-											namespaceConfig := nsList[len(nsList)-1].(map[string]interface{})
-											namespaceConfig["replication-factor"] = 3
-											aeroCluster.Spec.AerospikeConfig.Value["namespaces"].([]interface{})[len(nsList)-1] = namespaceConfig
-
-											err = k8sClient.Update(
-												ctx, aeroCluster,
-											)
-											Expect(err).Should(HaveOccurred())
-										},
+									err = k8sClient.Update(
+										ctx, aeroCluster,
 									)
+									Expect(err).Should(HaveOccurred())
 								},
 							)
 
-							Context(
-								"Network", func() {
-									// Should fail when changing network config from non-tls to tls in a single step.
-									// Ideally first tls and non-tls config both has to set and then remove non-tls config.
-									It(
-										"UpdateService: should fail for updating non-tls to tls in single step. Cannot be updated",
-										func() {
-											aeroCluster, err := getCluster(
-												k8sClient, ctx, clusterNamespacedName,
-											)
-											Expect(err).ToNot(HaveOccurred())
+							It(
+								"UpdateReplicationFactor: should fail for updating namespace"+
+									"replication-factor on non-SC namespace. Cannot be updated",
+								func() {
+									By("RollingRestart By Adding Namespace Dynamically")
 
-											network := getNetworkTLSConfig()
-											serviceNetwork := network[asdbv1.ServicePortName].(map[string]interface{})
-											delete(serviceNetwork, "port")
-											network[asdbv1.ServicePortName] = serviceNetwork
-											aeroCluster.Spec.AerospikeConfig.Value["network"] = network
-											aeroCluster.Spec.OperatorClientCertSpec = &asdbv1.AerospikeOperatorClientCertSpec{
-												AerospikeOperatorCertSource: asdbv1.AerospikeOperatorCertSource{
-													SecretCertSource: &asdbv1.AerospikeSecretCertSource{
-														SecretName:         test.AerospikeSecretName,
-														CaCertsFilename:    "cacert.pem",
-														ClientCertFilename: "svc_cluster_chain.pem",
-														ClientKeyFilename:  "svc_key.pem",
-													},
-												},
-											}
-											err = updateCluster(k8sClient, ctx, aeroCluster)
-											Expect(err).Should(HaveOccurred())
-										},
+									err := rollingRestartClusterByAddingNamespaceDynamicallyTest(
+										k8sClient, ctx, dynamicNs, clusterNamespacedName,
 									)
+									Expect(err).ToNot(HaveOccurred())
+
+									aeroCluster, err := getCluster(
+										k8sClient, ctx,
+										clusterNamespacedName,
+									)
+									Expect(err).ToNot(HaveOccurred())
+
+									nsList := aeroCluster.Spec.AerospikeConfig.Value[asdbv1.ConfKeyNamespace].([]interface{})
+									namespaceConfig := nsList[len(nsList)-1].(map[string]interface{})
+									namespaceConfig["replication-factor"] = 3
+									aeroCluster.Spec.AerospikeConfig.
+										Value[asdbv1.ConfKeyNamespace].([]interface{})[len(nsList)-1] = namespaceConfig
+
+									err = k8sClient.Update(
+										ctx, aeroCluster,
+									)
+									Expect(err).Should(HaveOccurred())
 								},
 							)
 						},
@@ -1598,7 +1983,7 @@ func negativeDeployClusterValidationTest(
 							)
 							aeroCluster.Spec.AerospikeConfig = &asdbv1.AerospikeConfigSpec{
 								Value: map[string]interface{}{
-									"namespaces": "invalidConf",
+									asdbv1.ConfKeyNamespace: "invalidConf",
 								},
 							}
 							Expect(DeployCluster(k8sClient, ctx, aeroCluster)).Should(HaveOccurred())
@@ -1611,7 +1996,7 @@ func negativeDeployClusterValidationTest(
 							aeroCluster := createDummyAerospikeCluster(
 								clusterNamespacedName, 1,
 							)
-							aeroCluster.Spec.AerospikeConfig.Value["service"].(map[string]interface{})["advertise-ipv6"] = true
+							aeroCluster.Spec.AerospikeConfig.Value[asdbv1.ConfKeyService].(map[string]interface{})["advertise-ipv6"] = true
 							Expect(DeployCluster(k8sClient, ctx, aeroCluster)).Should(HaveOccurred())
 						},
 					)
@@ -1624,7 +2009,7 @@ func negativeDeployClusterValidationTest(
 									aeroCluster := createDummyAerospikeCluster(
 										clusterNamespacedName, 1,
 									)
-									aeroCluster.Spec.AerospikeConfig.Value["namespaces"] = nil
+									aeroCluster.Spec.AerospikeConfig.Value[asdbv1.ConfKeyNamespace] = nil
 									Expect(DeployCluster(k8sClient, ctx, aeroCluster)).Should(HaveOccurred())
 								},
 							)
@@ -1639,9 +2024,9 @@ func negativeDeployClusterValidationTest(
 												clusterNamespacedName, 1,
 											)
 											namespaceConfig :=
-												aeroCluster.Spec.AerospikeConfig.Value["namespaces"].([]interface{})[0].(map[string]interface{})
+												aeroCluster.Spec.AerospikeConfig.Value[asdbv1.ConfKeyNamespace].([]interface{})[0].(map[string]interface{})
 											namespaceConfig["storage-engine"] = nil
-											aeroCluster.Spec.AerospikeConfig.Value["namespaces"].([]interface{})[0] = namespaceConfig
+											aeroCluster.Spec.AerospikeConfig.Value[asdbv1.ConfKeyNamespace].([]interface{})[0] = namespaceConfig
 											Expect(DeployCluster(k8sClient, ctx, aeroCluster)).Should(HaveOccurred())
 										},
 									)
@@ -1653,12 +2038,12 @@ func negativeDeployClusterValidationTest(
 												clusterNamespacedName, 1,
 											)
 											namespaceConfig :=
-												aeroCluster.Spec.AerospikeConfig.Value["namespaces"].([]interface{})[0].(map[string]interface{})
+												aeroCluster.Spec.AerospikeConfig.Value[asdbv1.ConfKeyNamespace].([]interface{})[0].(map[string]interface{})
 
 											if _, ok :=
 												namespaceConfig["storage-engine"].(map[string]interface{})["devices"]; ok {
 												namespaceConfig["storage-engine"].(map[string]interface{})["devices"] = nil
-												aeroCluster.Spec.AerospikeConfig.Value["namespaces"].([]interface{})[0] = namespaceConfig
+												aeroCluster.Spec.AerospikeConfig.Value[asdbv1.ConfKeyNamespace].([]interface{})[0] = namespaceConfig
 												Expect(DeployCluster(k8sClient, ctx, aeroCluster)).Should(HaveOccurred())
 											}
 										},
@@ -1672,7 +2057,7 @@ func negativeDeployClusterValidationTest(
 												clusterNamespacedName, 1,
 											)
 											namespaceConfig :=
-												aeroCluster.Spec.AerospikeConfig.Value["namespaces"].([]interface{})[0].(map[string]interface{})
+												aeroCluster.Spec.AerospikeConfig.Value[asdbv1.ConfKeyNamespace].([]interface{})[0].(map[string]interface{})
 
 											if _, ok :=
 												namespaceConfig["storage-engine"].(map[string]interface{})["devices"]; ok {
@@ -1719,10 +2104,10 @@ func negativeDeployClusterValidationTest(
 												}
 
 												namespaceConfig :=
-													aeroCluster.Spec.AerospikeConfig.Value["namespaces"].([]interface{})[0].(map[string]interface{})
+													aeroCluster.Spec.AerospikeConfig.Value[asdbv1.ConfKeyNamespace].([]interface{})[0].(map[string]interface{})
 												namespaceConfig["storage-engine"].(map[string]interface{})["devices"] =
 													[]string{"/dev/xvdf1 /dev/xvdf2 /dev/xvdf3"}
-												aeroCluster.Spec.AerospikeConfig.Value["namespaces"].([]interface{})[0] = namespaceConfig
+												aeroCluster.Spec.AerospikeConfig.Value[asdbv1.ConfKeyNamespace].([]interface{})[0] = namespaceConfig
 												Expect(DeployCluster(k8sClient, ctx, aeroCluster)).Should(HaveOccurred())
 											}
 										},
@@ -1735,11 +2120,11 @@ func negativeDeployClusterValidationTest(
 												clusterNamespacedName, 1,
 											)
 											namespaceConfig :=
-												aeroCluster.Spec.AerospikeConfig.Value["namespaces"].([]interface{})[0].(map[string]interface{})
+												aeroCluster.Spec.AerospikeConfig.Value[asdbv1.ConfKeyNamespace].([]interface{})[0].(map[string]interface{})
 
 											if _, ok := namespaceConfig["storage-engine"].(map[string]interface{})["files"]; ok {
 												namespaceConfig["storage-engine"].(map[string]interface{})["files"] = nil
-												aeroCluster.Spec.AerospikeConfig.Value["namespaces"].([]interface{})[0] = namespaceConfig
+												aeroCluster.Spec.AerospikeConfig.Value[asdbv1.ConfKeyNamespace].([]interface{})[0] = namespaceConfig
 												Expect(DeployCluster(k8sClient, ctx, aeroCluster)).Should(HaveOccurred())
 											}
 										},
@@ -1753,7 +2138,7 @@ func negativeDeployClusterValidationTest(
 												clusterNamespacedName, 1,
 											)
 											namespaceConfig :=
-												aeroCluster.Spec.AerospikeConfig.Value["namespaces"].([]interface{})[0].(map[string]interface{})
+												aeroCluster.Spec.AerospikeConfig.Value[asdbv1.ConfKeyNamespace].([]interface{})[0].(map[string]interface{})
 
 											if _, ok := namespaceConfig["storage-engine"].(map[string]interface{})["devices"]; ok {
 												devList := namespaceConfig["storage-engine"].(map[string]interface{})["devices"].([]interface{})
@@ -1761,7 +2146,7 @@ func negativeDeployClusterValidationTest(
 													devList, "andRandomDevice",
 												)
 												namespaceConfig["storage-engine"].(map[string]interface{})["devices"] = devList
-												aeroCluster.Spec.AerospikeConfig.Value["namespaces"].([]interface{})[0] = namespaceConfig
+												aeroCluster.Spec.AerospikeConfig.Value[asdbv1.ConfKeyNamespace].([]interface{})[0] = namespaceConfig
 												Expect(DeployCluster(k8sClient, ctx, aeroCluster)).Should(HaveOccurred())
 											}
 										},
@@ -1783,9 +2168,9 @@ func negativeDeployClusterValidationTest(
 												},
 											}
 
-											nsList := aeroCluster.Spec.AerospikeConfig.Value["namespaces"].([]interface{})
+											nsList := aeroCluster.Spec.AerospikeConfig.Value[asdbv1.ConfKeyNamespace].([]interface{})
 											nsList = append(nsList, secondNs)
-											aeroCluster.Spec.AerospikeConfig.Value["namespaces"] = nsList
+											aeroCluster.Spec.AerospikeConfig.Value[asdbv1.ConfKeyNamespace] = nsList
 											Expect(DeployCluster(k8sClient, ctx, aeroCluster)).Should(HaveOccurred())
 										},
 									)
@@ -1797,7 +2182,7 @@ func negativeDeployClusterValidationTest(
 												clusterNamespacedName, 1,
 											)
 											namespaceConfig :=
-												aeroCluster.Spec.AerospikeConfig.Value["namespaces"].([]interface{})[0].(map[string]interface{})
+												aeroCluster.Spec.AerospikeConfig.Value[asdbv1.ConfKeyNamespace].([]interface{})[0].(map[string]interface{})
 
 											if _, ok := namespaceConfig["storage-engine"].(map[string]interface{})["devices"]; ok {
 												aeroCluster.Spec.Storage = asdbv1.AerospikeStorageSpec{}
@@ -1821,7 +2206,7 @@ func negativeDeployClusterValidationTest(
 									// Ns conf
 									// Rack-id
 									// aeroCluster := createDummyAerospikeCluster(clusterNamespacedName, 1)
-									// aeroCluster.Spec.AerospikeConfig.Value["namespaces"].
+									// aeroCluster.Spec.AerospikeConfig.Value[asdbv1.ConfKeyNamespace].
 									// ([]interface{})[0].(map[string]interface{})["rack-id"] = 1
 									// aeroCluster.Spec.RackConfig.Namespaces = []string{"test"}
 									// err := deployCluster(k8sClient, ctx, aeroCluster)
@@ -1838,55 +2223,14 @@ func negativeDeployClusterValidationTest(
 									aeroCluster := createDummyAerospikeCluster(
 										clusterNamespacedName, 1,
 									)
-									aeroCluster.Spec.AerospikeConfig.Value["service"].(map[string]interface{})["node-id"] = "a1"
+									aeroCluster.Spec.AerospikeConfig.Value[asdbv1.ConfKeyService].(map[string]interface{})["node-id"] = "a1"
 									Expect(DeployCluster(k8sClient, ctx, aeroCluster)).Should(HaveOccurred())
 
 									aeroCluster = createDummyAerospikeCluster(
 										clusterNamespacedName, 1,
 									)
-									aeroCluster.Spec.AerospikeConfig.Value["service"].(map[string]interface{})["cluster-name"] = "cluster-name"
-									Expect(DeployCluster(k8sClient, ctx, aeroCluster)).Should(HaveOccurred())
-								},
-							)
-
-							It(
-								"NetworkConf: should fail for setting network conf/tls network conf",
-								func() {
-									// Network conf
-									// "port"
-									// "access-port"
-									// "access-addresses"
-									// "alternate-access-port"
-									// "alternate-access-addresses"
-									aeroCluster := createDummyAerospikeCluster(
-										clusterNamespacedName, 1,
-									)
-									networkConf := map[string]interface{}{
-										"service": map[string]interface{}{
-											"port":             serviceNonTLSPort,
-											"access-addresses": []string{"<access_addresses>"},
-										},
-									}
-									aeroCluster.Spec.AerospikeConfig.Value["network"] = networkConf
-									Expect(DeployCluster(k8sClient, ctx, aeroCluster)).Should(HaveOccurred())
-
-									// if "tls-name" in conf
-									// "tls-port"
-									// "tls-access-port"
-									// "tls-access-addresses"
-									// "tls-alternate-access-port"
-									// "tls-alternate-access-addresses"
-									aeroCluster = createDummyAerospikeCluster(
-										clusterNamespacedName, 1,
-									)
-									networkConf = map[string]interface{}{
-										"service": map[string]interface{}{
-											"tls-name":             "aerospike-a-0.test-runner",
-											"tls-port":             3001,
-											"tls-access-addresses": []string{"<tls-access-addresses>"},
-										},
-									}
-									aeroCluster.Spec.AerospikeConfig.Value["network"] = networkConf
+									aeroCluster.Spec.AerospikeConfig.
+										Value[asdbv1.ConfKeyService].(map[string]interface{})[clusterNameConfig] = clusterNameConfig
 									Expect(DeployCluster(k8sClient, ctx, aeroCluster)).Should(HaveOccurred())
 								},
 							)
@@ -1903,87 +2247,8 @@ func negativeDeployClusterValidationTest(
 							aeroCluster := createAerospikeClusterPost640(
 								clusterNamespacedName, 1, latestImage,
 							)
-							aeroCluster.Spec.AerospikeConfig.Value["service"] = map[string]interface{}{
+							aeroCluster.Spec.AerospikeConfig.Value[asdbv1.ConfKeyService] = map[string]interface{}{
 								"feature-key-file": "/randompath/features.conf",
-							}
-							Expect(DeployCluster(k8sClient, ctx, aeroCluster)).Should(HaveOccurred())
-						},
-					)
-
-					It(
-						"WhenTLSExist: should fail for no tls path in storage volume",
-						func() {
-							aeroCluster := createAerospikeClusterPost640(
-								clusterNamespacedName, 1, latestImage,
-							)
-							aeroCluster.Spec.AerospikeConfig.Value["network"] = map[string]interface{}{
-								"tls": []interface{}{
-									map[string]interface{}{
-										"name":      "aerospike-a-0.test-runner",
-										"cert-file": "/randompath/svc_cluster_chain.pem",
-									},
-								},
-							}
-							Expect(DeployCluster(k8sClient, ctx, aeroCluster)).Should(HaveOccurred())
-						},
-					)
-
-					It(
-						"WhenTLSExist: should fail for both ca-file and ca-path in tls",
-						func() {
-							aeroCluster := createAerospikeClusterPost640(
-								clusterNamespacedName, 1, latestImage,
-							)
-							aeroCluster.Spec.AerospikeConfig.Value["network"] = map[string]interface{}{
-								"tls": []interface{}{
-									map[string]interface{}{
-										"name":      "aerospike-a-0.test-runner",
-										"cert-file": "/etc/aerospike/secret/svc_cluster_chain.pem",
-										"key-file":  "/etc/aerospike/secret/svc_key.pem",
-										"ca-file":   "/etc/aerospike/secret/cacert.pem",
-										"ca-path":   "/etc/aerospike/secret/cacerts",
-									},
-								},
-							}
-							Expect(DeployCluster(k8sClient, ctx, aeroCluster)).Should(HaveOccurred())
-						},
-					)
-
-					It(
-						"WhenTLSExist: should fail for ca-file path pointing to Secret Manager",
-						func() {
-							aeroCluster := createAerospikeClusterPost640(
-								clusterNamespacedName, 1, latestImage,
-							)
-							aeroCluster.Spec.AerospikeConfig.Value["network"] = map[string]interface{}{
-								"tls": []interface{}{
-									map[string]interface{}{
-										"name":      "aerospike-a-0.test-runner",
-										"cert-file": "/etc/aerospike/secret/svc_cluster_chain.pem",
-										"key-file":  "/etc/aerospike/secret/svc_key.pem",
-										"ca-file":   "secrets:Test-secret:Key",
-									},
-								},
-							}
-							Expect(DeployCluster(k8sClient, ctx, aeroCluster)).Should(HaveOccurred())
-						},
-					)
-
-					It(
-						"WhenTLSExist: should fail for ca-path pointing to Secret Manager",
-						func() {
-							aeroCluster := createAerospikeClusterPost640(
-								clusterNamespacedName, 1, latestImage,
-							)
-							aeroCluster.Spec.AerospikeConfig.Value["network"] = map[string]interface{}{
-								"tls": []interface{}{
-									map[string]interface{}{
-										"name":      "aerospike-a-0.test-runner",
-										"cert-file": "/etc/aerospike/secret/svc_cluster_chain.pem",
-										"key-file":  "/etc/aerospike/secret/svc_key.pem",
-										"ca-path":   "secrets:Test-secret:Key",
-									},
-								},
 							}
 							Expect(DeployCluster(k8sClient, ctx, aeroCluster)).Should(HaveOccurred())
 						},
@@ -2165,7 +2430,7 @@ func negativeUpdateClusterValidationTest(
 
 							aeroCluster.Spec.AerospikeConfig = &asdbv1.AerospikeConfigSpec{
 								Value: map[string]interface{}{
-									"namespaces": "invalidConf",
+									asdbv1.ConfKeyNamespace: "invalidConf",
 								},
 							}
 							err = k8sClient.Update(ctx, aeroCluster)
@@ -2183,7 +2448,7 @@ func negativeUpdateClusterValidationTest(
 									)
 									Expect(err).ToNot(HaveOccurred())
 
-									aeroCluster.Spec.AerospikeConfig.Value["namespaces"] = nil
+									aeroCluster.Spec.AerospikeConfig.Value[asdbv1.ConfKeyNamespace] = nil
 									err = k8sClient.Update(ctx, aeroCluster)
 									Expect(err).Should(HaveOccurred())
 								},
@@ -2202,9 +2467,9 @@ func negativeUpdateClusterValidationTest(
 											Expect(err).ToNot(HaveOccurred())
 
 											namespaceConfig :=
-												aeroCluster.Spec.AerospikeConfig.Value["namespaces"].([]interface{})[0].(map[string]interface{})
+												aeroCluster.Spec.AerospikeConfig.Value[asdbv1.ConfKeyNamespace].([]interface{})[0].(map[string]interface{})
 											namespaceConfig["storage-engine"] = nil
-											aeroCluster.Spec.AerospikeConfig.Value["namespaces"].([]interface{})[0] =
+											aeroCluster.Spec.AerospikeConfig.Value[asdbv1.ConfKeyNamespace].([]interface{})[0] =
 												namespaceConfig
 											err = k8sClient.Update(
 												ctx, aeroCluster,
@@ -2223,10 +2488,10 @@ func negativeUpdateClusterValidationTest(
 											Expect(err).ToNot(HaveOccurred())
 
 											namespaceConfig :=
-												aeroCluster.Spec.AerospikeConfig.Value["namespaces"].([]interface{})[0].(map[string]interface{})
+												aeroCluster.Spec.AerospikeConfig.Value[asdbv1.ConfKeyNamespace].([]interface{})[0].(map[string]interface{})
 											if _, ok := namespaceConfig["storage-engine"].(map[string]interface{})["devices"]; ok {
 												namespaceConfig["storage-engine"].(map[string]interface{})["devices"] = nil
-												aeroCluster.Spec.AerospikeConfig.Value["namespaces"].([]interface{})[0] = namespaceConfig
+												aeroCluster.Spec.AerospikeConfig.Value[asdbv1.ConfKeyNamespace].([]interface{})[0] = namespaceConfig
 												err = k8sClient.Update(
 													ctx, aeroCluster,
 												)
@@ -2245,10 +2510,10 @@ func negativeUpdateClusterValidationTest(
 											Expect(err).ToNot(HaveOccurred())
 
 											namespaceConfig :=
-												aeroCluster.Spec.AerospikeConfig.Value["namespaces"].([]interface{})[0].(map[string]interface{})
+												aeroCluster.Spec.AerospikeConfig.Value[asdbv1.ConfKeyNamespace].([]interface{})[0].(map[string]interface{})
 											if _, ok := namespaceConfig["storage-engine"].(map[string]interface{})["files"]; ok {
 												namespaceConfig["storage-engine"].(map[string]interface{})["files"] = nil
-												aeroCluster.Spec.AerospikeConfig.Value["namespaces"].([]interface{})[0] = namespaceConfig
+												aeroCluster.Spec.AerospikeConfig.Value[asdbv1.ConfKeyNamespace].([]interface{})[0] = namespaceConfig
 												err = k8sClient.Update(
 													ctx, aeroCluster,
 												)
@@ -2268,14 +2533,14 @@ func negativeUpdateClusterValidationTest(
 											Expect(err).ToNot(HaveOccurred())
 
 											namespaceConfig :=
-												aeroCluster.Spec.AerospikeConfig.Value["namespaces"].([]interface{})[0].(map[string]interface{})
+												aeroCluster.Spec.AerospikeConfig.Value[asdbv1.ConfKeyNamespace].([]interface{})[0].(map[string]interface{})
 											if _, ok := namespaceConfig["storage-engine"].(map[string]interface{})["devices"]; ok {
 												devList := namespaceConfig["storage-engine"].(map[string]interface{})["devices"].([]interface{})
 												devList = append(
 													devList, "andRandomDevice",
 												)
 												namespaceConfig["storage-engine"].(map[string]interface{})["devices"] = devList
-												aeroCluster.Spec.AerospikeConfig.Value["namespaces"].([]interface{})[0] = namespaceConfig
+												aeroCluster.Spec.AerospikeConfig.Value[asdbv1.ConfKeyNamespace].([]interface{})[0] = namespaceConfig
 												err = k8sClient.Update(
 													ctx, aeroCluster,
 												)
@@ -2303,9 +2568,9 @@ func negativeUpdateClusterValidationTest(
 												},
 											}
 
-											nsList := aeroCluster.Spec.AerospikeConfig.Value["namespaces"].([]interface{})
+											nsList := aeroCluster.Spec.AerospikeConfig.Value[asdbv1.ConfKeyNamespace].([]interface{})
 											nsList = append(nsList, secondNs)
-											aeroCluster.Spec.AerospikeConfig.Value["namespaces"] = nsList
+											aeroCluster.Spec.AerospikeConfig.Value[asdbv1.ConfKeyNamespace] = nsList
 											err = k8sClient.Update(
 												ctx, aeroCluster,
 											)
@@ -2323,7 +2588,7 @@ func negativeUpdateClusterValidationTest(
 											Expect(err).ToNot(HaveOccurred())
 
 											namespaceConfig :=
-												aeroCluster.Spec.AerospikeConfig.Value["namespaces"].([]interface{})[0].(map[string]interface{})
+												aeroCluster.Spec.AerospikeConfig.Value[asdbv1.ConfKeyNamespace].([]interface{})[0].(map[string]interface{})
 											if _, ok := namespaceConfig["storage-engine"].(map[string]interface{})["devices"]; ok {
 												aeroCluster.Spec.AerospikeConfig.Value["xdr"] = map[string]interface{}{
 													"enable-xdr":         false,
@@ -2354,7 +2619,7 @@ func negativeUpdateClusterValidationTest(
 									)
 									Expect(err).ToNot(HaveOccurred())
 
-									aeroCluster.Spec.AerospikeConfig.Value["service"].(map[string]interface{})["node-id"] = "a10"
+									aeroCluster.Spec.AerospikeConfig.Value[asdbv1.ConfKeyService].(map[string]interface{})["node-id"] = "a10"
 									err = k8sClient.Update(ctx, aeroCluster)
 									Expect(err).Should(HaveOccurred())
 
@@ -2363,55 +2628,8 @@ func negativeUpdateClusterValidationTest(
 									)
 									Expect(err).ToNot(HaveOccurred())
 
-									aeroCluster.Spec.AerospikeConfig.Value["service"].(map[string]interface{})["cluster-name"] = "cluster-name"
-									err = k8sClient.Update(ctx, aeroCluster)
-									Expect(err).Should(HaveOccurred())
-								},
-							)
-
-							It(
-								"NetworkConf: should fail for setting network conf, should fail for setting tls network conf",
-								func() {
-									// Network conf
-									// "port"
-									// "access-port"
-									// "access-addresses"
-									// "alternate-access-port"
-									// "alternate-access-addresses"
-									aeroCluster, err := getCluster(
-										k8sClient, ctx, clusterNamespacedName,
-									)
-									Expect(err).ToNot(HaveOccurred())
-
-									networkConf := map[string]interface{}{
-										"service": map[string]interface{}{
-											"port":             serviceNonTLSPort,
-											"access-addresses": []string{"<access_addresses>"},
-										},
-									}
-									aeroCluster.Spec.AerospikeConfig.Value["network"] = networkConf
-									err = k8sClient.Update(ctx, aeroCluster)
-									Expect(err).Should(HaveOccurred())
-
-									// if "tls-name" in conf
-									// "tls-port"
-									// "tls-access-port"
-									// "tls-access-addresses"
-									// "tls-alternate-access-port"
-									// "tls-alternate-access-addresses"
-									aeroCluster, err = getCluster(
-										k8sClient, ctx, clusterNamespacedName,
-									)
-									Expect(err).ToNot(HaveOccurred())
-
-									networkConf = map[string]interface{}{
-										"service": map[string]interface{}{
-											"tls-name":             "aerospike-a-0.test-runner",
-											"tls-port":             3001,
-											"tls-access-addresses": []string{"<tls-access-addresses>"},
-										},
-									}
-									aeroCluster.Spec.AerospikeConfig.Value["network"] = networkConf
+									aeroCluster.Spec.AerospikeConfig.
+										Value[asdbv1.ConfKeyService].(map[string]interface{})[clusterNameConfig] = clusterNameConfig
 									err = k8sClient.Update(ctx, aeroCluster)
 									Expect(err).Should(HaveOccurred())
 								},
@@ -2484,29 +2702,8 @@ func negativeUpdateClusterValidationTest(
 					)
 					Expect(err).ToNot(HaveOccurred())
 
-					aeroCluster.Spec.AerospikeConfig.Value["service"] = map[string]interface{}{
+					aeroCluster.Spec.AerospikeConfig.Value[asdbv1.ConfKeyService] = map[string]interface{}{
 						"feature-key-file": "/randompath/features.conf",
-					}
-					err = k8sClient.Update(ctx, aeroCluster)
-					Expect(err).Should(HaveOccurred())
-				},
-			)
-
-			It(
-				"WhenTLSExist: should fail for no tls path in storage volumes",
-				func() {
-					aeroCluster, err := getCluster(
-						k8sClient, ctx, clusterNamespacedName,
-					)
-					Expect(err).ToNot(HaveOccurred())
-
-					aeroCluster.Spec.AerospikeConfig.Value["network"] = map[string]interface{}{
-						"tls": []interface{}{
-							map[string]interface{}{
-								"name":      "aerospike-a-0.test-runner",
-								"cert-file": "/randompath/svc_cluster_chain.pem",
-							},
-						},
 					}
 					err = k8sClient.Update(ctx, aeroCluster)
 					Expect(err).Should(HaveOccurred())

@@ -117,7 +117,7 @@ var _ = Describe(
 							"report-data-op": []string{"test"},
 						}
 
-						aeroCluster.Spec.AerospikeConfig.Value["service"].(map[string]interface{})["proto-fd-max"] = 18000
+						aeroCluster.Spec.AerospikeConfig.Value[asdbv1.ConfKeyService].(map[string]interface{})["proto-fd-max"] = 18000
 						aeroCluster.Spec.AerospikeConfig.Value["security"].(map[string]interface{})["log"] = log
 
 						dc := map[string]interface{}{
@@ -145,7 +145,7 @@ var _ = Describe(
 
 						// Fetch and verify service section config
 						conf, err := getAerospikeConfigFromNode(logger, k8sClient, ctx, clusterNamespacedName,
-							"service", aeroCluster.Name+"-0-0")
+							asdbv1.ConfKeyService, aeroCluster.Name+"-0-0")
 						Expect(err).ToNot(HaveOccurred())
 
 						cv, ok := conf["proto-fd-max"]
@@ -179,7 +179,7 @@ var _ = Describe(
 						podPIDMap, err = getPodIDs(ctx, aeroCluster)
 						Expect(err).ToNot(HaveOccurred())
 
-						delete(aeroCluster.Spec.AerospikeConfig.Value["service"].(map[string]interface{}), "proto-fd-max")
+						delete(aeroCluster.Spec.AerospikeConfig.Value[asdbv1.ConfKeyService].(map[string]interface{}), "proto-fd-max")
 						delete(aeroCluster.Spec.AerospikeConfig.Value["security"].(map[string]interface{}), "log")
 
 						aeroCluster.Spec.AerospikeConfig.Value["xdr"].(map[string]interface{})["dcs"] =
@@ -192,7 +192,7 @@ var _ = Describe(
 
 						// Fetch and verify service section config
 						conf, err = getAerospikeConfigFromNode(logger, k8sClient, ctx, clusterNamespacedName,
-							"service", aeroCluster.Name+"-0-0")
+							asdbv1.ConfKeyService, aeroCluster.Name+"-0-0")
 						Expect(err).ToNot(HaveOccurred())
 						cv, ok = conf["proto-fd-max"]
 						Expect(ok).To(BeTrue())
@@ -302,7 +302,7 @@ var _ = Describe(
 
 						// Disable dynamic config update and set config
 						aeroCluster.Spec.EnableDynamicConfigUpdate = ptr.To(false)
-						aeroCluster.Spec.AerospikeConfig.Value["service"].(map[string]interface{})["proto-fd-max"] = 19000
+						aeroCluster.Spec.AerospikeConfig.Value[asdbv1.ConfKeyService].(map[string]interface{})["proto-fd-max"] = 19000
 
 						err = updateCluster(k8sClient, ctx, aeroCluster)
 						Expect(err).ToNot(HaveOccurred())
@@ -310,7 +310,7 @@ var _ = Describe(
 						By("Fetch and verify static configs")
 
 						conf, err := getAerospikeConfigFromNode(logger, k8sClient, ctx, clusterNamespacedName,
-							"service", aeroCluster.Name+"-0-0")
+							asdbv1.ConfKeyService, aeroCluster.Name+"-0-0")
 						Expect(err).ToNot(HaveOccurred())
 
 						cv, ok := conf["proto-fd-max"]
@@ -371,7 +371,7 @@ var _ = Describe(
 						// Update invalid config value
 						// This change will lead to dynamic config update failure.
 						// In case of full failure, will not fall back to rolling restart
-						aeroCluster.Spec.AerospikeConfig.Value["service"].(map[string]interface{})["proto-fd-max"] = 9999999
+						aeroCluster.Spec.AerospikeConfig.Value[asdbv1.ConfKeyService].(map[string]interface{})["proto-fd-max"] = 9999999
 
 						err = updateClusterWithTO(k8sClient, ctx, aeroCluster, time.Minute*1)
 						Expect(err).To(HaveOccurred())
@@ -379,7 +379,7 @@ var _ = Describe(
 						// Recovery:
 						// Update valid config value
 						// This change will lead to dynamic config update success.
-						aeroCluster.Spec.AerospikeConfig.Value["service"].(map[string]interface{})["proto-fd-max"] = 15000
+						aeroCluster.Spec.AerospikeConfig.Value[asdbv1.ConfKeyService].(map[string]interface{})["proto-fd-max"] = 15000
 
 						err = updateCluster(k8sClient, ctx, aeroCluster)
 						Expect(err).ToNot(HaveOccurred())
@@ -406,7 +406,7 @@ var _ = Describe(
 						// This change will lead to dynamic config update failure.
 						// Assuming it will fall back to rolling restart in case of partial failure.
 						// Which leads to pod failures.
-						aeroCluster.Spec.AerospikeConfig.Value["service"].(map[string]interface{})["proto-fd-max"] = 9999999
+						aeroCluster.Spec.AerospikeConfig.Value[asdbv1.ConfKeyService].(map[string]interface{})["proto-fd-max"] = 9999999
 
 						dc := map[string]interface{}{
 							"name":      "dc2",
@@ -432,7 +432,7 @@ var _ = Describe(
 						// Recovery:
 						// Update valid config value
 						// This change will lead to static config update success.
-						aeroCluster.Spec.AerospikeConfig.Value["service"].(map[string]interface{})["proto-fd-max"] = 15000
+						aeroCluster.Spec.AerospikeConfig.Value[asdbv1.ConfKeyService].(map[string]interface{})["proto-fd-max"] = 15000
 
 						err = updateCluster(k8sClient, ctx, aeroCluster)
 						Expect(err).ToNot(HaveOccurred())
@@ -814,7 +814,7 @@ func validateServiceContextDynamically(
 	ignoredConf := mapset.NewSet("cluster-name", "microsecond-histograms", "advertise-ipv6")
 
 	for confKey, val := range *flatServer {
-		if asconfig.ContextKey(confKey) != "service" {
+		if asconfig.ContextKey(confKey) != asdbv1.ConfKeyService {
 			continue
 		}
 
@@ -843,7 +843,7 @@ func validateServiceContextDynamically(
 	newConf := asconfig.New(logger, &newSpec)
 	newMap := *newConf.ToMap()
 
-	aeroCluster.Spec.AerospikeConfig.Value["service"] = lib.DeepCopy(newMap["service"])
+	aeroCluster.Spec.AerospikeConfig.Value[asdbv1.ConfKeyService] = lib.DeepCopy(newMap[asdbv1.ConfKeyService])
 
 	return updateCluster(k8sClient, ctx, aeroCluster)
 }
@@ -1075,7 +1075,7 @@ func getAerospikeConfigFromNodeAndSpec(aeroCluster *asdbv1.AerospikeCluster) (fl
 
 	pod := aeroCluster.Status.Pods[pods.Items[0].Name]
 
-	host, err := createHost(&pod)
+	host, err := createHost(&pod, asdbv1.ConfKeyNetworkService)
 	if err != nil {
 		return nil, nil, err
 	}
