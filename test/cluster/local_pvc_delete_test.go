@@ -66,16 +66,17 @@ var _ = Describe(
 
 				It("Should delete the local PVCs of only 1 rack when deleteLocalStorageOnRestart is set "+
 					"at the rack level and set MFD dynamically", func() {
+					// size is intentionally set to 3 to have 2 pods in 1 rack where deleteLocalStorageOnRestart is set
 					aeroCluster := createDummyAerospikeCluster(
-						clusterNamespacedName, 2,
+						clusterNamespacedName, 3,
 					)
 					rackConfig := asdbv1.RackConfig{
 						Racks: getDummyRackConf(1, 2),
 					}
 					storage := lib.DeepCopy(&aeroCluster.Spec.Storage).(*asdbv1.AerospikeStorageSpec)
+					storage.DeleteLocalStorageOnRestart = ptr.To(true)
+					storage.LocalStorageClasses = []string{storageClass}
 					rackConfig.Racks[0].InputStorage = storage
-					rackConfig.Racks[0].InputStorage.DeleteLocalStorageOnRestart = ptr.To(true)
-					rackConfig.Racks[0].InputStorage.LocalStorageClasses = []string{storageClass}
 					aeroCluster.Spec.RackConfig = rackConfig
 					Expect(DeployCluster(k8sClient, ctx, aeroCluster)).ToNot(HaveOccurred())
 
@@ -133,16 +134,17 @@ var _ = Describe(
 
 				It("Should delete the local PVCs of only 1 rack when deleteLocalStorageOnRestart is set "+
 					"at the rack level and set MFD dynamically", func() {
+					// size is intentionally set to 3 to have 2 pods in 1 rack where deleteLocalStorageOnRestart is set
 					aeroCluster := createDummyAerospikeCluster(
-						clusterNamespacedName, 2,
+						clusterNamespacedName, 3,
 					)
 					rackConfig := asdbv1.RackConfig{
 						Racks: getDummyRackConf(1, 2),
 					}
 					storage := lib.DeepCopy(&aeroCluster.Spec.Storage).(*asdbv1.AerospikeStorageSpec)
+					storage.DeleteLocalStorageOnRestart = ptr.To(true)
+					storage.LocalStorageClasses = []string{storageClass}
 					rackConfig.Racks[0].InputStorage = storage
-					rackConfig.Racks[0].InputStorage.DeleteLocalStorageOnRestart = ptr.To(true)
-					rackConfig.Racks[0].InputStorage.LocalStorageClasses = []string{storageClass}
 					aeroCluster.Spec.RackConfig = rackConfig
 					Expect(DeployCluster(k8sClient, ctx, aeroCluster)).ToNot(HaveOccurred())
 
@@ -214,13 +216,15 @@ func updateAndValidateIntermediateMFD(ctx goctx.Context, k8sClient client.Client
 
 	clusterNamespacedName := utils.GetNamespacedName(aeroCluster)
 
-	err := waitForOperatorToStartPodRestart(ctx, k8sClient, aeroCluster)
-	Expect(err).ToNot(HaveOccurred())
-
 	By("Validating the migrate-fill-delay is set to given value before the restart")
 
-	err = validateMigrateFillDelay(ctx, k8sClient, logger, clusterNamespacedName, expectedMigFillDelay,
+	err := validateMigrateFillDelay(ctx, k8sClient, logger, clusterNamespacedName, expectedMigFillDelay,
 		&shortRetryInterval)
+	Expect(err).ToNot(HaveOccurred())
+
+	By("Wait for the operator to start the pod restart process")
+
+	err = waitForOperatorToStartPodRestart(ctx, k8sClient, aeroCluster)
 	Expect(err).ToNot(HaveOccurred())
 
 	By("Validating the migrate-fill-delay is set to 0 after the restart (pod is running)")
