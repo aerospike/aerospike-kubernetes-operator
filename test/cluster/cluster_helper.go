@@ -4,7 +4,6 @@ import (
 	goctx "context"
 	"fmt"
 	"reflect"
-	"strconv"
 	"time"
 
 	"github.com/go-logr/logr"
@@ -548,42 +547,21 @@ func validateAerospikeConfigServiceClusterUpdate(
 
 func validateMigrateFillDelay(
 	ctx goctx.Context, k8sClient client.Client, log logr.Logger,
-	clusterNamespacedName types.NamespacedName, expectedMigFillDelay int64, retryInt *time.Duration,
+	clusterNamespacedName types.NamespacedName, expectedMigFillDelay int64, retryInt *time.Duration, podName string,
 ) error {
-	aeroCluster, err := getCluster(k8sClient, ctx, clusterNamespacedName)
-	if err != nil {
-		return err
-	}
-
-	// Use any pod for confirmation. Using first pod for the confirmation
-	firstPodName := aeroCluster.Name + "-" + strconv.Itoa(aeroCluster.Spec.RackConfig.Racks[0].ID) + "-" + strconv.Itoa(0)
-
-	firstPod, exists := aeroCluster.Status.Pods[firstPodName]
-	if !exists {
-		return fmt.Errorf("pod %s missing from the status", firstPodName)
-	}
-
-	host, err := createHost(&firstPod)
-	if err != nil {
-		return err
-	}
-
 	interval := retryInterval
 
 	if retryInt != nil {
 		interval = *retryInt
 	}
 
-	asinfo := info.NewAsInfo(log, host, getClientPolicy(aeroCluster, k8sClient))
-
-	err = wait.PollUntilContextTimeout(ctx,
+	err := wait.PollUntilContextTimeout(ctx,
 		interval, getTimeout(1), true, func(goctx.Context) (done bool, err error) {
-			confs, err := getAsConfig(asinfo, "service")
+			svcConfs, err := getAerospikeConfigFromNode(log, k8sClient, ctx,
+				clusterNamespacedName, "service", podName)
 			if err != nil {
 				return false, err
 			}
-
-			svcConfs := confs["service"].(lib.Stats)
 
 			current, exists := svcConfs["migrate-fill-delay"]
 			if !exists {
@@ -1736,6 +1714,8 @@ func waitForOperatorToStartPodRestart(ctx goctx.Context, k8sClient client.Client
 			if unreadyPods > 0 {
 				return true, nil
 			}
+
+			pkgLog.Info("Operator is yet to start the pod restart process")
 
 			return false, nil
 		},

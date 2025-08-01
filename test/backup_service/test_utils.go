@@ -23,7 +23,7 @@ import (
 	"github.com/aerospike/aerospike-kubernetes-operator/v4/test"
 )
 
-const BackupServiceImage = "aerospike/aerospike-backup-service:3.1.0"
+const BackupServiceImage = "aerospike/aerospike-backup-service:3.2.0"
 const BackupServiceVersion2Image = "aerospike/aerospike-backup-service:2.0.0"
 
 const (
@@ -251,7 +251,7 @@ func getBackupServiceConfMap() map[string]interface{} {
 		asdbv1beta1.StorageKey: map[string]interface{}{
 			"local": map[string]interface{}{
 				"local-storage": map[string]interface{}{
-					"path": "/localStorage",
+					"path": "/tmp/localStorage",
 				},
 			},
 			"s3Storage": map[string]interface{}{
