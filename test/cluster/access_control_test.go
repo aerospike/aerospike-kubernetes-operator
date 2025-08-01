@@ -16,6 +16,7 @@ import (
 	corev1 "k8s.io/api/core/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/types"
+	"k8s.io/apimachinery/pkg/util/intstr"
 	"k8s.io/utils/ptr"
 
 	as "github.com/aerospike/aerospike-client-go/v8"
@@ -25,7 +26,7 @@ import (
 )
 
 const (
-	testClusterSize = 2
+	testClusterSize = 4
 )
 
 var aerospikeConfigWithSecurity = &asdbv1.AerospikeConfigSpec{
@@ -1274,7 +1275,7 @@ var _ = Describe(
 									)
 								}
 
-								aerospikeConfigSpec.setEnableSecurity(false)
+								aerospikeConfigSpec.setSecurity(false)
 
 								aeroCluster := getAerospikeClusterSpecWithAccessControl(
 									clusterNamespacedName, &accessControl,
@@ -1358,7 +1359,7 @@ var _ = Describe(
 									)
 								}
 
-								aerospikeConfigSpec.setEnableSecurity(true)
+								aerospikeConfigSpec.setSecurity(true)
 
 								aeroCluster := getAerospikeClusterSpecWithAccessControl(
 									clusterNamespacedName, &accessControl,
@@ -1528,7 +1529,7 @@ var _ = Describe(
 									)
 								}
 
-								aerospikeConfigSpec.setEnableSecurity(false)
+								aerospikeConfigSpec.setSecurity(false)
 
 								// Save cluster variable as well for cleanup.
 								aeroCluster := getAerospikeClusterSpecWithAccessControl(
@@ -1575,17 +1576,7 @@ var _ = Describe(
 									},
 								}
 
-								aerospikeConfigSpec, err = NewAerospikeConfSpec(latestImage)
-								if err != nil {
-									Fail(
-										fmt.Sprintf(
-											"Invalid Aerospike Config Spec: %v",
-											err,
-										),
-									)
-								}
-
-								aerospikeConfigSpec.setEnableSecurity(true)
+								aerospikeConfigSpec.setSecurity(true)
 
 								aeroCluster = getAerospikeClusterSpecWithAccessControl(
 									clusterNamespacedName, accessControl,
@@ -1597,6 +1588,179 @@ var _ = Describe(
 								if err != nil {
 									Fail("Security should have enabled successfully")
 								}
+							},
+						)
+
+						It(
+							"SecurityDisable: should disable security in running cluster",
+							func() {
+								accessControl := &asdbv1.AerospikeAccessControlSpec{
+									Roles: []asdbv1.AerospikeRoleSpec{
+										{
+											Name: "profiler",
+											Privileges: []string{
+												"read-write-udf.test.users",
+												"write",
+											},
+											Whitelist: []string{
+												"8.8.0.0/16",
+											},
+										},
+									},
+									Users: []asdbv1.AerospikeUserSpec{
+										{
+											Name:       "admin",
+											SecretName: test.AuthSecretNameForUpdate,
+											Roles: []string{
+												"sys-admin",
+												"user-admin",
+											},
+										},
+
+										{
+											Name:       "profileUser",
+											SecretName: test.AuthSecretNameForUpdate,
+											Roles: []string{
+												"data-admin",
+												"read-write-udf",
+												"write",
+											},
+										},
+									},
+								}
+
+								aerospikeConfigSpec, err := NewAerospikeConfSpec(latestImage)
+								if err != nil {
+									Fail(
+										fmt.Sprintf(
+											"Invalid Aerospike Config Spec: %v",
+											err,
+										),
+									)
+								}
+
+								aerospikeConfigSpec.setSecurity(true)
+
+								aeroCluster := getAerospikeClusterSpecWithAccessControl(
+									clusterNamespacedName, accessControl,
+									aerospikeConfigSpec,
+								)
+								err = testAccessControlReconcile(
+									aeroCluster, ctx,
+								)
+								if err != nil {
+									Fail("Security should be enabled")
+								}
+
+								aerospikeConfigSpec.setSecurity(false)
+								accessControl = nil
+
+								// Save cluster variable as well for cleanup.
+								aeroCluster = getAerospikeClusterSpecWithAccessControl(
+									clusterNamespacedName, accessControl,
+									aerospikeConfigSpec,
+								)
+								err = testAccessControlReconcile(
+									aeroCluster, ctx,
+								)
+								Expect(err).To(HaveOccurred())
+								Expect(err.Error()).Should(ContainSubstring("SECURITY_NOT_ENABLED"))
+							},
+						)
+
+						It(
+							"SecurityDisable: should disable security in partially security enabled cluster",
+							func() {
+								var accessControl *asdbv1.AerospikeAccessControlSpec
+
+								aerospikeConfigSpec, err := NewAerospikeConfSpec(latestImage)
+								if err != nil {
+									Fail(
+										fmt.Sprintf(
+											"Invalid Aerospike Config Spec: %v",
+											err,
+										),
+									)
+								}
+
+								aerospikeConfigSpec.setSecurity(false)
+
+								// Save cluster variable as well for cleanup.
+								aeroCluster := getAerospikeClusterSpecWithAccessControl(
+									clusterNamespacedName, accessControl,
+									aerospikeConfigSpec,
+								)
+								err = aerospikeClusterCreateUpdate(
+									k8sClient, aeroCluster, ctx,
+								)
+								Expect(err).ToNot(HaveOccurred())
+
+								accessControl = &asdbv1.AerospikeAccessControlSpec{
+									Roles: []asdbv1.AerospikeRoleSpec{
+										{
+											Name: "profiler",
+											Privileges: []string{
+												"read-write-udf.test.users",
+												"write",
+											},
+											Whitelist: []string{
+												"8.8.0.0/16",
+											},
+										},
+									},
+									Users: []asdbv1.AerospikeUserSpec{
+										{
+											Name:       "admin",
+											SecretName: test.AuthSecretNameForUpdate,
+											Roles: []string{
+												"sys-admin",
+												"user-admin",
+											},
+										},
+
+										{
+											Name:       "profileUser",
+											SecretName: test.AuthSecretNameForUpdate,
+											Roles: []string{
+												"profiler",
+											},
+										},
+									},
+								}
+
+								aerospikeConfigSpec.setSecurity(true)
+
+								aeroCluster = getAerospikeClusterSpecWithAccessControl(
+									clusterNamespacedName, accessControl,
+									aerospikeConfigSpec,
+								)
+
+								err = updateClusterWithNoWait(k8sClient, ctx, aeroCluster)
+								Expect(err).ToNot(HaveOccurred())
+
+								aerospikeConfigSpec.setSecurity(false)
+								accessControl = nil
+
+								// Save cluster variable as well for cleanup.
+								aeroCluster = getAerospikeClusterSpecWithAccessControl(
+									clusterNamespacedName, accessControl,
+									aerospikeConfigSpec,
+								)
+
+								err = testAccessControlReconcile(
+									aeroCluster, ctx,
+								)
+
+								Expect(err).To(HaveOccurred())
+								Expect(err.Error()).Should(ContainSubstring(
+									"security enablement is in progress"))
+
+								Eventually(func(g Gomega) {
+									err := testAccessControlReconcile(aeroCluster, ctx)
+									g.Expect(err).To(HaveOccurred())
+									g.Expect(err.Error()).To(ContainSubstring("SECURITY_NOT_ENABLED"))
+								}, 5*time.Minute, 20*time.Second).Should(Succeed())
+
 							},
 						)
 
@@ -1663,7 +1827,7 @@ var _ = Describe(
 									)
 								}
 
-								aerospikeConfigSpec.setEnableSecurity(true)
+								aerospikeConfigSpec.setSecurity(true)
 
 								aeroCluster := getAerospikeClusterSpecWithAccessControl(
 									clusterNamespacedName, &accessControl,
@@ -1717,33 +1881,6 @@ var _ = Describe(
 									aeroCluster, ctx,
 								)
 								Expect(err).ToNot(HaveOccurred())
-
-								By("SecurityUpdateReject")
-								aerospikeConfigSpec, err = NewAerospikeConfSpec(latestImage)
-								if err != nil {
-									Fail(
-										fmt.Sprintf(
-											"Invalid Aerospike Config Spec: %v",
-											err,
-										),
-									)
-								}
-
-								aerospikeConfigSpec.setEnableSecurity(false)
-
-								aeroCluster = getAerospikeClusterSpecWithAccessControl(
-									clusterNamespacedName, nil,
-									aerospikeConfigSpec,
-								)
-								err = testAccessControlReconcile(
-									aeroCluster, ctx,
-								)
-								if err == nil || !strings.Contains(
-									err.Error(),
-									"cannot disable cluster security in running cluster",
-								) {
-									Fail("SecurityUpdate should have failed")
-								}
 
 								By("EnableQuota")
 
@@ -1800,17 +1937,7 @@ var _ = Describe(
 									},
 								}
 
-								aerospikeConfigSpec, err = NewAerospikeConfSpec(latestImage)
-								if err != nil {
-									Fail(
-										fmt.Sprintf(
-											"Invalid Aerospike Config Spec: %v",
-											err,
-										),
-									)
-								}
-
-								aerospikeConfigSpec.setEnableSecurity(true)
+								aerospikeConfigSpec.setSecurity(true)
 								aerospikeConfigSpec.setEnableQuotas(true)
 
 								aeroCluster = getAerospikeClusterSpecWithAccessControl(
@@ -1873,16 +2000,7 @@ var _ = Describe(
 									},
 								}
 
-								aerospikeConfigSpec, err = NewAerospikeConfSpec(latestImage)
-								if err != nil {
-									Fail(
-										fmt.Sprintf(
-											"Invalid Aerospike Config Spec: %v",
-											err,
-										),
-									)
-								}
-								aerospikeConfigSpec.setEnableSecurity(true)
+								aerospikeConfigSpec.setSecurity(true)
 								aerospikeConfigSpec.setEnableQuotas(false)
 
 								aeroCluster = getAerospikeClusterSpecWithAccessControl(
@@ -1947,16 +2065,7 @@ var _ = Describe(
 									},
 								}
 
-								aerospikeConfigSpec, err = NewAerospikeConfSpec(latestImage)
-								if err != nil {
-									Fail(
-										fmt.Sprintf(
-											"Invalid Aerospike Config Spec: %v",
-											err,
-										),
-									)
-								}
-								aerospikeConfigSpec.setEnableSecurity(true)
+								aerospikeConfigSpec.setSecurity(true)
 								aerospikeConfigSpec.setEnableQuotas(false)
 
 								aeroCluster = getAerospikeClusterSpecWithAccessControl(
@@ -2140,6 +2249,14 @@ func getAerospikeClusterSpecWithAccessControl(
 	accessControl *asdbv1.AerospikeAccessControlSpec,
 	aerospikeConfSpec *AerospikeConfSpec,
 ) *asdbv1.AerospikeCluster {
+	racks := []asdbv1.Rack{
+		{
+			ID: 1,
+		},
+		{
+			ID: 2,
+		},
+	}
 	// create Aerospike custom resource
 	return &asdbv1.AerospikeCluster{
 		ObjectMeta: metav1.ObjectMeta{
@@ -2147,6 +2264,12 @@ func getAerospikeClusterSpecWithAccessControl(
 			Namespace: clusterNamespacedName.Namespace,
 		},
 		Spec: asdbv1.AerospikeClusterSpec{
+			RackConfig: asdbv1.RackConfig{
+				Namespaces: []string{"test"},
+				Racks:      racks,
+				RollingUpdateBatchSize: &intstr.IntOrString{Type: intstr.Int,
+					IntVal: int32(2)},
+			},
 			Size: testClusterSize,
 			Image: fmt.Sprintf(
 				"%s:%s", baseImage, aerospikeConfSpec.getVersion(),
