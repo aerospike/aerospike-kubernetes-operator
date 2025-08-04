@@ -3,6 +3,7 @@ package cluster
 import (
 	goctx "context"
 	"fmt"
+	"strconv"
 	"time"
 
 	. "github.com/onsi/ginkgo/v2"
@@ -747,7 +748,10 @@ func ScaleDownWithMigrateFillDelay(ctx goctx.Context) {
 					Expect(err).ToNot(HaveOccurred())
 
 					// verify that migrate-fill-delay is set to 0 while scaling down
-					err = validateMigrateFillDelay(ctx, k8sClient, logger, clusterNamespacedName, 0, nil)
+					firstPodName := aeroCluster.Name + "-" + strconv.Itoa(aeroCluster.Spec.RackConfig.Racks[0].ID) + "-0"
+
+					err = validateMigrateFillDelay(ctx, k8sClient, logger, clusterNamespacedName, 0,
+						nil, firstPodName)
 					Expect(err).ToNot(HaveOccurred())
 
 					err = waitForAerospikeCluster(
@@ -757,7 +761,8 @@ func ScaleDownWithMigrateFillDelay(ctx goctx.Context) {
 					Expect(err).ToNot(HaveOccurred())
 
 					// verify that migrate-fill-delay is reverted to original value after scaling down
-					err = validateMigrateFillDelay(ctx, k8sClient, logger, clusterNamespacedName, migrateFillDelay, nil)
+					err = validateMigrateFillDelay(ctx, k8sClient, logger, clusterNamespacedName, migrateFillDelay,
+						nil, firstPodName)
 					Expect(err).ToNot(HaveOccurred())
 				},
 			)

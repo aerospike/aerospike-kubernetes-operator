@@ -1595,7 +1595,7 @@ func getSTSPodOrdinal(podName string) (*int32, error) {
 		return nil, err
 	}
 
-	result := int32(ordinal) //nolint:gosec // ordinal can't exceed int32 range
+	result := int32(ordinal)
 
 	return &result, nil
 }
