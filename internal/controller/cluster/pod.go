@@ -19,6 +19,7 @@ import (
 	"k8s.io/client-go/util/retry"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 
+	as "github.com/aerospike/aerospike-client-go/v8"
 	asdbv1 "github.com/aerospike/aerospike-kubernetes-operator/v4/api/v1"
 	"github.com/aerospike/aerospike-kubernetes-operator/v4/internal/controller/common"
 	"github.com/aerospike/aerospike-kubernetes-operator/v4/pkg/jsonpatch"
@@ -272,7 +273,8 @@ func (r *SingleClusterReconciler) rollingRestartPods(
 			return res
 		}
 
-		clientPolicy := r.getClientPolicy()
+		var clientPolicy *as.ClientPolicy
+
 		setMigrateFillDelay := r.shouldSetMigrateFillDelay(rackState, podsToRestart, restartTypeMap)
 
 		r.Log.Info(
@@ -282,7 +284,8 @@ func (r *SingleClusterReconciler) rollingRestartPods(
 		// Revert migrate-fill-delay to the original value before restarting active pods.
 		// This will be a no-op in the first reconcile
 		if setMigrateFillDelay {
-			// Add an optimisation check to only run set MFD in case of cold restart.
+			clientPolicy = r.getClientPolicy()
+
 			if res := r.setMigrateFillDelay(clientPolicy, &rackState.Rack.AerospikeConfig, false,
 				ignorablePodNames,
 			); !res.IsSuccess {
@@ -594,7 +597,8 @@ func (r *SingleClusterReconciler) safelyDeletePodsAndEnsureImageUpdated(
 			return res
 		}
 
-		clientPolicy := r.getClientPolicy()
+		var clientPolicy *as.ClientPolicy
+
 		setMigrateFillDelay := r.shouldSetMigrateFillDelay(rackState, podsToUpdate, nil)
 
 		r.Log.Info(
@@ -603,6 +607,8 @@ func (r *SingleClusterReconciler) safelyDeletePodsAndEnsureImageUpdated(
 		// Revert migrate-fill-delay to the original value before restarting active pods.
 		// This will be a no-op in the first reconcile
 		if setMigrateFillDelay {
+			clientPolicy = r.getClientPolicy()
+
 			if res := r.setMigrateFillDelay(clientPolicy, &rackState.Rack.AerospikeConfig, false,
 				ignorablePodNames,
 			); !res.IsSuccess {
