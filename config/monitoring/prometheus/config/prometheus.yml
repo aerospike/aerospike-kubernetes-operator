@@ -38,6 +38,7 @@ scrape_configs:
           names:
             - default
             - aerospike
+            - operators
 #  - job_name: "kubernetes-cadvisor"
 #    scheme: https
 #    metrics_path: /metrics/cadvisor
