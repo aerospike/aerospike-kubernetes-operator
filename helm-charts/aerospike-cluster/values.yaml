@@ -8,7 +8,7 @@ replicas: 3
 ## Aerospike server docker image
 image:
   repository: aerospike/aerospike-server-enterprise
-  tag: 8.0.0.2
+  tag: 8.1.0.0
 
 ## In case the above image is pulled from a registry that requires
 ## authentication, a secret containing credentials can be added
@@ -70,7 +70,7 @@ podSpec: {}
 ## Sidecars (example: Aerospike Prometheus Exporter)
 #   sidecars:
 #     - name: aerospike-prometheus-exporter
-#       image: aerospike/aerospike-prometheus-exporter:1.24.0
+#       image: aerospike/aerospike-prometheus-exporter:1.25.0
 #       ports:
 #         - containerPort: 9145
 #           name: exporter
