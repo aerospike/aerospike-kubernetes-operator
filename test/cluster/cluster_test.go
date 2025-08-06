@@ -112,7 +112,6 @@ var _ = Describe(
 
 func adminPortTests(ctx goctx.Context) {
 	aeroCluster := &asdbv1.AerospikeCluster{}
-	customInitImage := "aerospike-kubernetes-init:2.3.0-dev56"
 
 	AfterEach(
 		func() {
@@ -153,9 +152,6 @@ func adminPortTests(ctx goctx.Context) {
 
 			// Create cluster without admin port initially
 			aeroCluster = createDummyAerospikeCluster(clusterNamespacedName, 2)
-			aeroCluster.Spec.Image = fmt.Sprintf("%s:%s", baseImage, "8.1.0.0-rc3")
-			aeroCluster.Spec.PodSpec.AerospikeInitContainerSpec.ImageRegistryNamespace = ptr.To("tanmayj10")
-			aeroCluster.Spec.PodSpec.AerospikeInitContainerSpec.ImageNameAndTag = customInitImage
 			aeroCluster.Spec.PodSpec.MultiPodPerHost = ptr.To(false)
 			Expect(DeployCluster(k8sClient, ctx, aeroCluster)).ToNot(HaveOccurred())
 

@@ -32,14 +32,14 @@ import (
 
 const (
 	baseImage           = "aerospike/aerospike-server-enterprise"
-	nextServerVersion   = "8.1.0.0-rc4"
-	latestServerVersion = "8.1.0.0-rc3"
+	nextServerVersion   = "8.0.0.2_1"
+	latestServerVersion = "8.0.0.2"
 	invalidVersion      = "3.0.0.4"
 
 	post6Version = "7.0.0.0"
 	version6     = "6.0.0.5"
 
-	latestSchemaVersion = "8.1.0"
+	latestSchemaVersion = "8.0.0"
 )
 
 var (
@@ -505,8 +505,6 @@ func validatePodPortsUpdate(k8sClient client.Client, ctx goctx.Context,
 
 		portSet := sets.NewInt32(ports...)
 
-		println(fmt.Sprintf("pod %s, ports: %v", podName, pod.Spec.Containers[0].Ports))
-
 		for _, p := range pod.Spec.Containers[0].Ports {
 			if portSet.Has(p.ContainerPort) {
 				portSet.Delete(p.ContainerPort)
@@ -596,7 +594,7 @@ func validateMigrateFillDelay(
 	err := wait.PollUntilContextTimeout(ctx,
 		interval, getTimeout(1), true, func(goctx.Context) (done bool, err error) {
 			svcConfs, err := getAerospikeConfigFromNode(log, k8sClient, ctx,
-				clusterNamespacedName, "service", podName)
+				clusterNamespacedName, asdbv1.ConfKeyService, podName)
 			if err != nil {
 				return false, err
 			}
@@ -1108,9 +1106,6 @@ func createNonSCDummyAerospikeCluster(
 func createDummyAerospikeClusterWithAdminPort(clusterNamespacedName types.NamespacedName, size, adminPort int32,
 ) *asdbv1.AerospikeCluster {
 	aeroCluster := createDummyAerospikeCluster(clusterNamespacedName, size)
-	aeroCluster.Spec.Image = fmt.Sprintf("%s:%s", baseImage, "8.1.0.0-rc3")
-	aeroCluster.Spec.PodSpec.AerospikeInitContainerSpec.ImageRegistryNamespace = ptr.To("tanmayj10")
-	aeroCluster.Spec.PodSpec.AerospikeInitContainerSpec.ImageNameAndTag = "aerospike-kubernetes-init:2.3.0-dev56"
 
 	networkConf := aeroCluster.Spec.AerospikeConfig.Value[asdbv1.ConfKeyNetwork].(map[string]interface{})
 	networkConf[asdbv1.ConfKeyNetworkAdmin] = map[string]interface{}{

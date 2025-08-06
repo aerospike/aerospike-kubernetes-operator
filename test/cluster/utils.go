@@ -240,7 +240,7 @@ type AerospikeConfSpec struct {
 	namespaces []interface{}
 }
 
-func (acs *AerospikeConfSpec) getVersion() string { //nolint:unused // revert once server image is available without rc
+func (acs *AerospikeConfSpec) getVersion() string {
 	return acs.version
 }
 
