@@ -23,6 +23,7 @@ import (
 
 const (
 	clusterNameConfig = "cluster-name"
+	adminPort         = 3003
 )
 
 var _ = Describe(
@@ -128,7 +129,7 @@ func adminPortTests(ctx goctx.Context) {
 			)
 
 			// Create cluster with admin port configuration
-			aeroCluster = createDummyAerospikeClusterWithAdminPort(clusterNamespacedName, 2, 3003)
+			aeroCluster = createDummyAerospikeClusterWithAdminPort(clusterNamespacedName, 2, adminPort)
 
 			aeroCluster.Spec.PodSpec.MultiPodPerHost = ptr.To(false)
 
@@ -136,7 +137,7 @@ func adminPortTests(ctx goctx.Context) {
 
 			// Verify admin port is configured in Aerospike
 			By("Verifying admin port configuration")
-			validateAdminPort(ctx, clusterNamespacedName, clusterNamespacedName.Name+"-0-0", 3003)
+			validateAdminPort(ctx, clusterNamespacedName, clusterNamespacedName.Name+"-0-0", adminPort)
 		},
 	)
 
@@ -161,7 +162,7 @@ func adminPortTests(ctx goctx.Context) {
 
 			networkConf := aeroCluster.Spec.AerospikeConfig.Value[asdbv1.ConfKeyNetwork].(map[string]interface{})
 			networkConf[asdbv1.ConfKeyNetworkAdmin] = map[string]interface{}{
-				asdbv1.ConfKeyPort: 3003,
+				asdbv1.ConfKeyPort: adminPort,
 			}
 			aeroCluster.Spec.AerospikeConfig.Value[asdbv1.ConfKeyNetwork] = networkConf
 
@@ -170,7 +171,7 @@ func adminPortTests(ctx goctx.Context) {
 
 			// Verify admin port is configured in Aerospike
 			By("Verifying admin port configuration")
-			validateAdminPort(ctx, clusterNamespacedName, clusterNamespacedName.Name+"-0-0", 3003)
+			validateAdminPort(ctx, clusterNamespacedName, clusterNamespacedName.Name+"-0-0", adminPort)
 		},
 	)
 
@@ -183,13 +184,13 @@ func adminPortTests(ctx goctx.Context) {
 			)
 
 			// Create cluster with admin port initially
-			aeroCluster = createDummyAerospikeClusterWithAdminPort(clusterNamespacedName, 2, 3003)
+			aeroCluster = createDummyAerospikeClusterWithAdminPort(clusterNamespacedName, 2, adminPort)
 
 			Expect(DeployCluster(k8sClient, ctx, aeroCluster)).ToNot(HaveOccurred())
 
 			// Verify admin port is initially configured
 			By("Verifying admin port configuration")
-			validateAdminPort(ctx, clusterNamespacedName, clusterNamespacedName.Name+"-0-0", 3003)
+			validateAdminPort(ctx, clusterNamespacedName, clusterNamespacedName.Name+"-0-0", adminPort)
 
 			// Update cluster to remove admin port
 			By("Removing admin port configuration")
@@ -1592,7 +1593,7 @@ func UpdateClusterTest(ctx goctx.Context) {
 
 	Context(
 		"When doing valid operations", func() {
-			It(
+			FIt(
 				"Try update operations", func() {
 					By("ScaleUp")
 

@@ -494,15 +494,13 @@ func validatePodPortsUpdate(k8sClient client.Client, ctx goctx.Context,
 		return err
 	}
 
-	for podName := range aeroCluster.Status.Pods {
-		podNamespaceName := test.GetNamespacedName(podName, aeroCluster.Namespace)
-		pod := &corev1.Pod{}
+	pods, err := getClusterPodList(k8sClient, ctx, aeroCluster)
+	if err != nil {
+		return err
+	}
 
-		err = k8sClient.Get(ctx, podNamespaceName, pod)
-		if err != nil {
-			return err
-		}
-
+	for idx := range pods.Items {
+		pod := &pods.Items[idx]
 		portSet := sets.NewInt32(ports...)
 
 		for _, p := range pod.Spec.Containers[0].Ports {
@@ -512,7 +510,7 @@ func validatePodPortsUpdate(k8sClient client.Client, ctx goctx.Context,
 		}
 
 		if portSet.Len() > 0 {
-			return fmt.Errorf("pod %s port not configured correctly", podNamespaceName.Name)
+			return fmt.Errorf("pod %s port not configured correctly", pod.Name)
 		}
 	}
 
