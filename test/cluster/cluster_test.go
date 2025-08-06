@@ -1593,7 +1593,7 @@ func UpdateClusterTest(ctx goctx.Context) {
 
 	Context(
 		"When doing valid operations", func() {
-			FIt(
+			It(
 				"Try update operations", func() {
 					By("ScaleUp")
 
