@@ -102,12 +102,15 @@ func (r *SingleClusterReconciler) getRollingRestartTypeMap(rackState *RackState,
 
 		podStatus := r.aeroCluster.Status.Pods[pods[idx].Name]
 		if podStatus.AerospikeConfigHash != requiredConfHash {
-			if addedNSDevices == nil {
-				// Fetching all block devices that have been added in namespaces.
-				addedNSDevices, err = r.getNSAddedDevices(rackState)
-				if err != nil {
-					return nil, nil, err
-				}
+			podSpecUpdated, err := r.isAnyPodSpecUpdated(rackState, pods[idx])
+			if err != nil {
+				return nil, nil, fmt.Errorf("failed to check if pod spec is updated: %v", err)
+			}
+
+			if podSpecUpdated {
+				// If pod spec is updated, then we need to restart the pod.
+				restartTypeMap[pods[idx].Name] = podRestart
+				continue
 			}
 
 			serverContainer := getContainer(pods[idx].Spec.Containers, asdbv1.AerospikeServerContainerName)
@@ -145,6 +148,14 @@ func (r *SingleClusterReconciler) getRollingRestartTypeMap(rackState *RackState,
 					podStatus.DynamicConfigUpdateStatus != asdbv1.PartiallyFailed &&
 					isAllDynamicConfig(r.Log, specToStatusDiffs, version) {
 					dynamicConfDiffPerPod[pods[idx].Name] = specToStatusDiffs
+				}
+			}
+
+			if addedNSDevices == nil {
+				// Fetching all block devices that have been added in namespaces.
+				addedNSDevices, err = r.getNSAddedDevices(rackState)
+				if err != nil {
+					return nil, nil, err
 				}
 			}
 		}
@@ -227,13 +238,6 @@ func (r *SingleClusterReconciler) getRollingRestartTypePod(
 		restartType = mergeRestartType(restartType, podRestart)
 
 		r.Log.Info("Aerospike rack storage changed. Need rolling restart")
-	}
-
-	if r.isReadinessPortUpdated(pod) {
-		restartType = mergeRestartType(restartType, podRestart)
-
-		r.Log.Info("Aerospike readiness tcp port changed. Need rolling restart",
-			"newTCPPort", r.getReadinessProbe().TCPSocket.String())
 	}
 
 	if opType := r.onDemandOperationType(pod.Name, onDemandQuickRestarts, onDemandPodRestarts); opType != noRestart {
@@ -1762,4 +1766,21 @@ func (r *SingleClusterReconciler) shouldSetMigrateFillDelay(rackState *RackState
 	}
 
 	return false
+}
+
+func (r *SingleClusterReconciler) isAnyPodSpecUpdated(rackState *RackState,
+	pod *corev1.Pod) (bool, error) {
+	sts, err := r.getSTS(rackState)
+	if err != nil {
+		return false, err
+	}
+
+	// Creating a local copy of the statefulset to avoid modifying the original object
+	// Currently just checking the server container ports, but can be extended to other fields as needed
+	r.updateSTSPorts(sts)
+
+	stsServerContainer := getContainer(sts.Spec.Template.Spec.Containers, asdbv1.AerospikeServerContainerName)
+	serverContainer := getContainer(pod.Spec.Containers, asdbv1.AerospikeServerContainerName)
+
+	return !reflect.DeepEqual(serverContainer.Ports, stsServerContainer.Ports), nil
 }

@@ -31,31 +31,40 @@ const (
 	FabricTLSPortName = "tls-fabric"
 	FabricPortName    = "fabric"
 
+	AdminTLSPortName = "tls-admin"
+	AdminPortName    = "admin"
+
 	InfoPortName = "info"
 )
 
 const (
 	// Namespace keys.
-	confKeyNamespace     = "namespaces"
-	ConfKeyTLSName       = "tls-name"
+	ConfKeyNamespace     = "namespaces"
 	ConfKeyStorageEngine = "storage-engine"
 
 	// Network section keys.
 	ConfKeyNetwork          = "network"
 	ConfKeyNetworkService   = "service"
-	confKeyNetworkHeartbeat = "heartbeat"
-	confKeyNetworkFabric    = "fabric"
+	ConfKeyNetworkHeartbeat = "heartbeat"
+	ConfKeyNetworkFabric    = "fabric"
+	ConfKeyNetworkAdmin     = "admin"
+	ConfKeyNetworkInfo      = "info"
+
+	// Ports and TLS keys.
+	ConfKeyTLSName = "tls-name"
+	ConfKeyTLSPort = "tls-port"
+	ConfKeyPort    = "port"
 
 	// XDR keys.
 	confKeyXdr         = "xdr"
 	confKeyXdrDlogPath = "xdr-digestlog-path"
 
 	// Security keys.
-	confKeySecurity                    = "security"
+	ConfKeySecurity                    = "security"
 	confKeySecurityDefaultPasswordFile = "default-password-file"
 
 	// Service section keys.
-	confKeyService       = "service"
+	ConfKeyService       = "service"
 	confKeyWorkDirectory = "work-directory"
 
 	// Defaults.
@@ -70,7 +79,7 @@ const (
 	AerospikeInitContainerNameTagEnvVar            = "AEROSPIKE_KUBERNETES_INIT_NAME_TAG"
 	AerospikeInitContainerDefaultRegistry          = "docker.io"
 	AerospikeInitContainerDefaultRegistryNamespace = "aerospike"
-	AerospikeInitContainerDefaultNameAndTag        = "aerospike-kubernetes-init:2.3.0-dev4"
+	AerospikeInitContainerDefaultNameAndTag        = "aerospike-kubernetes-init:2.3.0-dev5"
 	AerospikeAppLabel                              = "app"
 	AerospikeAppLabelValue                         = "aerospike-cluster"
 	AerospikeCustomResourceLabel                   = "aerospike.com/cr"
@@ -84,7 +93,7 @@ func GetConfiguredWorkDirectory(aerospikeConfigSpec AerospikeConfigSpec) string 
 	// Get namespace config.
 	aerospikeConfig := aerospikeConfigSpec.Value
 
-	serviceTmp := aerospikeConfig[confKeyService]
+	serviceTmp := aerospikeConfig[ConfKeyService]
 	if serviceTmp != nil {
 		serviceConf := serviceTmp.(map[string]interface{})
 
@@ -304,7 +313,7 @@ func IsAerospikeNamespacePresent(
 	aerospikeConfig := aerospikeConfigSpec.Value
 
 	// Get namespace config.
-	if confs, ok := aerospikeConfig[confKeyNamespace].([]interface{}); ok {
+	if confs, ok := aerospikeConfig[ConfKeyNamespace].([]interface{}); ok {
 		for _, nsConf := range confs {
 			namespaceConf, ok := nsConf.(map[string]interface{})
 			if !ok {
@@ -403,15 +412,19 @@ func GetDigestLogFile(aerospikeConfigSpec AerospikeConfigSpec) (
 }
 
 func GetServiceTLSNameAndPort(aeroConf *AerospikeConfigSpec) (tlsName string, port *int32) {
-	return GetTLSNameAndPort(aeroConf, confKeyService)
+	return GetTLSNameAndPort(aeroConf, ConfKeyNetworkService)
 }
 
 func GetHeartbeatTLSNameAndPort(aeroConf *AerospikeConfigSpec) (tlsName string, port *int32) {
-	return GetTLSNameAndPort(aeroConf, confKeyNetworkHeartbeat)
+	return GetTLSNameAndPort(aeroConf, ConfKeyNetworkHeartbeat)
 }
 
 func GetFabricTLSNameAndPort(aeroConf *AerospikeConfigSpec) (tlsName string, port *int32) {
-	return GetTLSNameAndPort(aeroConf, confKeyNetworkFabric)
+	return GetTLSNameAndPort(aeroConf, ConfKeyNetworkFabric)
+}
+
+func GetAdminTLSNameAndPort(aeroConf *AerospikeConfigSpec) (tlsName string, port *int32) {
+	return GetTLSNameAndPort(aeroConf, ConfKeyNetworkAdmin)
 }
 
 func GetTLSNameAndPort(
@@ -419,31 +432,38 @@ func GetTLSNameAndPort(
 ) (tlsName string, port *int32) {
 	if networkConfTmp, ok := aeroConf.Value[ConfKeyNetwork]; ok {
 		networkConf := networkConfTmp.(map[string]interface{})
-		serviceConf := networkConf[connectionType].(map[string]interface{})
+		if _, ok := networkConf[connectionType]; !ok {
+			return tlsName, port
+		}
 
-		if tlsName, ok := serviceConf["tls-name"]; ok {
-			if tlsPort, portConfigured := serviceConf["tls-port"]; portConfigured {
+		connConf := networkConf[connectionType].(map[string]interface{})
+		if name, ok := connConf[ConfKeyTLSName]; ok {
+			tlsName = name.(string)
+
+			if tlsPort, tlsPortConfigured := connConf[ConfKeyTLSPort]; tlsPortConfigured {
 				intPort := int32(tlsPort.(float64))
-				return tlsName.(string), &intPort
+				port = &intPort
 			}
-
-			return tlsName.(string), nil
 		}
 	}
 
-	return "", nil
+	return tlsName, port
 }
 
 func GetServicePort(aeroConf *AerospikeConfigSpec) *int32 {
-	return GetPortFromConfig(aeroConf, ConfKeyNetworkService, "port")
+	return GetPortFromConfig(aeroConf, ConfKeyNetworkService, ConfKeyPort)
 }
 
 func GetHeartbeatPort(aeroConf *AerospikeConfigSpec) *int32 {
-	return GetPortFromConfig(aeroConf, confKeyNetworkHeartbeat, "port")
+	return GetPortFromConfig(aeroConf, ConfKeyNetworkHeartbeat, ConfKeyPort)
 }
 
 func GetFabricPort(aeroConf *AerospikeConfigSpec) *int32 {
-	return GetPortFromConfig(aeroConf, confKeyNetworkFabric, "port")
+	return GetPortFromConfig(aeroConf, ConfKeyNetworkFabric, ConfKeyPort)
+}
+
+func GetAdminPort(aeroConf *AerospikeConfigSpec) *int32 {
+	return GetPortFromConfig(aeroConf, ConfKeyNetworkAdmin, ConfKeyPort)
 }
 
 func GetPortFromConfig(
@@ -477,7 +497,7 @@ func GetIntType(value interface{}) (int, error) {
 
 // GetMigrateFillDelay returns the migrate-fill-delay from the Aerospike configuration
 func GetMigrateFillDelay(asConfig *AerospikeConfigSpec) (int, error) {
-	serviceConfig := asConfig.Value["service"].(map[string]interface{})
+	serviceConfig := asConfig.Value[ConfKeyService].(map[string]interface{})
 
 	fillDelayIFace, exists := serviceConfig["migrate-fill-delay"]
 	if !exists {
@@ -527,7 +547,7 @@ func GetDefaultPasswordFilePath(aerospikeConfigSpec *AerospikeConfigSpec) *strin
 	aerospikeConfig := aerospikeConfigSpec.Value
 
 	// Get security config.
-	securityConfTmp, ok := aerospikeConfig[confKeySecurity]
+	securityConfTmp, ok := aerospikeConfig[ConfKeySecurity]
 	if !ok {
 		return nil
 	}

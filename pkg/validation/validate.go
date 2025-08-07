@@ -13,7 +13,8 @@ import (
 	"github.com/aerospike/aerospike-management-lib/asconfig"
 )
 
-var networkConnectionTypes = []string{"service", "heartbeat", "fabric"}
+var networkConnectionTypes = []string{asdbv1.ConfKeyNetworkService, asdbv1.ConfKeyNetworkHeartbeat,
+	asdbv1.ConfKeyNetworkFabric, asdbv1.ConfKeyNetworkAdmin}
 
 // ValidateAerospikeConfig validates the aerospikeConfig.
 // It validates the schema, service, network, logging and namespace configurations.
@@ -29,10 +30,10 @@ func ValidateAerospikeConfig(
 	}
 
 	// service conf
-	serviceConf, ok := config["service"].(map[string]interface{})
+	serviceConf, ok := config[asdbv1.ConfKeyService].(map[string]interface{})
 	if !ok {
 		return fmt.Errorf(
-			"aerospikeConfig.service not a valid map %v", config["service"],
+			"aerospikeConfig.service not a valid map %v", config[asdbv1.ConfKeyService],
 		)
 	}
 
@@ -113,7 +114,7 @@ func validateLoggingConf(loggingConfList []interface{}) error {
 }
 
 func validateNetworkConfig(networkConf map[string]interface{}) error {
-	serviceConf, serviceExist := networkConf["service"]
+	serviceConf, serviceExist := networkConf[asdbv1.ConfKeyNetworkService]
 	if !serviceExist {
 		return fmt.Errorf("network.service section not found in config")
 	}
@@ -824,11 +825,24 @@ func validateNsConfUpdate(oldConf, newConf map[string]interface{}) error {
 func validateNetworkConnectionUpdate(oldConf, newConf map[string]interface{}, connectionType string) error {
 	var networkPorts = []string{
 		"port", "access-port",
-		"alternate-access-port",
+		"alternate-access-port"}
+
+	// Extract network configs safely
+	oldNetwork, oldOk := oldConf["network"].(map[string]interface{})
+	newNetwork, newOk := newConf["network"].(map[string]interface{})
+
+	if !oldOk || !newOk {
+		return fmt.Errorf("invalid network configuration structure")
 	}
 
-	oldConnectionConfig := oldConf["network"].(map[string]interface{})[connectionType].(map[string]interface{})
-	newConnectionConfig := newConf["network"].(map[string]interface{})[connectionType].(map[string]interface{})
+	oldConnectionConfig, oldConnOk := oldNetwork[connectionType].(map[string]interface{})
+	newConnectionConfig, newConnOk := newNetwork[connectionType].(map[string]interface{})
+
+	// If the connectionType is missing in either old or new config, assume it's an admin and skip validation.
+	// Other connectionType are required fields and their existence is checked in mutation.
+	if !oldConnOk || !newConnOk {
+		return nil
+	}
 
 	oldTLSName, oldTLSNameOk := oldConnectionConfig["tls-name"]
 	newTLSName, newTLSNameOk := newConnectionConfig["tls-name"]

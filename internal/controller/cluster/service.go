@@ -30,7 +30,7 @@ func (r *SingleClusterReconciler) createOrUpdateSTSHeadlessSvc() error {
 
 	defaultMetadata := asdbv1.AerospikeObjectMeta{
 		Annotations: map[string]string{
-			// deprecation in 1.10, supported until at least 1.13,  breaks peer-finder/kube-dns if not used
+			// deprecation in 1.10, supported until at least 1.13, breaks peer-finder/kube-dns if not used
 			"service.alpha.kubernetes.io/tolerate-unready-endpoints": "true",
 		},
 		Labels: utils.LabelsForAerospikeCluster(r.aeroCluster.Name),
@@ -397,6 +397,29 @@ func (r *SingleClusterReconciler) getServicePorts() []corev1.ServicePort {
 			servicePorts, corev1.ServicePort{
 				Name: asdbv1.ServiceTLSPortName,
 				Port: *tlsPort,
+			},
+		)
+	}
+
+	if adminPort := asdbv1.GetAdminPort(
+		r.aeroCluster.Spec.
+			AerospikeConfig,
+	); adminPort != nil {
+		servicePorts = append(
+			servicePorts, corev1.ServicePort{
+				Name: asdbv1.AdminPortName,
+				Port: *adminPort,
+			},
+		)
+	}
+
+	if _, adminTLSPort := asdbv1.GetAdminTLSNameAndPort(
+		r.aeroCluster.Spec.AerospikeConfig,
+	); adminTLSPort != nil {
+		servicePorts = append(
+			servicePorts, corev1.ServicePort{
+				Name: asdbv1.AdminTLSPortName,
+				Port: *adminTLSPort,
 			},
 		)
 	}
