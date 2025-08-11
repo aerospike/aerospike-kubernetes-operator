@@ -612,7 +612,6 @@ type AerospikeAccessControlSpec struct {
 }
 
 // AerospikeVolumeMethod specifies how block volumes should be initialized.
-// +kubebuilder:validation:Enum=none;dd;headerCleanup;blkdiscard;blkdiscardWithHeaderCleanup;deleteFiles
 // +k8s:openapi-gen=true
 type AerospikeVolumeMethod string
 
@@ -650,11 +649,13 @@ type AerospikePersistentVolumePolicySpec struct {
 
 	// InitMethod determines how volumes attached to Aerospike server pods are initialized when the pods come up the
 	// first time. Defaults to "none".
+	// +kubebuilder:validation:Enum=none;dd;headerCleanup;blkdiscard;blkdiscardWithHeaderCleanup;deleteFiles
 	// +optional
 	InputInitMethod *AerospikeVolumeMethod `json:"initMethod,omitempty"`
 
 	// WipeMethod determines how volumes attached to Aerospike server pods are wiped for dealing with storage format
 	// changes.
+	// +kubebuilder:validation:Enum=dd;blkdiscard;deleteFiles
 	// +optional
 	InputWipeMethod *AerospikeVolumeMethod `json:"wipeMethod,omitempty"`
 
@@ -664,11 +665,13 @@ type AerospikePersistentVolumePolicySpec struct {
 	InputCascadeDelete *bool `json:"cascadeDelete,omitempty"`
 
 	// Effective/operative value to use as the volume init method after applying defaults.
+	// +kubebuilder:validation:Enum=none;dd;headerCleanup;blkdiscard;blkdiscardWithHeaderCleanup;deleteFiles
 	// +optional
 	InitMethod AerospikeVolumeMethod `json:"effectiveInitMethod,omitempty"`
 
 	// Effective/operative value to use as the volume wipe method after applying defaults.
 	// +optional
+	// +kubebuilder:validation:Enum=dd;blkdiscard;deleteFiles
 	WipeMethod AerospikeVolumeMethod `json:"effectiveWipeMethod,omitempty"`
 
 	// Effective/operative value to use for cascade delete after applying defaults.
@@ -739,6 +742,7 @@ type PersistentVolumeSpec struct { //nolint:govet // for readability
 	StorageClass string `json:"storageClass"`
 
 	// VolumeMode specifies if the volume is block/raw or a filesystem.
+	// +kubebuilder:validation:Enum=Block;Filesystem
 	VolumeMode corev1.PersistentVolumeMode `json:"volumeMode"`
 
 	// Size of volume.
@@ -746,6 +750,7 @@ type PersistentVolumeSpec struct { //nolint:govet // for readability
 
 	// AccessModes contains the desired access modes the volume should have.
 	// More info: https://kubernetes.io/docs/concepts/storage/persistent-volumes/#access-modes
+	// +kubebuilder:validation:items:Enum=ReadOnlyMany;ReadWriteMany;ReadWriteOnce
 	// +optional
 	AccessModes []corev1.PersistentVolumeAccessMode `json:"accessModes,omitempty" protobuf:"bytes,1,rep,name=accessModes,casttype=PersistentVolumeAccessMode"` //nolint:lll // for readability
 

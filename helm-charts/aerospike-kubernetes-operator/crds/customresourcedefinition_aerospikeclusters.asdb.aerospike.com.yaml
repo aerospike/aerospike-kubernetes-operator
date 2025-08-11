@@ -6228,11 +6228,8 @@ spec:
                                   description: Effective/operative value to use as
                                     the volume wipe method after applying defaults.
                                   enum:
-                                  - none
                                   - dd
-                                  - headerCleanup
                                   - blkdiscard
-                                  - blkdiscardWithHeaderCleanup
                                   - deleteFiles
                                   type: string
                                 initMethod:
@@ -6252,11 +6249,8 @@ spec:
                                     WipeMethod determines how volumes attached to Aerospike server pods are wiped for dealing with storage format
                                     changes.
                                   enum:
-                                  - none
                                   - dd
-                                  - headerCleanup
                                   - blkdiscard
-                                  - blkdiscardWithHeaderCleanup
                                   - deleteFiles
                                   type: string
                               type: object
@@ -6297,11 +6291,8 @@ spec:
                                   description: Effective/operative value to use as
                                     the volume wipe method after applying defaults.
                                   enum:
-                                  - none
                                   - dd
-                                  - headerCleanup
                                   - blkdiscard
-                                  - blkdiscardWithHeaderCleanup
                                   - deleteFiles
                                   type: string
                                 initMethod:
@@ -6321,11 +6312,8 @@ spec:
                                     WipeMethod determines how volumes attached to Aerospike server pods are wiped for dealing with storage format
                                     changes.
                                   enum:
-                                  - none
                                   - dd
-                                  - headerCleanup
                                   - blkdiscard
-                                  - blkdiscardWithHeaderCleanup
                                   - deleteFiles
                                   type: string
                               type: object
@@ -6402,11 +6390,8 @@ spec:
                                     description: Effective/operative value to use
                                       as the volume wipe method after applying defaults.
                                     enum:
-                                    - none
                                     - dd
-                                    - headerCleanup
                                     - blkdiscard
-                                    - blkdiscardWithHeaderCleanup
                                     - deleteFiles
                                     type: string
                                   initContainers:
@@ -6629,6 +6614,10 @@ spec:
                                               AccessModes contains the desired access modes the volume should have.
                                               More info: https://kubernetes.io/docs/concepts/storage/persistent-volumes/#access-modes
                                             items:
+                                              enum:
+                                              - ReadOnlyMany
+                                              - ReadWriteMany
+                                              - ReadWriteOnce
                                               type: string
                                             type: array
                                           metadata:
@@ -6711,6 +6700,9 @@ spec:
                                           volumeMode:
                                             description: VolumeMode specifies if the
                                               volume is block/raw or a filesystem.
+                                            enum:
+                                            - Block
+                                            - Filesystem
                                             type: string
                                         required:
                                         - size
@@ -6791,11 +6783,8 @@ spec:
                                       WipeMethod determines how volumes attached to Aerospike server pods are wiped for dealing with storage format
                                       changes.
                                     enum:
-                                    - none
                                     - dd
-                                    - headerCleanup
                                     - blkdiscard
-                                    - blkdiscardWithHeaderCleanup
                                     - deleteFiles
                                     type: string
                                 required:
@@ -7846,11 +7835,8 @@ spec:
                                   description: Effective/operative value to use as
                                     the volume wipe method after applying defaults.
                                   enum:
-                                  - none
                                   - dd
-                                  - headerCleanup
                                   - blkdiscard
-                                  - blkdiscardWithHeaderCleanup
                                   - deleteFiles
                                   type: string
                                 initMethod:
@@ -7870,11 +7856,8 @@ spec:
                                     WipeMethod determines how volumes attached to Aerospike server pods are wiped for dealing with storage format
                                     changes.
                                   enum:
-                                  - none
                                   - dd
-                                  - headerCleanup
                                   - blkdiscard
-                                  - blkdiscardWithHeaderCleanup
                                   - deleteFiles
                                   type: string
                               type: object
@@ -7915,11 +7898,8 @@ spec:
                                   description: Effective/operative value to use as
                                     the volume wipe method after applying defaults.
                                   enum:
-                                  - none
                                   - dd
-                                  - headerCleanup
                                   - blkdiscard
-                                  - blkdiscardWithHeaderCleanup
                                   - deleteFiles
                                   type: string
                                 initMethod:
@@ -7939,11 +7919,8 @@ spec:
                                     WipeMethod determines how volumes attached to Aerospike server pods are wiped for dealing with storage format
                                     changes.
                                   enum:
-                                  - none
                                   - dd
-                                  - headerCleanup
                                   - blkdiscard
-                                  - blkdiscardWithHeaderCleanup
                                   - deleteFiles
                                   type: string
                               type: object
@@ -8020,11 +7997,8 @@ spec:
                                     description: Effective/operative value to use
                                       as the volume wipe method after applying defaults.
                                     enum:
-                                    - none
                                     - dd
-                                    - headerCleanup
                                     - blkdiscard
-                                    - blkdiscardWithHeaderCleanup
                                     - deleteFiles
                                     type: string
                                   initContainers:
@@ -8247,6 +8221,10 @@ spec:
                                               AccessModes contains the desired access modes the volume should have.
                                               More info: https://kubernetes.io/docs/concepts/storage/persistent-volumes/#access-modes
                                             items:
+                                              enum:
+                                              - ReadOnlyMany
+                                              - ReadWriteMany
+                                              - ReadWriteOnce
                                               type: string
                                             type: array
                                           metadata:
@@ -8329,6 +8307,9 @@ spec:
                                           volumeMode:
                                             description: VolumeMode specifies if the
                                               volume is block/raw or a filesystem.
+                                            enum:
+                                            - Block
+                                            - Filesystem
                                             type: string
                                         required:
                                         - size
@@ -8409,11 +8390,8 @@ spec:
                                       WipeMethod determines how volumes attached to Aerospike server pods are wiped for dealing with storage format
                                       changes.
                                     enum:
-                                    - none
                                     - dd
-                                    - headerCleanup
                                     - blkdiscard
-                                    - blkdiscardWithHeaderCleanup
                                     - deleteFiles
                                     type: string
                                 required:
@@ -8535,11 +8513,8 @@ spec:
                         description: Effective/operative value to use as the volume
                           wipe method after applying defaults.
                         enum:
-                        - none
                         - dd
-                        - headerCleanup
                         - blkdiscard
-                        - blkdiscardWithHeaderCleanup
                         - deleteFiles
                         type: string
                       initMethod:
@@ -8559,11 +8534,8 @@ spec:
                           WipeMethod determines how volumes attached to Aerospike server pods are wiped for dealing with storage format
                           changes.
                         enum:
-                        - none
                         - dd
-                        - headerCleanup
                         - blkdiscard
-                        - blkdiscardWithHeaderCleanup
                         - deleteFiles
                         type: string
                     type: object
@@ -8604,11 +8576,8 @@ spec:
                         description: Effective/operative value to use as the volume
                           wipe method after applying defaults.
                         enum:
-                        - none
                         - dd
-                        - headerCleanup
                         - blkdiscard
-                        - blkdiscardWithHeaderCleanup
                         - deleteFiles
                         type: string
                       initMethod:
@@ -8628,11 +8597,8 @@ spec:
                           WipeMethod determines how volumes attached to Aerospike server pods are wiped for dealing with storage format
                           changes.
                         enum:
-                        - none
                         - dd
-                        - headerCleanup
                         - blkdiscard
-                        - blkdiscardWithHeaderCleanup
                         - deleteFiles
                         type: string
                     type: object
@@ -8709,11 +8675,8 @@ spec:
                           description: Effective/operative value to use as the volume
                             wipe method after applying defaults.
                           enum:
-                          - none
                           - dd
-                          - headerCleanup
                           - blkdiscard
-                          - blkdiscardWithHeaderCleanup
                           - deleteFiles
                           type: string
                         initContainers:
@@ -8933,6 +8896,10 @@ spec:
                                     AccessModes contains the desired access modes the volume should have.
                                     More info: https://kubernetes.io/docs/concepts/storage/persistent-volumes/#access-modes
                                   items:
+                                    enum:
+                                    - ReadOnlyMany
+                                    - ReadWriteMany
+                                    - ReadWriteOnce
                                     type: string
                                   type: array
                                 metadata:
@@ -9014,6 +8981,9 @@ spec:
                                 volumeMode:
                                   description: VolumeMode specifies if the volume
                                     is block/raw or a filesystem.
+                                  enum:
+                                  - Block
+                                  - Filesystem
                                   type: string
                               required:
                               - size
@@ -9094,11 +9064,8 @@ spec:
                             WipeMethod determines how volumes attached to Aerospike server pods are wiped for dealing with storage format
                             changes.
                           enum:
-                          - none
                           - dd
-                          - headerCleanup
                           - blkdiscard
-                          - blkdiscardWithHeaderCleanup
                           - deleteFiles
                           type: string
                       required:
@@ -15470,11 +15437,8 @@ spec:
                                   description: Effective/operative value to use as
                                     the volume wipe method after applying defaults.
                                   enum:
-                                  - none
                                   - dd
-                                  - headerCleanup
                                   - blkdiscard
-                                  - blkdiscardWithHeaderCleanup
                                   - deleteFiles
                                   type: string
                                 initMethod:
@@ -15494,11 +15458,8 @@ spec:
                                     WipeMethod determines how volumes attached to Aerospike server pods are wiped for dealing with storage format
                                     changes.
                                   enum:
-                                  - none
                                   - dd
-                                  - headerCleanup
                                   - blkdiscard
-                                  - blkdiscardWithHeaderCleanup
                                   - deleteFiles
                                   type: string
                               type: object
@@ -15539,11 +15500,8 @@ spec:
                                   description: Effective/operative value to use as
                                     the volume wipe method after applying defaults.
                                   enum:
-                                  - none
                                   - dd
-                                  - headerCleanup
                                   - blkdiscard
-                                  - blkdiscardWithHeaderCleanup
                                   - deleteFiles
                                   type: string
                                 initMethod:
@@ -15563,11 +15521,8 @@ spec:
                                     WipeMethod determines how volumes attached to Aerospike server pods are wiped for dealing with storage format
                                     changes.
                                   enum:
-                                  - none
                                   - dd
-                                  - headerCleanup
                                   - blkdiscard
-                                  - blkdiscardWithHeaderCleanup
                                   - deleteFiles
                                   type: string
                               type: object
@@ -15644,11 +15599,8 @@ spec:
                                     description: Effective/operative value to use
                                       as the volume wipe method after applying defaults.
                                     enum:
-                                    - none
                                     - dd
-                                    - headerCleanup
                                     - blkdiscard
-                                    - blkdiscardWithHeaderCleanup
                                     - deleteFiles
                                     type: string
                                   initContainers:
@@ -15871,6 +15823,10 @@ spec:
                                               AccessModes contains the desired access modes the volume should have.
                                               More info: https://kubernetes.io/docs/concepts/storage/persistent-volumes/#access-modes
                                             items:
+                                              enum:
+                                              - ReadOnlyMany
+                                              - ReadWriteMany
+                                              - ReadWriteOnce
                                               type: string
                                             type: array
                                           metadata:
@@ -15953,6 +15909,9 @@ spec:
                                           volumeMode:
                                             description: VolumeMode specifies if the
                                               volume is block/raw or a filesystem.
+                                            enum:
+                                            - Block
+                                            - Filesystem
                                             type: string
                                         required:
                                         - size
@@ -16033,11 +15992,8 @@ spec:
                                       WipeMethod determines how volumes attached to Aerospike server pods are wiped for dealing with storage format
                                       changes.
                                     enum:
-                                    - none
                                     - dd
-                                    - headerCleanup
                                     - blkdiscard
-                                    - blkdiscardWithHeaderCleanup
                                     - deleteFiles
                                     type: string
                                 required:
@@ -17088,11 +17044,8 @@ spec:
                                   description: Effective/operative value to use as
                                     the volume wipe method after applying defaults.
                                   enum:
-                                  - none
                                   - dd
-                                  - headerCleanup
                                   - blkdiscard
-                                  - blkdiscardWithHeaderCleanup
                                   - deleteFiles
                                   type: string
                                 initMethod:
@@ -17112,11 +17065,8 @@ spec:
                                     WipeMethod determines how volumes attached to Aerospike server pods are wiped for dealing with storage format
                                     changes.
                                   enum:
-                                  - none
                                   - dd
-                                  - headerCleanup
                                   - blkdiscard
-                                  - blkdiscardWithHeaderCleanup
                                   - deleteFiles
                                   type: string
                               type: object
@@ -17157,11 +17107,8 @@ spec:
                                   description: Effective/operative value to use as
                                     the volume wipe method after applying defaults.
                                   enum:
-                                  - none
                                   - dd
-                                  - headerCleanup
                                   - blkdiscard
-                                  - blkdiscardWithHeaderCleanup
                                   - deleteFiles
                                   type: string
                                 initMethod:
@@ -17181,11 +17128,8 @@ spec:
                                     WipeMethod determines how volumes attached to Aerospike server pods are wiped for dealing with storage format
                                     changes.
                                   enum:
-                                  - none
                                   - dd
-                                  - headerCleanup
                                   - blkdiscard
-                                  - blkdiscardWithHeaderCleanup
                                   - deleteFiles
                                   type: string
                               type: object
@@ -17262,11 +17206,8 @@ spec:
                                     description: Effective/operative value to use
                                       as the volume wipe method after applying defaults.
                                     enum:
-                                    - none
                                     - dd
-                                    - headerCleanup
                                     - blkdiscard
-                                    - blkdiscardWithHeaderCleanup
                                     - deleteFiles
                                     type: string
                                   initContainers:
@@ -17489,6 +17430,10 @@ spec:
                                               AccessModes contains the desired access modes the volume should have.
                                               More info: https://kubernetes.io/docs/concepts/storage/persistent-volumes/#access-modes
                                             items:
+                                              enum:
+                                              - ReadOnlyMany
+                                              - ReadWriteMany
+                                              - ReadWriteOnce
                                               type: string
                                             type: array
                                           metadata:
@@ -17571,6 +17516,9 @@ spec:
                                           volumeMode:
                                             description: VolumeMode specifies if the
                                               volume is block/raw or a filesystem.
+                                            enum:
+                                            - Block
+                                            - Filesystem
                                             type: string
                                         required:
                                         - size
@@ -17651,11 +17599,8 @@ spec:
                                       WipeMethod determines how volumes attached to Aerospike server pods are wiped for dealing with storage format
                                       changes.
                                     enum:
-                                    - none
                                     - dd
-                                    - headerCleanup
                                     - blkdiscard
-                                    - blkdiscardWithHeaderCleanup
                                     - deleteFiles
                                     type: string
                                 required:
@@ -17843,11 +17788,8 @@ spec:
                         description: Effective/operative value to use as the volume
                           wipe method after applying defaults.
                         enum:
-                        - none
                         - dd
-                        - headerCleanup
                         - blkdiscard
-                        - blkdiscardWithHeaderCleanup
                         - deleteFiles
                         type: string
                       initMethod:
@@ -17867,11 +17809,8 @@ spec:
                           WipeMethod determines how volumes attached to Aerospike server pods are wiped for dealing with storage format
                           changes.
                         enum:
-                        - none
                         - dd
-                        - headerCleanup
                         - blkdiscard
-                        - blkdiscardWithHeaderCleanup
                         - deleteFiles
                         type: string
                     type: object
@@ -17912,11 +17851,8 @@ spec:
                         description: Effective/operative value to use as the volume
                           wipe method after applying defaults.
                         enum:
-                        - none
                         - dd
-                        - headerCleanup
                         - blkdiscard
-                        - blkdiscardWithHeaderCleanup
                         - deleteFiles
                         type: string
                       initMethod:
@@ -17936,11 +17872,8 @@ spec:
                           WipeMethod determines how volumes attached to Aerospike server pods are wiped for dealing with storage format
                           changes.
                         enum:
-                        - none
                         - dd
-                        - headerCleanup
                         - blkdiscard
-                        - blkdiscardWithHeaderCleanup
                         - deleteFiles
                         type: string
                     type: object
@@ -18017,11 +17950,8 @@ spec:
                           description: Effective/operative value to use as the volume
                             wipe method after applying defaults.
                           enum:
-                          - none
                           - dd
-                          - headerCleanup
                           - blkdiscard
-                          - blkdiscardWithHeaderCleanup
                           - deleteFiles
                           type: string
                         initContainers:
@@ -18241,6 +18171,10 @@ spec:
                                     AccessModes contains the desired access modes the volume should have.
                                     More info: https://kubernetes.io/docs/concepts/storage/persistent-volumes/#access-modes
                                   items:
+                                    enum:
+                                    - ReadOnlyMany
+                                    - ReadWriteMany
+                                    - ReadWriteOnce
                                     type: string
                                   type: array
                                 metadata:
@@ -18322,6 +18256,9 @@ spec:
                                 volumeMode:
                                   description: VolumeMode specifies if the volume
                                     is block/raw or a filesystem.
+                                  enum:
+                                  - Block
+                                  - Filesystem
                                   type: string
                               required:
                               - size
@@ -18402,11 +18339,8 @@ spec:
                             WipeMethod determines how volumes attached to Aerospike server pods are wiped for dealing with storage format
                             changes.
                           enum:
-                          - none
                           - dd
-                          - headerCleanup
                           - blkdiscard
-                          - blkdiscardWithHeaderCleanup
                           - deleteFiles
                           type: string
                       required:
