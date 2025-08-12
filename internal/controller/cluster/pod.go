@@ -1804,41 +1804,46 @@ func (r *SingleClusterReconciler) checkForPortsUpdate(sts *appsv1.StatefulSet, p
 		return false, fmt.Errorf("server container not found in pod or statefulset")
 	}
 
-	desiredContainerPorts := stsServerContainer.Ports
-	currentContainerPorts := serverContainer.Ports
+	desiredContainerPortsMap := make(map[string]corev1.ContainerPort, len(stsServerContainer.Ports))
+	for _, port := range stsServerContainer.Ports {
+		desiredContainerPortsMap[port.Name] = port
+	}
 
-	for idx := range desiredContainerPorts {
-		desiredPort := desiredContainerPorts[idx]
+	currentContainerPortsMap := make(map[string]corev1.ContainerPort, len(serverContainer.Ports))
+	for _, port := range serverContainer.Ports {
+		currentContainerPortsMap[port.Name] = port
+	}
 
-		var portFound bool
-
-		for jdx := range currentContainerPorts {
-			currentPort := currentContainerPorts[jdx]
-
-			if desiredPort.Name != currentPort.Name {
-				continue
-			}
-
-			portFound = true
-
-			// Check for
-			// 1. Container port change
-			// 2. Host port change from 0 to non-zero (indicating a change from not exposed to exposed)
-			// Ignore the case where host Port is disabled (0).
-			if desiredPort.ContainerPort != currentPort.ContainerPort ||
-				(desiredPort.HostPort != 0 && currentPort.HostPort == 0) {
-				r.Log.Info(
-					"Pod spec is updated, container port changed",
-					"podName", pod.Name, "desiredPort", desiredPort, "currentPort", currentPort,
-				)
-
-				return true, nil
-			}
-		}
-
-		if !portFound {
+	for name, desiredPort := range desiredContainerPortsMap {
+		if _, ok := currentContainerPortsMap[name]; !ok {
 			return true, nil
 		}
+
+		currentPort := currentContainerPortsMap[name]
+		// Check for
+		// 1. Container port change
+		// 2. Host port change from 0 to non-zero (indicating a change from not exposed to exposed)
+		// Ignore the case where host Port is disabled (0).
+		if desiredPort.ContainerPort != currentPort.ContainerPort ||
+			(desiredPort.HostPort != 0 && currentPort.HostPort == 0) {
+			r.Log.Info(
+				"Pod spec is updated, container port changed",
+				"podName", pod.Name, "desiredPort", desiredPort, "currentPort", currentPort,
+			)
+
+			return true, nil
+		}
+
+		// remove same port from currentContainerPortsMap
+		delete(currentContainerPortsMap, name)
+	}
+
+	// If any port is left in currentContainerPortsMap, it means that the port was removed
+	// If the removed port is a TLS port, we need to restart the pod as it indicates a change in Readiness TCP port.
+	if _, ok := currentContainerPortsMap[asdbv1.ServiceTLSPortName]; ok {
+		r.Log.Info("Aerospike readiness tcp port changed. Need rolling restart")
+
+		return true, nil
 	}
 
 	return false, nil

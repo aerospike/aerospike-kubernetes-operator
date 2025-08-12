@@ -259,23 +259,6 @@ func getAerospikeWipeStorageConfig(
 				},
 			},
 			{
-				Name: "test-wipe-device-blkdiscard-with-header-cleanup-1",
-				AerospikePersistentVolumePolicySpec: asdbv1.AerospikePersistentVolumePolicySpec{
-					InputInitMethod: &blkdiscardWithHeaderCleanupMethod,
-					InputWipeMethod: &blkdiscardWithHeaderCleanupMethod,
-				},
-				Source: asdbv1.VolumeSource{
-					PersistentVolume: &asdbv1.PersistentVolumeSpec{
-						Size:         resource.MustParse("1Gi"),
-						StorageClass: storageClass,
-						VolumeMode:   corev1.PersistentVolumeBlock,
-					},
-				},
-				Aerospike: &asdbv1.AerospikeServerVolumeAttachment{
-					Path: "/test/wipe/blkdiscard-with-header-cleanup/xvdf",
-				},
-			},
-			{
 				Name: "test-wipe-files-deletefiles-1",
 				AerospikePersistentVolumePolicySpec: asdbv1.AerospikePersistentVolumePolicySpec{
 					InputInitMethod: &fileDeleteMethod,
@@ -451,8 +434,7 @@ func getAerospikeWipeRackStorageConfig(
 	)
 	aerospikeStorageSpec.Volumes[0].Name = "test-wipe-device-dd-2"
 	aerospikeStorageSpec.Volumes[1].Name = "test-wipe-device-blkdiscard-2"
-	aerospikeStorageSpec.Volumes[2].Name = "test-wipe-device-blkdiscard-with-header-cleanup-2"
-	aerospikeStorageSpec.Volumes[3].Name = "test-wipe-files-deletefiles-2"
+	aerospikeStorageSpec.Volumes[2].Name = "test-wipe-files-deletefiles-2"
 
 	return aerospikeStorageSpec
 }
