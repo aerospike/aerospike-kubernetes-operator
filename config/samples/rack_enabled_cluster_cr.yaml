@@ -24,7 +24,6 @@ spec:
       initMethod: deleteFiles
     blockVolumePolicy:
       cascadeDelete: true
-      initMethod: headerCleanup
     volumes:
       - name: workdir
         aerospike:
@@ -39,7 +38,7 @@ spec:
           path: /test/dev/xvdf
         source:
           persistentVolume:
-            storageClass: local-ssd
+            storageClass: ssd
             volumeMode: Block
             size: 5Gi
       - name: aerospike-config-secret
@@ -59,12 +58,10 @@ spec:
         roles:
           - sys-admin
           - user-admin
-          - read-write
 
   aerospikeConfig:
     service:
       feature-key-file: /etc/aerospike/secret/features.conf
-      proto-fd-max: 14000
     security: {}
 
     network:
@@ -79,8 +76,6 @@ spec:
       - name: test
         replication-factor: 2
         storage-engine:
-          encryption-key-file: /etc/aerospike/secret/key.dat
-          encryption: aes-256
           type: device
           devices:
             - /test/dev/xvdf
