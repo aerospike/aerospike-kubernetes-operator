@@ -1,4 +1,4 @@
-# Storage class for AKS with SSD
+# Sample storage class for AKS with SSD
 apiVersion: storage.k8s.io/v1
 kind: StorageClass
 metadata:

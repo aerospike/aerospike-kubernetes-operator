@@ -19,6 +19,7 @@ import (
 	"k8s.io/client-go/util/retry"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 
+	as "github.com/aerospike/aerospike-client-go/v8"
 	asdbv1 "github.com/aerospike/aerospike-kubernetes-operator/v4/api/v1"
 	"github.com/aerospike/aerospike-kubernetes-operator/v4/internal/controller/common"
 	"github.com/aerospike/aerospike-kubernetes-operator/v4/pkg/jsonpatch"
@@ -102,17 +103,6 @@ func (r *SingleClusterReconciler) getRollingRestartTypeMap(rackState *RackState,
 
 		podStatus := r.aeroCluster.Status.Pods[pods[idx].Name]
 		if podStatus.AerospikeConfigHash != requiredConfHash {
-			podSpecUpdated, err := r.isAnyPodSpecUpdated(rackState, pods[idx])
-			if err != nil {
-				return nil, nil, fmt.Errorf("failed to check if pod spec is updated: %v", err)
-			}
-
-			if podSpecUpdated {
-				// If pod spec is updated, then we need to restart the pod.
-				restartTypeMap[pods[idx].Name] = podRestart
-				continue
-			}
-
 			serverContainer := getContainer(pods[idx].Spec.Containers, asdbv1.AerospikeServerContainerName)
 
 			version, err := asdbv1.GetImageVersion(serverContainer.Image)
@@ -160,8 +150,13 @@ func (r *SingleClusterReconciler) getRollingRestartTypeMap(rackState *RackState,
 			}
 		}
 
-		restartTypeMap[pods[idx].Name] = r.getRollingRestartTypePod(rackState, pods[idx], confMap, addedNSDevices,
+		restartType, err := r.getRollingRestartTypePod(rackState, pods[idx], confMap, addedNSDevices,
 			len(dynamicConfDiffPerPod[pods[idx].Name]) > 0, onDemandQuickRestarts, onDemandPodRestarts)
+		if err != nil {
+			return nil, nil, err
+		}
+
+		restartTypeMap[pods[idx].Name] = restartType
 
 		// Fallback to rolling restart in case of partial failure to recover with the desired Aerospike config
 		if podStatus.DynamicConfigUpdateStatus == asdbv1.PartiallyFailed {
@@ -176,12 +171,12 @@ func (r *SingleClusterReconciler) getRollingRestartTypePod(
 	rackState *RackState, pod *corev1.Pod, confMap *corev1.ConfigMap,
 	addedNSDevices []string, onlyDynamicConfigChange bool,
 	onDemandQuickRestarts, onDemandPodRestarts sets.Set[string],
-) RestartType {
+) (RestartType, error) {
 	restartType := noRestart
 
 	// AerospikeConfig nil means status not updated yet
 	if r.IsStatusEmpty() {
-		return restartType
+		return restartType, nil
 	}
 
 	requiredConfHash := confMap.Data[aerospikeConfHashFileName]
@@ -233,6 +228,17 @@ func (r *SingleClusterReconciler) getRollingRestartTypePod(
 		)
 	}
 
+	podSpecUpdated, err := r.isAnyPodSpecUpdated(rackState, pod)
+	if err != nil {
+		return restartType, fmt.Errorf("failed to check if pod spec is updated: %v", err)
+	}
+
+	if podSpecUpdated {
+		restartType = mergeRestartType(restartType, podRestart)
+
+		r.Log.Info("Aerospike pod ports changed. Need rolling restart")
+	}
+
 	// Check if rack storage is updated
 	if r.isRackStorageUpdatedInAeroCluster(rackState, pod) {
 		restartType = mergeRestartType(restartType, podRestart)
@@ -247,7 +253,7 @@ func (r *SingleClusterReconciler) getRollingRestartTypePod(
 			"pod name", pod.Name, "operation", opType, "restartType", restartType)
 	}
 
-	return restartType
+	return restartType, nil
 }
 
 func (r *SingleClusterReconciler) rollingRestartPods(
@@ -272,7 +278,8 @@ func (r *SingleClusterReconciler) rollingRestartPods(
 			return res
 		}
 
-		clientPolicy := r.getClientPolicy()
+		var clientPolicy *as.ClientPolicy
+
 		setMigrateFillDelay := r.shouldSetMigrateFillDelay(rackState, podsToRestart, restartTypeMap)
 
 		r.Log.Info(
@@ -282,7 +289,8 @@ func (r *SingleClusterReconciler) rollingRestartPods(
 		// Revert migrate-fill-delay to the original value before restarting active pods.
 		// This will be a no-op in the first reconcile
 		if setMigrateFillDelay {
-			// Add an optimisation check to only run set MFD in case of cold restart.
+			clientPolicy = r.getClientPolicy()
+
 			if res := r.setMigrateFillDelay(clientPolicy, &rackState.Rack.AerospikeConfig, false,
 				ignorablePodNames,
 			); !res.IsSuccess {
@@ -594,7 +602,8 @@ func (r *SingleClusterReconciler) safelyDeletePodsAndEnsureImageUpdated(
 			return res
 		}
 
-		clientPolicy := r.getClientPolicy()
+		var clientPolicy *as.ClientPolicy
+
 		setMigrateFillDelay := r.shouldSetMigrateFillDelay(rackState, podsToUpdate, nil)
 
 		r.Log.Info(
@@ -603,6 +612,8 @@ func (r *SingleClusterReconciler) safelyDeletePodsAndEnsureImageUpdated(
 		// Revert migrate-fill-delay to the original value before restarting active pods.
 		// This will be a no-op in the first reconcile
 		if setMigrateFillDelay {
+			clientPolicy = r.getClientPolicy()
+
 			if res := r.setMigrateFillDelay(clientPolicy, &rackState.Rack.AerospikeConfig, false,
 				ignorablePodNames,
 			); !res.IsSuccess {
@@ -1768,19 +1779,72 @@ func (r *SingleClusterReconciler) shouldSetMigrateFillDelay(rackState *RackState
 	return false
 }
 
+// isAnyPodSpecUpdated checks if any pod spec has been updated indirectly based on
+// aerospikeConfig or aerospikeNetworkPolicy change
 func (r *SingleClusterReconciler) isAnyPodSpecUpdated(rackState *RackState,
 	pod *corev1.Pod) (bool, error) {
+	// Creating a local copy of the statefulset to avoid modifying the original object
 	sts, err := r.getSTS(rackState)
 	if err != nil {
 		return false, err
 	}
 
-	// Creating a local copy of the statefulset to avoid modifying the original object
 	// Currently just checking the server container ports, but can be extended to other fields as needed
+	return r.checkForPortsUpdate(sts, pod)
+}
+
+func (r *SingleClusterReconciler) checkForPortsUpdate(sts *appsv1.StatefulSet, pod *corev1.Pod,
+) (bool, error) {
 	r.updateSTSPorts(sts)
 
 	stsServerContainer := getContainer(sts.Spec.Template.Spec.Containers, asdbv1.AerospikeServerContainerName)
 	serverContainer := getContainer(pod.Spec.Containers, asdbv1.AerospikeServerContainerName)
 
-	return !reflect.DeepEqual(serverContainer.Ports, stsServerContainer.Ports), nil
+	if serverContainer == nil || stsServerContainer == nil {
+		return false, fmt.Errorf("server container not found in pod or statefulset")
+	}
+
+	desiredContainerPortsMap := make(map[string]corev1.ContainerPort, len(stsServerContainer.Ports))
+	for _, port := range stsServerContainer.Ports {
+		desiredContainerPortsMap[port.Name] = port
+	}
+
+	currentContainerPortsMap := make(map[string]corev1.ContainerPort, len(serverContainer.Ports))
+	for _, port := range serverContainer.Ports {
+		currentContainerPortsMap[port.Name] = port
+	}
+
+	for name, desiredPort := range desiredContainerPortsMap {
+		if _, ok := currentContainerPortsMap[name]; !ok {
+			return true, nil
+		}
+
+		currentPort := currentContainerPortsMap[name]
+		// Check for
+		// 1. Container port change
+		// 2. Host port change from 0 to non-zero (indicating a change from not exposed to exposed)
+		// Ignore the case where host Port is disabled (0).
+		if desiredPort.ContainerPort != currentPort.ContainerPort ||
+			(desiredPort.HostPort != 0 && currentPort.HostPort == 0) {
+			r.Log.Info(
+				"Pod spec is updated, container port changed",
+				"podName", pod.Name, "desiredPort", desiredPort, "currentPort", currentPort,
+			)
+
+			return true, nil
+		}
+
+		// remove same port from currentContainerPortsMap
+		delete(currentContainerPortsMap, name)
+	}
+
+	// If any port is left in currentContainerPortsMap, it means that the port was removed
+	// If the removed port is a TLS port, we need to restart the pod as it indicates a change in Readiness TCP port.
+	if _, ok := currentContainerPortsMap[asdbv1.ServiceTLSPortName]; ok {
+		r.Log.Info("Aerospike readiness tcp port changed. Need rolling restart")
+
+		return true, nil
+	}
+
+	return false, nil
 }

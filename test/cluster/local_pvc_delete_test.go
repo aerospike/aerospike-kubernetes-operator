@@ -217,7 +217,7 @@ func updateAndValidateIntermediateMFD(ctx goctx.Context, k8sClient client.Client
 
 	By("Validating the migrate-fill-delay is set to given value before the restart")
 
-	// Using last pod for the confirmation as first rack pod are restarted first
+	// Using last rack's pod for the confirmation as first rack pods are restarted first
 	lastPodName := aeroCluster.Name + "-" +
 		strconv.Itoa(aeroCluster.Spec.RackConfig.Racks[len(aeroCluster.Spec.RackConfig.Racks)-1].ID) + "-0"
 
