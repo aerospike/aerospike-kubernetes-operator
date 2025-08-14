@@ -1080,7 +1080,7 @@ func deployClusterForMaxIgnorablePods(ctx goctx.Context, clusterNamespacedName t
 // Test cluster deployment with all image post 5.7.0 except the latest version
 func DeployClusterForAllImagesPost570(ctx goctx.Context) {
 	versions := []string{
-		"7.2.0.6", "7.1.0.12", "7.0.0.20", "6.4.0.7", "6.3.0.13", "6.2.0.9", "6.1.0.14", "6.0.0.16",
+		"8.0.0.2", "7.2.0.6", "7.1.0.12", "7.0.0.20", "6.4.0.7", "6.3.0.13", "6.2.0.9", "6.1.0.14", "6.0.0.16",
 	}
 
 	aeroCluster := &asdbv1.AerospikeCluster{}
