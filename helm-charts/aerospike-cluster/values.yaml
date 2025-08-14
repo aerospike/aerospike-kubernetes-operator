@@ -47,6 +47,8 @@ aerospikeConfig:
 #       port: 3001
 #     heartbeat:
 #       port: 3002
+#     admin:
+#       port: 3003
 #
 #   namespaces:
 #     - name: test

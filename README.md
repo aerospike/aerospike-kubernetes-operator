@@ -85,7 +85,7 @@ operator using OLM.
 ### Install operator-sdk
 
 Install operator-sdk version 1.40.0 using the
-installation [guide](https://v1-39-x.sdk.operatorframework.io/docs/installation/)
+installation [guide](https://v1-40-x.sdk.operatorframework.io/docs/installation/)
 
 ### Build the bundle
 
@@ -99,7 +99,6 @@ export IMAGE_TAG_BASE=${ACCOUNT}/aerospike-kubernetes-operator
 export VERSION=4.1.0
 export IMG=docker.io/${IMAGE_TAG_BASE}-nightly:${VERSION}
 export BUNDLE_IMG=docker.io/${IMAGE_TAG_BASE}-bundle-nightly:${VERSION}
-export CATALOG_IMG=docker.io/${IMAGE_TAG_BASE}-catalog-nightly:${VERSION}
 ```
 
 Create the bundle
