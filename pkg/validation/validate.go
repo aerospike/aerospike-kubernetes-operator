@@ -632,28 +632,6 @@ func isValueUpdated(m1, m2 map[string]interface{}, key string) bool {
 	return !reflect.DeepEqual(val1, val2)
 }
 
-func validateSecurityConfigUpdate(oldConfig, newConfig map[string]interface{}) error {
-	ovflag, err := asdbv1.IsSecurityEnabled(oldConfig)
-	if err != nil {
-		return fmt.Errorf(
-			"failed to validate Security context of old aerospike conf: %w", err,
-		)
-	}
-
-	ivflag, err := asdbv1.IsSecurityEnabled(newConfig)
-	if err != nil {
-		return fmt.Errorf(
-			"failed to validate Security context of new aerospike conf: %w", err,
-		)
-	}
-
-	if !ivflag && ovflag {
-		return fmt.Errorf("cannot disable cluster security in running cluster")
-	}
-
-	return nil
-}
-
 // ValidateAerospikeConfigUpdate validates the update of aerospikeConfig.
 // It validates the schema, security, tls, network and namespace configurations for the newConfig
 // It also validates the update of security, tls, network and namespace configurations.
@@ -673,10 +651,6 @@ func ValidateAerospikeConfigUpdate(
 // ValidateAerospikeConfigUpdateWithoutSchema validates the update of aerospikeConfig except for the schema.
 // It validates the update of security, tls, network and namespace configurations.
 func ValidateAerospikeConfigUpdateWithoutSchema(oldConfig, newConfig map[string]interface{}) error {
-	if err := validateSecurityConfigUpdate(oldConfig, newConfig); err != nil {
-		return err
-	}
-
 	if err := validateTLSUpdate(oldConfig, newConfig); err != nil {
 		return err
 	}
