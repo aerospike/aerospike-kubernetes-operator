@@ -147,6 +147,11 @@ func (r *SingleClusterReconciler) getRollingRestartTypeMap(rackState *RackState,
 		if podStatus.DynamicConfigUpdateStatus == asdbv1.PartiallyFailed {
 			restartTypeMap[pods[idx].Name] = mergeRestartType(restartTypeMap[pods[idx].Name], quickRestart)
 		}
+
+		// Flipkart: Disabling quick restart; performing a full pod restart instead.
+		if restartTypeMap[pods[idx].Name] == quickRestart {
+			restartTypeMap[pods[idx].Name] = podRestart
+		}
 	}
 
 	return restartTypeMap, dynamicConfDiffPerPod, nil
