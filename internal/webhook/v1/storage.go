@@ -445,13 +445,6 @@ func validateStorageVolumeSource(volume *asdbv1.VolumeSpec) error {
 	if source.PersistentVolume != nil {
 		// Validate VolumeMode
 		vm := source.PersistentVolume.VolumeMode
-		if vm != v1.PersistentVolumeBlock &&
-			vm != v1.PersistentVolumeFilesystem {
-			return fmt.Errorf(
-				"invalid VolumeMode `%s`. Valid VolumeModes: %s, %s", vm,
-				v1.PersistentVolumeBlock, v1.PersistentVolumeFilesystem,
-			)
-		}
 
 		// Validate InitMethod
 		if vm == v1.PersistentVolumeBlock {
@@ -475,7 +468,6 @@ func validateStorageVolumeSource(volume *asdbv1.VolumeSpec) error {
 			validWipeMethods := sets.New(
 				asdbv1.AerospikeVolumeMethodBlkdiscard,
 				asdbv1.AerospikeVolumeMethodDD,
-				asdbv1.AerospikeVolumeMethodBlkdiscardWithHeaderCleanup,
 			)
 
 			if !validWipeMethods.Has(volume.WipeMethod) {
@@ -499,15 +491,6 @@ func validateStorageVolumeSource(volume *asdbv1.VolumeSpec) error {
 					"invalid wipe method %s for filesystem volume: %s",
 					volume.WipeMethod, volume.Name,
 				)
-			}
-		}
-
-		// Validate accessModes
-		validAccessModes := sets.New(v1.ReadOnlyMany, v1.ReadWriteMany, v1.ReadWriteOnce)
-		for _, am := range source.PersistentVolume.AccessModes {
-			if !validAccessModes.Has(am) {
-				return fmt.Errorf("invalid AccessMode `%s`. Valid AccessModes: %s, %s, %s",
-					am, v1.ReadOnlyMany, v1.ReadWriteMany, v1.ReadWriteOnce)
 			}
 		}
 	}

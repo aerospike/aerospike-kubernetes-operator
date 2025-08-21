@@ -301,6 +301,8 @@ func (r *SingleClusterReconciler) setMigrateFillDelay(
 		)
 	}
 
+	r.Log.Info("Setting migrate-fill-delay", "migrateFillDelay", migrateFillDelay)
+
 	if err := deployment.SetMigrateFillDelay(r.Log, policy, allHostConns, migrateFillDelay); err != nil {
 		return common.ReconcileError(err)
 	}

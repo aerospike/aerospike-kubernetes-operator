@@ -8,7 +8,7 @@ replicas: 3
 ## Aerospike server docker image
 image:
   repository: aerospike/aerospike-server-enterprise
-  tag: 8.0.0.2
+  tag: 8.1.0.0
 
 ## In case the above image is pulled from a registry that requires
 ## authentication, a secret containing credentials can be added
@@ -47,6 +47,8 @@ aerospikeConfig:
 #       port: 3001
 #     heartbeat:
 #       port: 3002
+#     admin:
+#       port: 3003
 #
 #   namespaces:
 #     - name: test

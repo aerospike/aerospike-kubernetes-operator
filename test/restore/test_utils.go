@@ -231,7 +231,7 @@ func getRestoreConfigInMap(backupPath string) map[string]interface{} {
 		},
 		"source": map[string]interface{}{
 			"local-storage": map[string]interface{}{
-				"path": "/localStorage",
+				"path": "/tmp/localStorage",
 			},
 		},
 		"backup-data-path": backupPath,

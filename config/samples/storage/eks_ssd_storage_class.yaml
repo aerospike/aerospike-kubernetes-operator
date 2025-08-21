@@ -1,4 +1,4 @@
-# Storage class for EKS with gp3
+# Sample storage class for EKS with gp3
 kind: StorageClass
 apiVersion: storage.k8s.io/v1
 metadata:

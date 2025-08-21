@@ -44,7 +44,7 @@ Run the following command with the appropriate name and version for the operator
 
 ```sh
 IMAGE_TAG_BASE=aerospike/aerospike-kubernetes-operator-nightly
-VERSION=4.1.0-preview
+VERSION=4.1.0
 make docker-buildx IMG=${IMAGE_TAG_BASE}:${VERSION} PLATFORMS=linux/amd64
 ```
 **Note**: Change `PLATFORMS` var as per host machine or remove it to build multi-arch image
@@ -84,8 +84,8 @@ operator using OLM.
 
 ### Install operator-sdk
 
-Install operator-sdk version 1.39.1 using the
-installation [guide](https://v1-39-x.sdk.operatorframework.io/docs/installation/)
+Install operator-sdk version 1.40.0 using the
+installation [guide](https://v1-40-x.sdk.operatorframework.io/docs/installation/)
 
 ### Build the bundle
 
@@ -96,10 +96,9 @@ Set up the environment with image names.
 ```shell
 export ACCOUNT=aerospike
 export IMAGE_TAG_BASE=${ACCOUNT}/aerospike-kubernetes-operator
-export VERSION=4.1.0-preview
+export VERSION=4.1.0
 export IMG=docker.io/${IMAGE_TAG_BASE}-nightly:${VERSION}
 export BUNDLE_IMG=docker.io/${IMAGE_TAG_BASE}-bundle-nightly:${VERSION}
-export CATALOG_IMG=docker.io/${IMAGE_TAG_BASE}-catalog-nightly:${VERSION}
 ```
 
 Create the bundle

@@ -9,7 +9,7 @@ else
 fi
 
 # Define the dashboards to download in the format <dashboard_id>:<revision> or <dashboard_id>
-DASHBOARDS="16119:10 16115:7 20279"
+DASHBOARDS="16119:13 16115:8 20279:2 23455"
 
 # Directory where the dashboards will be saved
 TARGET_DIR="/mnt/data"

@@ -769,7 +769,7 @@ func validateNetworkConfig(config map[string]interface{},
 ) error {
 	// network conf
 	networkConf := config["network"].(map[string]interface{})
-	serviceConf := networkConf["service"]
+	serviceConf := networkConf[asdbv1.ConfKeyNetworkService]
 
 	return validateTLSClientNames(
 		serviceConf.(map[string]interface{}), operatorClientCert,
@@ -1158,7 +1158,7 @@ func getFeatureKeyFilePaths(configSpec asdbv1.AerospikeConfigSpec) []string {
 	config := configSpec.Value
 
 	// feature-key-file needs secret
-	if svc, ok := config["service"]; ok {
+	if svc, ok := config[asdbv1.ConfKeyService]; ok {
 		if path, ok := svc.(map[string]interface{})["feature-key-file"]; ok {
 			return []string{path.(string)}
 		} else if pathsInterface, ok := svc.(map[string]interface{})["feature-key-files"]; ok {

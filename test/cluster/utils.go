@@ -601,8 +601,8 @@ func contains(elems []string, v string) bool {
 	return false
 }
 
-func getAerospikeConfigFromNode(log logr.Logger, k8sClient client.Client, ctx goctx.Context,
-	clusterNamespacedName types.NamespacedName, configContext, podName string) (lib.Stats, error) {
+func getASInfo(log logr.Logger, k8sClient client.Client, ctx goctx.Context,
+	clusterNamespacedName types.NamespacedName, podName, network string) (*info.AsInfo, error) {
 	aeroCluster, err := getCluster(k8sClient, ctx, clusterNamespacedName)
 	if err != nil {
 		return nil, err
@@ -610,14 +610,22 @@ func getAerospikeConfigFromNode(log logr.Logger, k8sClient client.Client, ctx go
 
 	pod := aeroCluster.Status.Pods[podName]
 
-	host, err := createHost(&pod)
+	host, err := createHost(&pod, network)
 	if err != nil {
 		return nil, err
 	}
 
-	asinfo := info.NewAsInfo(
+	return info.NewAsInfo(
 		log, host, getClientPolicy(aeroCluster, k8sClient),
-	)
+	), nil
+}
+
+func getAerospikeConfigFromNode(log logr.Logger, k8sClient client.Client, ctx goctx.Context,
+	clusterNamespacedName types.NamespacedName, configContext, podName string) (lib.Stats, error) {
+	asinfo, err := getASInfo(log, k8sClient, ctx, clusterNamespacedName, podName, "service")
+	if err != nil {
+		return nil, fmt.Errorf("failed to get ASInfo: %w", err)
+	}
 
 	confs, err := getAsConfig(asinfo, configContext)
 	if err != nil {
@@ -629,21 +637,10 @@ func getAerospikeConfigFromNode(log logr.Logger, k8sClient client.Client, ctx go
 
 func requestInfoFromNode(log logr.Logger, k8sClient client.Client, ctx goctx.Context,
 	clusterNamespacedName types.NamespacedName, cmd, podName string) (map[string]string, error) {
-	aeroCluster, err := getCluster(k8sClient, ctx, clusterNamespacedName)
+	asinfo, err := getASInfo(log, k8sClient, ctx, clusterNamespacedName, podName, "service")
 	if err != nil {
-		return nil, err
+		return nil, fmt.Errorf("failed to get ASInfo: %w", err)
 	}
-
-	pod := aeroCluster.Status.Pods[podName]
-
-	host, err := createHost(&pod)
-	if err != nil {
-		return nil, err
-	}
-
-	asinfo := info.NewAsInfo(
-		log, host, getClientPolicy(aeroCluster, k8sClient),
-	)
 
 	confs, err := asinfo.RequestInfo(cmd)
 	if err != nil {
@@ -687,7 +684,7 @@ func getAerospikeClient(aeroCluster *asdbv1.AerospikeCluster, k8sClient client.C
 	for podName := range aeroCluster.Status.Pods {
 		pod := aeroCluster.Status.Pods[podName]
 
-		host, err := createHost(&pod)
+		host, err := createHost(&pod, "service")
 		if err != nil {
 			return nil, err
 		}

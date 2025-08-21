@@ -612,7 +612,6 @@ type AerospikeAccessControlSpec struct {
 }
 
 // AerospikeVolumeMethod specifies how block volumes should be initialized.
-// +kubebuilder:validation:Enum=none;dd;headerCleanup;blkdiscard;blkdiscardWithHeaderCleanup;deleteFiles
 // +k8s:openapi-gen=true
 type AerospikeVolumeMethod string
 
@@ -650,11 +649,13 @@ type AerospikePersistentVolumePolicySpec struct {
 
 	// InitMethod determines how volumes attached to Aerospike server pods are initialized when the pods come up the
 	// first time. Defaults to "none".
+	// +kubebuilder:validation:Enum=none;dd;headerCleanup;blkdiscard;blkdiscardWithHeaderCleanup;deleteFiles
 	// +optional
 	InputInitMethod *AerospikeVolumeMethod `json:"initMethod,omitempty"`
 
 	// WipeMethod determines how volumes attached to Aerospike server pods are wiped for dealing with storage format
 	// changes.
+	// +kubebuilder:validation:Enum=dd;blkdiscard;deleteFiles
 	// +optional
 	InputWipeMethod *AerospikeVolumeMethod `json:"wipeMethod,omitempty"`
 
@@ -664,11 +665,13 @@ type AerospikePersistentVolumePolicySpec struct {
 	InputCascadeDelete *bool `json:"cascadeDelete,omitempty"`
 
 	// Effective/operative value to use as the volume init method after applying defaults.
+	// +kubebuilder:validation:Enum=none;dd;headerCleanup;blkdiscard;blkdiscardWithHeaderCleanup;deleteFiles
 	// +optional
 	InitMethod AerospikeVolumeMethod `json:"effectiveInitMethod,omitempty"`
 
 	// Effective/operative value to use as the volume wipe method after applying defaults.
 	// +optional
+	// +kubebuilder:validation:Enum=dd;blkdiscard;deleteFiles
 	WipeMethod AerospikeVolumeMethod `json:"effectiveWipeMethod,omitempty"`
 
 	// Effective/operative value to use for cascade delete after applying defaults.
@@ -739,6 +742,7 @@ type PersistentVolumeSpec struct { //nolint:govet // for readability
 	StorageClass string `json:"storageClass"`
 
 	// VolumeMode specifies if the volume is block/raw or a filesystem.
+	// +kubebuilder:validation:Enum=Block;Filesystem
 	VolumeMode corev1.PersistentVolumeMode `json:"volumeMode"`
 
 	// Size of volume.
@@ -746,6 +750,7 @@ type PersistentVolumeSpec struct { //nolint:govet // for readability
 
 	// AccessModes contains the desired access modes the volume should have.
 	// More info: https://kubernetes.io/docs/concepts/storage/persistent-volumes/#access-modes
+	// +kubebuilder:validation:items:Enum=ReadOnlyMany;ReadWriteMany;ReadWriteOnce
 	// +optional
 	AccessModes []corev1.PersistentVolumeAccessMode `json:"accessModes,omitempty" protobuf:"bytes,1,rep,name=accessModes,casttype=PersistentVolumeAccessMode"` //nolint:lll // for readability
 
@@ -1173,6 +1178,18 @@ type AerospikePodStatus struct { //nolint:govet // for readability
 	// +optional
 	ServicePort int32 `json:"servicePort,omitempty"`
 
+	// PodAdminPort is the admin port K8s internal Aerospike clients can connect to.
+	// Admin port is a reserved port for administrative tools,
+	// ensuring cluster accessibility even during application overload scenarios.
+	// +optional
+	PodAdminPort int32 `json:"podAdminPort,omitempty"`
+
+	// ServiceAdminPort is the admin port Aerospike clients outside K8s can connect to.
+	// Admin port is a reserved port for administrative tools,
+	// ensuring cluster accessibility even during application overload scenarios.
+	// +optional
+	ServiceAdminPort int32 `json:"serviceAdminPort,omitempty"`
+
 	// Aerospike server instance summary for this pod.
 	// +optional
 	Aerospike AerospikeInstanceSummary `json:"aerospike,omitempty"`
@@ -1216,7 +1233,7 @@ type AerospikePodStatus struct { //nolint:govet // for readability
 
 // AerospikeCluster is the schema for the AerospikeCluster API
 // +operator-sdk:csv:customresourcedefinitions:displayName="Aerospike Cluster",resources={{Service, v1},{Pod,v1},{StatefulSet,v1}}
-// +kubebuilder:metadata:annotations="aerospike-kubernetes-operator/version=4.1.0-preview"
+// +kubebuilder:metadata:annotations="aerospike-kubernetes-operator/version=4.1.0"
 //
 //nolint:lll // for readability
 type AerospikeCluster struct { //nolint:govet // for readability

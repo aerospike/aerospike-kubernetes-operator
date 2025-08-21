@@ -100,7 +100,7 @@ var _ = Describe(
 
 					err = createRestore(k8sClient, restore)
 					Expect(err).To(HaveOccurred())
-					Expect(err.Error()).To(ContainSubstring("should be positive number"))
+					Expect(err.Error()).To(ContainSubstring("empty field validation error: \"time\" required"))
 				})
 
 				It("Should fail when source field is given for Timestamp restore type", func() {

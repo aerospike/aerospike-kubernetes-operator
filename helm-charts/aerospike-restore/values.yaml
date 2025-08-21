@@ -34,7 +34,7 @@ restoreConfig: {}
 #    no-indexes: true
 #  source:
 #    local-storage:
-#      path: /localStorage
+#      path: /tmp/localStorage
 #  backup-data-path: aerospike-aerospikebackup-test-routine/backup/1722326391329/data/test
 
 

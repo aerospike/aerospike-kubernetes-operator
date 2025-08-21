@@ -146,7 +146,7 @@ func getEndpointIP(
 	return "", fmt.Errorf("unknown network type: %s", networkType)
 }
 
-func createHost(pod *asdbv1.AerospikePodStatus) (*as.Host, error) {
+func createHost(pod *asdbv1.AerospikePodStatus, network string) (*as.Host, error) {
 	var host string
 
 	networkType := asdbv1.AerospikeNetworkType(*defaultNetworkType)
@@ -194,8 +194,13 @@ func createHost(pod *asdbv1.AerospikePodStatus) (*as.Host, error) {
 		return nil, fmt.Errorf("unknown network type: %s", networkType)
 	}
 
+	port := pod.ServicePort
+	if network == asdbv1.ConfKeyNetworkAdmin {
+		port = pod.ServiceAdminPort
+	}
+
 	return &as.Host{
-		Name: host, Port: int(pod.ServicePort), TLSName: pod.Aerospike.TLSName,
+		Name: host, Port: int(port), TLSName: pod.Aerospike.TLSName,
 	}, nil
 }
 
