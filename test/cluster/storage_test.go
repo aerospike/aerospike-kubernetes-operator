@@ -6,6 +6,7 @@ import (
 
 	. "github.com/onsi/ginkgo/v2"
 	. "github.com/onsi/gomega"
+	"golang.org/x/net/context"
 	v1 "k8s.io/api/core/v1"
 	"k8s.io/apimachinery/pkg/api/resource"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
@@ -573,8 +574,18 @@ var _ = Describe(
 									aeroCluster.Spec.Storage.Volumes[0].Sidecars,
 									va,
 								)
+
+								aeroCluster.Spec.Storage.Volumes = append(aeroCluster.Spec.Storage.Volumes,
+									getHostPathStorageVolumeForSidecar("sidecar-volume",
+										"/para/tomcat1", containerName, true))
+
 								err = updateCluster(k8sClient, ctx, aeroCluster)
 								Expect(err).ToNot(HaveOccurred())
+
+								readOnly, err := isVolumeMountReadOnly(test.GetNamespacedName(aeroCluster.Name+"-0-1", aeroCluster.Namespace),
+									containerName, "sidecar-volume")
+								Expect(err).ToNot(HaveOccurred())
+								Expect(readOnly).To(BeTrue())
 
 								// Update
 
@@ -643,4 +654,27 @@ func createDummyAerospikeClusterWithNonPVWorkdir(
 	}
 
 	return aeroCluster
+}
+
+// isVolumeMountReadOnly checks if the given volume name is mounted as read-only in the specified container.
+func isVolumeMountReadOnly(podNamespacedName types.NamespacedName, containerName, volumeName string) (bool, error) {
+	updatedPod := &v1.Pod{}
+
+	if err := k8sClient.Get(context.TODO(), podNamespacedName, updatedPod); err != nil {
+		return false, err
+	}
+
+	for idx := range updatedPod.Spec.Containers {
+		if updatedPod.Spec.Containers[idx].Name == containerName {
+			for _, vm := range updatedPod.Spec.Containers[idx].VolumeMounts {
+				if vm.Name == volumeName {
+					return vm.ReadOnly, nil
+				}
+			}
+
+			return false, fmt.Errorf("volume %s not found in container mounts", volumeName)
+		}
+	}
+
+	return false, fmt.Errorf("container not found %s", containerName)
 }
