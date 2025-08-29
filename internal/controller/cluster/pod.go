@@ -940,7 +940,7 @@ func (r *SingleClusterReconciler) getIgnorablePods(racksToDelete []asdbv1.Rack, 
 			r.aeroCluster.Spec.RackConfig.MaxIgnorablePods, int(rack.Size), false,
 		)
 
-		// TODO: In case of renamed rack, we should consider all the for that rack (old as well new pods)
+		// TODO: In case of renamed rack, we should consider all the pods for that rack (old as well new pods)
 		podList, err := r.getRackPodList(rack.Rack.ID, rack.Rack.RackRevision)
 		if err != nil {
 			return nil, err
