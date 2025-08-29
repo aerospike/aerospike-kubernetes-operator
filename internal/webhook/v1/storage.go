@@ -142,15 +142,15 @@ func validateHostPathVolumeReadOnly(volume *asdbv1.VolumeSpec) error {
 
 		for idx := range attachments {
 			if !asdbv1.GetBool(attachments[idx].ReadOnly) {
-				return fmt.Errorf("hostpath volume %s can only be mounted as read-only filesystem", volume.Name)
+				return fmt.Errorf("hostpath volume %s can only be mounted as read-only filesystem in %s container",
+					volume.Name, attachments[idx].ContainerName)
 			}
 		}
 
 		if volume.Aerospike != nil {
-			asdbv1.GetBool(volume.Aerospike.ReadOnly)
-
 			if !asdbv1.GetBool(volume.Aerospike.ReadOnly) {
-				return fmt.Errorf("hostpath volume %s can only be mounted as read-only filesystem", volume.Name)
+				return fmt.Errorf("hostpath volume %s can only be mounted as read-only filesystem in server container",
+					volume.Name)
 			}
 		}
 	}
