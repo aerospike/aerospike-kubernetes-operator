@@ -6604,6 +6604,27 @@ spec:
                                             pattern: ^(\+|-)?(([0-9]+(\.[0-9]*)?)|(\.[0-9]+))(([KMGTPE]i)|[numkMGTPE]|([eE](\+|-)?(([0-9]+(\.[0-9]*)?)|(\.[0-9]+))))?$
                                             x-kubernetes-int-or-string: true
                                         type: object
+                                      hostPath:
+                                        description: |-
+                                          HostPath represents a directory on the host provisioned by an administrator.
+                                          This is useful for exposing host paths to pods in a controlled, read-only manner.
+                                          More info: https://kubernetes.io/docs/concepts/storage/volumes#hostpath
+                                        properties:
+                                          path:
+                                            description: |-
+                                              path of the directory on the host.
+                                              If the path is a symlink, it will follow the link to the real path.
+                                              More info: https://kubernetes.io/docs/concepts/storage/volumes#hostpath
+                                            type: string
+                                          type:
+                                            description: |-
+                                              type for HostPath Volume
+                                              Defaults to ""
+                                              More info: https://kubernetes.io/docs/concepts/storage/volumes#hostpath
+                                            type: string
+                                        required:
+                                        - path
+                                        type: object
                                       persistentVolume:
                                         description: PersistentVolumeSpec describes
                                           a persistent volume to claim and attach
@@ -8211,6 +8232,27 @@ spec:
                                             pattern: ^(\+|-)?(([0-9]+(\.[0-9]*)?)|(\.[0-9]+))(([KMGTPE]i)|[numkMGTPE]|([eE](\+|-)?(([0-9]+(\.[0-9]*)?)|(\.[0-9]+))))?$
                                             x-kubernetes-int-or-string: true
                                         type: object
+                                      hostPath:
+                                        description: |-
+                                          HostPath represents a directory on the host provisioned by an administrator.
+                                          This is useful for exposing host paths to pods in a controlled, read-only manner.
+                                          More info: https://kubernetes.io/docs/concepts/storage/volumes#hostpath
+                                        properties:
+                                          path:
+                                            description: |-
+                                              path of the directory on the host.
+                                              If the path is a symlink, it will follow the link to the real path.
+                                              More info: https://kubernetes.io/docs/concepts/storage/volumes#hostpath
+                                            type: string
+                                          type:
+                                            description: |-
+                                              type for HostPath Volume
+                                              Defaults to ""
+                                              More info: https://kubernetes.io/docs/concepts/storage/volumes#hostpath
+                                            type: string
+                                        required:
+                                        - path
+                                        type: object
                                       persistentVolume:
                                         description: PersistentVolumeSpec describes
                                           a persistent volume to claim and attach
@@ -8886,6 +8928,27 @@ spec:
                                     More info: https://kubernetes.io/docs/concepts/storage/volumes#emptydir
                                   pattern: ^(\+|-)?(([0-9]+(\.[0-9]*)?)|(\.[0-9]+))(([KMGTPE]i)|[numkMGTPE]|([eE](\+|-)?(([0-9]+(\.[0-9]*)?)|(\.[0-9]+))))?$
                                   x-kubernetes-int-or-string: true
+                              type: object
+                            hostPath:
+                              description: |-
+                                HostPath represents a directory on the host provisioned by an administrator.
+                                This is useful for exposing host paths to pods in a controlled, read-only manner.
+                                More info: https://kubernetes.io/docs/concepts/storage/volumes#hostpath
+                              properties:
+                                path:
+                                  description: |-
+                                    path of the directory on the host.
+                                    If the path is a symlink, it will follow the link to the real path.
+                                    More info: https://kubernetes.io/docs/concepts/storage/volumes#hostpath
+                                  type: string
+                                type:
+                                  description: |-
+                                    type for HostPath Volume
+                                    Defaults to ""
+                                    More info: https://kubernetes.io/docs/concepts/storage/volumes#hostpath
+                                  type: string
+                              required:
+                              - path
                               type: object
                             persistentVolume:
                               description: PersistentVolumeSpec describes a persistent
@@ -15813,6 +15876,27 @@ spec:
                                             pattern: ^(\+|-)?(([0-9]+(\.[0-9]*)?)|(\.[0-9]+))(([KMGTPE]i)|[numkMGTPE]|([eE](\+|-)?(([0-9]+(\.[0-9]*)?)|(\.[0-9]+))))?$
                                             x-kubernetes-int-or-string: true
                                         type: object
+                                      hostPath:
+                                        description: |-
+                                          HostPath represents a directory on the host provisioned by an administrator.
+                                          This is useful for exposing host paths to pods in a controlled, read-only manner.
+                                          More info: https://kubernetes.io/docs/concepts/storage/volumes#hostpath
+                                        properties:
+                                          path:
+                                            description: |-
+                                              path of the directory on the host.
+                                              If the path is a symlink, it will follow the link to the real path.
+                                              More info: https://kubernetes.io/docs/concepts/storage/volumes#hostpath
+                                            type: string
+                                          type:
+                                            description: |-
+                                              type for HostPath Volume
+                                              Defaults to ""
+                                              More info: https://kubernetes.io/docs/concepts/storage/volumes#hostpath
+                                            type: string
+                                        required:
+                                        - path
+                                        type: object
                                       persistentVolume:
                                         description: PersistentVolumeSpec describes
                                           a persistent volume to claim and attach
@@ -17420,6 +17504,27 @@ spec:
                                             pattern: ^(\+|-)?(([0-9]+(\.[0-9]*)?)|(\.[0-9]+))(([KMGTPE]i)|[numkMGTPE]|([eE](\+|-)?(([0-9]+(\.[0-9]*)?)|(\.[0-9]+))))?$
                                             x-kubernetes-int-or-string: true
                                         type: object
+                                      hostPath:
+                                        description: |-
+                                          HostPath represents a directory on the host provisioned by an administrator.
+                                          This is useful for exposing host paths to pods in a controlled, read-only manner.
+                                          More info: https://kubernetes.io/docs/concepts/storage/volumes#hostpath
+                                        properties:
+                                          path:
+                                            description: |-
+                                              path of the directory on the host.
+                                              If the path is a symlink, it will follow the link to the real path.
+                                              More info: https://kubernetes.io/docs/concepts/storage/volumes#hostpath
+                                            type: string
+                                          type:
+                                            description: |-
+                                              type for HostPath Volume
+                                              Defaults to ""
+                                              More info: https://kubernetes.io/docs/concepts/storage/volumes#hostpath
+                                            type: string
+                                        required:
+                                        - path
+                                        type: object
                                       persistentVolume:
                                         description: PersistentVolumeSpec describes
                                           a persistent volume to claim and attach
@@ -18161,6 +18266,27 @@ spec:
                                     More info: https://kubernetes.io/docs/concepts/storage/volumes#emptydir
                                   pattern: ^(\+|-)?(([0-9]+(\.[0-9]*)?)|(\.[0-9]+))(([KMGTPE]i)|[numkMGTPE]|([eE](\+|-)?(([0-9]+(\.[0-9]*)?)|(\.[0-9]+))))?$
                                   x-kubernetes-int-or-string: true
+                              type: object
+                            hostPath:
+                              description: |-
+                                HostPath represents a directory on the host provisioned by an administrator.
+                                This is useful for exposing host paths to pods in a controlled, read-only manner.
+                                More info: https://kubernetes.io/docs/concepts/storage/volumes#hostpath
+                              properties:
+                                path:
+                                  description: |-
+                                    path of the directory on the host.
+                                    If the path is a symlink, it will follow the link to the real path.
+                                    More info: https://kubernetes.io/docs/concepts/storage/volumes#hostpath
+                                  type: string
+                                type:
+                                  description: |-
+                                    type for HostPath Volume
+                                    Defaults to ""
+                                    More info: https://kubernetes.io/docs/concepts/storage/volumes#hostpath
+                                  type: string
+                              required:
+                              - path
                               type: object
                             persistentVolume:
                               description: PersistentVolumeSpec describes a persistent

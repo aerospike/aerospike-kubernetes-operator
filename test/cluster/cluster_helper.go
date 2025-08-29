@@ -1533,6 +1533,28 @@ func getStorageVolumeForSecret() asdbv1.VolumeSpec {
 	}
 }
 
+func getHostPathStorageVolumeForSidecar(volumeName, path, containerName string, readOnly bool) asdbv1.VolumeSpec {
+	return asdbv1.VolumeSpec{
+		Name: volumeName,
+		Source: asdbv1.VolumeSource{
+			HostPath: &corev1.HostPathVolumeSource{
+				Path: "/dev/null",
+			},
+		},
+		Sidecars: []asdbv1.VolumeAttachment{
+			{
+				Path:          path,
+				ContainerName: containerName,
+				AttachmentOptions: asdbv1.AttachmentOptions{
+					MountOptions: asdbv1.MountOptions{
+						ReadOnly: ptr.To(readOnly),
+					},
+				},
+			},
+		},
+	}
+}
+
 func getSCNamespaceConfig(name, path string) map[string]interface{} {
 	return map[string]interface{}{
 		"name":               name,

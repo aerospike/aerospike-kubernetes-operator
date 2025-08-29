@@ -134,6 +134,30 @@ func setStorageDefaults(storage *asdbv1.AerospikeStorageSpec) {
 	}
 }
 
+func validateHostPathVolumeReadOnly(volume *asdbv1.VolumeSpec) error {
+	if volume.Source.HostPath != nil {
+		var attachments []asdbv1.VolumeAttachment
+		attachments = append(attachments, volume.Sidecars...)
+		attachments = append(attachments, volume.InitContainers...)
+
+		for idx := range attachments {
+			if !asdbv1.GetBool(attachments[idx].ReadOnly) {
+				return fmt.Errorf("hostpath volume %s can only be mounted as read-only filesystem in %s container",
+					volume.Name, attachments[idx].ContainerName)
+			}
+		}
+
+		if volume.Aerospike != nil {
+			if !asdbv1.GetBool(volume.Aerospike.ReadOnly) {
+				return fmt.Errorf("hostpath volume %s can only be mounted as read-only filesystem in server container",
+					volume.Name)
+			}
+		}
+	}
+
+	return nil
+}
+
 // setAerospikePersistentVolumePolicyDefaults applies default values to unset fields of the policy using corresponding
 // fields from defaultPolicy
 func setAerospikePersistentVolumePolicyDefaults(pvPolicy *asdbv1.AerospikePersistentVolumePolicySpec,
@@ -311,6 +335,10 @@ func validateStorage(
 		); err != nil {
 			return err
 		}
+
+		if err := validateHostPathVolumeReadOnly(volume); err != nil {
+			return err
+		}
 	}
 
 	return nil
@@ -431,6 +459,10 @@ func validateStorageVolumeSource(volume *asdbv1.VolumeSpec) error {
 	}
 
 	if source.PersistentVolume != nil {
+		sourceCount++
+	}
+
+	if source.HostPath != nil {
 		sourceCount++
 	}
 

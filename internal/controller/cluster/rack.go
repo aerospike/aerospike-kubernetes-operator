@@ -1512,7 +1512,7 @@ func (r *SingleClusterReconciler) isVolumeAttachmentAddedOrUpdated(
 		if volumeMount != nil {
 			// Found, check for updated
 			if getOriginalPath(volumeMount.MountPath) != attachment.Path ||
-				volumeMount.ReadOnly != attachment.ReadOnly ||
+				volumeMount.ReadOnly != asdbv1.GetBool(attachment.ReadOnly) ||
 				volumeMount.SubPath != attachment.SubPath ||
 				volumeMount.SubPathExpr != attachment.SubPathExpr ||
 				!reflect.DeepEqual(

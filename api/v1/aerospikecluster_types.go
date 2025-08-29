@@ -706,11 +706,11 @@ type AttachmentOptions struct {
 	MountOptions `json:"mountOptions,omitempty"`
 }
 
-type MountOptions struct { //nolint:govet // for readability
+type MountOptions struct {
 	// Mounted read-only if true, read-write otherwise (false or unspecified).
 	// Defaults to false.
 	// +optional
-	ReadOnly bool `json:"readOnly,omitempty"`
+	ReadOnly *bool `json:"readOnly,omitempty"`
 
 	// Path within the volume from which the container's volume should be mounted.
 	// Defaults to "" (volume's root).
@@ -776,6 +776,12 @@ type VolumeSource struct {
 
 	// +optional
 	PersistentVolume *PersistentVolumeSpec `json:"persistentVolume,omitempty"`
+
+	// HostPath represents a directory on the host provisioned by an administrator.
+	// This is useful for exposing host paths to pods in a controlled, read-only manner.
+	// More info: https://kubernetes.io/docs/concepts/storage/volumes#hostpath
+	// +optional
+	HostPath *corev1.HostPathVolumeSource `json:"hostPath,omitempty"`
 }
 
 type VolumeSpec struct {
