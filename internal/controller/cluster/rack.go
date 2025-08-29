@@ -321,7 +321,9 @@ func (r *SingleClusterReconciler) deleteRacks(
 	for idx := range racksToDelete {
 		rack := &racksToDelete[idx]
 		found := &appsv1.StatefulSet{}
-		stsName := utils.GetNamespacedNameForSTSOrConfigMap(r.aeroCluster, utils.GetRackIdentifier(rack.ID, rack.RackRevision))
+		stsName := utils.GetNamespacedNameForSTSOrConfigMap(
+			r.aeroCluster, utils.GetRackIdentifier(rack.ID, rack.RackRevision),
+		)
 
 		err := r.Client.Get(context.TODO(), stsName, found)
 		if err != nil {
@@ -1766,7 +1768,7 @@ func (r *SingleClusterReconciler) getCurrentRackList() (
 
 		racks := r.aeroCluster.Status.RackConfig.Racks
 		for rackIdx := range racks {
-			if racks[rackIdx].ID == rackID {
+			if racks[rackIdx].ID == rackID && racks[rackIdx].RackRevision == rackRevision {
 				found = true
 				break
 			}
@@ -2006,13 +2008,8 @@ func (r *SingleClusterReconciler) reconcileRenamedRacks(
 		"fromRevision", oldRack.Rack.RackRevision, "toRevision", newRack.Rack.RackRevision,
 	)
 
-	oldStsName := utils.GetNamespacedNameForSTSOrConfigMap(
-		r.aeroCluster,
-		utils.GetRackIdentifier(oldRack.Rack.ID, oldRack.Rack.RackRevision),
-	)
-	oldSts := &appsv1.StatefulSet{}
-
-	if err := r.Client.Get(context.TODO(), oldStsName, oldSts); err != nil {
+	oldSts, err := r.getSTS(oldRack)
+	if err != nil {
 		if !errors.IsNotFound(err) {
 			return common.ReconcileError(err)
 		}
@@ -2021,24 +2018,25 @@ func (r *SingleClusterReconciler) reconcileRenamedRacks(
 		// Instead of assuming completion, we now ensure the new rack is scaled up correctly.
 		r.Log.Info(
 			"Old rack STS not found. Ensuring new rack is at the target size.",
-			"oldStsName", oldStsName,
+			"oldStsName", utils.GetNamespacedNameForSTSOrConfigMap(r.aeroCluster,
+				utils.GetRackIdentifier(oldRack.Rack.ID, oldRack.Rack.RackRevision),
+			),
 		)
 
 		oldSts = nil
 	}
 
-	newStsName := utils.GetNamespacedNameForSTSOrConfigMap(
-		r.aeroCluster,
-		utils.GetRackIdentifier(newRack.Rack.ID, newRack.Rack.RackRevision),
-	)
-	newSts := &appsv1.StatefulSet{}
-
-	if err := r.Client.Get(context.TODO(), newStsName, newSts); err != nil {
+	newSts, err := r.getSTS(newRack)
+	if err != nil {
 		if !errors.IsNotFound(err) {
 			return common.ReconcileError(err)
 		}
 
-		r.Log.Info("New rack STS not found, creating it.", "stsName", newStsName)
+		r.Log.Info("New rack STS not found, creating it.",
+			"stsName", utils.GetNamespacedNameForSTSOrConfigMap(r.aeroCluster,
+				utils.GetRackIdentifier(newRack.Rack.ID, newRack.Rack.RackRevision),
+			),
+		)
 
 		zeroSizeRackState := &RackState{Rack: newRack.Rack, Size: 0}
 
@@ -2073,6 +2071,7 @@ func (r *SingleClusterReconciler) reconcileRenamedRacks(
 			return res
 		}
 
+		// TODO: We need to set roster for the new rackRevision pods here.
 		return common.ReconcileSuccess()
 	}
 
@@ -2084,15 +2083,36 @@ func (r *SingleClusterReconciler) reconcileRenamedRacks(
 
 	// The goal is to have oldSts replicas go to 0 and newSts replicas go to targetSize,
 	// while keeping the total number of pods running.
-	// We scale down one from old, and then scale up one in new.
-	totalCurrentPods := *oldSts.Spec.Replicas + *newSts.Spec.Replicas
+	// We scale down one pod batch from old, and then scale up one pod batch in new.
 	batchSize, _ := intstr.GetScaledValueFromIntOrPercent(
-		r.aeroCluster.Spec.RackConfig.ScaleDownBatchSize, int(targetSize), true,
+		r.aeroCluster.Spec.RackConfig.RollingUpdateBatchSize, int(targetSize), true,
 	)
 
 	if batchSize < 1 {
 		batchSize = 1
 	}
+
+	// If the new rack is oversized, it must be scaled down.
+	if *newSts.Spec.Replicas > targetSize {
+		podsToScaleDown := min(batchSize, int(*newSts.Spec.Replicas-targetSize))
+		r.Log.Info(
+			"Migrating rack: reconciling new STS to scale down by a batch", "stsName", newSts.Name,
+			"batchSize", podsToScaleDown,
+		)
+
+		tempNewRackState := &RackState{
+			Rack: newRack.Rack,
+			Size: *newSts.Spec.Replicas - int32(podsToScaleDown),
+		}
+
+		if res := r.reconcileRack(newSts, tempNewRackState, ignorablePodNames, nil); !res.IsSuccess {
+			return res
+		}
+
+		return common.ReconcileRequeueAfter(1)
+	}
+
+	totalCurrentPods := *oldSts.Spec.Replicas + *newSts.Spec.Replicas
 
 	// if total pods are less than desired, then scale up the new rack
 	if totalCurrentPods < targetSize {
@@ -2111,7 +2131,7 @@ func (r *SingleClusterReconciler) reconcileRenamedRacks(
 			if res := r.reconcileRack(newSts, tempNewRackState, ignorablePodNames, nil); !res.IsSuccess {
 				return res
 			}
-			// The reconciliation was successful (one pod was handled).
+			// The reconciliation was successful (one po batch was handled).
 			// Now we must requeue to continue the overall migration process.
 			return common.ReconcileRequeueAfter(1)
 		}
@@ -2136,6 +2156,7 @@ func (r *SingleClusterReconciler) reconcileRenamedRacks(
 	}
 
 	r.Log.Info("Rack migration in progress, waiting for next step", "oldSTS", oldSts.Name, "newSTS", newSts.Name)
+
 	return common.ReconcileRequeueAfter(1)
 }
 
