@@ -3,7 +3,6 @@ package utils
 import (
 	"encoding/hex"
 	"fmt"
-	"regexp"
 	"strconv"
 	"strings"
 
@@ -14,10 +13,12 @@ import (
 
 	asdbv1 "github.com/aerospike/aerospike-kubernetes-operator/v4/api/v1"
 	"github.com/aerospike/aerospike-kubernetes-operator/v4/api/v1beta1"
+	registryname "github.com/google/go-containerregistry/pkg/name"
 )
 
 const (
-	DockerHubImagePrefix = "docker.io/"
+	DockerHubImagePrefix    = "docker.io/"
+	DockerHubParsedRegistry = "index.docker.io"
 
 	// ReasonImagePullBackOff when pod status is Pending as container image pull failed.
 	ReasonImagePullBackOff = "ImagePullBackOff"
@@ -63,24 +64,48 @@ func IsImageEqual(image1, image2 string) bool {
 	desiredRegistry, desiredName, desiredVersion := ParseDockerImageTag(desiredImageWithVersion)
 	actualRegistry, actualName, actualVersion := ParseDockerImageTag(actualImageWithVersion)
 
-	// registry name, image name and version should match.
-	return desiredRegistry == actualRegistry && desiredName == actualName && (desiredVersion == actualVersion ||
-		(desiredVersion == ":latest" && actualVersion == "") ||
-		(actualVersion == ":latest" && desiredVersion == ""))
+	// image version should match first
+	if desiredVersion == actualVersion ||
+		(desiredVersion == "latest" && actualVersion == "") ||
+		(actualVersion == "latest" && desiredVersion == "") {
+		// if either desired or actual registry is docker hub, but the registries don't match,
+		// then we allow the names to match if one is a suffix of the other.
+		// This is to allow for pull through cache registries that prepend their path to the
+		// image name.
+		// e.g. aerospike/aerospike-server-enterprise:8.1 should match
+		// 000000000000.dkr.ecr.some-region.amazonaws.com/docker-hub/aerospike/aerospike-server-enterprise:8.1
+		if (desiredRegistry == DockerHubParsedRegistry || actualRegistry == DockerHubParsedRegistry) &&
+			desiredRegistry != actualRegistry {
+			return strings.HasSuffix(desiredName, actualName) || strings.HasSuffix(actualName, desiredName)
+		}
+
+		return desiredRegistry == actualRegistry && desiredName == actualName
+	}
+
+	return false
 }
 
 // ParseDockerImageTag parses input tag into registry, name and version.
 func ParseDockerImageTag(tag string) (
 	registry string, name string, version string,
 ) {
-	if tag == "" {
+	// remove @sha256: digest if exists
+	digest := ""
+	if idx := strings.Index(tag, "@sha256:"); idx != -1 {
+		digest = tag[idx:]
+		tag = tag[:idx]
+	}
+
+	ref, err := registryname.ParseReference(tag)
+	if err != nil {
 		return "", "", ""
 	}
 
-	r := regexp.MustCompile(`(?P<registry>[^/]+/)?(?P<image>[^:]+)(?P<version>:.+)?`)
-	matches := r.FindStringSubmatch(tag)
+	registry = ref.Context().RegistryStr()
+	name = ref.Context().RepositoryStr()
+	version = ref.Identifier() + digest // version can be tag or digest
 
-	return matches[1], matches[2], strings.TrimPrefix(matches[3], ":")
+	return registry, name, version
 }
 
 // IsPVCTerminating returns true if pvc's DeletionTimestamp has been set
