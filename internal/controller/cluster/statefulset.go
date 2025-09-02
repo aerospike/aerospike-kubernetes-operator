@@ -1443,15 +1443,10 @@ func getFinalVolumeAttachmentsForVolume(volume *asdbv1.VolumeSpec) (
 		initContainerAttachments, volume.InitContainers...,
 	)
 
-	initContainerAttachments = append(
-		initContainerAttachments, asdbv1.VolumeAttachment{
-			ContainerName: asdbv1.AerospikeInitContainerName,
-			Path:          initVolumePath,
-			AttachmentOptions: asdbv1.AttachmentOptions{
-				MountOptions: volume.Aerospike.MountOptions,
-			},
-		},
-	)
+	aerosikeInitContainerAttachment := asdbv1.VolumeAttachment{
+		ContainerName: asdbv1.AerospikeInitContainerName,
+		Path:          initVolumePath,
+	}
 
 	// Create dummy attachment for aerospike server container
 	containerAttachments = append(containerAttachments, volume.Sidecars...)
@@ -1466,7 +1461,15 @@ func getFinalVolumeAttachmentsForVolume(volume *asdbv1.VolumeSpec) (
 				},
 			},
 		)
+
+		aerosikeInitContainerAttachment.AttachmentOptions = asdbv1.AttachmentOptions{
+			MountOptions: volume.Aerospike.MountOptions,
+		}
 	}
+
+	initContainerAttachments = append(
+		initContainerAttachments, aerosikeInitContainerAttachment,
+	)
 
 	return initContainerAttachments, containerAttachments
 }

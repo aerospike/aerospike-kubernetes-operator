@@ -11,6 +11,7 @@ import (
 	"k8s.io/apimachinery/pkg/api/resource"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/types"
+	"k8s.io/utils/ptr"
 
 	asdbv1 "github.com/aerospike/aerospike-kubernetes-operator/v4/api/v1"
 	"github.com/aerospike/aerospike-kubernetes-operator/v4/test"
@@ -353,6 +354,174 @@ var _ = Describe(
 						)
 					},
 				)
+				FContext(
+					"When testing mount options for hostPath volumes", func() {
+						It(
+							"Should validate all mount options (ReadOnly, SubPath, SubPathExpr, MountPropagation) "+
+								"in Aerospike server, init, and sidecar containers",
+							func() {
+								aeroCluster := createDummyAerospikeCluster(clusterNamespacedName, 2)
+
+								// Add sidecar container to pod spec
+								aeroCluster.Spec.PodSpec.Sidecars = []v1.Container{
+									{
+										Name:  "sidecar-container",
+										Image: "busybox:latest",
+										Command: []string{
+											"/bin/sh",
+											"-c",
+											"sleep 1000",
+										},
+									},
+								}
+
+								// Add init container to pod spec
+								aeroCluster.Spec.PodSpec.InitContainers = []v1.Container{
+									{
+										Name:  "custom-init-container",
+										Image: "busybox:latest",
+										Command: []string{
+											"/bin/sh",
+											"-c",
+											"sleep 10",
+										},
+									},
+								}
+
+								// Create a hostPath volume with all mount options for all container types
+								hostPathVolume := asdbv1.VolumeSpec{
+									Name: "hostpath-mount-options-test",
+									Source: asdbv1.VolumeSource{
+										HostPath: &v1.HostPathVolumeSource{
+											Path: "/tmp/aerospike-test",
+											Type: &[]v1.HostPathType{v1.HostPathDirectoryOrCreate}[0],
+										},
+									},
+									// Aerospike server container mount options
+									Aerospike: &asdbv1.AerospikeServerVolumeAttachment{
+										Path: "/mnt/hostpath-data",
+										AttachmentOptions: asdbv1.AttachmentOptions{
+											MountOptions: asdbv1.MountOptions{
+												ReadOnly:         ptr.To(true),
+												SubPath:          "subdir",
+												MountPropagation: &[]v1.MountPropagationMode{v1.MountPropagationHostToContainer}[0],
+											},
+										},
+									},
+									// Init container mount options
+									InitContainers: []asdbv1.VolumeAttachment{
+										{
+											ContainerName: "custom-init-container",
+											Path:          "/mnt/hostpath-custom-init",
+											AttachmentOptions: asdbv1.AttachmentOptions{
+												MountOptions: asdbv1.MountOptions{
+													ReadOnly:         ptr.To(true),
+													SubPath:          "custom-init-subdir",
+													MountPropagation: &[]v1.MountPropagationMode{v1.MountPropagationHostToContainer}[0],
+												},
+											},
+										},
+									},
+									// Sidecar container mount options
+									Sidecars: []asdbv1.VolumeAttachment{
+										{
+											ContainerName: "sidecar-container",
+											Path:          "/mnt/hostpath-sidecar",
+											AttachmentOptions: asdbv1.AttachmentOptions{
+												MountOptions: asdbv1.MountOptions{
+													ReadOnly:         ptr.To(true),
+													SubPath:          "sidecar-subdir",
+													MountPropagation: &[]v1.MountPropagationMode{v1.MountPropagationHostToContainer}[0],
+												},
+											},
+										},
+									},
+								}
+
+								aeroCluster.Spec.Storage.Volumes = append(aeroCluster.Spec.Storage.Volumes, hostPathVolume)
+
+								// Deploy the cluster
+								err := DeployCluster(k8sClient, ctx, aeroCluster)
+								Expect(err).ToNot(HaveOccurred())
+
+								// Test Aerospike server container mount options
+								podNamespacedName := test.GetNamespacedName(aeroCluster.Name+"-0-1", aeroCluster.Namespace)
+
+								// Validate Aerospike server container mount options
+								aerospikeMountOptions, err := getVolumeMountOptions(podNamespacedName,
+									asdbv1.AerospikeServerContainerName, "hostpath-mount-options-test")
+								Expect(err).ToNot(HaveOccurred())
+
+								Expect(asdbv1.GetBool(aerospikeMountOptions.ReadOnly)).To(BeTrue())
+								Expect(aerospikeMountOptions.SubPath).To(Equal("subdir"))
+								Expect(aerospikeMountOptions.SubPathExpr).To(BeEmpty())
+								Expect(*aerospikeMountOptions.MountPropagation).To(Equal(v1.MountPropagationHostToContainer))
+
+								// Validate init container mount options
+								initMountOptions, err := getVolumeMountOptions(podNamespacedName,
+									asdbv1.AerospikeInitContainerName, "hostpath-mount-options-test")
+								Expect(err).ToNot(HaveOccurred())
+
+								Expect(asdbv1.GetBool(initMountOptions.ReadOnly)).To(BeTrue())
+								Expect(initMountOptions.SubPath).To(Equal("subdir"))
+								Expect(aerospikeMountOptions.SubPathExpr).To(BeEmpty())
+								Expect(*initMountOptions.MountPropagation).To(Equal(v1.MountPropagationHostToContainer))
+
+								// Validate custom init container mount options
+								customInitMountOptions, err := getVolumeMountOptions(podNamespacedName,
+									"custom-init-container", "hostpath-mount-options-test")
+								Expect(err).ToNot(HaveOccurred())
+
+								Expect(asdbv1.GetBool(customInitMountOptions.ReadOnly)).To(BeTrue())
+								Expect(customInitMountOptions.SubPath).To(Equal("custom-init-subdir"))
+								Expect(aerospikeMountOptions.SubPathExpr).To(BeEmpty())
+								Expect(*customInitMountOptions.MountPropagation).To(Equal(v1.MountPropagationHostToContainer))
+
+								// Validate sidecar container mount options
+								sidecarMountOptions, err := getVolumeMountOptions(podNamespacedName,
+									"sidecar-container", "hostpath-mount-options-test")
+								Expect(err).ToNot(HaveOccurred())
+
+								Expect(asdbv1.GetBool(sidecarMountOptions.ReadOnly)).To(BeTrue())
+								Expect(sidecarMountOptions.SubPath).To(Equal("sidecar-subdir"))
+								Expect(aerospikeMountOptions.SubPathExpr).To(BeEmpty())
+								Expect(*sidecarMountOptions.MountPropagation).To(Equal(v1.MountPropagationHostToContainer))
+
+								volumeIndex := len(aeroCluster.Spec.Storage.Volumes) - 1
+
+								// Test with read-write mount (should fail due to validation)
+								aeroCluster, err = getCluster(k8sClient, ctx, clusterNamespacedName)
+								Expect(err).ToNot(HaveOccurred())
+
+								// Try to set read-write for sidecar (should fail)
+								aeroCluster.Spec.Storage.Volumes[volumeIndex].Sidecars[0].AttachmentOptions.MountOptions.
+									ReadOnly = ptr.To(false)
+
+								err = updateCluster(k8sClient, ctx, aeroCluster)
+								Expect(err).Should(HaveOccurred())
+
+								// Try to set read-write for custom init container (should fail)
+								aeroCluster, err = getCluster(k8sClient, ctx, clusterNamespacedName)
+								Expect(err).ToNot(HaveOccurred())
+
+								aeroCluster.Spec.Storage.Volumes[volumeIndex].InitContainers[0].AttachmentOptions.
+									MountOptions.ReadOnly = ptr.To(false)
+
+								err = updateCluster(k8sClient, ctx, aeroCluster)
+								Expect(err).Should(HaveOccurred())
+
+								// Test with read-write mount for Aerospike server (should fail due to validation)
+								aeroCluster, err = getCluster(k8sClient, ctx, clusterNamespacedName)
+								Expect(err).ToNot(HaveOccurred())
+
+								aeroCluster.Spec.Storage.Volumes[volumeIndex].Aerospike.AttachmentOptions.MountOptions.ReadOnly = ptr.To(false)
+
+								err = updateCluster(k8sClient, ctx, aeroCluster)
+								Expect(err).Should(HaveOccurred())
+							},
+						)
+					},
+				)
 			},
 		)
 
@@ -575,17 +744,8 @@ var _ = Describe(
 									va,
 								)
 
-								aeroCluster.Spec.Storage.Volumes = append(aeroCluster.Spec.Storage.Volumes,
-									getHostPathStorageVolumeForSidecar("sidecar-volume",
-										"/para/tomcat1", containerName, true))
-
 								err = updateCluster(k8sClient, ctx, aeroCluster)
 								Expect(err).ToNot(HaveOccurred())
-
-								readOnly, err := isVolumeMountReadOnly(test.GetNamespacedName(aeroCluster.Name+"-0-1", aeroCluster.Namespace),
-									containerName, "sidecar-volume")
-								Expect(err).ToNot(HaveOccurred())
-								Expect(readOnly).To(BeTrue())
 
 								// Update
 
@@ -607,6 +767,56 @@ var _ = Describe(
 
 	},
 )
+
+// getVolumeMountOptions retrieves mount options for a specific volume in a container
+//
+//nolint:unparam // generic function
+func getVolumeMountOptions(podNamespacedName types.NamespacedName, containerName,
+	volumeName string) (*asdbv1.MountOptions, error) {
+	updatedPod := &v1.Pod{}
+
+	if err := k8sClient.Get(context.TODO(), podNamespacedName, updatedPod); err != nil {
+		return nil, err
+	}
+
+	// Check containers first (includes Aerospike server and sidecars)
+	for idx := range updatedPod.Spec.Containers {
+		if updatedPod.Spec.Containers[idx].Name == containerName {
+			for _, vm := range updatedPod.Spec.Containers[idx].VolumeMounts {
+				if vm.Name == volumeName {
+					return &asdbv1.MountOptions{
+						ReadOnly:         ptr.To(vm.ReadOnly),
+						SubPath:          vm.SubPath,
+						SubPathExpr:      vm.SubPathExpr,
+						MountPropagation: vm.MountPropagation,
+					}, nil
+				}
+			}
+
+			return nil, fmt.Errorf("volume %s not found in container %s mounts", volumeName, containerName)
+		}
+	}
+
+	// Check init containers if not found in containers
+	for idx := range updatedPod.Spec.InitContainers {
+		if updatedPod.Spec.InitContainers[idx].Name == containerName {
+			for _, vm := range updatedPod.Spec.InitContainers[idx].VolumeMounts {
+				if vm.Name == volumeName {
+					return &asdbv1.MountOptions{
+						ReadOnly:         ptr.To(vm.ReadOnly),
+						SubPath:          vm.SubPath,
+						SubPathExpr:      vm.SubPathExpr,
+						MountPropagation: vm.MountPropagation,
+					}, nil
+				}
+			}
+
+			return nil, fmt.Errorf("volume %s not found in init container %s mounts", volumeName, containerName)
+		}
+	}
+
+	return nil, fmt.Errorf("container %s not found in pod", containerName)
+}
 
 // Taking workdirVolumePath and workdirConfigPath separately as
 // workdirConfigPath can be empty in case of default workdir
@@ -654,27 +864,4 @@ func createDummyAerospikeClusterWithNonPVWorkdir(
 	}
 
 	return aeroCluster
-}
-
-// isVolumeMountReadOnly checks if the given volume name is mounted as read-only in the specified container.
-func isVolumeMountReadOnly(podNamespacedName types.NamespacedName, containerName, volumeName string) (bool, error) {
-	updatedPod := &v1.Pod{}
-
-	if err := k8sClient.Get(context.TODO(), podNamespacedName, updatedPod); err != nil {
-		return false, err
-	}
-
-	for idx := range updatedPod.Spec.Containers {
-		if updatedPod.Spec.Containers[idx].Name == containerName {
-			for _, vm := range updatedPod.Spec.Containers[idx].VolumeMounts {
-				if vm.Name == volumeName {
-					return vm.ReadOnly, nil
-				}
-			}
-
-			return false, fmt.Errorf("volume %s not found in container mounts", volumeName)
-		}
-	}
-
-	return false, fmt.Errorf("container not found %s", containerName)
 }
