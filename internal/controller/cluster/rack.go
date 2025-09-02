@@ -10,6 +10,7 @@ import (
 	appsv1 "k8s.io/api/apps/v1"
 	corev1 "k8s.io/api/core/v1"
 	"k8s.io/apimachinery/pkg/api/errors"
+	ls "k8s.io/apimachinery/pkg/labels"
 	"k8s.io/apimachinery/pkg/util/intstr"
 	"k8s.io/apimachinery/pkg/util/sets"
 	"sigs.k8s.io/controller-runtime/pkg/client"
@@ -338,7 +339,7 @@ func (r *SingleClusterReconciler) deleteRacks(
 		// TODO: Add option for quick delete of rack. DefaultRackID should always be removed gracefully
 		rackState := &RackState{Size: 0, Rack: rack}
 
-		found, res := r.scaleDownRack(found, rackState, ignorablePodNames)
+		found, res := r.scaleDownRack(found, rackState, ignorablePodNames, nil)
 		if !res.IsSuccess {
 			return res
 		}
@@ -606,7 +607,7 @@ func (r *SingleClusterReconciler) reconcileRack(
 
 	// Scale down
 	if currentSize > desiredSize {
-		found, res = r.scaleDownRack(found, rackState, ignorablePodNames)
+		found, res = r.scaleDownRack(found, rackState, ignorablePodNames, nil)
 		if !res.IsSuccess {
 			if res.Err != nil {
 				r.Log.Error(
@@ -905,7 +906,7 @@ func (r *SingleClusterReconciler) upgradeRack(
 }
 
 func (r *SingleClusterReconciler) scaleDownRack(
-	found *appsv1.StatefulSet, rackState *RackState, ignorablePodNames sets.Set[string],
+	found *appsv1.StatefulSet, rackState *RackState, ignorablePodNames sets.Set[string], customBatchSize *intstr.IntOrString,
 ) (*appsv1.StatefulSet, common.ReconcileResult) {
 	desiredSize := rackState.Size
 
@@ -941,8 +942,14 @@ func (r *SingleClusterReconciler) scaleDownRack(
 	policy := r.getClientPolicy()
 	diffPods := *found.Spec.Replicas - desiredSize
 
+	// Use custom batch size if provided, otherwise use ScaleDownBatchSize
+	batchSizeConfig := r.aeroCluster.Spec.RackConfig.ScaleDownBatchSize
+	if customBatchSize != nil {
+		batchSizeConfig = customBatchSize
+	}
+
 	podsBatchList := getPodsBatchList(
-		r.aeroCluster.Spec.RackConfig.ScaleDownBatchSize, oldPodList[:diffPods], len(oldPodList),
+		batchSizeConfig, oldPodList[:diffPods], len(oldPodList),
 	)
 
 	// Handle one batch
@@ -952,7 +959,7 @@ func (r *SingleClusterReconciler) scaleDownRack(
 		"Calculated batch for Pod scale-down",
 		"rackPodList", getPodNames(oldPodList),
 		"podsBatch", getPodNames(podsBatch),
-		"scaleDownBatchSize", r.aeroCluster.Spec.RackConfig.ScaleDownBatchSize,
+		"scaleDownBatchSize", batchSizeConfig,
 	)
 
 	var (
@@ -1704,6 +1711,24 @@ func (r *SingleClusterReconciler) getRackPodList(rackID int, rackRevision string
 	return podList, nil
 }
 
+func (r *SingleClusterReconciler) getRackPodListWithAllRevisions(rackID int) (
+	*corev1.PodList, error,
+) {
+	// List the pods for this aeroCluster's statefulset
+	podList := &corev1.PodList{}
+	listOps := &client.ListOptions{
+		Namespace:     r.aeroCluster.Namespace,
+		LabelSelector: ls.SelectorFromSet(utils.LabelsForAerospikeClusterRack(r.aeroCluster.Name, rackID, "")),
+	}
+
+	// TODO: Should we add check to get only non-terminating pod? What if it is rolling restart
+	if err := r.Client.List(context.TODO(), podList, listOps); err != nil {
+		return nil, err
+	}
+
+	return podList, nil
+}
+
 func (r *SingleClusterReconciler) getRackPodNames(rackState *RackState) []string {
 	rackIdentifier := utils.GetRackIdentifier(rackState.Rack.ID, rackState.Rack.RackRevision)
 	stsName := utils.GetNamespacedNameForSTSOrConfigMap(r.aeroCluster,
@@ -2055,7 +2080,6 @@ func (r *SingleClusterReconciler) reconcileRenamedRacks(
 		return r.reconcileRack(newSts, newRack, ignorablePodNames, nil)
 	}
 
-	// If the old STS has 0 replicas and the new STS has the target size, we can delete the old STS.
 	targetSize := newRack.Size
 
 	// If scale down of old STS and scale up of new STS is already done, we can delete the old STS.
@@ -2079,6 +2103,8 @@ func (r *SingleClusterReconciler) reconcileRenamedRacks(
 		r.Log.Info(
 			"Waiting for all racks to be stable before continuing migration",
 			"err", err)
+
+		return common.ReconcileError(err)
 	}
 
 	// The goal is to have oldSts replicas go to 0 and newSts replicas go to targetSize,
@@ -2094,15 +2120,14 @@ func (r *SingleClusterReconciler) reconcileRenamedRacks(
 
 	// If the new rack is oversized, it must be scaled down.
 	if *newSts.Spec.Replicas > targetSize {
-		podsToScaleDown := min(batchSize, int(*newSts.Spec.Replicas-targetSize))
 		r.Log.Info(
-			"Migrating rack: reconciling new STS to scale down by a batch", "stsName", newSts.Name,
-			"batchSize", podsToScaleDown,
+			"Migrating rack to new revisions: reconciling new STS to scale down",
+			"stsName", newSts.Name,
 		)
 
 		tempNewRackState := &RackState{
 			Rack: newRack.Rack,
-			Size: *newSts.Spec.Replicas - int32(podsToScaleDown),
+			Size: *newSts.Spec.Replicas - targetSize,
 		}
 
 		if res := r.reconcileRack(newSts, tempNewRackState, ignorablePodNames, nil); !res.IsSuccess {
@@ -2119,8 +2144,8 @@ func (r *SingleClusterReconciler) reconcileRenamedRacks(
 		if *newSts.Spec.Replicas < targetSize {
 			podsToScaleUp := min(batchSize, int(targetSize-totalCurrentPods))
 			r.Log.Info(
-				"Migrating rack: reconciling new STS to scale up by a batch", "stsName", newSts.Name,
-				"batchSize", podsToScaleUp,
+				"Migrating rack to new revision: reconciling new STS to scale up by a batch",
+				"stsName", newSts.Name, "batchSize", podsToScaleUp,
 			)
 			// Create a temporary RackState for reconcileRack to add one pod
 			tempNewRackState := &RackState{
@@ -2150,7 +2175,7 @@ func (r *SingleClusterReconciler) reconcileRenamedRacks(
 			Size: *oldSts.Spec.Replicas - int32(podsToScaleDown),
 		}
 
-		_, res := r.scaleDownRack(oldSts, tempOldRackState, ignorablePodNames)
+		_, res := r.scaleDownRack(oldSts, tempOldRackState, ignorablePodNames, r.aeroCluster.Spec.RackConfig.RollingUpdateBatchSize)
 		// scaleDownRack will requeue internally.
 		return res
 	}
