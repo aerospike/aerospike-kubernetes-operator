@@ -354,7 +354,7 @@ var _ = Describe(
 						)
 					},
 				)
-				FContext(
+				Context(
 					"When testing mount options for hostPath volumes", func() {
 						It(
 							"Should validate all mount options (ReadOnly, SubPath, SubPathExpr, MountPropagation) "+
