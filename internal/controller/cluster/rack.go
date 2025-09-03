@@ -11,6 +11,7 @@ import (
 	corev1 "k8s.io/api/core/v1"
 	"k8s.io/apimachinery/pkg/api/errors"
 	"k8s.io/apimachinery/pkg/labels"
+	"k8s.io/apimachinery/pkg/types"
 	"k8s.io/apimachinery/pkg/util/intstr"
 	"k8s.io/apimachinery/pkg/util/sets"
 	"sigs.k8s.io/controller-runtime/pkg/client"
@@ -974,6 +975,42 @@ func (r *SingleClusterReconciler) scaleDownRack(
 		); !res.IsSuccess {
 			return found, res
 		}
+
+		// Wait for migration to complete before deleting the pods.
+		if res := r.waitForMigrationToComplete(
+			ignorablePodNames,
+		); !res.IsSuccess {
+			r.Log.Error(
+				res.Err, "Failed to wait for migration to complete before deleting pods",
+				"rackID", rackState.Rack.ID,
+			)
+
+			return found, res
+		}
+	}
+
+	aeroCluster := &asdbv1.AerospikeCluster{}
+	if gErr := r.Client.Get(
+		context.TODO(), types.NamespacedName{
+			Name: r.aeroCluster.Name, Namespace: r.aeroCluster.Namespace,
+		}, aeroCluster,
+	); gErr != nil {
+		return found, common.ReconcileError(gErr)
+	}
+
+	rackStateList := getConfiguredRackStateList(aeroCluster)
+	newDesiredSize := desiredSize
+
+	for idx := range rackStateList {
+		if rackStateList[idx].Rack.ID == rackState.Rack.ID {
+			newDesiredSize = rackStateList[idx].Size
+			break
+		}
+	}
+	// If scale down is not needed then requeue
+	// This can happen if user reverts the size back to original value before scale down could complete
+	if *found.Spec.Replicas <= newDesiredSize {
+		return found, common.ReconcileRequeueAfter(1)
 	}
 
 	// Update new object with new size
