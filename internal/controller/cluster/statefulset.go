@@ -1066,7 +1066,7 @@ func updateSTSContainers(
 }
 
 func (r *SingleClusterReconciler) waitForAllSTSToBeReady(ignorablePodNames sets.Set[string]) error {
-	r.Log.Info("Waiting for cluster to be ready")
+	r.Log.Info("Waiting for cluster STS to be ready")
 
 	allRackIdentifier := sets.NewString()
 
