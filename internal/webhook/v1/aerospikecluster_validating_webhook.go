@@ -454,6 +454,8 @@ func validateRackUpdate(
 		return nil
 	}
 
+	ForceBlockFromRosterChanged := false
+
 	// Old racks cannot be updated
 	// Also need to exclude a default rack with default rack ID. No need to check here,
 	// user should not provide or update default rackID
@@ -510,9 +512,45 @@ func validateRackUpdate(
 					}
 				}
 
+				if oldRack.ForceBlockFromRoster != newRack.ForceBlockFromRoster {
+					ForceBlockFromRosterChanged = true
+				}
+
 				break
 			}
 		}
+	}
+
+	if ForceBlockFromRosterChanged && newObj.Status.AerospikeConfig == nil {
+		return fmt.Errorf("status is not updated yet, cannot change blockFromRoster in rack")
+	}
+
+	racksBlockedFromRosterInSpec := make(sets.Set[int])
+	racksBlockedFromRosterInStatus := make(sets.Set[int])
+
+	for idx := range newObj.Spec.RackConfig.Racks {
+		rack := newObj.Spec.RackConfig.Racks[idx]
+		if asdbv1.GetBool(rack.ForceBlockFromRoster) {
+			racksBlockedFromRosterInSpec.Insert(rack.ID)
+		}
+	}
+
+	for idx := range newObj.Status.RackConfig.Racks {
+		rack := newObj.Status.RackConfig.Racks[idx]
+		if asdbv1.GetBool(rack.ForceBlockFromRoster) {
+			racksBlockedFromRosterInStatus.Insert(rack.ID)
+		}
+	}
+
+	if len(newObj.Status.RackConfig.Racks)-len(racksBlockedFromRosterInSpec) == 1 &&
+		(newObj.Spec.RackConfig.RollingUpdateBatchSize != nil || newObj.Spec.RackConfig.ScaleDownBatchSize != nil) {
+		return fmt.Errorf("with only one rack remaining in roster, cannot use batch update or scale down")
+	}
+
+	desiredRacksBlockedFromRoster := racksBlockedFromRosterInSpec.Difference(racksBlockedFromRosterInStatus)
+
+	if len(desiredRacksBlockedFromRoster) > 1 {
+		return fmt.Errorf("can change only one rack at a time to BlockFromRoster: true")
 	}
 
 	return nil
@@ -594,6 +632,8 @@ func validateRackConfig(_ logr.Logger, cluster *asdbv1.AerospikeCluster) error {
 	rackMap := map[int]bool{}
 	migrateFillDelaySet := sets.Set[int]{}
 
+	var racksBlockedFromRoster int
+
 	for idx := range cluster.Spec.RackConfig.Racks {
 		rack := &cluster.Spec.RackConfig.Racks[idx]
 		// Check for duplicate
@@ -640,6 +680,24 @@ func validateRackConfig(_ logr.Logger, cluster *asdbv1.AerospikeCluster) error {
 		}
 
 		migrateFillDelaySet.Insert(migrateFillDelay)
+
+		if asdbv1.GetBool(rack.ForceBlockFromRoster) {
+			racksBlockedFromRoster++
+		}
+	}
+
+	if racksBlockedFromRoster > 0 {
+		if cluster.Spec.RackConfig.MaxIgnorablePods != nil {
+			return fmt.Errorf("ForceBlockFromRoster: true racks cannot be used with MaxIgnorablePods set")
+		}
+
+		if len(cluster.Spec.RosterNodeBlockList) > 0 {
+			return fmt.Errorf("ForceBlockFromRoster: true racks cannot be used with RosterNodeBlockList")
+		}
+
+		if racksBlockedFromRoster == len(cluster.Spec.RackConfig.Racks) {
+			return fmt.Errorf("all racks cannot have ForceBlockFromRoster: true. At least one rack must remain in the roster")
+		}
 	}
 
 	// If len of migrateFillDelaySet is more than 1, it means that different migrate-fill-delay is set across racks

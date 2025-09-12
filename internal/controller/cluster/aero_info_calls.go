@@ -16,6 +16,7 @@ package cluster
 import (
 	"context"
 	"fmt"
+	"regexp"
 	"time"
 
 	corev1 "k8s.io/api/core/v1"
@@ -80,6 +81,57 @@ func (r *SingleClusterReconciler) waitForMultipleNodesSafeStopReady(
 	}
 
 	return common.ReconcileSuccess()
+}
+
+// getNodeIDsFromBlockedRacks returns node IDs from all racks that have ForceBlockFromRoster: true
+func (r *SingleClusterReconciler) getNodeIDsFromBlockedRacks() []string {
+	var nodeIDs []string
+
+	// If no pods, return empty list
+	// assuming no nodes are present in roster
+	if len(r.aeroCluster.Status.Pods) == 0 {
+		return nodeIDs
+	}
+
+	rackStateList := getConfiguredRackStateList(r.aeroCluster)
+	for _, rackState := range rackStateList {
+		// Check if this rack has ForceBlockFromRoster set to true
+		if asdbv1.GetBool(rackState.Rack.ForceBlockFromRoster) {
+			rackID := rackState.Rack.ID
+
+			infix := getNodeIDInfixForRack(r.aeroCluster.Status.Pods, rackID)
+
+			// Extract node IDs from each pod in the rack
+			for podOrdinal := range rackState.Size {
+				nodeID := fmt.Sprintf("%d%s%d", rackID, infix, podOrdinal)
+				nodeIDs = append(nodeIDs, nodeID)
+
+				r.Log.V(1).Info("Added rack node to comprehensive block list",
+					"rackID", rackID, "nodeID", nodeID)
+			}
+		}
+	}
+
+	return nodeIDs
+}
+
+func getNodeIDInfixForRack(pods map[string]asdbv1.AerospikePodStatus, rackID int) string {
+	infix := "A"
+
+	for podName := range pods {
+		re := regexp.MustCompile(`^(\d+)(.)(\d+)$`)
+
+		matches := re.FindStringSubmatch(pods[podName].Aerospike.NodeID)
+		if len(matches) == 4 {
+			middleChar := matches[2]
+			if matches[1] == fmt.Sprintf("%d", rackID) {
+				infix = middleChar
+				break
+			}
+		}
+	}
+
+	return infix
 }
 
 func (r *SingleClusterReconciler) quiescePods(

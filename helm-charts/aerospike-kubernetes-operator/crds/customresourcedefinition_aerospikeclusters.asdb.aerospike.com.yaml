@@ -6795,6 +6795,12 @@ spec:
                               - name
                               x-kubernetes-list-type: map
                           type: object
+                        forceBlockFromRoster:
+                          description: |-
+                            ForceBlockFromRoster when set to true, removes all nodes from this rack from the roster
+                            If set to true, the operator will ignore unavailable/dead partitions and go ahead and remove the nodes from roster
+                            Hence, this should be used with caution.
+                          type: boolean
                         id:
                           description: Identifier for the rack
                           type: integer
@@ -16004,6 +16010,12 @@ spec:
                               - name
                               x-kubernetes-list-type: map
                           type: object
+                        forceBlockFromRoster:
+                          description: |-
+                            ForceBlockFromRoster when set to true, removes all nodes from this rack from the roster
+                            If set to true, the operator will ignore unavailable/dead partitions and go ahead and remove the nodes from roster
+                            Hence, this should be used with caution.
+                          type: boolean
                         id:
                           description: Identifier for the rack
                           type: integer
