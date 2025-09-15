@@ -98,6 +98,12 @@ validationPolicy: {}
 ## seedsFinderServices defines service (e.g. loadbalancer) to connect to Aerospike
 seedsFinderServices: {}
 
+## headlessService defines additional configuration parameters for the headless service created to discover Aerospike Cluster nodes
+headlessService: {}
+
+## podService defines additional configuration parameters for the pod service created to expose the Aerospike Cluster nodes outside the Kubernetes cluster.
+podService: {}
+
 ## operatorClientCert defines certificates to connect to Aerospike
 operatorClientCert: {}
 
