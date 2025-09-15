@@ -522,7 +522,7 @@ func validateRackUpdate(
 	}
 
 	if ForceBlockFromRosterChanged && newObj.Status.AerospikeConfig == nil {
-		return fmt.Errorf("status is not updated yet, cannot change blockFromRoster in rack")
+		return fmt.Errorf("status is not updated yet, cannot change ForceBlockFromRoster in rack")
 	}
 
 	racksBlockedFromRosterInSpec := make(sets.Set[int])
@@ -550,7 +550,7 @@ func validateRackUpdate(
 	desiredRacksBlockedFromRoster := racksBlockedFromRosterInSpec.Difference(racksBlockedFromRosterInStatus)
 
 	if len(desiredRacksBlockedFromRoster) > 1 {
-		return fmt.Errorf("can change only one rack at a time to BlockFromRoster: true")
+		return fmt.Errorf("can change only one rack at a time to ForceBlockFromRoster: true")
 	}
 
 	return nil

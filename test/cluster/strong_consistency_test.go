@@ -4,6 +4,9 @@ import (
 	goctx "context"
 	"fmt"
 	"strings"
+	"time"
+
+	"k8s.io/utils/ptr"
 
 	. "github.com/onsi/ginkgo/v2"
 	. "github.com/onsi/gomega"
@@ -107,6 +110,83 @@ var _ = Describe("SCMode", func() {
 			validateRoster(k8sClient, ctx, clusterNamespacedName, scNamespace)
 
 			validateLifecycleOperationInSCCluster(ctx, clusterNamespacedName, scNamespace)
+		})
+
+		It("Should test blocking rack from roster", func() {
+			By("Deploy")
+			aeroCluster := createDummyAerospikeCluster(clusterNamespacedName, 4)
+			aeroCluster.Spec.AerospikeConfig = getSCAerospikeConfig()
+			scNamespace := scNamespace
+			racks := []asdbv1.Rack{
+				{ID: 1},
+				{ID: 2},
+			}
+			rackConf := asdbv1.RackConfig{
+				Namespaces: []string{scNamespace},
+				Racks:      racks,
+			}
+			aeroCluster.Spec.RackConfig = rackConf
+
+			Expect(DeployCluster(k8sClient, ctx, aeroCluster)).ToNot(HaveOccurred())
+
+			validateRoster(k8sClient, ctx, clusterNamespacedName, scNamespace)
+
+			By("Block rack 1 from roster")
+			//		expectedRoster := []string{"2A0@2", "2A1@2"}
+			expectedRoster := "2A1@2,2A0@2"
+			aeroCluster.Spec.RackConfig.Racks[0].ForceBlockFromRoster = ptr.To(true)
+
+			Expect(updateCluster(k8sClient, ctx, aeroCluster)).ToNot(HaveOccurred())
+
+			aeroCluster, err := getCluster(k8sClient, ctx, clusterNamespacedName)
+			Expect(err).ToNot(HaveOccurred())
+
+			hostConns, err := newAllHostConn(logger, aeroCluster, k8sClient)
+			Expect(err).ToNot(HaveOccurred())
+
+			rosterNodesMap, err := getRoster(hostConns[0], getClientPolicy(aeroCluster, k8sClient), aeroCluster.Namespace)
+			Expect(err).ToNot(HaveOccurred())
+
+			// Roster is in uppercase, whereas nodeID is in lower case in server. Keep it in mind when comparing list
+			rosterStr := rosterNodesMap["roster"]
+			Expect(rosterStr).To(Equal(expectedRoster))
+
+			By("Unblock rack 1 from roster")
+			expectedRoster = "2A1@2,2A0@2,1A1@1,1A0@1"
+			aeroCluster.Spec.RackConfig.Racks[0].ForceBlockFromRoster = ptr.To(false)
+
+			Expect(updateCluster(k8sClient, ctx, aeroCluster)).ToNot(HaveOccurred())
+
+			rosterNodesMap, err = getRoster(hostConns[0], getClientPolicy(aeroCluster, k8sClient), aeroCluster.Namespace)
+			Expect(err).ToNot(HaveOccurred())
+
+			rosterStr = rosterNodesMap["roster"]
+			Expect(rosterStr).To(Equal(expectedRoster))
+
+			By("Block rack 1 from roster with failed pods")
+			aeroCluster, err = getCluster(k8sClient, ctx, clusterNamespacedName)
+			Expect(err).ToNot(HaveOccurred())
+
+			aeroCluster.Spec.PodSpec.AerospikeContainerSpec.Resources = unschedulableResource()
+			aeroCluster.Spec.RackConfig.RollingUpdateBatchSize = &intstr.IntOrString{IntVal: 2}
+
+			err = updateClusterWithTO(k8sClient, ctx, aeroCluster, 30*time.Second)
+			Expect(err).Should(HaveOccurred())
+
+			expectedRoster = "2A1@2,2A0@2"
+			aeroCluster.Spec.RackConfig.Racks[0].ForceBlockFromRoster = ptr.To(true)
+			aeroCluster.Spec.RackConfig.RollingUpdateBatchSize = nil
+
+			err = updateClusterWithTO(k8sClient, ctx, aeroCluster, 30*time.Second)
+			Expect(err).Should(HaveOccurred())
+
+			rosterNodesMap, err = getRoster(hostConns[2], getClientPolicy(aeroCluster, k8sClient), aeroCluster.Namespace)
+			Expect(err).ToNot(HaveOccurred())
+
+			// Roster is in uppercase, whereas nodeID is in lower case in server. Keep it in mind when comparing list
+			rosterStr = rosterNodesMap["roster"]
+			Expect(rosterStr).To(Equal(expectedRoster))
+
 		})
 
 		It("Should allow adding and removing SC namespace", func() {
@@ -356,7 +436,80 @@ var _ = Describe("SCMode", func() {
 
 			Expect(DeployCluster(k8sClient, ctx, aeroCluster)).To(HaveOccurred())
 		})
+		It("Should not allow ForceBlockFromRoster enable in more than 1 rack at once", func() {
+			By("Deploy")
+			aeroCluster := createDummyAerospikeCluster(clusterNamespacedName, 4)
+			aeroCluster.Spec.AerospikeConfig = getSCAerospikeConfig()
+			scNamespace := scNamespace
+			racks := []asdbv1.Rack{
+				{ID: 1},
+				{ID: 2},
+				{ID: 3},
+			}
+			rackConf := asdbv1.RackConfig{
+				Namespaces: []string{scNamespace},
+				Racks:      racks,
+			}
+			aeroCluster.Spec.RackConfig = rackConf
 
+			Expect(DeployCluster(k8sClient, ctx, aeroCluster)).ToNot(HaveOccurred())
+
+			aeroCluster.Spec.RackConfig.Racks[0].ForceBlockFromRoster = ptr.To(true)
+			aeroCluster.Spec.RackConfig.Racks[1].ForceBlockFromRoster = ptr.To(true)
+
+			err := updateCluster(k8sClient, ctx, aeroCluster)
+			Expect(err).Should(HaveOccurred())
+			Expect(err.Error()).To(ContainSubstring("can change only one rack at a time to ForceBlockFromRoster: true"))
+		})
+		It("Should not allow rack aware features with ForceBlockFromRoster", func() {
+			By("Deploy")
+			aeroCluster := createDummyAerospikeCluster(clusterNamespacedName, 4)
+			aeroCluster.Spec.AerospikeConfig = getSCAerospikeConfig()
+			scNamespace := scNamespace
+			racks := []asdbv1.Rack{
+				{ID: 1},
+				{ID: 2},
+			}
+			rackConf := asdbv1.RackConfig{
+				Namespaces: []string{scNamespace},
+				Racks:      racks,
+			}
+			aeroCluster.Spec.RackConfig = rackConf
+
+			Expect(DeployCluster(k8sClient, ctx, aeroCluster)).ToNot(HaveOccurred())
+
+			aeroCluster.Spec.RackConfig.Racks[0].ForceBlockFromRoster = ptr.To(true)
+
+			err := updateCluster(k8sClient, ctx, aeroCluster)
+			Expect(err).ToNot(HaveOccurred())
+
+			aeroCluster.Spec.RackConfig.RollingUpdateBatchSize = &intstr.IntOrString{IntVal: 2}
+
+			err = updateCluster(k8sClient, ctx, aeroCluster)
+			Expect(err).Should(HaveOccurred())
+			Expect(err.Error()).To(ContainSubstring(
+				"with only one rack remaining in roster, cannot use batch update or scale down"))
+
+			aeroCluster.Spec.RackConfig.RollingUpdateBatchSize = nil
+			aeroCluster.Spec.RackConfig.MaxIgnorablePods = &intstr.IntOrString{IntVal: 2}
+			err = updateCluster(k8sClient, ctx, aeroCluster)
+			Expect(err).Should(HaveOccurred())
+			Expect(err.Error()).To(ContainSubstring(
+				"ForceBlockFromRoster: true racks cannot be used with MaxIgnorablePods set"))
+
+			aeroCluster.Spec.RackConfig.MaxIgnorablePods = nil
+			aeroCluster.Spec.RosterNodeBlockList = []string{"1A0", "1A1"}
+			err = updateCluster(k8sClient, ctx, aeroCluster)
+			Expect(err).Should(HaveOccurred())
+			Expect(err.Error()).To(ContainSubstring("ForceBlockFromRoster: true racks cannot be used with RosterNodeBlockList"))
+
+			aeroCluster.Spec.RosterNodeBlockList = nil
+			aeroCluster.Spec.RackConfig.Racks[1].ForceBlockFromRoster = ptr.To(true)
+			err = updateCluster(k8sClient, ctx, aeroCluster)
+			Expect(err).Should(HaveOccurred())
+			Expect(err.Error()).To(ContainSubstring(
+				"all racks cannot have ForceBlockFromRoster: true. At least one rack must remain in the roster"))
+		})
 	})
 })
 
