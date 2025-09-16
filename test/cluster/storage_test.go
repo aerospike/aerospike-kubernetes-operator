@@ -362,6 +362,24 @@ var _ = Describe(
 							func() {
 								aeroCluster := createDummyAerospikeCluster(clusterNamespacedName, 2)
 
+								mountOptionsForContainers := []asdbv1.MountOptions{
+									{
+										ReadOnly:         ptr.To(true),
+										SubPath:          "subdir",
+										MountPropagation: &[]v1.MountPropagationMode{v1.MountPropagationHostToContainer}[0],
+									},
+									{
+										ReadOnly:         ptr.To(true),
+										SubPath:          "custom-init-subdir",
+										MountPropagation: &[]v1.MountPropagationMode{v1.MountPropagationHostToContainer}[0],
+									},
+									{
+										ReadOnly:         ptr.To(true),
+										SubPath:          "sidecar-subdir",
+										MountPropagation: &[]v1.MountPropagationMode{v1.MountPropagationHostToContainer}[0],
+									},
+								}
+
 								// Add sidecar container to pod spec
 								aeroCluster.Spec.PodSpec.Sidecars = []v1.Container{
 									{
@@ -401,11 +419,7 @@ var _ = Describe(
 									Aerospike: &asdbv1.AerospikeServerVolumeAttachment{
 										Path: "/mnt/hostpath-data",
 										AttachmentOptions: asdbv1.AttachmentOptions{
-											MountOptions: asdbv1.MountOptions{
-												ReadOnly:         ptr.To(true),
-												SubPath:          "subdir",
-												MountPropagation: &[]v1.MountPropagationMode{v1.MountPropagationHostToContainer}[0],
-											},
+											MountOptions: mountOptionsForContainers[0],
 										},
 									},
 									// Init container mount options
@@ -414,11 +428,7 @@ var _ = Describe(
 											ContainerName: "custom-init-container",
 											Path:          "/mnt/hostpath-custom-init",
 											AttachmentOptions: asdbv1.AttachmentOptions{
-												MountOptions: asdbv1.MountOptions{
-													ReadOnly:         ptr.To(true),
-													SubPath:          "custom-init-subdir",
-													MountPropagation: &[]v1.MountPropagationMode{v1.MountPropagationHostToContainer}[0],
-												},
+												MountOptions: mountOptionsForContainers[1],
 											},
 										},
 									},
@@ -428,11 +438,7 @@ var _ = Describe(
 											ContainerName: "sidecar-container",
 											Path:          "/mnt/hostpath-sidecar",
 											AttachmentOptions: asdbv1.AttachmentOptions{
-												MountOptions: asdbv1.MountOptions{
-													ReadOnly:         ptr.To(true),
-													SubPath:          "sidecar-subdir",
-													MountPropagation: &[]v1.MountPropagationMode{v1.MountPropagationHostToContainer}[0],
-												},
+												MountOptions: mountOptionsForContainers[2],
 											},
 										},
 									},
@@ -446,52 +452,40 @@ var _ = Describe(
 
 								// Test Aerospike server container mount options
 								podNamespacedName := test.GetNamespacedName(aeroCluster.Name+"-0-1", aeroCluster.Namespace)
+								updatedPod := &v1.Pod{}
+
+								err = k8sClient.Get(context.TODO(), podNamespacedName, updatedPod)
+								Expect(err).ToNot(HaveOccurred())
 
 								// Validate Aerospike server container mount options
-								aerospikeMountOptions, err := getVolumeMountOptions(podNamespacedName,
+								aerospikeMountOptions, err := getVolumeMountOptions(updatedPod,
 									asdbv1.AerospikeServerContainerName, "hostpath-mount-options-test")
 								Expect(err).ToNot(HaveOccurred())
 
-								Expect(asdbv1.GetBool(aerospikeMountOptions.ReadOnly)).To(BeTrue())
-								Expect(aerospikeMountOptions.SubPath).To(Equal("subdir"))
-								Expect(aerospikeMountOptions.SubPathExpr).To(BeEmpty())
-								Expect(*aerospikeMountOptions.MountPropagation).To(Equal(v1.MountPropagationHostToContainer))
+								validateMountOptions(aerospikeMountOptions, &mountOptionsForContainers[0])
 
 								// Validate init container mount options
-								initMountOptions, err := getVolumeMountOptions(podNamespacedName,
+								initMountOptions, err := getVolumeMountOptions(updatedPod,
 									asdbv1.AerospikeInitContainerName, "hostpath-mount-options-test")
 								Expect(err).ToNot(HaveOccurred())
 
-								Expect(asdbv1.GetBool(initMountOptions.ReadOnly)).To(BeTrue())
-								Expect(initMountOptions.SubPath).To(Equal("subdir"))
-								Expect(aerospikeMountOptions.SubPathExpr).To(BeEmpty())
-								Expect(*initMountOptions.MountPropagation).To(Equal(v1.MountPropagationHostToContainer))
+								validateMountOptions(initMountOptions, &mountOptionsForContainers[0])
 
 								// Validate custom init container mount options
-								customInitMountOptions, err := getVolumeMountOptions(podNamespacedName,
+								customInitMountOptions, err := getVolumeMountOptions(updatedPod,
 									"custom-init-container", "hostpath-mount-options-test")
 								Expect(err).ToNot(HaveOccurred())
 
-								Expect(asdbv1.GetBool(customInitMountOptions.ReadOnly)).To(BeTrue())
-								Expect(customInitMountOptions.SubPath).To(Equal("custom-init-subdir"))
-								Expect(aerospikeMountOptions.SubPathExpr).To(BeEmpty())
-								Expect(*customInitMountOptions.MountPropagation).To(Equal(v1.MountPropagationHostToContainer))
+								validateMountOptions(customInitMountOptions, &mountOptionsForContainers[1])
 
 								// Validate sidecar container mount options
-								sidecarMountOptions, err := getVolumeMountOptions(podNamespacedName,
+								sidecarMountOptions, err := getVolumeMountOptions(updatedPod,
 									"sidecar-container", "hostpath-mount-options-test")
 								Expect(err).ToNot(HaveOccurred())
 
-								Expect(asdbv1.GetBool(sidecarMountOptions.ReadOnly)).To(BeTrue())
-								Expect(sidecarMountOptions.SubPath).To(Equal("sidecar-subdir"))
-								Expect(aerospikeMountOptions.SubPathExpr).To(BeEmpty())
-								Expect(*sidecarMountOptions.MountPropagation).To(Equal(v1.MountPropagationHostToContainer))
+								validateMountOptions(sidecarMountOptions, &mountOptionsForContainers[2])
 
 								volumeIndex := len(aeroCluster.Spec.Storage.Volumes) - 1
-
-								// Test with read-write mount (should fail due to validation)
-								aeroCluster, err = getCluster(k8sClient, ctx, clusterNamespacedName)
-								Expect(err).ToNot(HaveOccurred())
 
 								// Try to set read-write for sidecar (should fail)
 								aeroCluster.Spec.Storage.Volumes[volumeIndex].Sidecars[0].AttachmentOptions.MountOptions.
@@ -500,19 +494,11 @@ var _ = Describe(
 								err = updateCluster(k8sClient, ctx, aeroCluster)
 								Expect(err).Should(HaveOccurred())
 
-								// Try to set read-write for custom init container (should fail)
-								aeroCluster, err = getCluster(k8sClient, ctx, clusterNamespacedName)
-								Expect(err).ToNot(HaveOccurred())
-
 								aeroCluster.Spec.Storage.Volumes[volumeIndex].InitContainers[0].AttachmentOptions.
 									MountOptions.ReadOnly = ptr.To(false)
 
 								err = updateCluster(k8sClient, ctx, aeroCluster)
 								Expect(err).Should(HaveOccurred())
-
-								// Test with read-write mount for Aerospike server (should fail due to validation)
-								aeroCluster, err = getCluster(k8sClient, ctx, clusterNamespacedName)
-								Expect(err).ToNot(HaveOccurred())
 
 								aeroCluster.Spec.Storage.Volumes[volumeIndex].Aerospike.AttachmentOptions.MountOptions.ReadOnly = ptr.To(false)
 
@@ -771,18 +757,12 @@ var _ = Describe(
 // getVolumeMountOptions retrieves mount options for a specific volume in a container
 //
 //nolint:unparam // generic function
-func getVolumeMountOptions(podNamespacedName types.NamespacedName, containerName,
+func getVolumeMountOptions(pod *v1.Pod, containerName,
 	volumeName string) (*asdbv1.MountOptions, error) {
-	updatedPod := &v1.Pod{}
-
-	if err := k8sClient.Get(context.TODO(), podNamespacedName, updatedPod); err != nil {
-		return nil, err
-	}
-
 	// Check containers first (includes Aerospike server and sidecars)
-	for idx := range updatedPod.Spec.Containers {
-		if updatedPod.Spec.Containers[idx].Name == containerName {
-			for _, vm := range updatedPod.Spec.Containers[idx].VolumeMounts {
+	for idx := range pod.Spec.Containers {
+		if pod.Spec.Containers[idx].Name == containerName {
+			for _, vm := range pod.Spec.Containers[idx].VolumeMounts {
 				if vm.Name == volumeName {
 					return &asdbv1.MountOptions{
 						ReadOnly:         ptr.To(vm.ReadOnly),
@@ -798,9 +778,9 @@ func getVolumeMountOptions(podNamespacedName types.NamespacedName, containerName
 	}
 
 	// Check init containers if not found in containers
-	for idx := range updatedPod.Spec.InitContainers {
-		if updatedPod.Spec.InitContainers[idx].Name == containerName {
-			for _, vm := range updatedPod.Spec.InitContainers[idx].VolumeMounts {
+	for idx := range pod.Spec.InitContainers {
+		if pod.Spec.InitContainers[idx].Name == containerName {
+			for _, vm := range pod.Spec.InitContainers[idx].VolumeMounts {
 				if vm.Name == volumeName {
 					return &asdbv1.MountOptions{
 						ReadOnly:         ptr.To(vm.ReadOnly),
@@ -864,4 +844,11 @@ func createDummyAerospikeClusterWithNonPVWorkdir(
 	}
 
 	return aeroCluster
+}
+
+func validateMountOptions(currentMountOptions, expectedMountOptions *asdbv1.MountOptions) {
+	Expect(asdbv1.GetBool(currentMountOptions.ReadOnly)).To(Equal(asdbv1.GetBool(expectedMountOptions.ReadOnly)))
+	Expect(currentMountOptions.SubPath).To(Equal(expectedMountOptions.SubPath))
+	Expect(currentMountOptions.SubPathExpr).To(BeEmpty())
+	Expect(*currentMountOptions.MountPropagation).To(Equal(*expectedMountOptions.MountPropagation))
 }
