@@ -66,6 +66,8 @@ var aerospikeVolumeInitMethodDeleteFiles = asdbv1.AerospikeVolumeMethodDeleteFil
 var (
 	retryInterval      = time.Second * 30
 	shortRetryInterval = time.Second * 1
+	versionV1          = "v1"
+	versionV2          = "v2"
 	cascadeDeleteFalse = false
 	cascadeDeleteTrue  = true
 	logger             = logr.Discard()
