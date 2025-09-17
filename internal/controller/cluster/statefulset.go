@@ -1425,6 +1425,7 @@ func createVolumeForVolumeAttachment(volume *asdbv1.VolumeSpec) corev1.Volume {
 			ConfigMap: volume.Source.ConfigMap,
 			Secret:    volume.Source.Secret,
 			EmptyDir:  volume.Source.EmptyDir,
+			HostPath:  volume.Source.HostPath,
 		},
 	}
 }
@@ -1441,12 +1442,11 @@ func getFinalVolumeAttachmentsForVolume(volume *asdbv1.VolumeSpec) (
 	initContainerAttachments = append(
 		initContainerAttachments, volume.InitContainers...,
 	)
-	initContainerAttachments = append(
-		initContainerAttachments, asdbv1.VolumeAttachment{
-			ContainerName: asdbv1.AerospikeInitContainerName,
-			Path:          initVolumePath,
-		},
-	)
+
+	aerosikeInitContainerAttachment := asdbv1.VolumeAttachment{
+		ContainerName: asdbv1.AerospikeInitContainerName,
+		Path:          initVolumePath,
+	}
 
 	// Create dummy attachment for aerospike server container
 	containerAttachments = append(containerAttachments, volume.Sidecars...)
@@ -1456,9 +1456,20 @@ func getFinalVolumeAttachmentsForVolume(volume *asdbv1.VolumeSpec) (
 			containerAttachments, asdbv1.VolumeAttachment{
 				ContainerName: asdbv1.AerospikeServerContainerName,
 				Path:          volume.Aerospike.Path,
+				AttachmentOptions: asdbv1.AttachmentOptions{
+					MountOptions: volume.Aerospike.MountOptions,
+				},
 			},
 		)
+
+		aerosikeInitContainerAttachment.AttachmentOptions = asdbv1.AttachmentOptions{
+			MountOptions: volume.Aerospike.MountOptions,
+		}
 	}
+
+	initContainerAttachments = append(
+		initContainerAttachments, aerosikeInitContainerAttachment,
+	)
 
 	return initContainerAttachments, containerAttachments
 }
@@ -1467,7 +1478,10 @@ func addVolumeMountInContainer(
 	volumeName string, volumeAttachments []asdbv1.VolumeAttachment,
 	containers []corev1.Container, pathPrefix string,
 ) {
-	var volumeMount corev1.VolumeMount
+	var (
+		mountPath   string
+		volumeMount corev1.VolumeMount
+	)
 
 	for _, volumeAttachment := range volumeAttachments {
 		for idx := range containers {
@@ -1475,15 +1489,18 @@ func addVolumeMountInContainer(
 
 			if container.Name == volumeAttachment.ContainerName {
 				if container.Name == asdbv1.AerospikeInitContainerName {
-					volumeMount = corev1.VolumeMount{
-						Name:      volumeName,
-						MountPath: pathPrefix + volumeAttachment.Path,
-					}
+					mountPath = pathPrefix + volumeAttachment.Path
 				} else {
-					volumeMount = corev1.VolumeMount{
-						Name:      volumeName,
-						MountPath: volumeAttachment.Path,
-					}
+					mountPath = volumeAttachment.Path
+				}
+
+				volumeMount = corev1.VolumeMount{
+					Name:             volumeName,
+					MountPath:        mountPath,
+					ReadOnly:         asdbv1.GetBool(volumeAttachment.AttachmentOptions.MountOptions.ReadOnly),
+					SubPath:          volumeAttachment.AttachmentOptions.MountOptions.SubPath,
+					SubPathExpr:      volumeAttachment.AttachmentOptions.MountOptions.SubPathExpr,
+					MountPropagation: volumeAttachment.AttachmentOptions.MountOptions.MountPropagation,
 				}
 
 				container.VolumeMounts = append(
