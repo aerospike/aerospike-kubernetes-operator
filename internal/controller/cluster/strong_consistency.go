@@ -13,6 +13,12 @@ func (r *SingleClusterReconciler) getAndSetRoster(
 	policy *as.ClientPolicy, rosterNodeBlockList []string,
 	ignorablePodNames sets.Set[string],
 ) error {
+	// Get node IDs from racks with ForceBlockFromRoster: true
+	rackBlockedNodeIDs := r.getNodeIDsFromBlockedRacks()
+
+	// Append rack-blocked node IDs to the user-specified block list
+	rosterNodeBlockList = append(rosterNodeBlockList, rackBlockedNodeIDs...)
+
 	allHostConns, err := r.newAllHostConnWithOption(ignorablePodNames)
 	if err != nil {
 		return err
@@ -23,7 +29,8 @@ func (r *SingleClusterReconciler) getAndSetRoster(
 		return err
 	}
 
-	return deployment.GetAndSetRoster(r.Log, allHostConns, policy, rosterNodeBlockList, ignorableNamespaces)
+	return deployment.ManageRoster(r.Log, allHostConns, policy, rosterNodeBlockList,
+		ignorableNamespaces, len(rackBlockedNodeIDs) > 0)
 }
 
 func (r *SingleClusterReconciler) validateSCClusterState(policy *as.ClientPolicy, ignorablePodNames sets.Set[string],
