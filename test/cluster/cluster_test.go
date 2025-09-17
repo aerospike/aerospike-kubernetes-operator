@@ -1266,7 +1266,7 @@ func DeployClusterWithDNSConfiguration(ctx goctx.Context) {
 
 			Expect(DeployCluster(k8sClient, ctx, aeroCluster)).ShouldNot(HaveOccurred())
 
-			sts, err := getSTSFromRackID(aeroCluster, 0)
+			sts, err := getSTSFromRackID(aeroCluster, 0, "")
 			Expect(err).ShouldNot(HaveOccurred())
 			Expect(sts.Spec.Template.Spec.DNSConfig).To(Equal(dnsConfig))
 		},

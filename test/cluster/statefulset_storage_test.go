@@ -3,7 +3,6 @@ package cluster
 import (
 	goctx "context"
 	"fmt"
-	"strconv"
 	"time"
 
 	. "github.com/onsi/ginkgo/v2"
@@ -59,7 +58,7 @@ var _ = Describe(
 						aeroCluster, err := getCluster(k8sClient, ctx, clusterNamespacedName)
 						Expect(err).ToNot(HaveOccurred())
 
-						sts, err := getSTSFromRackID(aeroCluster, 0)
+						sts, err := getSTSFromRackID(aeroCluster, 0, "")
 						Expect(err).ToNot(HaveOccurred())
 
 						mountedVolumes := sts.Spec.Template.Spec.Containers[0].VolumeMounts
@@ -88,7 +87,7 @@ var _ = Describe(
 						)
 						Expect(err).ToNot(HaveOccurred())
 
-						sts, err = getSTSFromRackID(aeroCluster, 0)
+						sts, err = getSTSFromRackID(aeroCluster, 0, "")
 						Expect(err).ToNot(HaveOccurred())
 
 						rackPodList, err := getRackPodList(k8sClient, ctx, sts)
@@ -130,7 +129,7 @@ var _ = Describe(
 						aeroCluster, err := getCluster(k8sClient, ctx, clusterNamespacedName)
 						Expect(err).ToNot(HaveOccurred())
 
-						sts, err := getSTSFromRackID(aeroCluster, 0)
+						sts, err := getSTSFromRackID(aeroCluster, 0, "")
 						Expect(err).ToNot(HaveOccurred())
 
 						mountedVolumes := sts.Spec.Template.Spec.Containers[0].VolumeMounts
@@ -165,7 +164,7 @@ var _ = Describe(
 						)
 						Expect(err).ToNot(HaveOccurred())
 
-						sts, err = getSTSFromRackID(aeroCluster, 0)
+						sts, err = getSTSFromRackID(aeroCluster, 0, "")
 						Expect(err).ToNot(HaveOccurred())
 
 						rackPodList, err := getRackPodList(k8sClient, ctx, sts)
@@ -266,7 +265,7 @@ var _ = Describe(
 						err = updateCluster(k8sClient, ctx, aeroCluster)
 						Expect(err).ToNot(HaveOccurred())
 
-						sts, err := getSTSFromRackID(aeroCluster, 0)
+						sts, err := getSTSFromRackID(aeroCluster, 0, "")
 						Expect(err).ToNot(HaveOccurred())
 
 						mountedVolumes := sts.Spec.Template.Spec.Containers[0].VolumeMounts
@@ -307,7 +306,7 @@ var _ = Describe(
 						)
 						Expect(err).ToNot(HaveOccurred())
 
-						sts, err = getSTSFromRackID(aeroCluster, 0)
+						sts, err = getSTSFromRackID(aeroCluster, 0, "")
 						Expect(err).ToNot(HaveOccurred())
 
 						rackPodList, err := getRackPodList(k8sClient, ctx, sts)
@@ -382,13 +381,14 @@ var _ = Describe(
 	},
 )
 
-func getSTSFromRackID(aeroCluster *asdbv1.AerospikeCluster, rackID int) (
-	*appsv1.StatefulSet, error,
-) {
+//nolint:unparam // generic function
+func getSTSFromRackID(
+	aeroCluster *asdbv1.AerospikeCluster, rackID int, rackRevision string,
+) (*appsv1.StatefulSet, error) {
 	found := &appsv1.StatefulSet{}
 	err := k8sClient.Get(
 		goctx.TODO(),
-		GetNamespacedNameForSTS(aeroCluster, rackID),
+		GetNamespacedNameForSTS(aeroCluster, utils.GetRackIdentifier(rackID, rackRevision)),
 		found,
 	)
 
@@ -429,10 +429,10 @@ func validateExternalVolumeInContainer(sts *appsv1.StatefulSet, index int, isIni
 }
 
 func GetNamespacedNameForSTS(
-	aeroCluster *asdbv1.AerospikeCluster, rackID int,
+	aeroCluster *asdbv1.AerospikeCluster, rackIdentifier string,
 ) types.NamespacedName {
 	return types.NamespacedName{
-		Name:      aeroCluster.Name + "-" + strconv.Itoa(rackID),
+		Name:      aeroCluster.Name + "-" + rackIdentifier,
 		Namespace: aeroCluster.Namespace,
 	}
 }
