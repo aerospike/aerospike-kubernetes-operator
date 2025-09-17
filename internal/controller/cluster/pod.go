@@ -929,17 +929,17 @@ func (r *SingleClusterReconciler) getIgnorablePods(racksToDelete []int, configur
 	}
 
 	for idx := range configuredRacks {
-		rack := &configuredRacks[idx]
-		if ignorableRacks.Has(rack.Rack.ID) {
+		rackState := &configuredRacks[idx]
+		if ignorableRacks.Has(rackState.Rack.ID) {
 			// Already handled above
 			continue
 		}
 
 		failedAllowed, _ := intstr.GetScaledValueFromIntOrPercent(
-			r.aeroCluster.Spec.RackConfig.MaxIgnorablePods, int(rack.Size), false,
+			r.aeroCluster.Spec.RackConfig.MaxIgnorablePods, int(rackState.Size), false,
 		)
 
-		podList, err := r.getRackPodList(rack.Rack.ID)
+		podList, err := r.getRackPodList(rackState.Rack.ID)
 		if err != nil {
 			return nil, err
 		}

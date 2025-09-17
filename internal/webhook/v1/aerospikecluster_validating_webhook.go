@@ -454,7 +454,7 @@ func validateRackUpdate(
 		return nil
 	}
 
-	ForceBlockFromRosterChanged := false
+	forceBlockFromRosterChanged := false
 
 	// Old racks cannot be updated
 	// Also need to exclude a default rack with default rack ID. No need to check here,
@@ -513,7 +513,7 @@ func validateRackUpdate(
 				}
 
 				if oldRack.ForceBlockFromRoster != newRack.ForceBlockFromRoster {
-					ForceBlockFromRosterChanged = true
+					forceBlockFromRosterChanged = true
 				}
 
 				break
@@ -521,7 +521,7 @@ func validateRackUpdate(
 		}
 	}
 
-	if ForceBlockFromRosterChanged && newObj.Status.AerospikeConfig == nil {
+	if forceBlockFromRosterChanged && newObj.Status.AerospikeConfig == nil {
 		return fmt.Errorf("status is not updated yet, cannot change ForceBlockFromRoster in rack")
 	}
 

@@ -16,7 +16,8 @@ package cluster
 import (
 	"context"
 	"fmt"
-	"regexp"
+	"strconv"
+	"strings"
 	"time"
 
 	corev1 "k8s.io/api/core/v1"
@@ -85,30 +86,28 @@ func (r *SingleClusterReconciler) waitForMultipleNodesSafeStopReady(
 
 // getNodeIDsFromBlockedRacks returns node IDs from all racks that have ForceBlockFromRoster: true
 func (r *SingleClusterReconciler) getNodeIDsFromBlockedRacks() []string {
-	var nodeIDs []string
-
-	// If no pods, return empty list
-	// assuming no nodes are present in roster
+	// If no pods, return empty list (no nodes in roster)
 	if len(r.aeroCluster.Status.Pods) == 0 {
-		return nodeIDs
+		return nil
 	}
+
+	var nodeIDs []string
 
 	rackStateList := getConfiguredRackStateList(r.aeroCluster)
 	for _, rackState := range rackStateList {
-		// Check if this rack has ForceBlockFromRoster set to true
-		if asdbv1.GetBool(rackState.Rack.ForceBlockFromRoster) {
-			rackID := rackState.Rack.ID
+		if !asdbv1.GetBool(rackState.Rack.ForceBlockFromRoster) {
+			continue
+		}
 
-			infix := getNodeIDInfixForRack(r.aeroCluster.Status.Pods, rackID)
+		rackID := rackState.Rack.ID
+		infix := getNodeIDInfixForRack(r.aeroCluster.Status.Pods, rackID)
 
-			// Extract node IDs from each pod in the rack
-			for podOrdinal := range rackState.Size {
-				nodeID := fmt.Sprintf("%d%s%d", rackID, infix, podOrdinal)
-				nodeIDs = append(nodeIDs, nodeID)
+		for podOrdinal := int32(0); podOrdinal < rackState.Size; podOrdinal++ {
+			nodeID := fmt.Sprintf("%d%s%d", rackID, infix, podOrdinal)
+			nodeIDs = append(nodeIDs, nodeID)
 
-				r.Log.V(1).Info("Added rack node to comprehensive block list",
-					"rackID", rackID, "nodeID", nodeID)
-			}
+			r.Log.V(1).Info("Added rack node to comprehensive block list",
+				"rackID", rackID, "nodeID", nodeID)
 		}
 	}
 
@@ -116,22 +115,21 @@ func (r *SingleClusterReconciler) getNodeIDsFromBlockedRacks() []string {
 }
 
 func getNodeIDInfixForRack(pods map[string]asdbv1.AerospikePodStatus, rackID int) string {
-	infix := "A"
+	rackIDStr := strconv.Itoa(rackID)
 
-	for podName := range pods {
-		re := regexp.MustCompile(`^(\d+)(.)(\d+)$`)
+	for idx := range pods {
+		nodeID := pods[idx].Aerospike.NodeID
+		// ensure nodeID is long enough to contain rackID + infix + ordinal
+		if len(nodeID) <= len(rackIDStr) {
+			continue
+		}
 
-		matches := re.FindStringSubmatch(pods[podName].Aerospike.NodeID)
-		if len(matches) == 4 {
-			middleChar := matches[2]
-			if matches[1] == fmt.Sprintf("%d", rackID) {
-				infix = middleChar
-				break
-			}
+		if strings.HasPrefix(nodeID, rackIDStr) {
+			return string(nodeID[len(rackIDStr)]) // middle character
 		}
 	}
 
-	return infix
+	return "A"
 }
 
 func (r *SingleClusterReconciler) quiescePods(
