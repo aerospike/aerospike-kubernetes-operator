@@ -117,6 +117,16 @@ spec:
   seedsFinderServices: {{- toYaml . | nindent 4 }}
   {{- end }}
 
+  ## headlessService defines additional configuration parameters for the headless service created to discover Aerospike Cluster nodes
+  {{- with .Values.headlessService }}
+  headlessService: {{- toYaml . | nindent 4 }}
+  {{- end }}
+
+  ## podService defines additional configuration parameters for the pod service created to expose the Aerospike Cluster nodes outside the Kubernetes cluster.
+  {{- with .Values.podService }}
+  podService: {{- toYaml . | nindent 4 }}
+  {{- end }}
+
   ## rosterNodeBlockList is a list of blocked nodeIDs from roster in a strong-consistency setup
   {{- with .Values.rosterNodeBlockList }}
   rosterNodeBlockList: {{- toYaml . | nindent 4 }}
