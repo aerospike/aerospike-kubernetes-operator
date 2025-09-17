@@ -7,6 +7,7 @@ import (
 	"net/http"
 	"strconv"
 	"strings"
+	"time"
 
 	corev1 "k8s.io/api/core/v1"
 	"k8s.io/apimachinery/pkg/types"
@@ -14,6 +15,10 @@ import (
 	"k8s.io/client-go/rest"
 	"k8s.io/client-go/tools/remotecommand"
 	"k8s.io/kubectl/pkg/scheme"
+)
+
+const (
+	PodSchedulerDelay = 60 * time.Second
 )
 
 // IsPodRunningAndReady returns true if pod is in the PodRunning Phase, if it has a condition of PodReady.
@@ -204,9 +209,16 @@ func isPodError(reason string) bool {
 
 func IsPodReasonUnschedulable(pod *corev1.Pod) (isPodUnschedulable bool, reason string) {
 	for _, condition := range pod.Status.Conditions {
-		if condition.Type == corev1.PodScheduled && (condition.Reason == corev1.PodReasonUnschedulable ||
-			condition.Reason == corev1.PodReasonSchedulerError) {
-			return true, condition.Message
+		if condition.Type == corev1.PodScheduled {
+			switch condition.Reason {
+			case corev1.PodReasonSchedulerError:
+				return true, condition.Message
+			case corev1.PodReasonUnschedulable:
+				// check if condition.LastTransitionTime is older than the configured delay
+				if condition.LastTransitionTime.Add(PodSchedulerDelay).Before(time.Now()) {
+					return true, condition.Message
+				}
+			}
 		}
 	}
 
