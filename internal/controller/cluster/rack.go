@@ -55,10 +55,8 @@ func (r *SingleClusterReconciler) reconcileRacks() common.ReconcileResult {
 		ignorablePodNames.UnsortedList(),
 	)
 
-	// Handle failed racks
+	// Handle failed racks (integrates both normal racks and renamed racks)
 	for idx := range configuredRacks {
-		var podList []*corev1.Pod
-
 		state := &configuredRacks[idx]
 		found := &appsv1.StatefulSet{}
 		stsName := utils.GetNamespacedNameForSTSOrConfigMap(r.aeroCluster,
@@ -72,68 +70,14 @@ func (r *SingleClusterReconciler) reconcileRacks() common.ReconcileResult {
 			continue
 		}
 
-		// 1. Fetch the pods for the rack and if there are failed pods then reconcile rack
-		podList, err = r.getOrderedRackPodList(state.Rack.ID, state.Rack.RackRevision)
-		if err != nil {
-			return common.ReconcileError(
-				fmt.Errorf(
-					"failed to list pods: %v", err,
-				),
-			)
+		// Check if this rack is part of a rename operation and handle old revision
+		if renamedRack, isRenamed := renamedRacks[state.Rack.ID]; isRenamed {
+			r.handleOldRevisionFailedPods(renamedRack.OldRack, ignorablePodNames)
 		}
 
-		failedPods, _ := getFailedAndActivePods(podList)
-		// remove ignorable pods from failedPods
-		failedPods = getNonIgnorablePods(failedPods, ignorablePodNames)
-		if len(failedPods) != 0 {
-			r.Log.Info(
-				"Reconcile the failed pods in the Rack", "rackID", state.Rack.ID, "failedPods", getPodNames(failedPods),
-			)
-
-			if res = r.reconcileRack(
-				found, state, ignorablePodNames, failedPods,
-			); !res.IsSuccess {
-				return res
-			}
-
-			r.Log.Info(
-				"Reconciled the failed pods in the Rack", "rackID", state.Rack.ID, "failedPods", getPodNames(failedPods),
-			)
-		}
-
-		// 2. Again, fetch the pods for the rack and if there are failed pods then restart them.
-		// This is needed in cases where hash values generated from CR spec are same as hash values in pods.
-		// But, pods are in failed state due to their bad spec.
-		// e.g. configuring unschedulable resources in CR podSpec and reverting them to old value.
-		podList, err = r.getOrderedRackPodList(state.Rack.ID, state.Rack.RackRevision)
-		if err != nil {
-			return common.ReconcileError(
-				fmt.Errorf(
-					"failed to list pods: %v", err,
-				),
-			)
-		}
-
-		failedPods, _ = getFailedAndActivePods(podList)
-		// remove ignorable pods from failedPods
-		failedPods = getNonIgnorablePods(failedPods, ignorablePodNames)
-		if len(failedPods) != 0 {
-			r.Log.Info(
-				"Restart the failed pods in the Rack", "rackID", state.Rack.ID, "failedPods", getPodNames(failedPods),
-			)
-
-			if _, res = r.rollingRestartRack(
-				found, state, ignorablePodNames, nil,
-				failedPods,
-			); !res.IsSuccess {
-				return res
-			}
-
-			r.Log.Info(
-				"Restarted the failed pods in the Rack", "rackID", state.Rack.ID, "failedPods", getPodNames(failedPods),
-			)
-			// Requeue after 1 second to fetch latest CR object with updated pod status
-			return common.ReconcileRequeueAfter(1)
+		// Handle failed pods for this rack (two-pass: reconcile then restart if not recovered)
+		if res = r.handleFailedPodsInRack(found, state, ignorablePodNames); !res.IsSuccess {
+			return res
 		}
 	}
 
@@ -1712,7 +1656,7 @@ func (r *SingleClusterReconciler) getRackPodList(rackID int, rackRevision string
 	return podList, nil
 }
 
-func (r *SingleClusterReconciler) getRackPodListWithAllRevisions(rackID int) (
+func (r *SingleClusterReconciler) getRackPodListForAllRevisions(rackID int) (
 	*corev1.PodList, error,
 ) {
 	// List the pods for this aeroCluster's statefulset
@@ -2141,6 +2085,114 @@ func (r *SingleClusterReconciler) reconcileRenamedRacks(
 		_, res := r.scaleDownRack(oldSts, tempState, ignorablePodNames, r.aeroCluster.Spec.RackConfig.RollingUpdateBatchSize)
 
 		return res
+	}
+
+	return common.ReconcileSuccess()
+}
+
+// handleOldRevisionFailedPods handles failed pods in old revision racks by adding them to ignore list
+func (r *SingleClusterReconciler) handleOldRevisionFailedPods(
+	oldRackState *RackState, ignorablePodNames sets.Set[string]) {
+	oldSts := &appsv1.StatefulSet{}
+	oldStsName := utils.GetNamespacedNameForSTSOrConfigMap(r.aeroCluster,
+		utils.GetRackIdentifier(oldRackState.Rack.ID, oldRackState.Rack.RackRevision))
+
+	if err := r.Client.Get(context.TODO(), oldStsName, oldSts); err != nil {
+		// Old STS not found or error - skip silently (may have been deleted)
+		return
+	}
+
+	if *oldSts.Spec.Replicas == 0 {
+		// No pods in old revision - skip
+		return
+	}
+
+	// Get failed pods from old revision
+	oldPodList, err := r.getOrderedRackPodList(oldRackState.Rack.ID, oldRackState.Rack.RackRevision)
+	if err != nil {
+		r.Log.Error(err, "Failed to list pods for old revision rack",
+			"rackID", oldRackState.Rack.ID, "oldRevision", oldRackState.Rack.RackRevision)
+		return
+	}
+
+	oldFailedPods, _ := getFailedAndActivePods(oldPodList)
+	oldFailedPods = getNonIgnorablePods(oldFailedPods, ignorablePodNames)
+
+	if len(oldFailedPods) > 0 {
+		r.Log.Info("Adding old revision failed pods to ignore list (will be replaced)",
+			"rackID", oldRackState.Rack.ID, "oldRevision", oldRackState.Rack.RackRevision,
+			"failedPods", getPodNames(oldFailedPods))
+
+		// Add failed pod names to the ignore list
+		for _, pod := range oldFailedPods {
+			ignorablePodNames.Insert(pod.Name)
+		}
+	}
+}
+
+func (r *SingleClusterReconciler) handleFailedPodsInRack(
+	found *appsv1.StatefulSet, rackState *RackState, ignorablePodNames sets.Set[string],
+) common.ReconcileResult {
+	// 1. Fetch the pods for the rack and if there are failed pods, then reconcile the rack
+	podList, err := r.getOrderedRackPodList(rackState.Rack.ID, rackState.Rack.RackRevision)
+	if err != nil {
+		return common.ReconcileError(
+			fmt.Errorf("failed to list pods for rack %d-%s: %v",
+				rackState.Rack.ID, rackState.Rack.RackRevision, err),
+		)
+	}
+
+	failedPods, _ := getFailedAndActivePods(podList)
+	// remove ignorable pods from failedPods
+	failedPods = getNonIgnorablePods(failedPods, ignorablePodNames)
+	if len(failedPods) != 0 {
+		r.Log.Info("Reconcile the failed pods in the Rack",
+			"rackID", rackState.Rack.ID, "rackRevision", rackState.Rack.RackRevision,
+			"failedPods", getPodNames(failedPods))
+
+		if res := r.reconcileRack(
+			found, rackState, ignorablePodNames, failedPods,
+		); !res.IsSuccess {
+			return res
+		}
+
+		r.Log.Info("Reconciled the failed pods in the Rack",
+			"rackID", rackState.Rack.ID, "rackRevision", rackState.Rack.RackRevision,
+			"failedPods", getPodNames(failedPods))
+	}
+
+	// 2. Again, fetch the pods for the rack and if there are failed pods then restart them.
+	// This is needed in cases where hash values generated from CR spec are same as hash values in pods.
+	// But, pods are in failed state due to their bad spec.
+	// e.g. configuring unschedulable resources in CR podSpec and reverting them to old value.
+	podList, err = r.getOrderedRackPodList(rackState.Rack.ID, rackState.Rack.RackRevision)
+	if err != nil {
+		return common.ReconcileError(
+			fmt.Errorf("failed to re-fetch pods for restart check on rack %d-%s: %v",
+				rackState.Rack.ID, rackState.Rack.RackRevision, err),
+		)
+	}
+
+	failedPods, _ = getFailedAndActivePods(podList)
+	// remove ignorable pods from failedPods
+	failedPods = getNonIgnorablePods(failedPods, ignorablePodNames)
+	if len(failedPods) != 0 {
+		r.Log.Info("Restart the failed pods in the Rack",
+			"rackID", rackState.Rack.ID, "rackRevision", rackState.Rack.RackRevision,
+			"failedPods", getPodNames(failedPods))
+
+		if _, res := r.rollingRestartRack(
+			found, rackState, ignorablePodNames, nil,
+			failedPods,
+		); !res.IsSuccess {
+			return res
+		}
+
+		r.Log.Info("Restarted the failed pods in the Rack",
+			"rackID", rackState.Rack.ID, "rackRevision", rackState.Rack.RackRevision,
+			"failedPods", getPodNames(failedPods))
+		// Requeue after 1 second to fetch latest CR object with updated pod status
+		return common.ReconcileRequeueAfter(1)
 	}
 
 	return common.ReconcileSuccess()

@@ -209,32 +209,34 @@ var _ = Describe(
 							},
 						)
 
-						// TODO: Uncomment this when failed pod handling is implemented
-						// It(
-						//	"Should handle failed pods during rack revision migration", func() {
-						//		By("Creating cluster and triggering migration")
-						//		aeroCluster := createDummyClusterWithRackRevision(clusterNamespacedName, versionV1, 2)
-						//		Expect(DeployCluster(k8sClient, ctx, aeroCluster)).ToNot(HaveOccurred())
-						//
-						//		// Start migration
-						//		updatedCluster, err := getCluster(k8sClient, ctx, clusterNamespacedName)
-						//		Expect(err).ToNot(HaveOccurred())
-						//
-						//		for idx := range updatedCluster.Spec.RackConfig.Racks {
-						//			updatedCluster.Spec.RackConfig.Racks[idx].RackRevision = versionV2
-						//		}
-						//
-						//		err = updateCluster(k8sClient, ctx, updatedCluster)
-						//		Expect(err).ToNot(HaveOccurred())
-						//
-						//		By("Migration should handle any failed pods gracefully")
-						//		// The reconcileRenamedRacks function includes failed pod handling
-						//		// This test verifies the migration completes even with potential pod failures
-						//		Eventually(func() bool {
-						//			return checkOnlyTargetRevisionExists(k8sClient, ctx, clusterNamespacedName, versionV2, 2)
-						//		}, 15*time.Minute, 20*time.Second).Should(BeTrue())
-						//	},
-						// )
+						It(
+							"Should handle failed pods during rack revision migration", func() {
+								By("Creating cluster and triggering migration")
+								aeroCluster := createDummyClusterWithRackRevision(clusterNamespacedName, versionV1, 6)
+								Expect(DeployCluster(k8sClient, ctx, aeroCluster)).ToNot(HaveOccurred())
+
+								podName := clusterName + "-1-v1-0"
+								err := markPodAsFailed(ctx, k8sClient, podName, clusterNamespacedName.Namespace)
+								Expect(err).ToNot(HaveOccurred())
+
+								_ = changeRackRevision(k8sClient, ctx, clusterNamespacedName)
+
+								err = waitForAerospikeCluster(
+									k8sClient, ctx, aeroCluster, int(aeroCluster.Spec.Size), retryInterval,
+									getTimeout(aeroCluster.Spec.Size),
+									[]asdbv1.AerospikeClusterPhase{asdbv1.AerospikeClusterCompleted},
+								)
+								Expect(err).ToNot(HaveOccurred())
+
+								// Validate final state
+								err = validateRackEnabledCluster(k8sClient, ctx, clusterNamespacedName)
+								Expect(err).ToNot(HaveOccurred())
+
+								// Ensure v1 revision resources are cleaned up
+								err = validateRackRevisionCleanup(k8sClient, ctx, aeroCluster, []int{1}, versionV1)
+								Expect(err).ToNot(HaveOccurred())
+							},
+						)
 					},
 				)
 			},

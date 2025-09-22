@@ -940,7 +940,7 @@ func (r *SingleClusterReconciler) getIgnorablePods(racksToDelete []asdbv1.Rack, 
 			r.aeroCluster.Spec.RackConfig.MaxIgnorablePods, int(rack.Size), false,
 		)
 
-		podList, err := r.getRackPodListWithAllRevisions(rack.Rack.ID)
+		podList, err := r.getRackPodListForAllRevisions(rack.Rack.ID)
 		if err != nil {
 			return nil, err
 		}
