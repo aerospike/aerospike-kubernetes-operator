@@ -4,6 +4,7 @@ import (
 	goctx "context"
 	"fmt"
 	"reflect"
+	"strconv"
 	"time"
 
 	"github.com/go-logr/logr"
@@ -614,6 +615,45 @@ func validateMigrateFillDelay(
 	)
 
 	return err
+}
+
+// Helper function to get number of migrations in progress
+func getMigrationsInProgress(ctx goctx.Context, k8sClient client.Client,
+	clusterNamespacedName types.NamespacedName) (int, error) {
+	aeroCluster, err := getCluster(k8sClient, ctx, clusterNamespacedName)
+	if err != nil {
+		return -1, err
+	}
+
+	podList, err := getPodList(aeroCluster, k8sClient)
+	if err != nil {
+		return -1, err
+	}
+
+	maxMigrations := 0
+
+	for idx := range podList.Items {
+		pod := &podList.Items[idx]
+
+		asinfo, err := getASInfo(logger, k8sClient, ctx, clusterNamespacedName, pod.Name, "statistics")
+		if err != nil {
+			continue
+		}
+
+		podStats, err := asinfo.RequestInfo("statistics")
+		if err != nil {
+			continue
+		}
+
+		if strVal, ok := podStats["migrate_partitions_remaining"]; ok {
+			val, err := strconv.Atoi(strVal)
+			if err == nil && val > maxMigrations {
+				maxMigrations = val
+			}
+		}
+	}
+
+	return maxMigrations, nil
 }
 
 // validate readiness port
