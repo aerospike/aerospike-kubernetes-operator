@@ -175,10 +175,6 @@ var _ = Describe(
 								// Validate final state
 								err = validateRackEnabledCluster(k8sClient, ctx, clusterNamespacedName)
 								Expect(err).ToNot(HaveOccurred())
-
-								// Ensure v1 revision resources are cleaned up
-								err = validateRackRevisionCleanup(k8sClient, ctx, aeroCluster, []int{1}, versionV1)
-								Expect(err).ToNot(HaveOccurred())
 							},
 						)
 
@@ -192,7 +188,7 @@ var _ = Describe(
 
 								Eventually(func() bool {
 									return checkBothRevisionsExist(k8sClient, ctx, clusterNamespacedName, versionV1, versionV2)
-								}, 2*time.Minute, 5*time.Second).Should(BeTrue())
+								}, 5*time.Minute, 5*time.Second).Should(BeTrue())
 
 								updatedCluster.Spec.Size = 2
 

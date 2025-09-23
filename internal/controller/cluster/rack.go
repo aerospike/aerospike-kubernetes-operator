@@ -10,7 +10,6 @@ import (
 	appsv1 "k8s.io/api/apps/v1"
 	corev1 "k8s.io/api/core/v1"
 	"k8s.io/apimachinery/pkg/api/errors"
-	ls "k8s.io/apimachinery/pkg/labels"
 	"k8s.io/apimachinery/pkg/util/intstr"
 	"k8s.io/apimachinery/pkg/util/sets"
 	"sigs.k8s.io/controller-runtime/pkg/client"
@@ -45,7 +44,7 @@ func (r *SingleClusterReconciler) reconcileRacks() common.ReconcileResult {
 		return common.ReconcileResult{}
 	}
 
-	ignorablePodNames, err := r.getIgnorablePods(racksToDelete, configuredRacks)
+	ignorablePodNames, err := r.getIgnorablePods(racksToDelete, configuredRacks, renamedRacks)
 	if err != nil {
 		return common.ReconcileError(err)
 	}
@@ -68,11 +67,6 @@ func (r *SingleClusterReconciler) reconcileRacks() common.ReconcileResult {
 			}
 
 			continue
-		}
-
-		// Check if this rack is part of a rename operation and handle old revision
-		if renamedRack, isRenamed := renamedRacks[state.Rack.ID]; isRenamed {
-			r.handleOldRevisionFailedPods(renamedRack.OldRack, ignorablePodNames)
 		}
 
 		// Handle failed pods for this rack (two-pass: reconcile then restart if not recovered)
@@ -272,7 +266,7 @@ func (r *SingleClusterReconciler) deleteRacks(
 
 		err := r.Client.Get(context.TODO(), stsName, found)
 		if err != nil {
-			// If not found then go to next
+			// If not found, then go to the next
 			if errors.IsNotFound(err) {
 				continue
 			}
@@ -1656,24 +1650,6 @@ func (r *SingleClusterReconciler) getRackPodList(rackID int, rackRevision string
 	return podList, nil
 }
 
-func (r *SingleClusterReconciler) getRackPodListForAllRevisions(rackID int) (
-	*corev1.PodList, error,
-) {
-	// List the pods for this aeroCluster's statefulset
-	podList := &corev1.PodList{}
-	listOps := &client.ListOptions{
-		Namespace:     r.aeroCluster.Namespace,
-		LabelSelector: ls.SelectorFromSet(utils.LabelsForAerospikeClusterRack(r.aeroCluster.Name, rackID, "")),
-	}
-
-	// TODO: Should we add check to get only non-terminating pod? What if it is rolling restart
-	if err := r.Client.List(context.TODO(), podList, listOps); err != nil {
-		return nil, err
-	}
-
-	return podList, nil
-}
-
 func (r *SingleClusterReconciler) getRackPodNames(rackState *RackState) []string {
 	rackIdentifier := utils.GetRackIdentifier(rackState.Rack.ID, rackState.Rack.RackRevision)
 	stsName := utils.GetNamespacedNameForSTSOrConfigMap(r.aeroCluster,
@@ -2088,46 +2064,6 @@ func (r *SingleClusterReconciler) reconcileRenamedRacks(
 	}
 
 	return common.ReconcileSuccess()
-}
-
-// handleOldRevisionFailedPods handles failed pods in old revision racks by adding them to ignore list
-func (r *SingleClusterReconciler) handleOldRevisionFailedPods(
-	oldRackState *RackState, ignorablePodNames sets.Set[string]) {
-	oldSts := &appsv1.StatefulSet{}
-	oldStsName := utils.GetNamespacedNameForSTSOrConfigMap(r.aeroCluster,
-		utils.GetRackIdentifier(oldRackState.Rack.ID, oldRackState.Rack.RackRevision))
-
-	if err := r.Client.Get(context.TODO(), oldStsName, oldSts); err != nil {
-		// Old STS not found or error - skip silently (may have been deleted)
-		return
-	}
-
-	if *oldSts.Spec.Replicas == 0 {
-		// No pods in old revision - skip
-		return
-	}
-
-	// Get failed pods from old revision
-	oldPodList, err := r.getOrderedRackPodList(oldRackState.Rack.ID, oldRackState.Rack.RackRevision)
-	if err != nil {
-		r.Log.Error(err, "Failed to list pods for old revision rack",
-			"rackID", oldRackState.Rack.ID, "oldRevision", oldRackState.Rack.RackRevision)
-		return
-	}
-
-	oldFailedPods, _ := getFailedAndActivePods(oldPodList)
-	oldFailedPods = getNonIgnorablePods(oldFailedPods, ignorablePodNames)
-
-	if len(oldFailedPods) > 0 {
-		r.Log.Info("Adding old revision failed pods to ignore list (will be replaced)",
-			"rackID", oldRackState.Rack.ID, "oldRevision", oldRackState.Rack.RackRevision,
-			"failedPods", getPodNames(oldFailedPods))
-
-		// Add failed pod names to the ignore list
-		for _, pod := range oldFailedPods {
-			ignorablePodNames.Insert(pod.Name)
-		}
-	}
 }
 
 func (r *SingleClusterReconciler) handleFailedPodsInRack(

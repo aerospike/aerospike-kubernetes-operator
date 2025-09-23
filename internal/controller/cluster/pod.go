@@ -908,10 +908,10 @@ func (r *SingleClusterReconciler) cleanupDanglingPodsRack(sts *appsv1.StatefulSe
 // getIgnorablePods returns pods:
 // 1. From racksToDelete that are currently not running and can be ignored in stability checks.
 // 2. Failed/pending pods from the configuredRacks identified using maxIgnorablePods field and
-// can be ignored from stability checks.
-func (r *SingleClusterReconciler) getIgnorablePods(racksToDelete []asdbv1.Rack, configuredRacks []RackState) (
-	sets.Set[string], error,
-) {
+// 3. Failed pods from old revisions of renamed racks that will be replaced anyway can be ignored from stability checks.
+func (r *SingleClusterReconciler) getIgnorablePods(
+	racksToDelete []asdbv1.Rack, configuredRacks []RackState, renamedRacks map[int]RenamedRack,
+) (sets.Set[string], error) {
 	ignorablePodNames := sets.Set[string]{}
 
 	for rackIdx := range racksToDelete {
@@ -933,6 +933,36 @@ func (r *SingleClusterReconciler) getIgnorablePods(racksToDelete []asdbv1.Rack, 
 		}
 	}
 
+	// Handle failed pods from old revisions of renamed racks
+	for rackID, renamedRack := range renamedRacks {
+		oldRackState := renamedRack.OldRack
+		r.Log.Info("Checking old revision failed pods for renamed rack",
+			"rackID", rackID, "oldRevision", oldRackState.Rack.RackRevision)
+
+		oldPodList, err := r.getRackPodList(oldRackState.Rack.ID, oldRackState.Rack.RackRevision)
+		if err != nil {
+			r.Log.Error(err, "Failed to list pods for old revision rack",
+				"rackID", oldRackState.Rack.ID, "oldRevision", oldRackState.Rack.RackRevision)
+			continue
+		}
+
+		var oldFailedPods []string
+
+		for podIdx := range oldPodList.Items {
+			pod := oldPodList.Items[podIdx]
+			if !utils.IsPodRunningAndReady(&pod) {
+				oldFailedPods = append(oldFailedPods, pod.Name)
+				ignorablePodNames.Insert(pod.Name)
+			}
+		}
+
+		if len(oldFailedPods) > 0 {
+			r.Log.Info("Adding old revision failed pods to ignore list (will be replaced)",
+				"rackID", oldRackState.Rack.ID, "oldRevision", oldRackState.Rack.RackRevision,
+				"failedPods", oldFailedPods)
+		}
+	}
+
 	for idx := range configuredRacks {
 		rack := &configuredRacks[idx]
 
@@ -940,7 +970,7 @@ func (r *SingleClusterReconciler) getIgnorablePods(racksToDelete []asdbv1.Rack, 
 			r.aeroCluster.Spec.RackConfig.MaxIgnorablePods, int(rack.Size), false,
 		)
 
-		podList, err := r.getRackPodListForAllRevisions(rack.Rack.ID)
+		podList, err := r.getRackPodList(rack.Rack.ID, rack.Rack.RackRevision)
 		if err != nil {
 			return nil, err
 		}
