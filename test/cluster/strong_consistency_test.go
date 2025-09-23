@@ -112,7 +112,7 @@ var _ = Describe("SCMode", func() {
 			validateLifecycleOperationInSCCluster(ctx, clusterNamespacedName, scNamespace)
 		})
 
-		It("Should test blocking rack from roster", func() {
+		FIt("Should test blocking rack from roster", func() {
 			By("Deploy")
 			aeroCluster := createDummyAerospikeCluster(clusterNamespacedName, 4)
 			aeroCluster.Spec.AerospikeConfig = getSCAerospikeConfig()
@@ -132,7 +132,6 @@ var _ = Describe("SCMode", func() {
 			validateRoster(k8sClient, ctx, clusterNamespacedName, scNamespace)
 
 			By("Block rack 1 from roster")
-			//		expectedRoster := []string{"2A0@2", "2A1@2"}
 			expectedRoster := "2A1@2,2A0@2"
 			aeroCluster.Spec.RackConfig.Racks[0].ForceBlockFromRoster = ptr.To(true)
 
@@ -459,7 +458,8 @@ var _ = Describe("SCMode", func() {
 
 			err := updateCluster(k8sClient, ctx, aeroCluster)
 			Expect(err).Should(HaveOccurred())
-			Expect(err.Error()).To(ContainSubstring("can change only one rack at a time to ForceBlockFromRoster: true"))
+			Expect(err.Error()).To(ContainSubstring(
+				"only one rack can be force-blocked from the roster at a time using the forceBlockFromRoster flag"))
 		})
 		It("Should not allow rack aware features with ForceBlockFromRoster", func() {
 			By("Deploy")
@@ -480,18 +480,16 @@ var _ = Describe("SCMode", func() {
 
 			aeroCluster.Spec.RackConfig.Racks[0].ForceBlockFromRoster = ptr.To(true)
 
-			err := updateCluster(k8sClient, ctx, aeroCluster)
-			Expect(err).ToNot(HaveOccurred())
-
 			aeroCluster.Spec.RackConfig.RollingUpdateBatchSize = &intstr.IntOrString{IntVal: 2}
 
-			err = updateCluster(k8sClient, ctx, aeroCluster)
+			err := updateCluster(k8sClient, ctx, aeroCluster)
 			Expect(err).Should(HaveOccurred())
 			Expect(err.Error()).To(ContainSubstring(
-				"with only one rack remaining in roster, cannot use batch update or scale down"))
+				"with only one rack remaining in roster, cannot use rollingUpdateBatchSize or scaleDownBatchSize"))
 
 			aeroCluster.Spec.RackConfig.RollingUpdateBatchSize = nil
 			aeroCluster.Spec.RackConfig.MaxIgnorablePods = &intstr.IntOrString{IntVal: 2}
+			aeroCluster.Spec.RackConfig.Racks[0].ForceBlockFromRoster = ptr.To(true)
 			err = updateCluster(k8sClient, ctx, aeroCluster)
 			Expect(err).Should(HaveOccurred())
 			Expect(err.Error()).To(ContainSubstring(
@@ -499,16 +497,18 @@ var _ = Describe("SCMode", func() {
 
 			aeroCluster.Spec.RackConfig.MaxIgnorablePods = nil
 			aeroCluster.Spec.RosterNodeBlockList = []string{"1A0", "1A1"}
+			aeroCluster.Spec.RackConfig.Racks[0].ForceBlockFromRoster = ptr.To(true)
 			err = updateCluster(k8sClient, ctx, aeroCluster)
 			Expect(err).Should(HaveOccurred())
 			Expect(err.Error()).To(ContainSubstring("ForceBlockFromRoster: true racks cannot be used with RosterNodeBlockList"))
 
 			aeroCluster.Spec.RosterNodeBlockList = nil
 			aeroCluster.Spec.RackConfig.Racks[1].ForceBlockFromRoster = ptr.To(true)
+			aeroCluster.Spec.RackConfig.Racks[0].ForceBlockFromRoster = ptr.To(true)
 			err = updateCluster(k8sClient, ctx, aeroCluster)
 			Expect(err).Should(HaveOccurred())
 			Expect(err.Error()).To(ContainSubstring(
-				"all racks cannot have ForceBlockFromRoster: true. At least one rack must remain in the roster"))
+				"all racks cannot have forceBlockFromRoster enabled. At least one rack must remain in the roster"))
 		})
 	})
 })

@@ -905,17 +905,19 @@ func (r *SingleClusterReconciler) cleanupDanglingPodsRack(sts *appsv1.StatefulSe
 // 1. From racksToDelete that are currently not running and can be ignored in stability checks.
 // 2. Failed/pending pods from the configuredRacks identified using maxIgnorablePods field and
 // can be ignored from stability checks.
-func (r *SingleClusterReconciler) getIgnorablePods(racksToDelete []int, configuredRacks []RackState) (
+func (r *SingleClusterReconciler) getIgnorablePods(racksToDelete []asdbv1.Rack, configuredRacks []RackState) (
 	sets.Set[string], error,
 ) {
+	var ignorableRacks []asdbv1.Rack
+
 	ignorablePodNames := sets.Set[string]{}
-	ignorableRacks := sets.Set[int]{}
+	ignorableRackIDs := sets.Set[int]{}
 
-	ignorableRacks.Insert(racksToDelete...)
-	ignorableRacks.Insert(getRacksToBeBlockedFromRoster(r.Log, configuredRacks)...)
+	ignorableRacks = append(ignorableRacks, racksToDelete...)
+	ignorableRacks = append(ignorableRacks, getRacksToBeBlockedFromRoster(r.Log, configuredRacks)...)
 
-	for rackID := range ignorableRacks {
-		rackPods, err := r.getRackPodList(rackID)
+	for idx := range ignorableRacks {
+		rackPods, err := r.getRackPodList(ignorableRacks[idx].ID)
 		if err != nil {
 			return nil, err
 		}
@@ -926,11 +928,13 @@ func (r *SingleClusterReconciler) getIgnorablePods(racksToDelete []int, configur
 				ignorablePodNames.Insert(pod.Name)
 			}
 		}
+
+		ignorableRackIDs.Insert(ignorableRacks[idx].ID)
 	}
 
 	for idx := range configuredRacks {
 		rackState := &configuredRacks[idx]
-		if ignorableRacks.Has(rackState.Rack.ID) {
+		if ignorableRackIDs.Has(rackState.Rack.ID) {
 			// Already handled above
 			continue
 		}

@@ -534,9 +534,10 @@ type Rack struct { //nolint:govet // for readability
 	// +optional
 	PodSpec RackPodSpec `json:"effectivePodSpec,omitempty"`
 
-	// ForceBlockFromRoster when set to true, removes all nodes from this rack from the roster
-	// If set to true, the operator will ignore unavailable/dead partitions and go ahead and remove the nodes from roster
-	// Hence, this should be used with caution.
+	// ForceBlockFromRoster, when set to true, forcefully removes all nodes in this rack from the roster.
+	// With this enabled, the operator ignores unavailable or dead partitions and proceeds with node removal.
+	// Additionally, any failed or pending pods in this rack are also ignored during this process.
+	// It may result in data loss. Use this with caution.
 	// +optional
 	ForceBlockFromRoster *bool `json:"forceBlockFromRoster,omitempty"`
 }

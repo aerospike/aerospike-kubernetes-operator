@@ -544,13 +544,13 @@ func validateRackUpdate(
 
 	if len(newObj.Status.RackConfig.Racks)-len(racksBlockedFromRosterInSpec) == 1 &&
 		(newObj.Spec.RackConfig.RollingUpdateBatchSize != nil || newObj.Spec.RackConfig.ScaleDownBatchSize != nil) {
-		return fmt.Errorf("with only one rack remaining in roster, cannot use batch update or scale down")
+		return fmt.Errorf("with only one rack remaining in roster, cannot use rollingUpdateBatchSize or scaleDownBatchSize")
 	}
 
 	desiredRacksBlockedFromRoster := racksBlockedFromRosterInSpec.Difference(racksBlockedFromRosterInStatus)
 
 	if len(desiredRacksBlockedFromRoster) > 1 {
-		return fmt.Errorf("can change only one rack at a time to ForceBlockFromRoster: true")
+		return fmt.Errorf("only one rack can be force-blocked from the roster at a time using the forceBlockFromRoster flag")
 	}
 
 	return nil
@@ -688,15 +688,15 @@ func validateRackConfig(_ logr.Logger, cluster *asdbv1.AerospikeCluster) error {
 
 	if racksBlockedFromRoster > 0 {
 		if cluster.Spec.RackConfig.MaxIgnorablePods != nil {
-			return fmt.Errorf("ForceBlockFromRoster: true racks cannot be used with MaxIgnorablePods set")
+			return fmt.Errorf("forceBlockFromRoster cannot be enabled when maxIgnorablePods is set")
 		}
 
 		if len(cluster.Spec.RosterNodeBlockList) > 0 {
-			return fmt.Errorf("ForceBlockFromRoster: true racks cannot be used with RosterNodeBlockList")
+			return fmt.Errorf("forceBlockFromRoster cannot be enabled with RosterNodeBlockList")
 		}
 
 		if racksBlockedFromRoster == len(cluster.Spec.RackConfig.Racks) {
-			return fmt.Errorf("all racks cannot have ForceBlockFromRoster: true. At least one rack must remain in the roster")
+			return fmt.Errorf("all racks cannot have forceBlockFromRoster enabled. At least one rack must remain in the roster")
 		}
 	}
 

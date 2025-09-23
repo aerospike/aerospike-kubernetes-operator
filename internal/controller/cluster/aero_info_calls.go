@@ -16,6 +16,7 @@ package cluster
 import (
 	"context"
 	"fmt"
+	"regexp"
 	"strconv"
 	"strings"
 	"time"
@@ -105,11 +106,10 @@ func (r *SingleClusterReconciler) getNodeIDsFromBlockedRacks() []string {
 		for podOrdinal := int32(0); podOrdinal < rackState.Size; podOrdinal++ {
 			nodeID := fmt.Sprintf("%d%s%d", rackID, infix, podOrdinal)
 			nodeIDs = append(nodeIDs, nodeID)
-
-			r.Log.V(1).Info("Added rack node to comprehensive block list",
-				"rackID", rackID, "nodeID", nodeID)
 		}
 	}
+
+	r.Log.V(1).Info("Added nodes to comprehensive roster block list", "nodeIDs", nodeIDs)
 
 	return nodeIDs
 }
@@ -119,13 +119,12 @@ func getNodeIDInfixForRack(pods map[string]asdbv1.AerospikePodStatus, rackID int
 
 	for idx := range pods {
 		nodeID := pods[idx].Aerospike.NodeID
-		// ensure nodeID is long enough to contain rackID + infix + ordinal
-		if len(nodeID) <= len(rackIDStr) {
-			continue
-		}
+		re := regexp.MustCompile(`^(\d+)(.)(\d+)$`)
 
-		if strings.HasPrefix(nodeID, rackIDStr) {
-			return string(nodeID[len(rackIDStr)]) // middle character
+		matches := re.FindStringSubmatch(nodeID)
+		if len(matches) == 4 && matches[1] == rackIDStr {
+			// Found a node in the rack, return the infix character
+			return strings.ToUpper(matches[2])
 		}
 	}
 

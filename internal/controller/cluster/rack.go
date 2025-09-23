@@ -47,7 +47,7 @@ func (r *SingleClusterReconciler) reconcileRacks() common.ReconcileResult {
 		rackIDsToDelete = append(rackIDsToDelete, racksToDelete[idx].ID)
 	}
 
-	ignorablePodNames, err := r.getIgnorablePods(rackIDsToDelete, rackStateList)
+	ignorablePodNames, err := r.getIgnorablePods(racksToDelete, rackStateList)
 	if err != nil {
 		return common.ReconcileError(err)
 	}
@@ -278,13 +278,13 @@ func (r *SingleClusterReconciler) createEmptyRack(rackState *RackState) (
 
 // getRacksToBeBlockedFromRoster identifies racks that should have their nodes blocked from roster
 // and returns a slice of racks that have ForceBlockFromRoster: true
-func getRacksToBeBlockedFromRoster(log logger, rackStateList []RackState) []int {
-	var racksToBlock []int
+func getRacksToBeBlockedFromRoster(log logger, rackStateList []RackState) []asdbv1.Rack {
+	var racksToBlock []asdbv1.Rack
 
 	for _, rackState := range rackStateList {
 		// Check if this rack has ForceBlockFromRoster set to true
 		if asdbv1.GetBool(rackState.Rack.ForceBlockFromRoster) {
-			racksToBlock = append(racksToBlock, rackState.Rack.ID)
+			racksToBlock = append(racksToBlock, *rackState.Rack)
 			log.Info("Rack marked for roster blocking",
 				"rackID", rackState.Rack.ID)
 		}
