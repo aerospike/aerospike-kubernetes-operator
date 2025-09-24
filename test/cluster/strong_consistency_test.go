@@ -112,7 +112,7 @@ var _ = Describe("SCMode", func() {
 			validateLifecycleOperationInSCCluster(ctx, clusterNamespacedName, scNamespace)
 		})
 
-		FIt("Should test blocking rack from roster", func() {
+		It("Should test blocking rack from roster", func() {
 			By("Deploy")
 			aeroCluster := createDummyAerospikeCluster(clusterNamespacedName, 4)
 			aeroCluster.Spec.AerospikeConfig = getSCAerospikeConfig()
