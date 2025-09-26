@@ -635,7 +635,7 @@ func getMigrationsInProgress(ctx goctx.Context, k8sClient client.Client,
 	for idx := range podList.Items {
 		pod := &podList.Items[idx]
 
-		asinfo, err := getASInfo(logger, k8sClient, ctx, clusterNamespacedName, pod.Name, "statistics")
+		asinfo, err := getASInfo(logger, k8sClient, ctx, clusterNamespacedName, pod.Name, "service")
 		if err != nil {
 			continue
 		}
