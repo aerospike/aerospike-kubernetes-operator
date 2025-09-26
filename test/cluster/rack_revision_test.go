@@ -24,7 +24,7 @@ import (
 )
 
 var _ = Describe(
-	"RackRevision", func() {
+	"Revision", func() {
 		ctx := goctx.TODO()
 
 		Context(
@@ -68,7 +68,7 @@ var _ = Describe(
 								// Update storage with new revision
 								for idx := range updatedCluster.Spec.RackConfig.Racks {
 									rack := &updatedCluster.Spec.RackConfig.Racks[idx]
-									rack.RackRevision = versionV2
+									rack.Revision = versionV2
 
 									// Add new storage volume to simulate storage update
 									rack.Storage.Volumes = append(rack.Storage.Volumes, asdbv1.VolumeSpec{
@@ -268,11 +268,11 @@ var _ = Describe(
 						aeroCluster, err := getCluster(k8sClient, ctx, clusterNamespacedName)
 						Expect(err).ToNot(HaveOccurred())
 
-						aeroCluster.Spec.RackConfig.Racks[0].RackRevision = versionV2
+						aeroCluster.Spec.RackConfig.Racks[0].Revision = versionV2
 
 						Expect(updateClusterWithNoWait(k8sClient, ctx, aeroCluster)).ToNot(HaveOccurred())
 
-						aeroCluster.Spec.RackConfig.Racks[0].RackRevision = "v3"
+						aeroCluster.Spec.RackConfig.Racks[0].Revision = "v3"
 
 						Expect(updateClusterWithNoWait(k8sClient, ctx, aeroCluster)).To(HaveOccurred())
 					},
@@ -286,7 +286,7 @@ var _ = Describe(
 
 						// Change revision and storage
 						rack1 := aeroCluster.Spec.RackConfig.Racks[0]
-						rack1.RackRevision = versionV2
+						rack1.Revision = versionV2
 						rack1.InputStorage = lib.DeepCopy(&aeroCluster.Spec.Storage).(*asdbv1.AerospikeStorageSpec)
 
 						rack1.InputStorage.Volumes = append(rack1.Storage.Volumes, asdbv1.VolumeSpec{
@@ -308,7 +308,7 @@ var _ = Describe(
 
 						By("Attempting to rollback revision while keeping new storage")
 
-						aeroCluster.Spec.RackConfig.Racks[0].RackRevision = versionV1
+						aeroCluster.Spec.RackConfig.Racks[0].Revision = versionV1
 						Expect(updateClusterWithNoWait(k8sClient, ctx, aeroCluster)).To(HaveOccurred())
 					},
 				)
@@ -353,11 +353,11 @@ func createDummyClusterWithRackRevision(
 	aeroCluster := createDummyAerospikeCluster(clusterNamespacedName, size)
 
 	aeroCluster.Spec.PodSpec.AerospikeInitContainerSpec.ImageRegistryNamespace = ptr.To("abhishekdwivedi3060")
-	aeroCluster.Spec.PodSpec.AerospikeInitContainerSpec.ImageNameAndTag = "aerospike-kubernetes-init:2.3.0-1"
+	aeroCluster.Spec.PodSpec.AerospikeInitContainerSpec.ImageNameAndTag = "aerospike-kubernetes-init:2.3.0-2"
 
 	racks := []asdbv1.Rack{
-		{ID: 1, RackRevision: revision},
-		{ID: 2, RackRevision: revision},
+		{ID: 1, Revision: revision},
+		{ID: 2, Revision: revision},
 	}
 
 	rackConf := asdbv1.RackConfig{
@@ -477,7 +477,7 @@ func changeRackRevision(k8sClient client.Client, ctx goctx.Context,
 	updatedCluster, err := getCluster(k8sClient, ctx, clusterNamespacedName)
 	Expect(err).ToNot(HaveOccurred())
 
-	updatedCluster.Spec.RackConfig.Racks[0].RackRevision = versionV2
+	updatedCluster.Spec.RackConfig.Racks[0].Revision = versionV2
 
 	err = updateClusterWithNoWait(k8sClient, ctx, updatedCluster)
 	Expect(err).ToNot(HaveOccurred())

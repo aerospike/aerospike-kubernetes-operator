@@ -107,7 +107,7 @@ func (r *SingleClusterReconciler) removePVCsAsync(
 // deleteLocalPVCs deletes PVCs which are created using local storage classes
 // It considers the user given LocalStorageClasses list from spec to determine if a PVC is local or not.
 func (r *SingleClusterReconciler) deleteLocalPVCs(rackState *RackState, pod *corev1.Pod) error {
-	pvcItems, err := r.getPodsPVCList([]string{pod.Name}, rackState.Rack.ID, rackState.Rack.RackRevision)
+	pvcItems, err := r.getPodsPVCList([]string{pod.Name}, rackState.Rack.ID, rackState.Rack.Revision)
 	if err != nil {
 		return fmt.Errorf("could not find pvc for pod %v: %v", pod.Name, err)
 	}

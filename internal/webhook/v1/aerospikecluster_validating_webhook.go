@@ -512,7 +512,7 @@ func validateRackUpdate(
 
 					// Storage update is allowed only when rack revision is changed.
 					// In case of the same rack revision, check for storage update
-					if oldRack.RackRevision == newRack.RackRevision {
+					if oldRack.Revision == newRack.Revision {
 						if err := validateStorageSpecChange(&oldStorage, &newStorage); err != nil {
 							return fmt.Errorf(
 								"rack storage config cannot be updated: %v", err,
@@ -525,7 +525,7 @@ func validateRackUpdate(
 
 						for idx := range oldObj.Status.RackConfig.Racks {
 							if oldObj.Status.RackConfig.Racks[idx].ID == newRack.ID &&
-								oldObj.Status.RackConfig.Racks[idx].RackRevision == newRack.RackRevision {
+								oldObj.Status.RackConfig.Racks[idx].Revision == newRack.Revision {
 								statusStorage = &oldObj.Status.RackConfig.Racks[idx].Storage
 								break
 							}
@@ -535,7 +535,7 @@ func validateRackUpdate(
 							if err := validateStorageSpecChange(statusStorage, &newStorage); err != nil {
 								return fmt.Errorf(
 									"old rack with same revision %s already exists with different storage "+
-										"config: %v", newRack.RackRevision, err)
+										"config: %v", newRack.Revision, err)
 							}
 						}
 					}
@@ -562,7 +562,7 @@ func validateConcurrentRackRevisions(oldObj, newObj *asdbv1.AerospikeCluster) er
 				rackRevisions[racks[idx].ID] = sets.New[string]()
 			}
 
-			rackRevisions[racks[idx].ID] = rackRevisions[racks[idx].ID].Insert(racks[idx].RackRevision)
+			rackRevisions[racks[idx].ID] = rackRevisions[racks[idx].ID].Insert(racks[idx].Revision)
 		}
 	}
 
@@ -1064,7 +1064,7 @@ func validateNsConfUpdateFromStatus(newConfSpec, currentStatus *asdbv1.Aerospike
 	newConf := newConfSpec.Value
 	newNsConfList := newConf["namespaces"].([]interface{})
 
-	// TODO: Do we need to skip this validation for RackRevision update?
+	// TODO: Do we need to skip this validation for Revision update?
 	return validateStorageEngineDeviceListUpdate(newNsConfList, statusNsConfList)
 }
 

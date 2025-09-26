@@ -7819,14 +7819,16 @@ spec:
                             RackLabel for setting rack affinity.
                             Rack pods will be deployed in k8s nodes having rackLabel {aerospike.com/rack-label: <rack-label>}
                           type: string
-                        rackRevision:
-                          description: |-
-                            RackRevision to use along with rack id. This can be used to provision a new rack with same id but different spec.
-                            This revision will be appended to the rackID for Rack resource naming.
-                          type: string
                         region:
                           description: Region name for setting rack affinity. Rack
                             pods will be deployed to given Region
+                          type: string
+                        revision:
+                          description: |-
+                            Revision is a version identifier for this rack's specification, used to trigger controlled migrations
+                            when rack configuration changes require new StatefulSets. Change this field when making changes
+                            that cannot be applied in-place, such as storage updates that require pod recreation.
+                            The revision is appended to the rack ID for Kubernetes resource naming (e.g., <cluster>-<rackID>-<revision>).
                           type: string
                         storage:
                           description: Storage specify persistent storage to use for
@@ -17096,14 +17098,16 @@ spec:
                             RackLabel for setting rack affinity.
                             Rack pods will be deployed in k8s nodes having rackLabel {aerospike.com/rack-label: <rack-label>}
                           type: string
-                        rackRevision:
-                          description: |-
-                            RackRevision to use along with rack id. This can be used to provision a new rack with same id but different spec.
-                            This revision will be appended to the rackID for Rack resource naming.
-                          type: string
                         region:
                           description: Region name for setting rack affinity. Rack
                             pods will be deployed to given Region
+                          type: string
+                        revision:
+                          description: |-
+                            Revision is a version identifier for this rack's specification, used to trigger controlled migrations
+                            when rack configuration changes require new StatefulSets. Change this field when making changes
+                            that cannot be applied in-place, such as storage updates that require pod recreation.
+                            The revision is appended to the rack ID for Kubernetes resource naming (e.g., <cluster>-<rackID>-<revision>).
                           type: string
                         storage:
                           description: Storage specify persistent storage to use for

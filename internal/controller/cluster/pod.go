@@ -71,12 +71,12 @@ func (r *SingleClusterReconciler) getRollingRestartTypeMap(rackState *RackState,
 	restartTypeMap = make(map[string]RestartType)
 	dynamicConfDiffPerPod = make(map[string]asconfig.DynamicConfigMap)
 
-	pods, err := r.getOrderedRackPodList(rackState.Rack.ID, rackState.Rack.RackRevision)
+	pods, err := r.getOrderedRackPodList(rackState.Rack.ID, rackState.Rack.Revision)
 	if err != nil {
 		return nil, nil, fmt.Errorf("failed to list pods: %v", err)
 	}
 
-	confMap, err := r.getConfigMap(utils.GetRackIdentifier(rackState.Rack.ID, rackState.Rack.RackRevision))
+	confMap, err := r.getConfigMap(utils.GetRackIdentifier(rackState.Rack.ID, rackState.Rack.Revision))
 	if err != nil {
 		return nil, nil, err
 	}
@@ -760,7 +760,7 @@ func (r *SingleClusterReconciler) cleanupPods(
 	r.Log.Info("Removing pvc for removed pods", "pods", podNames)
 
 	// Delete PVCs if cascadeDelete
-	pvcItems, err := r.getPodsPVCList(podNames, rackState.Rack.ID, rackState.Rack.RackRevision)
+	pvcItems, err := r.getPodsPVCList(podNames, rackState.Rack.ID, rackState.Rack.Revision)
 	if err != nil {
 		return fmt.Errorf("could not find pvc for pods %v: %v", podNames, err)
 	}
@@ -881,7 +881,7 @@ func (r *SingleClusterReconciler) cleanupDanglingPodsRack(sts *appsv1.StatefulSe
 			)
 		}
 
-		if rackID != rackState.Rack.ID || rackRevision != rackState.Rack.RackRevision {
+		if rackID != rackState.Rack.ID || rackRevision != rackState.Rack.Revision {
 			// This pod is from other rack, so skip it
 			continue
 		}
@@ -916,9 +916,9 @@ func (r *SingleClusterReconciler) getIgnorablePods(
 
 	for rackIdx := range racksToDelete {
 		r.Log.Info("Rack to delete found", "rackID",
-			racksToDelete[rackIdx].ID, "rackRevision", racksToDelete[rackIdx].RackRevision)
+			racksToDelete[rackIdx].ID, "rackRevision", racksToDelete[rackIdx].Revision)
 
-		rackPods, err := r.getRackPodList(racksToDelete[rackIdx].ID, racksToDelete[rackIdx].RackRevision)
+		rackPods, err := r.getRackPodList(racksToDelete[rackIdx].ID, racksToDelete[rackIdx].Revision)
 		if err != nil {
 			return nil, err
 		}
@@ -937,12 +937,12 @@ func (r *SingleClusterReconciler) getIgnorablePods(
 	for rackID, renamedRack := range renamedRacks {
 		oldRackState := renamedRack.OldRack
 		r.Log.Info("Checking old revision failed pods for renamed rack",
-			"rackID", rackID, "oldRevision", oldRackState.Rack.RackRevision)
+			"rackID", rackID, "oldRevision", oldRackState.Rack.Revision)
 
-		oldPodList, err := r.getRackPodList(oldRackState.Rack.ID, oldRackState.Rack.RackRevision)
+		oldPodList, err := r.getRackPodList(oldRackState.Rack.ID, oldRackState.Rack.Revision)
 		if err != nil {
 			r.Log.Error(err, "Failed to list pods for old revision rack",
-				"rackID", oldRackState.Rack.ID, "oldRevision", oldRackState.Rack.RackRevision)
+				"rackID", oldRackState.Rack.ID, "oldRevision", oldRackState.Rack.Revision)
 			continue
 		}
 
@@ -958,7 +958,7 @@ func (r *SingleClusterReconciler) getIgnorablePods(
 
 		if len(oldFailedPods) > 0 {
 			r.Log.Info("Adding old revision failed pods to ignore list (will be replaced)",
-				"rackID", oldRackState.Rack.ID, "oldRevision", oldRackState.Rack.RackRevision,
+				"rackID", oldRackState.Rack.ID, "oldRevision", oldRackState.Rack.Revision,
 				"failedPods", oldFailedPods)
 		}
 	}
@@ -970,7 +970,7 @@ func (r *SingleClusterReconciler) getIgnorablePods(
 			r.aeroCluster.Spec.RackConfig.MaxIgnorablePods, int(rack.Size), false,
 		)
 
-		podList, err := r.getRackPodList(rack.Rack.ID, rack.Rack.RackRevision)
+		podList, err := r.getRackPodList(rack.Rack.ID, rack.Rack.Revision)
 		if err != nil {
 			return nil, err
 		}

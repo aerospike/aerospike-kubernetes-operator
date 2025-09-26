@@ -490,10 +490,12 @@ type Rack struct { //nolint:govet // for readability
 	// Identifier for the rack
 	ID int `json:"id"`
 
-	// RackRevision to use along with rack id. This can be used to provision a new rack with same id but different spec.
-	// This revision will be appended to the rackID for Rack resource naming.
+	// Revision is a version identifier for this rack's specification, used to trigger controlled migrations
+	// when rack configuration changes require new StatefulSets. Change this field when making changes
+	// that cannot be applied in-place, such as storage updates that require pod recreation.
+	// The revision is appended to the rack ID for Kubernetes resource naming (e.g., <cluster>-<rackID>-<revision>).
 	// +optional
-	RackRevision string `json:"rackRevision,omitempty"`
+	Revision string `json:"revision,omitempty"`
 
 	// Zone name for setting rack affinity. Rack pods will be deployed to given Zone
 	// +optional

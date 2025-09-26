@@ -734,7 +734,7 @@ func (r *SingleClusterReconciler) recoverFailedCreate() error {
 	for rackIdx := range rackStateList {
 		state := rackStateList[rackIdx]
 
-		pods, err := r.getRackPodList(state.Rack.ID, state.Rack.RackRevision)
+		pods, err := r.getRackPodList(state.Rack.ID, state.Rack.Revision)
 		if err != nil {
 			return fmt.Errorf("failed recover failed cluster: %v", err)
 		}
@@ -805,7 +805,7 @@ func (r *SingleClusterReconciler) deleteExternalResources() error {
 	for idx := range r.aeroCluster.Spec.RackConfig.Racks {
 		rack := &r.aeroCluster.Spec.RackConfig.Racks[idx]
 
-		rackPVCItems, err := r.getRackPVCList(rack.ID, rack.RackRevision)
+		rackPVCItems, err := r.getRackPVCList(rack.ID, rack.Revision)
 		if err != nil {
 			return fmt.Errorf("could not find pvc for rack: %v", err)
 		}
@@ -834,7 +834,7 @@ func (r *SingleClusterReconciler) deleteExternalResources() error {
 		for rackIdx := range r.aeroCluster.Spec.RackConfig.Racks {
 			rack := &r.aeroCluster.Spec.RackConfig.Racks[rackIdx]
 			rackLabels := utils.LabelsForAerospikeClusterRack(
-				r.aeroCluster.Name, rack.ID, rack.RackRevision,
+				r.aeroCluster.Name, rack.ID, rack.Revision,
 			)
 
 			if reflect.DeepEqual(pvc.Labels, rackLabels) {

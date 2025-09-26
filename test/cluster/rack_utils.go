@@ -186,7 +186,7 @@ func getPodSpecAnnotations(
 	for rackStateIndex := range rackStateList {
 		found := &appsv1.StatefulSet{}
 		stsName := utils.GetNamespacedNameForSTSOrConfigMap(aeroCluster,
-			utils.GetRackIdentifier(rackStateList[rackStateIndex].Rack.ID, rackStateList[rackStateIndex].Rack.RackRevision))
+			utils.GetRackIdentifier(rackStateList[rackStateIndex].Rack.ID, rackStateList[rackStateIndex].Rack.Revision))
 
 		err := k8sClient.Get(ctx, stsName, found)
 		if errors.IsNotFound(err) {
@@ -214,7 +214,7 @@ func getPodSpecLabels(
 	for rackStateIndex := range rackStateList {
 		found := &appsv1.StatefulSet{}
 		stsName := utils.GetNamespacedNameForSTSOrConfigMap(aeroCluster,
-			utils.GetRackIdentifier(rackStateList[rackStateIndex].Rack.ID, rackStateList[rackStateIndex].Rack.RackRevision))
+			utils.GetRackIdentifier(rackStateList[rackStateIndex].Rack.ID, rackStateList[rackStateIndex].Rack.Revision))
 
 		err := k8sClient.Get(ctx, stsName, found)
 		if errors.IsNotFound(err) {
@@ -242,7 +242,7 @@ func validateRackEnabledCluster(
 		found := &appsv1.StatefulSet{}
 		stsName := utils.GetNamespacedNameForSTSOrConfigMap(
 			aeroCluster,
-			utils.GetRackIdentifier(rackStateList[rackStateIndex].Rack.ID, rackStateList[rackStateIndex].Rack.RackRevision),
+			utils.GetRackIdentifier(rackStateList[rackStateIndex].Rack.ID, rackStateList[rackStateIndex].Rack.Revision),
 		)
 
 		err := k8sClient.Get(ctx, stsName, found)
