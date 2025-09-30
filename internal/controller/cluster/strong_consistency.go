@@ -17,8 +17,8 @@ func (r *SingleClusterReconciler) getAndSetRoster(
 ) error {
 	rackStateList := getConfiguredRackStateList(r.aeroCluster)
 	blockedRackIDs := gosets.NewSet[string]()
-	blockedRacks := getRacksToBeBlockedFromRoster(r.Log, rackStateList)
 
+	blockedRacks := getRacksToBeBlockedFromRoster(r.Log, rackStateList)
 	for idx := range blockedRacks {
 		blockedRackIDs.Add(strconv.Itoa(blockedRacks[idx].ID))
 	}

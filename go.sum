@@ -16,6 +16,8 @@ github.com/aerospike/aerospike-management-lib v1.8.1-0.20250924083206-778ebe8d3c
 github.com/aerospike/aerospike-management-lib v1.8.1-0.20250924083206-778ebe8d3cd4/go.mod h1:RNKlkSnppiaBaLEdAiCeBv68M+odPR5JR+ziO0NfaHQ=
 github.com/aerospike/aerospike-management-lib v1.8.1-0.20250924160556-d98795e04f2d h1:wiUiFdCrWApczqiF8ihivyGshEZBkE57NbAJ5h0pRKY=
 github.com/aerospike/aerospike-management-lib v1.8.1-0.20250924160556-d98795e04f2d/go.mod h1:RNKlkSnppiaBaLEdAiCeBv68M+odPR5JR+ziO0NfaHQ=
+github.com/aerospike/aerospike-management-lib v1.8.1-0.20250930184009-daee20155e23 h1:s68lNIGVi/ht5XtszMzPHqWTG911ny3QmVgUJaA12vg=
+github.com/aerospike/aerospike-management-lib v1.8.1-0.20250930184009-daee20155e23/go.mod h1:RNKlkSnppiaBaLEdAiCeBv68M+odPR5JR+ziO0NfaHQ=
 github.com/aerospike/backup-go v0.5.1 h1:8ryLV0nOoo3Zn7LRV1kQABFnYgg1V0r9ZJJOL22FBs0=
 github.com/aerospike/backup-go v0.5.1/go.mod h1:+RJdOaVCG6jQlhoNIJrzQgZnJ/HEBPfAiPGdv3YYzyg=
 github.com/antlr4-go/antlr/v4 v4.13.0 h1:lxCg3LAv+EUK6t1i0y1V6/SLeUi0eKEKdhQAlS8TVTI=

@@ -908,12 +908,10 @@ func (r *SingleClusterReconciler) cleanupDanglingPodsRack(sts *appsv1.StatefulSe
 func (r *SingleClusterReconciler) getIgnorablePods(racksToDelete []asdbv1.Rack, configuredRacks []RackState) (
 	sets.Set[string], error,
 ) {
-	var ignorableRacks []asdbv1.Rack
-
 	ignorablePodNames := sets.Set[string]{}
 	ignorableRackIDs := sets.Set[int]{}
 
-	ignorableRacks = append(ignorableRacks, racksToDelete...)
+	ignorableRacks := append([]asdbv1.Rack{}, racksToDelete...)
 	ignorableRacks = append(ignorableRacks, getRacksToBeBlockedFromRoster(r.Log, configuredRacks)...)
 
 	for idx := range ignorableRacks {

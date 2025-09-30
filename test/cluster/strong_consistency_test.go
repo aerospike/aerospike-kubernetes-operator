@@ -435,6 +435,7 @@ var _ = Describe("SCMode", func() {
 
 			Expect(DeployCluster(k8sClient, ctx, aeroCluster)).To(HaveOccurred())
 		})
+
 		It("Should not allow ForceBlockFromRoster enable in more than 1 rack at once", func() {
 			By("Deploy")
 			aeroCluster := createDummyAerospikeCluster(clusterNamespacedName, 4)
@@ -461,6 +462,7 @@ var _ = Describe("SCMode", func() {
 			Expect(err.Error()).To(ContainSubstring(
 				"only one rack can be force-blocked from the roster at a time using the forceBlockFromRoster flag"))
 		})
+
 		It("Should not allow rack aware features with ForceBlockFromRoster", func() {
 			By("Deploy")
 			aeroCluster := createDummyAerospikeCluster(clusterNamespacedName, 4)
@@ -479,7 +481,6 @@ var _ = Describe("SCMode", func() {
 			Expect(DeployCluster(k8sClient, ctx, aeroCluster)).ToNot(HaveOccurred())
 
 			aeroCluster.Spec.RackConfig.Racks[0].ForceBlockFromRoster = ptr.To(true)
-
 			aeroCluster.Spec.RackConfig.RollingUpdateBatchSize = &intstr.IntOrString{IntVal: 2}
 
 			err := updateCluster(k8sClient, ctx, aeroCluster)
@@ -489,22 +490,19 @@ var _ = Describe("SCMode", func() {
 
 			aeroCluster.Spec.RackConfig.RollingUpdateBatchSize = nil
 			aeroCluster.Spec.RackConfig.MaxIgnorablePods = &intstr.IntOrString{IntVal: 2}
-			aeroCluster.Spec.RackConfig.Racks[0].ForceBlockFromRoster = ptr.To(true)
 			err = updateCluster(k8sClient, ctx, aeroCluster)
 			Expect(err).Should(HaveOccurred())
 			Expect(err.Error()).To(ContainSubstring(
-				"ForceBlockFromRoster: true racks cannot be used with MaxIgnorablePods set"))
+				"forceBlockFromRoster cannot be enabled when maxIgnorablePods is set"))
 
 			aeroCluster.Spec.RackConfig.MaxIgnorablePods = nil
 			aeroCluster.Spec.RosterNodeBlockList = []string{"1A0", "1A1"}
-			aeroCluster.Spec.RackConfig.Racks[0].ForceBlockFromRoster = ptr.To(true)
 			err = updateCluster(k8sClient, ctx, aeroCluster)
 			Expect(err).Should(HaveOccurred())
-			Expect(err.Error()).To(ContainSubstring("ForceBlockFromRoster: true racks cannot be used with RosterNodeBlockList"))
+			Expect(err.Error()).To(ContainSubstring("forceBlockFromRoster cannot be enabled with RosterNodeBlockList"))
 
 			aeroCluster.Spec.RosterNodeBlockList = nil
 			aeroCluster.Spec.RackConfig.Racks[1].ForceBlockFromRoster = ptr.To(true)
-			aeroCluster.Spec.RackConfig.Racks[0].ForceBlockFromRoster = ptr.To(true)
 			err = updateCluster(k8sClient, ctx, aeroCluster)
 			Expect(err).Should(HaveOccurred())
 			Expect(err.Error()).To(ContainSubstring(
