@@ -976,7 +976,7 @@ func (r *SingleClusterReconciler) scaleDownRack(
 		}
 
 		// Wait for migration to complete before deleting the pods.
-		if res := r.waitForMigrationToComplete(
+		if res := r.waitForMigrationToComplete(policy,
 			ignorablePodNames,
 		); !res.IsSuccess {
 			r.Log.Error(

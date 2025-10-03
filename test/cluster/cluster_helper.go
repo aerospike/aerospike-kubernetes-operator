@@ -619,28 +619,13 @@ func validateMigrateFillDelay(
 
 // Helper function to get number of migrations in progress
 func getMigrationsInProgress(ctx goctx.Context, k8sClient client.Client,
-	clusterNamespacedName types.NamespacedName) (int, error) {
-	aeroCluster, err := getCluster(k8sClient, ctx, clusterNamespacedName)
-	if err != nil {
-		return -1, err
-	}
-
-	podList, err := getPodList(aeroCluster, k8sClient)
-	if err != nil {
-		return -1, err
-	}
-
+	clusterNamespacedName types.NamespacedName, podList *corev1.PodList) int {
 	maxMigrations := 0
 
 	for idx := range podList.Items {
 		pod := &podList.Items[idx]
 
-		asinfo, err := getASInfo(logger, k8sClient, ctx, clusterNamespacedName, pod.Name, "service")
-		if err != nil {
-			continue
-		}
-
-		podStats, err := asinfo.RequestInfo("statistics")
+		podStats, err := requestInfoFromNode(logger, k8sClient, ctx, clusterNamespacedName, "statistics", pod.Name)
 		if err != nil {
 			continue
 		}
@@ -653,7 +638,7 @@ func getMigrationsInProgress(ctx goctx.Context, k8sClient client.Client,
 		}
 	}
 
-	return maxMigrations, nil
+	return maxMigrations
 }
 
 // validate readiness port

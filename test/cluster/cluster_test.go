@@ -4,6 +4,7 @@ import (
 	goctx "context"
 	"fmt"
 	"strconv"
+	"strings"
 	"time"
 
 	. "github.com/onsi/ginkgo/v2"
@@ -809,25 +810,46 @@ func ValidateScaleDownWaitForMigrations(ctx goctx.Context) {
 					err = k8sClient.Update(ctx, aeroCluster)
 					Expect(err).ToNot(HaveOccurred())
 
+					seenQuiesced := false
+					seenMigrationsComplete := false
+
 					Eventually(func() bool {
 						podList, lErr := getPodList(aeroCluster, k8sClient)
 						Expect(lErr).ToNot(HaveOccurred())
-						migrations, mErr := getMigrationsInProgress(ctx, k8sClient, clusterNamespacedName)
-						Expect(mErr).ToNot(HaveOccurred())
+						info, iErr := requestInfoFromNode(logger, k8sClient, ctx, clusterNamespacedName, "namespace/test",
+							podList.Items[0].Name)
+						Expect(iErr).ToNot(HaveOccurred())
 
-						// Fail condition: pods scaledown while migrations still running
-						if utils.Len32(podList.Items) < 4 && migrations != 0 {
+						var nodesQuiesced string
+						confs := strings.Split(info["namespace/test"], ";")
+						for _, conf := range confs {
+							if strings.Contains(conf, "nodes_quiesced") {
+								nodesQuiesced = strings.Split(conf, "=")[1]
+								break
+							}
+						}
+						migrations := getMigrationsInProgress(ctx, k8sClient, clusterNamespacedName, podList)
+
+						podCount := utils.Len32(podList.Items)
+						// Track quiesced
+						if podCount == 4 && nodesQuiesced == "1" {
+							seenQuiesced = true
+						}
+
+						// Track migrations complete after quiesce
+						if seenQuiesced && podCount == 4 && migrations == 0 {
+							seenMigrationsComplete = true
+						}
+
+						// Fail condition: if scale down happens before migrations finish
+						if podCount < 4 && migrations != 0 {
 							Fail(fmt.Sprintf("Pods scaledown while migrations still running (pods=%d, migrations=%d)",
-								utils.Len32(podList.Items), migrations))
+								podCount, migrations))
 						}
 
-						// Success condition: migrations complete and number of pods is equal to spec size
-						if utils.Len32(podList.Items) == aeroCluster.Spec.Size && migrations == 0 {
-							return true
-						}
-						// Keep waiting otherwise
-						return false
-					}, 5*time.Minute, 10*time.Second).Should(BeTrue(), "Pods should only scaledown after migrations complete")
+						// Success condition: pod scale down only after migrations complete
+						return podCount == aeroCluster.Spec.Size && seenQuiesced && seenMigrationsComplete
+					}, 5*time.Minute, 1*time.Second).Should(BeTrue(), "Pods should only scaledown after migrations complete")
 
 					err = waitForAerospikeCluster(
 						k8sClient, ctx, aeroCluster, int(aeroCluster.Spec.Size), retryInterval,
