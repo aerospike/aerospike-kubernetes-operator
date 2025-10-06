@@ -522,11 +522,11 @@ func validateRackUpdate(
 	}
 
 	if forceBlockFromRosterChanged && newObj.Status.AerospikeConfig == nil {
-		return fmt.Errorf("status is not updated yet, cannot change ForceBlockFromRoster in rack")
+		return fmt.Errorf("status is not updated yet, cannot change forceBlockFromRoster in rack")
 	}
 
-	racksBlockedFromRosterInSpec := make(sets.Set[int])
-	racksBlockedFromRosterInStatus := make(sets.Set[int])
+	racksBlockedFromRosterInSpec := sets.New[int]()
+	racksBlockedFromRosterInStatus := sets.New[int]()
 
 	for idx := range newObj.Spec.RackConfig.Racks {
 		rack := newObj.Spec.RackConfig.Racks[idx]
@@ -542,7 +542,14 @@ func validateRackUpdate(
 		}
 	}
 
-	if len(newObj.Status.RackConfig.Racks)-len(racksBlockedFromRosterInSpec) == 1 &&
+	totalCurrentRacks := len(newObj.Status.RackConfig.Racks)
+	totalRacksBlockedFromRoster := len(racksBlockedFromRosterInSpec)
+
+	if totalCurrentRacks <= totalRacksBlockedFromRoster {
+		return fmt.Errorf("all racks cannot be blocked from roster")
+	}
+
+	if totalCurrentRacks-totalRacksBlockedFromRoster == 1 &&
 		(newObj.Spec.RackConfig.RollingUpdateBatchSize != nil || newObj.Spec.RackConfig.ScaleDownBatchSize != nil) {
 		return fmt.Errorf("with only one rack remaining in roster, cannot use rollingUpdateBatchSize or scaleDownBatchSize")
 	}
@@ -550,7 +557,7 @@ func validateRackUpdate(
 	desiredRacksBlockedFromRoster := racksBlockedFromRosterInSpec.Difference(racksBlockedFromRosterInStatus)
 
 	if len(desiredRacksBlockedFromRoster) > 1 {
-		return fmt.Errorf("only one rack can be force-blocked from the roster at a time using the forceBlockFromRoster flag")
+		return fmt.Errorf("the forceBlockFromRoster flag can be applied to only one rack at a time")
 	}
 
 	return nil
@@ -688,11 +695,11 @@ func validateRackConfig(_ logr.Logger, cluster *asdbv1.AerospikeCluster) error {
 
 	if racksBlockedFromRoster > 0 {
 		if cluster.Spec.RackConfig.MaxIgnorablePods != nil {
-			return fmt.Errorf("forceBlockFromRoster cannot be enabled when maxIgnorablePods is set")
+			return fmt.Errorf("forceBlockFromRoster cannot be used together with maxIgnorablePods")
 		}
 
 		if len(cluster.Spec.RosterNodeBlockList) > 0 {
-			return fmt.Errorf("forceBlockFromRoster cannot be enabled with RosterNodeBlockList")
+			return fmt.Errorf("forceBlockFromRoster cannot be used together with RosterNodeBlockList")
 		}
 
 		if racksBlockedFromRoster == len(cluster.Spec.RackConfig.Racks) {
