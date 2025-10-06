@@ -1295,8 +1295,6 @@ func (r *SingleClusterReconciler) handleNSOrDeviceRemovalPerPod(
 		if err := r.patchPodStatus(context.TODO(), patches); err != nil {
 			return err
 		}
-
-		r.Log.V(1).Info("Patching status with updated initialised volumes", "clusterSpec", r.aeroCluster.Spec, "clusterStatus", r.aeroCluster.Status)
 	}
 
 	return nil
