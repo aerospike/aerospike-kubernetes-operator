@@ -6,14 +6,13 @@ import (
 	"strings"
 	"time"
 
-	"k8s.io/utils/ptr"
-
 	. "github.com/onsi/ginkgo/v2"
 	. "github.com/onsi/gomega"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/types"
 	"k8s.io/apimachinery/pkg/util/intstr"
 	"k8s.io/apimachinery/pkg/util/sets"
+	"k8s.io/utils/ptr"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 
 	as "github.com/aerospike/aerospike-client-go/v8"
@@ -169,7 +168,7 @@ var _ = Describe("SCMode", func() {
 			aeroCluster.Spec.PodSpec.AerospikeContainerSpec.Resources = unschedulableResource()
 			aeroCluster.Spec.RackConfig.RollingUpdateBatchSize = &intstr.IntOrString{IntVal: 2}
 
-			err = updateClusterWithTO(k8sClient, ctx, aeroCluster, 30*time.Second)
+			err = updateClusterWithTO(k8sClient, ctx, aeroCluster, 60*time.Second)
 			Expect(err).Should(HaveOccurred())
 
 			expectedRoster = "2A1@2,2A0@2"
@@ -460,7 +459,7 @@ var _ = Describe("SCMode", func() {
 			err := updateCluster(k8sClient, ctx, aeroCluster)
 			Expect(err).Should(HaveOccurred())
 			Expect(err.Error()).To(ContainSubstring(
-				"only one rack can be force-blocked from the roster at a time using the forceBlockFromRoster flag"))
+				"the forceBlockFromRoster flag can be applied to only one rack at a time"))
 		})
 
 		It("Should not allow rack aware features with ForceBlockFromRoster", func() {
@@ -493,13 +492,13 @@ var _ = Describe("SCMode", func() {
 			err = updateCluster(k8sClient, ctx, aeroCluster)
 			Expect(err).Should(HaveOccurred())
 			Expect(err.Error()).To(ContainSubstring(
-				"forceBlockFromRoster cannot be enabled when maxIgnorablePods is set"))
+				"forceBlockFromRoster cannot be used together with maxIgnorablePods"))
 
 			aeroCluster.Spec.RackConfig.MaxIgnorablePods = nil
 			aeroCluster.Spec.RosterNodeBlockList = []string{"1A0", "1A1"}
 			err = updateCluster(k8sClient, ctx, aeroCluster)
 			Expect(err).Should(HaveOccurred())
-			Expect(err.Error()).To(ContainSubstring("forceBlockFromRoster cannot be enabled with RosterNodeBlockList"))
+			Expect(err.Error()).To(ContainSubstring("forceBlockFromRoster cannot be used together with RosterNodeBlockList"))
 
 			aeroCluster.Spec.RosterNodeBlockList = nil
 			aeroCluster.Spec.RackConfig.Racks[1].ForceBlockFromRoster = ptr.To(true)
