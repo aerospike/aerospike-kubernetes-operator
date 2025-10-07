@@ -521,6 +521,10 @@ func validateRackUpdate(
 		}
 	}
 
+	return validateForceBlockFromRosterUpdate(forceBlockFromRosterChanged, newObj)
+}
+
+func validateForceBlockFromRosterUpdate(forceBlockFromRosterChanged bool, newObj *asdbv1.AerospikeCluster) error {
 	if forceBlockFromRosterChanged && newObj.Status.AerospikeConfig == nil {
 		return fmt.Errorf("status is not updated yet, cannot change forceBlockFromRoster in rack")
 	}
@@ -542,20 +546,12 @@ func validateRackUpdate(
 		}
 	}
 
-	totalCurrentRacks := len(newObj.Status.RackConfig.Racks)
-	totalRacksBlockedFromRoster := len(racksBlockedFromRosterInSpec)
-
-	if totalCurrentRacks <= totalRacksBlockedFromRoster {
-		return fmt.Errorf("all racks cannot be blocked from roster")
-	}
-
-	if totalCurrentRacks-totalRacksBlockedFromRoster == 1 &&
-		(newObj.Spec.RackConfig.RollingUpdateBatchSize != nil || newObj.Spec.RackConfig.ScaleDownBatchSize != nil) {
-		return fmt.Errorf("with only one rack remaining in roster, cannot use rollingUpdateBatchSize or scaleDownBatchSize")
+	remainingRacks := len(newObj.Status.RackConfig.Racks) - len(racksBlockedFromRosterInSpec)
+	if err := validateRackCountConstraints(remainingRacks, &newObj.Spec.RackConfig); err != nil {
+		return err
 	}
 
 	desiredRacksBlockedFromRoster := racksBlockedFromRosterInSpec.Difference(racksBlockedFromRosterInStatus)
-
 	if len(desiredRacksBlockedFromRoster) > 1 {
 		return fmt.Errorf("the forceBlockFromRoster flag can be applied to only one rack at a time")
 	}
@@ -693,18 +689,8 @@ func validateRackConfig(_ logr.Logger, cluster *asdbv1.AerospikeCluster) error {
 		}
 	}
 
-	if racksBlockedFromRoster > 0 {
-		if cluster.Spec.RackConfig.MaxIgnorablePods != nil {
-			return fmt.Errorf("forceBlockFromRoster cannot be used together with maxIgnorablePods")
-		}
-
-		if len(cluster.Spec.RosterNodeBlockList) > 0 {
-			return fmt.Errorf("forceBlockFromRoster cannot be used together with RosterNodeBlockList")
-		}
-
-		if racksBlockedFromRoster == len(cluster.Spec.RackConfig.Racks) {
-			return fmt.Errorf("all racks cannot have forceBlockFromRoster enabled. At least one rack must remain in the roster")
-		}
+	if err := validateRackBlockedFromRoster(racksBlockedFromRoster, cluster); err != nil {
+		return err
 	}
 
 	// If len of migrateFillDelaySet is more than 1, it means that different migrate-fill-delay is set across racks
@@ -730,6 +716,38 @@ func validateRackConfig(_ logr.Logger, cluster *asdbv1.AerospikeCluster) error {
 		}
 	}
 	// TODO: should not use batch if racks are less than replication-factor
+	return nil
+}
+
+func validateRackBlockedFromRoster(racksBlockedFromRoster int, cluster *asdbv1.AerospikeCluster) error {
+	if racksBlockedFromRoster > 0 {
+		if cluster.Spec.RackConfig.MaxIgnorablePods != nil {
+			return fmt.Errorf("forceBlockFromRoster cannot be used together with maxIgnorablePods")
+		}
+
+		if len(cluster.Spec.RosterNodeBlockList) > 0 {
+			return fmt.Errorf("forceBlockFromRoster cannot be used together with RosterNodeBlockList")
+		}
+
+		remainingRacks := len(cluster.Spec.RackConfig.Racks) - racksBlockedFromRoster
+		if err := validateRackCountConstraints(remainingRacks, &cluster.Spec.RackConfig); err != nil {
+			return err
+		}
+	}
+
+	return nil
+}
+
+func validateRackCountConstraints(remainingRacks int, rackConfig *asdbv1.RackConfig) error {
+	if remainingRacks <= 0 {
+		return fmt.Errorf("all racks cannot have forceBlockFromRoster enabled. At least one rack must remain in the roster")
+	}
+
+	if remainingRacks == 1 &&
+		(rackConfig.RollingUpdateBatchSize != nil || rackConfig.ScaleDownBatchSize != nil) {
+		return fmt.Errorf("with only one rack in roster, cannot use rollingUpdateBatchSize or scaleDownBatchSize")
+	}
+
 	return nil
 }
 

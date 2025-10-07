@@ -168,7 +168,7 @@ var _ = Describe("SCMode", func() {
 			aeroCluster.Spec.PodSpec.AerospikeContainerSpec.Resources = unschedulableResource()
 			aeroCluster.Spec.RackConfig.RollingUpdateBatchSize = &intstr.IntOrString{IntVal: 2}
 
-			err = updateClusterWithTO(k8sClient, ctx, aeroCluster, 60*time.Second)
+			err = updateClusterWithTO(k8sClient, ctx, aeroCluster, 30*time.Second)
 			Expect(err).Should(HaveOccurred())
 
 			expectedRoster = "2A1@2,2A0@2"
@@ -178,13 +178,20 @@ var _ = Describe("SCMode", func() {
 			err = updateClusterWithTO(k8sClient, ctx, aeroCluster, 30*time.Second)
 			Expect(err).Should(HaveOccurred())
 
-			rosterNodesMap, err = getRoster(hostConns[2], getClientPolicy(aeroCluster, k8sClient), aeroCluster.Namespace)
-			Expect(err).ToNot(HaveOccurred())
+			Eventually(func() error {
+				rosterNodesMap, err = getRoster(hostConns[2], getClientPolicy(aeroCluster, k8sClient), aeroCluster.Namespace)
+				if err != nil {
+					return err
+				}
 
-			// Roster is in uppercase, whereas nodeID is in lower case in server. Keep it in mind when comparing list
-			rosterStr = rosterNodesMap["roster"]
-			Expect(rosterStr).To(Equal(expectedRoster))
+				// Roster is in uppercase, whereas nodeID is in lower case in server. Keep it in mind when comparing list
+				rosterStr = rosterNodesMap["roster"]
+				if rosterStr != expectedRoster {
+					return fmt.Errorf("roster not matching. expected %s, got %s", expectedRoster, rosterStr)
+				}
 
+				return nil
+			}, 5*time.Minute, 10*time.Second).ShouldNot(HaveOccurred())
 		})
 
 		It("Should allow adding and removing SC namespace", func() {
@@ -485,7 +492,7 @@ var _ = Describe("SCMode", func() {
 			err := updateCluster(k8sClient, ctx, aeroCluster)
 			Expect(err).Should(HaveOccurred())
 			Expect(err.Error()).To(ContainSubstring(
-				"with only one rack remaining in roster, cannot use rollingUpdateBatchSize or scaleDownBatchSize"))
+				"with only one rack in roster, cannot use rollingUpdateBatchSize or scaleDownBatchSize"))
 
 			aeroCluster.Spec.RackConfig.RollingUpdateBatchSize = nil
 			aeroCluster.Spec.RackConfig.MaxIgnorablePods = &intstr.IntOrString{IntVal: 2}
