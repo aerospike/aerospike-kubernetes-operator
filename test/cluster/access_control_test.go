@@ -2058,63 +2058,18 @@ var _ = Describe(
 								Expect(err).ToNot(HaveOccurred())
 
 								By("AccessControlUpdate")
-								users := []asdbv1.AerospikeUserSpec{
-									{
-										Name:       "admin",
-										SecretName: test.AuthSecretName,
-										Roles: []string{
-											"sys-admin",
-											"user-admin",
-										},
-									},
-
-									{
-										Name:       "profileUser",
-										SecretName: test.AuthSecretName,
-										Roles: []string{
-											"profiler",
-											"sys-admin",
-										},
-									},
-
-									{
-										Name:       "userToDrop1",
-										SecretName: test.AuthSecretName,
-										Roles: []string{
-											"profiler",
-										},
-									},
-								}
 
 								aeroCluster, err = getCluster(k8sClient, ctx, clusterNamespacedName)
 								Expect(err).ToNot(HaveOccurred())
 
-								aeroCluster.Spec.AerospikeAccessControl.Users = users
+								users := aeroCluster.Spec.AerospikeAccessControl.Users
+								aeroCluster.Spec.AerospikeAccessControl.Users = users[:len(users)-1]
 
 								err = k8sClient.Update(ctx, aeroCluster)
 								Expect(err).ToNot(HaveOccurred())
 
-								users = []asdbv1.AerospikeUserSpec{
-									{
-										Name:       "admin",
-										SecretName: test.AuthSecretName,
-										Roles: []string{
-											"sys-admin",
-											"user-admin",
-										},
-									},
-
-									{
-										Name:       "profileUser",
-										SecretName: test.AuthSecretName,
-										Roles: []string{
-											"profiler",
-											"sys-admin",
-										},
-									},
-								}
-
-								aeroCluster.Spec.AerospikeAccessControl.Users = users
+								users = aeroCluster.Spec.AerospikeAccessControl.Users
+								aeroCluster.Spec.AerospikeAccessControl.Users = users[:len(users)-1]
 
 								err = testAccessControlReconcile(
 									aeroCluster, ctx,
