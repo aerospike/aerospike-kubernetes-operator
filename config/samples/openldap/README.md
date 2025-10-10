@@ -1,7 +1,6 @@
 # OpenLDAP sample deployment
 
-This is an example OpenLDAP setup using bitnami LDAP container for demo purposes only. It has been adapted from
-[here](https://docs.bitnami.com/tutorials/create-openldap-server-kubernetes/).
+This is an example OpenLDAP setup using bitnami LDAP container for demo purposes only.
 
 It launches a single node LDAP server with two users
 
