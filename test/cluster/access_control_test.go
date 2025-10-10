@@ -1974,6 +1974,109 @@ var _ = Describe(
 								}
 							},
 						)
+
+						It(
+							"should drop multiple users consecutively", func() {
+
+								By("AccessControlCreate")
+
+								accessControl := asdbv1.AerospikeAccessControlSpec{
+									Roles: []asdbv1.AerospikeRoleSpec{
+										{
+											Name: "profiler",
+											Privileges: []string{
+												"read-write.test",
+												"read-write-udf.test.users",
+											},
+										},
+										{
+											Name: "roleToDrop",
+											Privileges: []string{
+												"read-write.test",
+												"read-write-udf.test.users",
+											},
+											Whitelist: []string{
+												"8.8.0.0/16",
+											},
+										},
+									},
+									Users: []asdbv1.AerospikeUserSpec{
+										{
+											Name:       "admin",
+											SecretName: test.AuthSecretName,
+											Roles: []string{
+												"sys-admin",
+												"user-admin",
+											},
+										},
+
+										{
+											Name:       "profileUser",
+											SecretName: test.AuthSecretName,
+											Roles: []string{
+												"profiler",
+												"sys-admin",
+											},
+										},
+
+										{
+											Name:       "userToDrop1",
+											SecretName: test.AuthSecretName,
+											Roles: []string{
+												"profiler",
+											},
+										},
+
+										{
+											Name:       "userToDrop2",
+											SecretName: test.AuthSecretName,
+											Roles: []string{
+												"profiler",
+											},
+										},
+									},
+								}
+								aerospikeConfigSpec, err := NewAerospikeConfSpec(latestImage)
+								if err != nil {
+									Fail(
+										fmt.Sprintf(
+											"Invalid Aerospike Config Spec: %v",
+											err,
+										),
+									)
+								}
+
+								aerospikeConfigSpec.setEnableSecurity(true)
+
+								aeroCluster := getAerospikeClusterSpecWithAccessControl(
+									clusterNamespacedName, &accessControl,
+									aerospikeConfigSpec,
+								)
+								err = testAccessControlReconcile(
+									aeroCluster, ctx,
+								)
+								Expect(err).ToNot(HaveOccurred())
+
+								By("AccessControlUpdate")
+
+								aeroCluster, err = getCluster(k8sClient, ctx, clusterNamespacedName)
+								Expect(err).ToNot(HaveOccurred())
+
+								users := aeroCluster.Spec.AerospikeAccessControl.Users
+								aeroCluster.Spec.AerospikeAccessControl.Users = users[:len(users)-1]
+
+								err = k8sClient.Update(ctx, aeroCluster)
+								Expect(err).ToNot(HaveOccurred())
+
+								users = aeroCluster.Spec.AerospikeAccessControl.Users
+								aeroCluster.Spec.AerospikeAccessControl.Users = users[:len(users)-1]
+
+								err = testAccessControlReconcile(
+									aeroCluster, ctx,
+								)
+								Expect(err).ToNot(HaveOccurred())
+							},
+						)
 					},
 				)
 			},

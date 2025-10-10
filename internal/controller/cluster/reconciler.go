@@ -10,6 +10,7 @@ import (
 	"github.com/go-logr/logr"
 	corev1 "k8s.io/api/core/v1"
 	"k8s.io/apimachinery/pkg/api/errors"
+	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/labels"
 	k8sRuntime "k8s.io/apimachinery/pkg/runtime"
 	"k8s.io/apimachinery/pkg/types"
@@ -673,7 +674,10 @@ func (r *SingleClusterReconciler) patchStatus(newAeroCluster *asdbv1.AerospikeCl
 	patch := client.RawPatch(types.JSONPatchType, jsonPatchJSON)
 
 	if err = r.Client.Status().Patch(
-		context.TODO(), oldAeroCluster, patch,
+		context.TODO(), &asdbv1.AerospikeCluster{ObjectMeta: metav1.ObjectMeta{
+			Name:      oldAeroCluster.Name,
+			Namespace: oldAeroCluster.Namespace,
+		}}, patch,
 		client.FieldOwner(patchFieldOwner),
 	); err != nil {
 		return fmt.Errorf("error patching status: %v", err)

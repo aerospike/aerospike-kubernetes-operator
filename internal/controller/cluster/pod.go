@@ -26,6 +26,7 @@ import (
 	"github.com/aerospike/aerospike-kubernetes-operator/v4/pkg/utils"
 	lib "github.com/aerospike/aerospike-management-lib"
 	"github.com/aerospike/aerospike-management-lib/asconfig"
+	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 )
 
 // RestartType is the type of pod restart to use.
@@ -1575,7 +1576,12 @@ func (r *SingleClusterReconciler) patchPodStatus(ctx context.Context, patches []
 
 	constantPatch := client.RawPatch(types.JSONPatchType, jsonPatchJSON)
 
-	return retry.OnError(retry.DefaultBackoff, func(_ error) bool {
+	patchedAerospikeCluster := &asdbv1.AerospikeCluster{ObjectMeta: metav1.ObjectMeta{
+		Name:      r.aeroCluster.Name,
+		Namespace: r.aeroCluster.Namespace,
+	}}
+
+	if err := retry.OnError(retry.DefaultBackoff, func(_ error) bool {
 		// Customize the error check for retrying, return true to retry, false to stop retrying
 		return true
 	}, func() error {
@@ -1583,7 +1589,7 @@ func (r *SingleClusterReconciler) patchPodStatus(ctx context.Context, patches []
 		// Since the pod status is updated from pod init container,
 		// set the field owner to "pod" for pod status updates.
 		if err := r.Client.Status().Patch(
-			ctx, r.aeroCluster, constantPatch, client.FieldOwner("pod"),
+			ctx, patchedAerospikeCluster, constantPatch, client.FieldOwner("pod"),
 		); err != nil {
 			return fmt.Errorf("error updating status: %v", err)
 		}
@@ -1591,7 +1597,13 @@ func (r *SingleClusterReconciler) patchPodStatus(ctx context.Context, patches []
 		r.Log.Info("Pod status patched successfully")
 
 		return nil
-	})
+	}); err != nil {
+		return err
+	}
+
+	r.aeroCluster.Status.Pods = patchedAerospikeCluster.Status.Pods
+
+	return nil
 }
 
 func (r *SingleClusterReconciler) onDemandOperationType(podName string, onDemandQuickRestarts,
