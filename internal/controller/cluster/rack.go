@@ -41,7 +41,7 @@ func (r *SingleClusterReconciler) reconcileRacks() common.ReconcileResult {
 
 	configuredRacks, renamedRacks, racksToDelete, err := r.categoriseRacks()
 	if err != nil {
-		return common.ReconcileResult{}
+		return common.ReconcileError(err)
 	}
 
 	ignorablePodNames, err := r.getIgnorablePods(racksToDelete, configuredRacks, renamedRacks)
