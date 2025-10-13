@@ -26,9 +26,9 @@ type scaledDownRack struct {
 	rackState *RackState
 }
 
-type RenamedRack struct {
-	OldRack *RackState
-	NewRack *RackState
+type revisionChangedRack struct {
+	oldRack *RackState
+	newRack *RackState
 }
 
 func (r *SingleClusterReconciler) reconcileRacks() common.ReconcileResult {
@@ -39,22 +39,22 @@ func (r *SingleClusterReconciler) reconcileRacks() common.ReconcileResult {
 		res                common.ReconcileResult
 	)
 
-	configuredRacks, renamedRacks, racksToDelete, err := r.categoriseRacks()
+	configuredRacks, revisionChangedRacks, racksToDelete, err := r.categoriseRacks()
 	if err != nil {
 		return common.ReconcileError(err)
 	}
 
-	ignorablePodNames, err := r.getIgnorablePods(racksToDelete, configuredRacks, renamedRacks)
+	ignorablePodNames, err := r.getIgnorablePods(racksToDelete, configuredRacks, revisionChangedRacks)
 	if err != nil {
 		return common.ReconcileError(err)
 	}
 
 	r.Log.Info(
-		"Rack changes", "racksToRename", renamedRacks, "racksToDelete", racksToDelete, "ignorablePods",
-		ignorablePodNames.UnsortedList(),
+		"Rack changes", "revisionChangedRacks", revisionChangedRacks, "racksToDelete",
+		racksToDelete, "ignorablePods", ignorablePodNames.UnsortedList(),
 	)
 
-	// Handle failed racks (integrates both normal racks and renamed racks)
+	// Handle failed racks (integrates both normal racks and revision-changed racks)
 	for idx := range configuredRacks {
 		state := &configuredRacks[idx]
 		found := &appsv1.StatefulSet{}
@@ -78,8 +78,8 @@ func (r *SingleClusterReconciler) reconcileRacks() common.ReconcileResult {
 	for idx := range configuredRacks {
 		state := &configuredRacks[idx]
 
-		if renamedRack, ok := renamedRacks[state.Rack.ID]; ok {
-			if res = r.reconcileRenamedRacks(renamedRack, ignorablePodNames); !res.IsSuccess {
+		if revisionChangedRackInfo, ok := revisionChangedRacks[state.Rack.ID]; ok {
+			if res = r.reconcileRevisionChangedRacks(revisionChangedRackInfo, ignorablePodNames); !res.IsSuccess {
 				return res
 			}
 
@@ -1955,36 +1955,18 @@ func chunkBy[T any](items []*T, chunkSize int) (chunks [][]*T) {
 	return append(chunks, items)
 }
 
-func (r *SingleClusterReconciler) reconcileRenamedRacks(
-	renameRackInfo RenamedRack, ignorablePodNames sets.Set[string],
+func (r *SingleClusterReconciler) reconcileRevisionChangedRacks(
+	revisionChangedRackInfo revisionChangedRack, ignorablePodNames sets.Set[string],
 ) common.ReconcileResult {
-	oldRack := renameRackInfo.OldRack
-	newRack := renameRackInfo.NewRack
+	oldRack := revisionChangedRackInfo.oldRack
+	newRack := revisionChangedRackInfo.newRack
 	targetSize := newRack.Size
 
 	r.Log.Info(
-		"Reconciling renamed rack", "rackID", newRack.Rack.ID,
+		"Reconciling revision-changed rack", "rackID", newRack.Rack.ID,
 		"fromRevision", oldRack.Rack.Revision, "toRevision", newRack.Rack.Revision,
 		"targetSize", targetSize,
 	)
-
-	oldSts, err := r.getSTS(oldRack)
-	if err != nil {
-		if !errors.IsNotFound(err) {
-			return common.ReconcileError(err)
-		}
-
-		// The old STS is not found. This could happen if it was manually deleted.
-		// Instead of assuming completion, we now ensure the new rack is scaled up correctly.
-		r.Log.Info(
-			"Old rack STS not found. Ensuring new rack is at the target size.",
-			"oldStsName", utils.GetNamespacedNameForSTSOrConfigMap(r.aeroCluster,
-				utils.GetRackIdentifier(oldRack.Rack.ID, oldRack.Rack.Revision),
-			),
-		)
-
-		oldSts = nil
-	}
 
 	newSts, err := r.getSTS(newRack)
 	if err != nil {
@@ -2000,8 +1982,21 @@ func (r *SingleClusterReconciler) reconcileRenamedRacks(
 		newSts = found
 	}
 
-	// If the old STS is nil, it means the old rack has been deleted.
-	if oldSts == nil {
+	oldSts, err := r.getSTS(oldRack)
+	if err != nil {
+		if !errors.IsNotFound(err) {
+			return common.ReconcileError(err)
+		}
+
+		// The old STS is not found. This could happen if it was manually deleted.
+		// Instead of assuming completion, we now ensure the new rack is scaled up correctly.
+		r.Log.Info(
+			"Old rack revision STS not found. Ensuring new rack revision STS is at the target size.",
+			"oldStsName", utils.GetNamespacedNameForSTSOrConfigMap(r.aeroCluster,
+				utils.GetRackIdentifier(oldRack.Rack.ID, oldRack.Rack.Revision),
+			),
+		)
+
 		// Use reconcileRack to bring the new rack to its desired state.
 		// This will handle the scale-up logic.
 		return r.reconcileRack(newSts, newRack, ignorablePodNames, nil)
@@ -2021,7 +2016,7 @@ func (r *SingleClusterReconciler) reconcileRenamedRacks(
 	// Handle oversized new rack
 	if newReplicas > targetSize {
 		r.Log.Info(
-			"Migrating rack to new revisions: reconciling new STS to scale down",
+			"Migrating rack to new revisions: reconciling new revision STS to scale down",
 			"stsName", newSts.Name,
 		)
 
@@ -2065,8 +2060,8 @@ func (r *SingleClusterReconciler) reconcileRenamedRacks(
 		// Scale down old rack
 		podsToScaleDown := min(batchSizeInt32, oldReplicas)
 		r.Log.Info(
-			"Migrating rack: scaling down old STS by a batch", "stsName", oldSts.Name, "batchSize",
-			podsToScaleDown,
+			"Migrating rack: scaling down old revision STS by a batch", "stsName", oldSts.Name,
+			"batchSize", podsToScaleDown,
 		)
 
 		tempState := &RackState{Rack: oldRack.Rack, Size: oldReplicas - podsToScaleDown}
@@ -2147,22 +2142,22 @@ func (r *SingleClusterReconciler) handleFailedPodsInRack(
 }
 
 func (r *SingleClusterReconciler) categoriseRacks() (configuredRacks []RackState,
-	renamedRacks map[int]RenamedRack, racksToDelete []asdbv1.Rack, err error) {
+	revisionChangedRacks map[int]revisionChangedRack, racksToDelete []asdbv1.Rack, err error) {
 	configuredRacks = getConfiguredRackStateList(r.aeroCluster)
 
-	// Renamed racks are not considered in the racks to delete.
+	// Revision-changed racks are not considered in the racks to delete.
 	racksToDelete, err = r.getRacksToDelete(configuredRacks)
 	if err != nil {
-		return configuredRacks, renamedRacks, racksToDelete, err
+		return configuredRacks, revisionChangedRacks, racksToDelete, err
 	}
 
 	oldRacks, err := r.getCurrentRackList()
 	if err != nil {
-		return configuredRacks, renamedRacks, racksToDelete, err
+		return configuredRacks, revisionChangedRacks, racksToDelete, err
 	}
 
 	// Find racks that are in the spec but don't have a statefulset yet.
-	renamedRacks = make(map[int]RenamedRack)
+	revisionChangedRacks = make(map[int]revisionChangedRack)
 
 	for idx := range configuredRacks {
 		state := &configuredRacks[idx]
@@ -2170,12 +2165,12 @@ func (r *SingleClusterReconciler) categoriseRacks() (configuredRacks []RackState
 		for jdx := range oldRacks {
 			oldRack := oldRacks[jdx]
 			if state.Rack.ID == oldRack.ID && state.Rack.Revision != oldRack.Revision {
-				renamedRacks[state.Rack.ID] = RenamedRack{
-					OldRack: &RackState{
+				revisionChangedRacks[state.Rack.ID] = revisionChangedRack{
+					oldRack: &RackState{
 						Rack: &oldRack,
 						Size: state.Size,
 					},
-					NewRack: state,
+					newRack: state,
 				}
 
 				break
@@ -2183,5 +2178,5 @@ func (r *SingleClusterReconciler) categoriseRacks() (configuredRacks []RackState
 		}
 	}
 
-	return configuredRacks, renamedRacks, racksToDelete, err
+	return configuredRacks, revisionChangedRacks, racksToDelete, err
 }

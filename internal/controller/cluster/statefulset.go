@@ -1066,22 +1066,22 @@ func updateSTSContainers(
 }
 
 func (r *SingleClusterReconciler) waitForAllSTSToBeReady(ignorablePodNames sets.Set[string]) error {
-	r.Log.Info("Waiting for cluster STS to be ready")
+	r.Log.Info("Waiting for all cluster STSs to be ready")
 
-	allRackIdentifier := sets.NewString()
+	allRackIdentifiers := sets.NewString()
 
 	statusRacks := r.aeroCluster.Status.RackConfig.Racks
 	for idx := range statusRacks {
-		allRackIdentifier.Insert(utils.GetRackIdentifier(statusRacks[idx].ID, statusRacks[idx].Revision))
+		allRackIdentifiers.Insert(utils.GetRackIdentifier(statusRacks[idx].ID, statusRacks[idx].Revision))
 	}
 
 	// Check for newly added racks also because we do not check for these racks just after they are added
 	specRacks := r.aeroCluster.Spec.RackConfig.Racks
 	for idx := range specRacks {
-		allRackIdentifier.Insert(utils.GetRackIdentifier(specRacks[idx].ID, specRacks[idx].Revision))
+		allRackIdentifiers.Insert(utils.GetRackIdentifier(specRacks[idx].ID, specRacks[idx].Revision))
 	}
 
-	for rackIdentifier := range allRackIdentifier {
+	for rackIdentifier := range allRackIdentifiers {
 		st := &appsv1.StatefulSet{}
 		stsName := utils.GetNamespacedNameForSTSOrConfigMap(r.aeroCluster, rackIdentifier)
 

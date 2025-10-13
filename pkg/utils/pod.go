@@ -128,7 +128,7 @@ func GetRackIDAndRevisionFromPodName(clusterName, podName string) (rackID int, r
 	prefix := clusterName + "-"
 
 	rackAndPodIndexPart := strings.TrimPrefix(podName, prefix)
-	// parts contain only the rack-id, rack-revision (optional) pod-index.
+	// parts contain only the rack-id, rack-revision (optional), and pod-index.
 	parts := strings.Split(rackAndPodIndexPart, "-")
 
 	if len(parts) < 2 {

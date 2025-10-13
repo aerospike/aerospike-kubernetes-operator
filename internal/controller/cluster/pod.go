@@ -909,9 +909,10 @@ func (r *SingleClusterReconciler) cleanupDanglingPodsRack(sts *appsv1.StatefulSe
 // getIgnorablePods returns pods:
 // 1. From racksToDelete that are currently not running and can be ignored in stability checks.
 // 2. Failed/pending pods from the configuredRacks identified using maxIgnorablePods field and
-// 3. Failed pods from old revisions of renamed racks that will be replaced anyway can be ignored from stability checks.
+// 3. Failed pods from old revisions of revision-changed racks that will be replaced anyway can be
+// ignored from stability checks.
 func (r *SingleClusterReconciler) getIgnorablePods(
-	racksToDelete []asdbv1.Rack, configuredRacks []RackState, renamedRacks map[int]RenamedRack,
+	racksToDelete []asdbv1.Rack, configuredRacks []RackState, revisionChangedRacks map[int]revisionChangedRack,
 ) (sets.Set[string], error) {
 	ignorablePodNames := sets.Set[string]{}
 
@@ -934,10 +935,10 @@ func (r *SingleClusterReconciler) getIgnorablePods(
 		}
 	}
 
-	// Handle failed pods from old revisions of renamed racks
-	for rackID, renamedRack := range renamedRacks {
-		oldRackState := renamedRack.OldRack
-		r.Log.Info("Checking old revision failed pods for renamed rack",
+	// Handle failed pods from old revisions of revision-changed racks
+	for rackID, revisionChangedRackInfo := range revisionChangedRacks {
+		oldRackState := revisionChangedRackInfo.oldRack
+		r.Log.Info("Checking old revision failed pods for revision-changed rack",
 			"rackID", rackID, "oldRevision", oldRackState.Rack.Revision)
 
 		oldPodList, err := r.getRackPodList(oldRackState.Rack.ID, oldRackState.Rack.Revision)

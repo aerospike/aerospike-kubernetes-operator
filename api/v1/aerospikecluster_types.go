@@ -493,7 +493,7 @@ type Rack struct { //nolint:govet // for readability
 	// Revision is a version identifier for this rack's specification, used to trigger controlled migrations
 	// when rack configuration changes require new StatefulSets. Change this field when making changes
 	// that cannot be applied in-place, such as storage updates that require pod recreation.
-	// The revision is appended to the rack ID for Kubernetes resource naming (e.g., <cluster>-<rackID>-<revision>).
+	// The revision is appended to the rack ID for Kubernetes resource naming (e.g., <cluster-name>-<rackID>-<revision>).
 	// +optional
 	Revision string `json:"revision,omitempty"`
 
