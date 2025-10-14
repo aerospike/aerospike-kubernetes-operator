@@ -597,6 +597,22 @@ entries:
     version: 1.0.0
   aerospike-kubernetes-operator:
   - apiVersion: v2
+    appVersion: 4.2.0-dev1
+    created: "2025-10-14T14:12:13.724292+05:30"
+    description: A Helm chart for Aerospike Kubernetes Operator
+    digest: 3429481d7d2b3e0355e904add930a0116f5941cd1ad80856d9065121fb2563a0
+    icon: https://avatars0.githubusercontent.com/u/2214313?s=200&v=4
+    maintainers:
+    - email: developers@aerospike.com
+      name: Aerospike
+    name: aerospike-kubernetes-operator
+    sources:
+    - https://github.com/aerospike/aerospike-kubernetes-operator
+    type: application
+    urls:
+    - https://aerospike.github.io/aerospike-kubernetes-operator/aerospike-kubernetes-operator-4.2.0-dev1.tgz
+    version: 4.2.0-dev1
+  - apiVersion: v2
     appVersion: 4.1.1
     created: "2025-09-15T19:20:42.789067+05:30"
     description: A Helm chart for Aerospike Kubernetes Operator
@@ -1077,4 +1093,4 @@ entries:
     urls:
     - https://aerospike.github.io/aerospike-kubernetes-operator/aerospike-restore-3.4.0.tgz
     version: 3.4.0
-generated: "2025-09-15T19:20:42.728195+05:30"
+generated: "2025-10-14T14:12:13.625488+05:30"
