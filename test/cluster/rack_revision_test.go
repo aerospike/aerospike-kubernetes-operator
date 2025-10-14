@@ -352,8 +352,8 @@ func createDummyClusterWithRackRevision(
 ) *asdbv1.AerospikeCluster {
 	aeroCluster := createDummyAerospikeCluster(clusterNamespacedName, size)
 
-	aeroCluster.Spec.PodSpec.AerospikeInitContainerSpec.ImageRegistryNamespace = ptr.To("abhishekdwivedi3060")
-	aeroCluster.Spec.PodSpec.AerospikeInitContainerSpec.ImageNameAndTag = "aerospike-kubernetes-init:2.3.0-2"
+	aeroCluster.Spec.PodSpec.AerospikeInitContainerSpec.ImageRegistryNamespace = ptr.To("aerospike")
+	aeroCluster.Spec.PodSpec.AerospikeInitContainerSpec.ImageNameAndTag = "aerospike-kubernetes-init:2.4.0-dev1"
 
 	racks := []asdbv1.Rack{
 		{ID: 1, Revision: revision},

@@ -1246,7 +1246,7 @@ type AerospikePodStatus struct { //nolint:govet // for readability
 
 // AerospikeCluster is the schema for the AerospikeCluster API
 // +operator-sdk:csv:customresourcedefinitions:displayName="Aerospike Cluster",resources={{Service, v1},{Pod,v1},{StatefulSet,v1}}
-// +kubebuilder:metadata:annotations="aerospike-kubernetes-operator/version=4.1.1"
+// +kubebuilder:metadata:annotations="aerospike-kubernetes-operator/version=4.2.0-dev1"
 //
 //nolint:lll // for readability
 type AerospikeCluster struct { //nolint:govet // for readability
