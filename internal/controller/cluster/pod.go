@@ -674,6 +674,13 @@ func (r *SingleClusterReconciler) deletePodAndEnsureImageUpdated(
 }
 
 func (r *SingleClusterReconciler) isLocalPVCDeletionRequired(rackState *RackState, pod *corev1.Pod) bool {
+	// Check if pod is being deleted due to eviction
+	if _, hasEvictionBlocked := pod.Annotations[asdbv1.EvictionBlockedAnnotation]; hasEvictionBlocked {
+		r.Log.Info("Pod has eviction-blocked annotation, deleting corresponding local PVCs if any",
+			"podName", pod.Name)
+		return true
+	}
+
 	if utils.ContainsString(r.aeroCluster.Spec.K8sNodeBlockList, pod.Spec.NodeName) {
 		r.Log.Info("Pod found in blocked nodes list, deleting corresponding local PVCs if any",
 			"podName", pod.Name)
@@ -1675,8 +1682,15 @@ func (r *SingleClusterReconciler) podsToRestart() (quickRestarts, podRestarts se
 	statusOps := r.aeroCluster.Status.Operations
 	allPodNames := asdbv1.GetAllPodNames(r.aeroCluster.Status.Pods)
 
-	// If no spec operations, no pods to restart
-	// If the Spec.Operations and Status.Operations are equal, no pods to restart.
+	// Check for pods with eviction-blocked annotation that need restart
+	evictionBlockedPods := r.getEvictionBlockedPods()
+	if evictionBlockedPods.Len() > 0 {
+		// Add eviction-blocked pods to podRestarts (they need full pod restart)
+		podRestarts.Insert(evictionBlockedPods.UnsortedList()...)
+	}
+
+	// If no spec operations, only return eviction-blocked pods
+	// If the Spec.Operations and Status.Operations are equal, only return eviction-blocked pods
 	if len(specOps) == 0 || reflect.DeepEqual(specOps, statusOps) {
 		return quickRestarts, podRestarts
 	}
@@ -1732,6 +1746,31 @@ func (r *SingleClusterReconciler) podsToRestart() (quickRestarts, podRestarts se
 	}
 
 	return quickRestarts, podRestarts
+}
+
+// getEvictionBlockedPods returns pods that have eviction-blocked annotation and need restart
+func (r *SingleClusterReconciler) getEvictionBlockedPods() sets.Set[string] {
+	evictionBlockedPods := make(sets.Set[string])
+
+	// List all pods in the cluster namespace
+	pods, err := r.getClusterPodList()
+	if err != nil {
+		r.Log.Error(err, "Failed to list pods for eviction-blocked check")
+		return evictionBlockedPods
+	}
+
+	for idx := range pods.Items {
+		// Check if pod has eviction-blocked annotation
+		_, hasEvictionBlocked := pods.Items[idx].Annotations[asdbv1.EvictionBlockedAnnotation]
+		if !hasEvictionBlocked {
+			continue
+		}
+
+		// Add to eviction-blocked pods list
+		evictionBlockedPods.Insert(pods.Items[idx].Name)
+	}
+
+	return evictionBlockedPods
 }
 
 // shouldSetMigrateFillDelay determines if migrate-fill-delay should be set.

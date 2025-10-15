@@ -17,6 +17,16 @@ webhooks:
       namespace: {{ .Release.Namespace }}
       path: /validate-asdb-aerospike-com-v1-aerospikecluster
   failurePolicy: Fail
+  {{- if .Values.watchNamespaces }}
+  namespaceSelector:
+    matchExpressions:
+      - key: kubernetes.io/metadata.name
+        operator: In
+        values:
+        {{- range splitList "," .Values.watchNamespaces }}
+          - {{ . | trim | quote }}
+        {{- end }}
+  {{- end }}
   name: vaerospikecluster.kb.io
   rules:
   - apiGroups:
@@ -37,6 +47,16 @@ webhooks:
       namespace: {{ .Release.Namespace }}
       path: /validate-asdb-aerospike-com-v1beta1-aerospikebackup
   failurePolicy: Fail
+  {{- if .Values.watchNamespaces }}
+  namespaceSelector:
+    matchExpressions:
+      - key: kubernetes.io/metadata.name
+        operator: In
+        values:
+        {{- range splitList "," .Values.watchNamespaces }}
+          - {{ . | trim | quote }}
+        {{- end }}
+  {{- end }}
   name: vaerospikebackup.kb.io
   rules:
   - apiGroups:
@@ -57,6 +77,16 @@ webhooks:
       namespace: {{ .Release.Namespace }}
       path: /validate-asdb-aerospike-com-v1beta1-aerospikebackupservice
   failurePolicy: Fail
+  {{- if .Values.watchNamespaces }}
+  namespaceSelector:
+    matchExpressions:
+      - key: kubernetes.io/metadata.name
+        operator: In
+        values:
+        {{- range splitList "," .Values.watchNamespaces }}
+          - {{ . | trim | quote }}
+        {{- end }}
+    {{- end }}
   name: vaerospikebackupservice.kb.io
   rules:
   - apiGroups:
@@ -77,6 +107,16 @@ webhooks:
       namespace: {{ .Release.Namespace }}
       path: /validate-asdb-aerospike-com-v1beta1-aerospikerestore
   failurePolicy: Fail
+  {{- if .Values.watchNamespaces }}
+  namespaceSelector:
+    matchExpressions:
+      - key: kubernetes.io/metadata.name
+        operator: In
+        values:
+        {{- range splitList "," .Values.watchNamespaces }}
+          - {{ . | trim | quote }}
+        {{- end }}
+    {{- end }}
   name: vaerospikerestore.kb.io
   rules:
   - apiGroups:
@@ -88,4 +128,33 @@ webhooks:
     - UPDATE
     resources:
     - aerospikerestores
+  sideEffects: None
+- admissionReviewVersions:
+    - v1
+  clientConfig:
+    service:
+      name: aerospike-operator-webhook-service
+      namespace: {{ .Release.Namespace }}
+      path: /validate-eviction
+  failurePolicy: Ignore
+  {{- if .Values.watchNamespaces }}
+  namespaceSelector:
+    matchExpressions:
+      - key: kubernetes.io/metadata.name
+        operator: In
+        values:
+        {{- range splitList "," .Values.watchNamespaces }}
+          - {{ . | trim | quote }}
+        {{- end }}
+    {{- end }}
+  name: veviction.kb.io
+  rules:
+    - apiGroups:
+        - ""
+      apiVersions:
+        - v1
+      operations:
+        - CREATE
+      resources:
+        - pods/eviction
   sideEffects: None

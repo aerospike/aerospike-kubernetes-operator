@@ -3,7 +3,6 @@ package main
 import (
 	"crypto/tls"
 	"flag"
-	"fmt"
 	"os"
 	"path/filepath"
 	"strconv"
@@ -35,12 +34,10 @@ import (
 	backupservice "github.com/aerospike/aerospike-kubernetes-operator/v4/internal/controller/backup-service"
 	"github.com/aerospike/aerospike-kubernetes-operator/v4/internal/controller/cluster"
 	"github.com/aerospike/aerospike-kubernetes-operator/v4/internal/controller/restore"
-	"github.com/aerospike/aerospike-kubernetes-operator/v4/pkg/configschema"
-
-	webhookv1beta1 "github.com/aerospike/aerospike-kubernetes-operator/v4/internal/webhook/v1beta1"
-	// +kubebuilder:scaffold:imports
-	// to ensure that exec-entrypoint and run can make use of them.
+	webhookgeneral "github.com/aerospike/aerospike-kubernetes-operator/v4/internal/webhook/general"
 	webhookv1 "github.com/aerospike/aerospike-kubernetes-operator/v4/internal/webhook/v1"
+	webhookv1beta1 "github.com/aerospike/aerospike-kubernetes-operator/v4/internal/webhook/v1beta1"
+	"github.com/aerospike/aerospike-kubernetes-operator/v4/pkg/configschema"
 	"github.com/aerospike/aerospike-management-lib/asconfig"
 )
 
@@ -202,7 +199,7 @@ func main() {
 		})
 	}
 
-	watchNs, err := getWatchNamespace()
+	watchNs, err := asdbv1.GetWatchNamespace()
 	if err != nil {
 		setupLog.Error(err, "Failed to get watch namespace")
 		os.Exit(1)
@@ -354,6 +351,12 @@ func main() {
 		os.Exit(1)
 	}
 
+	// Setup eviction webhook
+	if err = webhookgeneral.SetupEvictionWebhookWithManager(mgr); err != nil {
+		setupLog.Error(err, "unable to create eviction webhook", "webhook", "Eviction")
+		os.Exit(1)
+	}
+
 	// +kubebuilder:scaffold:builder
 
 	if metricsCertWatcher != nil {
@@ -392,21 +395,6 @@ func main() {
 	}
 
 	eventBroadcaster.Shutdown()
-}
-
-// getWatchNamespace returns the Namespace the operator should be watching for changes
-func getWatchNamespace() (string, error) {
-	// WatchNamespaceEnvVar is the constant for env variable WATCH_NAMESPACE
-	// which specifies the Namespace to watch.
-	// An empty value means the operator is running with cluster scope.
-	var watchNamespaceEnvVar = "WATCH_NAMESPACE"
-
-	ns, found := os.LookupEnv(watchNamespaceEnvVar)
-	if !found {
-		return "", fmt.Errorf("%s must be set", watchNamespaceEnvVar)
-	}
-
-	return ns, nil
 }
 
 // getEventBurstSize returns the burst size of events that can be handled in the cluster
