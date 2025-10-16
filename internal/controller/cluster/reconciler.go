@@ -106,9 +106,9 @@ func (r *SingleClusterReconciler) Reconcile() (result ctrl.Result, recErr error)
 	}
 
 	// Handle previously failed cluster
-	hasFailed, chkErr := r.checkPreviouslyFailedCluster()
-	if chkErr != nil {
-		return reconcile.Result{}, chkErr
+	hasFailed, res := r.checkPreviouslyFailedCluster()
+	if !res.IsSuccess {
+		return res.Result, nil
 	}
 
 	if r.aeroCluster.Labels[asdbv1.AerospikeAPIVersionLabel] == asdbv1.AerospikeAPIVersion {
@@ -298,12 +298,27 @@ func (r *SingleClusterReconciler) recoverIgnorablePods(ignorablePodNames sets.Se
 
 	r.Log.Info("Try to recover failed/pending pods if any")
 
-	var anyPodFailed bool
-	// Try to recover failed/pending pods by deleting them
+	var (
+		anyPodFailed    bool
+		requeueInterval int
+	)
+
+	// Try to recover failed/pending pods by deleting them if grace period is over.
 	for idx := range podList.Items {
 		if ignorablePodNames.Has(podList.Items[idx].Name) {
-			if cErr := utils.CheckPodFailed(&podList.Items[idx]); cErr != nil {
+			if inGracePeriod, cErr := utils.CheckPodFailedWithGrace(&podList.Items[idx], true); cErr != nil {
 				anyPodFailed = true
+
+				if inGracePeriod {
+					r.Log.Info(
+						"Pod is in failed state but within grace period, will not delete",
+						"pod", podList.Items[idx].Name,
+					)
+
+					requeueInterval = asdbv1.RequeueIntervalSeconds10
+
+					continue
+				}
 
 				if err := r.createOrUpdatePodServiceIfNeeded([]string{podList.Items[idx].Name}); err != nil {
 					return common.ReconcileError(err)
@@ -325,7 +340,7 @@ func (r *SingleClusterReconciler) recoverIgnorablePods(ignorablePodNames sets.Se
 		r.Log.Info("Found ignorable pod(s), requeuing")
 	}
 
-	return common.ReconcileRequeueAfter(0)
+	return common.ReconcileRequeueAfter(requeueInterval)
 }
 
 func (r *SingleClusterReconciler) validateAndReconcileAccessControl(
@@ -590,37 +605,58 @@ func (r *SingleClusterReconciler) isNewCluster() (bool, error) {
 	return len(statefulSetList.Items) == 0, nil
 }
 
-func (r *SingleClusterReconciler) hasClusterFailed() (bool, error) {
+// hasClusterFailed returns (failed, inGracePeriod, error)
+// failed: true if cluster has truly failed and needs recovery
+// inGracePeriod: true if cluster has failed pods but within grace period
+// error: any error during the check
+func (r *SingleClusterReconciler) hasClusterFailed() (failed, inGracePeriod bool, err error) {
 	isNew, err := r.isNewCluster()
 	if err != nil {
 		// Checking cluster status failed.
-		return false, err
+		return failed, inGracePeriod, err
 	}
 
 	if isNew {
 		// New clusters should not be considered failed.
-		return false, nil
+		return failed, inGracePeriod, nil
 	}
 
 	// Check if there are any pods running
 	pods, err := r.getClusterPodList()
 	if err != nil {
-		return false, err
+		return failed, inGracePeriod, err
 	}
 
 	for idx := range pods.Items {
 		pod := &pods.Items[idx]
-		if err := utils.CheckPodFailed(pod); err == nil {
+
+		inGrace, err := utils.CheckPodFailedWithGrace(pod, true)
+		if err == nil {
 			// There is at least one pod that has not yet failed.
 			// It's possible that the containers are stuck doing a long disk
 			// initialization.
 			// Don't consider this cluster as failed and needing recovery
 			// as long as there is at least one running pod.
-			return false, nil
+			return false, false, nil
+		}
+
+		// Pod is failed, check if it's in grace period
+		if inGrace {
+			inGracePeriod = true
 		}
 	}
 
-	return r.IsStatusEmpty(), nil
+	// If we reach here, all pods are failed
+	if inGracePeriod {
+		// Return grace period state
+		return failed, inGracePeriod, nil
+	}
+
+	if r.IsStatusEmpty() {
+		return true, inGracePeriod, nil
+	}
+
+	return false, false, nil
 }
 
 func (r *SingleClusterReconciler) patchStatus(newAeroCluster *asdbv1.AerospikeCluster) error {
@@ -874,17 +910,17 @@ func (r *SingleClusterReconciler) handleClusterDeletion(finalizerName string) er
 	return nil
 }
 
-func (r *SingleClusterReconciler) checkPreviouslyFailedCluster() (bool, error) {
+func (r *SingleClusterReconciler) checkPreviouslyFailedCluster() (bool, common.ReconcileResult) {
 	isNew, err := r.isNewCluster()
 	if err != nil {
-		return false, fmt.Errorf("error determining if cluster is new: %v", err)
+		return false, common.ReconcileError(fmt.Errorf("error determining if cluster is new: %v", err))
 	}
 
 	if isNew {
 		r.Log.V(1).Info("It's a new cluster, create empty status object")
 
 		if err := r.createStatus(); err != nil {
-			return false, err
+			return false, common.ReconcileError(err)
 		}
 	} else {
 		r.Log.V(1).Info(
@@ -892,19 +928,26 @@ func (r *SingleClusterReconciler) checkPreviouslyFailedCluster() (bool, error) {
 				"checking if it is failed and needs recovery",
 		)
 
-		hasFailed, err := r.hasClusterFailed()
+		hasFailed, inGracePeriod, err := r.hasClusterFailed()
 		if err != nil {
-			return hasFailed, fmt.Errorf(
-				"error determining if cluster has failed: %v", err,
-			)
+			return false, common.ReconcileError(fmt.Errorf("error determining if cluster has failed: %v", err))
 		}
 
 		if hasFailed {
-			return hasFailed, r.recoverFailedCreate()
+			if err = r.recoverFailedCreate(); err != nil {
+				return hasFailed, common.ReconcileError(err)
+			}
+
+			return hasFailed, common.ReconcileSuccess()
+		}
+
+		if inGracePeriod {
+			r.Log.Info("Pods are failed but within grace period, requeueing...")
+			return false, common.ReconcileRequeueAfter(asdbv1.RequeueIntervalSeconds10)
 		}
 	}
 
-	return false, nil
+	return false, common.ReconcileSuccess()
 }
 
 func (r *SingleClusterReconciler) removedNamespaces(nodesNamespaces map[string][]string) []string {

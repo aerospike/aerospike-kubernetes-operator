@@ -261,7 +261,7 @@ func (r *SingleClusterReconciler) rollingRestartPods(
 	rackState *RackState, podsToRestart []*corev1.Pod, ignorablePodNames sets.Set[string],
 	restartTypeMap map[string]RestartType,
 ) common.ReconcileResult {
-	failedPods, activePods := getFailedAndActivePods(podsToRestart)
+	failedPods, _, activePods := getFailedAndActivePods(podsToRestart, false)
 
 	// If already dead node (failed pod) then no need to check node safety, migration
 	if len(failedPods) != 0 {
@@ -548,22 +548,30 @@ func (r *SingleClusterReconciler) ensurePodsRunningAndReady(podsToCheck []*corev
 		podNames,
 	)
 
-	return common.ReconcileRequeueAfter(10)
+	return common.ReconcileRequeueAfter(asdbv1.RequeueIntervalSeconds10)
 }
 
-func getFailedAndActivePods(pods []*corev1.Pod) (failedPods, activePods []*corev1.Pod) {
+func getFailedAndActivePods(
+	pods []*corev1.Pod, withGracePeriod bool) (failedPods, failedWithinGracePeriodPods, activePods []*corev1.Pod,
+) {
 	for idx := range pods {
 		pod := pods[idx]
 
-		if err := utils.CheckPodFailed(pod); err != nil {
-			failedPods = append(failedPods, pod)
+		inGracePeriod, err := utils.CheckPodFailedWithGrace(pod, withGracePeriod)
+		if err != nil {
+			if inGracePeriod {
+				failedWithinGracePeriodPods = append(failedWithinGracePeriodPods, pod)
+			} else {
+				failedPods = append(failedPods, pod)
+			}
+
 			continue
 		}
 
 		activePods = append(activePods, pod)
 	}
 
-	return failedPods, activePods
+	return failedPods, failedWithinGracePeriodPods, activePods
 }
 
 func getNonIgnorablePods(pods []*corev1.Pod, ignorablePodNames sets.Set[string],
@@ -585,7 +593,7 @@ func getNonIgnorablePods(pods []*corev1.Pod, ignorablePodNames sets.Set[string],
 func (r *SingleClusterReconciler) safelyDeletePodsAndEnsureImageUpdated(
 	rackState *RackState, podsToUpdate []*corev1.Pod, ignorablePodNames sets.Set[string],
 ) common.ReconcileResult {
-	failedPods, activePods := getFailedAndActivePods(podsToUpdate)
+	failedPods, _, activePods := getFailedAndActivePods(podsToUpdate, false)
 
 	// If already dead node (failed pod) then no need to check node safety, migration
 	if len(failedPods) != 0 {
@@ -720,6 +728,7 @@ func (r *SingleClusterReconciler) ensurePodsImageUpdated(podsToCheck []*corev1.P
 				return common.ReconcileError(err)
 			}
 
+			// For existing cluster operations, no grace period for immediate responsiveness
 			if err := utils.CheckPodFailed(updatedPod); err != nil {
 				return common.ReconcileError(err)
 			}
@@ -746,7 +755,7 @@ func (r *SingleClusterReconciler) ensurePodsImageUpdated(podsToCheck []*corev1.P
 		podNames,
 	)
 
-	return common.ReconcileRequeueAfter(10)
+	return common.ReconcileRequeueAfter(asdbv1.RequeueIntervalSeconds10)
 }
 
 // cleanupPods checks pods and status before scale-up to detect and fix any
