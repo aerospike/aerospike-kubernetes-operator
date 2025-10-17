@@ -82,6 +82,21 @@ func (r *SingleClusterReconciler) waitForMultipleNodesSafeStopReady(
 	return common.ReconcileSuccess()
 }
 
+// waitForMigrationToComplete waits for the migration to complete on all the nodes in the cluster.
+func (r *SingleClusterReconciler) waitForMigrationToComplete(policy *as.ClientPolicy,
+	ignorablePodNames sets.Set[string],
+) common.ReconcileResult {
+	// This doesn't make actual connection, only objects having connection info are created
+	allHostConns, err := r.newAllHostConnWithOption(ignorablePodNames)
+	if err != nil {
+		return common.ReconcileError(fmt.Errorf("failed to get hostConn for aerospike cluster nodes: %v", err))
+	}
+
+	r.Log.Info("Waiting for migration to complete")
+
+	return r.waitForClusterStability(policy, allHostConns)
+}
+
 func (r *SingleClusterReconciler) quiescePods(
 	policy *as.ClientPolicy, allHostConns []*deployment.HostConn, pods []*corev1.Pod, ignorablePodNames sets.Set[string],
 ) error {

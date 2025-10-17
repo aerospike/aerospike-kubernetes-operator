@@ -974,6 +974,18 @@ func (r *SingleClusterReconciler) scaleDownRack(
 		); !res.IsSuccess {
 			return found, res
 		}
+
+		// Wait for migration to complete before deleting the pods.
+		if res := r.waitForMigrationToComplete(policy,
+			ignorablePodNames,
+		); !res.IsSuccess {
+			r.Log.Error(
+				res.Err, "Failed to wait for migration to complete before deleting pods",
+				"rackID", rackState.Rack.ID,
+			)
+
+			return found, res
+		}
 	}
 
 	// Update new object with new size

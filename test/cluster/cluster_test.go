@@ -4,6 +4,7 @@ import (
 	goctx "context"
 	"fmt"
 	"strconv"
+	"strings"
 	"time"
 
 	. "github.com/onsi/ginkgo/v2"
@@ -76,6 +77,11 @@ var _ = Describe(
 		Context(
 			"RunScaleDownWithMigrateFillDelay", func() {
 				ScaleDownWithMigrateFillDelay(ctx)
+			},
+		)
+		Context(
+			"ValidateScaleDownWaitForMigrations", func() {
+				ValidateScaleDownWaitForMigrations(ctx)
 			},
 		)
 		Context(
@@ -760,6 +766,95 @@ func ScaleDownWithMigrateFillDelay(ctx goctx.Context) {
 					// verify that migrate-fill-delay is reverted to original value after scaling down
 					err = validateMigrateFillDelay(ctx, k8sClient, logger, clusterNamespacedName, migrateFillDelay,
 						nil, firstPodName)
+					Expect(err).ToNot(HaveOccurred())
+				},
+			)
+		},
+	)
+}
+
+func ValidateScaleDownWaitForMigrations(ctx goctx.Context) {
+	Context(
+		"ValidateScaleDownWaitForMigrations", func() {
+			clusterNamespacedName := test.GetNamespacedName(
+				"wait-for-migrations-cluster", namespace,
+			)
+
+			BeforeEach(
+				func() {
+					aeroCluster := createDummyAerospikeCluster(clusterNamespacedName, 4)
+					Expect(DeployCluster(k8sClient, ctx, aeroCluster)).ToNot(HaveOccurred())
+				},
+			)
+
+			AfterEach(
+				func() {
+					aeroCluster := &asdbv1.AerospikeCluster{
+						ObjectMeta: metav1.ObjectMeta{
+							Name:      clusterNamespacedName.Name,
+							Namespace: clusterNamespacedName.Namespace,
+						},
+					}
+
+					Expect(DeleteCluster(k8sClient, ctx, aeroCluster)).ToNot(HaveOccurred())
+					Expect(CleanupPVC(k8sClient, aeroCluster.Namespace, aeroCluster.Name)).ToNot(HaveOccurred())
+				},
+			)
+
+			It(
+				"Should wait for migrations to complete before pod deletion", func() {
+					aeroCluster, err := getCluster(k8sClient, ctx, clusterNamespacedName)
+					Expect(err).ToNot(HaveOccurred())
+
+					aeroCluster.Spec.Size -= 1
+					err = k8sClient.Update(ctx, aeroCluster)
+					Expect(err).ToNot(HaveOccurred())
+
+					seenQuiesced := false
+					seenMigrationsComplete := false
+
+					Eventually(func() bool {
+						podList, lErr := getPodList(aeroCluster, k8sClient)
+						Expect(lErr).ToNot(HaveOccurred())
+						info, iErr := requestInfoFromNode(logger, k8sClient, ctx, clusterNamespacedName, "namespace/test",
+							podList.Items[0].Name)
+						Expect(iErr).ToNot(HaveOccurred())
+
+						var nodesQuiesced string
+						confs := strings.Split(info["namespace/test"], ";")
+						for _, conf := range confs {
+							if strings.Contains(conf, "nodes_quiesced") {
+								nodesQuiesced = strings.Split(conf, "=")[1]
+								break
+							}
+						}
+						migrations := getMigrationsInProgress(ctx, k8sClient, clusterNamespacedName, podList)
+
+						podCount := utils.Len32(podList.Items)
+						// Track quiesced
+						if podCount == 4 && nodesQuiesced == "1" {
+							seenQuiesced = true
+						}
+
+						// Track migrations complete after quiesce
+						if seenQuiesced && podCount == 4 && migrations == 0 {
+							seenMigrationsComplete = true
+						}
+
+						// Fail condition: if scale down happens before migrations finish
+						if podCount < 4 && migrations != 0 {
+							Fail(fmt.Sprintf("Pods scaledown while migrations still running (pods=%d, migrations=%d)",
+								podCount, migrations))
+						}
+
+						// Success condition: pod scale down only after migrations complete
+						return podCount == aeroCluster.Spec.Size && seenQuiesced && seenMigrationsComplete
+					}, 5*time.Minute, 1*time.Second).Should(BeTrue(), "Pods should only scaledown after migrations complete")
+
+					err = waitForAerospikeCluster(
+						k8sClient, ctx, aeroCluster, int(aeroCluster.Spec.Size), retryInterval,
+						getTimeout(2), []asdbv1.AerospikeClusterPhase{asdbv1.AerospikeClusterCompleted},
+					)
 					Expect(err).ToNot(HaveOccurred())
 				},
 			)
