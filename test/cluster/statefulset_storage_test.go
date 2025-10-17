@@ -98,7 +98,7 @@ var _ = Describe(
 						for podIndex := range rackPodList.Items {
 							err = k8sClient.Delete(ctx, &rackPodList.Items[podIndex])
 							Expect(err).ToNot(HaveOccurred())
-							started := waitForPod(&rackPodList.Items[podIndex])
+							started := waitForPod(utils.GetNamespacedName(&rackPodList.Items[podIndex]))
 							Expect(started).To(
 								BeTrue(), "pod was not able to come online in time",
 							)
@@ -175,7 +175,7 @@ var _ = Describe(
 						for podIndex := range rackPodList.Items {
 							err = k8sClient.Delete(ctx, &rackPodList.Items[podIndex])
 							Expect(err).ToNot(HaveOccurred())
-							started := waitForPod(&rackPodList.Items[podIndex])
+							started := waitForPod(utils.GetNamespacedName(&rackPodList.Items[podIndex]))
 							Expect(started).To(
 								BeTrue(), "pod was not able to come online in time",
 							)
@@ -317,7 +317,7 @@ var _ = Describe(
 						for podIndex := range rackPodList.Items {
 							err = k8sClient.Delete(ctx, &rackPodList.Items[podIndex])
 							Expect(err).ToNot(HaveOccurred())
-							started := waitForPod(&rackPodList.Items[podIndex])
+							started := waitForPod(utils.GetNamespacedName(&rackPodList.Items[podIndex]))
 							Expect(started).To(
 								BeTrue(), "pod was not able to come online in time",
 							)
@@ -437,7 +437,7 @@ func GetNamespacedNameForSTS(
 	}
 }
 
-func waitForPod(pod *v1.Pod) bool {
+func waitForPod(pod types.NamespacedName) bool {
 	var started bool
 
 	for i := 0; i < 20; i++ {

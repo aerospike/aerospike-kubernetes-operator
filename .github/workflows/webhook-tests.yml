@@ -1,0 +1,32 @@
+name: Eviction Webhook Test Suite
+
+on:
+  push:
+    tags:
+      - v*
+    branches:
+      - master
+  pull_request:
+    branches:
+      - master
+
+jobs:
+  setup-kind:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout sources
+        uses: actions/checkout@v4
+        with:
+          submodules: true
+      - name: Setup-go
+        uses: actions/setup-go@v5
+        with:
+          go-version-file: go.mod
+
+      # Install Ginkgo CLI (so `go run` not needed)
+      - name: Install Ginkgo CLI
+        run: go install github.com/onsi/ginkgo/v2/ginkgo@latest
+
+      # Run your env-test target
+      - name: Run EnvTest Suite
+        run: make env-test
