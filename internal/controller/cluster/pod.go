@@ -1144,7 +1144,7 @@ func (r *SingleClusterReconciler) handleNSOrDeviceRemoval(rackState *RackState, 
 
 	for idx := range r.aeroCluster.Status.RackConfig.Racks {
 		rackStatus = r.aeroCluster.Status.RackConfig.Racks[idx]
-		if rackStatus.ID == rackState.Rack.ID {
+		if rackStatus.ID == rackState.Rack.ID && rackStatus.Revision == rackState.Rack.Revision {
 			rackFound = true
 			break
 		}
@@ -1359,7 +1359,7 @@ func (r *SingleClusterReconciler) getNSAddedDevices(rackState *RackState) ([]str
 
 	for idx := range newAeroCluster.Status.RackConfig.Racks {
 		rackStatus = newAeroCluster.Status.RackConfig.Racks[idx]
-		if rackStatus.ID == rackState.Rack.ID {
+		if rackStatus.ID == rackState.Rack.ID && rackStatus.Revision == rackState.Rack.Revision {
 			rackFound = true
 			break
 		}
@@ -1453,7 +1453,7 @@ func (r *SingleClusterReconciler) handleNSOrDeviceAddition(volumes []string, pod
 
 func getVolumeNameFromDevicePath(volumes []asdbv1.VolumeSpec, s string) string {
 	for idx := range volumes {
-		if volumes[idx].Aerospike.Path == s {
+		if volumes[idx].Aerospike != nil && volumes[idx].Aerospike.Path == s {
 			return volumes[idx].Name
 		}
 	}
