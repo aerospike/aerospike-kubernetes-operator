@@ -147,6 +147,10 @@ func (acv *AerospikeClusterCustomValidator) ValidateUpdate(_ context.Context, ol
 		return warnings, err
 	}
 
+	if err := validateAccessControlUpdate(&oldObject.Spec, &aerospikeCluster.Spec); err != nil {
+		return warnings, err
+	}
+
 	// Validate AerospikeConfig update
 	if err := validateAerospikeConfigUpdate(
 		aslog, aerospikeCluster.Spec.AerospikeConfig, oldObject.Spec.AerospikeConfig,
@@ -310,6 +314,31 @@ func validate(aslog logr.Logger, cluster *asdbv1.AerospikeCluster) (admission.Wa
 	}
 
 	return warnings, validateSCNamespaces(cluster)
+}
+
+func validateAccessControlUpdate(
+	oldSpec *asdbv1.AerospikeClusterSpec,
+	newSpec *asdbv1.AerospikeClusterSpec,
+) error {
+	if reflect.DeepEqual(oldSpec.AerospikeAccessControl, newSpec.AerospikeAccessControl) {
+		return nil
+	}
+
+	if newSpec.AerospikeAccessControl == nil && oldSpec.AerospikeAccessControl != nil {
+		return fmt.Errorf("aerospikeAccessControl cannot be removed once set")
+	}
+
+	desiredSecurityEnabled, err := asdbv1.IsSecurityEnabled(newSpec.AerospikeConfig.Value)
+	if err != nil {
+		return err
+	}
+
+	// ACL changes are only allowed when security is enabled
+	if !desiredSecurityEnabled {
+		return fmt.Errorf("aerospikeAccessControl cannot be updated when security is disabled or being enabled")
+	}
+
+	return nil
 }
 
 func validateOperation(cluster *asdbv1.AerospikeCluster) error {
@@ -926,26 +955,6 @@ func validateNamespaceConfig(
 	return nil
 }
 
-func validateSecurityConfigUpdateFromStatus(newSpec, currentStatus *asdbv1.AerospikeConfigSpec) error {
-	if currentStatus != nil {
-		currentSecurityEnabled, err := asdbv1.IsSecurityEnabled(currentStatus.Value)
-		if err != nil {
-			return err
-		}
-
-		desiredSecurityEnabled, err := asdbv1.IsSecurityEnabled(newSpec.Value)
-		if err != nil {
-			return err
-		}
-
-		if currentSecurityEnabled && !desiredSecurityEnabled {
-			return fmt.Errorf("cannot disable cluster security in running cluster")
-		}
-	}
-
-	return nil
-}
-
 func validateAerospikeConfigUpdate(
 	aslog logr.Logger,
 	incomingSpec, outgoingSpec, currentStatus *asdbv1.AerospikeConfigSpec,
@@ -956,10 +965,6 @@ func validateAerospikeConfigUpdate(
 	oldConf := outgoingSpec.Value
 
 	if err := validation.ValidateAerospikeConfigUpdateWithoutSchema(oldConf, newConf); err != nil {
-		return err
-	}
-
-	if err := validateSecurityConfigUpdateFromStatus(incomingSpec, currentStatus); err != nil {
 		return err
 	}
 

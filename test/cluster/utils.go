@@ -244,10 +244,12 @@ func (acs *AerospikeConfSpec) getVersion() string {
 	return acs.version
 }
 
-func (acs *AerospikeConfSpec) setEnableSecurity(enableSecurity bool) {
+func (acs *AerospikeConfSpec) setSecurity(enableSecurity bool) {
 	if enableSecurity {
 		security := map[string]interface{}{}
 		acs.security = security
+	} else {
+		acs.security = nil
 	}
 }
 
@@ -342,7 +344,7 @@ func NewAerospikeConfSpec(image string) (*AerospikeConfSpec, error) {
 	namespaces := []interface{}{
 		map[string]interface{}{
 			"name":               "test",
-			"replication-factor": 1,
+			"replication-factor": 2,
 			"storage-engine": map[string]interface{}{
 				"type":      "memory",
 				"data-size": 1073741824,
