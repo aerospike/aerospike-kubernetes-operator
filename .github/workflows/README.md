@@ -4,7 +4,7 @@ This directory contains GitHub Actions workflows for CI/CD automation.
 
 ## Available Workflows
 
-### 1. PKG Unit Tests (`pkg-unit-tests.yaml`)
+### 1. Unit tests (`pkg-unit-tests.yaml`)
 **Unit testing workflow for pkg directory**
 
 **Triggers:**

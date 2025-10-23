@@ -1,4 +1,4 @@
-name: PKG Unit Tests
+name: unit tests
 
 on:
   push:
@@ -16,12 +16,14 @@ on:
 
 jobs:
   pkg-unit-tests:
-    name: Run PKG Unit Tests
+    name: pkg
     runs-on: ubuntu-latest
     
     steps:
       - name: Checkout code
         uses: actions/checkout@v4
+        with:
+          submodules: true
       
       - name: Setup Go
         uses: actions/setup-go@v5
