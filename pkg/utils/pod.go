@@ -265,6 +265,7 @@ func getPodFailureSince(pod *corev1.Pod) time.Time {
 
 		isFailureCondition := false
 
+		//nolint:exhaustive // Only required condition types are checked
 		switch condition.Type {
 		case corev1.PodScheduled:
 			// Check for Unschedulable condition
@@ -294,19 +295,6 @@ func getPodFailureSince(pod *corev1.Pod) time.Time {
 	}
 
 	return *earliestFailure
-}
-
-// GetUnschedulableSince returns the time when the pod last transitioned
-// to an Unschedulable PodScheduled condition, if available.
-func GetUnschedulableSince(pod *corev1.Pod) (time.Time, bool) {
-	for _, condition := range pod.Status.Conditions {
-		if condition.Type == corev1.PodScheduled && (condition.Reason == corev1.PodReasonUnschedulable ||
-			condition.Reason == corev1.PodReasonSchedulerError) {
-			return condition.LastTransitionTime.Time, true
-		}
-	}
-
-	return time.Time{}, false
 }
 
 // GetFailedPodGracePeriod reads FAILED_POD_GRACE_PERIOD_SECONDS env.

@@ -83,20 +83,10 @@ func (r *SingleClusterReconciler) reconcileRacks() common.ReconcileResult {
 			)
 		}
 
-		failedPods, failedWithinGracePeriod, _ := getFailedAndActivePods(podList, true)
+		failedPods, _, _ := getFailedAndActivePods(podList, false)
 
 		// remove ignorable pods from failedPods
 		failedPods = getNonIgnorablePods(failedPods, ignorablePodNames)
-		failedWithinGracePeriod = getNonIgnorablePods(failedWithinGracePeriod, ignorablePodNames)
-
-		if len(failedWithinGracePeriod) != 0 {
-			r.Log.Info(
-				"Some pods are in failed state within grace period, so waiting for them to recover. Requeuing",
-				"rackID", state.Rack.ID, "failedPodsWithinGracePeriod", getPodNames(failedWithinGracePeriod),
-			)
-
-			return common.ReconcileRequeueAfter(asdbv1.RequeueIntervalSeconds10)
-		}
 
 		if len(failedPods) != 0 {
 			r.Log.Info(
@@ -127,19 +117,9 @@ func (r *SingleClusterReconciler) reconcileRacks() common.ReconcileResult {
 			)
 		}
 
-		failedPods, failedWithinGracePeriod, _ = getFailedAndActivePods(podList, true)
+		failedPods, _, _ = getFailedAndActivePods(podList, false)
 		// remove ignorable pods from failedPods
 		failedPods = getNonIgnorablePods(failedPods, ignorablePodNames)
-		failedWithinGracePeriod = getNonIgnorablePods(failedWithinGracePeriod, ignorablePodNames)
-
-		if len(failedWithinGracePeriod) != 0 {
-			r.Log.Info(
-				"Some pods are in failed state within grace period, so waiting for them to recover. Requeuing",
-				"rackID", state.Rack.ID, "failedPodsWithinGracePeriod", getPodNames(failedWithinGracePeriod),
-			)
-
-			return common.ReconcileRequeueAfter(asdbv1.RequeueIntervalSeconds10)
-		}
 
 		if len(failedPods) != 0 {
 			r.Log.Info(

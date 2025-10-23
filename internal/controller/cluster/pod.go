@@ -261,7 +261,7 @@ func (r *SingleClusterReconciler) rollingRestartPods(
 	rackState *RackState, podsToRestart []*corev1.Pod, ignorablePodNames sets.Set[string],
 	restartTypeMap map[string]RestartType,
 ) common.ReconcileResult {
-	failedPods, _, activePods := getFailedAndActivePods(podsToRestart, false)
+	failedPods, failedWithinGracePeriodPods, activePods := getFailedAndActivePods(podsToRestart, true)
 
 	// If already dead node (failed pod) then no need to check node safety, migration
 	if len(failedPods) != 0 {
@@ -315,6 +315,15 @@ func (r *SingleClusterReconciler) rollingRestartPods(
 				return res
 			}
 		}
+	}
+
+	if len(failedWithinGracePeriodPods) != 0 {
+		r.Log.Info(
+			"Pods are in failed state but within grace period, will not delete",
+			"pods", getPodNames(failedWithinGracePeriodPods),
+		)
+
+		return common.ReconcileRequeueAfter(asdbv1.RequeueIntervalSeconds10)
 	}
 
 	return common.ReconcileSuccess()
@@ -593,7 +602,7 @@ func getNonIgnorablePods(pods []*corev1.Pod, ignorablePodNames sets.Set[string],
 func (r *SingleClusterReconciler) safelyDeletePodsAndEnsureImageUpdated(
 	rackState *RackState, podsToUpdate []*corev1.Pod, ignorablePodNames sets.Set[string],
 ) common.ReconcileResult {
-	failedPods, _, activePods := getFailedAndActivePods(podsToUpdate, false)
+	failedPods, failedWithinGracePeriodPods, activePods := getFailedAndActivePods(podsToUpdate, true)
 
 	// If already dead node (failed pod) then no need to check node safety, migration
 	if len(failedPods) != 0 {
@@ -646,6 +655,15 @@ func (r *SingleClusterReconciler) safelyDeletePodsAndEnsureImageUpdated(
 				return res
 			}
 		}
+	}
+
+	if len(failedWithinGracePeriodPods) != 0 {
+		r.Log.Info(
+			"Pods are in failed state but within grace period, will not delete",
+			"pods", getPodNames(failedWithinGracePeriodPods),
+		)
+
+		return common.ReconcileRequeueAfter(asdbv1.RequeueIntervalSeconds10)
 	}
 
 	return common.ReconcileSuccess()

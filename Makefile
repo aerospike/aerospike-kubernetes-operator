@@ -141,6 +141,18 @@ go-lint-fix: golangci-lint ## Run golangci-lint linter and perform fixes
 .PHONY: all-test
 all-test: manifests generate fmt vet setup-envtest cluster-test backup-service-test backup-test restore-test ## Run tests.
 
+.PHONY: pkg-test
+pkg-test: ## Run unit tests for pkg directory
+	@echo "Running pkg unit tests..."
+	go test -v -race -coverprofile=coverage.out ./pkg/...
+	@echo "\nCoverage Summary:"
+	@go tool cover -func=coverage.out | tail -1
+
+.PHONY: pkg-test-coverage
+pkg-test-coverage: pkg-test ## Run pkg unit tests and open coverage report in browser
+	@echo "Opening coverage report in browser..."
+	go tool cover -html=coverage.out
+
 .PHONY: cluster-test
 cluster-test: manifests generate fmt vet setup-envtest ## Run tests.
 	KUBEBUILDER_ASSETS="$(shell $(ENVTEST) use $(ENVTEST_K8S_VERSION) --bin-dir $(LOCALBIN) -p path)" cd $(shell pwd)/test/cluster; mkdir -p ../test-results; go run github.com/onsi/ginkgo/v2/ginkgo --grace-period=10m -p --procs=8 -coverprofile ascover.out -v -show-node-events --focus="$(FOCUS)" -timeout=5h0m0s --junit-report=../test-results/junit-cluster.xml  -- ${ARGS}

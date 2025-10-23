@@ -1,0 +1,34 @@
+name: PKG Unit Tests
+
+on:
+  push:
+    branches:
+      - master
+    paths:
+      - 'pkg/**'
+      - '.github/workflows/pkg-unit-tests.yaml'
+  pull_request:
+    branches:
+      - master
+    paths:
+      - 'pkg/**'
+      - '.github/workflows/pkg-unit-tests.yaml'
+
+jobs:
+  pkg-unit-tests:
+    name: Run PKG Unit Tests
+    runs-on: ubuntu-latest
+    
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+      
+      - name: Setup Go
+        uses: actions/setup-go@v5
+        with:
+          go-version-file: go.mod
+          cache: true
+      
+      - name: Run pkg unit tests
+        run: make pkg-test
+
