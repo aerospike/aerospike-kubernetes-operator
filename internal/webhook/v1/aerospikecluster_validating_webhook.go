@@ -63,7 +63,16 @@ func (acv *AerospikeClusterCustomValidator) ValidateCreate(_ context.Context, ob
 
 	aslog.Info("Validate create")
 
-	return validate(aslog, aerospikeCluster)
+	warns, vErr := validate(aslog, aerospikeCluster)
+	if vErr != nil {
+		return warns, vErr
+	}
+
+	if err := validateAccessControlCreate(&aerospikeCluster.Spec); err != nil {
+		return warns, err
+	}
+
+	return nil, nil
 }
 
 // ValidateDelete implements webhook.CustomValidator so a webhook will be registered for the type
@@ -316,6 +325,22 @@ func validate(aslog logr.Logger, cluster *asdbv1.AerospikeCluster) (admission.Wa
 	return warnings, validateSCNamespaces(cluster)
 }
 
+func validateAccessControlCreate(
+	aerospikeClusterSpec *asdbv1.AerospikeClusterSpec,
+) error {
+	enabled, err := asdbv1.IsSecurityEnabled(aerospikeClusterSpec.AerospikeConfig.Value)
+	if err != nil {
+		return err
+	}
+
+	if !enabled && aerospikeClusterSpec.AerospikeAccessControl != nil {
+		// Security is disabled however access control is specified.
+		return fmt.Errorf("security is disabled but access control is specified")
+	}
+
+	return nil
+}
+
 func validateAccessControlUpdate(
 	oldSpec *asdbv1.AerospikeClusterSpec,
 	newSpec *asdbv1.AerospikeClusterSpec,
@@ -335,7 +360,7 @@ func validateAccessControlUpdate(
 
 	// ACL changes are only allowed when security is enabled
 	if !desiredSecurityEnabled {
-		return fmt.Errorf("aerospikeAccessControl cannot be updated when security is disabled or being enabled")
+		return fmt.Errorf("aerospikeAccessControl cannot be updated when security is disabled")
 	}
 
 	return nil

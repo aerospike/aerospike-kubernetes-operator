@@ -1406,6 +1406,71 @@ var _ = Describe(
 								}
 							},
 						)
+						It(
+							"SecurityDisable: should reject access control if security is disabled",
+							func() {
+								var accessControl *asdbv1.AerospikeAccessControlSpec
+
+								aerospikeConfigSpec, err := NewAerospikeConfSpec(latestImage)
+								if err != nil {
+									Fail(
+										fmt.Sprintf(
+											"Invalid Aerospike Config Spec: %v",
+											err,
+										),
+									)
+								}
+
+								aerospikeConfigSpec.setSecurity(false)
+
+								accessControl = &asdbv1.AerospikeAccessControlSpec{
+									Roles: []asdbv1.AerospikeRoleSpec{
+										{
+											Name: "profiler",
+											Privileges: []string{
+												"read-write-udf.test.users",
+												"write",
+											},
+											Whitelist: []string{
+												"8.8.0.0/16",
+											},
+										},
+									},
+									Users: []asdbv1.AerospikeUserSpec{
+										{
+											Name:       "admin",
+											SecretName: test.AuthSecretNameForUpdate,
+											Roles: []string{
+												"sys-admin",
+												"user-admin",
+											},
+										},
+
+										{
+											Name:       "profileUser",
+											SecretName: test.AuthSecretNameForUpdate,
+											Roles: []string{
+												"profiler",
+											},
+										},
+									},
+								}
+
+								// Save cluster variable as well for cleanup.
+								aeroCluster := getAerospikeClusterSpecWithAccessControl(
+									clusterNamespacedName, accessControl,
+									aerospikeConfigSpec,
+								)
+								err = deployClusterWithTO(
+									k8sClient, ctx, aeroCluster,
+									retryInterval, shortRetry,
+								)
+								Expect(err).To(HaveOccurred())
+								Expect(err.Error()).To(ContainSubstring(
+									"security is disabled but access control is specified",
+								))
+							},
+						)
 					},
 				)
 				Context(
@@ -1750,7 +1815,7 @@ var _ = Describe(
 								err = updateClusterWithNoWait(k8sClient, ctx, aeroCluster)
 								Expect(err).To(HaveOccurred())
 								Expect(err.Error()).To(ContainSubstring(
-									"aerospikeAccessControl cannot be updated when security is disabled or being enabled"))
+									"aerospikeAccessControl cannot be updated when security is disabled"))
 
 								aeroCluster.Spec.AerospikeAccessControl = nil
 
