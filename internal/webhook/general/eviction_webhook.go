@@ -25,8 +25,6 @@ import (
 	"strings"
 	"time"
 
-	lib "github.com/aerospike/aerospike-management-lib"
-
 	"github.com/go-logr/logr"
 	admissionv1 "k8s.io/api/admission/v1"
 	corev1 "k8s.io/api/core/v1"
@@ -72,6 +70,13 @@ func (ew *EvictionWebhook) isAerospikePod(pod *corev1.Pod) bool {
 
 // setEvictionBlockedAnnotation sets an annotation on the pod indicating eviction was blocked
 func (ew *EvictionWebhook) setEvictionBlockedAnnotation(ctx context.Context, pod *corev1.Pod) error {
+	// Check if annotation already exists, no update needed
+	if pod.Annotations != nil {
+		if _, exists := pod.Annotations[EvictionBlockedAnnotation]; exists {
+			return nil
+		}
+	}
+
 	// Create a patch to add the annotation
 	patch := client.MergeFrom(pod.DeepCopy())
 
@@ -128,14 +133,6 @@ func (ew *EvictionWebhook) Handle(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	// Check namespace filtering
-	if !ew.shouldEvaluateNamespace(admissionReview.Request.Namespace) {
-		log.V(1).Info("Namespace not in watch list, allowing eviction", "namespace", admissionReview.Request.Namespace)
-		ew.sendResponse(w, admissionReview, &response)
-
-		return
-	}
-
 	// Process eviction request
 	evictionResult := ew.processEvictionRequest(admissionReview, log)
 	if evictionResult != nil {
@@ -165,23 +162,6 @@ func (ew *EvictionWebhook) parseAdmissionReview(r *http.Request) (*admissionv1.A
 func (ew *EvictionWebhook) isWebhookEnabled() bool {
 	enable, found := os.LookupEnv("ENABLE_SAFE_POD_EVICTION")
 	return found && strings.EqualFold(enable, "true")
-}
-
-// shouldEvaluateNamespace checks if the namespace should be evaluated
-func (ew *EvictionWebhook) shouldEvaluateNamespace(namespace string) bool {
-	watchNs, err := asdbv1.GetWatchNamespace()
-	if err != nil {
-		ew.Log.Error(err, "Failed to get watch namespaces")
-		return false
-	}
-
-	if watchNs == "" {
-		return true // No namespace filtering
-	}
-
-	nsList := strings.Split(watchNs, ",")
-
-	return lib.ContainsString(nsList, namespace)
 }
 
 // processEvictionRequest processes the eviction request and returns the response
@@ -229,6 +209,7 @@ func (ew *EvictionWebhook) processEvictionRequest(admissionReview *admissionv1.A
 	log.Info("Blocking eviction of Aerospike pod", "pod", eviction.Name)
 
 	// Set annotation asynchronously (non-blocking)
+	// TODO: do we really want async here?
 	go ew.setEvictionBlockedAnnotationAsync(pod)
 
 	return &admissionv1.AdmissionResponse{

@@ -523,7 +523,7 @@ var _ = Describe(
 					},
 				)
 
-				FIt(
+				It(
 					"Should fail adding reserved annotations",
 					func() {
 						aeroCluster := createDummyAerospikeCluster(

@@ -3,6 +3,7 @@ package main
 import (
 	"crypto/tls"
 	"flag"
+	"fmt"
 	"os"
 	"path/filepath"
 	"strconv"
@@ -199,7 +200,7 @@ func main() {
 		})
 	}
 
-	watchNs, err := asdbv1.GetWatchNamespace()
+	watchNs, err := getWatchNamespace()
 	if err != nil {
 		setupLog.Error(err, "Failed to get watch namespace")
 		os.Exit(1)
@@ -395,6 +396,21 @@ func main() {
 	}
 
 	eventBroadcaster.Shutdown()
+}
+
+// getWatchNamespace returns the Namespace the operator should be watching for changes
+func getWatchNamespace() (string, error) {
+	// WatchNamespaceEnvVar is the constant for env variable WATCH_NAMESPACE
+	// which specifies the Namespace to watch.
+	// An empty value means the operator is running with cluster scope.
+	var watchNamespaceEnvVar = "WATCH_NAMESPACE"
+
+	ns, found := os.LookupEnv(watchNamespaceEnvVar)
+	if !found {
+		return "", fmt.Errorf("%s must be set", watchNamespaceEnvVar)
+	}
+
+	return ns, nil
 }
 
 // getEventBurstSize returns the burst size of events that can be handled in the cluster
