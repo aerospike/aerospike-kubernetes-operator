@@ -29,14 +29,6 @@ spec:
             storageClass: ssd
             volumeMode: Filesystem
             size: 3Gi
-      - name: xdr
-        aerospike:
-          path: /opt/aerospike/xdr
-        source:
-          persistentVolume:
-            storageClass: ssd
-            volumeMode: Filesystem
-            size: 3Gi
       - name: aerospike-config-secret
         source:
           secret:

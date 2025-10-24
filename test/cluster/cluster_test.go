@@ -2271,26 +2271,6 @@ func negativeDeployClusterValidationTest(
 											Expect(DeployCluster(k8sClient, ctx, aeroCluster)).Should(HaveOccurred())
 										},
 									)
-
-									It(
-										"InvalidxdrConfig: should fail for invalid xdr config. mountPath for digestlog not present in storage",
-										func() {
-											aeroCluster := createDummyAerospikeCluster(
-												clusterNamespacedName, 1,
-											)
-											namespaceConfig :=
-												aeroCluster.Spec.AerospikeConfig.Value[asdbv1.ConfKeyNamespace].([]interface{})[0].(map[string]interface{})
-
-											if _, ok := namespaceConfig["storage-engine"].(map[string]interface{})["devices"]; ok {
-												aeroCluster.Spec.Storage = asdbv1.AerospikeStorageSpec{}
-												aeroCluster.Spec.AerospikeConfig.Value["xdr"] = map[string]interface{}{
-													"enable-xdr":         false,
-													"xdr-digestlog-path": "/opt/aerospike/xdr/digestlog 100G",
-												}
-												Expect(DeployCluster(k8sClient, ctx, aeroCluster)).Should(HaveOccurred())
-											}
-										},
-									)
 								},
 							)
 						},
@@ -2672,30 +2652,6 @@ func negativeUpdateClusterValidationTest(
 												ctx, aeroCluster,
 											)
 											Expect(err).Should(HaveOccurred())
-										},
-									)
-
-									It(
-										"InvalidxdrConfig: should fail for invalid xdr config. mountPath for digestlog not present in fileStorage",
-										func() {
-											aeroCluster, err := getCluster(
-												k8sClient, ctx,
-												clusterNamespacedName,
-											)
-											Expect(err).ToNot(HaveOccurred())
-
-											namespaceConfig :=
-												aeroCluster.Spec.AerospikeConfig.Value[asdbv1.ConfKeyNamespace].([]interface{})[0].(map[string]interface{})
-											if _, ok := namespaceConfig["storage-engine"].(map[string]interface{})["devices"]; ok {
-												aeroCluster.Spec.AerospikeConfig.Value["xdr"] = map[string]interface{}{
-													"enable-xdr":         false,
-													"xdr-digestlog-path": "randomPath 100G",
-												}
-												err = k8sClient.Update(
-													ctx, aeroCluster,
-												)
-												Expect(err).Should(HaveOccurred())
-											}
 										},
 									)
 								},
