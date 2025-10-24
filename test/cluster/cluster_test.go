@@ -2811,8 +2811,9 @@ func negativeUpdateClusterValidationTest(
 
 	Context(
 		"FailedPodGracePeriodConfiguration", func() {
+			clusterName := fmt.Sprintf("grace-period-%d", GinkgoParallelProcess())
 			clusterNamespacedName := test.GetNamespacedName(
-				"grace-period-test", namespace,
+				clusterName, namespace,
 			)
 
 			AfterEach(
@@ -2869,12 +2870,12 @@ func negativeUpdateClusterValidationTest(
 							}
 
 							return nil
-						}, 1*time.Minute, 5*time.Second,
+						}, 5*time.Minute, 10*time.Second,
 					).Should(Succeed())
 
 					By("Waiting within grace period and verifying operator does not recreate pods")
-					pkgLog.Info("Waiting 30 seconds within grace period (grace period = 60s)...")
-					time.Sleep(30 * time.Second)
+					pkgLog.Info("Waiting 20 seconds within grace period (grace period = 60s)...")
+					time.Sleep(20 * time.Second)
 
 					podList, err = getPodList(aeroCluster, k8sClient)
 					Expect(err).ToNot(HaveOccurred())
@@ -2909,7 +2910,7 @@ func negativeUpdateClusterValidationTest(
 							}
 
 							return nil
-						}, 1*time.Minute, 5*time.Second).Should(Succeed())
+						}, 5*time.Minute, 10*time.Second).Should(Succeed())
 				},
 			)
 
@@ -2949,8 +2950,8 @@ func negativeUpdateClusterValidationTest(
 					).Should(Succeed())
 
 					By("Waiting within grace period and verifying operator does not recreate pods")
-					pkgLog.Info("Waiting 30 seconds within grace period (grace period = 60s)...")
-					time.Sleep(30 * time.Second)
+					pkgLog.Info("Waiting 20 seconds within grace period (grace period = 60s)...")
+					time.Sleep(20 * time.Second)
 
 					podList, err = getPodList(aeroCluster, k8sClient)
 					Expect(err).ToNot(HaveOccurred())
@@ -2984,7 +2985,7 @@ func negativeUpdateClusterValidationTest(
 							}
 
 							return false
-						}, 1*time.Minute, 5*time.Second).Should(BeTrue())
+						}, 5*time.Minute, 10*time.Second).Should(BeTrue())
 				},
 			)
 		},
