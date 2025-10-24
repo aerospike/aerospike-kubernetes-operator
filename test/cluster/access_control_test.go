@@ -59,7 +59,7 @@ var aerospikeConfigWithSecurityWithQuota = &asdbv1.AerospikeConfigSpec{
 	},
 }
 
-var _ = FDescribe(
+var _ = Describe(
 	"AccessControl", func() {
 		ctx := goctx.TODO()
 
