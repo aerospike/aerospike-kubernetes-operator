@@ -65,12 +65,12 @@ func TestCheckPodFailedWithGrace(t *testing.T) {
 	now := time.Now()
 
 	tests := []struct {
-		pod             *corev1.Pod
-		name            string
-		description     string
-		allowGrace      bool
-		expectedInGrace bool
-		expectedError   bool
+		pod           *corev1.Pod
+		name          string
+		description   string
+		allowGrace    bool
+		expectReason  bool
+		expectedState PodHealthState
 	}{
 		{
 			name: "healthy running pod",
@@ -89,10 +89,10 @@ func TestCheckPodFailedWithGrace(t *testing.T) {
 					},
 				},
 			},
-			allowGrace:      true,
-			expectedInGrace: false,
-			expectedError:   false,
-			description:     "should not be failed or in grace",
+			allowGrace:    true,
+			expectedState: PodHealthy,
+			expectReason:  false,
+			description:   "should be healthy",
 		},
 		{
 			name: "failed pod within grace period",
@@ -106,10 +106,10 @@ func TestCheckPodFailedWithGrace(t *testing.T) {
 					Reason: "Error",
 				},
 			},
-			allowGrace:      true,
-			expectedInGrace: true,
-			expectedError:   true,
-			description:     "should be in grace period when allowGrace=true",
+			allowGrace:    true,
+			expectedState: PodFailedInGrace,
+			expectReason:  true,
+			description:   "should be in grace period when allowGrace=true",
 		},
 		{
 			name: "failed pod within grace period but allowGrace=false",
@@ -123,10 +123,10 @@ func TestCheckPodFailedWithGrace(t *testing.T) {
 					Reason: "Error",
 				},
 			},
-			allowGrace:      false,
-			expectedInGrace: false,
-			expectedError:   true,
-			description:     "should not be in grace when allowGrace=false",
+			allowGrace:    false,
+			expectedState: PodFailed,
+			expectReason:  true,
+			description:   "should be failed when allowGrace=false",
 		},
 		{
 			name: "unschedulable pod within grace period",
@@ -147,10 +147,10 @@ func TestCheckPodFailedWithGrace(t *testing.T) {
 					},
 				},
 			},
-			allowGrace:      true,
-			expectedInGrace: true,
-			expectedError:   true,
-			description:     "unschedulable pod should be in grace period",
+			allowGrace:    true,
+			expectedState: PodFailedInGrace,
+			expectReason:  true,
+			description:   "unschedulable pod should be in grace period",
 		},
 		{
 			name: "terminating pod",
@@ -164,26 +164,26 @@ func TestCheckPodFailedWithGrace(t *testing.T) {
 					Phase: corev1.PodRunning,
 				},
 			},
-			allowGrace:      true,
-			expectedInGrace: false,
-			expectedError:   false,
-			description:     "terminating pod should not be considered failed",
+			allowGrace:    true,
+			expectedState: PodHealthy,
+			expectReason:  false,
+			description:   "terminating pod should not be considered failed",
 		},
 	}
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			inGrace, err := CheckPodFailedWithGrace(tt.pod, tt.allowGrace)
+			podState := CheckPodFailedWithGrace(tt.pod, tt.allowGrace)
 
-			if inGrace != tt.expectedInGrace {
-				t.Errorf("CheckPodFailedWithGrace() inGrace = %v, expected %v (%s)",
-					inGrace, tt.expectedInGrace, tt.description)
+			if podState.State != tt.expectedState {
+				t.Errorf("CheckPodFailedWithGrace() state = %v, expected %v (%s)",
+					podState.State, tt.expectedState, tt.description)
 			}
 
-			hasError := err != nil
-			if hasError != tt.expectedError {
-				t.Errorf("CheckPodFailedWithGrace() error = %v, expected error = %v (%s)",
-					err, tt.expectedError, tt.description)
+			hasReason := podState.Reason != ""
+			if hasReason != tt.expectReason {
+				t.Errorf("CheckPodFailedWithGrace() has reason = %v, expected %v (%s)",
+					hasReason, tt.expectReason, tt.description)
 			}
 		})
 	}

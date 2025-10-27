@@ -566,18 +566,16 @@ func getFailedAndActivePods(
 	for idx := range pods {
 		pod := pods[idx]
 
-		inGracePeriod, err := utils.CheckPodFailedWithGrace(pod, withGracePeriod)
-		if err != nil {
-			if inGracePeriod {
-				failedWithinGracePeriodPods = append(failedWithinGracePeriodPods, pod)
-			} else {
-				failedPods = append(failedPods, pod)
-			}
+		podState := utils.CheckPodFailedWithGrace(pod, withGracePeriod)
 
-			continue
+		switch podState.State {
+		case utils.PodHealthy:
+			activePods = append(activePods, pod)
+		case utils.PodFailedInGrace:
+			failedWithinGracePeriodPods = append(failedWithinGracePeriodPods, pod)
+		case utils.PodFailed:
+			failedPods = append(failedPods, pod)
 		}
-
-		activePods = append(activePods, pod)
 	}
 
 	return failedPods, failedWithinGracePeriodPods, activePods

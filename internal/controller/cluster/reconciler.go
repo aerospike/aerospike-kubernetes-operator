@@ -306,10 +306,12 @@ func (r *SingleClusterReconciler) recoverIgnorablePods(ignorablePodNames sets.Se
 	// Try to recover failed/pending pods by deleting them if grace period is over.
 	for idx := range podList.Items {
 		if ignorablePodNames.Has(podList.Items[idx].Name) {
-			if inGracePeriod, cErr := utils.CheckPodFailedWithGrace(&podList.Items[idx], true); cErr != nil {
+			podState := utils.CheckPodFailedWithGrace(&podList.Items[idx], true)
+
+			if podState.State != utils.PodHealthy {
 				anyPodFailed = true
 
-				if inGracePeriod {
+				if podState.State == utils.PodFailedInGrace {
 					r.Log.Info(
 						"Pod is in failed state but within grace period, will not delete",
 						"pod", podList.Items[idx].Name,
@@ -320,6 +322,7 @@ func (r *SingleClusterReconciler) recoverIgnorablePods(ignorablePodNames sets.Se
 					continue
 				}
 
+				// Pod has failed and grace period is over
 				if err := r.createOrUpdatePodServiceIfNeeded([]string{podList.Items[idx].Name}); err != nil {
 					return common.ReconcileError(err)
 				}
@@ -630,8 +633,8 @@ func (r *SingleClusterReconciler) hasClusterFailed() (failed, inGracePeriod bool
 	for idx := range pods.Items {
 		pod := &pods.Items[idx]
 
-		inGrace, err := utils.CheckPodFailedWithGrace(pod, true)
-		if err == nil {
+		podState := utils.CheckPodFailedWithGrace(pod, true)
+		if podState.State == utils.PodHealthy {
 			// There is at least one pod that has not yet failed.
 			// It's possible that the containers are stuck doing a long disk
 			// initialization.
@@ -641,7 +644,7 @@ func (r *SingleClusterReconciler) hasClusterFailed() (failed, inGracePeriod bool
 		}
 
 		// Pod is failed, check if it's in grace period
-		if inGrace {
+		if podState.State == utils.PodFailedInGrace {
 			inGracePeriod = true
 		}
 	}
