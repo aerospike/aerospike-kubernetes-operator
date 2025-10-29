@@ -244,7 +244,7 @@ func (acs *AerospikeConfSpec) getVersion() string {
 	return acs.version
 }
 
-func (acs *AerospikeConfSpec) setSecurity(enableSecurity bool) {
+func (acs *AerospikeConfSpec) configureSecurity(enableSecurity bool) {
 	if enableSecurity {
 		security := map[string]interface{}{}
 		acs.security = security

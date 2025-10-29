@@ -1274,7 +1274,7 @@ var _ = Describe(
 									)
 								}
 
-								aerospikeConfigSpec.setSecurity(true)
+								aerospikeConfigSpec.configureSecurity(true)
 
 								aeroCluster := getAerospikeClusterSpecWithAccessControl(
 									clusterNamespacedName, &accessControl,
@@ -1290,6 +1290,7 @@ var _ = Describe(
 								}
 							},
 						)
+
 						It(
 							"Try ValidAccessControlQuota", func() {
 								accessControl := asdbv1.AerospikeAccessControlSpec{
@@ -1341,6 +1342,7 @@ var _ = Describe(
 								)
 							},
 						)
+
 						It(
 							"Try Invalid AccessControlEnableQuotaMissing",
 							func() {
@@ -1406,6 +1408,7 @@ var _ = Describe(
 								}
 							},
 						)
+
 						It(
 							"SecurityDisable: should reject access control if security is disabled",
 							func() {
@@ -1421,7 +1424,7 @@ var _ = Describe(
 									)
 								}
 
-								aerospikeConfigSpec.setSecurity(false)
+								aerospikeConfigSpec.configureSecurity(false)
 
 								accessControl = &asdbv1.AerospikeAccessControlSpec{
 									Roles: []asdbv1.AerospikeRoleSpec{
@@ -1456,7 +1459,6 @@ var _ = Describe(
 									},
 								}
 
-								// Save cluster variable as well for cleanup.
 								aeroCluster := getAerospikeClusterSpecWithAccessControl(
 									clusterNamespacedName, accessControl,
 									aerospikeConfigSpec,
@@ -1509,9 +1511,8 @@ var _ = Describe(
 									)
 								}
 
-								aerospikeConfigSpec.setSecurity(false)
+								aerospikeConfigSpec.configureSecurity(false)
 
-								// Save cluster variable as well for cleanup.
 								aeroCluster := getAerospikeClusterSpecWithAccessControl(
 									clusterNamespacedName, accessControl,
 									aerospikeConfigSpec,
@@ -1556,7 +1557,7 @@ var _ = Describe(
 									},
 								}
 
-								aerospikeConfigSpec.setSecurity(true)
+								aerospikeConfigSpec.configureSecurity(true)
 
 								aeroCluster = getAerospikeClusterSpecWithAccessControl(
 									clusterNamespacedName, accessControl,
@@ -1619,7 +1620,7 @@ var _ = Describe(
 									)
 								}
 
-								aerospikeConfigSpec.setSecurity(true)
+								aerospikeConfigSpec.configureSecurity(true)
 
 								aeroCluster := getAerospikeClusterSpecWithAccessControl(
 									clusterNamespacedName, accessControl,
@@ -1632,9 +1633,8 @@ var _ = Describe(
 									Fail("Security should be enabled")
 								}
 
-								aerospikeConfigSpec.setSecurity(false)
+								aerospikeConfigSpec.configureSecurity(false)
 
-								// Save cluster variable as well for cleanup.
 								aeroCluster = getAerospikeClusterSpecWithAccessControl(
 									clusterNamespacedName, accessControl,
 									aerospikeConfigSpec,
@@ -1662,9 +1662,8 @@ var _ = Describe(
 									)
 								}
 
-								aerospikeConfigSpec.setSecurity(false)
+								aerospikeConfigSpec.configureSecurity(false)
 
-								// Save cluster variable as well for cleanup.
 								aeroCluster := getAerospikeClusterSpecWithAccessControl(
 									clusterNamespacedName, accessControl,
 									aerospikeConfigSpec,
@@ -1707,7 +1706,7 @@ var _ = Describe(
 									},
 								}
 
-								aerospikeConfigSpec.setSecurity(true)
+								aerospikeConfigSpec.configureSecurity(true)
 
 								aeroCluster = getAerospikeClusterSpecWithAccessControl(
 									clusterNamespacedName, accessControl,
@@ -1717,7 +1716,7 @@ var _ = Describe(
 								err = updateClusterWithNoWait(k8sClient, ctx, aeroCluster)
 								Expect(err).ToNot(HaveOccurred())
 
-								aerospikeConfigSpec.setSecurity(false)
+								aerospikeConfigSpec.configureSecurity(false)
 
 								// Save cluster variable as well for cleanup.
 								aeroCluster = getAerospikeClusterSpecWithAccessControl(
@@ -1749,7 +1748,7 @@ var _ = Describe(
 									)
 								}
 
-								aerospikeConfigSpec.setSecurity(true)
+								aerospikeConfigSpec.configureSecurity(true)
 
 								accessControl = &asdbv1.AerospikeAccessControlSpec{
 									Roles: []asdbv1.AerospikeRoleSpec{
@@ -1784,7 +1783,6 @@ var _ = Describe(
 									},
 								}
 
-								// Save cluster variable as well for cleanup.
 								aeroCluster := getAerospikeClusterSpecWithAccessControl(
 									clusterNamespacedName, accessControl,
 									aerospikeConfigSpec,
@@ -1794,7 +1792,7 @@ var _ = Describe(
 								)
 								Expect(err).ToNot(HaveOccurred())
 
-								aerospikeConfigSpec.setSecurity(false)
+								aerospikeConfigSpec.configureSecurity(false)
 
 								aeroCluster = getAerospikeClusterSpecWithAccessControl(
 									clusterNamespacedName, accessControl,
@@ -1807,9 +1805,6 @@ var _ = Describe(
 								Expect(err).ToNot(HaveOccurred())
 
 								accessControl.Users = accessControl.Users[:1] // Try to drop one user.
-								// Save cluster variable as well for cleanup.
-								aeroCluster, err = getCluster(k8sClient, ctx, clusterNamespacedName)
-								Expect(err).ToNot(HaveOccurred())
 								aeroCluster.Spec.AerospikeAccessControl = accessControl
 
 								err = updateClusterWithNoWait(k8sClient, ctx, aeroCluster)
@@ -1888,7 +1883,7 @@ var _ = Describe(
 									)
 								}
 
-								aerospikeConfigSpec.setSecurity(true)
+								aerospikeConfigSpec.configureSecurity(true)
 
 								aeroCluster := getAerospikeClusterSpecWithAccessControl(
 									clusterNamespacedName, &accessControl,
@@ -1998,7 +1993,7 @@ var _ = Describe(
 									},
 								}
 
-								aerospikeConfigSpec.setSecurity(true)
+								aerospikeConfigSpec.configureSecurity(true)
 								aerospikeConfigSpec.setEnableQuotas(true)
 
 								aeroCluster = getAerospikeClusterSpecWithAccessControl(
@@ -2009,6 +2004,25 @@ var _ = Describe(
 									aeroCluster, ctx,
 								)
 								Expect(err).ToNot(HaveOccurred())
+
+								By("QuotaParamsSpecifiedButFlagIsOff")
+
+								aerospikeConfigSpec.configureSecurity(true)
+								aerospikeConfigSpec.setEnableQuotas(false)
+
+								aeroCluster = getAerospikeClusterSpecWithAccessControl(
+									clusterNamespacedName, &accessControl,
+									aerospikeConfigSpec,
+								)
+								err = testAccessControlReconcile(
+									aeroCluster, ctx,
+								)
+								if err == nil || !strings.Contains(
+									err.Error(),
+									"denied the request: security.enable-quotas is set to false but quota params are",
+								) {
+									Fail("QuotaParamsSpecifiedButFlagIsOff should have failed")
+								}
 
 								By("DisableQuota")
 
@@ -2061,7 +2075,7 @@ var _ = Describe(
 									},
 								}
 
-								aerospikeConfigSpec.setSecurity(true)
+								aerospikeConfigSpec.configureSecurity(true)
 								aerospikeConfigSpec.setEnableQuotas(false)
 
 								aeroCluster = getAerospikeClusterSpecWithAccessControl(
@@ -2072,76 +2086,6 @@ var _ = Describe(
 									aeroCluster, ctx,
 								)
 								Expect(err).ToNot(HaveOccurred())
-
-								By("QuotaParamsSpecifiedButFlagIsOff")
-
-								accessControl = asdbv1.AerospikeAccessControlSpec{
-									Roles: []asdbv1.AerospikeRoleSpec{
-										{
-											Name: "profiler",
-											Privileges: []string{
-												"read-write.test",
-												"read-write-udf.test.users",
-											},
-										},
-										{
-											Name: "roleToDrop",
-											Privileges: []string{
-												"read-write.test",
-												"read-write-udf.test.users",
-											},
-											Whitelist: []string{
-												"8.8.0.0/16",
-											},
-											ReadQuota:  1,
-											WriteQuota: 1,
-										},
-									},
-									Users: []asdbv1.AerospikeUserSpec{
-										{
-											Name:       "admin",
-											SecretName: test.AuthSecretName,
-											Roles: []string{
-												"sys-admin",
-												"user-admin",
-											},
-										},
-
-										{
-											Name:       "profileUser",
-											SecretName: test.AuthSecretName,
-											Roles: []string{
-												"profiler",
-												"sys-admin",
-											},
-										},
-
-										{
-											Name:       "userToDrop",
-											SecretName: test.AuthSecretName,
-											Roles: []string{
-												"profiler",
-											},
-										},
-									},
-								}
-
-								aerospikeConfigSpec.setSecurity(true)
-								aerospikeConfigSpec.setEnableQuotas(false)
-
-								aeroCluster = getAerospikeClusterSpecWithAccessControl(
-									clusterNamespacedName, &accessControl,
-									aerospikeConfigSpec,
-								)
-								err = testAccessControlReconcile(
-									aeroCluster, ctx,
-								)
-								if err == nil || !strings.Contains(
-									err.Error(),
-									"denied the request: security.enable-quotas is set to false but quota params are",
-								) {
-									Fail("QuotaParamsSpecifiedButFlagIsOff should have failed")
-								}
 							},
 						)
 					},

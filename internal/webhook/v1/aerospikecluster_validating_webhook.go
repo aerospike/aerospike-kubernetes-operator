@@ -72,7 +72,7 @@ func (acv *AerospikeClusterCustomValidator) ValidateCreate(_ context.Context, ob
 		return warns, err
 	}
 
-	return nil, nil
+	return warns, nil
 }
 
 // ValidateDelete implements webhook.CustomValidator so a webhook will be registered for the type

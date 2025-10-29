@@ -634,7 +634,7 @@ func isValueUpdated(m1, m2 map[string]interface{}, key string) bool {
 
 // ValidateAerospikeConfigUpdate validates the update of aerospikeConfig.
 // It validates the schema, security, tls, network and namespace configurations for the newConfig
-// It also validates the update of security, tls, network and namespace configurations.
+// It also validates the update of tls, network and namespace configurations.
 func ValidateAerospikeConfigUpdate(
 	aslog logr.Logger, version string,
 	oldConfig, newConfig map[string]interface{}, clSize int,
@@ -649,7 +649,7 @@ func ValidateAerospikeConfigUpdate(
 }
 
 // ValidateAerospikeConfigUpdateWithoutSchema validates the update of aerospikeConfig except for the schema.
-// It validates the update of security, tls, network and namespace configurations.
+// It validates the update of tls, network and namespace configurations.
 func ValidateAerospikeConfigUpdateWithoutSchema(oldConfig, newConfig map[string]interface{}) error {
 	if err := validateTLSUpdate(oldConfig, newConfig); err != nil {
 		return err
