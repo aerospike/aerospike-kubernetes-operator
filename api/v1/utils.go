@@ -35,6 +35,9 @@ const (
 	AdminPortName    = "admin"
 
 	InfoPortName = "info"
+
+	DefaultFailedPodGracePeriodSeconds = 60
+	RequeueIntervalSeconds10           = 10
 )
 
 const (

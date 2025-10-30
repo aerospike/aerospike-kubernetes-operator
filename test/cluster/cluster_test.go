@@ -2764,4 +2764,186 @@ func negativeUpdateClusterValidationTest(
 			)
 		},
 	)
+
+	Context(
+		"FailedPodGracePeriodConfiguration", func() {
+			clusterName := fmt.Sprintf("grace-period-%d", GinkgoParallelProcess())
+			clusterNamespacedName := test.GetNamespacedName(
+				clusterName, namespace,
+			)
+
+			AfterEach(
+				func() {
+					aeroCluster := &asdbv1.AerospikeCluster{
+						ObjectMeta: metav1.ObjectMeta{
+							Name:      clusterNamespacedName.Name,
+							Namespace: namespace,
+						},
+					}
+
+					Expect(DeleteCluster(k8sClient, ctx, aeroCluster)).ToNot(HaveOccurred())
+					Expect(CleanupPVC(k8sClient, aeroCluster.Namespace, aeroCluster.Name)).ToNot(HaveOccurred())
+				},
+			)
+
+			It(
+				"Should wait for grace period before recreating pods in fresh cluster deployment", func() {
+					By("Creating fresh cluster with unschedulable resource requirements")
+
+					aeroCluster := createDummyAerospikeCluster(clusterNamespacedName, 2)
+					// Make pods unschedulable by requesting excessive memory
+					aeroCluster.Spec.PodSpec.AerospikeContainerSpec.Resources = unschedulableResource()
+
+					err := k8sClient.Create(ctx, aeroCluster)
+					Expect(err).ToNot(HaveOccurred())
+
+					By("Waiting for pods to be created and enter pending state")
+
+					var (
+						podList *v1.PodList
+						uuidMap = make(map[string]types.UID)
+					)
+
+					Eventually(
+						func() error {
+							podList, err = getPodList(aeroCluster, k8sClient)
+							if err != nil {
+								return err
+							}
+
+							if len(podList.Items) != int(aeroCluster.Spec.Size) {
+								return fmt.Errorf("expected %d pods, found %d",
+									aeroCluster.Spec.Size, len(podList.Items))
+							}
+
+							for idx := range podList.Items {
+								pod := &podList.Items[idx]
+								if pod.Status.Phase != v1.PodPending {
+									return fmt.Errorf("pod %s is not in pending state", pod.Name)
+								}
+
+								uuidMap[pod.Name] = pod.UID
+							}
+
+							return nil
+						}, 5*time.Minute, 10*time.Second,
+					).Should(Succeed())
+
+					By("Waiting within grace period and verifying operator does not recreate pods")
+					pkgLog.Info("Waiting 20 seconds within grace period (grace period = 60s)...")
+					time.Sleep(20 * time.Second)
+
+					podList, err = getPodList(aeroCluster, k8sClient)
+					Expect(err).ToNot(HaveOccurred())
+
+					By("Verifying pods are not recreated within grace period")
+
+					for idx := range podList.Items {
+						pod := &podList.Items[idx]
+						Expect(pod.Status.Phase).To(Equal(v1.PodPending))
+						Expect(uuidMap[pod.Name]).To(Equal(pod.UID))
+					}
+
+					By("Verifying pods are recreated after grace period")
+
+					Eventually(
+						func() error {
+							podList, err = getPodList(aeroCluster, k8sClient)
+							if err != nil {
+								return err
+							}
+
+							if len(podList.Items) != int(aeroCluster.Spec.Size) {
+								return fmt.Errorf("expected %d pods, found %d",
+									aeroCluster.Spec.Size, len(podList.Items))
+							}
+
+							for idx := range podList.Items {
+								pod := &podList.Items[idx]
+								if uuidMap[pod.Name] == pod.UID {
+									return fmt.Errorf("pod %s was not recreated yet", pod.Name)
+								}
+							}
+
+							return nil
+						}, 5*time.Minute, 10*time.Second).Should(Succeed())
+				},
+			)
+
+			It(
+				"Should wait for grace period before recreating pods in an existing cluster", func() {
+					aeroCluster := createDummyAerospikeCluster(clusterNamespacedName, 2)
+
+					Expect(DeployCluster(k8sClient, ctx, aeroCluster)).ToNot(HaveOccurred())
+
+					aeroCluster.Spec.PodSpec.AerospikeContainerSpec.Resources = unschedulableResource()
+
+					err := updateClusterWithNoWait(k8sClient, ctx, aeroCluster)
+					Expect(err).ToNot(HaveOccurred())
+
+					var (
+						podList    *v1.PodList
+						pendingPod *v1.Pod
+					)
+
+					Eventually(
+						func() error {
+							podList, err = getPodList(aeroCluster, k8sClient)
+							if err != nil {
+								return err
+							}
+
+							for idx := range podList.Items {
+								pod := &podList.Items[idx]
+								if pod.Status.Phase == v1.PodPending {
+									pendingPod = pod
+									return nil
+								}
+							}
+
+							return fmt.Errorf("no pod in pending state")
+						}, 5*time.Minute, 10*time.Second,
+					).Should(Succeed())
+
+					By("Waiting within grace period and verifying operator does not recreate pods")
+					pkgLog.Info("Waiting 20 seconds within grace period (grace period = 60s)...")
+					time.Sleep(20 * time.Second)
+
+					podList, err = getPodList(aeroCluster, k8sClient)
+					Expect(err).ToNot(HaveOccurred())
+
+					By("Verifying pods are not recreated within grace period")
+
+					for idx := range podList.Items {
+						pod := &podList.Items[idx]
+						if pod.Name == pendingPod.Name {
+							Expect(pod.Status.Phase).To(Equal(v1.PodPending))
+							Expect(pod.UID).To(Equal(pendingPod.UID))
+
+							break
+						}
+					}
+
+					By("Verifying pods are recreated after grace period")
+					Eventually(
+						func() bool {
+							podList, err = getPodList(aeroCluster, k8sClient)
+							if err != nil {
+								pkgLog.Error(err, "Failed to get pod list")
+								return false
+							}
+
+							for idx := range podList.Items {
+								pod := &podList.Items[idx]
+								if pod.Name == pendingPod.Name {
+									return pod.UID != pendingPod.UID
+								}
+							}
+
+							return false
+						}, 5*time.Minute, 10*time.Second).Should(BeTrue())
+				},
+			)
+		},
+	)
 }
