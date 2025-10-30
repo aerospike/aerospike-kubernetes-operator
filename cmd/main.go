@@ -35,12 +35,10 @@ import (
 	backupservice "github.com/aerospike/aerospike-kubernetes-operator/v4/internal/controller/backup-service"
 	"github.com/aerospike/aerospike-kubernetes-operator/v4/internal/controller/cluster"
 	"github.com/aerospike/aerospike-kubernetes-operator/v4/internal/controller/restore"
-	"github.com/aerospike/aerospike-kubernetes-operator/v4/pkg/configschema"
-
-	webhookv1beta1 "github.com/aerospike/aerospike-kubernetes-operator/v4/internal/webhook/v1beta1"
-	// +kubebuilder:scaffold:imports
-	// to ensure that exec-entrypoint and run can make use of them.
+	webhookgeneral "github.com/aerospike/aerospike-kubernetes-operator/v4/internal/webhook/general"
 	webhookv1 "github.com/aerospike/aerospike-kubernetes-operator/v4/internal/webhook/v1"
+	webhookv1beta1 "github.com/aerospike/aerospike-kubernetes-operator/v4/internal/webhook/v1beta1"
+	"github.com/aerospike/aerospike-kubernetes-operator/v4/pkg/configschema"
 	"github.com/aerospike/aerospike-management-lib/asconfig"
 )
 
@@ -351,6 +349,12 @@ func main() {
 
 	if err = webhookv1beta1.SetupAerospikeRestoreWebhookWithManager(mgr); err != nil {
 		setupLog.Error(err, "unable to create webhook", "webhook", "AerospikeRestore")
+		os.Exit(1)
+	}
+
+	// Setup eviction webhook
+	if err = webhookgeneral.SetupEvictionWebhookWithManager(mgr); err != nil {
+		setupLog.Error(err, "unable to create eviction webhook", "webhook", "Eviction")
 		os.Exit(1)
 	}
 

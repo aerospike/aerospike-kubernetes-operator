@@ -96,6 +96,25 @@ webhooks:
     service:
       name: webhook-service
       namespace: system
+      path: /validate-eviction
+  failurePolicy: Ignore
+  name: veviction.kb.io
+  rules:
+  - apiGroups:
+    - ""
+    apiVersions:
+    - v1
+    operations:
+    - CREATE
+    resources:
+    - pods/eviction
+  sideEffects: None
+- admissionReviewVersions:
+  - v1
+  clientConfig:
+    service:
+      name: webhook-service
+      namespace: system
       path: /validate-asdb-aerospike-com-v1beta1-aerospikebackup
   failurePolicy: Fail
   name: vaerospikebackup.kb.io
