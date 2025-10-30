@@ -37,26 +37,8 @@ func AerospikeAdminCredentials(
 	desiredState, currentState *asdbv1.AerospikeClusterSpec,
 	passwordProvider AerospikeUserPasswordProvider,
 ) (user, pass string, err error) {
-	var (
-		enabled            bool
-		currentSecurityErr error
-		desiredSecurityErr error
-	)
-
-	enabled, desiredSecurityErr = asdbv1.IsSecurityEnabled(desiredState.AerospikeConfig.Value)
-	if !enabled {
-		if currentState.AerospikeConfig != nil {
-			// It is possible that this is a new cluster and the current state is empty.
-			enabled, currentSecurityErr = asdbv1.IsSecurityEnabled(currentState.AerospikeConfig.Value)
-		}
-
-		if currentSecurityErr != nil && desiredSecurityErr != nil {
-			return "", "", desiredSecurityErr
-		}
-	}
-
-	if !enabled {
-		// Return zero strings if this is not a security enabled cluster.
+	if desiredState.AerospikeAccessControl == nil {
+		// Security not enabled.
 		return "", "", nil
 	}
 
