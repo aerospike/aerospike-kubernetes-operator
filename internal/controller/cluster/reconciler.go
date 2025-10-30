@@ -659,7 +659,7 @@ func (r *SingleClusterReconciler) hasClusterFailed() (failed, inGracePeriod bool
 		return true, inGracePeriod, nil
 	}
 
-	return false, false, nil
+	return failed, inGracePeriod, nil
 }
 
 func (r *SingleClusterReconciler) patchStatus(newAeroCluster *asdbv1.AerospikeCluster) error {
