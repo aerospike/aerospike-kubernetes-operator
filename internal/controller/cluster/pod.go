@@ -910,9 +910,13 @@ func (r *SingleClusterReconciler) getIgnorablePods(racksToDelete []asdbv1.Rack, 
 	sets.Set[string], error,
 ) {
 	ignorablePodNames := sets.Set[string]{}
+	ignorableRackIDs := sets.Set[int]{}
 
-	for rackIdx := range racksToDelete {
-		rackPods, err := r.getRackPodList(racksToDelete[rackIdx].ID)
+	ignorableRacks := append([]asdbv1.Rack{}, racksToDelete...)
+	ignorableRacks = append(ignorableRacks, getRacksToBeBlockedFromRoster(r.Log, configuredRacks)...)
+
+	for idx := range ignorableRacks {
+		rackPods, err := r.getRackPodList(ignorableRacks[idx].ID)
 		if err != nil {
 			return nil, err
 		}
@@ -923,24 +927,27 @@ func (r *SingleClusterReconciler) getIgnorablePods(racksToDelete []asdbv1.Rack, 
 				ignorablePodNames.Insert(pod.Name)
 			}
 		}
+
+		ignorableRackIDs.Insert(ignorableRacks[idx].ID)
 	}
 
 	for idx := range configuredRacks {
-		rack := &configuredRacks[idx]
+		rackState := &configuredRacks[idx]
+		if ignorableRackIDs.Has(rackState.Rack.ID) {
+			// Already handled above
+			continue
+		}
 
 		failedAllowed, _ := intstr.GetScaledValueFromIntOrPercent(
-			r.aeroCluster.Spec.RackConfig.MaxIgnorablePods, int(rack.Size), false,
+			r.aeroCluster.Spec.RackConfig.MaxIgnorablePods, int(rackState.Size), false,
 		)
 
-		podList, err := r.getRackPodList(rack.Rack.ID)
+		podList, err := r.getRackPodList(rackState.Rack.ID)
 		if err != nil {
 			return nil, err
 		}
 
-		var (
-			failedPod  []string
-			pendingPod []string
-		)
+		var failedPod, pendingPod []string
 
 		for podIdx := range podList.Items {
 			pod := &podList.Items[podIdx]
@@ -971,6 +978,7 @@ func (r *SingleClusterReconciler) getIgnorablePods(racksToDelete []asdbv1.Rack, 
 
 	return ignorablePodNames, nil
 }
+
 func (r *SingleClusterReconciler) getPodsPVCList(
 	podNames []string, rackID int,
 ) ([]corev1.PersistentVolumeClaim, error) {
