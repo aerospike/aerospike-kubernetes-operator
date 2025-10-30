@@ -107,7 +107,7 @@ func (r *SingleClusterReconciler) removePVCsAsync(
 // deleteLocalPVCs deletes PVCs which are created using local storage classes
 // It considers the user given LocalStorageClasses list from spec to determine if a PVC is local or not.
 func (r *SingleClusterReconciler) deleteLocalPVCs(rackState *RackState, pod *corev1.Pod) error {
-	pvcItems, err := r.getPodsPVCList([]string{pod.Name}, rackState.Rack.ID)
+	pvcItems, err := r.getPodsPVCList([]string{pod.Name}, rackState.Rack.ID, rackState.Rack.Revision)
 	if err != nil {
 		return fmt.Errorf("could not find pvc for pod %v: %v", pod.Name, err)
 	}
@@ -203,18 +203,14 @@ func (r *SingleClusterReconciler) getClusterPVCList() (
 	return pvcList.Items, nil
 }
 
-func (r *SingleClusterReconciler) getRackPVCList(rackID int) (
+func (r *SingleClusterReconciler) getRackPVCList(rackID int, rackRevision string) (
 	[]corev1.PersistentVolumeClaim, error,
 ) {
 	// List the pvc for this aeroCluster's statefulset
 	pvcList := &corev1.PersistentVolumeClaimList{}
-	labelSelector := labels.SelectorFromSet(
-		utils.LabelsForAerospikeClusterRack(
-			r.aeroCluster.Name, rackID,
-		),
-	)
 	listOps := &client.ListOptions{
-		Namespace: r.aeroCluster.Namespace, LabelSelector: labelSelector,
+		Namespace:     r.aeroCluster.Namespace,
+		LabelSelector: utils.GetAerospikeClusterRackLabelSelector(r.aeroCluster.Name, rackID, rackRevision),
 	}
 
 	if err := r.Client.List(context.TODO(), pvcList, listOps); err != nil {

@@ -10,6 +10,8 @@ import (
 	"golang.org/x/crypto/ripemd160" //nolint:staticcheck,gosec // this ripemd160 legacy hash is only used for diff comparison not for security purpose
 	corev1 "k8s.io/api/core/v1"
 	meta "k8s.io/apimachinery/pkg/apis/meta/v1"
+	ls "k8s.io/apimachinery/pkg/labels"
+	"k8s.io/apimachinery/pkg/selection"
 	"k8s.io/apimachinery/pkg/types"
 
 	asdbv1 "github.com/aerospike/aerospike-kubernetes-operator/v4/api/v1"
@@ -47,10 +49,10 @@ func GetNamespacedName(obj meta.Object) types.NamespacedName {
 }
 
 func GetNamespacedNameForSTSOrConfigMap(
-	aeroCluster *asdbv1.AerospikeCluster, rackID int,
+	aeroCluster *asdbv1.AerospikeCluster, rackIdentifier string,
 ) types.NamespacedName {
 	return types.NamespacedName{
-		Name:      aeroCluster.Name + "-" + strconv.Itoa(rackID),
+		Name:      aeroCluster.Name + "-" + rackIdentifier,
 		Namespace: aeroCluster.Namespace,
 	}
 }
@@ -128,12 +130,31 @@ func LabelsForAerospikeCluster(clName string) map[string]string {
 
 // LabelsForAerospikeClusterRack returns the labels for specific rack
 func LabelsForAerospikeClusterRack(
-	clName string, rackID int,
+	clName string, rackID int, rackRevision string,
 ) map[string]string {
 	labels := LabelsForAerospikeCluster(clName)
 	labels[asdbv1.AerospikeRackIDLabel] = strconv.Itoa(rackID)
 
+	if rackRevision != "" {
+		labels[asdbv1.AerospikeRackRevisionLabel] = rackRevision
+	}
+
 	return labels
+}
+
+func GetAerospikeClusterRackLabelSelector(
+	clName string, rackID int, rackRevision string,
+) ls.Selector {
+	labelSelector := ls.SelectorFromSet(LabelsForAerospikeClusterRack(clName, rackID, rackRevision))
+
+	if rackRevision == "" {
+		// rack-revision DoesNotExist
+		reqRackRevision, _ := ls.NewRequirement(asdbv1.AerospikeRackRevisionLabel, selection.DoesNotExist, nil)
+
+		labelSelector = labelSelector.Add(*reqRackRevision)
+	}
+
+	return labelSelector
 }
 
 // LabelsForPodAntiAffinity returns the labels to use for setting pod
@@ -182,23 +203,24 @@ func GetHash(str string) (string, error) {
 	return hex.EncodeToString(res), nil
 }
 
-func GetRackIDFromSTSName(statefulSetName string) (*int, error) {
-	parts := strings.Split(statefulSetName, "-")
-	if len(parts) < 2 {
-		return nil, fmt.Errorf(
-			"failed to get rackID from statefulSetName %s", statefulSetName,
-		)
-	}
+// GetRackIDAndRevisionFromSTSName gets rackID and rackRevision from the statefulset name.
+// It assumes statefulset name is of format <cluster-name>-<rack-id> or <cluster-name>-<rack-id>-<rack-revision>
+func GetRackIDAndRevisionFromSTSName(clusterName, statefulSetName string) (rackID int, rackRevision string, err error) {
+	rackIdentifier := strings.TrimPrefix(statefulSetName, clusterName+"-")
+	// Split the rackIdentifier into parts: rack-id and rack-revision (optional).
+	parts := strings.SplitN(rackIdentifier, "-", 2)
 
-	// stsname ==> clustername-rackid
-	rackStr := parts[len(parts)-1]
-
-	rackID, err := strconv.Atoi(rackStr)
+	rackID, err = strconv.Atoi(parts[0])
 	if err != nil {
-		return nil, err
+		return 0, "", fmt.Errorf(
+			"could not get rack id from rackIdentifier %s for sts %s: %v", rackIdentifier, statefulSetName, err)
 	}
 
-	return &rackID, nil
+	if len(parts) > 1 {
+		rackRevision = parts[1]
+	}
+
+	return rackID, rackRevision, nil
 }
 
 // ContainsString returns true if a string exists in a slice of strings.
@@ -228,4 +250,14 @@ func RemoveString(slice []string, s string) (result []string) {
 // Len32 returns length of slice in int32 range.
 func Len32[T any](v []T) int32 {
 	return int32(len(v)) //nolint:gosec // length can't exceed int32 range
+}
+
+func GetRackIdentifier(rackID int, rackRevision string) string {
+	rackIDStr := strconv.Itoa(rackID)
+
+	if rackRevision != "" {
+		return fmt.Sprintf("%s-%s", rackIDStr, rackRevision)
+	}
+
+	return rackIDStr
 }

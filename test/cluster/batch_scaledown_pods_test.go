@@ -164,7 +164,7 @@ func validateBatchScaleDown(aeroCluster *asdbv1.AerospikeCluster, batchSize *int
 				scaleDownBatchSize = batchSize.IntVal
 			}
 
-			sts, err := getSTSFromRackID(aeroCluster, aeroCluster.Spec.RackConfig.Racks[idx].ID)
+			sts, err := getSTSFromRackID(aeroCluster, aeroCluster.Spec.RackConfig.Racks[idx].ID, "")
 			Expect(err).ToNot(HaveOccurred())
 
 			currentSize := *sts.Spec.Replicas
@@ -191,13 +191,13 @@ func validateBatchScaleDown(aeroCluster *asdbv1.AerospikeCluster, batchSize *int
 }
 
 func validateRackBatchDelete(aeroCluster *asdbv1.AerospikeCluster, scaleDownBatchSize, rackID int) {
-	sts, err := getSTSFromRackID(aeroCluster, rackID)
+	sts, err := getSTSFromRackID(aeroCluster, rackID, "")
 	Expect(err).ToNot(HaveOccurred())
 
 	oldSize := int(sts.Status.Replicas)
 
 	Eventually(func() bool {
-		sts, err = getSTSFromRackID(aeroCluster, rackID)
+		sts, err = getSTSFromRackID(aeroCluster, rackID, "")
 		if err != nil {
 			if errors.IsNotFound(err) {
 				pkgLog.Info("STS deleted", "rack", rackID)

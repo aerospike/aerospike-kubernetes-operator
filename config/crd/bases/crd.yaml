@@ -1,12 +1,21 @@
----
 apiVersion: apiextensions.k8s.io/v1
 kind: CustomResourceDefinition
 metadata:
   annotations:
-    aerospike-kubernetes-operator/version: 4.2.0-dev1
-    controller-gen.kubebuilder.io/version: v0.17.2
+    aerospike-kubernetes-operator/version: 4.0.2
+    controller-gen.kubebuilder.io/version: v0.16.1
+    operatorframework.io/installed-alongside-cdf4c623e8941660: operators/aerospike-kubernetes-operator.v4.0.2
+  creationTimestamp: "2025-05-15T18:56:11Z"
+  generation: 1
+  labels:
+    olm.managed: "true"
+    operators.coreos.com/aerospike-kubernetes-operator.operators: ""
   name: aerospikeclusters.asdb.aerospike.com
+  resourceVersion: "706923683"
+  uid: e55c7d69-566e-4845-8849-8906bd45bd53
 spec:
+  conversion:
+    strategy: None
   group: asdb.aerospike.com
   names:
     kind: AerospikeCluster
@@ -299,27 +308,6 @@ spec:
                   If enabled, operator will try to update the Aerospike config dynamically.
                   In case of inconsistent state during dynamic config update, operator falls back to rolling restart.
                 type: boolean
-              headlessService:
-                description: |-
-                  HeadlessService defines additional configuration parameters for the headless service created to discover
-                  Aerospike Cluster nodes
-                properties:
-                  metadata:
-                    properties:
-                      annotations:
-                        additionalProperties:
-                          type: string
-                        description: Key - Value pair that may be set by external
-                          tools to store and retrieve arbitrary metadata
-                        type: object
-                      labels:
-                        additionalProperties:
-                          type: string
-                        description: Key - Value pairs that can be used to organize
-                          and categorize scope and select objects
-                        type: object
-                    type: object
-                type: object
               image:
                 description: Aerospike server image
                 type: string
@@ -420,29 +408,6 @@ spec:
                 description: Paused flag is used to pause the reconciliation for the
                   AerospikeCluster.
                 type: boolean
-              podService:
-                description: |-
-                  PodService defines additional configuration parameters for the pod service created to expose the
-                  Aerospike Cluster nodes outside the Kubernetes cluster. This service is created only created when
-                  `multiPodPerHost` is set to `true` and `aerospikeNetworkPolicy` has one of the network types:
-                  'hostInternal', 'hostExternal', 'configuredIP'
-                properties:
-                  metadata:
-                    properties:
-                      annotations:
-                        additionalProperties:
-                          type: string
-                        description: Key - Value pair that may be set by external
-                          tools to store and retrieve arbitrary metadata
-                        type: object
-                      labels:
-                        additionalProperties:
-                          type: string
-                        description: Key - Value pairs that can be used to organize
-                          and categorize scope and select objects
-                        type: object
-                    type: object
-                type: object
               podSpec:
                 description: Specify additional configuration for the Aerospike pods
                 properties:
@@ -1934,12 +1899,9 @@ spec:
                             of a pod.
                           properties:
                             name:
-                              description: |-
-                                Name is this DNS resolver option's name.
-                                Required.
+                              description: Required.
                               type: string
                             value:
-                              description: Value is this DNS resolver option's value.
                               type: string
                           type: object
                         type: array
@@ -2231,8 +2193,7 @@ spec:
                                 More info: https://kubernetes.io/docs/concepts/containers/container-lifecycle-hooks/#container-hooks
                               properties:
                                 exec:
-                                  description: Exec specifies a command to execute
-                                    in the container.
+                                  description: Exec specifies the action to take.
                                   properties:
                                     command:
                                       description: |-
@@ -2247,7 +2208,7 @@ spec:
                                       x-kubernetes-list-type: atomic
                                   type: object
                                 httpGet:
-                                  description: HTTPGet specifies an HTTP GET request
+                                  description: HTTPGet specifies the http request
                                     to perform.
                                   properties:
                                     host:
@@ -2297,8 +2258,8 @@ spec:
                                   - port
                                   type: object
                                 sleep:
-                                  description: Sleep represents a duration that the
-                                    container should sleep.
+                                  description: Sleep represents the duration that
+                                    the container should sleep before being terminated.
                                   properties:
                                     seconds:
                                       description: Seconds is the number of seconds
@@ -2311,8 +2272,8 @@ spec:
                                 tcpSocket:
                                   description: |-
                                     Deprecated. TCPSocket is NOT supported as a LifecycleHandler and kept
-                                    for backward compatibility. There is no validation of this field and
-                                    lifecycle hooks will fail at runtime when it is specified.
+                                    for the backward compatibility. There are no validation of this field and
+                                    lifecycle hooks will fail in runtime when tcp handler is specified.
                                   properties:
                                     host:
                                       description: 'Optional: Host name to connect
@@ -2344,8 +2305,7 @@ spec:
                                 More info: https://kubernetes.io/docs/concepts/containers/container-lifecycle-hooks/#container-hooks
                               properties:
                                 exec:
-                                  description: Exec specifies a command to execute
-                                    in the container.
+                                  description: Exec specifies the action to take.
                                   properties:
                                     command:
                                       description: |-
@@ -2360,7 +2320,7 @@ spec:
                                       x-kubernetes-list-type: atomic
                                   type: object
                                 httpGet:
-                                  description: HTTPGet specifies an HTTP GET request
+                                  description: HTTPGet specifies the http request
                                     to perform.
                                   properties:
                                     host:
@@ -2410,8 +2370,8 @@ spec:
                                   - port
                                   type: object
                                 sleep:
-                                  description: Sleep represents a duration that the
-                                    container should sleep.
+                                  description: Sleep represents the duration that
+                                    the container should sleep before being terminated.
                                   properties:
                                     seconds:
                                       description: Seconds is the number of seconds
@@ -2424,8 +2384,8 @@ spec:
                                 tcpSocket:
                                   description: |-
                                     Deprecated. TCPSocket is NOT supported as a LifecycleHandler and kept
-                                    for backward compatibility. There is no validation of this field and
-                                    lifecycle hooks will fail at runtime when it is specified.
+                                    for the backward compatibility. There are no validation of this field and
+                                    lifecycle hooks will fail in runtime when tcp handler is specified.
                                   properties:
                                     host:
                                       description: 'Optional: Host name to connect
@@ -2453,8 +2413,7 @@ spec:
                             More info: https://kubernetes.io/docs/concepts/workloads/pods/pod-lifecycle#container-probes
                           properties:
                             exec:
-                              description: Exec specifies a command to execute in
-                                the container.
+                              description: Exec specifies the action to take.
                               properties:
                                 command:
                                   description: |-
@@ -2475,7 +2434,8 @@ spec:
                               format: int32
                               type: integer
                             grpc:
-                              description: GRPC specifies a GRPC HealthCheckRequest.
+                              description: GRPC specifies an action involving a GRPC
+                                port.
                               properties:
                                 port:
                                   description: Port number of the gRPC service. Number
@@ -2494,8 +2454,7 @@ spec:
                               - port
                               type: object
                             httpGet:
-                              description: HTTPGet specifies an HTTP GET request to
-                                perform.
+                              description: HTTPGet specifies the http request to perform.
                               properties:
                                 host:
                                   description: |-
@@ -2562,8 +2521,8 @@ spec:
                               format: int32
                               type: integer
                             tcpSocket:
-                              description: TCPSocket specifies a connection to a TCP
-                                port.
+                              description: TCPSocket specifies an action involving
+                                a TCP port.
                               properties:
                                 host:
                                   description: 'Optional: Host name to connect to,
@@ -2668,8 +2627,7 @@ spec:
                             More info: https://kubernetes.io/docs/concepts/workloads/pods/pod-lifecycle#container-probes
                           properties:
                             exec:
-                              description: Exec specifies a command to execute in
-                                the container.
+                              description: Exec specifies the action to take.
                               properties:
                                 command:
                                   description: |-
@@ -2690,7 +2648,8 @@ spec:
                               format: int32
                               type: integer
                             grpc:
-                              description: GRPC specifies a GRPC HealthCheckRequest.
+                              description: GRPC specifies an action involving a GRPC
+                                port.
                               properties:
                                 port:
                                   description: Port number of the gRPC service. Number
@@ -2709,8 +2668,7 @@ spec:
                               - port
                               type: object
                             httpGet:
-                              description: HTTPGet specifies an HTTP GET request to
-                                perform.
+                              description: HTTPGet specifies the http request to perform.
                               properties:
                                 host:
                                   description: |-
@@ -2777,8 +2735,8 @@ spec:
                               format: int32
                               type: integer
                             tcpSocket:
-                              description: TCPSocket specifies a connection to a TCP
-                                port.
+                              description: TCPSocket specifies an action involving
+                                a TCP port.
                               properties:
                                 host:
                                   description: 'Optional: Host name to connect to,
@@ -3127,8 +3085,7 @@ spec:
                             More info: https://kubernetes.io/docs/concepts/workloads/pods/pod-lifecycle#container-probes
                           properties:
                             exec:
-                              description: Exec specifies a command to execute in
-                                the container.
+                              description: Exec specifies the action to take.
                               properties:
                                 command:
                                   description: |-
@@ -3149,7 +3106,8 @@ spec:
                               format: int32
                               type: integer
                             grpc:
-                              description: GRPC specifies a GRPC HealthCheckRequest.
+                              description: GRPC specifies an action involving a GRPC
+                                port.
                               properties:
                                 port:
                                   description: Port number of the gRPC service. Number
@@ -3168,8 +3126,7 @@ spec:
                               - port
                               type: object
                             httpGet:
-                              description: HTTPGet specifies an HTTP GET request to
-                                perform.
+                              description: HTTPGet specifies the http request to perform.
                               properties:
                                 host:
                                   description: |-
@@ -3236,8 +3193,8 @@ spec:
                               format: int32
                               type: integer
                             tcpSocket:
-                              description: TCPSocket specifies a connection to a TCP
-                                port.
+                              description: TCPSocket specifies an action involving
+                                a TCP port.
                               properties:
                                 host:
                                   description: 'Optional: Host name to connect to,
@@ -3538,32 +3495,6 @@ spec:
                           Note that this field cannot be set when spec.os.name is windows.
                         format: int64
                         type: integer
-                      seLinuxChangePolicy:
-                        description: |-
-                          seLinuxChangePolicy defines how the container's SELinux label is applied to all volumes used by the Pod.
-                          It has no effect on nodes that do not support SELinux or to volumes does not support SELinux.
-                          Valid values are "MountOption" and "Recursive".
-
-                          "Recursive" means relabeling of all files on all Pod volumes by the container runtime.
-                          This may be slow for large volumes, but allows mixing privileged and unprivileged Pods sharing the same volume on the same node.
-
-                          "MountOption" mounts all eligible Pod volumes with `-o context` mount option.
-                          This requires all Pods that share the same volume to use the same SELinux label.
-                          It is not possible to share the same volume among privileged and unprivileged Pods.
-                          Eligible volumes are in-tree FibreChannel and iSCSI volumes, and all CSI volumes
-                          whose CSI driver announces SELinux support by setting spec.seLinuxMount: true in their
-                          CSIDriver instance. Other volumes are always re-labelled recursively.
-                          "MountOption" value is allowed only when SELinuxMount feature gate is enabled.
-
-                          If not specified and SELinuxMount feature gate is enabled, "MountOption" is used.
-                          If not specified and SELinuxMount feature gate is disabled, "MountOption" is used for ReadWriteOncePod volumes
-                          and "Recursive" for all other volumes.
-
-                          This field affects only Pods that have SELinux label set, either in PodSecurityContext or in SecurityContext of all containers.
-
-                          All Pods that use the same volume should use the same seLinuxChangePolicy, otherwise some pods can get stuck in ContainerCreating state.
-                          Note that this field cannot be set when spec.os.name is windows.
-                        type: string
                       seLinuxOptions:
                         description: |-
                           The SELinux context to be applied to all containers.
@@ -3933,8 +3864,7 @@ spec:
                                 More info: https://kubernetes.io/docs/concepts/containers/container-lifecycle-hooks/#container-hooks
                               properties:
                                 exec:
-                                  description: Exec specifies a command to execute
-                                    in the container.
+                                  description: Exec specifies the action to take.
                                   properties:
                                     command:
                                       description: |-
@@ -3949,7 +3879,7 @@ spec:
                                       x-kubernetes-list-type: atomic
                                   type: object
                                 httpGet:
-                                  description: HTTPGet specifies an HTTP GET request
+                                  description: HTTPGet specifies the http request
                                     to perform.
                                   properties:
                                     host:
@@ -3999,8 +3929,8 @@ spec:
                                   - port
                                   type: object
                                 sleep:
-                                  description: Sleep represents a duration that the
-                                    container should sleep.
+                                  description: Sleep represents the duration that
+                                    the container should sleep before being terminated.
                                   properties:
                                     seconds:
                                       description: Seconds is the number of seconds
@@ -4013,8 +3943,8 @@ spec:
                                 tcpSocket:
                                   description: |-
                                     Deprecated. TCPSocket is NOT supported as a LifecycleHandler and kept
-                                    for backward compatibility. There is no validation of this field and
-                                    lifecycle hooks will fail at runtime when it is specified.
+                                    for the backward compatibility. There are no validation of this field and
+                                    lifecycle hooks will fail in runtime when tcp handler is specified.
                                   properties:
                                     host:
                                       description: 'Optional: Host name to connect
@@ -4046,8 +3976,7 @@ spec:
                                 More info: https://kubernetes.io/docs/concepts/containers/container-lifecycle-hooks/#container-hooks
                               properties:
                                 exec:
-                                  description: Exec specifies a command to execute
-                                    in the container.
+                                  description: Exec specifies the action to take.
                                   properties:
                                     command:
                                       description: |-
@@ -4062,7 +3991,7 @@ spec:
                                       x-kubernetes-list-type: atomic
                                   type: object
                                 httpGet:
-                                  description: HTTPGet specifies an HTTP GET request
+                                  description: HTTPGet specifies the http request
                                     to perform.
                                   properties:
                                     host:
@@ -4112,8 +4041,8 @@ spec:
                                   - port
                                   type: object
                                 sleep:
-                                  description: Sleep represents a duration that the
-                                    container should sleep.
+                                  description: Sleep represents the duration that
+                                    the container should sleep before being terminated.
                                   properties:
                                     seconds:
                                       description: Seconds is the number of seconds
@@ -4126,8 +4055,8 @@ spec:
                                 tcpSocket:
                                   description: |-
                                     Deprecated. TCPSocket is NOT supported as a LifecycleHandler and kept
-                                    for backward compatibility. There is no validation of this field and
-                                    lifecycle hooks will fail at runtime when it is specified.
+                                    for the backward compatibility. There are no validation of this field and
+                                    lifecycle hooks will fail in runtime when tcp handler is specified.
                                   properties:
                                     host:
                                       description: 'Optional: Host name to connect
@@ -4155,8 +4084,7 @@ spec:
                             More info: https://kubernetes.io/docs/concepts/workloads/pods/pod-lifecycle#container-probes
                           properties:
                             exec:
-                              description: Exec specifies a command to execute in
-                                the container.
+                              description: Exec specifies the action to take.
                               properties:
                                 command:
                                   description: |-
@@ -4177,7 +4105,8 @@ spec:
                               format: int32
                               type: integer
                             grpc:
-                              description: GRPC specifies a GRPC HealthCheckRequest.
+                              description: GRPC specifies an action involving a GRPC
+                                port.
                               properties:
                                 port:
                                   description: Port number of the gRPC service. Number
@@ -4196,8 +4125,7 @@ spec:
                               - port
                               type: object
                             httpGet:
-                              description: HTTPGet specifies an HTTP GET request to
-                                perform.
+                              description: HTTPGet specifies the http request to perform.
                               properties:
                                 host:
                                   description: |-
@@ -4264,8 +4192,8 @@ spec:
                               format: int32
                               type: integer
                             tcpSocket:
-                              description: TCPSocket specifies a connection to a TCP
-                                port.
+                              description: TCPSocket specifies an action involving
+                                a TCP port.
                               properties:
                                 host:
                                   description: 'Optional: Host name to connect to,
@@ -4370,8 +4298,7 @@ spec:
                             More info: https://kubernetes.io/docs/concepts/workloads/pods/pod-lifecycle#container-probes
                           properties:
                             exec:
-                              description: Exec specifies a command to execute in
-                                the container.
+                              description: Exec specifies the action to take.
                               properties:
                                 command:
                                   description: |-
@@ -4392,7 +4319,8 @@ spec:
                               format: int32
                               type: integer
                             grpc:
-                              description: GRPC specifies a GRPC HealthCheckRequest.
+                              description: GRPC specifies an action involving a GRPC
+                                port.
                               properties:
                                 port:
                                   description: Port number of the gRPC service. Number
@@ -4411,8 +4339,7 @@ spec:
                               - port
                               type: object
                             httpGet:
-                              description: HTTPGet specifies an HTTP GET request to
-                                perform.
+                              description: HTTPGet specifies the http request to perform.
                               properties:
                                 host:
                                   description: |-
@@ -4479,8 +4406,8 @@ spec:
                               format: int32
                               type: integer
                             tcpSocket:
-                              description: TCPSocket specifies a connection to a TCP
-                                port.
+                              description: TCPSocket specifies an action involving
+                                a TCP port.
                               properties:
                                 host:
                                   description: 'Optional: Host name to connect to,
@@ -4829,8 +4756,7 @@ spec:
                             More info: https://kubernetes.io/docs/concepts/workloads/pods/pod-lifecycle#container-probes
                           properties:
                             exec:
-                              description: Exec specifies a command to execute in
-                                the container.
+                              description: Exec specifies the action to take.
                               properties:
                                 command:
                                   description: |-
@@ -4851,7 +4777,8 @@ spec:
                               format: int32
                               type: integer
                             grpc:
-                              description: GRPC specifies a GRPC HealthCheckRequest.
+                              description: GRPC specifies an action involving a GRPC
+                                port.
                               properties:
                                 port:
                                   description: Port number of the gRPC service. Number
@@ -4870,8 +4797,7 @@ spec:
                               - port
                               type: object
                             httpGet:
-                              description: HTTPGet specifies an HTTP GET request to
-                                perform.
+                              description: HTTPGet specifies the http request to perform.
                               properties:
                                 host:
                                   description: |-
@@ -4938,8 +4864,8 @@ spec:
                               format: int32
                               type: integer
                             tcpSocket:
-                              description: TCPSocket specifies a connection to a TCP
-                                port.
+                              description: TCPSocket specifies an action involving
+                                a TCP port.
                               properties:
                                 host:
                                   description: 'Optional: Host name to connect to,
@@ -6219,15 +6145,14 @@ spec:
                                   enum:
                                   - none
                                   - dd
-                                  - headerCleanup
                                   - blkdiscard
-                                  - blkdiscardWithHeaderCleanup
                                   - deleteFiles
                                   type: string
                                 effectiveWipeMethod:
                                   description: Effective/operative value to use as
                                     the volume wipe method after applying defaults.
                                   enum:
+                                  - none
                                   - dd
                                   - blkdiscard
                                   - deleteFiles
@@ -6239,9 +6164,7 @@ spec:
                                   enum:
                                   - none
                                   - dd
-                                  - headerCleanup
                                   - blkdiscard
-                                  - blkdiscardWithHeaderCleanup
                                   - deleteFiles
                                   type: string
                                 wipeMethod:
@@ -6249,6 +6172,7 @@ spec:
                                     WipeMethod determines how volumes attached to Aerospike server pods are wiped for dealing with storage format
                                     changes.
                                   enum:
+                                  - none
                                   - dd
                                   - blkdiscard
                                   - deleteFiles
@@ -6258,11 +6182,6 @@ spec:
                               description: CleanupThreads contains the maximum number
                                 of cleanup threads(dd or blkdiscard) per init container.
                               type: integer
-                            deleteLocalStorageOnRestart:
-                              description: |-
-                                DeleteLocalStorageOnRestart enables the deletion of local storage PVCs when a pod is restarted or rescheduled
-                                by AKO. It only considers local storage classes given in the localStorageClasses field.
-                              type: boolean
                             filesystemVolumePolicy:
                               description: FileSystemVolumePolicy contains default
                                 policies for filesystem volumes.
@@ -6282,15 +6201,14 @@ spec:
                                   enum:
                                   - none
                                   - dd
-                                  - headerCleanup
                                   - blkdiscard
-                                  - blkdiscardWithHeaderCleanup
                                   - deleteFiles
                                   type: string
                                 effectiveWipeMethod:
                                   description: Effective/operative value to use as
                                     the volume wipe method after applying defaults.
                                   enum:
+                                  - none
                                   - dd
                                   - blkdiscard
                                   - deleteFiles
@@ -6302,9 +6220,7 @@ spec:
                                   enum:
                                   - none
                                   - dd
-                                  - headerCleanup
                                   - blkdiscard
-                                  - blkdiscardWithHeaderCleanup
                                   - deleteFiles
                                   type: string
                                 wipeMethod:
@@ -6312,6 +6228,7 @@ spec:
                                     WipeMethod determines how volumes attached to Aerospike server pods are wiped for dealing with storage format
                                     changes.
                                   enum:
+                                  - none
                                   - dd
                                   - blkdiscard
                                   - deleteFiles
@@ -6381,15 +6298,14 @@ spec:
                                     enum:
                                     - none
                                     - dd
-                                    - headerCleanup
                                     - blkdiscard
-                                    - blkdiscardWithHeaderCleanup
                                     - deleteFiles
                                     type: string
                                   effectiveWipeMethod:
                                     description: Effective/operative value to use
                                       as the volume wipe method after applying defaults.
                                     enum:
+                                    - none
                                     - dd
                                     - blkdiscard
                                     - deleteFiles
@@ -6449,9 +6365,7 @@ spec:
                                     enum:
                                     - none
                                     - dd
-                                    - headerCleanup
                                     - blkdiscard
-                                    - blkdiscardWithHeaderCleanup
                                     - deleteFiles
                                     type: string
                                   name:
@@ -6604,27 +6518,6 @@ spec:
                                             pattern: ^(\+|-)?(([0-9]+(\.[0-9]*)?)|(\.[0-9]+))(([KMGTPE]i)|[numkMGTPE]|([eE](\+|-)?(([0-9]+(\.[0-9]*)?)|(\.[0-9]+))))?$
                                             x-kubernetes-int-or-string: true
                                         type: object
-                                      hostPath:
-                                        description: |-
-                                          HostPath represents a directory on the host provisioned by an administrator.
-                                          This is useful for exposing host paths to pods in a controlled, read-only manner.
-                                          More info: https://kubernetes.io/docs/concepts/storage/volumes#hostpath
-                                        properties:
-                                          path:
-                                            description: |-
-                                              path of the directory on the host.
-                                              If the path is a symlink, it will follow the link to the real path.
-                                              More info: https://kubernetes.io/docs/concepts/storage/volumes#hostpath
-                                            type: string
-                                          type:
-                                            description: |-
-                                              type for HostPath Volume
-                                              Defaults to ""
-                                              More info: https://kubernetes.io/docs/concepts/storage/volumes#hostpath
-                                            type: string
-                                        required:
-                                        - path
-                                        type: object
                                       persistentVolume:
                                         description: PersistentVolumeSpec describes
                                           a persistent volume to claim and attach
@@ -6632,13 +6525,9 @@ spec:
                                         properties:
                                           accessModes:
                                             description: |-
-                                              AccessModes contains the desired access modes the volume should have.
-                                              More info: https://kubernetes.io/docs/concepts/storage/persistent-volumes/#access-modes
+                                              Name for creating PVC for this volume, Name or path should be given
+                                              Name string `json:"name"`
                                             items:
-                                              enum:
-                                              - ReadOnlyMany
-                                              - ReadWriteMany
-                                              - ReadWriteOnce
                                               type: string
                                             type: array
                                           metadata:
@@ -6721,9 +6610,6 @@ spec:
                                           volumeMode:
                                             description: VolumeMode specifies if the
                                               volume is block/raw or a filesystem.
-                                            enum:
-                                            - Block
-                                            - Filesystem
                                             type: string
                                         required:
                                         - size
@@ -6804,6 +6690,7 @@ spec:
                                       WipeMethod determines how volumes attached to Aerospike server pods are wiped for dealing with storage format
                                       changes.
                                     enum:
+                                    - none
                                     - dd
                                     - blkdiscard
                                     - deleteFiles
@@ -7823,13 +7710,6 @@ spec:
                           description: Region name for setting rack affinity. Rack
                             pods will be deployed to given Region
                           type: string
-                        revision:
-                          description: |-
-                            Revision is a version identifier for this rack's specification, used to trigger controlled migrations
-                            when rack configuration changes require new StatefulSets. Change this field when making changes
-                            that cannot be applied in-place, such as storage updates that require pod recreation.
-                            The revision is appended to the rack ID for Kubernetes resource naming (e.g., <cluster-name>-<rackID>-<revision>).
-                          type: string
                         storage:
                           description: Storage specify persistent storage to use for
                             the pods in this rack. This value overwrites the global
@@ -7854,15 +7734,14 @@ spec:
                                   enum:
                                   - none
                                   - dd
-                                  - headerCleanup
                                   - blkdiscard
-                                  - blkdiscardWithHeaderCleanup
                                   - deleteFiles
                                   type: string
                                 effectiveWipeMethod:
                                   description: Effective/operative value to use as
                                     the volume wipe method after applying defaults.
                                   enum:
+                                  - none
                                   - dd
                                   - blkdiscard
                                   - deleteFiles
@@ -7874,9 +7753,7 @@ spec:
                                   enum:
                                   - none
                                   - dd
-                                  - headerCleanup
                                   - blkdiscard
-                                  - blkdiscardWithHeaderCleanup
                                   - deleteFiles
                                   type: string
                                 wipeMethod:
@@ -7884,6 +7761,7 @@ spec:
                                     WipeMethod determines how volumes attached to Aerospike server pods are wiped for dealing with storage format
                                     changes.
                                   enum:
+                                  - none
                                   - dd
                                   - blkdiscard
                                   - deleteFiles
@@ -7893,11 +7771,6 @@ spec:
                               description: CleanupThreads contains the maximum number
                                 of cleanup threads(dd or blkdiscard) per init container.
                               type: integer
-                            deleteLocalStorageOnRestart:
-                              description: |-
-                                DeleteLocalStorageOnRestart enables the deletion of local storage PVCs when a pod is restarted or rescheduled
-                                by AKO. It only considers local storage classes given in the localStorageClasses field.
-                              type: boolean
                             filesystemVolumePolicy:
                               description: FileSystemVolumePolicy contains default
                                 policies for filesystem volumes.
@@ -7917,15 +7790,14 @@ spec:
                                   enum:
                                   - none
                                   - dd
-                                  - headerCleanup
                                   - blkdiscard
-                                  - blkdiscardWithHeaderCleanup
                                   - deleteFiles
                                   type: string
                                 effectiveWipeMethod:
                                   description: Effective/operative value to use as
                                     the volume wipe method after applying defaults.
                                   enum:
+                                  - none
                                   - dd
                                   - blkdiscard
                                   - deleteFiles
@@ -7937,9 +7809,7 @@ spec:
                                   enum:
                                   - none
                                   - dd
-                                  - headerCleanup
                                   - blkdiscard
-                                  - blkdiscardWithHeaderCleanup
                                   - deleteFiles
                                   type: string
                                 wipeMethod:
@@ -7947,6 +7817,7 @@ spec:
                                     WipeMethod determines how volumes attached to Aerospike server pods are wiped for dealing with storage format
                                     changes.
                                   enum:
+                                  - none
                                   - dd
                                   - blkdiscard
                                   - deleteFiles
@@ -8016,15 +7887,14 @@ spec:
                                     enum:
                                     - none
                                     - dd
-                                    - headerCleanup
                                     - blkdiscard
-                                    - blkdiscardWithHeaderCleanup
                                     - deleteFiles
                                     type: string
                                   effectiveWipeMethod:
                                     description: Effective/operative value to use
                                       as the volume wipe method after applying defaults.
                                     enum:
+                                    - none
                                     - dd
                                     - blkdiscard
                                     - deleteFiles
@@ -8084,9 +7954,7 @@ spec:
                                     enum:
                                     - none
                                     - dd
-                                    - headerCleanup
                                     - blkdiscard
-                                    - blkdiscardWithHeaderCleanup
                                     - deleteFiles
                                     type: string
                                   name:
@@ -8239,27 +8107,6 @@ spec:
                                             pattern: ^(\+|-)?(([0-9]+(\.[0-9]*)?)|(\.[0-9]+))(([KMGTPE]i)|[numkMGTPE]|([eE](\+|-)?(([0-9]+(\.[0-9]*)?)|(\.[0-9]+))))?$
                                             x-kubernetes-int-or-string: true
                                         type: object
-                                      hostPath:
-                                        description: |-
-                                          HostPath represents a directory on the host provisioned by an administrator.
-                                          This is useful for exposing host paths to pods in a controlled, read-only manner.
-                                          More info: https://kubernetes.io/docs/concepts/storage/volumes#hostpath
-                                        properties:
-                                          path:
-                                            description: |-
-                                              path of the directory on the host.
-                                              If the path is a symlink, it will follow the link to the real path.
-                                              More info: https://kubernetes.io/docs/concepts/storage/volumes#hostpath
-                                            type: string
-                                          type:
-                                            description: |-
-                                              type for HostPath Volume
-                                              Defaults to ""
-                                              More info: https://kubernetes.io/docs/concepts/storage/volumes#hostpath
-                                            type: string
-                                        required:
-                                        - path
-                                        type: object
                                       persistentVolume:
                                         description: PersistentVolumeSpec describes
                                           a persistent volume to claim and attach
@@ -8267,13 +8114,9 @@ spec:
                                         properties:
                                           accessModes:
                                             description: |-
-                                              AccessModes contains the desired access modes the volume should have.
-                                              More info: https://kubernetes.io/docs/concepts/storage/persistent-volumes/#access-modes
+                                              Name for creating PVC for this volume, Name or path should be given
+                                              Name string `json:"name"`
                                             items:
-                                              enum:
-                                              - ReadOnlyMany
-                                              - ReadWriteMany
-                                              - ReadWriteOnce
                                               type: string
                                             type: array
                                           metadata:
@@ -8356,9 +8199,6 @@ spec:
                                           volumeMode:
                                             description: VolumeMode specifies if the
                                               volume is block/raw or a filesystem.
-                                            enum:
-                                            - Block
-                                            - Filesystem
                                             type: string
                                         required:
                                         - size
@@ -8439,6 +8279,7 @@ spec:
                                       WipeMethod determines how volumes attached to Aerospike server pods are wiped for dealing with storage format
                                       changes.
                                     enum:
+                                    - none
                                     - dd
                                     - blkdiscard
                                     - deleteFiles
@@ -8496,7 +8337,10 @@ spec:
                           type: string
                         type: object
                       externalTrafficPolicy:
-                        description: for backwards compat
+                        description: |-
+                          ServiceExternalTrafficPolicy describes how nodes distribute service traffic they
+                          receive on one of the Service's "externally-facing" addresses (NodePorts, ExternalIPs,
+                          and LoadBalancer IPs.
                         enum:
                         - Local
                         - Cluster
@@ -8553,15 +8397,14 @@ spec:
                         enum:
                         - none
                         - dd
-                        - headerCleanup
                         - blkdiscard
-                        - blkdiscardWithHeaderCleanup
                         - deleteFiles
                         type: string
                       effectiveWipeMethod:
                         description: Effective/operative value to use as the volume
                           wipe method after applying defaults.
                         enum:
+                        - none
                         - dd
                         - blkdiscard
                         - deleteFiles
@@ -8573,9 +8416,7 @@ spec:
                         enum:
                         - none
                         - dd
-                        - headerCleanup
                         - blkdiscard
-                        - blkdiscardWithHeaderCleanup
                         - deleteFiles
                         type: string
                       wipeMethod:
@@ -8583,6 +8424,7 @@ spec:
                           WipeMethod determines how volumes attached to Aerospike server pods are wiped for dealing with storage format
                           changes.
                         enum:
+                        - none
                         - dd
                         - blkdiscard
                         - deleteFiles
@@ -8592,11 +8434,6 @@ spec:
                     description: CleanupThreads contains the maximum number of cleanup
                       threads(dd or blkdiscard) per init container.
                     type: integer
-                  deleteLocalStorageOnRestart:
-                    description: |-
-                      DeleteLocalStorageOnRestart enables the deletion of local storage PVCs when a pod is restarted or rescheduled
-                      by AKO. It only considers local storage classes given in the localStorageClasses field.
-                    type: boolean
                   filesystemVolumePolicy:
                     description: FileSystemVolumePolicy contains default policies
                       for filesystem volumes.
@@ -8616,15 +8453,14 @@ spec:
                         enum:
                         - none
                         - dd
-                        - headerCleanup
                         - blkdiscard
-                        - blkdiscardWithHeaderCleanup
                         - deleteFiles
                         type: string
                       effectiveWipeMethod:
                         description: Effective/operative value to use as the volume
                           wipe method after applying defaults.
                         enum:
+                        - none
                         - dd
                         - blkdiscard
                         - deleteFiles
@@ -8636,9 +8472,7 @@ spec:
                         enum:
                         - none
                         - dd
-                        - headerCleanup
                         - blkdiscard
-                        - blkdiscardWithHeaderCleanup
                         - deleteFiles
                         type: string
                       wipeMethod:
@@ -8646,6 +8480,7 @@ spec:
                           WipeMethod determines how volumes attached to Aerospike server pods are wiped for dealing with storage format
                           changes.
                         enum:
+                        - none
                         - dd
                         - blkdiscard
                         - deleteFiles
@@ -8715,15 +8550,14 @@ spec:
                           enum:
                           - none
                           - dd
-                          - headerCleanup
                           - blkdiscard
-                          - blkdiscardWithHeaderCleanup
                           - deleteFiles
                           type: string
                         effectiveWipeMethod:
                           description: Effective/operative value to use as the volume
                             wipe method after applying defaults.
                           enum:
+                          - none
                           - dd
                           - blkdiscard
                           - deleteFiles
@@ -8782,9 +8616,7 @@ spec:
                           enum:
                           - none
                           - dd
-                          - headerCleanup
                           - blkdiscard
-                          - blkdiscardWithHeaderCleanup
                           - deleteFiles
                           type: string
                         name:
@@ -8936,40 +8768,15 @@ spec:
                                   pattern: ^(\+|-)?(([0-9]+(\.[0-9]*)?)|(\.[0-9]+))(([KMGTPE]i)|[numkMGTPE]|([eE](\+|-)?(([0-9]+(\.[0-9]*)?)|(\.[0-9]+))))?$
                                   x-kubernetes-int-or-string: true
                               type: object
-                            hostPath:
-                              description: |-
-                                HostPath represents a directory on the host provisioned by an administrator.
-                                This is useful for exposing host paths to pods in a controlled, read-only manner.
-                                More info: https://kubernetes.io/docs/concepts/storage/volumes#hostpath
-                              properties:
-                                path:
-                                  description: |-
-                                    path of the directory on the host.
-                                    If the path is a symlink, it will follow the link to the real path.
-                                    More info: https://kubernetes.io/docs/concepts/storage/volumes#hostpath
-                                  type: string
-                                type:
-                                  description: |-
-                                    type for HostPath Volume
-                                    Defaults to ""
-                                    More info: https://kubernetes.io/docs/concepts/storage/volumes#hostpath
-                                  type: string
-                              required:
-                              - path
-                              type: object
                             persistentVolume:
                               description: PersistentVolumeSpec describes a persistent
                                 volume to claim and attach to Aerospike pods.
                               properties:
                                 accessModes:
                                   description: |-
-                                    AccessModes contains the desired access modes the volume should have.
-                                    More info: https://kubernetes.io/docs/concepts/storage/persistent-volumes/#access-modes
+                                    Name for creating PVC for this volume, Name or path should be given
+                                    Name string `json:"name"`
                                   items:
-                                    enum:
-                                    - ReadOnlyMany
-                                    - ReadWriteMany
-                                    - ReadWriteOnce
                                     type: string
                                   type: array
                                 metadata:
@@ -9051,9 +8858,6 @@ spec:
                                 volumeMode:
                                   description: VolumeMode specifies if the volume
                                     is block/raw or a filesystem.
-                                  enum:
-                                  - Block
-                                  - Filesystem
                                   type: string
                               required:
                               - size
@@ -9134,6 +8938,7 @@ spec:
                             WipeMethod determines how volumes attached to Aerospike server pods are wiped for dealing with storage format
                             changes.
                           enum:
+                          - none
                           - dd
                           - blkdiscard
                           - deleteFiles
@@ -9415,27 +9220,6 @@ spec:
                   If enabled, operator will try to update the Aerospike config dynamically.
                   In case of inconsistent state during dynamic config update, operator falls back to rolling restart.
                 type: boolean
-              headlessService:
-                description: |-
-                  HeadlessService defines additional configuration parameters for the headless service created to discover
-                  Aerospike Cluster nodes
-                properties:
-                  metadata:
-                    properties:
-                      annotations:
-                        additionalProperties:
-                          type: string
-                        description: Key - Value pair that may be set by external
-                          tools to store and retrieve arbitrary metadata
-                        type: object
-                      labels:
-                        additionalProperties:
-                          type: string
-                        description: Key - Value pairs that can be used to organize
-                          and categorize scope and select objects
-                        type: object
-                    type: object
-                type: object
               image:
                 description: Aerospike server image
                 type: string
@@ -9556,29 +9340,6 @@ spec:
                 - Completed
                 - Error
                 type: string
-              podService:
-                description: |-
-                  PodService defines additional configuration parameters for the pod service created to expose the
-                  Aerospike Cluster nodes outside the Kubernetes cluster. This service is created only created when
-                  `multiPodPerHost` is set to `true` and `aerospikeNetworkPolicy` has one of the network types:
-                  'hostInternal', 'hostExternal', 'configuredIP'
-                properties:
-                  metadata:
-                    properties:
-                      annotations:
-                        additionalProperties:
-                          type: string
-                        description: Key - Value pair that may be set by external
-                          tools to store and retrieve arbitrary metadata
-                        type: object
-                      labels:
-                        additionalProperties:
-                          type: string
-                        description: Key - Value pairs that can be used to organize
-                          and categorize scope and select objects
-                        type: object
-                    type: object
-                type: object
               podSpec:
                 description: Additional configuration for create Aerospike pods.
                 properties:
@@ -11070,12 +10831,9 @@ spec:
                             of a pod.
                           properties:
                             name:
-                              description: |-
-                                Name is this DNS resolver option's name.
-                                Required.
+                              description: Required.
                               type: string
                             value:
-                              description: Value is this DNS resolver option's value.
                               type: string
                           type: object
                         type: array
@@ -11367,8 +11125,7 @@ spec:
                                 More info: https://kubernetes.io/docs/concepts/containers/container-lifecycle-hooks/#container-hooks
                               properties:
                                 exec:
-                                  description: Exec specifies a command to execute
-                                    in the container.
+                                  description: Exec specifies the action to take.
                                   properties:
                                     command:
                                       description: |-
@@ -11383,7 +11140,7 @@ spec:
                                       x-kubernetes-list-type: atomic
                                   type: object
                                 httpGet:
-                                  description: HTTPGet specifies an HTTP GET request
+                                  description: HTTPGet specifies the http request
                                     to perform.
                                   properties:
                                     host:
@@ -11433,8 +11190,8 @@ spec:
                                   - port
                                   type: object
                                 sleep:
-                                  description: Sleep represents a duration that the
-                                    container should sleep.
+                                  description: Sleep represents the duration that
+                                    the container should sleep before being terminated.
                                   properties:
                                     seconds:
                                       description: Seconds is the number of seconds
@@ -11447,8 +11204,8 @@ spec:
                                 tcpSocket:
                                   description: |-
                                     Deprecated. TCPSocket is NOT supported as a LifecycleHandler and kept
-                                    for backward compatibility. There is no validation of this field and
-                                    lifecycle hooks will fail at runtime when it is specified.
+                                    for the backward compatibility. There are no validation of this field and
+                                    lifecycle hooks will fail in runtime when tcp handler is specified.
                                   properties:
                                     host:
                                       description: 'Optional: Host name to connect
@@ -11480,8 +11237,7 @@ spec:
                                 More info: https://kubernetes.io/docs/concepts/containers/container-lifecycle-hooks/#container-hooks
                               properties:
                                 exec:
-                                  description: Exec specifies a command to execute
-                                    in the container.
+                                  description: Exec specifies the action to take.
                                   properties:
                                     command:
                                       description: |-
@@ -11496,7 +11252,7 @@ spec:
                                       x-kubernetes-list-type: atomic
                                   type: object
                                 httpGet:
-                                  description: HTTPGet specifies an HTTP GET request
+                                  description: HTTPGet specifies the http request
                                     to perform.
                                   properties:
                                     host:
@@ -11546,8 +11302,8 @@ spec:
                                   - port
                                   type: object
                                 sleep:
-                                  description: Sleep represents a duration that the
-                                    container should sleep.
+                                  description: Sleep represents the duration that
+                                    the container should sleep before being terminated.
                                   properties:
                                     seconds:
                                       description: Seconds is the number of seconds
@@ -11560,8 +11316,8 @@ spec:
                                 tcpSocket:
                                   description: |-
                                     Deprecated. TCPSocket is NOT supported as a LifecycleHandler and kept
-                                    for backward compatibility. There is no validation of this field and
-                                    lifecycle hooks will fail at runtime when it is specified.
+                                    for the backward compatibility. There are no validation of this field and
+                                    lifecycle hooks will fail in runtime when tcp handler is specified.
                                   properties:
                                     host:
                                       description: 'Optional: Host name to connect
@@ -11589,8 +11345,7 @@ spec:
                             More info: https://kubernetes.io/docs/concepts/workloads/pods/pod-lifecycle#container-probes
                           properties:
                             exec:
-                              description: Exec specifies a command to execute in
-                                the container.
+                              description: Exec specifies the action to take.
                               properties:
                                 command:
                                   description: |-
@@ -11611,7 +11366,8 @@ spec:
                               format: int32
                               type: integer
                             grpc:
-                              description: GRPC specifies a GRPC HealthCheckRequest.
+                              description: GRPC specifies an action involving a GRPC
+                                port.
                               properties:
                                 port:
                                   description: Port number of the gRPC service. Number
@@ -11630,8 +11386,7 @@ spec:
                               - port
                               type: object
                             httpGet:
-                              description: HTTPGet specifies an HTTP GET request to
-                                perform.
+                              description: HTTPGet specifies the http request to perform.
                               properties:
                                 host:
                                   description: |-
@@ -11698,8 +11453,8 @@ spec:
                               format: int32
                               type: integer
                             tcpSocket:
-                              description: TCPSocket specifies a connection to a TCP
-                                port.
+                              description: TCPSocket specifies an action involving
+                                a TCP port.
                               properties:
                                 host:
                                   description: 'Optional: Host name to connect to,
@@ -11804,8 +11559,7 @@ spec:
                             More info: https://kubernetes.io/docs/concepts/workloads/pods/pod-lifecycle#container-probes
                           properties:
                             exec:
-                              description: Exec specifies a command to execute in
-                                the container.
+                              description: Exec specifies the action to take.
                               properties:
                                 command:
                                   description: |-
@@ -11826,7 +11580,8 @@ spec:
                               format: int32
                               type: integer
                             grpc:
-                              description: GRPC specifies a GRPC HealthCheckRequest.
+                              description: GRPC specifies an action involving a GRPC
+                                port.
                               properties:
                                 port:
                                   description: Port number of the gRPC service. Number
@@ -11845,8 +11600,7 @@ spec:
                               - port
                               type: object
                             httpGet:
-                              description: HTTPGet specifies an HTTP GET request to
-                                perform.
+                              description: HTTPGet specifies the http request to perform.
                               properties:
                                 host:
                                   description: |-
@@ -11913,8 +11667,8 @@ spec:
                               format: int32
                               type: integer
                             tcpSocket:
-                              description: TCPSocket specifies a connection to a TCP
-                                port.
+                              description: TCPSocket specifies an action involving
+                                a TCP port.
                               properties:
                                 host:
                                   description: 'Optional: Host name to connect to,
@@ -12263,8 +12017,7 @@ spec:
                             More info: https://kubernetes.io/docs/concepts/workloads/pods/pod-lifecycle#container-probes
                           properties:
                             exec:
-                              description: Exec specifies a command to execute in
-                                the container.
+                              description: Exec specifies the action to take.
                               properties:
                                 command:
                                   description: |-
@@ -12285,7 +12038,8 @@ spec:
                               format: int32
                               type: integer
                             grpc:
-                              description: GRPC specifies a GRPC HealthCheckRequest.
+                              description: GRPC specifies an action involving a GRPC
+                                port.
                               properties:
                                 port:
                                   description: Port number of the gRPC service. Number
@@ -12304,8 +12058,7 @@ spec:
                               - port
                               type: object
                             httpGet:
-                              description: HTTPGet specifies an HTTP GET request to
-                                perform.
+                              description: HTTPGet specifies the http request to perform.
                               properties:
                                 host:
                                   description: |-
@@ -12372,8 +12125,8 @@ spec:
                               format: int32
                               type: integer
                             tcpSocket:
-                              description: TCPSocket specifies a connection to a TCP
-                                port.
+                              description: TCPSocket specifies an action involving
+                                a TCP port.
                               properties:
                                 host:
                                   description: 'Optional: Host name to connect to,
@@ -12674,32 +12427,6 @@ spec:
                           Note that this field cannot be set when spec.os.name is windows.
                         format: int64
                         type: integer
-                      seLinuxChangePolicy:
-                        description: |-
-                          seLinuxChangePolicy defines how the container's SELinux label is applied to all volumes used by the Pod.
-                          It has no effect on nodes that do not support SELinux or to volumes does not support SELinux.
-                          Valid values are "MountOption" and "Recursive".
-
-                          "Recursive" means relabeling of all files on all Pod volumes by the container runtime.
-                          This may be slow for large volumes, but allows mixing privileged and unprivileged Pods sharing the same volume on the same node.
-
-                          "MountOption" mounts all eligible Pod volumes with `-o context` mount option.
-                          This requires all Pods that share the same volume to use the same SELinux label.
-                          It is not possible to share the same volume among privileged and unprivileged Pods.
-                          Eligible volumes are in-tree FibreChannel and iSCSI volumes, and all CSI volumes
-                          whose CSI driver announces SELinux support by setting spec.seLinuxMount: true in their
-                          CSIDriver instance. Other volumes are always re-labelled recursively.
-                          "MountOption" value is allowed only when SELinuxMount feature gate is enabled.
-
-                          If not specified and SELinuxMount feature gate is enabled, "MountOption" is used.
-                          If not specified and SELinuxMount feature gate is disabled, "MountOption" is used for ReadWriteOncePod volumes
-                          and "Recursive" for all other volumes.
-
-                          This field affects only Pods that have SELinux label set, either in PodSecurityContext or in SecurityContext of all containers.
-
-                          All Pods that use the same volume should use the same seLinuxChangePolicy, otherwise some pods can get stuck in ContainerCreating state.
-                          Note that this field cannot be set when spec.os.name is windows.
-                        type: string
                       seLinuxOptions:
                         description: |-
                           The SELinux context to be applied to all containers.
@@ -13069,8 +12796,7 @@ spec:
                                 More info: https://kubernetes.io/docs/concepts/containers/container-lifecycle-hooks/#container-hooks
                               properties:
                                 exec:
-                                  description: Exec specifies a command to execute
-                                    in the container.
+                                  description: Exec specifies the action to take.
                                   properties:
                                     command:
                                       description: |-
@@ -13085,7 +12811,7 @@ spec:
                                       x-kubernetes-list-type: atomic
                                   type: object
                                 httpGet:
-                                  description: HTTPGet specifies an HTTP GET request
+                                  description: HTTPGet specifies the http request
                                     to perform.
                                   properties:
                                     host:
@@ -13135,8 +12861,8 @@ spec:
                                   - port
                                   type: object
                                 sleep:
-                                  description: Sleep represents a duration that the
-                                    container should sleep.
+                                  description: Sleep represents the duration that
+                                    the container should sleep before being terminated.
                                   properties:
                                     seconds:
                                       description: Seconds is the number of seconds
@@ -13149,8 +12875,8 @@ spec:
                                 tcpSocket:
                                   description: |-
                                     Deprecated. TCPSocket is NOT supported as a LifecycleHandler and kept
-                                    for backward compatibility. There is no validation of this field and
-                                    lifecycle hooks will fail at runtime when it is specified.
+                                    for the backward compatibility. There are no validation of this field and
+                                    lifecycle hooks will fail in runtime when tcp handler is specified.
                                   properties:
                                     host:
                                       description: 'Optional: Host name to connect
@@ -13182,8 +12908,7 @@ spec:
                                 More info: https://kubernetes.io/docs/concepts/containers/container-lifecycle-hooks/#container-hooks
                               properties:
                                 exec:
-                                  description: Exec specifies a command to execute
-                                    in the container.
+                                  description: Exec specifies the action to take.
                                   properties:
                                     command:
                                       description: |-
@@ -13198,7 +12923,7 @@ spec:
                                       x-kubernetes-list-type: atomic
                                   type: object
                                 httpGet:
-                                  description: HTTPGet specifies an HTTP GET request
+                                  description: HTTPGet specifies the http request
                                     to perform.
                                   properties:
                                     host:
@@ -13248,8 +12973,8 @@ spec:
                                   - port
                                   type: object
                                 sleep:
-                                  description: Sleep represents a duration that the
-                                    container should sleep.
+                                  description: Sleep represents the duration that
+                                    the container should sleep before being terminated.
                                   properties:
                                     seconds:
                                       description: Seconds is the number of seconds
@@ -13262,8 +12987,8 @@ spec:
                                 tcpSocket:
                                   description: |-
                                     Deprecated. TCPSocket is NOT supported as a LifecycleHandler and kept
-                                    for backward compatibility. There is no validation of this field and
-                                    lifecycle hooks will fail at runtime when it is specified.
+                                    for the backward compatibility. There are no validation of this field and
+                                    lifecycle hooks will fail in runtime when tcp handler is specified.
                                   properties:
                                     host:
                                       description: 'Optional: Host name to connect
@@ -13291,8 +13016,7 @@ spec:
                             More info: https://kubernetes.io/docs/concepts/workloads/pods/pod-lifecycle#container-probes
                           properties:
                             exec:
-                              description: Exec specifies a command to execute in
-                                the container.
+                              description: Exec specifies the action to take.
                               properties:
                                 command:
                                   description: |-
@@ -13313,7 +13037,8 @@ spec:
                               format: int32
                               type: integer
                             grpc:
-                              description: GRPC specifies a GRPC HealthCheckRequest.
+                              description: GRPC specifies an action involving a GRPC
+                                port.
                               properties:
                                 port:
                                   description: Port number of the gRPC service. Number
@@ -13332,8 +13057,7 @@ spec:
                               - port
                               type: object
                             httpGet:
-                              description: HTTPGet specifies an HTTP GET request to
-                                perform.
+                              description: HTTPGet specifies the http request to perform.
                               properties:
                                 host:
                                   description: |-
@@ -13400,8 +13124,8 @@ spec:
                               format: int32
                               type: integer
                             tcpSocket:
-                              description: TCPSocket specifies a connection to a TCP
-                                port.
+                              description: TCPSocket specifies an action involving
+                                a TCP port.
                               properties:
                                 host:
                                   description: 'Optional: Host name to connect to,
@@ -13506,8 +13230,7 @@ spec:
                             More info: https://kubernetes.io/docs/concepts/workloads/pods/pod-lifecycle#container-probes
                           properties:
                             exec:
-                              description: Exec specifies a command to execute in
-                                the container.
+                              description: Exec specifies the action to take.
                               properties:
                                 command:
                                   description: |-
@@ -13528,7 +13251,8 @@ spec:
                               format: int32
                               type: integer
                             grpc:
-                              description: GRPC specifies a GRPC HealthCheckRequest.
+                              description: GRPC specifies an action involving a GRPC
+                                port.
                               properties:
                                 port:
                                   description: Port number of the gRPC service. Number
@@ -13547,8 +13271,7 @@ spec:
                               - port
                               type: object
                             httpGet:
-                              description: HTTPGet specifies an HTTP GET request to
-                                perform.
+                              description: HTTPGet specifies the http request to perform.
                               properties:
                                 host:
                                   description: |-
@@ -13615,8 +13338,8 @@ spec:
                               format: int32
                               type: integer
                             tcpSocket:
-                              description: TCPSocket specifies a connection to a TCP
-                                port.
+                              description: TCPSocket specifies an action involving
+                                a TCP port.
                               properties:
                                 host:
                                   description: 'Optional: Host name to connect to,
@@ -13965,8 +13688,7 @@ spec:
                             More info: https://kubernetes.io/docs/concepts/workloads/pods/pod-lifecycle#container-probes
                           properties:
                             exec:
-                              description: Exec specifies a command to execute in
-                                the container.
+                              description: Exec specifies the action to take.
                               properties:
                                 command:
                                   description: |-
@@ -13987,7 +13709,8 @@ spec:
                               format: int32
                               type: integer
                             grpc:
-                              description: GRPC specifies a GRPC HealthCheckRequest.
+                              description: GRPC specifies an action involving a GRPC
+                                port.
                               properties:
                                 port:
                                   description: Port number of the gRPC service. Number
@@ -14006,8 +13729,7 @@ spec:
                               - port
                               type: object
                             httpGet:
-                              description: HTTPGet specifies an HTTP GET request to
-                                perform.
+                              description: HTTPGet specifies the http request to perform.
                               properties:
                                 host:
                                   description: |-
@@ -14074,8 +13796,8 @@ spec:
                               format: int32
                               type: integer
                             tcpSocket:
-                              description: TCPSocket specifies a connection to a TCP
-                                port.
+                              description: TCPSocket specifies an action involving
+                                a TCP port.
                               properties:
                                 host:
                                   description: 'Optional: Host name to connect to,
@@ -14398,13 +14120,6 @@ spec:
                       description: NetworkPolicyHash is ripemd160 hash of NetworkPolicy
                         used by this pod
                       type: string
-                    podAdminPort:
-                      description: |-
-                        PodAdminPort is the admin port K8s internal Aerospike clients can connect to.
-                        Admin port is a reserved port for administrative tools,
-                        ensuring cluster accessibility even during application overload scenarios.
-                      format: int32
-                      type: integer
                     podIP:
                       description: PodIP in the K8s network.
                       type: string
@@ -14416,13 +14131,6 @@ spec:
                       description: PodSpecHash is ripemd160 hash of PodSpec used by
                         this pod
                       type: string
-                    serviceAdminPort:
-                      description: |-
-                        ServiceAdminPort is the admin port Aerospike clients outside K8s can connect to.
-                        Admin port is a reserved port for administrative tools,
-                        ensuring cluster accessibility even during application overload scenarios.
-                      format: int32
-                      type: integer
                     servicePort:
                       description: ServicePort is the port Aerospike clients outside
                         K8s can connect to.
@@ -15498,15 +15206,14 @@ spec:
                                   enum:
                                   - none
                                   - dd
-                                  - headerCleanup
                                   - blkdiscard
-                                  - blkdiscardWithHeaderCleanup
                                   - deleteFiles
                                   type: string
                                 effectiveWipeMethod:
                                   description: Effective/operative value to use as
                                     the volume wipe method after applying defaults.
                                   enum:
+                                  - none
                                   - dd
                                   - blkdiscard
                                   - deleteFiles
@@ -15518,9 +15225,7 @@ spec:
                                   enum:
                                   - none
                                   - dd
-                                  - headerCleanup
                                   - blkdiscard
-                                  - blkdiscardWithHeaderCleanup
                                   - deleteFiles
                                   type: string
                                 wipeMethod:
@@ -15528,6 +15233,7 @@ spec:
                                     WipeMethod determines how volumes attached to Aerospike server pods are wiped for dealing with storage format
                                     changes.
                                   enum:
+                                  - none
                                   - dd
                                   - blkdiscard
                                   - deleteFiles
@@ -15537,11 +15243,6 @@ spec:
                               description: CleanupThreads contains the maximum number
                                 of cleanup threads(dd or blkdiscard) per init container.
                               type: integer
-                            deleteLocalStorageOnRestart:
-                              description: |-
-                                DeleteLocalStorageOnRestart enables the deletion of local storage PVCs when a pod is restarted or rescheduled
-                                by AKO. It only considers local storage classes given in the localStorageClasses field.
-                              type: boolean
                             filesystemVolumePolicy:
                               description: FileSystemVolumePolicy contains default
                                 policies for filesystem volumes.
@@ -15561,15 +15262,14 @@ spec:
                                   enum:
                                   - none
                                   - dd
-                                  - headerCleanup
                                   - blkdiscard
-                                  - blkdiscardWithHeaderCleanup
                                   - deleteFiles
                                   type: string
                                 effectiveWipeMethod:
                                   description: Effective/operative value to use as
                                     the volume wipe method after applying defaults.
                                   enum:
+                                  - none
                                   - dd
                                   - blkdiscard
                                   - deleteFiles
@@ -15581,9 +15281,7 @@ spec:
                                   enum:
                                   - none
                                   - dd
-                                  - headerCleanup
                                   - blkdiscard
-                                  - blkdiscardWithHeaderCleanup
                                   - deleteFiles
                                   type: string
                                 wipeMethod:
@@ -15591,6 +15289,7 @@ spec:
                                     WipeMethod determines how volumes attached to Aerospike server pods are wiped for dealing with storage format
                                     changes.
                                   enum:
+                                  - none
                                   - dd
                                   - blkdiscard
                                   - deleteFiles
@@ -15660,15 +15359,14 @@ spec:
                                     enum:
                                     - none
                                     - dd
-                                    - headerCleanup
                                     - blkdiscard
-                                    - blkdiscardWithHeaderCleanup
                                     - deleteFiles
                                     type: string
                                   effectiveWipeMethod:
                                     description: Effective/operative value to use
                                       as the volume wipe method after applying defaults.
                                     enum:
+                                    - none
                                     - dd
                                     - blkdiscard
                                     - deleteFiles
@@ -15728,9 +15426,7 @@ spec:
                                     enum:
                                     - none
                                     - dd
-                                    - headerCleanup
                                     - blkdiscard
-                                    - blkdiscardWithHeaderCleanup
                                     - deleteFiles
                                     type: string
                                   name:
@@ -15883,27 +15579,6 @@ spec:
                                             pattern: ^(\+|-)?(([0-9]+(\.[0-9]*)?)|(\.[0-9]+))(([KMGTPE]i)|[numkMGTPE]|([eE](\+|-)?(([0-9]+(\.[0-9]*)?)|(\.[0-9]+))))?$
                                             x-kubernetes-int-or-string: true
                                         type: object
-                                      hostPath:
-                                        description: |-
-                                          HostPath represents a directory on the host provisioned by an administrator.
-                                          This is useful for exposing host paths to pods in a controlled, read-only manner.
-                                          More info: https://kubernetes.io/docs/concepts/storage/volumes#hostpath
-                                        properties:
-                                          path:
-                                            description: |-
-                                              path of the directory on the host.
-                                              If the path is a symlink, it will follow the link to the real path.
-                                              More info: https://kubernetes.io/docs/concepts/storage/volumes#hostpath
-                                            type: string
-                                          type:
-                                            description: |-
-                                              type for HostPath Volume
-                                              Defaults to ""
-                                              More info: https://kubernetes.io/docs/concepts/storage/volumes#hostpath
-                                            type: string
-                                        required:
-                                        - path
-                                        type: object
                                       persistentVolume:
                                         description: PersistentVolumeSpec describes
                                           a persistent volume to claim and attach
@@ -15911,13 +15586,9 @@ spec:
                                         properties:
                                           accessModes:
                                             description: |-
-                                              AccessModes contains the desired access modes the volume should have.
-                                              More info: https://kubernetes.io/docs/concepts/storage/persistent-volumes/#access-modes
+                                              Name for creating PVC for this volume, Name or path should be given
+                                              Name string `json:"name"`
                                             items:
-                                              enum:
-                                              - ReadOnlyMany
-                                              - ReadWriteMany
-                                              - ReadWriteOnce
                                               type: string
                                             type: array
                                           metadata:
@@ -16000,9 +15671,6 @@ spec:
                                           volumeMode:
                                             description: VolumeMode specifies if the
                                               volume is block/raw or a filesystem.
-                                            enum:
-                                            - Block
-                                            - Filesystem
                                             type: string
                                         required:
                                         - size
@@ -16083,6 +15751,7 @@ spec:
                                       WipeMethod determines how volumes attached to Aerospike server pods are wiped for dealing with storage format
                                       changes.
                                     enum:
+                                    - none
                                     - dd
                                     - blkdiscard
                                     - deleteFiles
@@ -17102,13 +16771,6 @@ spec:
                           description: Region name for setting rack affinity. Rack
                             pods will be deployed to given Region
                           type: string
-                        revision:
-                          description: |-
-                            Revision is a version identifier for this rack's specification, used to trigger controlled migrations
-                            when rack configuration changes require new StatefulSets. Change this field when making changes
-                            that cannot be applied in-place, such as storage updates that require pod recreation.
-                            The revision is appended to the rack ID for Kubernetes resource naming (e.g., <cluster-name>-<rackID>-<revision>).
-                          type: string
                         storage:
                           description: Storage specify persistent storage to use for
                             the pods in this rack. This value overwrites the global
@@ -17133,15 +16795,14 @@ spec:
                                   enum:
                                   - none
                                   - dd
-                                  - headerCleanup
                                   - blkdiscard
-                                  - blkdiscardWithHeaderCleanup
                                   - deleteFiles
                                   type: string
                                 effectiveWipeMethod:
                                   description: Effective/operative value to use as
                                     the volume wipe method after applying defaults.
                                   enum:
+                                  - none
                                   - dd
                                   - blkdiscard
                                   - deleteFiles
@@ -17153,9 +16814,7 @@ spec:
                                   enum:
                                   - none
                                   - dd
-                                  - headerCleanup
                                   - blkdiscard
-                                  - blkdiscardWithHeaderCleanup
                                   - deleteFiles
                                   type: string
                                 wipeMethod:
@@ -17163,6 +16822,7 @@ spec:
                                     WipeMethod determines how volumes attached to Aerospike server pods are wiped for dealing with storage format
                                     changes.
                                   enum:
+                                  - none
                                   - dd
                                   - blkdiscard
                                   - deleteFiles
@@ -17172,11 +16832,6 @@ spec:
                               description: CleanupThreads contains the maximum number
                                 of cleanup threads(dd or blkdiscard) per init container.
                               type: integer
-                            deleteLocalStorageOnRestart:
-                              description: |-
-                                DeleteLocalStorageOnRestart enables the deletion of local storage PVCs when a pod is restarted or rescheduled
-                                by AKO. It only considers local storage classes given in the localStorageClasses field.
-                              type: boolean
                             filesystemVolumePolicy:
                               description: FileSystemVolumePolicy contains default
                                 policies for filesystem volumes.
@@ -17196,15 +16851,14 @@ spec:
                                   enum:
                                   - none
                                   - dd
-                                  - headerCleanup
                                   - blkdiscard
-                                  - blkdiscardWithHeaderCleanup
                                   - deleteFiles
                                   type: string
                                 effectiveWipeMethod:
                                   description: Effective/operative value to use as
                                     the volume wipe method after applying defaults.
                                   enum:
+                                  - none
                                   - dd
                                   - blkdiscard
                                   - deleteFiles
@@ -17216,9 +16870,7 @@ spec:
                                   enum:
                                   - none
                                   - dd
-                                  - headerCleanup
                                   - blkdiscard
-                                  - blkdiscardWithHeaderCleanup
                                   - deleteFiles
                                   type: string
                                 wipeMethod:
@@ -17226,6 +16878,7 @@ spec:
                                     WipeMethod determines how volumes attached to Aerospike server pods are wiped for dealing with storage format
                                     changes.
                                   enum:
+                                  - none
                                   - dd
                                   - blkdiscard
                                   - deleteFiles
@@ -17295,15 +16948,14 @@ spec:
                                     enum:
                                     - none
                                     - dd
-                                    - headerCleanup
                                     - blkdiscard
-                                    - blkdiscardWithHeaderCleanup
                                     - deleteFiles
                                     type: string
                                   effectiveWipeMethod:
                                     description: Effective/operative value to use
                                       as the volume wipe method after applying defaults.
                                     enum:
+                                    - none
                                     - dd
                                     - blkdiscard
                                     - deleteFiles
@@ -17363,9 +17015,7 @@ spec:
                                     enum:
                                     - none
                                     - dd
-                                    - headerCleanup
                                     - blkdiscard
-                                    - blkdiscardWithHeaderCleanup
                                     - deleteFiles
                                     type: string
                                   name:
@@ -17518,27 +17168,6 @@ spec:
                                             pattern: ^(\+|-)?(([0-9]+(\.[0-9]*)?)|(\.[0-9]+))(([KMGTPE]i)|[numkMGTPE]|([eE](\+|-)?(([0-9]+(\.[0-9]*)?)|(\.[0-9]+))))?$
                                             x-kubernetes-int-or-string: true
                                         type: object
-                                      hostPath:
-                                        description: |-
-                                          HostPath represents a directory on the host provisioned by an administrator.
-                                          This is useful for exposing host paths to pods in a controlled, read-only manner.
-                                          More info: https://kubernetes.io/docs/concepts/storage/volumes#hostpath
-                                        properties:
-                                          path:
-                                            description: |-
-                                              path of the directory on the host.
-                                              If the path is a symlink, it will follow the link to the real path.
-                                              More info: https://kubernetes.io/docs/concepts/storage/volumes#hostpath
-                                            type: string
-                                          type:
-                                            description: |-
-                                              type for HostPath Volume
-                                              Defaults to ""
-                                              More info: https://kubernetes.io/docs/concepts/storage/volumes#hostpath
-                                            type: string
-                                        required:
-                                        - path
-                                        type: object
                                       persistentVolume:
                                         description: PersistentVolumeSpec describes
                                           a persistent volume to claim and attach
@@ -17546,13 +17175,9 @@ spec:
                                         properties:
                                           accessModes:
                                             description: |-
-                                              AccessModes contains the desired access modes the volume should have.
-                                              More info: https://kubernetes.io/docs/concepts/storage/persistent-volumes/#access-modes
+                                              Name for creating PVC for this volume, Name or path should be given
+                                              Name string `json:"name"`
                                             items:
-                                              enum:
-                                              - ReadOnlyMany
-                                              - ReadWriteMany
-                                              - ReadWriteOnce
                                               type: string
                                             type: array
                                           metadata:
@@ -17635,9 +17260,6 @@ spec:
                                           volumeMode:
                                             description: VolumeMode specifies if the
                                               volume is block/raw or a filesystem.
-                                            enum:
-                                            - Block
-                                            - Filesystem
                                             type: string
                                         required:
                                         - size
@@ -17718,6 +17340,7 @@ spec:
                                       WipeMethod determines how volumes attached to Aerospike server pods are wiped for dealing with storage format
                                       changes.
                                     enum:
+                                    - none
                                     - dd
                                     - blkdiscard
                                     - deleteFiles
@@ -17837,7 +17460,10 @@ spec:
                           type: string
                         type: object
                       externalTrafficPolicy:
-                        description: for backwards compat
+                        description: |-
+                          ServiceExternalTrafficPolicy describes how nodes distribute service traffic they
+                          receive on one of the Service's "externally-facing" addresses (NodePorts, ExternalIPs,
+                          and LoadBalancer IPs.
                         enum:
                         - Local
                         - Cluster
@@ -17898,15 +17524,14 @@ spec:
                         enum:
                         - none
                         - dd
-                        - headerCleanup
                         - blkdiscard
-                        - blkdiscardWithHeaderCleanup
                         - deleteFiles
                         type: string
                       effectiveWipeMethod:
                         description: Effective/operative value to use as the volume
                           wipe method after applying defaults.
                         enum:
+                        - none
                         - dd
                         - blkdiscard
                         - deleteFiles
@@ -17918,9 +17543,7 @@ spec:
                         enum:
                         - none
                         - dd
-                        - headerCleanup
                         - blkdiscard
-                        - blkdiscardWithHeaderCleanup
                         - deleteFiles
                         type: string
                       wipeMethod:
@@ -17928,6 +17551,7 @@ spec:
                           WipeMethod determines how volumes attached to Aerospike server pods are wiped for dealing with storage format
                           changes.
                         enum:
+                        - none
                         - dd
                         - blkdiscard
                         - deleteFiles
@@ -17937,11 +17561,6 @@ spec:
                     description: CleanupThreads contains the maximum number of cleanup
                       threads(dd or blkdiscard) per init container.
                     type: integer
-                  deleteLocalStorageOnRestart:
-                    description: |-
-                      DeleteLocalStorageOnRestart enables the deletion of local storage PVCs when a pod is restarted or rescheduled
-                      by AKO. It only considers local storage classes given in the localStorageClasses field.
-                    type: boolean
                   filesystemVolumePolicy:
                     description: FileSystemVolumePolicy contains default policies
                       for filesystem volumes.
@@ -17961,15 +17580,14 @@ spec:
                         enum:
                         - none
                         - dd
-                        - headerCleanup
                         - blkdiscard
-                        - blkdiscardWithHeaderCleanup
                         - deleteFiles
                         type: string
                       effectiveWipeMethod:
                         description: Effective/operative value to use as the volume
                           wipe method after applying defaults.
                         enum:
+                        - none
                         - dd
                         - blkdiscard
                         - deleteFiles
@@ -17981,9 +17599,7 @@ spec:
                         enum:
                         - none
                         - dd
-                        - headerCleanup
                         - blkdiscard
-                        - blkdiscardWithHeaderCleanup
                         - deleteFiles
                         type: string
                       wipeMethod:
@@ -17991,6 +17607,7 @@ spec:
                           WipeMethod determines how volumes attached to Aerospike server pods are wiped for dealing with storage format
                           changes.
                         enum:
+                        - none
                         - dd
                         - blkdiscard
                         - deleteFiles
@@ -18060,15 +17677,14 @@ spec:
                           enum:
                           - none
                           - dd
-                          - headerCleanup
                           - blkdiscard
-                          - blkdiscardWithHeaderCleanup
                           - deleteFiles
                           type: string
                         effectiveWipeMethod:
                           description: Effective/operative value to use as the volume
                             wipe method after applying defaults.
                           enum:
+                          - none
                           - dd
                           - blkdiscard
                           - deleteFiles
@@ -18127,9 +17743,7 @@ spec:
                           enum:
                           - none
                           - dd
-                          - headerCleanup
                           - blkdiscard
-                          - blkdiscardWithHeaderCleanup
                           - deleteFiles
                           type: string
                         name:
@@ -18281,40 +17895,15 @@ spec:
                                   pattern: ^(\+|-)?(([0-9]+(\.[0-9]*)?)|(\.[0-9]+))(([KMGTPE]i)|[numkMGTPE]|([eE](\+|-)?(([0-9]+(\.[0-9]*)?)|(\.[0-9]+))))?$
                                   x-kubernetes-int-or-string: true
                               type: object
-                            hostPath:
-                              description: |-
-                                HostPath represents a directory on the host provisioned by an administrator.
-                                This is useful for exposing host paths to pods in a controlled, read-only manner.
-                                More info: https://kubernetes.io/docs/concepts/storage/volumes#hostpath
-                              properties:
-                                path:
-                                  description: |-
-                                    path of the directory on the host.
-                                    If the path is a symlink, it will follow the link to the real path.
-                                    More info: https://kubernetes.io/docs/concepts/storage/volumes#hostpath
-                                  type: string
-                                type:
-                                  description: |-
-                                    type for HostPath Volume
-                                    Defaults to ""
-                                    More info: https://kubernetes.io/docs/concepts/storage/volumes#hostpath
-                                  type: string
-                              required:
-                              - path
-                              type: object
                             persistentVolume:
                               description: PersistentVolumeSpec describes a persistent
                                 volume to claim and attach to Aerospike pods.
                               properties:
                                 accessModes:
                                   description: |-
-                                    AccessModes contains the desired access modes the volume should have.
-                                    More info: https://kubernetes.io/docs/concepts/storage/persistent-volumes/#access-modes
+                                    Name for creating PVC for this volume, Name or path should be given
+                                    Name string `json:"name"`
                                   items:
-                                    enum:
-                                    - ReadOnlyMany
-                                    - ReadWriteMany
-                                    - ReadWriteOnce
                                     type: string
                                   type: array
                                 metadata:
@@ -18396,9 +17985,6 @@ spec:
                                 volumeMode:
                                   description: VolumeMode specifies if the volume
                                     is block/raw or a filesystem.
-                                  enum:
-                                  - Block
-                                  - Filesystem
                                   type: string
                               required:
                               - size
@@ -18479,6 +18065,7 @@ spec:
                             WipeMethod determines how volumes attached to Aerospike server pods are wiped for dealing with storage format
                             changes.
                           enum:
+                          - none
                           - dd
                           - blkdiscard
                           - deleteFiles
@@ -18519,3 +18106,22 @@ spec:
         specReplicasPath: .spec.size
         statusReplicasPath: .status.size
       status: {}
+status:
+  acceptedNames:
+    kind: AerospikeCluster
+    listKind: AerospikeClusterList
+    plural: aerospikeclusters
+    singular: aerospikecluster
+  conditions:
+  - lastTransitionTime: "2025-05-15T18:56:11Z"
+    message: no conflicts found
+    reason: NoConflicts
+    status: "True"
+    type: NamesAccepted
+  - lastTransitionTime: "2025-05-15T18:56:12Z"
+    message: the initial names have been accepted
+    reason: InitialNamesAccepted
+    status: "True"
+    type: Established
+  storedVersions:
+  - v1
