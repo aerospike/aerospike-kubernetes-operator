@@ -1469,14 +1469,7 @@ func aerospikeClusterCreateUpdateWithTO(
 
 	current.Spec.AerospikeConfig.Value = desired.Spec.AerospikeConfig.DeepCopy().Value
 
-	if err := k8sClient.Update(ctx, current); err != nil {
-		return err
-	}
-
-	return waitForAerospikeCluster(
-		k8sClient, ctx, desired, int(desired.Spec.Size), retryInterval, timeout,
-		[]asdbv1.AerospikeClusterPhase{asdbv1.AerospikeClusterCompleted},
-	)
+	return updateClusterWithTO(k8sClient, ctx, current, timeout)
 }
 
 func aerospikeClusterCreateUpdate(

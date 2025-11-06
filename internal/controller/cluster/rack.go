@@ -2085,9 +2085,10 @@ func (r *SingleClusterReconciler) handleFailedPodsInRack(
 		)
 	}
 
-	failedPods, _ := getFailedAndActivePods(podList)
+	failedPods, _, _ := getFailedAndActivePods(podList, false)
 	// remove ignorable pods from failedPods
 	failedPods = getNonIgnorablePods(failedPods, ignorablePodNames)
+
 	if len(failedPods) != 0 {
 		r.Log.Info("Reconcile the failed pods in the Rack",
 			"rackID", rackState.Rack.ID, "rackRevision", rackState.Rack.Revision,
@@ -2116,9 +2117,10 @@ func (r *SingleClusterReconciler) handleFailedPodsInRack(
 		)
 	}
 
-	failedPods, _ = getFailedAndActivePods(podList)
+	failedPods, _, _ = getFailedAndActivePods(podList, false)
 	// remove ignorable pods from failedPods
 	failedPods = getNonIgnorablePods(failedPods, ignorablePodNames)
+
 	if len(failedPods) != 0 {
 		r.Log.Info("Restart the failed pods in the Rack",
 			"rackID", rackState.Rack.ID, "rackRevision", rackState.Rack.Revision,

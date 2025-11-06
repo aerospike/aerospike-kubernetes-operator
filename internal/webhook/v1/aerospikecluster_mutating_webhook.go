@@ -296,8 +296,6 @@ func updateRacksAerospikeConfigFromGlobal(asLog logr.Logger, cluster *asdbv1.Aer
 
 func setDefaultAerospikeConfigs(asLog logr.Logger,
 	configSpec asdbv1.AerospikeConfigSpec, rackID *int, cluster *asdbv1.AerospikeCluster) error {
-	config := configSpec.Value
-
 	// namespace conf
 	if err := setDefaultNsConf(asLog, configSpec, cluster.Spec.RackConfig.Namespaces, rackID); err != nil {
 		return err
@@ -318,13 +316,6 @@ func setDefaultAerospikeConfigs(asLog logr.Logger,
 	// logging conf
 	if err := setDefaultLoggingConf(asLog, configSpec); err != nil {
 		return err
-	}
-
-	// xdr conf
-	if _, ok := config["xdr"]; ok {
-		if err := setDefaultXDRConf(asLog, configSpec); err != nil {
-			return err
-		}
 	}
 
 	// escape LDAP configuration
@@ -710,13 +701,6 @@ func setDefaultLoggingConf(
 
 	config["logging"] = loggingConfList
 
-	return nil
-}
-
-func setDefaultXDRConf(
-	_ logr.Logger, _ asdbv1.AerospikeConfigSpec,
-) error {
-	// Nothing to update for now
 	return nil
 }
 

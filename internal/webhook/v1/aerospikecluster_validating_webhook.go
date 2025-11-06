@@ -63,7 +63,16 @@ func (acv *AerospikeClusterCustomValidator) ValidateCreate(_ context.Context, ob
 
 	aslog.Info("Validate create")
 
-	return validate(aslog, aerospikeCluster)
+	warns, vErr := validate(aslog, aerospikeCluster)
+	if vErr != nil {
+		return warns, vErr
+	}
+
+	if err := validateAccessControlCreate(&aerospikeCluster.Spec); err != nil {
+		return warns, err
+	}
+
+	return warns, nil
 }
 
 // ValidateDelete implements webhook.CustomValidator so a webhook will be registered for the type
@@ -144,6 +153,10 @@ func (acv *AerospikeClusterCustomValidator) ValidateUpdate(_ context.Context, ol
 	if err := validateOperationUpdate(
 		&oldObject.Spec, &aerospikeCluster.Spec, &aerospikeCluster.Status,
 	); err != nil {
+		return warnings, err
+	}
+
+	if err := validateAccessControlUpdate(&oldObject.Spec, &aerospikeCluster.Spec); err != nil {
 		return warnings, err
 	}
 
@@ -319,6 +332,47 @@ func validate(aslog logr.Logger, cluster *asdbv1.AerospikeCluster) (admission.Wa
 	}
 
 	return warnings, validateSCNamespaces(cluster)
+}
+
+func validateAccessControlCreate(
+	aerospikeClusterSpec *asdbv1.AerospikeClusterSpec,
+) error {
+	enabled, err := asdbv1.IsSecurityEnabled(aerospikeClusterSpec.AerospikeConfig.Value)
+	if err != nil {
+		return err
+	}
+
+	if !enabled && aerospikeClusterSpec.AerospikeAccessControl != nil {
+		// Security is disabled however access control is specified.
+		return fmt.Errorf("security is disabled but access control is specified")
+	}
+
+	return nil
+}
+
+func validateAccessControlUpdate(
+	oldSpec *asdbv1.AerospikeClusterSpec,
+	newSpec *asdbv1.AerospikeClusterSpec,
+) error {
+	if reflect.DeepEqual(oldSpec.AerospikeAccessControl, newSpec.AerospikeAccessControl) {
+		return nil
+	}
+
+	if newSpec.AerospikeAccessControl == nil && oldSpec.AerospikeAccessControl != nil {
+		return fmt.Errorf("aerospikeAccessControl cannot be removed once set")
+	}
+
+	desiredSecurityEnabled, err := asdbv1.IsSecurityEnabled(newSpec.AerospikeConfig.Value)
+	if err != nil {
+		return err
+	}
+
+	// ACL changes are only allowed when security is enabled
+	if !desiredSecurityEnabled {
+		return fmt.Errorf("aerospikeAccessControl cannot be updated when security is disabled")
+	}
+
+	return nil
 }
 
 func validateOperation(cluster *asdbv1.AerospikeCluster) error {
@@ -991,26 +1045,6 @@ func validateNamespaceConfig(
 	return nil
 }
 
-func validateSecurityConfigUpdateFromStatus(newSpec, currentStatus *asdbv1.AerospikeConfigSpec) error {
-	if currentStatus != nil {
-		currentSecurityEnabled, err := asdbv1.IsSecurityEnabled(currentStatus.Value)
-		if err != nil {
-			return err
-		}
-
-		desiredSecurityEnabled, err := asdbv1.IsSecurityEnabled(newSpec.Value)
-		if err != nil {
-			return err
-		}
-
-		if currentSecurityEnabled && !desiredSecurityEnabled {
-			return fmt.Errorf("cannot disable cluster security in running cluster")
-		}
-	}
-
-	return nil
-}
-
 func validateAerospikeConfigUpdate(
 	aslog logr.Logger,
 	incomingSpec, outgoingSpec, currentStatus *asdbv1.AerospikeConfigSpec,
@@ -1021,10 +1055,6 @@ func validateAerospikeConfigUpdate(
 	oldConf := outgoingSpec.Value
 
 	if err := validation.ValidateAerospikeConfigUpdateWithoutSchema(oldConf, newConf); err != nil {
-		return err
-	}
-
-	if err := validateSecurityConfigUpdateFromStatus(incomingSpec, currentStatus); err != nil {
 		return err
 	}
 
