@@ -2308,8 +2308,7 @@ func validateAccessControl(
 		return fmt.Errorf("error creating client: %v", err)
 	}
 
-	client := *clientP
-	defer client.Close()
+	defer clientP.Close()
 
 	err = validateRoles(clientP, &aeroCluster.Spec)
 	if err != nil {
@@ -2347,10 +2346,9 @@ func getUser(
 func validateRoles(
 	clientP *as.Client, clusterSpec *asdbv1.AerospikeClusterSpec,
 ) error {
-	client := *clientP
 	adminPolicy := aerospikecluster.GetAdminPolicy(clusterSpec)
 
-	asRoles, err := client.QueryRoles(&adminPolicy)
+	asRoles, err := clientP.QueryRoles(&adminPolicy)
 	if err != nil {
 		return fmt.Errorf("error querying roles: %v", err)
 	}
@@ -2460,11 +2458,10 @@ func validateUsers(
 	clientP *as.Client, aeroCluster *asdbv1.AerospikeCluster,
 ) error {
 	clusterSpec := &aeroCluster.Spec
-	client := *clientP
 
 	adminPolicy := aerospikecluster.GetAdminPolicy(clusterSpec)
 
-	asUsers, err := client.QueryUsers(&adminPolicy)
+	asUsers, err := clientP.QueryUsers(&adminPolicy)
 	if err != nil {
 		return fmt.Errorf("error querying users: %v", err)
 	}

@@ -1317,6 +1317,7 @@ func createBasicTLSCluster(
 						Roles: []string{
 							"sys-admin",
 							"user-admin",
+							"read-write",
 						},
 					},
 				},
@@ -1348,6 +1349,18 @@ func createBasicTLSCluster(
 			},
 		},
 	}
+
+	return aeroCluster
+}
+
+func CreateBasicTLSCluster(
+	clusterNamespacedName types.NamespacedName, size int32,
+) *asdbv1.AerospikeCluster {
+	aeroCluster := createBasicTLSCluster(clusterNamespacedName, size)
+	aeroCluster.Spec.AerospikeConfig.Value[asdbv1.ConfKeyNamespace] = []interface{}{
+		getSCNamespaceConfig("test", "/test/dev/xvdf"),
+	}
+	aeroCluster.Spec.Storage = getBasicStorageSpecObject()
 
 	return aeroCluster
 }

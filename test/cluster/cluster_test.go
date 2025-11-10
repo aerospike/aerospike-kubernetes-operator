@@ -1392,12 +1392,7 @@ func UpdateTLSClusterTest(ctx goctx.Context) {
 
 	BeforeEach(
 		func() {
-			aeroCluster := createBasicTLSCluster(clusterNamespacedName, 3)
-			aeroCluster.Spec.AerospikeConfig.Value[asdbv1.ConfKeyNamespace] = []interface{}{
-				getSCNamespaceConfig("test", "/test/dev/xvdf"),
-			}
-			aeroCluster.Spec.Storage = getBasicStorageSpecObject()
-
+			aeroCluster := CreateBasicTLSCluster(clusterNamespacedName, 3)
 			Expect(DeployCluster(k8sClient, ctx, aeroCluster)).ToNot(HaveOccurred())
 		},
 	)

@@ -153,7 +153,19 @@ var _ = Describe(
 
 						err = validateRestoredData(k8sClient)
 						Expect(err).ToNot(HaveOccurred())
+					},
+				)
 
+				It(
+					"Should complete restore for Full restore type and with TLS configured", func() {
+						restore, err = newRestoreWithTLS(restoreNsNm, asdbv1beta1.Full)
+						Expect(err).ToNot(HaveOccurred())
+
+						err = createRestore(k8sClient, restore)
+						Expect(err).ToNot(HaveOccurred())
+
+						err = validateRestoredData(k8sClient)
+						Expect(err).ToNot(HaveOccurred())
 					},
 				)
 

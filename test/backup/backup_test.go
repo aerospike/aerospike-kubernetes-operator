@@ -366,6 +366,17 @@ var _ = Describe(
 
 			})
 
+			It("Should trigger backup when correct backup config with TLS and local storage are given", func() {
+				backup, err = NewBackupWithTLS(backupNsNm)
+				Expect(err).ToNot(HaveOccurred())
+				err = CreateBackup(k8sClient, backup)
+				Expect(err).ToNot(HaveOccurred())
+
+				err = validateTriggeredBackup(k8sClient, backup)
+				Expect(err).ToNot(HaveOccurred())
+
+			})
+
 			It("Should trigger backup when correct backup config with s3 storage is given", func() {
 				config := getBackupConfigInMap(namePrefix(backupNsNm))
 				backupRoutines := config[asdbv1beta1.BackupRoutinesKey].(map[string]interface{})
