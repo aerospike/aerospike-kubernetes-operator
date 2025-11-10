@@ -35,6 +35,9 @@ const (
 	AdminPortName    = "admin"
 
 	InfoPortName = "info"
+
+	DefaultFailedPodGracePeriodSeconds = 60
+	RequeueIntervalSeconds10           = 10
 )
 
 const (
@@ -56,8 +59,7 @@ const (
 	ConfKeyPort    = "port"
 
 	// XDR keys.
-	confKeyXdr         = "xdr"
-	confKeyXdrDlogPath = "xdr-digestlog-path"
+	ConfKeyXdr = "xdr"
 
 	// Security keys.
 	ConfKeySecurity                    = "security"
@@ -334,7 +336,7 @@ func IsAerospikeNamespacePresent(
 // IsXdrEnabled indicates if XDR is enabled in aerospikeConfig.
 func IsXdrEnabled(aerospikeConfigSpec AerospikeConfigSpec) bool {
 	aerospikeConfig := aerospikeConfigSpec.Value
-	xdrConf := aerospikeConfig[confKeyXdr]
+	xdrConf := aerospikeConfig[ConfKeyXdr]
 
 	return xdrConf != nil
 }
@@ -366,50 +368,6 @@ func ReadTLSAuthenticateClient(serviceConf map[string]interface{}) (
 	}
 
 	return nil, fmt.Errorf("invalid configuration")
-}
-
-// GetDigestLogFile returns the xdr digest file path if configured.
-func GetDigestLogFile(aerospikeConfigSpec AerospikeConfigSpec) (
-	*string, error,
-) {
-	aerospikeConfig := aerospikeConfigSpec.Value
-
-	if xdrConfTmp, ok := aerospikeConfig[confKeyXdr]; ok {
-		xdrConf, ok := xdrConfTmp.(map[string]interface{})
-		if !ok {
-			return nil, fmt.Errorf(
-				"aerospikeConfig.xdr not a valid map %v",
-				aerospikeConfig[confKeyXdr],
-			)
-		}
-
-		dgLog, ok := xdrConf[confKeyXdrDlogPath]
-		if !ok {
-			return nil, fmt.Errorf(
-				"%s is missing in aerospikeConfig.xdr %v", confKeyXdrDlogPath,
-				xdrConf,
-			)
-		}
-
-		if _, ok := dgLog.(string); !ok {
-			return nil, fmt.Errorf(
-				"%s is not a valid string in aerospikeConfig.xdr %v",
-				confKeyXdrDlogPath, xdrConf,
-			)
-		}
-
-		// "/opt/aerospike/xdr/digestlog 100G"
-		if len(strings.Fields(dgLog.(string))) != 2 {
-			return nil, fmt.Errorf(
-				"%s is not in valid format (/opt/aerospike/xdr/digestlog 100G) in aerospikeConfig.xdr %v",
-				confKeyXdrDlogPath, xdrConf,
-			)
-		}
-
-		return &strings.Fields(dgLog.(string))[0], nil
-	}
-
-	return nil, fmt.Errorf("xdr not configured")
 }
 
 func GetServiceTLSNameAndPort(aeroConf *AerospikeConfigSpec) (tlsName string, port *int32) {

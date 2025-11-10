@@ -35,6 +35,9 @@ certs:
 watchNamespaces: "default,aerospike"
 enableSafePodEviction: "false"
 
+# Grace period to delete/recover failed pods (in seconds)
+failedPodGracePeriodSeconds: "60"
+
 # Registry used to pull aerospike-init image
 aerospikeKubernetesInitRegistry: "docker.io"
 

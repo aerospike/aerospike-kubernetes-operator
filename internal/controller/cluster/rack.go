@@ -73,7 +73,7 @@ func (r *SingleClusterReconciler) reconcileRacks() common.ReconcileResult {
 			continue
 		}
 
-		// 1. Fetch the pods for the rack and if there are failed pods then reconcile rack
+		// 1. Fetch the pods for the rack and if there are failed pods, then reconcile the rack
 		podList, err = r.getOrderedRackPodList(state.Rack.ID)
 		if err != nil {
 			return common.ReconcileError(
@@ -83,9 +83,11 @@ func (r *SingleClusterReconciler) reconcileRacks() common.ReconcileResult {
 			)
 		}
 
-		failedPods, _ := getFailedAndActivePods(podList)
+		failedPods, _, _ := getFailedAndActivePods(podList, false)
+
 		// remove ignorable pods from failedPods
 		failedPods = getNonIgnorablePods(failedPods, ignorablePodNames)
+
 		if len(failedPods) != 0 {
 			r.Log.Info(
 				"Reconcile the failed pods in the Rack", "rackID", state.Rack.ID, "failedPods", getPodNames(failedPods),
@@ -115,9 +117,10 @@ func (r *SingleClusterReconciler) reconcileRacks() common.ReconcileResult {
 			)
 		}
 
-		failedPods, _ = getFailedAndActivePods(podList)
+		failedPods, _, _ = getFailedAndActivePods(podList, false)
 		// remove ignorable pods from failedPods
 		failedPods = getNonIgnorablePods(failedPods, ignorablePodNames)
+
 		if len(failedPods) != 0 {
 			r.Log.Info(
 				"Restart the failed pods in the Rack", "rackID", state.Rack.ID, "failedPods", getPodNames(failedPods),
@@ -241,7 +244,7 @@ func (r *SingleClusterReconciler) reconcileRacks() common.ReconcileResult {
 func (r *SingleClusterReconciler) createEmptyRack(rackState *RackState) (
 	*appsv1.StatefulSet, common.ReconcileResult,
 ) {
-	r.Log.Info("Create new Aerospike cluster if needed")
+	r.Log.Info("Create new Aerospike cluster rack if needed")
 
 	// NoOp if already exist
 	r.Log.Info("AerospikeCluster", "Spec", r.aeroCluster.Spec)

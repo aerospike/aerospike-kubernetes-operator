@@ -589,32 +589,6 @@ var _ = Describe(
 												)
 											},
 										)
-
-										It(
-											"should fail for invalid xdr config. mountPath for digestlog not present in fileStorage",
-											func() {
-												aeroCluster := createDummyRackAwareAerospikeCluster(
-													clusterNamespacedName, 2,
-												)
-												namespaceConfig :=
-													aeroCluster.Spec.AerospikeConfig.Value["namespaces"].([]interface{})[0].(map[string]interface{})
-												if _, ok :=
-													namespaceConfig["storage-engine"].(map[string]interface{})["devices"]; ok {
-													aeroCluster.Spec.Storage = asdbv1.AerospikeStorageSpec{}
-													aeroConfig := asdbv1.AerospikeConfigSpec{
-														Value: map[string]interface{}{
-															"xdr": map[string]interface{}{
-																"enable-xdr":         false,
-																"xdr-digestlog-path": "/opt/aerospike/xdr/digestlog 100G",
-															},
-														},
-													}
-													aeroCluster.Spec.RackConfig.Racks[0].InputAerospikeConfig = &aeroConfig
-													Expect(DeployCluster(k8sClient, ctx, aeroCluster)).Should(HaveOccurred())
-												}
-											},
-										)
-										// Replication-factor can not be updated
 									},
 								)
 
