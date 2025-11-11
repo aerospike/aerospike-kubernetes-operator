@@ -5,7 +5,6 @@ import (
 	"fmt"
 	"time"
 
-	lib "github.com/aerospike/aerospike-management-lib"
 	. "github.com/onsi/ginkgo/v2"
 	. "github.com/onsi/gomega"
 	appsv1 "k8s.io/api/apps/v1"
@@ -21,10 +20,11 @@ import (
 	asdbv1 "github.com/aerospike/aerospike-kubernetes-operator/v4/api/v1"
 	"github.com/aerospike/aerospike-kubernetes-operator/v4/pkg/utils"
 	"github.com/aerospike/aerospike-kubernetes-operator/v4/test"
+	lib "github.com/aerospike/aerospike-management-lib"
 )
 
 var _ = Describe(
-	"Revision", func() {
+	"RackRevision", func() {
 		ctx := goctx.TODO()
 
 		Context(
@@ -48,67 +48,15 @@ var _ = Describe(
 						)
 
 						It(
-							"Should successfully migrate rack to new revision with storage update", func() {
-								By("Creating cluster with initial storage configuration")
-								aeroCluster := createDummyClusterWithRackRevision(clusterNamespacedName, versionV1, 6)
-								Expect(DeployCluster(k8sClient, ctx, aeroCluster)).ToNot(HaveOccurred())
+							"Should successfully migrate rack from no revision to v1 along with storage update",
+							func() {
+								testRackRevisionChangeWithStorageUpdate(k8sClient, ctx, clusterNamespacedName, "", versionV1)
+							},
+						)
 
-								// Validate initial deployment
-								err := validateRackEnabledCluster(k8sClient, ctx, clusterNamespacedName)
-								Expect(err).ToNot(HaveOccurred())
-
-								// Validate initial StatefulSets are created with v1 revision
-								err = validateRackRevisionStatefulSets(k8sClient, ctx, clusterNamespacedName, versionV1, 2)
-								Expect(err).ToNot(HaveOccurred())
-
-								By("Updating storage configuration with new rack revision")
-								updatedCluster, err := getCluster(k8sClient, ctx, clusterNamespacedName)
-								Expect(err).ToNot(HaveOccurred())
-
-								// Update storage with new revision
-								for idx := range updatedCluster.Spec.RackConfig.Racks {
-									rack := &updatedCluster.Spec.RackConfig.Racks[idx]
-									rack.Revision = versionV2
-
-									// Add new storage volume to simulate storage update
-									rack.Storage.Volumes = append(rack.Storage.Volumes, asdbv1.VolumeSpec{
-										Name: "new-volume",
-										Source: asdbv1.VolumeSource{
-											PersistentVolume: &asdbv1.PersistentVolumeSpec{
-												Size:         resource.MustParse("1Gi"),
-												StorageClass: storageClass,
-												VolumeMode:   corev1.PersistentVolumeFilesystem,
-											},
-										},
-										Aerospike: &asdbv1.AerospikeServerVolumeAttachment{
-											Path: "/opt/aerospike/data2",
-										},
-									})
-								}
-
-								Expect(updateClusterWithNoWait(k8sClient, ctx, updatedCluster)).ToNot(HaveOccurred())
-
-								By("Validating gradual migration from v1 to v2")
-								// Both v1 and v2 StatefulSets should exist during migration
-								Eventually(func() bool {
-									return checkBothRevisionsExist(k8sClient, ctx, clusterNamespacedName, versionV1, versionV2)
-								}, 5*time.Minute, 10*time.Second).Should(BeTrue())
-
-								By("Waiting for the migration to complete")
-								err = waitForAerospikeCluster(
-									k8sClient, ctx, aeroCluster, int(aeroCluster.Spec.Size), retryInterval,
-									getTimeout(aeroCluster.Spec.Size),
-									[]asdbv1.AerospikeClusterPhase{asdbv1.AerospikeClusterCompleted},
-								)
-								Expect(err).ToNot(HaveOccurred())
-
-								// Validate final state
-								err = validateRackEnabledCluster(k8sClient, ctx, clusterNamespacedName)
-								Expect(err).ToNot(HaveOccurred())
-
-								// Ensure v1 revision resources are cleaned up
-								err = validateRackRevisionCleanup(k8sClient, ctx, aeroCluster, []int{1, 2}, versionV1)
-								Expect(err).ToNot(HaveOccurred())
+						It(
+							"Should successfully migrate rack from v1 to v2 revision with storage update", func() {
+								testRackRevisionChangeWithStorageUpdate(k8sClient, ctx, clusterNamespacedName, versionV1, versionV2)
 							},
 						)
 
@@ -162,7 +110,7 @@ var _ = Describe(
 
 								// Manually delete old StatefulSet
 								By("Manually deleting old StatefulSet during migration")
-								err := deleteOldStatefulSet(k8sClient, ctx, clusterNamespacedName, versionV1, 1)
+								err := deleteStatefulSet(k8sClient, ctx, clusterNamespacedName, versionV1, 1)
 								Expect(err).ToNot(HaveOccurred())
 
 								err = waitForAerospikeCluster(
@@ -347,6 +295,76 @@ var _ = Describe(
 	},
 )
 
+func testRackRevisionChangeWithStorageUpdate(
+	k8sClient client.Client, ctx goctx.Context, clusterNamespacedName types.NamespacedName,
+	fromRevision, toRevision string,
+) {
+	By("Creating cluster with initial storage configuration")
+
+	aeroCluster := createDummyClusterWithRackRevision(clusterNamespacedName, fromRevision, 6)
+	Expect(DeployCluster(k8sClient, ctx, aeroCluster)).ToNot(HaveOccurred())
+
+	// Validate initial deployment
+	err := validateRackEnabledCluster(k8sClient, ctx, clusterNamespacedName)
+	Expect(err).ToNot(HaveOccurred())
+
+	// Validate initial StatefulSets are created with fromRevision revision
+	err = validateRackRevisionStatefulSets(k8sClient, ctx, clusterNamespacedName, fromRevision, 2)
+	Expect(err).ToNot(HaveOccurred())
+
+	By(fmt.Sprintf("Updating storage configuration with new %s rack revision", toRevision))
+
+	updatedCluster, err := getCluster(k8sClient, ctx, clusterNamespacedName)
+	Expect(err).ToNot(HaveOccurred())
+
+	// Update storage with new revision
+	for idx := range updatedCluster.Spec.RackConfig.Racks {
+		rack := &updatedCluster.Spec.RackConfig.Racks[idx]
+		rack.Revision = toRevision
+
+		// Add new storage volume to simulate storage update
+		rack.Storage.Volumes = append(rack.Storage.Volumes, asdbv1.VolumeSpec{
+			Name: "new-volume",
+			Source: asdbv1.VolumeSource{
+				PersistentVolume: &asdbv1.PersistentVolumeSpec{
+					Size:         resource.MustParse("1Gi"),
+					StorageClass: storageClass,
+					VolumeMode:   corev1.PersistentVolumeFilesystem,
+				},
+			},
+			Aerospike: &asdbv1.AerospikeServerVolumeAttachment{
+				Path: "/opt/aerospike/data2",
+			},
+		},
+		)
+	}
+
+	Expect(updateClusterWithNoWait(k8sClient, ctx, updatedCluster)).ToNot(HaveOccurred())
+
+	By(fmt.Sprintf("Validating gradual migration from %s to %s", fromRevision, toRevision))
+	// Both rack revision StatefulSets should exist during migration
+	Eventually(func() bool {
+		return checkBothRevisionsExist(k8sClient, ctx, clusterNamespacedName, fromRevision, toRevision)
+	}, 5*time.Minute, 10*time.Second).Should(BeTrue())
+
+	By("Waiting for the migration to complete")
+
+	err = waitForAerospikeCluster(
+		k8sClient, ctx, aeroCluster, int(aeroCluster.Spec.Size), retryInterval,
+		getTimeout(aeroCluster.Spec.Size),
+		[]asdbv1.AerospikeClusterPhase{asdbv1.AerospikeClusterCompleted},
+	)
+	Expect(err).ToNot(HaveOccurred())
+
+	// Validate final state
+	err = validateRackEnabledCluster(k8sClient, ctx, clusterNamespacedName)
+	Expect(err).ToNot(HaveOccurred())
+
+	// Ensure fromRevision revision resources are cleaned up
+	err = validateRackRevisionCleanup(k8sClient, ctx, aeroCluster, []int{1, 2}, fromRevision)
+	Expect(err).ToNot(HaveOccurred())
+}
+
 func createDummyClusterWithRackRevision(
 	clusterNamespacedName types.NamespacedName, revision string, size int32,
 ) *asdbv1.AerospikeCluster {
@@ -387,8 +405,13 @@ func validateRackRevisionStatefulSets(
 	var revisionCount int
 
 	for idx := range stsList.Items {
-		if rackRevision, exists := stsList.Items[idx].Labels[asdbv1.AerospikeRackRevisionLabel]; exists &&
-			rackRevision == revision {
+		rackRevision, exists := stsList.Items[idx].Labels[asdbv1.AerospikeRackRevisionLabel]
+
+		if revision == "" && !exists {
+			revisionCount++
+		}
+
+		if exists && rackRevision == revision {
 			revisionCount++
 		}
 	}
@@ -404,6 +427,11 @@ func checkBothRevisionsExist(
 	k8sClient client.Client, ctx goctx.Context, clusterNamespacedName types.NamespacedName, oldRevision,
 	newRevision string,
 ) bool {
+	if oldRevision == newRevision {
+		pkgLog.Info(fmt.Sprintf("old revision: %s is the same as new revision: %s", oldRevision, newRevision))
+		return false
+	}
+
 	stsList := &appsv1.StatefulSetList{}
 	labelSelector := labels.SelectorFromSet(utils.LabelsForAerospikeCluster(clusterNamespacedName.Name))
 	listOps := &client.ListOptions{
@@ -418,12 +446,21 @@ func checkBothRevisionsExist(
 	var oldExists, newExists bool
 
 	for idx := range stsList.Items {
-		if rackRevision, exists := stsList.Items[idx].Labels[asdbv1.AerospikeRackRevisionLabel]; exists {
+		rackRevision, exists := stsList.Items[idx].Labels[asdbv1.AerospikeRackRevisionLabel]
+		if exists {
 			if rackRevision == oldRevision {
 				oldExists = true
 			}
 
 			if rackRevision == newRevision && stsList.Items[idx].Status.ReadyReplicas > 1 {
+				newExists = true
+			}
+		} else {
+			if oldRevision == "" {
+				oldExists = true
+			}
+
+			if newRevision == "" {
 				newExists = true
 			}
 		}
@@ -456,7 +493,7 @@ func validateRackRevisionCleanup(
 	return nil
 }
 
-func deleteOldStatefulSet(
+func deleteStatefulSet(
 	k8sClient client.Client, ctx goctx.Context, clusterNamespacedName types.NamespacedName,
 	revision string, rackID int,
 ) error {

@@ -262,7 +262,12 @@ func validateRackEnabledCluster(
 		// If Label key are changed for zone, region.. then those should be changed here also
 
 		// Match NodeAffinity, if something else is used in place of affinity then it will fail
-		err = validateSTSForRack(found, &rackStateList[rackStateIndex])
+		err = validateSTSAffinityRulesForRack(found, &rackStateList[rackStateIndex])
+		if err != nil {
+			return err
+		}
+
+		err = validateSTSStorageForRack(found, &rackStateList[rackStateIndex])
 		if err != nil {
 			return err
 		}
@@ -277,7 +282,7 @@ func validateRackEnabledCluster(
 	return nil
 }
 
-func validateSTSForRack(found *appsv1.StatefulSet, rackState *RackState) error {
+func validateSTSAffinityRulesForRack(found *appsv1.StatefulSet, rackState *RackState) error {
 	rackLabelKey := "RackLabel"
 	hostKey := "kubernetes.io/hostname"
 	rackSelectorMap := map[string]string{}
@@ -343,6 +348,34 @@ func validateSTSForRack(found *appsv1.StatefulSet, rackState *RackState) error {
 		return fmt.Errorf(
 			"statefulset doesn't have required match strings. terms %v", terms,
 		)
+	}
+
+	return nil
+}
+
+func validateSTSStorageForRack(found *appsv1.StatefulSet, rackState *RackState) error {
+	for rackVolIdx := range rackState.Rack.Storage.Volumes {
+		rackVol := rackState.Rack.Storage.Volumes[rackVolIdx]
+
+		if rackVol.Source.PersistentVolume == nil {
+			continue
+		}
+
+		var exists bool
+
+		for stsVolIdx := range found.Spec.VolumeClaimTemplates {
+			stsVol := found.Spec.VolumeClaimTemplates[stsVolIdx]
+
+			if rackVol.Name == stsVol.Name {
+				exists = true
+
+				break
+			}
+		}
+
+		if !exists {
+			return fmt.Errorf("rack volume %s not found in STS %s", rackVol.Name, found.Name)
+		}
 	}
 
 	return nil

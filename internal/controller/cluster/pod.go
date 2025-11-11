@@ -950,8 +950,6 @@ func (r *SingleClusterReconciler) getIgnorablePods(
 			return nil, err
 		}
 
-		r.Log.Info("Pods found in rack to delete", "podList", rackPods)
-
 		for podIdx := range rackPods.Items {
 			pod := rackPods.Items[podIdx]
 			if !utils.IsPodRunningAndReady(&pod) {
@@ -968,9 +966,7 @@ func (r *SingleClusterReconciler) getIgnorablePods(
 
 		oldPodList, err := r.getRackPodList(oldRackState.Rack.ID, oldRackState.Rack.Revision)
 		if err != nil {
-			r.Log.Error(err, "Failed to list pods for old revision rack",
-				"rackID", oldRackState.Rack.ID, "oldRevision", oldRackState.Rack.Revision)
-			continue
+			return nil, err
 		}
 
 		var oldFailedPods []string
