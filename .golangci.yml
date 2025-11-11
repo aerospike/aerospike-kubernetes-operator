@@ -1,73 +1,81 @@
-
-linters-settings:
-  revive:
-    rules:
-      - name: dot-imports
-        arguments:
-          - allowedPackages: # Allow dot imports for testing packages
-              - "github.com/onsi/ginkgo/v2"
-              - "github.com/onsi/gomega"
-      - name: comment-spacings
-  goconst:
-    min-len: 2
-    min-occurrences: 3
-  gocritic:
-    enabled-tags:
-      - diagnostic
-      - experimental
-      - opinionated
-      - performance
-      - style
-  govet:
-    enable:
-      - fieldalignment
-      - shadow
-
-  nolintlint:
-    require-explanation: true
-    require-specific: true
-
+version: "2"
+run:
+  go: "1.24"
 linters:
-  disable-all: true
+  default: none
   enable:
     - bodyclose
-    - unused
+    - copyloopvar
     - dogsled
     - dupl
     - errcheck
-    - copyloopvar
     - exhaustive
+    - ginkgolinter
     - goconst
     - gocritic
-    - gofmt
-    - goimports
     - gocyclo
     - gosec
-    - gosimple
     - govet
     - ineffassign
+    - lll
     - misspell
-    - nolintlint
     - nakedret
-    - prealloc # pre-allocate slices with define size if the slice size is known in advance
+    - nolintlint
+    - prealloc
     - predeclared
     - revive
     - staticcheck
-    - stylecheck
     - thelper
     - tparallel
-    - typecheck
     - unconvert
     - unparam
+    - unused
     - whitespace
-    - ginkgolinter
-    - lll
-    - wsl # White space linter
-
-run:
-  issues-exit-code: 1
-  go: '1.23'
-#  skip-dirs:
-#    - sample
-#  skip-files:
-#    - sample
+    - wsl
+  settings:
+    goconst:
+      min-len: 2
+      min-occurrences: 3
+    gocritic:
+      enabled-tags:
+        - diagnostic
+        - experimental
+        - opinionated
+        - performance
+        - style
+    govet:
+      enable:
+        - fieldalignment
+        - shadow
+    nolintlint:
+      require-explanation: true
+      require-specific: true
+    revive:
+      rules:
+        - name: dot-imports
+          arguments:
+            - allowedPackages:
+                - github.com/onsi/ginkgo/v2
+                - github.com/onsi/gomega
+        - name: comment-spacings
+  exclusions:
+    generated: lax
+    presets:
+      - comments
+      - common-false-positives
+      - legacy
+      - std-error-handling
+    paths:
+      - third_party$
+      - builtin$
+      - examples$
+formatters:
+  enable:
+    - gofmt
+    - goimports
+  exclusions:
+    generated: lax
+    paths:
+      - third_party$
+      - builtin$
+      - examples$
