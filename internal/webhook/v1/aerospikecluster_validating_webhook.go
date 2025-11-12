@@ -1094,7 +1094,6 @@ func validateNsConfUpdateFromStatus(newConfSpec, currentStatus *asdbv1.Aerospike
 	newConf := newConfSpec.Value
 	newNsConfList := newConf["namespaces"].([]interface{})
 
-	// TODO: Do we need to skip this validation for Revision update?
 	return validateStorageEngineDeviceListUpdate(newNsConfList, statusNsConfList)
 }
 

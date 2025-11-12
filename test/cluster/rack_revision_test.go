@@ -14,7 +14,6 @@ import (
 	"k8s.io/apimachinery/pkg/labels"
 	"k8s.io/apimachinery/pkg/types"
 	"k8s.io/apimachinery/pkg/util/intstr"
-	"k8s.io/utils/ptr"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 
 	asdbv1 "github.com/aerospike/aerospike-kubernetes-operator/v4/api/v1"
@@ -369,9 +368,6 @@ func createDummyClusterWithRackRevision(
 	clusterNamespacedName types.NamespacedName, revision string, size int32,
 ) *asdbv1.AerospikeCluster {
 	aeroCluster := createDummyAerospikeCluster(clusterNamespacedName, size)
-
-	aeroCluster.Spec.PodSpec.AerospikeInitContainerSpec.ImageRegistryNamespace = ptr.To("aerospike")
-	aeroCluster.Spec.PodSpec.AerospikeInitContainerSpec.ImageNameAndTag = "aerospike-kubernetes-init:2.4.0-dev1"
 
 	racks := []asdbv1.Rack{
 		{ID: 1, Revision: revision},
