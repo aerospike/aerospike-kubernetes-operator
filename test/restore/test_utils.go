@@ -189,6 +189,8 @@ func waitForRestore(cl client.Client, restore *asdbv1beta1.AerospikeRestore,
 		return fmt.Errorf("restore result is not set")
 	}
 
+	pkgLog.Info(fmt.Sprintf("Restore result %s", string(restore.Status.RestoreResult.Raw)))
+
 	var restoreResult dto.RestoreJobStatus
 
 	if err := json.Unmarshal(restore.Status.RestoreResult.Raw, &restoreResult); err != nil {
@@ -197,6 +199,10 @@ func waitForRestore(cl client.Client, restore *asdbv1beta1.AerospikeRestore,
 
 	if restoreResult.Status != dto.JobStatusDone {
 		return fmt.Errorf("restore job status is not done")
+	}
+
+	if restoreResult.InsertedRecords == 0 {
+		return fmt.Errorf("no records were restored")
 	}
 
 	if restoreResult.Error != "" {
