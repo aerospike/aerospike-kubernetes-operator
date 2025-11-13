@@ -30,7 +30,7 @@ done
 CRED_PATH=${CRED_PATH:-$HOME/.docker/config.json}
 REGISTRY=${REGISTRY:-568976754000.dkr.ecr.ap-south-1.amazonaws.com}
 REGISTRY_NAMESPACE=${REGISTRY_NAMESPACE:-aerospike}
-INIT_IMAGE_NAME_TAG=${INIT_IMAGE_NAME_TAG:-aerospike-kubernetes-init:2.3.1}
+INIT_IMAGE_NAME_TAG=${INIT_IMAGE_NAME_TAG:-aerospike-kubernetes-init:2.4.0-dev2}
 
 
 DIR="$( cd "$( dirname "${BASH_SOURCE[0]}" )" >/dev/null 2>&1 && pwd )"

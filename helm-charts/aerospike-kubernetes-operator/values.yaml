@@ -4,7 +4,7 @@ replicas: 2
 ## Operator image
 operatorImage:
   repository: aerospike/aerospike-kubernetes-operator
-  tag: 4.1.1
+  tag: 4.2.0-dev1
   pullPolicy: IfNotPresent
 
 ## In case the above image is pulled from a registry that requires
@@ -44,7 +44,7 @@ aerospikeKubernetesInitRegistry: "docker.io"
 aerospikeKubernetesInitRegistryNamespace: "aerospike"
 
 # Name and tag of aerospike-init image
-aerospikeKubernetesInitNameTag: "aerospike-kubernetes-init:2.3.1"
+aerospikeKubernetesInitNameTag: "aerospike-kubernetes-init:2.4.0-dev2"
 
 ## Resources - limits / requests
 resources:

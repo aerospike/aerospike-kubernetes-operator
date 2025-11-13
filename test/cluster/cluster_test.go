@@ -1033,25 +1033,14 @@ func clusterWithMaxIgnorablePod(ctx goctx.Context) {
 					By("Fail 1-1 aerospike pod")
 
 					ignorePodName := clusterNamespacedName.Name + "-1-1"
-					pod := &v1.Pod{}
-
-					err := k8sClient.Get(
-						ctx, types.NamespacedName{
-							Name:      ignorePodName,
-							Namespace: clusterNamespacedName.Namespace,
-						}, pod,
-					)
-					Expect(err).ToNot(HaveOccurred())
-
-					pod.Spec.Containers[0].Image = wrongImage
-					err = k8sClient.Update(ctx, pod)
+					err = markPodAsFailed(ctx, k8sClient, ignorePodName, clusterNamespacedName.Namespace)
 					Expect(err).ToNot(HaveOccurred())
 
 					// Underlying kubernetes cluster should have atleast 6 nodes to run this test successfully.
 					By("Delete rack with id 2")
 
-					aeroCluster, err := getCluster(k8sClient, ctx, clusterNamespacedName)
-					Expect(err).ToNot(HaveOccurred())
+					aeroCluster, gErr := getCluster(k8sClient, ctx, clusterNamespacedName)
+					Expect(gErr).ToNot(HaveOccurred())
 
 					val := intstr.FromInt32(1)
 					aeroCluster.Spec.RackConfig.MaxIgnorablePods = &val
@@ -1060,6 +1049,9 @@ func clusterWithMaxIgnorablePod(ctx goctx.Context) {
 					Expect(err).ToNot(HaveOccurred())
 
 					By(fmt.Sprintf("Verify if failed pod %s is automatically recovered", ignorePodName))
+
+					pod := &v1.Pod{}
+
 					Eventually(
 						func() bool {
 							err = k8sClient.Get(
@@ -1091,18 +1083,8 @@ func clusterWithMaxIgnorablePod(ctx goctx.Context) {
 					By("Fail 1-1 aerospike pod")
 
 					ignorePodName := clusterNamespacedName.Name + "-1-1"
-					pod := &v1.Pod{}
 
-					err := k8sClient.Get(
-						ctx, types.NamespacedName{
-							Name:      ignorePodName,
-							Namespace: clusterNamespacedName.Namespace,
-						}, pod,
-					)
-					Expect(err).ToNot(HaveOccurred())
-
-					pod.Spec.Containers[0].Image = wrongImage
-					err = k8sClient.Update(ctx, pod)
+					err = markPodAsFailed(ctx, k8sClient, ignorePodName, clusterNamespacedName.Namespace)
 					Expect(err).ToNot(HaveOccurred())
 
 					By("Set MaxIgnorablePod and Rolling restart by removing namespace")
@@ -1361,7 +1343,7 @@ func DeployClusterWithDNSConfiguration(ctx goctx.Context) {
 
 			Expect(DeployCluster(k8sClient, ctx, aeroCluster)).ShouldNot(HaveOccurred())
 
-			sts, err := getSTSFromRackID(aeroCluster, 0)
+			sts, err := getSTSFromRackID(aeroCluster, 0, "")
 			Expect(err).ShouldNot(HaveOccurred())
 			Expect(sts.Spec.Template.Spec.DNSConfig).To(Equal(dnsConfig))
 		},

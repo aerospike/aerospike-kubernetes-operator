@@ -107,7 +107,7 @@ func (r *SingleClusterReconciler) createSTS(
 	)
 
 	operatorDefinedLabels := utils.LabelsForAerospikeClusterRack(
-		r.aeroCluster.Name, rackState.Rack.ID,
+		r.aeroCluster.Name, rackState.Rack.ID, rackState.Rack.Revision,
 	)
 
 	tlsName, _ := asdbv1.GetServiceTLSNameAndPort(r.aeroCluster.Spec.AerospikeConfig)
@@ -161,7 +161,7 @@ func (r *SingleClusterReconciler) createSTS(
 									{
 										Name: "CONFIG_MAP_NAME",
 										Value: utils.GetNamespacedNameForSTSOrConfigMap(
-											r.aeroCluster, rackState.Rack.ID,
+											r.aeroCluster, utils.GetRackIdentifier(rackState.Rack.ID, rackState.Rack.Revision),
 										).Name,
 									},
 								}...,
@@ -371,7 +371,8 @@ func (r *SingleClusterReconciler) getSTS(rackState *RackState) (*appsv1.Stateful
 	found := &appsv1.StatefulSet{}
 	if err := r.Client.Get(
 		context.TODO(),
-		utils.GetNamespacedNameForSTSOrConfigMap(r.aeroCluster, rackState.Rack.ID),
+		utils.GetNamespacedNameForSTSOrConfigMap(r.aeroCluster,
+			utils.GetRackIdentifier(rackState.Rack.ID, rackState.Rack.Revision)),
 		found,
 	); err != nil {
 		return nil, err
@@ -380,7 +381,7 @@ func (r *SingleClusterReconciler) getSTS(rackState *RackState) (*appsv1.Stateful
 	return found, nil
 }
 
-func (r *SingleClusterReconciler) buildSTSConfigMap(
+func (r *SingleClusterReconciler) createSTSConfigMap(
 	namespacedName types.NamespacedName, rack *asdbv1.Rack,
 ) error {
 	r.Log.Info("Creating a new ConfigMap for statefulSet")
@@ -975,7 +976,7 @@ func (r *SingleClusterReconciler) updateSTSFromPodSpec(
 	st *appsv1.StatefulSet, rackState *RackState,
 ) {
 	defaultLabels := utils.LabelsForAerospikeClusterRack(
-		r.aeroCluster.Name, rackState.Rack.ID,
+		r.aeroCluster.Name, rackState.Rack.ID, rackState.Rack.Revision,
 	)
 
 	r.updateSTSSchedulingPolicy(st, rackState)
@@ -1065,24 +1066,24 @@ func updateSTSContainers(
 }
 
 func (r *SingleClusterReconciler) waitForAllSTSToBeReady(ignorablePodNames sets.Set[string]) error {
-	r.Log.Info("Waiting for cluster to be ready")
+	r.Log.Info("Waiting for all cluster STSs to be ready")
 
-	allRackIDs := sets.NewInt()
+	allRackIdentifiers := sets.NewString()
 
 	statusRacks := r.aeroCluster.Status.RackConfig.Racks
 	for idx := range statusRacks {
-		allRackIDs.Insert(statusRacks[idx].ID)
+		allRackIdentifiers.Insert(utils.GetRackIdentifier(statusRacks[idx].ID, statusRacks[idx].Revision))
 	}
 
 	// Check for newly added racks also because we do not check for these racks just after they are added
 	specRacks := r.aeroCluster.Spec.RackConfig.Racks
 	for idx := range specRacks {
-		allRackIDs.Insert(specRacks[idx].ID)
+		allRackIdentifiers.Insert(utils.GetRackIdentifier(specRacks[idx].ID, specRacks[idx].Revision))
 	}
 
-	for rackID := range allRackIDs {
+	for rackIdentifier := range allRackIdentifiers {
 		st := &appsv1.StatefulSet{}
-		stsName := utils.GetNamespacedNameForSTSOrConfigMap(r.aeroCluster, rackID)
+		stsName := utils.GetNamespacedNameForSTSOrConfigMap(r.aeroCluster, rackIdentifier)
 
 		if err := r.Client.Get(context.TODO(), stsName, st); err != nil {
 			if !errors.IsNotFound(err) {
@@ -1278,7 +1279,7 @@ func getDefaultSTSVolumes(
 				ConfigMap: &corev1.ConfigMapVolumeSource{
 					LocalObjectReference: corev1.LocalObjectReference{
 						Name: utils.GetNamespacedNameForSTSOrConfigMap(
-							aeroCluster, rackState.Rack.ID,
+							aeroCluster, utils.GetRackIdentifier(rackState.Rack.ID, rackState.Rack.Revision),
 						).Name,
 					},
 				},

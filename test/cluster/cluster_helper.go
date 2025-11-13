@@ -33,6 +33,7 @@ import (
 
 const (
 	baseImage           = "aerospike/aerospike-server-enterprise"
+	wrongImage          = "wrong-image"
 	nextServerVersion   = "8.1.0.0_1"
 	latestServerVersion = "8.1.0.0"
 	invalidVersion      = "3.0.0.4"
@@ -67,6 +68,8 @@ var aerospikeVolumeInitMethodDeleteFiles = asdbv1.AerospikeVolumeMethodDeleteFil
 var (
 	retryInterval      = time.Second * 30
 	shortRetryInterval = time.Second * 1
+	versionV1          = "v1"
+	versionV2          = "v2"
 	cascadeDeleteFalse = false
 	cascadeDeleteTrue  = true
 	logger             = logr.Discard()
@@ -1783,4 +1786,21 @@ func waitForOperatorToStartPodRestart(ctx goctx.Context, k8sClient client.Client
 			return false, nil
 		},
 	)
+}
+
+func markPodAsFailed(ctx goctx.Context, k8sClient client.Client, name, namespace string) error {
+	pod := &corev1.Pod{}
+
+	if err := k8sClient.Get(
+		ctx, types.NamespacedName{
+			Name:      name,
+			Namespace: namespace,
+		}, pod,
+	); err != nil {
+		return err
+	}
+
+	pod.Spec.Containers[0].Image = wrongImage
+
+	return k8sClient.Update(ctx, pod)
 }
