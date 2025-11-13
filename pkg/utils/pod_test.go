@@ -38,6 +38,7 @@ func TestGetFailedPodGracePeriod(t *testing.T) {
 		t.Run(tt.name, func(t *testing.T) {
 			// Save original env var
 			originalEnv := os.Getenv("FAILED_POD_GRACE_PERIOD_SECONDS")
+
 			defer func() {
 				if originalEnv != "" {
 					os.Setenv("FAILED_POD_GRACE_PERIOD_SECONDS", originalEnv)

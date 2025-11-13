@@ -114,6 +114,7 @@ func CheckPodFailedWithGrace(pod *corev1.Pod, allowGrace bool) PodState {
 func checkContainerFailures(pod *corev1.Pod) string {
 	// grab the status of every container in the pod (including its init containers)
 	var containerStatus []corev1.ContainerStatus
+
 	containerStatus = append(containerStatus, pod.Status.InitContainerStatuses...)
 	containerStatus = append(containerStatus, pod.Status.ContainerStatuses...)
 
@@ -154,6 +155,7 @@ func CheckPodImageFailed(pod *corev1.Pod) error {
 
 	// grab the status of every container in the pod (including its init containers)
 	var containerStatus []corev1.ContainerStatus
+
 	containerStatus = append(containerStatus, pod.Status.InitContainerStatuses...)
 	containerStatus = append(containerStatus, pod.Status.ContainerStatuses...)
 

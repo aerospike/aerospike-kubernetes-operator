@@ -31,7 +31,7 @@ linters:
     - unparam
     - unused
     - whitespace
-    - wsl
+    - wsl_v5
   settings:
     goconst:
       min-len: 2
@@ -58,6 +58,10 @@ linters:
                 - github.com/onsi/ginkgo/v2
                 - github.com/onsi/gomega
         - name: comment-spacings
+    wsl_v5:
+      allow-first-in-block: true
+      allow-whole-block: false
+      branch-max-lines: 2
   exclusions:
     generated: lax
     presets:

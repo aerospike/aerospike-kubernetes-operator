@@ -386,12 +386,12 @@ func getSTSFromRackID(
 	aeroCluster *asdbv1.AerospikeCluster, rackID int, rackRevision string,
 ) (*appsv1.StatefulSet, error) {
 	found := &appsv1.StatefulSet{}
+
 	err := k8sClient.Get(
 		goctx.TODO(),
 		GetNamespacedNameForSTS(aeroCluster, utils.GetRackIdentifier(rackID, rackRevision)),
 		found,
 	)
-
 	if err != nil {
 		return nil, err
 	}

@@ -1,6 +1,6 @@
 module github.com/aerospike/aerospike-kubernetes-operator/v4
 
-go 1.24.0
+go 1.24.10
 
 require (
 	github.com/aerospike/aerospike-backup-service/v3 v3.2.0

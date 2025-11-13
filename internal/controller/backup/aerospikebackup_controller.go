@@ -57,7 +57,7 @@ func (r *AerospikeBackupReconciler) Reconcile(_ context.Context, request ctrl.Re
 
 	// Fetch the AerospikeBackup instance
 	aeroBackup := &asdbv1beta1.AerospikeBackup{}
-	if err := r.Client.Get(context.TODO(), request.NamespacedName, aeroBackup); err != nil {
+	if err := r.Get(context.TODO(), request.NamespacedName, aeroBackup); err != nil {
 		if errors.IsNotFound(err) {
 			// Request object not found, could have been deleted after Reconcile request.
 			return reconcile.Result{}, nil
