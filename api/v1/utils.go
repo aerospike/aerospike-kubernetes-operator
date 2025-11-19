@@ -572,7 +572,7 @@ func GetImageVersion(imageStr string) (string, error) {
 
 	// Ignore special prefixes and suffixes.
 	matches := versionRegex.FindAllString(version, -1)
-	if matches == nil || len(matches) < 1 {
+	if len(matches) < 1 {
 		return "", fmt.Errorf(
 			"invalid image version format: %v", version,
 		)

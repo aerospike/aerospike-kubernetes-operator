@@ -682,8 +682,8 @@ func writeDataToVolumeBlock(
 			magicBytes, path,
 		),
 	}
-	_, _, err := utils.Exec(utils.GetNamespacedName(pod), cName, cmd, k8sClientSet, cfg)
 
+	_, _, err := utils.Exec(utils.GetNamespacedName(pod), cName, cmd, k8sClientSet, cfg)
 	if err != nil {
 		return fmt.Errorf("error creating file %v", err)
 	}
@@ -699,8 +699,8 @@ func writeDataToVolumeFileSystem(
 	cmd := []string{
 		"bash", "-c", fmt.Sprintf("echo %s > %s/magic.txt", magicBytes, path),
 	}
-	_, _, err := utils.Exec(utils.GetNamespacedName(pod), cName, cmd, k8sClientSet, cfg)
 
+	_, _, err := utils.Exec(utils.GetNamespacedName(pod), cName, cmd, k8sClientSet, cfg)
 	if err != nil {
 		return fmt.Errorf("error creating file %v", err)
 	}

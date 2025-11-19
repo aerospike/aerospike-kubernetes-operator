@@ -727,7 +727,7 @@ func validateTLSUpdate(oldConf, newConf map[string]interface{}) error {
 			oldCAFile, oldCAFileOK := oldTLSCAFileMap[tlsMap["name"].(string)]
 			_, oldCAPathOK := oldTLSCAPathMap[tlsMap["name"].(string)]
 
-			if (oldCAFileOK || oldCAPathOK) && !(newCAPathOK || newCAFileOK) {
+			if (oldCAFileOK || oldCAPathOK) && !newCAPathOK && !newCAFileOK {
 				return fmt.Errorf(
 					"cannot remove used `ca-file` or `ca-path` from tls",
 				)
@@ -858,7 +858,7 @@ func validateNetworkPortUpdate(oldConnectionConfig, newConnectionConfig map[stri
 	}
 
 	if (!newTLSPortOk && oldTLSPortOk) || (!newPortOk && oldPortOk) {
-		if !(oldPortOk && oldTLSPortOk) {
+		if !oldPortOk || !oldTLSPortOk {
 			return fmt.Errorf("cannot remove tls or non-tls configurations unless both configurations have been set initially")
 		}
 	}

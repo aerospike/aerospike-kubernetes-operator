@@ -37,7 +37,7 @@ func (r *SingleClusterReconciler) deletePDB() error {
 	pdb := &v1.PodDisruptionBudget{}
 
 	// Get the PodDisruptionBudget
-	if err := r.Client.Get(
+	if err := r.Get(
 		context.TODO(), types.NamespacedName{
 			Name: r.aeroCluster.Name, Namespace: r.aeroCluster.Namespace,
 		}, pdb,
@@ -60,7 +60,7 @@ func (r *SingleClusterReconciler) deletePDB() error {
 	}
 
 	// Delete the PodDisruptionBudget
-	return r.Client.Delete(context.TODO(), pdb)
+	return r.Delete(context.TODO(), pdb)
 }
 
 func (r *SingleClusterReconciler) createOrUpdatePDB() error {
@@ -75,6 +75,7 @@ func (r *SingleClusterReconciler) createOrUpdatePDB() error {
 		if !clusterReadinessEnabled {
 			r.Log.Info("Pod Readiness is not enabled throughout cluster. Skipping PodDisruptionBudget." +
 				" Refer Aerospike documentation for more details.")
+
 			return nil
 		}
 	}
@@ -82,7 +83,7 @@ func (r *SingleClusterReconciler) createOrUpdatePDB() error {
 	ls := utils.LabelsForAerospikeCluster(r.aeroCluster.Name)
 	pdb := &v1.PodDisruptionBudget{}
 
-	if err := r.Client.Get(
+	if err := r.Get(
 		context.TODO(), types.NamespacedName{
 			Name: r.aeroCluster.Name, Namespace: r.aeroCluster.Namespace,
 		}, pdb,
@@ -109,7 +110,7 @@ func (r *SingleClusterReconciler) createOrUpdatePDB() error {
 			return err
 		}
 
-		if err = r.Client.Create(
+		if err = r.Create(
 			context.TODO(), pdb, common.CreateOption,
 		); err != nil {
 			return fmt.Errorf(
@@ -146,7 +147,7 @@ func (r *SingleClusterReconciler) createOrUpdatePDB() error {
 	if pdb.Spec.MaxUnavailable.String() != r.aeroCluster.Spec.MaxUnavailable.String() {
 		pdb.Spec.MaxUnavailable = r.aeroCluster.Spec.MaxUnavailable
 
-		if err := r.Client.Update(
+		if err := r.Update(
 			context.TODO(), pdb, common.UpdateOption,
 		); err != nil {
 			return fmt.Errorf(

@@ -84,7 +84,7 @@ operator using OLM.
 
 ### Install operator-sdk
 
-Install operator-sdk version 1.40.0 using the
+Install operator-sdk version 1.41.1 using the
 installation [guide](https://v1-40-x.sdk.operatorframework.io/docs/installation/)
 
 ### Build the bundle

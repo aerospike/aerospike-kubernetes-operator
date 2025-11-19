@@ -104,7 +104,6 @@ func createMarkerFile(
 			utils.GetNamespacedName(pod), asdbv1.AerospikeServerContainerName, cmd, k8sClientSet,
 			cfg,
 		)
-
 		if err != nil {
 			return fmt.Errorf(
 				"error reading ASD Pid from pod %s - %v", pod.Name, err,

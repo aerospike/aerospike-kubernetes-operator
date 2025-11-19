@@ -611,9 +611,9 @@ func (c *Client) ScheduleBackup(routineName string, delay metav1.Duration) error
 		return err
 	}
 
-	if delay.Duration.Milliseconds() > 0 {
+	if delay.Milliseconds() > 0 {
 		query := url.Query()
-		query.Add("delay", fmt.Sprintf("%d", delay.Duration.Milliseconds()))
+		query.Add("delay", fmt.Sprintf("%d", delay.Milliseconds()))
 		url.RawQuery = query.Encode()
 	}
 

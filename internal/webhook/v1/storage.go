@@ -137,6 +137,7 @@ func setStorageDefaults(storage *asdbv1.AerospikeStorageSpec) {
 func validateHostPathVolumeReadOnly(volume *asdbv1.VolumeSpec) error {
 	if volume.Source.HostPath != nil {
 		var attachments []asdbv1.VolumeAttachment
+
 		attachments = append(attachments, volume.Sidecars...)
 		attachments = append(attachments, volume.InitContainers...)
 
@@ -220,10 +221,10 @@ func getAerospikeStorageList(storage *asdbv1.AerospikeStorageSpec, onlyPV bool) 
 				continue
 			}
 
-			switch {
-			case volume.Source.PersistentVolume.VolumeMode == v1.PersistentVolumeBlock:
+			switch volume.Source.PersistentVolume.VolumeMode {
+			case v1.PersistentVolumeBlock:
 				blockStorageDeviceList = append(blockStorageDeviceList, volume.Aerospike.Path)
-			case volume.Source.PersistentVolume.VolumeMode == v1.PersistentVolumeFilesystem:
+			case v1.PersistentVolumeFilesystem:
 				fileStorageList = append(fileStorageList, volume.Aerospike.Path)
 			default:
 				return nil, nil, fmt.Errorf(

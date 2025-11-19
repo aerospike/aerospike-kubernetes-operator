@@ -61,7 +61,7 @@ func (r *SingleClusterReconciler) reconcileRacks() common.ReconcileResult {
 		stsName := utils.GetNamespacedNameForSTSOrConfigMap(r.aeroCluster,
 			utils.GetRackIdentifier(state.Rack.ID, state.Rack.Revision))
 
-		if err = r.Client.Get(context.TODO(), stsName, found); err != nil {
+		if err = r.Get(context.TODO(), stsName, found); err != nil {
 			if !errors.IsNotFound(err) {
 				return common.ReconcileError(err)
 			}
@@ -90,7 +90,7 @@ func (r *SingleClusterReconciler) reconcileRacks() common.ReconcileResult {
 		stsName := utils.GetNamespacedNameForSTSOrConfigMap(r.aeroCluster,
 			utils.GetRackIdentifier(state.Rack.ID, state.Rack.Revision))
 
-		if err = r.Client.Get(context.TODO(), stsName, found); err != nil {
+		if err = r.Get(context.TODO(), stsName, found); err != nil {
 			if !errors.IsNotFound(err) {
 				return common.ReconcileError(err)
 			}
@@ -151,7 +151,7 @@ func (r *SingleClusterReconciler) reconcileRacks() common.ReconcileResult {
 		stsName := utils.GetNamespacedNameForSTSOrConfigMap(r.aeroCluster,
 			utils.GetRackIdentifier(state.Rack.ID, state.Rack.Revision))
 
-		if err := r.Client.Get(context.TODO(), stsName, found); err != nil {
+		if err := r.Get(context.TODO(), stsName, found); err != nil {
 			if !errors.IsNotFound(err) {
 				return common.ReconcileError(err)
 			}
@@ -264,7 +264,7 @@ func (r *SingleClusterReconciler) deleteRacks(
 			r.aeroCluster, utils.GetRackIdentifier(rack.ID, rack.Revision),
 		)
 
-		err := r.Client.Get(context.TODO(), stsName, found)
+		err := r.Get(context.TODO(), stsName, found)
 		if err != nil {
 			// If not found, then go to the next
 			if errors.IsNotFound(err) {
@@ -694,7 +694,7 @@ func (r *SingleClusterReconciler) scaleUpRack(
 	found.Spec.Replicas = &desiredSize
 
 	// Scale up the statefulset
-	if err = r.Client.Update(context.TODO(), found, common.UpdateOption); err != nil {
+	if err = r.Update(context.TODO(), found, common.UpdateOption); err != nil {
 		return found, common.ReconcileError(
 			fmt.Errorf(
 				"failed to update StatefulSet pods: %v", err,
@@ -952,7 +952,7 @@ func (r *SingleClusterReconciler) scaleDownRack(
 	newSize := *found.Spec.Replicas - utils.Len32(podsBatch)
 	found.Spec.Replicas = &newSize
 
-	if err = r.Client.Update(
+	if err = r.Update(
 		context.TODO(), found, common.UpdateOption,
 	); err != nil {
 		return found, common.ReconcileError(
@@ -988,7 +988,7 @@ func (r *SingleClusterReconciler) scaleDownRack(
 				"size", newSize,
 			)
 
-			if err = r.Client.Update(
+			if err = r.Update(
 				context.TODO(), found, common.UpdateOption,
 			); err != nil {
 				return found, common.ReconcileError(
@@ -1323,6 +1323,7 @@ func (r *SingleClusterReconciler) isRackStorageUpdatedInAeroCluster(
 
 		// Check for Added/Updated volumeAttachments
 		var containerAttachments []asdbv1.VolumeAttachment
+
 		containerAttachments = append(containerAttachments, volume.Sidecars...)
 
 		if volume.Aerospike != nil {
@@ -1655,7 +1656,7 @@ func (r *SingleClusterReconciler) getRackPodList(rackID int, rackRevision string
 	}
 
 	// TODO: Should we add check to get only non-terminating pod? What if it is rolling restart
-	if err := r.Client.List(context.TODO(), podList, listOps); err != nil {
+	if err := r.List(context.TODO(), podList, listOps); err != nil {
 		return nil, err
 	}
 
@@ -1705,6 +1706,7 @@ func (r *SingleClusterReconciler) getCurrentRackList() (
 	[]asdbv1.Rack, error,
 ) {
 	var rackList []asdbv1.Rack
+
 	rackList = append(rackList, r.aeroCluster.Status.RackConfig.Racks...)
 
 	// Create dummy rack structures for dangling racks that have stateful sets but were deleted later because rack
