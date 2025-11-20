@@ -219,8 +219,8 @@ func getTimeStampRestoreConfigBytes(restoreConfig map[string]interface{}) (confi
 	delete(restoreConfig, asdbv1beta1.BackupDataPathKey)
 
 	parts := strings.Split(backupDataPath, "/")
-	time := parts[len(parts)-3]
-	timeInt, err := strconv.Atoi(time)
+	timeStamp := parts[len(parts)-3]
+	timeInt, err := strconv.Atoi(timeStamp)
 	Expect(err).ToNot(HaveOccurred())
 
 	// increase time by 1 millisecond to consider the latest backup under time bound
