@@ -194,7 +194,7 @@ func getPodSpecAnnotations(
 			return nil, err
 		}
 
-		annotations = append(annotations, found.Spec.Template.ObjectMeta.Annotations)
+		annotations = append(annotations, found.Spec.Template.Annotations)
 	}
 
 	return annotations, nil
@@ -222,7 +222,7 @@ func getPodSpecLabels(
 			return nil, err
 		}
 
-		ls = append(ls, found.Spec.Template.ObjectMeta.Labels)
+		ls = append(ls, found.Spec.Template.Labels)
 	}
 
 	return ls, nil
@@ -412,10 +412,10 @@ func validateSTSPodsForRack(
 
 	for podIndex := range rackPodList.Items {
 		node := &corev1.Node{}
+
 		err := k8sClient.Get(
 			ctx, types.NamespacedName{Name: rackPodList.Items[podIndex].Spec.NodeName}, node,
 		)
-
 		if err != nil {
 			return err
 		}
@@ -465,7 +465,7 @@ func getConfiguredRackStateList(aeroCluster *asdbv1.AerospikeCluster) []RackStat
 }
 
 func getRackID(pod *corev1.Pod) (int, error) {
-	rack, ok := pod.ObjectMeta.Labels["aerospike.com/rack-id"]
+	rack, ok := pod.Labels["aerospike.com/rack-id"]
 	if !ok {
 		return 0, nil
 	}

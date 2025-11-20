@@ -2223,12 +2223,12 @@ func testAccessControlReconcile(
 	}
 
 	current := &asdbv1.AerospikeCluster{}
+
 	err = k8sClient.Get(
 		ctx,
 		types.NamespacedName{Name: desired.Name, Namespace: desired.Namespace},
 		current,
 	)
-
 	if err != nil {
 		return err
 	}

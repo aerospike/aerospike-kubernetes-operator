@@ -140,7 +140,6 @@ func deleteRestore(cl client.Client, restore *asdbv1beta1.AerospikeRestore) erro
 			Namespace: restore.Namespace,
 			Name:      restore.Name,
 		})
-
 		if err != nil {
 			if k8serrors.IsNotFound(err) {
 				break

@@ -285,6 +285,7 @@ func validateLoadBalancerExists(aeroCluster *asdbv1.AerospikeCluster) {
 func validateLoadBalancerSvcDeleted(aeroCluster *asdbv1.AerospikeCluster) {
 	Eventually(func() error {
 		service := &corev1.Service{}
+
 		err := k8sClient.Get(goctx.TODO(), loadBalancerName(aeroCluster), service)
 		if errors.IsNotFound(err) {
 			return nil

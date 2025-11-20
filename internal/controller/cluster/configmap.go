@@ -85,7 +85,6 @@ func init() {
 			return nil
 		},
 	)
-
 	if err != nil {
 		// Error reading embedded script templates.
 		panic(fmt.Sprintf("error reading embedded script templates: %v", err))
@@ -358,7 +357,7 @@ func (r *SingleClusterReconciler) deleteRackConfigMap(namespacedName types.Names
 		},
 	}
 
-	if err := r.Client.Delete(context.TODO(), configMap); err != nil {
+	if err := r.Delete(context.TODO(), configMap); err != nil {
 		if errors.IsNotFound(err) {
 			r.Log.Info(
 				"Can't find rack configmap while trying to delete it. Skipping...",

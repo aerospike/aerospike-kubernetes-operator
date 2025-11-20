@@ -271,12 +271,12 @@ func waitForClusterScaleDown(
 		retryInterval, timeout, true, func(ctx goctx.Context) (done bool, err error) {
 			// Fetch the AerospikeCluster instance
 			newCluster := &asdbv1.AerospikeCluster{}
+
 			err = k8sClient.Get(
 				ctx, types.NamespacedName{
 					Name: aeroCluster.Name, Namespace: aeroCluster.Namespace,
 				}, newCluster,
 			)
-
 			if err != nil {
 				if apierrors.IsNotFound(err) {
 					return false, nil
@@ -288,6 +288,7 @@ func waitForClusterScaleDown(
 			if int(newCluster.Status.Size) < replicas {
 				err = fmt.Errorf("cluster size can not go below temp size," +
 					" it should have only final value, as this is the new reconcile flow")
+
 				return false, err
 			}
 
@@ -320,12 +321,12 @@ func waitForClusterRollingRestart(
 		retryInterval, timeout, true, func(ctx goctx.Context) (done bool, err error) {
 			// Fetch the AerospikeCluster instance
 			newCluster := &asdbv1.AerospikeCluster{}
+
 			err = k8sClient.Get(
 				ctx, types.NamespacedName{
 					Name: aeroCluster.Name, Namespace: aeroCluster.Namespace,
 				}, newCluster,
 			)
-
 			if err != nil {
 				if apierrors.IsNotFound(err) {
 					return false, nil
@@ -364,12 +365,12 @@ func waitForClusterUpgrade(
 		retryInterval, timeout, true, func(ctx goctx.Context) (done bool, err error) {
 			// Fetch the AerospikeCluster instance
 			newCluster := &asdbv1.AerospikeCluster{}
+
 			err = k8sClient.Get(
 				ctx, types.NamespacedName{
 					Name: aeroCluster.Name, Namespace: aeroCluster.Namespace,
 				}, newCluster,
 			)
-
 			if err != nil {
 				if apierrors.IsNotFound(err) {
 					return false, nil

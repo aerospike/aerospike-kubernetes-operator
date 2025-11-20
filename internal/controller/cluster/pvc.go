@@ -83,7 +83,7 @@ func (r *SingleClusterReconciler) removePVCsAsync(
 		if cascadeDelete {
 			deletedPVCs = append(deletedPVCs, pvc)
 
-			if err := r.Client.Delete(context.TODO(), &pvc); err != nil {
+			if err := r.Delete(context.TODO(), &pvc); err != nil {
 				return nil, fmt.Errorf(
 					"could not delete pvc %s: %v", pvc.Name, err,
 				)
@@ -121,7 +121,7 @@ func (r *SingleClusterReconciler) deleteLocalPVCs(rackState *RackState, pod *cor
 		}
 
 		if utils.ContainsString(rackState.Rack.Storage.LocalStorageClasses, *pvcStorageClass) {
-			if err := r.Client.Delete(context.TODO(), &pvcItems[idx]); err != nil && !errors.IsNotFound(err) {
+			if err := r.Delete(context.TODO(), &pvcItems[idx]); err != nil && !errors.IsNotFound(err) {
 				return fmt.Errorf(
 					"could not delete pvc %s: %v", pvcItems[idx].Name, err,
 				)
@@ -196,7 +196,7 @@ func (r *SingleClusterReconciler) getClusterPVCList() (
 		Namespace: r.aeroCluster.Namespace, LabelSelector: labelSelector,
 	}
 
-	if err := r.Client.List(context.TODO(), pvcList, listOps); err != nil {
+	if err := r.List(context.TODO(), pvcList, listOps); err != nil {
 		return nil, err
 	}
 
@@ -213,7 +213,7 @@ func (r *SingleClusterReconciler) getRackPVCList(rackID int, rackRevision string
 		LabelSelector: utils.GetAerospikeClusterRackLabelSelector(r.aeroCluster.Name, rackID, rackRevision),
 	}
 
-	if err := r.Client.List(context.TODO(), pvcList, listOps); err != nil {
+	if err := r.List(context.TODO(), pvcList, listOps); err != nil {
 		return nil, err
 	}
 

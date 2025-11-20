@@ -488,19 +488,19 @@ var _ = Describe(
 								volumeIndex := len(aeroCluster.Spec.Storage.Volumes) - 1
 
 								// Try to set read-write for sidecar (should fail)
-								aeroCluster.Spec.Storage.Volumes[volumeIndex].Sidecars[0].AttachmentOptions.MountOptions.
+								aeroCluster.Spec.Storage.Volumes[volumeIndex].Sidecars[0].
 									ReadOnly = ptr.To(false)
 
 								err = updateCluster(k8sClient, ctx, aeroCluster)
 								Expect(err).Should(HaveOccurred())
 
-								aeroCluster.Spec.Storage.Volumes[volumeIndex].InitContainers[0].AttachmentOptions.
-									MountOptions.ReadOnly = ptr.To(false)
+								aeroCluster.Spec.Storage.Volumes[volumeIndex].InitContainers[0].
+									ReadOnly = ptr.To(false)
 
 								err = updateCluster(k8sClient, ctx, aeroCluster)
 								Expect(err).Should(HaveOccurred())
 
-								aeroCluster.Spec.Storage.Volumes[volumeIndex].Aerospike.AttachmentOptions.MountOptions.ReadOnly = ptr.To(false)
+								aeroCluster.Spec.Storage.Volumes[volumeIndex].Aerospike.ReadOnly = ptr.To(false)
 
 								err = updateCluster(k8sClient, ctx, aeroCluster)
 								Expect(err).Should(HaveOccurred())

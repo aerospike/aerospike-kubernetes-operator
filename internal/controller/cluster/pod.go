@@ -297,6 +297,7 @@ func (r *SingleClusterReconciler) rollingRestartPods(
 			); !res.IsSuccess {
 				r.Log.Error(res.Err,
 					"Failed to set migrate-fill-delay to original value before restarting the running pods")
+
 				return res
 			}
 		}
@@ -387,7 +388,6 @@ func (r *SingleClusterReconciler) restartASDOrUpdateAerospikeConf(podName string
 				podNamespacedName, asdbv1.AerospikeServerContainerName, cmd, r.KubeClient,
 				r.KubeConfig,
 			)
-
 			if err != nil {
 				r.Log.V(1).Info(
 					"Failed warm restart", "err", err, "podName", podNamespacedName.Name, "stdout",
@@ -441,7 +441,8 @@ func (r *SingleClusterReconciler) restartPods(
 		// Check if this pod needs restart
 		restartType := restartTypeMap[pod.Name]
 
-		if restartType == quickRestart {
+		switch restartType {
+		case quickRestart:
 			// We assume that the pod server image supports pod warm restart.
 			if err := r.restartASDOrUpdateAerospikeConf(pod.Name, quickRestart); err != nil {
 				r.Log.Error(err, "Failed to warm restart pod", "podName", pod.Name)
@@ -449,14 +450,14 @@ func (r *SingleClusterReconciler) restartPods(
 			}
 
 			restartedASDPodNames = append(restartedASDPodNames, pod.Name)
-		} else if restartType == podRestart {
+		case podRestart:
 			if r.isLocalPVCDeletionRequired(rackState, pod) {
 				if err := r.deleteLocalPVCs(rackState, pod); err != nil {
 					return common.ReconcileError(err)
 				}
 			}
 
-			if err := r.Client.Delete(context.TODO(), pod); err != nil {
+			if err := r.Delete(context.TODO(), pod); err != nil {
 				r.Log.Error(err, "Failed to delete pod")
 				return common.ReconcileError(err)
 			}
@@ -465,6 +466,8 @@ func (r *SingleClusterReconciler) restartPods(
 			restartedPodNames = append(restartedPodNames, pod.Name)
 
 			r.Log.V(1).Info("Pod deleted", "podName", pod.Name)
+		case noRestart, noRestartUpdateConf:
+			// No action needed for these restart types
 		}
 	}
 
@@ -519,7 +522,7 @@ func (r *SingleClusterReconciler) ensurePodsRunningAndReady(podsToCheck []*corev
 			updatedPod := &corev1.Pod{}
 			podName := types.NamespacedName{Name: pod.Name, Namespace: pod.Namespace}
 
-			if err := r.Client.Get(context.TODO(), podName, updatedPod); err != nil {
+			if err := r.Get(context.TODO(), podName, updatedPod); err != nil {
 				return common.ReconcileError(err)
 			}
 
@@ -635,6 +638,7 @@ func (r *SingleClusterReconciler) safelyDeletePodsAndEnsureImageUpdated(
 			); !res.IsSuccess {
 				r.Log.Error(res.Err,
 					"Failed to set migrate-fill-delay to original value before upgrading the running pods")
+
 				return res
 			}
 		}
@@ -684,7 +688,7 @@ func (r *SingleClusterReconciler) deletePodAndEnsureImageUpdated(
 			}
 		}
 
-		if err := r.Client.Delete(context.TODO(), pod); err != nil {
+		if err := r.Delete(context.TODO(), pod); err != nil {
 			return common.ReconcileError(err)
 		}
 
@@ -702,12 +706,14 @@ func (r *SingleClusterReconciler) isLocalPVCDeletionRequired(rackState *RackStat
 	if utils.ContainsString(r.aeroCluster.Spec.K8sNodeBlockList, pod.Spec.NodeName) {
 		r.Log.Info("Pod found in blocked nodes list, deleting corresponding local PVCs if any",
 			"podName", pod.Name)
+
 		return true
 	}
 
 	if asdbv1.GetBool(rackState.Rack.Storage.DeleteLocalStorageOnRestart) {
 		r.Log.Info("deleteLocalStorageOnRestart flag is enabled, deleting corresponding local PVCs if any",
 			"podName", pod.Name)
+
 		return true
 	}
 
@@ -740,7 +746,7 @@ func (r *SingleClusterReconciler) ensurePodsImageUpdated(podsToCheck []*corev1.P
 			updatedPod := &corev1.Pod{}
 			podName := types.NamespacedName{Name: pod.Name, Namespace: pod.Namespace}
 
-			if err := r.Client.Get(context.TODO(), podName, updatedPod); err != nil {
+			if err := r.Get(context.TODO(), podName, updatedPod); err != nil {
 				return common.ReconcileError(err)
 			}
 
@@ -1069,7 +1075,7 @@ func (r *SingleClusterReconciler) getClusterPodList() (
 	}
 
 	// TODO: Should we add check to get only non-terminating pod? What if it is rolling restart
-	if err := r.Client.List(context.TODO(), podList, listOps); err != nil {
+	if err := r.List(context.TODO(), podList, listOps); err != nil {
 		return nil, err
 	}
 
@@ -1368,7 +1374,7 @@ func (r *SingleClusterReconciler) getNSAddedDevices(rackState *RackState) ([]str
 	)
 
 	newAeroCluster := &asdbv1.AerospikeCluster{}
-	if err := r.Client.Get(
+	if err := r.Get(
 		context.TODO(), types.NamespacedName{
 			Name: r.aeroCluster.Name, Namespace: r.aeroCluster.Namespace,
 		}, newAeroCluster,
@@ -1497,7 +1503,6 @@ func (r *SingleClusterReconciler) deleteFileStorage(podName, fileName string) er
 
 	stdout, stderr, err := utils.Exec(podNamespacedName, asdbv1.AerospikeServerContainerName,
 		cmd, r.KubeClient, r.KubeConfig)
-
 	if err != nil {
 		r.Log.V(1).Info(
 			"File deletion failed", "err", err, "podName", podName, "stdout",
@@ -1514,7 +1519,7 @@ func (r *SingleClusterReconciler) getConfigMap(rackIdentifier string) (*corev1.C
 	cmName := utils.GetNamespacedNameForSTSOrConfigMap(r.aeroCluster, rackIdentifier)
 	confMap := &corev1.ConfigMap{}
 
-	if err := r.Client.Get(context.TODO(), cmName, confMap); err != nil {
+	if err := r.Get(context.TODO(), cmName, confMap); err != nil {
 		return nil, err
 	}
 
@@ -1580,6 +1585,7 @@ func getConfDiff(log logger, specConfig map[string]interface{}, podAnnotations m
 	if err != nil {
 		log.Info("Failed to get config diff to change config dynamically, fallback to rolling restart",
 			"error", err.Error())
+
 		return nil, nil
 	}
 
@@ -1722,7 +1728,7 @@ func (r *SingleClusterReconciler) updateOperationStatus(restartedASDPodNames, re
 
 	// Get the old object, it may have been updated in between.
 	newAeroCluster := &asdbv1.AerospikeCluster{}
-	if err := r.Client.Get(
+	if err := r.Get(
 		context.TODO(), types.NamespacedName{
 			Name: r.aeroCluster.Name, Namespace: r.aeroCluster.Namespace,
 		}, newAeroCluster,

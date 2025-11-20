@@ -331,7 +331,6 @@ func DeleteBackupService(
 	// Wait for all the dependent resources to be garbage collected by k8s
 	for {
 		_, err := getBackupServiceObj(k8sClient, utils.GetNamespacedName(backService))
-
 		if err != nil {
 			if k8serrors.IsNotFound(err) {
 				break

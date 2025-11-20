@@ -62,12 +62,12 @@ func waitForAerospikeCluster(
 		retryInterval, timeout, true, func(ctx goctx.Context) (done bool, err error) {
 			// Fetch the AerospikeCluster instance
 			newCluster := &asdbv1.AerospikeCluster{}
+
 			err = k8sClient.Get(
 				ctx, types.NamespacedName{
 					Name: aeroCluster.Name, Namespace: aeroCluster.Namespace,
 				}, newCluster,
 			)
-
 			if err != nil {
 				if errors.IsNotFound(err) {
 					pkgLog.Info(
@@ -86,7 +86,6 @@ func waitForAerospikeCluster(
 			return isValid, nil
 		},
 	)
-
 	if err != nil {
 		return err
 	}
@@ -786,11 +785,11 @@ func getServiceForPod(
 	pod *corev1.Pod, k8sClient client.Client,
 ) (*corev1.Service, error) {
 	service := &corev1.Service{}
+
 	err := k8sClient.Get(
 		goctx.TODO(),
 		types.NamespacedName{Name: pod.Name, Namespace: pod.Namespace}, service,
 	)
-
 	if err != nil {
 		return nil, fmt.Errorf(
 			"failed to get service for pod %s: %v", pod.Name, err,

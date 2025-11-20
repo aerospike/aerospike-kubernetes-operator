@@ -206,7 +206,6 @@ func DeleteBackup(cl client.Client, backup *asdbv1beta1.AerospikeBackup) error {
 	// Wait for the finalizer to be removed
 	for {
 		_, err := getBackupObj(cl, backup.Name, backup.Namespace)
-
 		if err != nil {
 			if k8serrors.IsNotFound(err) {
 				break

@@ -198,7 +198,7 @@ func (r *SingleClusterReconciler) createSTS(
 		return nil, err
 	}
 
-	if err := r.Client.Create(context.TODO(), st, common.CreateOption); err != nil {
+	if err := r.Create(context.TODO(), st, common.CreateOption); err != nil {
 		return nil, fmt.Errorf("failed to create new StatefulSet: %v", err)
 	}
 
@@ -244,7 +244,7 @@ func (r *SingleClusterReconciler) deleteSTS(st *appsv1.StatefulSet) error {
 	// No need to do cleanup pods after deleting sts
 	// It is only deleted while its creation is failed
 	// While doing rackRemove, we call scaleDown to 0 so that will do cleanup
-	return r.Client.Delete(context.TODO(), st)
+	return r.Delete(context.TODO(), st)
 }
 
 func (r *SingleClusterReconciler) waitForSTSToBeReady(
@@ -273,7 +273,7 @@ func (r *SingleClusterReconciler) waitForSTSToBeReady(
 
 		// Wait for 10 sec to pod to get started
 		for i := 0; i < 5; i++ {
-			if err := r.Client.Get(
+			if err := r.Get(
 				context.TODO(),
 				types.NamespacedName{Name: podName, Namespace: st.Namespace},
 				pod,
@@ -290,7 +290,7 @@ func (r *SingleClusterReconciler) waitForSTSToBeReady(
 				"Check statefulSet pod running and ready", "pod", podName,
 			)
 
-			if err := r.Client.Get(
+			if err := r.Get(
 				context.TODO(),
 				types.NamespacedName{Name: podName, Namespace: st.Namespace},
 				pod,
@@ -340,7 +340,7 @@ func (r *SingleClusterReconciler) waitForSTSToBeReady(
 
 		r.Log.V(1).Info("Check statefulSet status is updated or not")
 
-		if err := r.Client.Get(
+		if err := r.Get(
 			context.TODO(),
 			types.NamespacedName{Name: st.Name, Namespace: st.Namespace}, st,
 		); err != nil {
@@ -369,7 +369,7 @@ func (r *SingleClusterReconciler) waitForSTSToBeReady(
 
 func (r *SingleClusterReconciler) getSTS(rackState *RackState) (*appsv1.StatefulSet, error) {
 	found := &appsv1.StatefulSet{}
-	if err := r.Client.Get(
+	if err := r.Get(
 		context.TODO(),
 		utils.GetNamespacedNameForSTSOrConfigMap(r.aeroCluster,
 			utils.GetRackIdentifier(rackState.Rack.ID, rackState.Rack.Revision)),
@@ -387,12 +387,12 @@ func (r *SingleClusterReconciler) createSTSConfigMap(
 	r.Log.Info("Creating a new ConfigMap for statefulSet")
 
 	confMap := &corev1.ConfigMap{}
-	err := r.Client.Get(
+
+	err := r.Get(
 		context.TODO(), types.NamespacedName{
 			Name: namespacedName.Name, Namespace: namespacedName.Namespace,
 		}, confMap,
 	)
-
 	if err != nil {
 		if errors.IsNotFound(err) {
 			// build the aerospike config file based on the current spec
@@ -423,7 +423,7 @@ func (r *SingleClusterReconciler) createSTSConfigMap(
 				return err
 			}
 
-			if err = r.Client.Create(
+			if err = r.Create(
 				context.TODO(), confMap, common.CreateOption,
 			); err != nil {
 				return fmt.Errorf(
@@ -465,7 +465,7 @@ func (r *SingleClusterReconciler) createSTSConfigMap(
 
 	confMap.Data = configMapData
 
-	if err := r.Client.Update(
+	if err := r.Update(
 		context.TODO(), confMap, common.UpdateOption,
 	); err != nil {
 		return fmt.Errorf("failed to update ConfigMap for StatefulSet: %v", err)
@@ -480,7 +480,7 @@ func (r *SingleClusterReconciler) updateSTSConfigMap(
 	r.Log.Info("Updating ConfigMap", "ConfigMap", namespacedName)
 
 	confMap := &corev1.ConfigMap{}
-	if err := r.Client.Get(context.TODO(), namespacedName, confMap); err != nil {
+	if err := r.Get(context.TODO(), namespacedName, confMap); err != nil {
 		return err
 	}
 
@@ -495,7 +495,7 @@ func (r *SingleClusterReconciler) updateSTSConfigMap(
 		confMap.Data[k] = v
 	}
 
-	if err := r.Client.Update(
+	if err := r.Update(
 		context.TODO(), confMap, common.UpdateOption,
 	); err != nil {
 		return fmt.Errorf("failed to update confMap for StatefulSet: %v", err)
@@ -653,7 +653,7 @@ func (r *SingleClusterReconciler) updateSTS(
 
 		// Save the updated stateful set.
 		found.Spec = statefulSet.Spec
-		return r.Client.Update(context.TODO(), found, common.UpdateOption)
+		return r.Update(context.TODO(), found, common.UpdateOption)
 	}); err != nil {
 		return fmt.Errorf(
 			"failed to update StatefulSet %s: %v",
@@ -746,8 +746,8 @@ func (r *SingleClusterReconciler) updateSTSPVStorage(
 		volume := &volumes[idx]
 		initContainerAttachments, containerAttachments := getFinalVolumeAttachmentsForVolume(volume)
 
-		switch {
-		case volume.Source.PersistentVolume.VolumeMode == corev1.PersistentVolumeBlock:
+		switch volume.Source.PersistentVolume.VolumeMode {
+		case corev1.PersistentVolumeBlock:
 			initContainerVolumePathPrefix := "/workdir/block-volumes"
 
 			r.Log.V(1).Info("Added volume device for volume", "volume", volume)
@@ -761,7 +761,7 @@ func (r *SingleClusterReconciler) updateSTSPVStorage(
 				volume.Name, containerAttachments,
 				st.Spec.Template.Spec.Containers, "",
 			)
-		case volume.Source.PersistentVolume.VolumeMode == corev1.PersistentVolumeFilesystem:
+		case corev1.PersistentVolumeFilesystem:
 			initContainerVolumePathPrefix := "/workdir/filesystem-volumes"
 
 			r.Log.V(1).Info("Added volume mount for volume", "volume", volume)
@@ -985,8 +985,8 @@ func (r *SingleClusterReconciler) updateSTSFromPodSpec(
 	mergedLabels := utils.MergeLabels(defaultLabels, userDefinedLabels)
 
 	st.Spec.Template.Spec.HostNetwork = r.aeroCluster.Spec.PodSpec.HostNetwork
-	st.Spec.Template.ObjectMeta.Labels = mergedLabels
-	st.Spec.Template.ObjectMeta.Annotations = r.aeroCluster.Spec.PodSpec.AerospikeObjectMeta.Annotations
+	st.Spec.Template.Labels = mergedLabels
+	st.Spec.Template.Annotations = r.aeroCluster.Spec.PodSpec.AerospikeObjectMeta.Annotations
 
 	st.Spec.Template.Spec.DNSPolicy = r.aeroCluster.Spec.PodSpec.DNSPolicy
 	st.Spec.Template.Spec.DNSConfig = r.aeroCluster.Spec.PodSpec.DNSConfig
@@ -1085,7 +1085,7 @@ func (r *SingleClusterReconciler) waitForAllSTSToBeReady(ignorablePodNames sets.
 		st := &appsv1.StatefulSet{}
 		stsName := utils.GetNamespacedNameForSTSOrConfigMap(r.aeroCluster, rackIdentifier)
 
-		if err := r.Client.Get(context.TODO(), stsName, st); err != nil {
+		if err := r.Get(context.TODO(), stsName, st); err != nil {
 			if !errors.IsNotFound(err) {
 				return err
 			}
@@ -1112,7 +1112,7 @@ func (r *SingleClusterReconciler) getClusterSTSList() (
 		Namespace: r.aeroCluster.Namespace, LabelSelector: labelSelector,
 	}
 
-	if err := r.Client.List(
+	if err := r.List(
 		context.TODO(), statefulSetList, listOps,
 	); err != nil {
 		return nil, err
@@ -1127,10 +1127,10 @@ func (r *SingleClusterReconciler) updateContainerImages(statefulset *appsv1.Stat
 	updateImage := func(containers []corev1.Container) {
 		for idx := range containers {
 			container := &containers[idx]
+
 			desiredImage, err := utils.GetDesiredImage(
 				r.aeroCluster, container.Name,
 			)
-
 			if err != nil {
 				// Maybe a deleted container or an auto-injected container like Istio.
 				continue
@@ -1190,7 +1190,7 @@ func (r *SingleClusterReconciler) updateAerospikeInitContainerImage(statefulSet 
 
 			statefulSet.Spec.Template.Spec.InitContainers[idx].Image = desiredImage
 
-			if err := r.Client.Update(context.TODO(), statefulSet, common.UpdateOption); err != nil {
+			if err := r.Update(context.TODO(), statefulSet, common.UpdateOption); err != nil {
 				return fmt.Errorf(
 					"failed to update StatefulSet %s: %v",
 					statefulSet.Name,
@@ -1384,6 +1384,7 @@ func createPVCForVolumeAttachment(
 	pv := volume.Source.PersistentVolume
 
 	var accessModes []corev1.PersistentVolumeAccessMode
+
 	accessModes = append(accessModes, pv.AccessModes...)
 
 	if len(accessModes) == 0 {
@@ -1498,10 +1499,10 @@ func addVolumeMountInContainer(
 				volumeMount = corev1.VolumeMount{
 					Name:             volumeName,
 					MountPath:        mountPath,
-					ReadOnly:         asdbv1.GetBool(volumeAttachment.AttachmentOptions.MountOptions.ReadOnly),
-					SubPath:          volumeAttachment.AttachmentOptions.MountOptions.SubPath,
-					SubPathExpr:      volumeAttachment.AttachmentOptions.MountOptions.SubPathExpr,
-					MountPropagation: volumeAttachment.AttachmentOptions.MountOptions.MountPropagation,
+					ReadOnly:         asdbv1.GetBool(volumeAttachment.ReadOnly),
+					SubPath:          volumeAttachment.SubPath,
+					SubPathExpr:      volumeAttachment.SubPathExpr,
+					MountPropagation: volumeAttachment.MountPropagation,
 				}
 
 				container.VolumeMounts = append(
