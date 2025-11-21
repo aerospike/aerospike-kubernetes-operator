@@ -9,6 +9,10 @@ on:
   pull_request:
     branches:
       - master
+    paths:  # Only run on PRs when eviction webhook code or tests change
+      - 'internal/webhook/eviction/**'
+      - 'test/envtests/eviction_webhook_test.go'
+      - '.github/workflows/webhook-tests.yml'
 
 jobs:
   test:

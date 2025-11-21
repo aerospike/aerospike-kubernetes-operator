@@ -39,7 +39,7 @@ import (
 	// +kubebuilder:scaffold:imports
 
 	asdbv1 "github.com/aerospike/aerospike-kubernetes-operator/v4/api/v1"
-	webhookgeneral "github.com/aerospike/aerospike-kubernetes-operator/v4/internal/webhook/general"
+	evictionwebhook "github.com/aerospike/aerospike-kubernetes-operator/v4/internal/webhook/eviction"
 )
 
 // These tests use Ginkgo (BDD-style Go testing framework). Refer to
@@ -115,7 +115,7 @@ var _ = BeforeSuite(
 		Expect(err).NotTo(HaveOccurred())
 
 		// Setup eviction webhook
-		webhookgeneral.SetupEvictionWebhookWithManager(mgr)
+		evictionwebhook.SetupEvictionWebhookWithManager(mgr)
 
 		ctx, c := context.WithCancel(context.Background())
 		cancel = c

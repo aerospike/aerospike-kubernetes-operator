@@ -16,7 +16,7 @@ import (
 	"k8s.io/apimachinery/pkg/util/wait"
 
 	asdbv1 "github.com/aerospike/aerospike-kubernetes-operator/v4/api/v1"
-	webhookgeneral "github.com/aerospike/aerospike-kubernetes-operator/v4/internal/webhook/general"
+	evictionwebhook "github.com/aerospike/aerospike-kubernetes-operator/v4/internal/webhook/eviction"
 	"github.com/aerospike/aerospike-kubernetes-operator/v4/pkg/utils"
 	"github.com/aerospike/aerospike-kubernetes-operator/v4/test"
 )
@@ -188,7 +188,7 @@ func waitForPodRestartAnnotation(ctx goctx.Context, podName, namespace string) e
 
 			// Check for restart annotation (operator adds this during restart process)
 			if pod.Annotations != nil {
-				if _, exists := pod.Annotations[webhookgeneral.EvictionBlockedAnnotation]; exists {
+				if _, exists := pod.Annotations[evictionwebhook.EvictionBlockedAnnotation]; exists {
 					return true, nil
 				}
 			}

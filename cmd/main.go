@@ -36,7 +36,7 @@ import (
 	backupservice "github.com/aerospike/aerospike-kubernetes-operator/v4/internal/controller/backup-service"
 	"github.com/aerospike/aerospike-kubernetes-operator/v4/internal/controller/cluster"
 	"github.com/aerospike/aerospike-kubernetes-operator/v4/internal/controller/restore"
-	webhookgeneral "github.com/aerospike/aerospike-kubernetes-operator/v4/internal/webhook/general"
+	evictionwebhook "github.com/aerospike/aerospike-kubernetes-operator/v4/internal/webhook/eviction"
 	webhookv1 "github.com/aerospike/aerospike-kubernetes-operator/v4/internal/webhook/v1"
 	webhookv1beta1 "github.com/aerospike/aerospike-kubernetes-operator/v4/internal/webhook/v1beta1"
 	"github.com/aerospike/aerospike-kubernetes-operator/v4/pkg/configschema"
@@ -364,7 +364,7 @@ func main() {
 	}
 
 	// Setup eviction webhook
-	webhookgeneral.SetupEvictionWebhookWithManager(mgr)
+	evictionwebhook.SetupEvictionWebhookWithManager(mgr)
 
 	// +kubebuilder:scaffold:builder
 

@@ -64,6 +64,8 @@ spec:
             # for setting the grace period to delete/recover failed pods, default is 60 seconds
           value: 60
         - name: ENABLE_SAFE_POD_EVICTION
+          # enables the eviction webhook to safely block Aerospike pod evictions
+          # also enables eviction webhook Prometheus metrics (aerospike_ako_eviction_webhook_requests_total)
           value: "false"
         - name: AEROSPIKE_KUBERNETES_INIT_REGISTRY
           # this is the registry used to pull aerospike-init image

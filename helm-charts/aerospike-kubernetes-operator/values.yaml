@@ -33,6 +33,9 @@ certs:
 
 ##  Operator configurations
 watchNamespaces: "default,aerospike"
+
+# Enable the eviction webhook to safely block Aerospike pod evictions during node maintenance
+# Also enables Prometheus metrics: aerospike_ako_eviction_webhook_requests_total (labels: eviction_namespace, decision)
 enableSafePodEviction: "false"
 
 # Grace period to delete/recover failed pods (in seconds)

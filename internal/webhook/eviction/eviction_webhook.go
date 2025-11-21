@@ -26,6 +26,7 @@ import (
 	"time"
 
 	"github.com/go-logr/logr"
+	"github.com/prometheus/client_golang/prometheus"
 	admissionv1 "k8s.io/api/admission/v1"
 	corev1 "k8s.io/api/core/v1"
 	policyv1 "k8s.io/api/policy/v1"
@@ -35,6 +36,7 @@ import (
 	ctrl "sigs.k8s.io/controller-runtime"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 	logf "sigs.k8s.io/controller-runtime/pkg/log"
+	"sigs.k8s.io/controller-runtime/pkg/metrics"
 
 	asdbv1 "github.com/aerospike/aerospike-kubernetes-operator/v4/api/v1"
 )
@@ -42,6 +44,19 @@ import (
 const (
 	// EvictionBlockedAnnotation is the annotation set on pods when eviction is blocked
 	EvictionBlockedAnnotation = "aerospike.com/eviction-blocked"
+	EvictionAllowed           = "allowed"
+	EvictionBlocked           = "blocked"
+)
+
+var (
+	// evictionRequestsTotal tracks the total number of eviction requests processed
+	evictionRequestsTotal = prometheus.NewCounterVec(
+		prometheus.CounterOpts{
+			Name: "aerospike_ako_eviction_webhook_requests_total",
+			Help: "Total number of pod eviction requests processed by the webhook",
+		},
+		[]string{"eviction_namespace", "decision"},
+	)
 )
 
 // +kubebuilder:object:generate=false
@@ -102,6 +117,12 @@ func SetupEvictionWebhookWithManager(mgr ctrl.Manager) {
 
 	ew.Enable = found && strings.EqualFold(enable, "true")
 
+	// Register metrics only if webhook is enabled
+	if ew.Enable {
+		metrics.Registry.MustRegister(evictionRequestsTotal)
+		ew.Log.Info("Eviction webhook metrics registered")
+	}
+
 	// Register the webhook using the webhook server with direct HTTP handler
 	webhookServer := mgr.GetWebhookServer()
 	webhookServer.Register("/validate-eviction", http.HandlerFunc(ew.Handle))
@@ -159,6 +180,13 @@ func (ew *EvictionWebhook) isWebhookEnabled() bool {
 	return ew.Enable
 }
 
+// recordMetric records an eviction webhook metric if the webhook is enabled
+func (ew *EvictionWebhook) recordMetric(namespace, decision string) {
+	if ew.Enable {
+		evictionRequestsTotal.WithLabelValues(namespace, decision).Inc()
+	}
+}
+
 // processEvictionRequest processes the eviction request and returns the response
 func (ew *EvictionWebhook) processEvictionRequest(ctx context.Context, admissionReview *admissionv1.AdmissionReview,
 	log logr.Logger) *admissionv1.AdmissionResponse {
@@ -180,6 +208,8 @@ func (ew *EvictionWebhook) processEvictionRequest(ctx context.Context, admission
 		// If pod doesn't exist, allow the eviction request to proceed
 		if apierrors.IsNotFound(err) {
 			log.V(1).Info("Pod not found, allowing eviction request to proceed", "pod", eviction.Name)
+			ew.recordMetric(admissionReview.Request.Namespace, EvictionAllowed)
+
 			return getSuccessResponse(admissionReview.Request.UID)
 		}
 
@@ -197,6 +227,8 @@ func (ew *EvictionWebhook) processEvictionRequest(ctx context.Context, admission
 	// Check if this is an Aerospike pod (runtime filtering required for pods/eviction subresource)
 	if !ew.isAerospikePod(pod) {
 		log.V(1).Info("Allowing eviction of non-Aerospike pod", "pod", eviction.Name)
+		ew.recordMetric(admissionReview.Request.Namespace, EvictionAllowed)
+
 		return getSuccessResponse(admissionReview.Request.UID)
 	}
 
@@ -216,6 +248,7 @@ func (ew *EvictionWebhook) processEvictionRequest(ctx context.Context, admission
 		)
 	}
 
+	ew.recordMetric(admissionReview.Request.Namespace, EvictionBlocked)
 	// Block eviction regardless of annotation success/failure
 	return getFailureResponse(
 		admissionReview.Request.UID,
