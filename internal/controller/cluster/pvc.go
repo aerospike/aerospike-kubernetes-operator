@@ -83,7 +83,7 @@ func (r *SingleClusterReconciler) removePVCsAsync(
 		if cascadeDelete {
 			deletedPVCs = append(deletedPVCs, pvc)
 
-			if err := r.Client.Delete(context.TODO(), &pvc); err != nil {
+			if err := r.Delete(context.TODO(), &pvc); err != nil {
 				return nil, fmt.Errorf(
 					"could not delete pvc %s: %v", pvc.Name, err,
 				)
@@ -107,7 +107,7 @@ func (r *SingleClusterReconciler) removePVCsAsync(
 // deleteLocalPVCs deletes PVCs which are created using local storage classes
 // It considers the user given LocalStorageClasses list from spec to determine if a PVC is local or not.
 func (r *SingleClusterReconciler) deleteLocalPVCs(rackState *RackState, pod *corev1.Pod) error {
-	pvcItems, err := r.getPodsPVCList([]string{pod.Name}, rackState.Rack.ID)
+	pvcItems, err := r.getPodsPVCList([]string{pod.Name}, rackState.Rack.ID, rackState.Rack.Revision)
 	if err != nil {
 		return fmt.Errorf("could not find pvc for pod %v: %v", pod.Name, err)
 	}
@@ -121,7 +121,7 @@ func (r *SingleClusterReconciler) deleteLocalPVCs(rackState *RackState, pod *cor
 		}
 
 		if utils.ContainsString(rackState.Rack.Storage.LocalStorageClasses, *pvcStorageClass) {
-			if err := r.Client.Delete(context.TODO(), &pvcItems[idx]); err != nil && !errors.IsNotFound(err) {
+			if err := r.Delete(context.TODO(), &pvcItems[idx]); err != nil && !errors.IsNotFound(err) {
 				return fmt.Errorf(
 					"could not delete pvc %s: %v", pvcItems[idx].Name, err,
 				)
@@ -196,28 +196,24 @@ func (r *SingleClusterReconciler) getClusterPVCList() (
 		Namespace: r.aeroCluster.Namespace, LabelSelector: labelSelector,
 	}
 
-	if err := r.Client.List(context.TODO(), pvcList, listOps); err != nil {
+	if err := r.List(context.TODO(), pvcList, listOps); err != nil {
 		return nil, err
 	}
 
 	return pvcList.Items, nil
 }
 
-func (r *SingleClusterReconciler) getRackPVCList(rackID int) (
+func (r *SingleClusterReconciler) getRackPVCList(rackID int, rackRevision string) (
 	[]corev1.PersistentVolumeClaim, error,
 ) {
 	// List the pvc for this aeroCluster's statefulset
 	pvcList := &corev1.PersistentVolumeClaimList{}
-	labelSelector := labels.SelectorFromSet(
-		utils.LabelsForAerospikeClusterRack(
-			r.aeroCluster.Name, rackID,
-		),
-	)
 	listOps := &client.ListOptions{
-		Namespace: r.aeroCluster.Namespace, LabelSelector: labelSelector,
+		Namespace:     r.aeroCluster.Namespace,
+		LabelSelector: utils.GetAerospikeClusterRackLabelSelector(r.aeroCluster.Name, rackID, rackRevision),
 	}
 
-	if err := r.Client.List(context.TODO(), pvcList, listOps); err != nil {
+	if err := r.List(context.TODO(), pvcList, listOps); err != nil {
 		return nil, err
 	}
 

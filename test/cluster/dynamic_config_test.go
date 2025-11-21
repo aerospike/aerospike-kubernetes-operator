@@ -746,7 +746,6 @@ func getPodIDs(ctx context.Context, aeroCluster *asdbv1.AerospikeCluster) (map[s
 			utils.GetNamespacedName(pod), asdbv1.AerospikeServerContainerName, cmd, k8sClientSet,
 			cfg,
 		)
-
 		if execErr != nil {
 			return nil, fmt.Errorf(
 				"error reading ASD Pid from pod %s - %v", pod.Name, execErr,

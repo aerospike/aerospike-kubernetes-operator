@@ -95,6 +95,7 @@ func TestVsEmpty(t *testing.T) {
 
 func BenchmarkBigArrays(b *testing.B) {
 	var a1, a2 []interface{}
+
 	a1 = make([]interface{}, 100)
 	a2 = make([]interface{}, 101)
 
@@ -110,6 +111,7 @@ func BenchmarkBigArrays(b *testing.B) {
 
 func BenchmarkBigArrays2(b *testing.B) {
 	var a1, a2 []interface{}
+
 	a1 = make([]interface{}, 100)
 	a2 = make([]interface{}, 101)
 

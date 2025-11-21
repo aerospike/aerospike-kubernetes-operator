@@ -557,11 +557,14 @@ func PauseReconcileTest(ctx goctx.Context) {
 
 					// Check if at least one pod is upgraded
 					podUpgraded := false
+
 					for podName := range aeroCluster.Status.Pods {
 						podStatus := aeroCluster.Status.Pods[podName]
 						if podStatus.Image == nextImage {
 							pkgLog.Info("One Pod upgraded", "pod", podName, "image", podStatus.Image)
+
 							podUpgraded = true
+
 							break
 						}
 					}
@@ -816,11 +819,13 @@ func ValidateScaleDownWaitForMigrations(ctx goctx.Context) {
 					Eventually(func() bool {
 						podList, lErr := getPodList(aeroCluster, k8sClient)
 						Expect(lErr).ToNot(HaveOccurred())
+
 						info, iErr := requestInfoFromNode(logger, k8sClient, ctx, clusterNamespacedName, "namespace/test",
 							podList.Items[0].Name)
 						Expect(iErr).ToNot(HaveOccurred())
 
 						var nodesQuiesced string
+
 						confs := strings.Split(info["namespace/test"], ";")
 						for _, conf := range confs {
 							if strings.Contains(conf, "nodes_quiesced") {
@@ -828,6 +833,7 @@ func ValidateScaleDownWaitForMigrations(ctx goctx.Context) {
 								break
 							}
 						}
+
 						migrations := getMigrationsInProgress(ctx, k8sClient, clusterNamespacedName, podList)
 
 						podCount := utils.Len32(podList.Items)
@@ -927,6 +933,7 @@ func clusterWithMaxIgnorablePod(ctx goctx.Context) {
 						func() error {
 							aeroCluster, err = getCluster(k8sClient, ctx, clusterNamespacedName)
 							Expect(err).ToNot(HaveOccurred())
+
 							val := intstr.FromInt32(1)
 							aeroCluster.Spec.RackConfig.MaxIgnorablePods = &val
 							aeroCluster.Spec.AerospikeConfig.Value[asdbv1.ConfKeySecurity].(map[string]interface{})["enable-quotas"] = true
@@ -942,6 +949,7 @@ func clusterWithMaxIgnorablePod(ctx goctx.Context) {
 						func() error {
 							aeroCluster, err = getCluster(k8sClient, ctx, clusterNamespacedName)
 							Expect(err).ToNot(HaveOccurred())
+
 							aeroCluster.Spec.Image = nextImage
 							// As pod is in pending state, CR object won't reach the final phase.
 							// So expectedPhases can be InProgress or Completed
@@ -1033,25 +1041,14 @@ func clusterWithMaxIgnorablePod(ctx goctx.Context) {
 					By("Fail 1-1 aerospike pod")
 
 					ignorePodName := clusterNamespacedName.Name + "-1-1"
-					pod := &v1.Pod{}
-
-					err := k8sClient.Get(
-						ctx, types.NamespacedName{
-							Name:      ignorePodName,
-							Namespace: clusterNamespacedName.Namespace,
-						}, pod,
-					)
-					Expect(err).ToNot(HaveOccurred())
-
-					pod.Spec.Containers[0].Image = wrongImage
-					err = k8sClient.Update(ctx, pod)
+					err = markPodAsFailed(ctx, k8sClient, ignorePodName, clusterNamespacedName.Namespace)
 					Expect(err).ToNot(HaveOccurred())
 
 					// Underlying kubernetes cluster should have atleast 6 nodes to run this test successfully.
 					By("Delete rack with id 2")
 
-					aeroCluster, err := getCluster(k8sClient, ctx, clusterNamespacedName)
-					Expect(err).ToNot(HaveOccurred())
+					aeroCluster, gErr := getCluster(k8sClient, ctx, clusterNamespacedName)
+					Expect(gErr).ToNot(HaveOccurred())
 
 					val := intstr.FromInt32(1)
 					aeroCluster.Spec.RackConfig.MaxIgnorablePods = &val
@@ -1060,6 +1057,9 @@ func clusterWithMaxIgnorablePod(ctx goctx.Context) {
 					Expect(err).ToNot(HaveOccurred())
 
 					By(fmt.Sprintf("Verify if failed pod %s is automatically recovered", ignorePodName))
+
+					pod := &v1.Pod{}
+
 					Eventually(
 						func() bool {
 							err = k8sClient.Get(
@@ -1091,18 +1091,8 @@ func clusterWithMaxIgnorablePod(ctx goctx.Context) {
 					By("Fail 1-1 aerospike pod")
 
 					ignorePodName := clusterNamespacedName.Name + "-1-1"
-					pod := &v1.Pod{}
 
-					err := k8sClient.Get(
-						ctx, types.NamespacedName{
-							Name:      ignorePodName,
-							Namespace: clusterNamespacedName.Namespace,
-						}, pod,
-					)
-					Expect(err).ToNot(HaveOccurred())
-
-					pod.Spec.Containers[0].Image = wrongImage
-					err = k8sClient.Update(ctx, pod)
+					err = markPodAsFailed(ctx, k8sClient, ignorePodName, clusterNamespacedName.Namespace)
 					Expect(err).ToNot(HaveOccurred())
 
 					By("Set MaxIgnorablePod and Rolling restart by removing namespace")
@@ -1233,6 +1223,7 @@ func DeployClusterForDiffStorageTest(
 	Context(
 		"Positive", func() {
 			aeroCluster := &asdbv1.AerospikeCluster{}
+
 			AfterEach(
 				func() {
 					Expect(DeleteCluster(k8sClient, ctx, aeroCluster)).ToNot(HaveOccurred())
@@ -1361,7 +1352,7 @@ func DeployClusterWithDNSConfiguration(ctx goctx.Context) {
 
 			Expect(DeployCluster(k8sClient, ctx, aeroCluster)).ShouldNot(HaveOccurred())
 
-			sts, err := getSTSFromRackID(aeroCluster, 0)
+			sts, err := getSTSFromRackID(aeroCluster, 0, "")
 			Expect(err).ShouldNot(HaveOccurred())
 			Expect(sts.Spec.Template.Spec.DNSConfig).To(Equal(dnsConfig))
 		},
@@ -1505,11 +1496,11 @@ func UpdateTLSClusterTest(ctx goctx.Context) {
 					}
 					aeroCluster.Spec.Storage.Volumes = append(aeroCluster.Spec.Storage.Volumes, secretVolume)
 					operatorClientCertSpec := getOperatorCert()
-					operatorClientCertSpec.AerospikeOperatorCertSource.SecretCertSource.CaCertsFilename = ""
+					operatorClientCertSpec.SecretCertSource.CaCertsFilename = ""
 					cacertPath := &asdbv1.CaCertsSource{
 						SecretName: test.TLSCacertSecretName,
 					}
-					operatorClientCertSpec.AerospikeOperatorCertSource.SecretCertSource.CaCertsSource = cacertPath
+					operatorClientCertSpec.SecretCertSource.CaCertsSource = cacertPath
 					aeroCluster.Spec.OperatorClientCertSpec = operatorClientCertSpec
 					err = updateCluster(k8sClient, ctx, aeroCluster)
 					Expect(err).ToNot(HaveOccurred())

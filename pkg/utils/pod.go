@@ -114,6 +114,7 @@ func CheckPodFailedWithGrace(pod *corev1.Pod, allowGrace bool) PodState {
 func checkContainerFailures(pod *corev1.Pod) string {
 	// grab the status of every container in the pod (including its init containers)
 	var containerStatus []corev1.ContainerStatus
+
 	containerStatus = append(containerStatus, pod.Status.InitContainerStatuses...)
 	containerStatus = append(containerStatus, pod.Status.ContainerStatuses...)
 
@@ -154,6 +155,7 @@ func CheckPodImageFailed(pod *corev1.Pod) error {
 
 	// grab the status of every container in the pod (including its init containers)
 	var containerStatus []corev1.ContainerStatus
+
 	containerStatus = append(containerStatus, pod.Status.InitContainerStatuses...)
 	containerStatus = append(containerStatus, pod.Status.ContainerStatuses...)
 
@@ -195,22 +197,43 @@ func IsPodTerminating(pod *corev1.Pod) bool {
 	return pod.DeletionTimestamp != nil
 }
 
-// GetRackIDFromPodName returns the rack id given a pod name.
-func GetRackIDFromPodName(podName string) (*int, error) {
-	parts := strings.Split(podName, "-")
-	if len(parts) < 3 {
-		return nil, fmt.Errorf("failed to get rackID from podName %s", podName)
-	}
-	// Podname format stsname-ordinal
-	// stsname ==> clustername-rackid
-	rackStr := parts[len(parts)-2]
+// GetRackIDAndRevisionFromPodName returns the rack id and revision from a given pod name.
+func GetRackIDAndRevisionFromPodName(clusterName, podName string) (rackID int, rackRevision string, err error) {
+	prefix := clusterName + "-"
 
-	rackID, err := strconv.Atoi(rackStr)
+	rackAndPodIndexPart := strings.TrimPrefix(podName, prefix)
+	// parts contain only the rack-id, rack-revision (optional), and pod-index.
+	parts := strings.Split(rackAndPodIndexPart, "-")
+
+	if len(parts) < 2 {
+		// Needs at least rack-id and pod-index.
+		return 0, "", fmt.Errorf(
+			"invalid pod name format %q: expected at least <rack-id>-<pod-index> after cluster name", podName,
+		)
+	}
+
+	// The pod index is always the last part. We don't need it here, but we use its position.
+	// The rack ID is always the first part.
+	rackIDStr := parts[0]
+
+	// The rack-revision is everything in between the rack ID and the pod index.
+	if len(parts) == 2 {
+		// Format: <cluster-name>-<rack-id>-<pod-index>
+		// Example: parts is ["0", "0"]
+		rackRevision = ""
+	} else {
+		// Format: <cluster-name>-<rack-id>-<rack-revision>-<pod-index>
+		// Example: parts is ["0", "a", "0"]
+		// Revision should be "a"
+		rackRevision = strings.Join(parts[1:len(parts)-1], "-")
+	}
+
+	rackID, err = strconv.Atoi(rackIDStr)
 	if err != nil {
-		return nil, err
+		return 0, "", fmt.Errorf("failed to parse rackID from pod name %q: %w", podName, err)
 	}
 
-	return &rackID, nil
+	return rackID, rackRevision, nil
 }
 
 // Exec executes a non-interactive command on a pod.

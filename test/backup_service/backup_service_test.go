@@ -214,7 +214,7 @@ var _ = Describe(
 				Expect(gErr).ToNot(HaveOccurred())
 				Expect(podList.Items).To(HaveLen(1))
 
-				PodUID := podList.Items[0].ObjectMeta.UID
+				PodUID := podList.Items[0].UID
 
 				// Get backup service object
 				backupService, err = getBackupServiceObj(k8sClient, backupServiceNamespacedName)
@@ -244,7 +244,7 @@ var _ = Describe(
 				Expect(gErr).ToNot(HaveOccurred())
 				Expect(podList.Items).To(HaveLen(1))
 
-				PodUID := podList.Items[0].ObjectMeta.UID
+				PodUID := podList.Items[0].UID
 
 				// Get backup service object
 				backupService, err = getBackupServiceObj(k8sClient, backupServiceNamespacedName)
@@ -279,7 +279,7 @@ var _ = Describe(
 				Expect(gErr).ToNot(HaveOccurred())
 				Expect(podList.Items).To(HaveLen(1))
 
-				PodUID := podList.Items[0].ObjectMeta.UID
+				PodUID := podList.Items[0].UID
 
 				// Get backup service object
 				backupService, err = getBackupServiceObj(k8sClient, backupServiceNamespacedName)
@@ -636,7 +636,7 @@ func validatePodObjectMeta(annotations, labels map[string]string, backupServiceN
 
 	By("Validating Annotations")
 
-	actual := deploy.Spec.Template.ObjectMeta.Annotations
+	actual := deploy.Spec.Template.Annotations
 	valid := validateLabelsOrAnnotations(actual, annotations)
 	Expect(valid).To(
 		BeTrue(), "Annotations mismatch. expected %+v, found %+v", annotations, actual,
@@ -644,7 +644,7 @@ func validatePodObjectMeta(annotations, labels map[string]string, backupServiceN
 
 	By("Validating Labels")
 
-	actual = deploy.Spec.Template.ObjectMeta.Labels
+	actual = deploy.Spec.Template.Labels
 	valid = validateLabelsOrAnnotations(actual, labels)
 	Expect(valid).To(
 		BeTrue(), "Labels mismatch. expected %+v, found %+v", labels, actual,

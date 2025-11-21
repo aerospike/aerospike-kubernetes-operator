@@ -144,7 +144,7 @@ func (r *AerospikeClusterReconciler) Reconcile(
 
 	// Fetch the AerospikeCluster instance
 	aeroCluster := &asdbv1.AerospikeCluster{}
-	if err := r.Client.Get(context.TODO(), request.NamespacedName, aeroCluster); err != nil {
+	if err := r.Get(context.TODO(), request.NamespacedName, aeroCluster); err != nil {
 		if errors.IsNotFound(err) {
 			// Request object not found, could have been deleted after Reconcile request.
 			return reconcile.Result{}, nil

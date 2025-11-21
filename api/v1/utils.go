@@ -81,11 +81,12 @@ const (
 	AerospikeInitContainerNameTagEnvVar            = "AEROSPIKE_KUBERNETES_INIT_NAME_TAG"
 	AerospikeInitContainerDefaultRegistry          = "docker.io"
 	AerospikeInitContainerDefaultRegistryNamespace = "aerospike"
-	AerospikeInitContainerDefaultNameAndTag        = "aerospike-kubernetes-init:2.3.1"
+	AerospikeInitContainerDefaultNameAndTag        = "aerospike-kubernetes-init:2.4.0-dev2"
 	AerospikeAppLabel                              = "app"
 	AerospikeAppLabelValue                         = "aerospike-cluster"
 	AerospikeCustomResourceLabel                   = "aerospike.com/cr"
 	AerospikeRackIDLabel                           = "aerospike.com/rack-id"
+	AerospikeRackRevisionLabel                     = "aerospike.com/rack-revision"
 	AerospikeAPIVersionLabel                       = "aerospike.com/api-version"
 	EvictionBlockedAnnotation                      = "aerospike.com/eviction-blocked"
 	AerospikeAPIVersion                            = "v1"
@@ -572,7 +573,7 @@ func GetImageVersion(imageStr string) (string, error) {
 
 	// Ignore special prefixes and suffixes.
 	matches := versionRegex.FindAllString(version, -1)
-	if matches == nil || len(matches) < 1 {
+	if len(matches) < 1 {
 		return "", fmt.Errorf(
 			"invalid image version format: %v", version,
 		)

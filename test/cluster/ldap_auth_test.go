@@ -69,7 +69,6 @@ func validateTransactions(
 		pkgLog, cluster, k8sClient, ldapUser,
 		ldapPassword,
 	)
-
 	if err != nil {
 		return err
 	}

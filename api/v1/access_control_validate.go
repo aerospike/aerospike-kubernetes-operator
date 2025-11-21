@@ -112,7 +112,6 @@ func IsAerospikeAccessControlValid(aerospikeClusterSpec *AerospikeClusterSpec) (
 	_, err = isUserSpecValid(
 		aerospikeClusterSpec.AerospikeAccessControl.Users, roleMap,
 	)
-
 	if err != nil {
 		return false, err
 	}

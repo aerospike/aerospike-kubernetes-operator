@@ -68,7 +68,7 @@ func (ard *AerospikeRestoreCustomDefaulter) Default(_ context.Context, obj runti
 
 	arLog.Info("Setting defaults for aerospikeRestore")
 
-	if restore.Spec.PollingPeriod.Duration.Seconds() == 0 {
+	if restore.Spec.PollingPeriod.Seconds() == 0 {
 		restore.Spec.PollingPeriod.Duration = defaultPollingPeriod
 	}
 

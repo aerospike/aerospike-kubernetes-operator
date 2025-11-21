@@ -292,13 +292,13 @@ func doTestTLSAuthenticateClientAnyWithCapath(ctx goctx.Context, clusterName str
 			networkConf["tls"] = tls
 
 			operatorClientCertSpec := getOperatorCert()
-			operatorClientCertSpec.AerospikeOperatorCertSource.SecretCertSource.CaCertsFilename = ""
-			operatorClientCertSpec.AerospikeOperatorCertSource.SecretCertSource.ClientCertFilename = "server-cert.pem"
-			operatorClientCertSpec.AerospikeOperatorCertSource.SecretCertSource.ClientKeyFilename = "server_key.pem"
+			operatorClientCertSpec.SecretCertSource.CaCertsFilename = ""
+			operatorClientCertSpec.SecretCertSource.ClientCertFilename = "server-cert.pem"
+			operatorClientCertSpec.SecretCertSource.ClientKeyFilename = "server_key.pem"
 			cacertPath := &asdbv1.CaCertsSource{
 				SecretName: test.TLSCacertSecretName,
 			}
-			operatorClientCertSpec.AerospikeOperatorCertSource.SecretCertSource.CaCertsSource = cacertPath
+			operatorClientCertSpec.SecretCertSource.CaCertsSource = cacertPath
 
 			aeroCluster := getAerospikeConfig(
 				clusterName, networkConf, operatorClientCertSpec,

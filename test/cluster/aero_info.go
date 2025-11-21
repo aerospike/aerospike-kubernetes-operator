@@ -64,7 +64,6 @@ func newAsConn(
 	}
 
 	host, err := getEndpointIP(pod, k8sClient, networkType)
-
 	if err != nil {
 		return nil, err
 	}
@@ -102,10 +101,10 @@ func getEndpointIP(
 		return pod.Status.HostIP, nil
 	case asdbv1.AerospikeNetworkTypeHostExternal:
 		k8sNode := &corev1.Node{}
+
 		err := k8sClient.Get(
 			goctx.TODO(), types.NamespacedName{Name: pod.Spec.NodeName}, k8sNode,
 		)
-
 		if err != nil {
 			return "", fmt.Errorf(
 				"failed to get k8s node %s for pod %v: %w", pod.Spec.NodeName,

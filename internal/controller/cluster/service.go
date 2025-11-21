@@ -36,7 +36,7 @@ func (r *SingleClusterReconciler) createOrUpdateSTSHeadlessSvc() error {
 		Labels: utils.LabelsForAerospikeCluster(r.aeroCluster.Name),
 	}
 
-	err := r.Client.Get(
+	err := r.Get(
 		context.TODO(), types.NamespacedName{
 			Name: serviceName, Namespace: r.aeroCluster.Namespace,
 		}, service,
@@ -82,7 +82,7 @@ func (r *SingleClusterReconciler) createOrUpdateSTSHeadlessSvc() error {
 			return err
 		}
 
-		if err = r.Client.Create(
+		if err = r.Create(
 			context.TODO(), service, common.CreateOption,
 		); err != nil {
 			return fmt.Errorf(
@@ -119,7 +119,7 @@ func (r *SingleClusterReconciler) reconcileSTSLoadBalancerSvc() error {
 	service := &corev1.Service{}
 	servicePort := r.getLBServicePort(loadBalancer)
 
-	if err := r.Client.Get(
+	if err := r.Get(
 		context.TODO(), types.NamespacedName{
 			Name: serviceName, Namespace: r.aeroCluster.Namespace,
 		}, service,
@@ -159,7 +159,7 @@ func (r *SingleClusterReconciler) reconcileSTSLoadBalancerSvc() error {
 				return nErr
 			}
 
-			if nErr := r.Client.Create(
+			if nErr := r.Create(
 				context.TODO(), service, common.CreateOption,
 			); nErr != nil {
 				return nErr
@@ -185,7 +185,7 @@ func (r *SingleClusterReconciler) deleteLBServiceIfPresent(svcName, svcNamespace
 	service.Name = svcName
 	service.Namespace = svcNamespace
 
-	if err := r.Client.Delete(context.TODO(), service); err != nil {
+	if err := r.Delete(context.TODO(), service); err != nil {
 		if errors.IsNotFound(err) {
 			r.Log.Info("LoadBalancer is not configured. Skipping...")
 
@@ -214,8 +214,8 @@ func (r *SingleClusterReconciler) updateLBService(service *corev1.Service, servi
 		}
 	}
 
-	if !reflect.DeepEqual(service.ObjectMeta.Annotations, loadBalancer.Annotations) {
-		service.ObjectMeta.Annotations = loadBalancer.Annotations
+	if !reflect.DeepEqual(service.Annotations, loadBalancer.Annotations) {
+		service.Annotations = loadBalancer.Annotations
 		updateLBService = true
 	}
 
@@ -230,7 +230,7 @@ func (r *SingleClusterReconciler) updateLBService(service *corev1.Service, servi
 	}
 
 	if updateLBService {
-		if err := r.Client.Update(
+		if err := r.Update(
 			context.TODO(), service, common.UpdateOption,
 		); err != nil {
 			return fmt.Errorf(
@@ -240,6 +240,7 @@ func (r *SingleClusterReconciler) updateLBService(service *corev1.Service, servi
 	} else {
 		r.Log.Info("LoadBalancer service update not required, skipping",
 			"name", utils.NamespacedName(service.Namespace, service.Name))
+
 		return nil
 	}
 
@@ -267,7 +268,7 @@ func (r *SingleClusterReconciler) createOrUpdatePodService(pName, pNamespace str
 	podService := &r.aeroCluster.Spec.PodService
 	service := &corev1.Service{}
 
-	err := r.Client.Get(
+	err := r.Get(
 		context.TODO(), types.NamespacedName{
 			Name: pName, Namespace: pNamespace,
 		}, service,
@@ -306,7 +307,7 @@ func (r *SingleClusterReconciler) createOrUpdatePodService(pName, pNamespace str
 			return err
 		}
 
-		if err := r.Client.Create(
+		if err := r.Create(
 			context.TODO(), service, common.CreateOption,
 		); err != nil {
 			return fmt.Errorf(
@@ -337,7 +338,7 @@ func (r *SingleClusterReconciler) deletePodService(pName, pNamespace string) err
 	service.Namespace = pNamespace
 	serviceName := types.NamespacedName{Name: pName, Namespace: pNamespace}
 
-	if err := r.Client.Delete(context.TODO(), service); err != nil {
+	if err := r.Delete(context.TODO(), service); err != nil {
 		if errors.IsNotFound(err) {
 			r.Log.Info(
 				"Pod service not found for deletion. Skipping...",
@@ -456,7 +457,7 @@ func (r *SingleClusterReconciler) getLBServicePort(loadBalancer *asdbv1.LoadBala
 }
 
 func (r *SingleClusterReconciler) cleanupDanglingPodServices(rackState *RackState) error {
-	podList, err := r.getRackPodList(rackState.Rack.ID)
+	podList, err := r.getRackPodList(rackState.Rack.ID, rackState.Rack.Revision)
 	if err != nil {
 		return err
 	}
@@ -533,7 +534,7 @@ func (r *SingleClusterReconciler) isServiceMetadataUpdated(
 
 		maps.Copy(annotations, defaultMetadata.Annotations)
 		maps.Copy(annotations, specMetadata.Annotations)
-		service.ObjectMeta.Annotations = annotations
+		service.Annotations = annotations
 		needsUpdate = true
 	}
 
@@ -542,7 +543,7 @@ func (r *SingleClusterReconciler) isServiceMetadataUpdated(
 
 		maps.Copy(labels, defaultMetadata.Labels)
 		maps.Copy(labels, specMetadata.Labels)
-		service.ObjectMeta.Labels = labels
+		service.Labels = labels
 		needsUpdate = true
 	}
 
@@ -566,7 +567,7 @@ func (r *SingleClusterReconciler) updateService(
 	}
 
 	if needsUpdate {
-		if err := r.Client.Update(
+		if err := r.Update(
 			context.TODO(), service, common.UpdateOption,
 		); err != nil {
 			return fmt.Errorf(
