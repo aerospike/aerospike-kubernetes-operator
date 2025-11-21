@@ -1,4 +1,4 @@
-name: Eviction Webhook Test Suite
+name: Eviction Webhook ENV Test Suite
 
 on:
   push:

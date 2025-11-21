@@ -10,6 +10,7 @@ import (
 	"strings"
 
 	v1 "k8s.io/api/core/v1"
+	"k8s.io/apimachinery/pkg/labels"
 	k8Runtime "k8s.io/apimachinery/pkg/runtime"
 	utilRuntime "k8s.io/apimachinery/pkg/util/runtime"
 	"k8s.io/client-go/kubernetes"
@@ -224,6 +225,16 @@ func main() {
 		}
 	}
 
+	// Optimize memory: Only cache Aerospike-related pods
+	// In cluster-scoped mode, this prevents caching ALL pods in the cluster
+	cacheOptions.ByObject = map[crClient.Object]cache.ByObject{
+		&v1.Pod{}: {
+			Label: labels.SelectorFromSet(labels.Set{
+				asdbv1.AerospikeAppLabel: asdbv1.AerospikeAppLabelValue,
+			}),
+		},
+	}
+
 	kubeConfig := ctrl.GetConfigOrDie()
 
 	mgr, err := ctrl.NewManager(kubeConfig, ctrl.Options{
@@ -353,10 +364,7 @@ func main() {
 	}
 
 	// Setup eviction webhook
-	if err = webhookgeneral.SetupEvictionWebhookWithManager(mgr); err != nil {
-		setupLog.Error(err, "unable to create eviction webhook", "webhook", "Eviction")
-		os.Exit(1)
-	}
+	webhookgeneral.SetupEvictionWebhookWithManager(mgr)
 
 	// +kubebuilder:scaffold:builder
 

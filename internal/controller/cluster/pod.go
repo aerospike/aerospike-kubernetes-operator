@@ -86,7 +86,10 @@ func (r *SingleClusterReconciler) getRollingRestartTypeMap(rackState *RackState,
 	requiredConfHash := confMap.Data[aerospikeConfHashFileName]
 
 	// Fetching all pods requested for on-demand operations.
-	onDemandQuickRestarts, onDemandPodRestarts := r.podsToRestart()
+	onDemandQuickRestarts, onDemandPodRestarts, err := r.podsToRestart()
+	if err != nil {
+		return nil, nil, err
+	}
 
 	for idx := range pods {
 		if ignorablePodNames.Has(pods[idx].Name) {
@@ -1711,7 +1714,7 @@ func (r *SingleClusterReconciler) updateOperationStatus(restartedASDPodNames, re
 }
 
 // podsToRestart returns the pods that need to be restarted(quick/pod restart) based on the on-demand operations.
-func (r *SingleClusterReconciler) podsToRestart() (quickRestarts, podRestarts sets.Set[string]) {
+func (r *SingleClusterReconciler) podsToRestart() (quickRestarts, podRestarts sets.Set[string], err error) {
 	quickRestarts = make(sets.Set[string])
 	podRestarts = make(sets.Set[string])
 
@@ -1720,7 +1723,11 @@ func (r *SingleClusterReconciler) podsToRestart() (quickRestarts, podRestarts se
 	allPodNames := asdbv1.GetAllPodNames(r.aeroCluster.Status.Pods)
 
 	// Check for pods with eviction-blocked annotation that need restart
-	evictionBlockedPods := r.getEvictionBlockedPods()
+	evictionBlockedPods, err := r.getEvictionBlockedPods()
+	if err != nil {
+		return quickRestarts, podRestarts, err
+	}
+
 	if evictionBlockedPods.Len() > 0 {
 		// Add eviction-blocked pods to podRestarts (they need full pod restart)
 		podRestarts.Insert(evictionBlockedPods.UnsortedList()...)
@@ -1729,7 +1736,7 @@ func (r *SingleClusterReconciler) podsToRestart() (quickRestarts, podRestarts se
 	// If no spec operations, only return eviction-blocked pods
 	// If the Spec.Operations and Status.Operations are equal, only return eviction-blocked pods
 	if len(specOps) == 0 || reflect.DeepEqual(specOps, statusOps) {
-		return quickRestarts, podRestarts
+		return quickRestarts, podRestarts, err
 	}
 
 	// Assuming only one operation is present in the spec.
@@ -1782,18 +1789,18 @@ func (r *SingleClusterReconciler) podsToRestart() (quickRestarts, podRestarts se
 		}
 	}
 
-	return quickRestarts, podRestarts
+	return quickRestarts, podRestarts, err
 }
 
 // getEvictionBlockedPods returns pods that have eviction-blocked annotation and need restart
-func (r *SingleClusterReconciler) getEvictionBlockedPods() sets.Set[string] {
+func (r *SingleClusterReconciler) getEvictionBlockedPods() (sets.Set[string], error) {
 	evictionBlockedPods := make(sets.Set[string])
 
 	// List all pods in the cluster namespace
 	pods, err := r.getClusterPodList()
 	if err != nil {
 		r.Log.Error(err, "Failed to list pods for eviction-blocked check")
-		return evictionBlockedPods
+		return evictionBlockedPods, err
 	}
 
 	for idx := range pods.Items {
@@ -1807,7 +1814,7 @@ func (r *SingleClusterReconciler) getEvictionBlockedPods() sets.Set[string] {
 		evictionBlockedPods.Insert(pods.Items[idx].Name)
 	}
 
-	return evictionBlockedPods
+	return evictionBlockedPods, nil
 }
 
 // shouldSetMigrateFillDelay determines if migrate-fill-delay should be set.

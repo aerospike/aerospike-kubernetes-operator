@@ -29,6 +29,7 @@ import (
 	admissionv1 "k8s.io/api/admission/v1"
 	corev1 "k8s.io/api/core/v1"
 	policyv1 "k8s.io/api/policy/v1"
+	apierrors "k8s.io/apimachinery/pkg/api/errors"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/types"
 	ctrl "sigs.k8s.io/controller-runtime"
@@ -41,16 +42,16 @@ import (
 const (
 	// EvictionBlockedAnnotation is the annotation set on pods when eviction is blocked
 	EvictionBlockedAnnotation = "aerospike.com/eviction-blocked"
-	// EvictionBlockedReason is the reason for blocking eviction
-	EvictionBlockedReason = "AerospikePodEvictionBlocked"
 )
 
 // +kubebuilder:object:generate=false
 // Above marker prevents controller-gen from generating DeepCopy methods,
 // as it is used only for temporary operations and does not need to be deeply copied.
 type EvictionWebhook struct {
-	Client client.Client
-	Log    logr.Logger
+	Client    client.Client // Cache-backed client (fast for Aerospike pods)
+	APIReader client.Reader // Direct API server reader (fallback for non-Aerospike pods)
+	Log       logr.Logger
+	Enable    bool
 }
 
 // isAerospikePod checks if the given pod is an Aerospike pod
@@ -90,25 +91,29 @@ func (ew *EvictionWebhook) setEvictionBlockedAnnotation(ctx context.Context, pod
 }
 
 // SetupEvictionWebhookWithManager registers the eviction webhook with the manager
-func SetupEvictionWebhookWithManager(mgr ctrl.Manager) error {
+func SetupEvictionWebhookWithManager(mgr ctrl.Manager) {
 	ew := &EvictionWebhook{
-		Client: mgr.GetClient(),
-		Log:    logf.Log.WithName("eviction-webhook"),
+		Client:    mgr.GetClient(),    // Cache-backed client (fast for Aerospike pods)
+		APIReader: mgr.GetAPIReader(), // Direct API server reader (fallback for non-Aerospike pods)
+		Log:       logf.Log.WithName("eviction-webhook"),
 	}
+
+	enable, found := os.LookupEnv("ENABLE_SAFE_POD_EVICTION")
+
+	ew.Enable = found && strings.EqualFold(enable, "true")
 
 	// Register the webhook using the webhook server with direct HTTP handler
 	webhookServer := mgr.GetWebhookServer()
 	webhookServer.Register("/validate-eviction", http.HandlerFunc(ew.Handle))
-
-	return nil
 }
 
 //nolint:lll // for readability
 // +kubebuilder:webhook:path=/validate-eviction,mutating=false,failurePolicy=ignore,sideEffects=None,groups="",resources=pods/eviction, verbs=create,versions=v1,name=veviction.kb.io,admissionReviewVersions={v1}
 
 func (ew *EvictionWebhook) Handle(w http.ResponseWriter, r *http.Request) {
+	ctx := r.Context()
 	log := ew.Log.WithValues("method", r.Method, "url", r.URL.Path)
-	log.Info("Received eviction webhook request")
+	log.Info("Received pod eviction webhook request")
 
 	// Parse admission review
 	admissionReview, err := ew.parseAdmissionReview(r)
@@ -119,28 +124,19 @@ func (ew *EvictionWebhook) Handle(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	// Create base response
-	response := admissionv1.AdmissionResponse{
-		UID:     admissionReview.Request.UID,
-		Allowed: true,
-	}
-
 	// Check if webhook is enabled
 	if !ew.isWebhookEnabled() {
-		log.V(1).Info("Safe pod eviction is disabled via environment variable")
-		ew.sendResponse(w, admissionReview, &response)
+		log.V(1).Info("Safe pod eviction is disabled via environment variable, skipping request processing")
+		ew.sendResponse(w, admissionReview, getSuccessResponse(admissionReview.Request.UID))
 
 		return
 	}
 
 	// Process eviction request
-	evictionResult := ew.processEvictionRequest(admissionReview, log)
-	if evictionResult != nil {
-		response = *evictionResult
-	}
+	response := ew.processEvictionRequest(ctx, admissionReview, log)
 
 	// Send final response
-	ew.sendResponse(w, admissionReview, &response)
+	ew.sendResponse(w, admissionReview, response)
 	log.Info("Eviction webhook request processed", "allowed", response.Allowed)
 }
 
@@ -158,71 +154,77 @@ func (ew *EvictionWebhook) parseAdmissionReview(r *http.Request) (*admissionv1.A
 	return &admissionReview, nil
 }
 
-// isWebhookEnabled checks if the webhook is enabled via environment variable
+// isWebhookEnabled checks if the eviction webhook is enabled
 func (ew *EvictionWebhook) isWebhookEnabled() bool {
-	enable, found := os.LookupEnv("ENABLE_SAFE_POD_EVICTION")
-	return found && strings.EqualFold(enable, "true")
+	return ew.Enable
 }
 
 // processEvictionRequest processes the eviction request and returns the response
-func (ew *EvictionWebhook) processEvictionRequest(admissionReview *admissionv1.AdmissionReview,
+func (ew *EvictionWebhook) processEvictionRequest(ctx context.Context, admissionReview *admissionv1.AdmissionReview,
 	log logr.Logger) *admissionv1.AdmissionResponse {
 	// Parse eviction object
 	eviction, err := ew.parseEvictionObject(admissionReview.Request.Object.Raw)
 	if err != nil {
 		log.Error(err, "Failed to parse eviction object")
 
-		return &admissionv1.AdmissionResponse{
-			UID:     admissionReview.Request.UID,
-			Allowed: false,
-			Result: &metav1.Status{
-				Status:  metav1.StatusFailure,
-				Message: fmt.Sprintf("Failed to parse eviction object: %v", err),
-				Code:    http.StatusBadRequest,
-			},
-		}
+		return getFailureResponse(
+			admissionReview.Request.UID,
+			fmt.Sprintf("Failed to parse eviction object: %v", err),
+			metav1.StatusReasonBadRequest,
+			http.StatusBadRequest)
 	}
 
 	// Get pod information
-	pod, err := ew.getPodForEviction(eviction, admissionReview.Request.Namespace)
+	pod, err := ew.getPodForEviction(ctx, eviction, admissionReview.Request.Namespace)
 	if err != nil {
+		// If pod doesn't exist, allow the eviction request to proceed
+		if apierrors.IsNotFound(err) {
+			log.V(1).Info("Pod not found, allowing eviction request to proceed", "pod", eviction.Name)
+			return getSuccessResponse(admissionReview.Request.UID)
+		}
+
+		// For other errors (timeout, permission, etc.), return error
 		log.Error(err, "Failed to get pod for eviction", "pod", eviction.Name)
 
-		return &admissionv1.AdmissionResponse{
-			UID:     admissionReview.Request.UID,
-			Allowed: false,
-			Result: &metav1.Status{
-				Status:  metav1.StatusFailure,
-				Message: fmt.Sprintf("Failed to get pod %s/%s: %v", admissionReview.Request.Namespace, eviction.Name, err),
-				Code:    http.StatusInternalServerError,
-			},
-		}
+		return getFailureResponse(
+			admissionReview.Request.UID,
+			err.Error(),
+			metav1.StatusReasonInternalError,
+			http.StatusInternalServerError,
+		)
 	}
 
-	// Check if this is an Aerospike pod
+	// Check if this is an Aerospike pod (runtime filtering required for pods/eviction subresource)
 	if !ew.isAerospikePod(pod) {
 		log.V(1).Info("Allowing eviction of non-Aerospike pod", "pod", eviction.Name)
-		return nil // Allow eviction
+		return getSuccessResponse(admissionReview.Request.UID)
 	}
 
 	// Block Aerospike pod eviction
 	log.Info("Blocking eviction of Aerospike pod", "pod", eviction.Name)
 
-	// Set annotation asynchronously (non-blocking)
-	// TODO: do we really want async here?
-	go ew.setEvictionBlockedAnnotationAsync(pod)
+	if err := ew.setEvictionBlockedAnnotation(ctx, pod); err != nil {
+		log.Info("Failed to set eviction blocked annotation (eviction still blocked)",
+			"pod", pod.Name, "namespace", pod.Namespace, "error", err)
 
-	return &admissionv1.AdmissionResponse{
-		UID:     admissionReview.Request.UID,
-		Allowed: false,
-		Result: &metav1.Status{
-			Status: metav1.StatusFailure,
-			Message: fmt.Sprintf("Eviction of Aerospike pod %s/%s is blocked by admission webhook",
-				admissionReview.Request.Namespace, eviction.Name),
-			Reason: EvictionBlockedReason,
-			Code:   http.StatusForbidden,
-		},
+		return getFailureResponse(
+			admissionReview.Request.UID,
+			fmt.Sprintf("Failed to set eviction blocked annotation on pod %s/%s: %v",
+				admissionReview.Request.Namespace, eviction.Name, err),
+			metav1.StatusReasonInternalError,
+			http.StatusInternalServerError,
+		)
 	}
+
+	// Block eviction regardless of annotation success/failure
+	return getFailureResponse(
+		admissionReview.Request.UID,
+		fmt.Sprintf("Eviction of Aerospike pod %s/%s is blocked by admission webhook,"+
+			" Aerospike Operator will handle Aerospike pod eviction.",
+			admissionReview.Request.Namespace, eviction.Name),
+		metav1.StatusReasonForbidden,
+		http.StatusForbidden,
+	)
 }
 
 // parseEvictionObject parses the eviction object from raw bytes
@@ -236,7 +238,11 @@ func (ew *EvictionWebhook) parseEvictionObject(raw []byte) (*policyv1.Eviction, 
 }
 
 // getPodForEviction retrieves the pod that is being evicted
-func (ew *EvictionWebhook) getPodForEviction(eviction *policyv1.Eviction, namespace string) (*corev1.Pod, error) {
+// It tries the cache first (fast path for Aerospike pods), and falls back to
+// the API server if not found (for non-Aerospike pods filtered out by cache)
+func (ew *EvictionWebhook) getPodForEviction(
+	ctx context.Context, eviction *policyv1.Eviction, namespace string,
+) (*corev1.Pod, error) {
 	podKey := types.NamespacedName{
 		Name:      eviction.Name,
 		Namespace: namespace,
@@ -244,25 +250,28 @@ func (ew *EvictionWebhook) getPodForEviction(eviction *policyv1.Eviction, namesp
 
 	pod := &corev1.Pod{}
 
-	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
-	defer cancel()
-
-	if err := ew.Client.Get(ctx, podKey, pod); err != nil {
-		return nil, fmt.Errorf("failed to get pod %s: %w", podKey.String(), err)
+	// Try cache first (fast path for Aerospike pods)
+	err := ew.Client.Get(ctx, podKey, pod)
+	if err == nil {
+		return pod, nil
 	}
 
-	return pod, nil
-}
+	// If not found in cache, try API server directly
+	// This handles:
+	// 1. Non-Aerospike pods (filtered out by cache label selector)
+	// 2. Aerospike pods not yet in cache (race condition, cache sync delay, etc.)
+	if apierrors.IsNotFound(err) {
+		ew.Log.V(1).Info("Pod not in cache, checking API server", "pod", podKey.String())
 
-// setEvictionBlockedAnnotationAsync sets the eviction blocked annotation asynchronously
-func (ew *EvictionWebhook) setEvictionBlockedAnnotationAsync(pod *corev1.Pod) {
-	ctx, cancel := context.WithTimeout(context.Background(), 2*time.Second)
-	defer cancel()
+		if err = ew.APIReader.Get(ctx, podKey, pod); err != nil {
+			return nil, fmt.Errorf("failed to get pod %s: %w", podKey.String(), err)
+		}
 
-	if err := ew.setEvictionBlockedAnnotation(ctx, pod); err != nil {
-		ew.Log.V(1).Info("Failed to set eviction blocked annotation",
-			"pod", pod.Name, "error", err)
+		return pod, nil
 	}
+
+	// Other errors (not NotFound) are returned as-is
+	return nil, fmt.Errorf("failed to get pod %s from cache: %w", podKey.String(), err)
 }
 
 // sendResponse sends the admission review response
@@ -283,4 +292,26 @@ func (ew *EvictionWebhook) sendResponse(w http.ResponseWriter, admissionReview *
 func (ew *EvictionWebhook) sendErrorResponse(w http.ResponseWriter, statusCode int, message string) {
 	w.Header().Set("Content-Type", "application/json")
 	http.Error(w, message, statusCode)
+}
+
+func getSuccessResponse(requestID types.UID) *admissionv1.AdmissionResponse {
+	return &admissionv1.AdmissionResponse{
+		UID:     requestID,
+		Allowed: true,
+	}
+}
+
+// TODO: Finalise the error codes and reasons used here.
+func getFailureResponse(requestID types.UID, message string, reason metav1.StatusReason, code int32,
+) *admissionv1.AdmissionResponse {
+	return &admissionv1.AdmissionResponse{
+		UID:     requestID,
+		Allowed: false,
+		Result: &metav1.Status{
+			Status:  metav1.StatusFailure,
+			Message: message,
+			Reason:  reason,
+			Code:    code,
+		},
+	}
 }

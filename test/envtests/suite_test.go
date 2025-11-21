@@ -115,8 +115,7 @@ var _ = BeforeSuite(
 		Expect(err).NotTo(HaveOccurred())
 
 		// Setup eviction webhook
-		err = webhookgeneral.SetupEvictionWebhookWithManager(mgr)
-		Expect(err).NotTo(HaveOccurred())
+		webhookgeneral.SetupEvictionWebhookWithManager(mgr)
 
 		ctx, c := context.WithCancel(context.Background())
 		cancel = c
