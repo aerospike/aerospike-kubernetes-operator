@@ -710,6 +710,7 @@ func (r *SingleClusterReconciler) isLocalPVCDeletionRequired(rackState *RackStat
 	if _, hasEvictionBlocked := pod.Annotations[asdbv1.EvictionBlockedAnnotation]; hasEvictionBlocked {
 		r.Log.Info("Pod has eviction-blocked annotation, deleting corresponding local PVCs if any",
 			"podName", pod.Name)
+
 		return true
 	}
 

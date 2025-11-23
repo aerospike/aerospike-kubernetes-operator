@@ -106,7 +106,7 @@ func (ew *EvictionWebhook) setEvictionBlockedAnnotation(ctx context.Context, pod
 }
 
 // SetupEvictionWebhookWithManager registers the eviction webhook with the manager
-func SetupEvictionWebhookWithManager(mgr ctrl.Manager) {
+func SetupEvictionWebhookWithManager(mgr ctrl.Manager) *EvictionWebhook {
 	ew := &EvictionWebhook{
 		Client:    mgr.GetClient(),    // Cache-backed client (fast for Aerospike pods)
 		APIReader: mgr.GetAPIReader(), // Direct API server reader (fallback for non-Aerospike pods)
@@ -126,10 +126,12 @@ func SetupEvictionWebhookWithManager(mgr ctrl.Manager) {
 	// Register the webhook using the webhook server with direct HTTP handler
 	webhookServer := mgr.GetWebhookServer()
 	webhookServer.Register("/validate-eviction", http.HandlerFunc(ew.Handle))
+
+	return ew
 }
 
 //nolint:lll // for readability
-// +kubebuilder:webhook:path=/validate-eviction,mutating=false,failurePolicy=ignore,sideEffects=None,groups="",resources=pods/eviction, verbs=create,versions=v1,name=veviction.kb.io,admissionReviewVersions={v1}
+// +kubebuilder:webhook:path=/validate-eviction,mutating=false,failurePolicy=ignore,sideEffects=None,groups="",resources=pods/eviction,verbs=create,versions=v1,timeoutSeconds=20,name=vaerospikeeviction.kb.io,admissionReviewVersions={v1}
 
 func (ew *EvictionWebhook) Handle(w http.ResponseWriter, r *http.Request) {
 	ctx := r.Context()

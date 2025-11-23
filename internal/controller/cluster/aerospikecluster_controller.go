@@ -51,6 +51,7 @@ func (r *AerospikeClusterReconciler) SetupWithManager(mgr ctrl.Manager) error {
 			if !ok {
 				return false
 			}
+
 			newPod, ok := e.ObjectNew.(*corev1.Pod)
 			if !ok {
 				return false

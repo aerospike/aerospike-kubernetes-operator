@@ -147,7 +147,7 @@ webhooks:
           - {{ . | trim | quote }}
         {{- end }}
     {{- end }}
-  name: veviction.kb.io
+  name: vaerospikeeviction.kb.io
   rules:
     - apiGroups:
         - ""
@@ -158,3 +158,4 @@ webhooks:
       resources:
         - pods/eviction
   sideEffects: None
+  timeoutSeconds: {{ .Values.safePodEviction.timeoutSeconds }}

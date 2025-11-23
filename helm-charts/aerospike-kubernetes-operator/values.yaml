@@ -3,9 +3,9 @@ replicas: 2
 
 ## Operator image
 operatorImage:
-  repository: tanmayj10/aerospike-kubernetes-operator
-  tag: evictwebhook1
-  pullPolicy: Always
+  repository: aerospike/aerospike-kubernetes-operator
+  tag: 4.2.0-dev1
+  pullPolicy: IfNotPresent
 
 ## In case the above image is pulled from a registry that requires
 ## authentication, a secret containing credentials can be added
@@ -36,7 +36,10 @@ watchNamespaces: "default,aerospike"
 
 # Enable the eviction webhook to safely block Aerospike pod evictions during node maintenance
 # Also enables Prometheus metrics: aerospike_ako_eviction_webhook_requests_total (labels: eviction_namespace, decision)
-enableSafePodEviction: "false"
+safePodEviction:
+  enable: "false"
+  # Eviction webhook timeout in seconds
+  timeoutSeconds: "20"
 
 # Grace period to delete/recover failed pods (in seconds)
 failedPodGracePeriodSeconds: "60"

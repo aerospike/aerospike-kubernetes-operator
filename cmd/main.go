@@ -364,7 +364,7 @@ func main() {
 	}
 
 	// Setup eviction webhook
-	evictionwebhook.SetupEvictionWebhookWithManager(mgr)
+	_ = evictionwebhook.SetupEvictionWebhookWithManager(mgr)
 
 	// +kubebuilder:scaffold:builder
 

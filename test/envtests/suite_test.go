@@ -26,6 +26,7 @@ import (
 	"github.com/onsi/gomega/gexec"
 	admissionv1 "k8s.io/api/admission/v1"
 	k8Runtime "k8s.io/apimachinery/pkg/runtime"
+	"k8s.io/client-go/kubernetes"
 	clientgoscheme "k8s.io/client-go/kubernetes/scheme"
 	_ "k8s.io/client-go/plugin/pkg/client/auth"
 	"k8s.io/client-go/rest"
@@ -49,11 +50,15 @@ var testEnv *envtest.Environment
 
 var k8sClient client.Client
 
+var clientSet *kubernetes.Clientset
+
 var cfg *rest.Config
 
 var scheme = k8Runtime.NewScheme()
 
 var cancel context.CancelFunc
+
+var evictionWebhook *evictionwebhook.EvictionWebhook
 
 func TestAPIs(t *testing.T) {
 	RegisterFailHandler(Fail)
@@ -101,6 +106,10 @@ var _ = BeforeSuite(
 		Expect(err).NotTo(HaveOccurred())
 		Expect(k8sClient).NotTo(BeNil())
 
+		clientSet, err = kubernetes.NewForConfig(cfg)
+		Expect(err).NotTo(HaveOccurred())
+		Expect(clientSet).NotTo(BeNil())
+
 		// Start the webhook server using controller-runtime manager
 		mgr, err := ctrl.NewManager(cfg, ctrl.Options{
 			Scheme: scheme,
@@ -115,7 +124,7 @@ var _ = BeforeSuite(
 		Expect(err).NotTo(HaveOccurred())
 
 		// Setup eviction webhook
-		evictionwebhook.SetupEvictionWebhookWithManager(mgr)
+		evictionWebhook = evictionwebhook.SetupEvictionWebhookWithManager(mgr)
 
 		ctx, c := context.WithCancel(context.Background())
 		cancel = c
