@@ -50,7 +50,7 @@ func (r *SingleClusterReconciler) deletePDB() error {
 		return err
 	}
 
-	if !isPDBCreatedByOperator(pdb) {
+	if !utils.IsOwnedBy(pdb, r.aeroCluster) {
 		r.Log.Info(
 			"PodDisruptionBudget is not created/owned by operator. Skipping delete",
 			"name", getPDBNamespacedName(r.aeroCluster),
@@ -129,10 +129,9 @@ func (r *SingleClusterReconciler) createOrUpdatePDB() error {
 		"name", getPDBNamespacedName(r.aeroCluster),
 	)
 
-	// This will ensure that cluster is not deployed with PDB created by user
-	// cluster deploy call itself will fail.
+	// This will ensure that the cluster is not deployed with PDB created by the user.
 	// If PDB is not created by operator then no need to even match the spec
-	if !isPDBCreatedByOperator(pdb) {
+	if !utils.IsOwnedBy(pdb, r.aeroCluster) {
 		r.Log.Info(
 			"PodDisruptionBudget is not created/owned by operator. Skipping update",
 			"name", getPDBNamespacedName(r.aeroCluster),
@@ -160,15 +159,6 @@ func (r *SingleClusterReconciler) createOrUpdatePDB() error {
 	}
 
 	return nil
-}
-
-func isPDBCreatedByOperator(pdb *v1.PodDisruptionBudget) bool {
-	val, ok := pdb.GetLabels()[asdbv1.AerospikeAppLabel]
-	if ok && val == asdbv1.AerospikeAppLabelValue {
-		return true
-	}
-
-	return false
 }
 
 func getPDBNamespacedName(aeroCluster *asdbv1.AerospikeCluster) types.NamespacedName {

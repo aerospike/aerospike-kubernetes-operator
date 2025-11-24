@@ -13,6 +13,7 @@ import (
 	ls "k8s.io/apimachinery/pkg/labels"
 	"k8s.io/apimachinery/pkg/selection"
 	"k8s.io/apimachinery/pkg/types"
+	"sigs.k8s.io/controller-runtime/pkg/client"
 
 	asdbv1 "github.com/aerospike/aerospike-kubernetes-operator/v4/api/v1"
 	"github.com/aerospike/aerospike-kubernetes-operator/v4/api/v1beta1"
@@ -260,4 +261,14 @@ func GetRackIdentifier(rackID int, rackRevision string) string {
 	}
 
 	return rackIDStr
+}
+
+func IsOwnedBy(obj, parent client.Object) bool {
+	for _, o := range obj.GetOwnerReferences() {
+		if o.UID == parent.GetUID() {
+			return true
+		}
+	}
+
+	return false
 }
