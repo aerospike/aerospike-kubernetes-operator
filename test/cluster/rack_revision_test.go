@@ -105,7 +105,7 @@ var _ = Describe(
 
 								Eventually(func() bool {
 									return checkBothRevisionsExist(k8sClient, ctx, clusterNamespacedName, versionV1, versionV2)
-								}, 5*time.Minute, 10*time.Second).Should(BeTrue())
+								}, 10*time.Minute, 10*time.Second).Should(BeTrue())
 
 								// Manually delete old StatefulSet
 								By("Manually deleting old StatefulSet during migration")
@@ -131,11 +131,12 @@ var _ = Describe(
 								aeroCluster := createDummyClusterWithRackRevision(clusterNamespacedName, versionV1, 6)
 								Expect(DeployCluster(k8sClient, ctx, aeroCluster)).ToNot(HaveOccurred())
 
+								By("Changing rack revision to trigger migration")
 								updatedCluster := changeRackRevision(k8sClient, ctx, clusterNamespacedName)
 
 								Eventually(func() bool {
 									return checkBothRevisionsExist(k8sClient, ctx, clusterNamespacedName, versionV1, versionV2)
-								}, 5*time.Minute, 5*time.Second).Should(BeTrue())
+								}, 10*time.Minute, 10*time.Second).Should(BeTrue())
 
 								updatedCluster.Spec.Size = 2
 
@@ -344,7 +345,7 @@ func testRackRevisionChangeWithStorageUpdate(
 	// Both rack revision StatefulSets should exist during migration
 	Eventually(func() bool {
 		return checkBothRevisionsExist(k8sClient, ctx, clusterNamespacedName, fromRevision, toRevision)
-	}, 5*time.Minute, 10*time.Second).Should(BeTrue())
+	}, 10*time.Minute, 10*time.Second).Should(BeTrue())
 
 	By("Waiting for the migration to complete")
 

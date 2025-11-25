@@ -50,7 +50,7 @@ var destinationAerospikeClusterNsNm = types.NamespacedName{
 
 func newRestore(restoreNsNm types.NamespacedName, restoreType asdbv1beta1.RestoreType,
 ) (*asdbv1beta1.AerospikeRestore, error) {
-	configBytes, err := getRestoreConfBytes(backupDataPath)
+	configBytes, err := getRestoreConfBytes(getRestoreConfigInMap(backupDataPath))
 	if err != nil {
 		return nil, err
 	}
@@ -60,6 +60,18 @@ func newRestore(restoreNsNm types.NamespacedName, restoreType asdbv1beta1.Restor
 	restore.Spec.Config = runtime.RawExtension{
 		Raw: configBytes,
 	}
+
+	return restore, nil
+}
+
+func newRestoreWithTLS(restoreNsNm types.NamespacedName, restoreType asdbv1beta1.RestoreType,
+) (*asdbv1beta1.AerospikeRestore, error) {
+	configBytes, err := getRestoreConfBytes(getRestoreConfigWithTLSInMap(backupDataPath))
+	if err != nil {
+		return nil, err
+	}
+
+	restore := newRestoreWithConfig(restoreNsNm, restoreType, configBytes)
 
 	return restore, nil
 }
@@ -176,6 +188,8 @@ func waitForRestore(cl client.Client, restore *asdbv1beta1.AerospikeRestore,
 		return fmt.Errorf("restore result is not set")
 	}
 
+	pkgLog.Info(fmt.Sprintf("Restore result %s", string(restore.Status.RestoreResult.Raw)))
+
 	var restoreResult dto.RestoreJobStatus
 
 	if err := json.Unmarshal(restore.Status.RestoreResult.Raw, &restoreResult); err != nil {
@@ -186,6 +200,10 @@ func waitForRestore(cl client.Client, restore *asdbv1beta1.AerospikeRestore,
 		return fmt.Errorf("restore job status is not done")
 	}
 
+	if restoreResult.InsertedRecords == 0 {
+		return fmt.Errorf("no records were restored")
+	}
+
 	if restoreResult.Error != "" {
 		return fmt.Errorf("restore job failed with error: %s", restoreResult.Error)
 	}
@@ -193,9 +211,7 @@ func waitForRestore(cl client.Client, restore *asdbv1beta1.AerospikeRestore,
 	return nil
 }
 
-func getRestoreConfBytes(backupPath string) ([]byte, error) {
-	restoreConfig := getRestoreConfigInMap(backupPath)
-
+func getRestoreConfBytes(restoreConfig map[string]interface{}) ([]byte, error) {
 	configBytes, err := json.Marshal(restoreConfig)
 	if err != nil {
 		return nil, err
@@ -235,6 +251,25 @@ func getRestoreConfigInMap(backupPath string) map[string]interface{} {
 		},
 		"backup-data-path": backupPath,
 	}
+}
+
+func getRestoreConfigWithTLSInMap(backupPath string) map[string]interface{} {
+	restoreConfig := getRestoreConfigInMap(backupPath)
+	restoreDestination := restoreConfig["destination"].(map[string]interface{})
+
+	restoreDestination["tls"] = map[string]interface{}{
+		"ca-path":   "/etc/aerospike/secret/cacerts",
+		"name":      "aerospike-a-0.test-runner",
+		"cert-file": "/etc/aerospike/secret/svc_cluster_chain.pem",
+		"key-file":  "/etc/aerospike/secret/svc_key.pem",
+	}
+
+	seedNodeList := restoreDestination["seed-nodes"].([]map[string]interface{})
+	seedNode := seedNodeList[0]
+	seedNode["tls-name"] = "aerospike-a-0.test-runner"
+	seedNode["port"] = 4333
+
+	return restoreConfig
 }
 
 func validateRestoredData(k8sClient client.Client) error {
