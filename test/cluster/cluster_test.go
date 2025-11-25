@@ -557,11 +557,14 @@ func PauseReconcileTest(ctx goctx.Context) {
 
 					// Check if at least one pod is upgraded
 					podUpgraded := false
+
 					for podName := range aeroCluster.Status.Pods {
 						podStatus := aeroCluster.Status.Pods[podName]
 						if podStatus.Image == nextImage {
 							pkgLog.Info("One Pod upgraded", "pod", podName, "image", podStatus.Image)
+
 							podUpgraded = true
+
 							break
 						}
 					}
@@ -816,11 +819,13 @@ func ValidateScaleDownWaitForMigrations(ctx goctx.Context) {
 					Eventually(func() bool {
 						podList, lErr := getPodList(aeroCluster, k8sClient)
 						Expect(lErr).ToNot(HaveOccurred())
+
 						info, iErr := requestInfoFromNode(logger, k8sClient, ctx, clusterNamespacedName, "namespace/test",
 							podList.Items[0].Name)
 						Expect(iErr).ToNot(HaveOccurred())
 
 						var nodesQuiesced string
+
 						confs := strings.Split(info["namespace/test"], ";")
 						for _, conf := range confs {
 							if strings.Contains(conf, "nodes_quiesced") {
@@ -828,6 +833,7 @@ func ValidateScaleDownWaitForMigrations(ctx goctx.Context) {
 								break
 							}
 						}
+
 						migrations := getMigrationsInProgress(ctx, k8sClient, clusterNamespacedName, podList)
 
 						podCount := utils.Len32(podList.Items)
@@ -927,6 +933,7 @@ func clusterWithMaxIgnorablePod(ctx goctx.Context) {
 						func() error {
 							aeroCluster, err = getCluster(k8sClient, ctx, clusterNamespacedName)
 							Expect(err).ToNot(HaveOccurred())
+
 							val := intstr.FromInt32(1)
 							aeroCluster.Spec.RackConfig.MaxIgnorablePods = &val
 							aeroCluster.Spec.AerospikeConfig.Value[asdbv1.ConfKeySecurity].(map[string]interface{})["enable-quotas"] = true
@@ -942,6 +949,7 @@ func clusterWithMaxIgnorablePod(ctx goctx.Context) {
 						func() error {
 							aeroCluster, err = getCluster(k8sClient, ctx, clusterNamespacedName)
 							Expect(err).ToNot(HaveOccurred())
+
 							aeroCluster.Spec.Image = nextImage
 							// As pod is in pending state, CR object won't reach the final phase.
 							// So expectedPhases can be InProgress or Completed
@@ -1033,25 +1041,14 @@ func clusterWithMaxIgnorablePod(ctx goctx.Context) {
 					By("Fail 1-1 aerospike pod")
 
 					ignorePodName := clusterNamespacedName.Name + "-1-1"
-					pod := &v1.Pod{}
-
-					err := k8sClient.Get(
-						ctx, types.NamespacedName{
-							Name:      ignorePodName,
-							Namespace: clusterNamespacedName.Namespace,
-						}, pod,
-					)
-					Expect(err).ToNot(HaveOccurred())
-
-					pod.Spec.Containers[0].Image = wrongImage
-					err = k8sClient.Update(ctx, pod)
+					err = markPodAsFailed(ctx, k8sClient, ignorePodName, clusterNamespacedName.Namespace)
 					Expect(err).ToNot(HaveOccurred())
 
 					// Underlying kubernetes cluster should have atleast 6 nodes to run this test successfully.
 					By("Delete rack with id 2")
 
-					aeroCluster, err := getCluster(k8sClient, ctx, clusterNamespacedName)
-					Expect(err).ToNot(HaveOccurred())
+					aeroCluster, gErr := getCluster(k8sClient, ctx, clusterNamespacedName)
+					Expect(gErr).ToNot(HaveOccurred())
 
 					val := intstr.FromInt32(1)
 					aeroCluster.Spec.RackConfig.MaxIgnorablePods = &val
@@ -1060,6 +1057,9 @@ func clusterWithMaxIgnorablePod(ctx goctx.Context) {
 					Expect(err).ToNot(HaveOccurred())
 
 					By(fmt.Sprintf("Verify if failed pod %s is automatically recovered", ignorePodName))
+
+					pod := &v1.Pod{}
+
 					Eventually(
 						func() bool {
 							err = k8sClient.Get(
@@ -1091,18 +1091,8 @@ func clusterWithMaxIgnorablePod(ctx goctx.Context) {
 					By("Fail 1-1 aerospike pod")
 
 					ignorePodName := clusterNamespacedName.Name + "-1-1"
-					pod := &v1.Pod{}
 
-					err := k8sClient.Get(
-						ctx, types.NamespacedName{
-							Name:      ignorePodName,
-							Namespace: clusterNamespacedName.Namespace,
-						}, pod,
-					)
-					Expect(err).ToNot(HaveOccurred())
-
-					pod.Spec.Containers[0].Image = wrongImage
-					err = k8sClient.Update(ctx, pod)
+					err = markPodAsFailed(ctx, k8sClient, ignorePodName, clusterNamespacedName.Namespace)
 					Expect(err).ToNot(HaveOccurred())
 
 					By("Set MaxIgnorablePod and Rolling restart by removing namespace")
@@ -1233,6 +1223,7 @@ func DeployClusterForDiffStorageTest(
 	Context(
 		"Positive", func() {
 			aeroCluster := &asdbv1.AerospikeCluster{}
+
 			AfterEach(
 				func() {
 					Expect(DeleteCluster(k8sClient, ctx, aeroCluster)).ToNot(HaveOccurred())
@@ -1361,7 +1352,7 @@ func DeployClusterWithDNSConfiguration(ctx goctx.Context) {
 
 			Expect(DeployCluster(k8sClient, ctx, aeroCluster)).ShouldNot(HaveOccurred())
 
-			sts, err := getSTSFromRackID(aeroCluster, 0)
+			sts, err := getSTSFromRackID(aeroCluster, 0, "")
 			Expect(err).ShouldNot(HaveOccurred())
 			Expect(sts.Spec.Template.Spec.DNSConfig).To(Equal(dnsConfig))
 		},
@@ -1410,12 +1401,7 @@ func UpdateTLSClusterTest(ctx goctx.Context) {
 
 	BeforeEach(
 		func() {
-			aeroCluster := createBasicTLSCluster(clusterNamespacedName, 3)
-			aeroCluster.Spec.AerospikeConfig.Value[asdbv1.ConfKeyNamespace] = []interface{}{
-				getSCNamespaceConfig("test", "/test/dev/xvdf"),
-			}
-			aeroCluster.Spec.Storage = getBasicStorageSpecObject()
-
+			aeroCluster := CreateBasicTLSCluster(clusterNamespacedName, 3)
 			Expect(DeployCluster(k8sClient, ctx, aeroCluster)).ToNot(HaveOccurred())
 		},
 	)
@@ -1505,11 +1491,11 @@ func UpdateTLSClusterTest(ctx goctx.Context) {
 					}
 					aeroCluster.Spec.Storage.Volumes = append(aeroCluster.Spec.Storage.Volumes, secretVolume)
 					operatorClientCertSpec := getOperatorCert()
-					operatorClientCertSpec.AerospikeOperatorCertSource.SecretCertSource.CaCertsFilename = ""
+					operatorClientCertSpec.SecretCertSource.CaCertsFilename = ""
 					cacertPath := &asdbv1.CaCertsSource{
 						SecretName: test.TLSCacertSecretName,
 					}
-					operatorClientCertSpec.AerospikeOperatorCertSource.SecretCertSource.CaCertsSource = cacertPath
+					operatorClientCertSpec.SecretCertSource.CaCertsSource = cacertPath
 					aeroCluster.Spec.OperatorClientCertSpec = operatorClientCertSpec
 					err = updateCluster(k8sClient, ctx, aeroCluster)
 					Expect(err).ToNot(HaveOccurred())
@@ -2271,26 +2257,6 @@ func negativeDeployClusterValidationTest(
 											Expect(DeployCluster(k8sClient, ctx, aeroCluster)).Should(HaveOccurred())
 										},
 									)
-
-									It(
-										"InvalidxdrConfig: should fail for invalid xdr config. mountPath for digestlog not present in storage",
-										func() {
-											aeroCluster := createDummyAerospikeCluster(
-												clusterNamespacedName, 1,
-											)
-											namespaceConfig :=
-												aeroCluster.Spec.AerospikeConfig.Value[asdbv1.ConfKeyNamespace].([]interface{})[0].(map[string]interface{})
-
-											if _, ok := namespaceConfig["storage-engine"].(map[string]interface{})["devices"]; ok {
-												aeroCluster.Spec.Storage = asdbv1.AerospikeStorageSpec{}
-												aeroCluster.Spec.AerospikeConfig.Value["xdr"] = map[string]interface{}{
-													"enable-xdr":         false,
-													"xdr-digestlog-path": "/opt/aerospike/xdr/digestlog 100G",
-												}
-												Expect(DeployCluster(k8sClient, ctx, aeroCluster)).Should(HaveOccurred())
-											}
-										},
-									)
 								},
 							)
 						},
@@ -2674,30 +2640,6 @@ func negativeUpdateClusterValidationTest(
 											Expect(err).Should(HaveOccurred())
 										},
 									)
-
-									It(
-										"InvalidxdrConfig: should fail for invalid xdr config. mountPath for digestlog not present in fileStorage",
-										func() {
-											aeroCluster, err := getCluster(
-												k8sClient, ctx,
-												clusterNamespacedName,
-											)
-											Expect(err).ToNot(HaveOccurred())
-
-											namespaceConfig :=
-												aeroCluster.Spec.AerospikeConfig.Value[asdbv1.ConfKeyNamespace].([]interface{})[0].(map[string]interface{})
-											if _, ok := namespaceConfig["storage-engine"].(map[string]interface{})["devices"]; ok {
-												aeroCluster.Spec.AerospikeConfig.Value["xdr"] = map[string]interface{}{
-													"enable-xdr":         false,
-													"xdr-digestlog-path": "randomPath 100G",
-												}
-												err = k8sClient.Update(
-													ctx, aeroCluster,
-												)
-												Expect(err).Should(HaveOccurred())
-											}
-										},
-									)
 								},
 							)
 						},
@@ -2804,6 +2746,188 @@ func negativeUpdateClusterValidationTest(
 					}
 					err = k8sClient.Update(ctx, aeroCluster)
 					Expect(err).Should(HaveOccurred())
+				},
+			)
+		},
+	)
+
+	Context(
+		"FailedPodGracePeriodConfiguration", func() {
+			clusterName := fmt.Sprintf("grace-period-%d", GinkgoParallelProcess())
+			clusterNamespacedName := test.GetNamespacedName(
+				clusterName, namespace,
+			)
+
+			AfterEach(
+				func() {
+					aeroCluster := &asdbv1.AerospikeCluster{
+						ObjectMeta: metav1.ObjectMeta{
+							Name:      clusterNamespacedName.Name,
+							Namespace: namespace,
+						},
+					}
+
+					Expect(DeleteCluster(k8sClient, ctx, aeroCluster)).ToNot(HaveOccurred())
+					Expect(CleanupPVC(k8sClient, aeroCluster.Namespace, aeroCluster.Name)).ToNot(HaveOccurred())
+				},
+			)
+
+			It(
+				"Should wait for grace period before recreating pods in fresh cluster deployment", func() {
+					By("Creating fresh cluster with unschedulable resource requirements")
+
+					aeroCluster := createDummyAerospikeCluster(clusterNamespacedName, 2)
+					// Make pods unschedulable by requesting excessive memory
+					aeroCluster.Spec.PodSpec.AerospikeContainerSpec.Resources = unschedulableResource()
+
+					err := k8sClient.Create(ctx, aeroCluster)
+					Expect(err).ToNot(HaveOccurred())
+
+					By("Waiting for pods to be created and enter pending state")
+
+					var (
+						podList *v1.PodList
+						uuidMap = make(map[string]types.UID)
+					)
+
+					Eventually(
+						func() error {
+							podList, err = getPodList(aeroCluster, k8sClient)
+							if err != nil {
+								return err
+							}
+
+							if len(podList.Items) != int(aeroCluster.Spec.Size) {
+								return fmt.Errorf("expected %d pods, found %d",
+									aeroCluster.Spec.Size, len(podList.Items))
+							}
+
+							for idx := range podList.Items {
+								pod := &podList.Items[idx]
+								if pod.Status.Phase != v1.PodPending {
+									return fmt.Errorf("pod %s is not in pending state", pod.Name)
+								}
+
+								uuidMap[pod.Name] = pod.UID
+							}
+
+							return nil
+						}, 5*time.Minute, 10*time.Second,
+					).Should(Succeed())
+
+					By("Waiting within grace period and verifying operator does not recreate pods")
+					pkgLog.Info("Waiting 20 seconds within grace period (grace period = 60s)...")
+					time.Sleep(20 * time.Second)
+
+					podList, err = getPodList(aeroCluster, k8sClient)
+					Expect(err).ToNot(HaveOccurred())
+
+					By("Verifying pods are not recreated within grace period")
+
+					for idx := range podList.Items {
+						pod := &podList.Items[idx]
+						Expect(pod.Status.Phase).To(Equal(v1.PodPending))
+						Expect(uuidMap[pod.Name]).To(Equal(pod.UID))
+					}
+
+					By("Verifying pods are recreated after grace period")
+
+					Eventually(
+						func() error {
+							podList, err = getPodList(aeroCluster, k8sClient)
+							if err != nil {
+								return err
+							}
+
+							if len(podList.Items) != int(aeroCluster.Spec.Size) {
+								return fmt.Errorf("expected %d pods, found %d",
+									aeroCluster.Spec.Size, len(podList.Items))
+							}
+
+							for idx := range podList.Items {
+								pod := &podList.Items[idx]
+								if uuidMap[pod.Name] == pod.UID {
+									return fmt.Errorf("pod %s was not recreated yet", pod.Name)
+								}
+							}
+
+							return nil
+						}, 5*time.Minute, 10*time.Second).Should(Succeed())
+				},
+			)
+
+			It(
+				"Should wait for grace period before recreating pods in an existing cluster", func() {
+					aeroCluster := createDummyAerospikeCluster(clusterNamespacedName, 2)
+
+					Expect(DeployCluster(k8sClient, ctx, aeroCluster)).ToNot(HaveOccurred())
+
+					aeroCluster.Spec.PodSpec.AerospikeContainerSpec.Resources = unschedulableResource()
+
+					err := updateClusterWithNoWait(k8sClient, ctx, aeroCluster)
+					Expect(err).ToNot(HaveOccurred())
+
+					var (
+						podList    *v1.PodList
+						pendingPod *v1.Pod
+					)
+
+					Eventually(
+						func() error {
+							podList, err = getPodList(aeroCluster, k8sClient)
+							if err != nil {
+								return err
+							}
+
+							for idx := range podList.Items {
+								pod := &podList.Items[idx]
+								if pod.Status.Phase == v1.PodPending {
+									pendingPod = pod
+									return nil
+								}
+							}
+
+							return fmt.Errorf("no pod in pending state")
+						}, 5*time.Minute, 10*time.Second,
+					).Should(Succeed())
+
+					By("Waiting within grace period and verifying operator does not recreate pods")
+					pkgLog.Info("Waiting 20 seconds within grace period (grace period = 60s)...")
+					time.Sleep(20 * time.Second)
+
+					podList, err = getPodList(aeroCluster, k8sClient)
+					Expect(err).ToNot(HaveOccurred())
+
+					By("Verifying pods are not recreated within grace period")
+
+					for idx := range podList.Items {
+						pod := &podList.Items[idx]
+						if pod.Name == pendingPod.Name {
+							Expect(pod.Status.Phase).To(Equal(v1.PodPending))
+							Expect(pod.UID).To(Equal(pendingPod.UID))
+
+							break
+						}
+					}
+
+					By("Verifying pods are recreated after grace period")
+					Eventually(
+						func() bool {
+							podList, err = getPodList(aeroCluster, k8sClient)
+							if err != nil {
+								pkgLog.Error(err, "Failed to get pod list")
+								return false
+							}
+
+							for idx := range podList.Items {
+								pod := &podList.Items[idx]
+								if pod.Name == pendingPod.Name {
+									return pod.UID != pendingPod.UID
+								}
+							}
+
+							return false
+						}, 5*time.Minute, 10*time.Second).Should(BeTrue())
 				},
 			)
 		},

@@ -35,6 +35,9 @@ const (
 	AdminPortName    = "admin"
 
 	InfoPortName = "info"
+
+	DefaultFailedPodGracePeriodSeconds = 60
+	RequeueIntervalSeconds10           = 10
 )
 
 const (
@@ -56,8 +59,7 @@ const (
 	ConfKeyPort    = "port"
 
 	// XDR keys.
-	confKeyXdr         = "xdr"
-	confKeyXdrDlogPath = "xdr-digestlog-path"
+	ConfKeyXdr = "xdr"
 
 	// Security keys.
 	ConfKeySecurity                    = "security"
@@ -79,11 +81,12 @@ const (
 	AerospikeInitContainerNameTagEnvVar            = "AEROSPIKE_KUBERNETES_INIT_NAME_TAG"
 	AerospikeInitContainerDefaultRegistry          = "docker.io"
 	AerospikeInitContainerDefaultRegistryNamespace = "aerospike"
-	AerospikeInitContainerDefaultNameAndTag        = "aerospike-kubernetes-init:2.3.1"
+	AerospikeInitContainerDefaultNameAndTag        = "aerospike-kubernetes-init:2.4.0-dev2"
 	AerospikeAppLabel                              = "app"
 	AerospikeAppLabelValue                         = "aerospike-cluster"
 	AerospikeCustomResourceLabel                   = "aerospike.com/cr"
 	AerospikeRackIDLabel                           = "aerospike.com/rack-id"
+	AerospikeRackRevisionLabel                     = "aerospike.com/rack-revision"
 	AerospikeAPIVersionLabel                       = "aerospike.com/api-version"
 	AerospikeAPIVersion                            = "v1"
 )
@@ -333,7 +336,7 @@ func IsAerospikeNamespacePresent(
 // IsXdrEnabled indicates if XDR is enabled in aerospikeConfig.
 func IsXdrEnabled(aerospikeConfigSpec AerospikeConfigSpec) bool {
 	aerospikeConfig := aerospikeConfigSpec.Value
-	xdrConf := aerospikeConfig[confKeyXdr]
+	xdrConf := aerospikeConfig[ConfKeyXdr]
 
 	return xdrConf != nil
 }
@@ -365,50 +368,6 @@ func ReadTLSAuthenticateClient(serviceConf map[string]interface{}) (
 	}
 
 	return nil, fmt.Errorf("invalid configuration")
-}
-
-// GetDigestLogFile returns the xdr digest file path if configured.
-func GetDigestLogFile(aerospikeConfigSpec AerospikeConfigSpec) (
-	*string, error,
-) {
-	aerospikeConfig := aerospikeConfigSpec.Value
-
-	if xdrConfTmp, ok := aerospikeConfig[confKeyXdr]; ok {
-		xdrConf, ok := xdrConfTmp.(map[string]interface{})
-		if !ok {
-			return nil, fmt.Errorf(
-				"aerospikeConfig.xdr not a valid map %v",
-				aerospikeConfig[confKeyXdr],
-			)
-		}
-
-		dgLog, ok := xdrConf[confKeyXdrDlogPath]
-		if !ok {
-			return nil, fmt.Errorf(
-				"%s is missing in aerospikeConfig.xdr %v", confKeyXdrDlogPath,
-				xdrConf,
-			)
-		}
-
-		if _, ok := dgLog.(string); !ok {
-			return nil, fmt.Errorf(
-				"%s is not a valid string in aerospikeConfig.xdr %v",
-				confKeyXdrDlogPath, xdrConf,
-			)
-		}
-
-		// "/opt/aerospike/xdr/digestlog 100G"
-		if len(strings.Fields(dgLog.(string))) != 2 {
-			return nil, fmt.Errorf(
-				"%s is not in valid format (/opt/aerospike/xdr/digestlog 100G) in aerospikeConfig.xdr %v",
-				confKeyXdrDlogPath, xdrConf,
-			)
-		}
-
-		return &strings.Fields(dgLog.(string))[0], nil
-	}
-
-	return nil, fmt.Errorf("xdr not configured")
 }
 
 func GetServiceTLSNameAndPort(aeroConf *AerospikeConfigSpec) (tlsName string, port *int32) {
@@ -613,7 +572,7 @@ func GetImageVersion(imageStr string) (string, error) {
 
 	// Ignore special prefixes and suffixes.
 	matches := versionRegex.FindAllString(version, -1)
-	if matches == nil || len(matches) < 1 {
+	if len(matches) < 1 {
 		return "", fmt.Errorf(
 			"invalid image version format: %v", version,
 		)

@@ -610,10 +610,8 @@ func validateRoster(k8sClient client.Client, ctx goctx.Context,
 	// Check3 Scaleup: pod should be in roster or in blockList
 	for podName := range aeroCluster.Status.Pods {
 		nodeID := strings.ToUpper(strings.TrimLeft(aeroCluster.Status.Pods[podName].Aerospike.NodeID, "0"))
-		rackIDPtr, err := utils.GetRackIDFromPodName(podName)
+		rackID, _, err := utils.GetRackIDAndRevisionFromPodName(clusterNamespacedName.Name, podName)
 		Expect(err).ToNot(HaveOccurred())
-
-		rackID := *rackIDPtr
 
 		nodeRoster := nodeID
 		if rackID != 0 {

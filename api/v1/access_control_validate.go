@@ -89,11 +89,6 @@ func IsAerospikeAccessControlValid(aerospikeClusterSpec *AerospikeClusterSpec) (
 		return false, err
 	}
 
-	if !enabled && aerospikeClusterSpec.AerospikeAccessControl != nil {
-		// Security is disabled however access control is specified.
-		return false, fmt.Errorf("security is disabled but access control is specified")
-	}
-
 	if !enabled {
 		return true, nil
 	}
@@ -117,7 +112,6 @@ func IsAerospikeAccessControlValid(aerospikeClusterSpec *AerospikeClusterSpec) (
 	_, err = isUserSpecValid(
 		aerospikeClusterSpec.AerospikeAccessControl.Users, roleMap,
 	)
-
 	if err != nil {
 		return false, err
 	}

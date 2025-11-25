@@ -16,10 +16,6 @@ import (
 	"github.com/aerospike/aerospike-kubernetes-operator/v4/test"
 )
 
-const (
-	wrongImage = "wrong-image"
-)
-
 var _ = Describe(
 	"K8sNodeBlockList", func() {
 		ctx := context.TODO()
@@ -34,11 +30,6 @@ var _ = Describe(
 				clusterName := fmt.Sprintf("k8s-node-block-cluster-%d", GinkgoParallelProcess())
 				clusterNamespacedName := test.GetNamespacedName(clusterName, namespace)
 
-				var (
-					err   error
-					zones []string
-				)
-
 				BeforeEach(
 					func() {
 						aeroCluster := createDummyAerospikeCluster(
@@ -46,7 +37,7 @@ var _ = Describe(
 						)
 
 						// Zones are set to distribute the pods across different zone nodes.
-						zones, err = getZones(ctx, k8sClient)
+						zones, err := getZones(ctx, k8sClient)
 						Expect(err).ToNot(HaveOccurred())
 
 						zone1 := zones[0]
@@ -162,13 +153,7 @@ var _ = Describe(
 				It(
 					"Should migrate the failed pods from blocked nodes to other nodes with maxIgnorablePod", func() {
 						By(fmt.Sprintf("Fail %s aerospike pod", podName))
-						pod := &corev1.Pod{}
-						err := k8sClient.Get(ctx, types.NamespacedName{Name: podName,
-							Namespace: clusterNamespacedName.Namespace}, pod)
-						Expect(err).ToNot(HaveOccurred())
-
-						pod.Spec.Containers[0].Image = wrongImage
-						err = k8sClient.Update(ctx, pod)
+						err := markPodAsFailed(ctx, k8sClient, podName, clusterNamespacedName.Namespace)
 						Expect(err).ToNot(HaveOccurred())
 
 						By("Blocking the k8s node and setting maxIgnorablePod to 1")

@@ -33,6 +33,7 @@ import (
 
 const (
 	baseImage           = "aerospike/aerospike-server-enterprise"
+	wrongImage          = "wrong-image"
 	nextServerVersion   = "8.1.0.0_1"
 	latestServerVersion = "8.1.0.0"
 	invalidVersion      = "3.0.0.4"
@@ -67,6 +68,8 @@ var aerospikeVolumeInitMethodDeleteFiles = asdbv1.AerospikeVolumeMethodDeleteFil
 var (
 	retryInterval      = time.Second * 30
 	shortRetryInterval = time.Second * 1
+	versionV1          = "v1"
+	versionV2          = "v2"
 	cascadeDeleteFalse = false
 	cascadeDeleteTrue  = true
 	logger             = logr.Discard()
@@ -1314,6 +1317,7 @@ func createBasicTLSCluster(
 						Roles: []string{
 							"sys-admin",
 							"user-admin",
+							"read-write",
 						},
 					},
 				},
@@ -1345,6 +1349,18 @@ func createBasicTLSCluster(
 			},
 		},
 	}
+
+	return aeroCluster
+}
+
+func CreateBasicTLSCluster(
+	clusterNamespacedName types.NamespacedName, size int32,
+) *asdbv1.AerospikeCluster {
+	aeroCluster := createBasicTLSCluster(clusterNamespacedName, size)
+	aeroCluster.Spec.AerospikeConfig.Value[asdbv1.ConfKeyNamespace] = []interface{}{
+		getSCNamespaceConfig("test", "/test/dev/xvdf"),
+	}
+	aeroCluster.Spec.Storage = getBasicStorageSpecObject()
 
 	return aeroCluster
 }
@@ -1466,14 +1482,7 @@ func aerospikeClusterCreateUpdateWithTO(
 
 	current.Spec.AerospikeConfig.Value = desired.Spec.AerospikeConfig.DeepCopy().Value
 
-	if err := k8sClient.Update(ctx, current); err != nil {
-		return err
-	}
-
-	return waitForAerospikeCluster(
-		k8sClient, ctx, desired, int(desired.Spec.Size), retryInterval, timeout,
-		[]asdbv1.AerospikeClusterPhase{asdbv1.AerospikeClusterCompleted},
-	)
+	return updateClusterWithTO(k8sClient, ctx, current, timeout)
 }
 
 func aerospikeClusterCreateUpdate(
@@ -1790,4 +1799,21 @@ func waitForOperatorToStartPodRestart(ctx goctx.Context, k8sClient client.Client
 			return false, nil
 		},
 	)
+}
+
+func markPodAsFailed(ctx goctx.Context, k8sClient client.Client, name, namespace string) error {
+	pod := &corev1.Pod{}
+
+	if err := k8sClient.Get(
+		ctx, types.NamespacedName{
+			Name:      name,
+			Namespace: namespace,
+		}, pod,
+	); err != nil {
+		return err
+	}
+
+	pod.Spec.Containers[0].Image = wrongImage
+
+	return k8sClient.Update(ctx, pod)
 }

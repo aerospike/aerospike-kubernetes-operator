@@ -26,6 +26,7 @@ import (
 	"github.com/aerospike/aerospike-kubernetes-operator/v4/pkg/utils"
 	lib "github.com/aerospike/aerospike-management-lib"
 	"github.com/aerospike/aerospike-management-lib/asconfig"
+	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 )
 
 // RestartType is the type of pod restart to use.
@@ -71,12 +72,12 @@ func (r *SingleClusterReconciler) getRollingRestartTypeMap(rackState *RackState,
 	restartTypeMap = make(map[string]RestartType)
 	dynamicConfDiffPerPod = make(map[string]asconfig.DynamicConfigMap)
 
-	pods, err := r.getOrderedRackPodList(rackState.Rack.ID)
+	pods, err := r.getOrderedRackPodList(rackState.Rack.ID, rackState.Rack.Revision)
 	if err != nil {
 		return nil, nil, fmt.Errorf("failed to list pods: %v", err)
 	}
 
-	confMap, err := r.getConfigMap(rackState.Rack.ID)
+	confMap, err := r.getConfigMap(utils.GetRackIdentifier(rackState.Rack.ID, rackState.Rack.Revision))
 	if err != nil {
 		return nil, nil, err
 	}
@@ -260,7 +261,7 @@ func (r *SingleClusterReconciler) rollingRestartPods(
 	rackState *RackState, podsToRestart []*corev1.Pod, ignorablePodNames sets.Set[string],
 	restartTypeMap map[string]RestartType,
 ) common.ReconcileResult {
-	failedPods, activePods := getFailedAndActivePods(podsToRestart)
+	failedPods, failedWithinGracePeriodPods, activePods := getFailedAndActivePods(podsToRestart, true)
 
 	// If already dead node (failed pod) then no need to check node safety, migration
 	if len(failedPods) != 0 {
@@ -296,6 +297,7 @@ func (r *SingleClusterReconciler) rollingRestartPods(
 			); !res.IsSuccess {
 				r.Log.Error(res.Err,
 					"Failed to set migrate-fill-delay to original value before restarting the running pods")
+
 				return res
 			}
 		}
@@ -316,12 +318,21 @@ func (r *SingleClusterReconciler) rollingRestartPods(
 		}
 	}
 
+	if len(failedWithinGracePeriodPods) != 0 {
+		r.Log.Info(
+			"Pods are in failed state but within grace period, will not delete",
+			"pods", getPodNames(failedWithinGracePeriodPods),
+		)
+
+		return common.ReconcileRequeueAfter(asdbv1.RequeueIntervalSeconds10)
+	}
+
 	return common.ReconcileSuccess()
 }
 
 func (r *SingleClusterReconciler) restartASDOrUpdateAerospikeConf(podName string,
 	operation RestartType) error {
-	rackID, err := utils.GetRackIDFromPodName(podName)
+	rackID, rackRevision, err := utils.GetRackIDAndRevisionFromPodName(r.aeroCluster.Name, podName)
 	if err != nil {
 		return fmt.Errorf(
 			"failed to get rackID for the pod %s", podName,
@@ -333,7 +344,7 @@ func (r *SingleClusterReconciler) restartASDOrUpdateAerospikeConf(podName string
 		Namespace: r.aeroCluster.Namespace,
 	}
 
-	cmName := utils.GetNamespacedNameForSTSOrConfigMap(r.aeroCluster, *rackID)
+	cmName := utils.GetNamespacedNameForSTSOrConfigMap(r.aeroCluster, utils.GetRackIdentifier(rackID, rackRevision))
 	initBinary := "/etc/aerospike/akoinit"
 
 	var subCommand string
@@ -377,7 +388,6 @@ func (r *SingleClusterReconciler) restartASDOrUpdateAerospikeConf(podName string
 				podNamespacedName, asdbv1.AerospikeServerContainerName, cmd, r.KubeClient,
 				r.KubeConfig,
 			)
-
 			if err != nil {
 				r.Log.V(1).Info(
 					"Failed warm restart", "err", err, "podName", podNamespacedName.Name, "stdout",
@@ -399,13 +409,13 @@ func (r *SingleClusterReconciler) restartASDOrUpdateAerospikeConf(podName string
 	if subCommand == "quick-restart" {
 		r.Recorder.Eventf(
 			r.aeroCluster, corev1.EventTypeNormal, "PodWarmRestarted",
-			"[rack-%d] Restarted Pod %s", *rackID, podNamespacedName.Name,
+			"[rack-%d] Restarted Pod %s", rackID, podNamespacedName.Name,
 		)
 		r.Log.V(1).Info("Pod warm restarted", "podName", podNamespacedName.Name)
 	} else {
 		r.Recorder.Eventf(
 			r.aeroCluster, corev1.EventTypeNormal, "PodConfUpdated",
-			"[rack-%d] Updated Pod %s", *rackID, podNamespacedName.Name,
+			"[rack-%d] Updated Pod %s", rackID, podNamespacedName.Name,
 		)
 		r.Log.V(1).Info("Pod conf updated", "podName", podNamespacedName.Name)
 	}
@@ -431,7 +441,8 @@ func (r *SingleClusterReconciler) restartPods(
 		// Check if this pod needs restart
 		restartType := restartTypeMap[pod.Name]
 
-		if restartType == quickRestart {
+		switch restartType {
+		case quickRestart:
 			// We assume that the pod server image supports pod warm restart.
 			if err := r.restartASDOrUpdateAerospikeConf(pod.Name, quickRestart); err != nil {
 				r.Log.Error(err, "Failed to warm restart pod", "podName", pod.Name)
@@ -439,14 +450,14 @@ func (r *SingleClusterReconciler) restartPods(
 			}
 
 			restartedASDPodNames = append(restartedASDPodNames, pod.Name)
-		} else if restartType == podRestart {
+		case podRestart:
 			if r.isLocalPVCDeletionRequired(rackState, pod) {
 				if err := r.deleteLocalPVCs(rackState, pod); err != nil {
 					return common.ReconcileError(err)
 				}
 			}
 
-			if err := r.Client.Delete(context.TODO(), pod); err != nil {
+			if err := r.Delete(context.TODO(), pod); err != nil {
 				r.Log.Error(err, "Failed to delete pod")
 				return common.ReconcileError(err)
 			}
@@ -455,6 +466,8 @@ func (r *SingleClusterReconciler) restartPods(
 			restartedPodNames = append(restartedPodNames, pod.Name)
 
 			r.Log.V(1).Info("Pod deleted", "podName", pod.Name)
+		case noRestart, noRestartUpdateConf:
+			// No action needed for these restart types
 		}
 	}
 
@@ -509,7 +522,7 @@ func (r *SingleClusterReconciler) ensurePodsRunningAndReady(podsToCheck []*corev
 			updatedPod := &corev1.Pod{}
 			podName := types.NamespacedName{Name: pod.Name, Namespace: pod.Namespace}
 
-			if err := r.Client.Get(context.TODO(), podName, updatedPod); err != nil {
+			if err := r.Get(context.TODO(), podName, updatedPod); err != nil {
 				return common.ReconcileError(err)
 			}
 
@@ -547,22 +560,28 @@ func (r *SingleClusterReconciler) ensurePodsRunningAndReady(podsToCheck []*corev
 		podNames,
 	)
 
-	return common.ReconcileRequeueAfter(10)
+	return common.ReconcileRequeueAfter(asdbv1.RequeueIntervalSeconds10)
 }
 
-func getFailedAndActivePods(pods []*corev1.Pod) (failedPods, activePods []*corev1.Pod) {
+func getFailedAndActivePods(
+	pods []*corev1.Pod, withGracePeriod bool) (failedPods, failedWithinGracePeriodPods, activePods []*corev1.Pod,
+) {
 	for idx := range pods {
 		pod := pods[idx]
 
-		if err := utils.CheckPodFailed(pod); err != nil {
-			failedPods = append(failedPods, pod)
-			continue
-		}
+		podState := utils.CheckPodFailedWithGrace(pod, withGracePeriod)
 
-		activePods = append(activePods, pod)
+		switch podState.State {
+		case utils.PodHealthy:
+			activePods = append(activePods, pod)
+		case utils.PodFailedInGrace:
+			failedWithinGracePeriodPods = append(failedWithinGracePeriodPods, pod)
+		case utils.PodFailed:
+			failedPods = append(failedPods, pod)
+		}
 	}
 
-	return failedPods, activePods
+	return failedPods, failedWithinGracePeriodPods, activePods
 }
 
 func getNonIgnorablePods(pods []*corev1.Pod, ignorablePodNames sets.Set[string],
@@ -584,7 +603,7 @@ func getNonIgnorablePods(pods []*corev1.Pod, ignorablePodNames sets.Set[string],
 func (r *SingleClusterReconciler) safelyDeletePodsAndEnsureImageUpdated(
 	rackState *RackState, podsToUpdate []*corev1.Pod, ignorablePodNames sets.Set[string],
 ) common.ReconcileResult {
-	failedPods, activePods := getFailedAndActivePods(podsToUpdate)
+	failedPods, failedWithinGracePeriodPods, activePods := getFailedAndActivePods(podsToUpdate, true)
 
 	// If already dead node (failed pod) then no need to check node safety, migration
 	if len(failedPods) != 0 {
@@ -619,6 +638,7 @@ func (r *SingleClusterReconciler) safelyDeletePodsAndEnsureImageUpdated(
 			); !res.IsSuccess {
 				r.Log.Error(res.Err,
 					"Failed to set migrate-fill-delay to original value before upgrading the running pods")
+
 				return res
 			}
 		}
@@ -637,6 +657,15 @@ func (r *SingleClusterReconciler) safelyDeletePodsAndEnsureImageUpdated(
 				return res
 			}
 		}
+	}
+
+	if len(failedWithinGracePeriodPods) != 0 {
+		r.Log.Info(
+			"Pods are in failed state but within grace period, will not delete",
+			"pods", getPodNames(failedWithinGracePeriodPods),
+		)
+
+		return common.ReconcileRequeueAfter(asdbv1.RequeueIntervalSeconds10)
 	}
 
 	return common.ReconcileSuccess()
@@ -659,7 +688,7 @@ func (r *SingleClusterReconciler) deletePodAndEnsureImageUpdated(
 			}
 		}
 
-		if err := r.Client.Delete(context.TODO(), pod); err != nil {
+		if err := r.Delete(context.TODO(), pod); err != nil {
 			return common.ReconcileError(err)
 		}
 
@@ -677,12 +706,14 @@ func (r *SingleClusterReconciler) isLocalPVCDeletionRequired(rackState *RackStat
 	if utils.ContainsString(r.aeroCluster.Spec.K8sNodeBlockList, pod.Spec.NodeName) {
 		r.Log.Info("Pod found in blocked nodes list, deleting corresponding local PVCs if any",
 			"podName", pod.Name)
+
 		return true
 	}
 
 	if asdbv1.GetBool(rackState.Rack.Storage.DeleteLocalStorageOnRestart) {
 		r.Log.Info("deleteLocalStorageOnRestart flag is enabled, deleting corresponding local PVCs if any",
 			"podName", pod.Name)
+
 		return true
 	}
 
@@ -715,10 +746,11 @@ func (r *SingleClusterReconciler) ensurePodsImageUpdated(podsToCheck []*corev1.P
 			updatedPod := &corev1.Pod{}
 			podName := types.NamespacedName{Name: pod.Name, Namespace: pod.Namespace}
 
-			if err := r.Client.Get(context.TODO(), podName, updatedPod); err != nil {
+			if err := r.Get(context.TODO(), podName, updatedPod); err != nil {
 				return common.ReconcileError(err)
 			}
 
+			// For existing cluster operations, no grace period for immediate responsiveness
 			if err := utils.CheckPodFailed(updatedPod); err != nil {
 				return common.ReconcileError(err)
 			}
@@ -745,7 +777,7 @@ func (r *SingleClusterReconciler) ensurePodsImageUpdated(podsToCheck []*corev1.P
 		podNames,
 	)
 
-	return common.ReconcileRequeueAfter(10)
+	return common.ReconcileRequeueAfter(asdbv1.RequeueIntervalSeconds10)
 }
 
 // cleanupPods checks pods and status before scale-up to detect and fix any
@@ -753,10 +785,14 @@ func (r *SingleClusterReconciler) ensurePodsImageUpdated(podsToCheck []*corev1.P
 func (r *SingleClusterReconciler) cleanupPods(
 	podNames []string, rackState *RackState,
 ) error {
+	if len(podNames) == 0 {
+		return nil
+	}
+
 	r.Log.Info("Removing pvc for removed pods", "pods", podNames)
 
 	// Delete PVCs if cascadeDelete
-	pvcItems, err := r.getPodsPVCList(podNames, rackState.Rack.ID)
+	pvcItems, err := r.getPodsPVCList(podNames, rackState.Rack.ID, rackState.Rack.Revision)
 	if err != nil {
 		return fmt.Errorf("could not find pvc for pods %v: %v", podNames, err)
 	}
@@ -868,16 +904,16 @@ func (r *SingleClusterReconciler) cleanupDanglingPodsRack(sts *appsv1.StatefulSe
 	// is scaled down.
 	var danglingPods []string
 
-	// Find dangling pods in pods
+	// Find dangling pods in the status of the cluster.
 	for podName := range r.aeroCluster.Status.Pods {
-		rackID, err := utils.GetRackIDFromPodName(podName)
+		rackID, rackRevision, err := utils.GetRackIDAndRevisionFromPodName(r.aeroCluster.Name, podName)
 		if err != nil {
 			return fmt.Errorf(
 				"failed to get rackID for the pod %s", podName,
 			)
 		}
 
-		if *rackID != rackState.Rack.ID {
+		if rackID != rackState.Rack.ID || rackRevision != rackState.Rack.Revision {
 			// This pod is from other rack, so skip it
 			continue
 		}
@@ -904,18 +940,22 @@ func (r *SingleClusterReconciler) cleanupDanglingPodsRack(sts *appsv1.StatefulSe
 // getIgnorablePods returns pods:
 // 1. From racksToDelete that are currently not running and can be ignored in stability checks.
 // 2. Failed/pending pods from the configuredRacks identified using maxIgnorablePods field and
-// can be ignored from stability checks.
-func (r *SingleClusterReconciler) getIgnorablePods(racksToDelete []asdbv1.Rack, configuredRacks []RackState) (
-	sets.Set[string], error,
-) {
+// 3. Failed pods from old revisions of revision-changed racks that will be replaced anyway can be
+// ignored from stability checks.
+func (r *SingleClusterReconciler) getIgnorablePods(
+	racksToDelete []asdbv1.Rack, configuredRacks []RackState, revisionChangedRacks map[int]revisionChangedRack,
+) (sets.Set[string], error) {
 	ignorablePodNames := sets.Set[string]{}
 	ignorableRackIDs := sets.Set[int]{}
 
 	ignorableRacks := append([]asdbv1.Rack{}, racksToDelete...)
 	ignorableRacks = append(ignorableRacks, getRacksToBeBlockedFromRoster(r.Log, configuredRacks)...)
 
-	for idx := range ignorableRacks {
-		rackPods, err := r.getRackPodList(ignorableRacks[idx].ID)
+	for rackIdx := range ignorableRacks {
+		r.Log.Info("Rack to delete found", "rackID",
+			racksToDelete[rackIdx].ID, "rackRevision", racksToDelete[rackIdx].Revision)
+
+		rackPods, err := r.getRackPodList(ignorableRacks[rackIdx].ID, racksToDelete[rackIdx].Revision)
 		if err != nil {
 			return nil, err
 		}
@@ -927,7 +967,35 @@ func (r *SingleClusterReconciler) getIgnorablePods(racksToDelete []asdbv1.Rack, 
 			}
 		}
 
-		ignorableRackIDs.Insert(ignorableRacks[idx].ID)
+		ignorableRackIDs.Insert(ignorableRacks[rackIdx].ID)
+	}
+
+	// Handle failed pods from old revisions of revision-changed racks
+	for rackID, revisionChangedRackInfo := range revisionChangedRacks {
+		oldRackState := revisionChangedRackInfo.oldRack
+		r.Log.Info("Checking old revision failed pods for revision-changed rack",
+			"rackID", rackID, "oldRevision", oldRackState.Rack.Revision)
+
+		oldPodList, err := r.getRackPodList(oldRackState.Rack.ID, oldRackState.Rack.Revision)
+		if err != nil {
+			return nil, err
+		}
+
+		var oldFailedPods []string
+
+		for podIdx := range oldPodList.Items {
+			pod := oldPodList.Items[podIdx]
+			if !utils.IsPodRunningAndReady(&pod) {
+				oldFailedPods = append(oldFailedPods, pod.Name)
+				ignorablePodNames.Insert(pod.Name)
+			}
+		}
+
+		if len(oldFailedPods) > 0 {
+			r.Log.Info("Adding old revision failed pods to ignore list (will be replaced)",
+				"rackID", oldRackState.Rack.ID, "oldRevision", oldRackState.Rack.Revision,
+				"failedPods", oldFailedPods)
+		}
 	}
 
 	for idx := range configuredRacks {
@@ -941,7 +1009,7 @@ func (r *SingleClusterReconciler) getIgnorablePods(racksToDelete []asdbv1.Rack, 
 			r.aeroCluster.Spec.RackConfig.MaxIgnorablePods, int(rackState.Size), false,
 		)
 
-		podList, err := r.getRackPodList(rackState.Rack.ID)
+		podList, err := r.getRackPodList(rackState.Rack.ID, rackState.Rack.Revision)
 		if err != nil {
 			return nil, err
 		}
@@ -979,9 +1047,9 @@ func (r *SingleClusterReconciler) getIgnorablePods(racksToDelete []asdbv1.Rack, 
 }
 
 func (r *SingleClusterReconciler) getPodsPVCList(
-	podNames []string, rackID int,
+	podNames []string, rackID int, rackRevision string,
 ) ([]corev1.PersistentVolumeClaim, error) {
-	pvcListItems, err := r.getRackPVCList(rackID)
+	pvcListItems, err := r.getRackPVCList(rackID, rackRevision)
 	if err != nil {
 		return nil, err
 	}
@@ -989,19 +1057,19 @@ func (r *SingleClusterReconciler) getPodsPVCList(
 	// https://github.com/kubernetes/kubernetes/issues/72196
 	// No regex support in field-selector
 	// Can not get pvc having matching podName. Need to check more.
-	var newPVCItems []corev1.PersistentVolumeClaim
+	var podPVCs []corev1.PersistentVolumeClaim
 
 	for idx := range pvcListItems {
 		pvc := pvcListItems[idx]
 		for _, podName := range podNames {
 			// Get PVC belonging to pod only
 			if strings.HasSuffix(pvc.Name, podName) {
-				newPVCItems = append(newPVCItems, pvc)
+				podPVCs = append(podPVCs, pvc)
 			}
 		}
 	}
 
-	return newPVCItems, nil
+	return podPVCs, nil
 }
 
 func (r *SingleClusterReconciler) getClusterPodList() (
@@ -1015,7 +1083,7 @@ func (r *SingleClusterReconciler) getClusterPodList() (
 	}
 
 	// TODO: Should we add check to get only non-terminating pod? What if it is rolling restart
-	if err := r.Client.List(context.TODO(), podList, listOps); err != nil {
+	if err := r.List(context.TODO(), podList, listOps); err != nil {
 		return nil, err
 	}
 
@@ -1111,7 +1179,7 @@ func (r *SingleClusterReconciler) handleNSOrDeviceRemoval(rackState *RackState, 
 
 	for idx := range r.aeroCluster.Status.RackConfig.Racks {
 		rackStatus = r.aeroCluster.Status.RackConfig.Racks[idx]
-		if rackStatus.ID == rackState.Rack.ID {
+		if rackStatus.ID == rackState.Rack.ID && rackStatus.Revision == rackState.Rack.Revision {
 			rackFound = true
 			break
 		}
@@ -1314,7 +1382,7 @@ func (r *SingleClusterReconciler) getNSAddedDevices(rackState *RackState) ([]str
 	)
 
 	newAeroCluster := &asdbv1.AerospikeCluster{}
-	if err := r.Client.Get(
+	if err := r.Get(
 		context.TODO(), types.NamespacedName{
 			Name: r.aeroCluster.Name, Namespace: r.aeroCluster.Namespace,
 		}, newAeroCluster,
@@ -1326,7 +1394,7 @@ func (r *SingleClusterReconciler) getNSAddedDevices(rackState *RackState) ([]str
 
 	for idx := range newAeroCluster.Status.RackConfig.Racks {
 		rackStatus = newAeroCluster.Status.RackConfig.Racks[idx]
-		if rackStatus.ID == rackState.Rack.ID {
+		if rackStatus.ID == rackState.Rack.ID && rackStatus.Revision == rackState.Rack.Revision {
 			rackFound = true
 			break
 		}
@@ -1420,7 +1488,7 @@ func (r *SingleClusterReconciler) handleNSOrDeviceAddition(volumes []string, pod
 
 func getVolumeNameFromDevicePath(volumes []asdbv1.VolumeSpec, s string) string {
 	for idx := range volumes {
-		if volumes[idx].Aerospike.Path == s {
+		if volumes[idx].Aerospike != nil && volumes[idx].Aerospike.Path == s {
 			return volumes[idx].Name
 		}
 	}
@@ -1443,7 +1511,6 @@ func (r *SingleClusterReconciler) deleteFileStorage(podName, fileName string) er
 
 	stdout, stderr, err := utils.Exec(podNamespacedName, asdbv1.AerospikeServerContainerName,
 		cmd, r.KubeClient, r.KubeConfig)
-
 	if err != nil {
 		r.Log.V(1).Info(
 			"File deletion failed", "err", err, "podName", podName, "stdout",
@@ -1456,11 +1523,11 @@ func (r *SingleClusterReconciler) deleteFileStorage(podName, fileName string) er
 	return nil
 }
 
-func (r *SingleClusterReconciler) getConfigMap(rackID int) (*corev1.ConfigMap, error) {
-	cmName := utils.GetNamespacedNameForSTSOrConfigMap(r.aeroCluster, rackID)
+func (r *SingleClusterReconciler) getConfigMap(rackIdentifier string) (*corev1.ConfigMap, error) {
+	cmName := utils.GetNamespacedNameForSTSOrConfigMap(r.aeroCluster, rackIdentifier)
 	confMap := &corev1.ConfigMap{}
 
-	if err := r.Client.Get(context.TODO(), cmName, confMap); err != nil {
+	if err := r.Get(context.TODO(), cmName, confMap); err != nil {
 		return nil, err
 	}
 
@@ -1526,6 +1593,7 @@ func getConfDiff(log logger, specConfig map[string]interface{}, podAnnotations m
 	if err != nil {
 		log.Info("Failed to get config diff to change config dynamically, fallback to rolling restart",
 			"error", err.Error())
+
 		return nil, nil
 	}
 
@@ -1544,7 +1612,12 @@ func (r *SingleClusterReconciler) patchPodStatus(ctx context.Context, patches []
 
 	constantPatch := client.RawPatch(types.JSONPatchType, jsonPatchJSON)
 
-	return retry.OnError(retry.DefaultBackoff, func(_ error) bool {
+	patchedAerospikeCluster := &asdbv1.AerospikeCluster{ObjectMeta: metav1.ObjectMeta{
+		Name:      r.aeroCluster.Name,
+		Namespace: r.aeroCluster.Namespace,
+	}}
+
+	if err := retry.OnError(retry.DefaultBackoff, func(_ error) bool {
 		// Customize the error check for retrying, return true to retry, false to stop retrying
 		return true
 	}, func() error {
@@ -1552,7 +1625,7 @@ func (r *SingleClusterReconciler) patchPodStatus(ctx context.Context, patches []
 		// Since the pod status is updated from pod init container,
 		// set the field owner to "pod" for pod status updates.
 		if err := r.Client.Status().Patch(
-			ctx, r.aeroCluster, constantPatch, client.FieldOwner("pod"),
+			ctx, patchedAerospikeCluster, constantPatch, client.FieldOwner("pod"),
 		); err != nil {
 			return fmt.Errorf("error updating status: %v", err)
 		}
@@ -1560,7 +1633,13 @@ func (r *SingleClusterReconciler) patchPodStatus(ctx context.Context, patches []
 		r.Log.Info("Pod status patched successfully")
 
 		return nil
-	})
+	}); err != nil {
+		return err
+	}
+
+	r.aeroCluster.Status.Pods = patchedAerospikeCluster.Status.Pods
+
+	return nil
 }
 
 func (r *SingleClusterReconciler) onDemandOperationType(podName string, onDemandQuickRestarts,
@@ -1657,7 +1736,7 @@ func (r *SingleClusterReconciler) updateOperationStatus(restartedASDPodNames, re
 
 	// Get the old object, it may have been updated in between.
 	newAeroCluster := &asdbv1.AerospikeCluster{}
-	if err := r.Client.Get(
+	if err := r.Get(
 		context.TODO(), types.NamespacedName{
 			Name: r.aeroCluster.Name, Namespace: r.aeroCluster.Namespace,
 		}, newAeroCluster,

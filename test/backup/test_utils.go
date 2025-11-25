@@ -41,7 +41,7 @@ var aerospikeNsNm = types.NamespacedName{
 }
 
 func NewBackup(backupNsNm types.NamespacedName) (*asdbv1beta1.AerospikeBackup, error) {
-	configBytes, err := getBackupConfBytes(namePrefix(backupNsNm))
+	configBytes, err := getBackupConfBytes(getBackupConfigInMap(namePrefix(backupNsNm)))
 	if err != nil {
 		return nil, err
 	}
@@ -51,6 +51,17 @@ func NewBackup(backupNsNm types.NamespacedName) (*asdbv1beta1.AerospikeBackup, e
 	backup.Spec.Config = runtime.RawExtension{
 		Raw: configBytes,
 	}
+
+	return backup, nil
+}
+
+func NewBackupWithTLS(backupNsNm types.NamespacedName) (*asdbv1beta1.AerospikeBackup, error) {
+	configBytes, err := getBackupConfBytes(getBackupConfigWithTLSInMap(namePrefix(backupNsNm)))
+	if err != nil {
+		return nil, err
+	}
+
+	backup := newBackupWithConfig(backupNsNm, configBytes)
 
 	return backup, nil
 }
@@ -80,9 +91,7 @@ func newBackupWithEmptyConfig(backupNsNm types.NamespacedName) *asdbv1beta1.Aero
 	}
 }
 
-func getBackupConfBytes(prefix string) ([]byte, error) {
-	backupConfig := getBackupConfigInMap(prefix)
-
+func getBackupConfBytes(backupConfig map[string]interface{}) ([]byte, error) {
 	configBytes, err := json.Marshal(backupConfig)
 	if err != nil {
 		return nil, err
@@ -122,6 +131,27 @@ func getBackupConfigInMap(prefix string) map[string]interface{} {
 			},
 		},
 	}
+}
+
+func getBackupConfigWithTLSInMap(prefix string) map[string]interface{} {
+	backupConfig := getBackupConfigInMap(prefix)
+
+	aerospikeClusterMap := backupConfig[asdbv1beta1.AerospikeClusterKey].(map[string]interface{})
+	aerospikeCluster := aerospikeClusterMap[fmt.Sprintf("%s-%s", prefix, "test-cluster")].(map[string]interface{})
+
+	aerospikeCluster["tls"] = map[string]interface{}{
+		"ca-path":   "/etc/aerospike/secret/cacerts",
+		"name":      "aerospike-a-0.test-runner",
+		"cert-file": "/etc/aerospike/secret/svc_cluster_chain.pem",
+		"key-file":  "/etc/aerospike/secret/svc_key.pem",
+	}
+
+	seedNodeList := aerospikeCluster["seed-nodes"].([]map[string]interface{})
+	seedNode := seedNodeList[0]
+	seedNode["tls-name"] = "aerospike-a-0.test-runner"
+	seedNode["port"] = 4333
+
+	return backupConfig
 }
 
 func getWrongBackupConfBytes(prefix string) ([]byte, error) {
@@ -176,7 +206,6 @@ func DeleteBackup(cl client.Client, backup *asdbv1beta1.AerospikeBackup) error {
 	// Wait for the finalizer to be removed
 	for {
 		_, err := getBackupObj(cl, backup.Name, backup.Namespace)
-
 		if err != nil {
 			if k8serrors.IsNotFound(err) {
 				break

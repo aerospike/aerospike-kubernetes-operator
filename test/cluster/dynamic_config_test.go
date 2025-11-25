@@ -77,7 +77,7 @@ var _ = Describe(
 						)
 						aeroCluster.Spec.AerospikeConfig.Value["namespaces"] = append(
 							aeroCluster.Spec.AerospikeConfig.Value["namespaces"].([]interface{}), getNonSCInMemoryNamespaceConfig("mem"))
-						aeroCluster.Spec.AerospikeConfig.Value["xdr"] = map[string]interface{}{
+						aeroCluster.Spec.AerospikeConfig.Value[asdbv1.ConfKeyXdr] = map[string]interface{}{
 							"dcs": []map[string]interface{}{
 								{
 									"name":      "dc1",
@@ -135,8 +135,8 @@ var _ = Describe(
 							},
 						}
 
-						aeroCluster.Spec.AerospikeConfig.Value["xdr"].(map[string]interface{})["dcs"] = append(
-							aeroCluster.Spec.AerospikeConfig.Value["xdr"].(map[string]interface{})["dcs"].([]interface{}), dc)
+						aeroCluster.Spec.AerospikeConfig.Value[asdbv1.ConfKeyXdr].(map[string]interface{})["dcs"] = append(
+							aeroCluster.Spec.AerospikeConfig.Value[asdbv1.ConfKeyXdr].(map[string]interface{})["dcs"].([]interface{}), dc)
 
 						err = updateCluster(k8sClient, ctx, aeroCluster)
 						Expect(err).ToNot(HaveOccurred())
@@ -165,7 +165,7 @@ var _ = Describe(
 
 						// Fetch and verify xdr section config
 						conf, err = getAerospikeConfigFromNode(logger, k8sClient, ctx, clusterNamespacedName,
-							"xdr", aeroCluster.Name+"-0-0")
+							asdbv1.ConfKeyXdr, aeroCluster.Name+"-0-0")
 						Expect(err).ToNot(HaveOccurred())
 
 						Expect(conf["dcs"]).To(HaveLen(2))
@@ -182,8 +182,8 @@ var _ = Describe(
 						delete(aeroCluster.Spec.AerospikeConfig.Value[asdbv1.ConfKeyService].(map[string]interface{}), "proto-fd-max")
 						delete(aeroCluster.Spec.AerospikeConfig.Value["security"].(map[string]interface{}), "log")
 
-						aeroCluster.Spec.AerospikeConfig.Value["xdr"].(map[string]interface{})["dcs"] =
-							aeroCluster.Spec.AerospikeConfig.Value["xdr"].(map[string]interface{})["dcs"].([]interface{})[:1]
+						aeroCluster.Spec.AerospikeConfig.Value[asdbv1.ConfKeyXdr].(map[string]interface{})["dcs"] =
+							aeroCluster.Spec.AerospikeConfig.Value[asdbv1.ConfKeyXdr].(map[string]interface{})["dcs"].([]interface{})[:1]
 
 						err = updateCluster(k8sClient, ctx, aeroCluster)
 						Expect(err).ToNot(HaveOccurred())
@@ -209,7 +209,7 @@ var _ = Describe(
 
 						// Fetch and verify xdr section config
 						conf, err = getAerospikeConfigFromNode(logger, k8sClient, ctx, clusterNamespacedName,
-							"xdr", aeroCluster.Name+"-0-0")
+							asdbv1.ConfKeyXdr, aeroCluster.Name+"-0-0")
 						Expect(err).ToNot(HaveOccurred())
 
 						Expect(conf["dcs"]).To(HaveLen(1))
@@ -334,7 +334,7 @@ var _ = Describe(
 						aeroCluster := createDummyAerospikeCluster(
 							clusterNamespacedName, 2,
 						)
-						aeroCluster.Spec.AerospikeConfig.Value["xdr"] = map[string]interface{}{
+						aeroCluster.Spec.AerospikeConfig.Value[asdbv1.ConfKeyXdr] = map[string]interface{}{
 							"dcs": []map[string]interface{}{
 								{
 									"name":      "dc1",
@@ -423,8 +423,8 @@ var _ = Describe(
 							},
 						}
 
-						aeroCluster.Spec.AerospikeConfig.Value["xdr"].(map[string]interface{})["dcs"] = append(
-							aeroCluster.Spec.AerospikeConfig.Value["xdr"].(map[string]interface{})["dcs"].([]interface{}), dc)
+						aeroCluster.Spec.AerospikeConfig.Value[asdbv1.ConfKeyXdr].(map[string]interface{})["dcs"] = append(
+							aeroCluster.Spec.AerospikeConfig.Value[asdbv1.ConfKeyXdr].(map[string]interface{})["dcs"].([]interface{}), dc)
 
 						err = updateClusterWithTO(k8sClient, ctx, aeroCluster, time.Minute*1)
 						Expect(err).To(HaveOccurred())
@@ -476,7 +476,7 @@ var _ = Describe(
 								},
 							},
 						)
-						aeroCluster.Spec.AerospikeConfig.Value["xdr"] = map[string]interface{}{
+						aeroCluster.Spec.AerospikeConfig.Value[asdbv1.ConfKeyXdr] = map[string]interface{}{
 							"dcs": []map[string]interface{}{
 								{
 									"name":      "dc1",
@@ -746,7 +746,6 @@ func getPodIDs(ctx context.Context, aeroCluster *asdbv1.AerospikeCluster) (map[s
 			utils.GetNamespacedName(pod), asdbv1.AerospikeServerContainerName, cmd, k8sClientSet,
 			cfg,
 		)
-
 		if execErr != nil {
 			return nil, fmt.Errorf(
 				"error reading ASD Pid from pod %s - %v", pod.Name, execErr,
@@ -973,7 +972,7 @@ func validateXDRContextDynamically(clusterNamespacedName types.NamespacedName,
 	dcFields := make(asconfig.Conf)
 
 	for confKey, val := range *flatServer {
-		if asconfig.ContextKey(confKey) != "xdr" {
+		if asconfig.ContextKey(confKey) != asdbv1.ConfKeyXdr {
 			continue
 		}
 
@@ -1030,7 +1029,7 @@ func validateXDRNSFieldsDynamically(ctx goctx.Context, flatServer, flatSpec *asc
 	newConf := asconfig.New(logger, &newSpec)
 	newMap := *newConf.ToMap()
 
-	aeroCluster.Spec.AerospikeConfig.Value["xdr"] = lib.DeepCopy(newMap["xdr"])
+	aeroCluster.Spec.AerospikeConfig.Value[asdbv1.ConfKeyXdr] = lib.DeepCopy(newMap[asdbv1.ConfKeyXdr])
 
 	return updateCluster(k8sClient, ctx, aeroCluster)
 }
@@ -1057,11 +1056,11 @@ func validateXDRDCFieldsDynamically(ctx goctx.Context, flatServer, flatSpec *asc
 	newConf := asconfig.New(logger, &newSpec)
 	newMap := *newConf.ToMap()
 
-	aeroCluster.Spec.AerospikeConfig.Value["xdr"] = lib.DeepCopy(newMap["xdr"])
-	dcs := aeroCluster.Spec.AerospikeConfig.Value["xdr"].(lib.Stats)["dcs"].([]lib.Stats)
+	aeroCluster.Spec.AerospikeConfig.Value[asdbv1.ConfKeyXdr] = lib.DeepCopy(newMap[asdbv1.ConfKeyXdr])
+	dcs := aeroCluster.Spec.AerospikeConfig.Value[asdbv1.ConfKeyXdr].(lib.Stats)["dcs"].([]lib.Stats)
 	delete(dcs[0], "namespaces")
 	delete(dcs[0], "node-address-ports")
-	aeroCluster.Spec.AerospikeConfig.Value["xdr"].(lib.Stats)["dcs"] = dcs
+	aeroCluster.Spec.AerospikeConfig.Value[asdbv1.ConfKeyXdr].(lib.Stats)["dcs"] = dcs
 
 	return updateCluster(k8sClient, ctx, aeroCluster)
 }

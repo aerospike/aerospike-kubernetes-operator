@@ -61,7 +61,7 @@ var _ = BeforeSuite(
 
 		By("Deploy Backup Service")
 		backupServiceNamespacedName := test.GetNamespacedName("backup-service", namespace)
-		backupService, err := backupservice.NewBackupService(backupServiceNamespacedName)
+		backupService, err := backupservice.NewBackupServiceWithTLSSecretMounts(backupServiceNamespacedName)
 		Expect(err).ToNot(HaveOccurred())
 
 		backupService.Spec.Service = &asdbv1beta1.Service{
@@ -76,7 +76,7 @@ var _ = BeforeSuite(
 
 		By("Deploy Aerospike Cluster")
 		cascadeDeleteTrue := true
-		aeroCluster := cluster.CreateDummyAerospikeCluster(aerospikeNsNm, 2)
+		aeroCluster := cluster.CreateBasicTLSCluster(aerospikeNsNm, 2)
 		aeroCluster.Spec.Storage.BlockVolumePolicy.InputCascadeDelete = &cascadeDeleteTrue
 		aeroCluster.Spec.Storage.FileSystemVolumePolicy.InputCascadeDelete = &cascadeDeleteTrue
 

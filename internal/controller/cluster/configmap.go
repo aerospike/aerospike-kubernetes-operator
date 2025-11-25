@@ -85,7 +85,6 @@ func init() {
 			return nil
 		},
 	)
-
 	if err != nil {
 		// Error reading embedded script templates.
 		panic(fmt.Sprintf("error reading embedded script templates: %v", err))
@@ -338,7 +337,8 @@ func (r *SingleClusterReconciler) getFQDNsForCluster() ([]string, error) {
 	for idx := range rackStateList {
 		rackState := &rackStateList[idx]
 		size := rackState.Size
-		stsName := utils.GetNamespacedNameForSTSOrConfigMap(r.aeroCluster, rackState.Rack.ID)
+		stsName := utils.GetNamespacedNameForSTSOrConfigMap(r.aeroCluster,
+			utils.GetRackIdentifier(rackState.Rack.ID, rackState.Rack.Revision))
 
 		for i := int32(0); i < size; i++ {
 			fqdn := getFQDNForPod(r.aeroCluster, getSTSPodName(stsName.Name, i))
@@ -357,7 +357,7 @@ func (r *SingleClusterReconciler) deleteRackConfigMap(namespacedName types.Names
 		},
 	}
 
-	if err := r.Client.Delete(context.TODO(), configMap); err != nil {
+	if err := r.Delete(context.TODO(), configMap); err != nil {
 		if errors.IsNotFound(err) {
 			r.Log.Info(
 				"Can't find rack configmap while trying to delete it. Skipping...",

@@ -62,7 +62,8 @@ var _ = BeforeSuite(
 		Expect(err).ToNot(HaveOccurred())
 
 		By("Deploy Backup Service")
-		backupService, err := backupservice.NewBackupService(test.GetNamespacedName("backup-service", namespace))
+		backupService, err := backupservice.NewBackupServiceWithTLSSecretMounts(
+			test.GetNamespacedName("backup-service", namespace))
 		Expect(err).ToNot(HaveOccurred())
 
 		backupService.Spec.Service = &asdbv1beta1.Service{
@@ -78,7 +79,7 @@ var _ = BeforeSuite(
 		cascadeDeleteTrue := true
 
 		By(fmt.Sprintf("Deploy source Aerospike Cluster: %s", sourceAerospikeClusterNsNm.String()))
-		aeroCluster := cluster.CreateDummyAerospikeCluster(sourceAerospikeClusterNsNm, 2)
+		aeroCluster := cluster.CreateBasicTLSCluster(sourceAerospikeClusterNsNm, 2)
 		aeroCluster.Spec.Storage.BlockVolumePolicy.InputCascadeDelete = &cascadeDeleteTrue
 		aeroCluster.Spec.Storage.FileSystemVolumePolicy.InputCascadeDelete = &cascadeDeleteTrue
 
@@ -93,7 +94,7 @@ var _ = BeforeSuite(
 		)
 		Expect(err).NotTo(HaveOccurred())
 
-		backupObj, err := backup.NewBackup(backupNsNm)
+		backupObj, err := backup.NewBackupWithTLS(backupNsNm)
 		Expect(err).ToNot(HaveOccurred())
 
 		// Point to current suite's backup service
@@ -113,7 +114,7 @@ var _ = BeforeSuite(
 		backupDataPath = backupDataPaths[0]
 
 		By(fmt.Sprintf("Deploy destination Aerospike Cluster: %s", destinationAerospikeClusterNsNm.String()))
-		aeroCluster = cluster.CreateDummyAerospikeCluster(destinationAerospikeClusterNsNm, 2)
+		aeroCluster = cluster.CreateBasicTLSCluster(destinationAerospikeClusterNsNm, 2)
 		aeroCluster.Spec.Storage.BlockVolumePolicy.InputCascadeDelete = &cascadeDeleteTrue
 		aeroCluster.Spec.Storage.FileSystemVolumePolicy.InputCascadeDelete = &cascadeDeleteTrue
 

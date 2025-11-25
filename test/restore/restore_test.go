@@ -153,7 +153,19 @@ var _ = Describe(
 
 						err = validateRestoredData(k8sClient)
 						Expect(err).ToNot(HaveOccurred())
+					},
+				)
 
+				It(
+					"Should complete restore for Full restore type and with TLS configured", func() {
+						restore, err = newRestoreWithTLS(restoreNsNm, asdbv1beta1.Full)
+						Expect(err).ToNot(HaveOccurred())
+
+						err = createRestore(k8sClient, restore)
+						Expect(err).ToNot(HaveOccurred())
+
+						err = validateRestoredData(k8sClient)
+						Expect(err).ToNot(HaveOccurred())
 					},
 				)
 
@@ -167,26 +179,12 @@ var _ = Describe(
 
 						err = validateRestoredData(k8sClient)
 						Expect(err).ToNot(HaveOccurred())
-
 					},
 				)
 
 				It(
 					"Should complete restore for Timestamp restore type", func() {
-						restoreConfig := getRestoreConfigInMap(backupDataPath)
-						delete(restoreConfig, asdbv1beta1.SourceKey)
-						delete(restoreConfig, asdbv1beta1.BackupDataPathKey)
-
-						parts := strings.Split(backupDataPath, "/")
-						time := parts[len(parts)-3]
-						timeInt, err := strconv.Atoi(time)
-						Expect(err).ToNot(HaveOccurred())
-
-						// increase time by 1 millisecond to consider the latest backup under time bound
-						restoreConfig[asdbv1beta1.TimeKey] = int64(timeInt) + 1
-						restoreConfig[asdbv1beta1.RoutineKey] = parts[len(parts)-5]
-
-						configBytes, err := json.Marshal(restoreConfig)
+						configBytes, err := getTimeStampRestoreConfigBytes(getRestoreConfigInMap(backupDataPath))
 						Expect(err).ToNot(HaveOccurred())
 
 						restore = newRestoreWithConfig(restoreNsNm, asdbv1beta1.Timestamp, configBytes)
@@ -196,8 +194,38 @@ var _ = Describe(
 
 						err = validateRestoredData(k8sClient)
 						Expect(err).ToNot(HaveOccurred())
+					},
+				)
 
+				It(
+					"Should complete restore for Timestamp restore type and with TLS configured", func() {
+						configBytes, err := getTimeStampRestoreConfigBytes(getRestoreConfigWithTLSInMap(backupDataPath))
+						Expect(err).ToNot(HaveOccurred())
+
+						restore = newRestoreWithConfig(restoreNsNm, asdbv1beta1.Timestamp, configBytes)
+
+						err = createRestore(k8sClient, restore)
+						Expect(err).ToNot(HaveOccurred())
+
+						err = validateRestoredData(k8sClient)
+						Expect(err).ToNot(HaveOccurred())
 					},
 				)
 			})
 	})
+
+func getTimeStampRestoreConfigBytes(restoreConfig map[string]interface{}) (configBytes []byte, err error) {
+	delete(restoreConfig, asdbv1beta1.SourceKey)
+	delete(restoreConfig, asdbv1beta1.BackupDataPathKey)
+
+	parts := strings.Split(backupDataPath, "/")
+	timeStamp := parts[len(parts)-3]
+	timeInt, err := strconv.Atoi(timeStamp)
+	Expect(err).ToNot(HaveOccurred())
+
+	// increase time by 1 millisecond to consider the latest backup under time bound
+	restoreConfig[asdbv1beta1.TimeKey] = int64(timeInt) + 1
+	restoreConfig[asdbv1beta1.RoutineKey] = parts[len(parts)-5]
+
+	return getRestoreConfBytes(restoreConfig)
+}

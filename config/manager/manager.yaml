@@ -60,6 +60,9 @@ spec:
         - name: WATCH_NAMESPACE
           # for watching multiple namespaces by operator, give a list of namespaces (e.g. aerospike,test,test1,test2)
           value: aerospike
+        - name: FAILED_POD_GRACE_PERIOD_SECONDS
+            # for setting the grace period to delete/recover failed pods, default is 60 seconds
+          value: 60
         - name: AEROSPIKE_KUBERNETES_INIT_REGISTRY
           # this is the registry used to pull aerospike-init image
           value: docker.io
@@ -68,7 +71,7 @@ spec:
           value: aerospike
         - name: AEROSPIKE_KUBERNETES_INIT_NAME_TAG
           # this is the name and tag of aerospike-init image
-          value: aerospike-kubernetes-init:2.3.1
+          value: aerospike-kubernetes-init:2.4.0-dev2
       volumes: []
       serviceAccountName: controller-manager
 

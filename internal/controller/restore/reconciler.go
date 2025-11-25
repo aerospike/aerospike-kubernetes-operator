@@ -32,7 +32,7 @@ type SingleRestoreReconciler struct {
 }
 
 func (r *SingleRestoreReconciler) Reconcile() (result ctrl.Result, recErr error) {
-	if !r.aeroRestore.ObjectMeta.DeletionTimestamp.IsZero() {
+	if !r.aeroRestore.DeletionTimestamp.IsZero() {
 		r.Log.Info("Deleting AerospikeRestore")
 
 		if err := r.cleanUpAndRemoveFinalizer(finalizerName); err != nil {
@@ -211,20 +211,20 @@ func (r *SingleRestoreReconciler) addFinalizer(finalizerName string) error {
 	// The object is not being deleted, so if it does not have our finalizer,
 	// then lets add the finalizer and update the object.
 	if !utils.ContainsString(
-		r.aeroRestore.ObjectMeta.Finalizers, finalizerName,
+		r.aeroRestore.Finalizers, finalizerName,
 	) {
-		r.aeroRestore.ObjectMeta.Finalizers = append(
-			r.aeroRestore.ObjectMeta.Finalizers, finalizerName,
+		r.aeroRestore.Finalizers = append(
+			r.aeroRestore.Finalizers, finalizerName,
 		)
 
-		return r.Client.Update(context.TODO(), r.aeroRestore)
+		return r.Update(context.TODO(), r.aeroRestore)
 	}
 
 	return nil
 }
 
 func (r *SingleRestoreReconciler) cleanUpAndRemoveFinalizer(finalizerName string) error {
-	if utils.ContainsString(r.aeroRestore.ObjectMeta.Finalizers, finalizerName) {
+	if utils.ContainsString(r.aeroRestore.Finalizers, finalizerName) {
 		r.Log.Info("Removing finalizer")
 
 		if r.aeroRestore.Status.JobID != nil {
@@ -234,11 +234,11 @@ func (r *SingleRestoreReconciler) cleanUpAndRemoveFinalizer(finalizerName string
 		}
 
 		// Remove finalizer from the list
-		r.aeroRestore.ObjectMeta.Finalizers = utils.RemoveString(
-			r.aeroRestore.ObjectMeta.Finalizers, finalizerName,
+		r.aeroRestore.Finalizers = utils.RemoveString(
+			r.aeroRestore.Finalizers, finalizerName,
 		)
 
-		if err := r.Client.Update(context.TODO(), r.aeroRestore); err != nil {
+		if err := r.Update(context.TODO(), r.aeroRestore); err != nil {
 			return err
 		}
 

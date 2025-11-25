@@ -57,7 +57,7 @@ func (r *AerospikeBackupServiceReconciler) Reconcile(_ context.Context, request 
 
 	// Fetch the AerospikeBackupService instance
 	aeroBackupService := &asdbv1beta1.AerospikeBackupService{}
-	if err := r.Client.Get(context.TODO(), request.NamespacedName, aeroBackupService); err != nil {
+	if err := r.Get(context.TODO(), request.NamespacedName, aeroBackupService); err != nil {
 		if errors.IsNotFound(err) {
 			log.Info("Deleted AerospikeBackupService")
 

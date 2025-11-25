@@ -182,7 +182,7 @@ func deployClusterUsingFile(ctx context.Context, filePath string) (*asdbv1.Aeros
 		return aeroCluster, err
 	}
 
-	if !strings.Contains(filePath, "xdr") {
+	if !strings.Contains(filePath, asdbv1.ConfKeyXdr) {
 		baseName := strings.TrimSuffix(filepath.Base(filePath), "_cr.yaml")
 		aeroCluster.Name = strings.ReplaceAll(baseName, "_", "-")
 	}

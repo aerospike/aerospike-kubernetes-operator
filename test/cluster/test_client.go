@@ -328,7 +328,6 @@ func appendCACertFromFileOrPath(
 			return nil
 		},
 	)
-
 	if err != nil {
 		logrus.Info("\"Failed to load CA certs from dir", "caPath: ", caPath)
 	}

@@ -32,7 +32,6 @@ func InitialiseClients(scheme *runtime.Scheme, cfg *rest.Config) (
 	k8sClient, err = client.New(
 		cfg, client.Options{Scheme: scheme},
 	)
-
 	if err != nil {
 		return k8sClient, k8sClientSet, err
 	}

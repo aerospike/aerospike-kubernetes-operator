@@ -356,9 +356,9 @@ func (r *SingleClusterReconciler) setDynamicConfig(
 
 	for _, host := range selectedHostConns {
 		podName := podIPNameMap[host.ASConn.AerospikeHostName]
+
 		asConfCmds, err := asconfig.CreateSetConfigCmdList(r.Log, dynamicConfDiffPerPod[podName],
 			host.ASConn, r.getClientPolicy())
-
 		if err != nil {
 			// Assuming error returned here will not be a server error.
 			return common.ReconcileError(err)
