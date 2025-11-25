@@ -524,6 +524,21 @@ var _ = Describe(
 				)
 
 				It(
+					"Should fail adding reserved annotations",
+					func() {
+						aeroCluster := createDummyAerospikeCluster(
+							clusterNamespacedName, 2,
+						)
+						aeroCluster.Spec.PodSpec.AerospikeObjectMeta.Annotations = map[string]string{
+							asdbv1.EvictionBlockedAnnotation: "true",
+						}
+
+						err := k8sClient.Create(ctx, aeroCluster)
+						Expect(err).Should(HaveOccurred())
+					},
+				)
+
+				It(
 					"Should fail for adding sidecar container with same name",
 					func() {
 						aeroCluster := createDummyAerospikeCluster(

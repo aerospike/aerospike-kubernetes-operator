@@ -63,6 +63,8 @@ spec:
           value: {{ .Values.watchNamespaces | quote }}
         - name: FAILED_POD_GRACE_PERIOD_SECONDS
           value: {{ .Values.failedPodGracePeriodSeconds | quote }}
+        - name: ENABLE_SAFE_POD_EVICTION
+          value: {{ .Values.safePodEviction.enable | quote }}
         - name: AEROSPIKE_KUBERNETES_INIT_REGISTRY
           value: {{ .Values.aerospikeKubernetesInitRegistry }}
         - name: AEROSPIKE_KUBERNETES_INIT_REGISTRY_NAMESPACE
