@@ -185,20 +185,31 @@ func (r *SingleClusterReconciler) deleteLBServiceIfPresent(svcName, svcNamespace
 	service.Name = svcName
 	service.Namespace = svcNamespace
 
-	if err := r.Delete(context.TODO(), service); err != nil {
+	// Get the LB service
+	if err := r.Get(
+		context.TODO(), types.NamespacedName{
+			Name: svcName, Namespace: svcNamespace,
+		}, service,
+	); err != nil {
 		if errors.IsNotFound(err) {
-			r.Log.Info("LoadBalancer is not configured. Skipping...")
-
+			// LB service is already deleted
 			return nil
 		}
 
-		return fmt.Errorf("failed to delete loadbalancer service %s: %v", svcName, err)
+		return err
 	}
 
-	r.Log.Info("LoadBalancer service deleted",
-		"name", utils.NamespacedName(service.Namespace, service.Name))
+	if !utils.IsOwnedBy(service, r.aeroCluster) {
+		r.Log.Info(
+			"LoadBalancer service is not created/owned by operator. Skipping delete",
+			"name", utils.NamespacedName(service.Namespace, service.Name),
+		)
 
-	return nil
+		return nil
+	}
+
+	// Delete the LB service
+	return r.Delete(context.TODO(), service)
 }
 
 func (r *SingleClusterReconciler) updateLBService(service *corev1.Service, servicePort *corev1.ServicePort,
