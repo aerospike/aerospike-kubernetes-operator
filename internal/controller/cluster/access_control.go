@@ -73,6 +73,10 @@ func AerospikeAdminCredentials(
 		)
 	}
 
+	if adminUserSpec.AerospikeAuthMode == asdbv1.AerospikeAuthModePKIOnly {
+		return asdbv1.AdminUsername, "", nil
+	}
+
 	password, err := passwordProvider.Get(
 		asdbv1.AdminUsername, &adminUserSpec,
 	)
@@ -212,14 +216,27 @@ func (r *SingleClusterReconciler) reconcileUsers(
 
 	for userName := range desired {
 		userSpec := desired[userName]
+		currUserSpec, found := current[userName]
 
-		password, err := passwordProvider.Get(userName, &userSpec)
-		if err != nil {
-			return err
+		var password *string
+
+		if (!found || currUserSpec.AerospikeAuthMode == asdbv1.AerospikeAuthModeInternal) &&
+			userSpec.AerospikeAuthMode == asdbv1.AerospikeAuthModePKIOnly {
+			nop := "nopassword"
+			password = &nop
+		}
+
+		if userSpec.AerospikeAuthMode == asdbv1.AerospikeAuthModeInternal {
+			nop, err := passwordProvider.Get(userName, &userSpec)
+			if err != nil {
+				return err
+			}
+
+			password = &nop
 		}
 
 		cmd := aerospikeUserCreateUpdate{
-			name: userName, password: &password, roles: userSpec.Roles,
+			name: userName, password: password, roles: userSpec.Roles,
 		}
 		if userName == asdbv1.AdminUsername {
 			adminUpdateCmd = &cmd

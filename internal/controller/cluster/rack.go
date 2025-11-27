@@ -1353,12 +1353,35 @@ func (r *SingleClusterReconciler) isRackStorageUpdatedInAeroCluster(
 		containerAttachments = append(containerAttachments, volume.Sidecars...)
 
 		if volume.Aerospike != nil {
-			containerAttachments = append(
-				containerAttachments, asdbv1.VolumeAttachment{
-					ContainerName: asdbv1.AerospikeServerContainerName,
-					Path:          volume.Aerospike.Path,
-				},
-			)
+			if volume.Aerospike.Path == asdbv1.GetWorkDirectory(*r.aeroCluster.Spec.AerospikeConfig) {
+				containerAttachments = append(
+					containerAttachments, asdbv1.VolumeAttachment{
+						ContainerName: asdbv1.AerospikeServerContainerName,
+						Path:          volume.Aerospike.Path + "/smd",
+						AttachmentOptions: asdbv1.AttachmentOptions{
+							MountOptions: asdbv1.MountOptions{
+								SubPath: "smd",
+							},
+						},
+					},
+					asdbv1.VolumeAttachment{
+						ContainerName: asdbv1.AerospikeServerContainerName,
+						Path:          volume.Aerospike.Path + "/usr",
+						AttachmentOptions: asdbv1.AttachmentOptions{
+							MountOptions: asdbv1.MountOptions{
+								SubPath: "usr",
+							},
+						},
+					},
+				)
+			} else {
+				containerAttachments = append(
+					containerAttachments, asdbv1.VolumeAttachment{
+						ContainerName: asdbv1.AerospikeServerContainerName,
+						Path:          volume.Aerospike.Path,
+					},
+				)
+			}
 		}
 
 		if r.isVolumeAttachmentAddedOrUpdated(
@@ -1506,36 +1529,49 @@ func (r *SingleClusterReconciler) isVolumeAttachmentAddedOrUpdated(
 			continue
 		}
 
-		volumeMount := getContainerVolumeMounts(
-			container.VolumeMounts, volumeName,
-		)
-		if volumeMount != nil {
-			// Found, check for updated
-			if getOriginalPath(volumeMount.MountPath) != attachment.Path ||
-				volumeMount.ReadOnly != asdbv1.GetBool(attachment.ReadOnly) ||
-				volumeMount.SubPath != attachment.SubPath ||
-				volumeMount.SubPathExpr != attachment.SubPathExpr ||
-				!reflect.DeepEqual(
-					volumeMount.MountPropagation, attachment.MountPropagation,
-				) {
-				r.Log.Info(
-					"Volume updated in rack storage", "old", volumeMount, "new",
-					attachment,
-				)
+		found := false
 
-				return true
+		for _, volumeMount := range container.VolumeMounts {
+			if volumeMount.Name != volumeName {
+				continue
 			}
 
-			continue
+			if (attachment.Path == asdbv1.GetWorkDirectory(*r.aeroCluster.Spec.AerospikeConfig)+"/smd" ||
+				attachment.Path == asdbv1.GetWorkDirectory(*r.aeroCluster.Spec.AerospikeConfig)+"/usr") &&
+				volumeMount.MountPath == asdbv1.GetWorkDirectory(*r.aeroCluster.Spec.AerospikeConfig) {
+				// Accept direct workdir mount as compatible for workdir sub-directories attachments
+				found = true
+				break
+			}
+
+			if getOriginalPath(volumeMount.MountPath) == attachment.Path &&
+				volumeMount.SubPath == attachment.SubPath {
+				// Found a matching mount, check for other options
+				if volumeMount.ReadOnly != asdbv1.GetBool(attachment.ReadOnly) ||
+					volumeMount.SubPathExpr != attachment.SubPathExpr ||
+					!reflect.DeepEqual(volumeMount.MountPropagation, attachment.MountPropagation) {
+					r.Log.Info(
+						"Volume updated in rack storage", "old", volumeMount, "new", attachment,
+					)
+
+					return true
+				}
+
+				found = true
+
+				break
+			}
 		}
 
-		// Added volume
-		r.Log.Info(
-			"Volume added in rack storage", "volume", volumeName,
-			"containerName", container.Name,
-		)
+		// If not found, this attachment is new or changed
+		if !found {
+			r.Log.Info(
+				"Volume added or updated in rack storage", "volume", volumeName,
+				"containerName", container.Name, "attachmentPath", attachment.Path, "subPath", attachment.SubPath,
+			)
 
-		return true
+			return true
+		}
 	}
 
 	return false
@@ -1908,7 +1944,7 @@ func getContainerVolumeDevice(
 	return nil
 }
 
-func getContainerVolumeMounts(
+func getContainerVolumeMount(
 	mounts []corev1.VolumeMount, name string,
 ) *corev1.VolumeMount {
 	for _, mount := range mounts {

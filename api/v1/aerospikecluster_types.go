@@ -58,6 +58,17 @@ const (
 	Empty           DynamicConfigUpdateStatus = ""
 )
 
+// +kubebuilder:validation:Enum=Internal;PKI
+type AerospikeAuthMode string
+
+const (
+	// AerospikeAuthModeInternal indicates that Internal auth mode is enabled for the user.
+	AerospikeAuthModeInternal AerospikeAuthMode = "Internal"
+	// AerospikeAuthModePKIOnly indicates that PKI auth mode is enabled for the user.
+	// once set, it is not allowed to reverse back to Internal auth mode.
+	AerospikeAuthModePKIOnly AerospikeAuthMode = "PKI"
+)
+
 // NOTE: json tags are required.  Any new fields you add must have json tags for the fields to be serialized.
 
 // AerospikeClusterSpec defines the desired state of AerospikeCluster
@@ -571,6 +582,11 @@ type AerospikeRoleSpec struct {
 
 // AerospikeUserSpec specifies an Aerospike database user, the secret name for the password and, associated roles.
 type AerospikeUserSpec struct {
+	// AerospikeAuthMode specifies an authentication mode (Internal or PKI) enabled for the user.
+	// +kubebuilder:default:=Internal
+	// +optional
+	AerospikeAuthMode AerospikeAuthMode `json:"aerospikeAuthMode,omitempty"`
+
 	// Name is the user's username.
 	Name string `json:"name"`
 

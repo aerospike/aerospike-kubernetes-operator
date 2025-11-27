@@ -121,6 +121,14 @@ spec:
                       description: AerospikeUserSpec specifies an Aerospike database
                         user, the secret name for the password and, associated roles.
                       properties:
+                        aerospikeAuthMode:
+                          default: Internal
+                          description: AerospikeAuthMode specifies an authentication
+                            mode (Internal or PKI) enabled for the user.
+                          enum:
+                          - Internal
+                          - PKI
+                          type: string
                         name:
                           description: Name is the user's username.
                           type: string
@@ -9229,6 +9237,14 @@ spec:
                       description: AerospikeUserSpec specifies an Aerospike database
                         user, the secret name for the password and, associated roles.
                       properties:
+                        aerospikeAuthMode:
+                          default: Internal
+                          description: AerospikeAuthMode specifies an authentication
+                            mode (Internal or PKI) enabled for the user.
+                          enum:
+                          - Internal
+                          - PKI
+                          type: string
                         name:
                           description: Name is the user's username.
                           type: string

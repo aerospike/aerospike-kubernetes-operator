@@ -151,6 +151,19 @@ func GetUsersFromSpec(spec *AerospikeClusterSpec) map[string]AerospikeUserSpec {
 	return users
 }
 
+// GetAdminUserFromSpec returns admin user from the spec.
+func GetAdminUserFromSpec(spec *AerospikeClusterSpec) *AerospikeUserSpec {
+	if spec.AerospikeAccessControl != nil {
+		for _, userSpec := range spec.AerospikeAccessControl.Users {
+			if userSpec.Name == AdminUsername {
+				return &userSpec
+			}
+		}
+	}
+
+	return nil
+}
+
 func validateRoleQuotaParam(
 	roleSpec AerospikeRoleSpec, aerospikeConfigSpec *AerospikeConfigSpec,
 ) error {
@@ -440,9 +453,14 @@ func isUserSpecValid(
 			}
 		}
 
+		if userSpec.AerospikeAuthMode == AerospikeAuthModePKIOnly && strings.TrimSpace(userSpec.SecretName) != "" {
+			return false, fmt.Errorf(
+				"user %s doesn't require password when authmode is PKI", userSpec.Name,
+			)
+		}
 		// TODO We should validate actual password here but we cannot read the secret here.
 		// Will have to be done at the time of creating the user!
-		if strings.TrimSpace(userSpec.SecretName) == "" {
+		if strings.TrimSpace(userSpec.SecretName) == "" && userSpec.AerospikeAuthMode != AerospikeAuthModePKIOnly {
 			return false, fmt.Errorf(
 				"user %s has empty secret name", userSpec.Name,
 			)

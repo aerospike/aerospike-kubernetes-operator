@@ -135,6 +135,11 @@ func (acv *AerospikeClusterCustomValidator) ValidateUpdate(_ context.Context, ol
 		return warnings, fmt.Errorf("cannot update MultiPodPerHost setting")
 	}
 
+	if err := validateUsersAuthModeUpdate(oldObject.Spec.AerospikeAccessControl.Users,
+		aerospikeCluster.Spec.AerospikeAccessControl.Users); err != nil {
+		return warnings, err
+	}
+
 	if err := validateNetworkPolicyUpdate(
 		&oldObject.Spec.AerospikeNetworkPolicy, &aerospikeCluster.Spec.AerospikeNetworkPolicy,
 	); err != nil {
@@ -184,9 +189,8 @@ func validate(aslog logr.Logger, cluster *asdbv1.AerospikeCluster) (admission.Wa
 		return warnings, fmt.Errorf("aerospikeCluster name cannot have spaces")
 	}
 
-	// Validate image type. Only enterprise image allowed for now
-	if !isEnterprise(cluster.Spec.Image) {
-		return warnings, fmt.Errorf("CommunityEdition Cluster not supported")
+	if err := validateImage(cluster); err != nil {
+		return warnings, err
 	}
 
 	// Validate size
@@ -297,6 +301,10 @@ func validate(aslog logr.Logger, cluster *asdbv1.AerospikeCluster) (admission.Wa
 	}
 
 	if err := validateClientCertSpec(cluster); err != nil {
+		return warnings, err
+	}
+
+	if err := validateAdminCerts(cluster); err != nil {
 		return warnings, err
 	}
 
@@ -417,7 +425,13 @@ func validateClientCertSpec(cluster *asdbv1.AerospikeCluster) error {
 		return nil
 	}
 
+	adminUser := asdbv1.GetAdminUserFromSpec(&cluster.Spec)
+
 	switch {
+	case reflect.DeepEqual("false", tlsAuthenticateClientConfig) && adminUser != nil &&
+		adminUser.AerospikeAuthMode == asdbv1.AerospikeAuthModePKIOnly:
+		return fmt.Errorf("tls-authenticate-client cannot be false when auth mode for admin user is PKI, " +
+			"it should be any or specific client name")
 	case reflect.DeepEqual("false", tlsAuthenticateClientConfig):
 		return nil
 	case reflect.DeepEqual("any", tlsAuthenticateClientConfig):
@@ -442,6 +456,45 @@ func validateClientCertSpec(cluster *asdbv1.AerospikeCluster) error {
 		if err := validateOperatorClientCert(cluster.Spec.OperatorClientCertSpec); err != nil {
 			return err
 		}
+	}
+
+	return nil
+}
+
+func validateAdminCerts(cluster *asdbv1.AerospikeCluster) error {
+	adminUser := asdbv1.GetAdminUserFromSpec(&cluster.Spec)
+	if adminUser == nil || adminUser.AerospikeAuthMode != asdbv1.AerospikeAuthModePKIOnly {
+		return nil
+	}
+
+	clientCertSpec := cluster.Spec.OperatorClientCertSpec
+
+	var certBytes []byte
+
+	var err error
+
+	if clientCertSpec == nil || clientCertSpec.CertPathInOperator == nil ||
+		clientCertSpec.CertPathInOperator.ClientCertPath == "" {
+		return nil
+	}
+
+	certBytes, err = os.ReadFile(clientCertSpec.CertPathInOperator.ClientCertPath)
+	if err != nil {
+		return fmt.Errorf("failed to read operator client cert file: %v", err)
+	}
+
+	block, _ := pem.Decode(certBytes)
+	if block == nil {
+		return fmt.Errorf("failed to decode PEM block from operator client cert file")
+	}
+
+	cert, err := x509.ParseCertificate(block.Bytes)
+	if err != nil {
+		return fmt.Errorf("failed to parse operator client certificate: %v", err)
+	}
+
+	if cert.Subject.CommonName != "admin" {
+		return fmt.Errorf("operator client certificate CN is '%s', must be 'admin'", cert.Subject.CommonName)
 	}
 
 	return nil
@@ -1152,9 +1205,30 @@ func validateRequiredFileStorageForAerospikeConfig(
 	return nil
 }
 
-// isEnterprise indicates if aerospike image is enterprise
-func isEnterprise(image string) bool {
-	return strings.Contains(strings.ToLower(image), "enterprise")
+// isEnterpriseOrFederal indicates if aerospike image is enterprise or federal
+func isEnterpriseOrFederal(image string) bool {
+	return strings.Contains(strings.ToLower(image), "enterprise") || strings.Contains(strings.ToLower(image), "federal")
+}
+
+// isFederal indicates if aerospike image is federal
+func isFederal(image string) bool {
+	return strings.Contains(strings.ToLower(image), "federal")
+}
+
+func validateImage(cluster *asdbv1.AerospikeCluster) error {
+	// Validate image type. Only enterprise and federal image allowed for now.
+	if !isEnterpriseOrFederal(cluster.Spec.Image) {
+		return fmt.Errorf("CommunityEdition Cluster not supported")
+	}
+
+	if isFederal(cluster.Spec.Image) {
+		adminUser := asdbv1.GetAdminUserFromSpec(&cluster.Spec)
+		if adminUser == nil || adminUser.AerospikeAuthMode != asdbv1.AerospikeAuthModePKIOnly {
+			return fmt.Errorf("AuthMode for admin user is required to be PKI with Federal image")
+		}
+	}
+
+	return nil
 }
 
 func getFeatureKeyFilePaths(configSpec asdbv1.AerospikeConfigSpec) []string {
@@ -1645,4 +1719,22 @@ func getMinRunningInitVersion(pods map[string]asdbv1.AerospikePodStatus) (string
 	}
 
 	return minVersion, nil
+}
+
+func validateUsersAuthModeUpdate(oldUsers, newUsers []asdbv1.AerospikeUserSpec) error {
+	oldUsersMap := make(map[string]asdbv1.AerospikeUserSpec)
+	for _, userSpec := range oldUsers {
+		oldUsersMap[userSpec.Name] = userSpec
+	}
+
+	for _, userSpec := range newUsers {
+		if oldUserSpec, found := oldUsersMap[userSpec.Name]; found {
+			if oldUserSpec.AerospikeAuthMode == asdbv1.AerospikeAuthModePKIOnly &&
+				userSpec.AerospikeAuthMode == asdbv1.AerospikeAuthModeInternal {
+				return fmt.Errorf("user %s cannot be allowed to update auth mode from PKI to Internal", userSpec.Name)
+			}
+		}
+	}
+
+	return nil
 }
