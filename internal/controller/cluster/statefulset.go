@@ -1501,19 +1501,19 @@ func addVolumeMountInContainer(
 					volumeMount1 := corev1.VolumeMount{
 						Name:             volumeName,
 						MountPath:        mountPath + "/smd",
-						ReadOnly:         asdbv1.GetBool(volumeAttachment.AttachmentOptions.MountOptions.ReadOnly),
+						ReadOnly:         asdbv1.GetBool(volumeAttachment.ReadOnly),
 						SubPath:          "smd",
-						SubPathExpr:      volumeAttachment.AttachmentOptions.MountOptions.SubPathExpr,
-						MountPropagation: volumeAttachment.AttachmentOptions.MountOptions.MountPropagation,
+						SubPathExpr:      volumeAttachment.SubPathExpr,
+						MountPropagation: volumeAttachment.MountPropagation,
 					}
 
 					volumeMount2 := corev1.VolumeMount{
 						Name:             volumeName,
 						MountPath:        mountPath + "/usr",
-						ReadOnly:         asdbv1.GetBool(volumeAttachment.AttachmentOptions.MountOptions.ReadOnly),
+						ReadOnly:         asdbv1.GetBool(volumeAttachment.ReadOnly),
 						SubPath:          "usr",
-						SubPathExpr:      volumeAttachment.AttachmentOptions.MountOptions.SubPathExpr,
-						MountPropagation: volumeAttachment.AttachmentOptions.MountOptions.MountPropagation,
+						SubPathExpr:      volumeAttachment.SubPathExpr,
+						MountPropagation: volumeAttachment.MountPropagation,
 					}
 
 					container.VolumeMounts = append(
