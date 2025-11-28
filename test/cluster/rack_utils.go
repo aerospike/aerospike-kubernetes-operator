@@ -185,7 +185,8 @@ func getPodSpecAnnotations(
 
 	for rackStateIndex := range rackStateList {
 		found := &appsv1.StatefulSet{}
-		stsName := utils.GetNamespacedNameForSTSOrConfigMap(aeroCluster, rackStateList[rackStateIndex].Rack.ID)
+		stsName := utils.GetNamespacedNameForSTSOrConfigMap(aeroCluster,
+			utils.GetRackIdentifier(rackStateList[rackStateIndex].Rack.ID, rackStateList[rackStateIndex].Rack.Revision))
 
 		err := k8sClient.Get(ctx, stsName, found)
 		if errors.IsNotFound(err) {
@@ -193,7 +194,7 @@ func getPodSpecAnnotations(
 			return nil, err
 		}
 
-		annotations = append(annotations, found.Spec.Template.ObjectMeta.Annotations)
+		annotations = append(annotations, found.Spec.Template.Annotations)
 	}
 
 	return annotations, nil
@@ -212,7 +213,8 @@ func getPodSpecLabels(
 	rackStateList := getConfiguredRackStateList(aeroCluster)
 	for rackStateIndex := range rackStateList {
 		found := &appsv1.StatefulSet{}
-		stsName := utils.GetNamespacedNameForSTSOrConfigMap(aeroCluster, rackStateList[rackStateIndex].Rack.ID)
+		stsName := utils.GetNamespacedNameForSTSOrConfigMap(aeroCluster,
+			utils.GetRackIdentifier(rackStateList[rackStateIndex].Rack.ID, rackStateList[rackStateIndex].Rack.Revision))
 
 		err := k8sClient.Get(ctx, stsName, found)
 		if errors.IsNotFound(err) {
@@ -220,7 +222,7 @@ func getPodSpecLabels(
 			return nil, err
 		}
 
-		ls = append(ls, found.Spec.Template.ObjectMeta.Labels)
+		ls = append(ls, found.Spec.Template.Labels)
 	}
 
 	return ls, nil
@@ -239,7 +241,8 @@ func validateRackEnabledCluster(
 	for rackStateIndex := range rackStateList {
 		found := &appsv1.StatefulSet{}
 		stsName := utils.GetNamespacedNameForSTSOrConfigMap(
-			aeroCluster, rackStateList[rackStateIndex].Rack.ID,
+			aeroCluster,
+			utils.GetRackIdentifier(rackStateList[rackStateIndex].Rack.ID, rackStateList[rackStateIndex].Rack.Revision),
 		)
 
 		err := k8sClient.Get(ctx, stsName, found)
@@ -259,7 +262,12 @@ func validateRackEnabledCluster(
 		// If Label key are changed for zone, region.. then those should be changed here also
 
 		// Match NodeAffinity, if something else is used in place of affinity then it will fail
-		err = validateSTSForRack(found, &rackStateList[rackStateIndex])
+		err = validateSTSAffinityRulesForRack(found, &rackStateList[rackStateIndex])
+		if err != nil {
+			return err
+		}
+
+		err = validateSTSStorageForRack(found, &rackStateList[rackStateIndex])
 		if err != nil {
 			return err
 		}
@@ -274,7 +282,7 @@ func validateRackEnabledCluster(
 	return nil
 }
 
-func validateSTSForRack(found *appsv1.StatefulSet, rackState *RackState) error {
+func validateSTSAffinityRulesForRack(found *appsv1.StatefulSet, rackState *RackState) error {
 	rackLabelKey := "RackLabel"
 	hostKey := "kubernetes.io/hostname"
 	rackSelectorMap := map[string]string{}
@@ -345,6 +353,34 @@ func validateSTSForRack(found *appsv1.StatefulSet, rackState *RackState) error {
 	return nil
 }
 
+func validateSTSStorageForRack(found *appsv1.StatefulSet, rackState *RackState) error {
+	for rackVolIdx := range rackState.Rack.Storage.Volumes {
+		rackVol := rackState.Rack.Storage.Volumes[rackVolIdx]
+
+		if rackVol.Source.PersistentVolume == nil {
+			continue
+		}
+
+		var exists bool
+
+		for stsVolIdx := range found.Spec.VolumeClaimTemplates {
+			stsVol := found.Spec.VolumeClaimTemplates[stsVolIdx]
+
+			if rackVol.Name == stsVol.Name {
+				exists = true
+
+				break
+			}
+		}
+
+		if !exists {
+			return fmt.Errorf("rack volume %s not found in STS %s", rackVol.Name, found.Name)
+		}
+	}
+
+	return nil
+}
+
 func validateSTSPodsForRack(
 	k8sClient client.Client, ctx goctx.Context, found *appsv1.StatefulSet,
 	rackState *RackState,
@@ -376,10 +412,10 @@ func validateSTSPodsForRack(
 
 	for podIndex := range rackPodList.Items {
 		node := &corev1.Node{}
+
 		err := k8sClient.Get(
 			ctx, types.NamespacedName{Name: rackPodList.Items[podIndex].Spec.NodeName}, node,
 		)
-
 		if err != nil {
 			return err
 		}
@@ -429,7 +465,7 @@ func getConfiguredRackStateList(aeroCluster *asdbv1.AerospikeCluster) []RackStat
 }
 
 func getRackID(pod *corev1.Pod) (int, error) {
-	rack, ok := pod.ObjectMeta.Labels["aerospike.com/rack-id"]
+	rack, ok := pod.Labels["aerospike.com/rack-id"]
 	if !ok {
 		return 0, nil
 	}

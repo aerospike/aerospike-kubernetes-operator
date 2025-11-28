@@ -11,7 +11,7 @@ OPENSHIFT_VERSION="v4.10"
 # - use the VERSION as arg of the bundle target (e.g make bundle VERSION=0.0.2)
 # - use environment variables to overwrite this value (e.g export VERSION=0.0.2)
 # TODO: Version must be pulled from git tags
-VERSION ?= 4.1.1
+VERSION ?= 4.2.0-dev1
 
 # Platforms supported
 PLATFORMS ?= linux/amd64,linux/arm64
@@ -141,6 +141,18 @@ go-lint-fix: golangci-lint ## Run golangci-lint linter and perform fixes
 .PHONY: all-test
 all-test: manifests generate fmt vet setup-envtest cluster-test backup-service-test backup-test restore-test ## Run tests.
 
+.PHONY: pkg-test
+pkg-test: ## Run unit tests for pkg directory
+	@echo "Running pkg unit tests..."
+	go test -v -race -coverprofile=coverage.out ./pkg/...
+	@echo "\nCoverage Summary:"
+	@go tool cover -func=coverage.out | tail -1
+
+.PHONY: pkg-test-coverage
+pkg-test-coverage: pkg-test ## Run pkg unit tests and open coverage report in browser
+	@echo "Opening coverage report in browser..."
+	go tool cover -html=coverage.out
+
 .PHONY: cluster-test
 cluster-test: manifests generate fmt vet setup-envtest ## Run tests.
 	KUBEBUILDER_ASSETS="$(shell $(ENVTEST) use $(ENVTEST_K8S_VERSION) --bin-dir $(LOCALBIN) -p path)" cd $(shell pwd)/test/cluster; mkdir -p ../test-results; go run github.com/onsi/ginkgo/v2/ginkgo --grace-period=10m -p --procs=8 -coverprofile ascover.out -v -show-node-events --focus="$(FOCUS)" -timeout=5h0m0s --junit-report=../test-results/junit-cluster.xml  -- ${ARGS}
@@ -242,15 +254,15 @@ GOLANGCI_LINT = $(LOCALBIN)/golangci-lint
 
 ## Tool Versions
 KUSTOMIZE_VERSION ?= v5.6.0
-CONTROLLER_TOOLS_VERSION ?= v0.17.2
+CONTROLLER_TOOLS_VERSION ?= v0.18.0
 #ENVTEST_VERSION is the version of controller-runtime release branch to fetch the envtest setup script (i.e. release-0.20)
 ENVTEST_VERSION := $(shell go list -m -f "{{ .Version }}" sigs.k8s.io/controller-runtime | awk -F'[v.]' '{printf "release-%d.%d", $$2, $$3}')
 #ENVTEST_K8S_VERSION is the version of Kubernetes to use for setting up ENVTEST binaries (i.e. 1.31)
 ENVTEST_K8S_VERSION := $(shell go list -m -f "{{ .Version }}" k8s.io/api | awk -F'[v.]' '{printf "1.%d", $$3}')
-GOLANGCI_LINT_VERSION ?= v1.63.4
+GOLANGCI_LINT_VERSION ?= v2.6.1
 # Set the Operator SDK version to use. By default, what is installed on the system is used.
 # This is useful for CI or a project to utilize a specific version of the operator-sdk toolkit.
-OPERATOR_SDK_VERSION ?= v1.40.0
+OPERATOR_SDK_VERSION ?= v1.41.1
 
 .PHONY: kustomize
 kustomize: $(KUSTOMIZE) ## Download kustomize locally if necessary.
@@ -275,7 +287,7 @@ $(ENVTEST): $(LOCALBIN)
 .PHONY: golangci-lint
 golangci-lint: $(GOLANGCI_LINT) ## Download golangci-lint locally if necessary.
 $(GOLANGCI_LINT): $(LOCALBIN)
-	$(call go-install-tool,$(GOLANGCI_LINT),github.com/golangci/golangci-lint/cmd/golangci-lint,$(GOLANGCI_LINT_VERSION))
+	$(call go-install-tool,$(GOLANGCI_LINT),github.com/golangci/golangci-lint/v2/cmd/golangci-lint,$(GOLANGCI_LINT_VERSION))
 
 
 # go-install-tool will 'go install' any package with custom target and name of binary, if it doesn't exist
@@ -323,7 +335,7 @@ submodules: ## Pull and update git submodules recursively
 
 # Generate bundle manifests and metadata, then validate generated files.
 # For OpenShift bundles run
-# CHANNELS=stable DEFAULT_CHANNEL=stable OPENSHIFT_VERSION=v4.10 IMG=docker.io/aerospike/aerospike-kubernetes-operator-nightly:4.1.1 make bundle
+# CHANNELS=stable DEFAULT_CHANNEL=stable OPENSHIFT_VERSION=v4.10 IMG=docker.io/aerospike/aerospike-kubernetes-operator-nightly:4.2.0-dev1 make bundle
 .PHONY: bundle
 bundle: manifests kustomize operator-sdk
 	rm -rf $(ROOT_DIR)/bundle.Dockerfile $(BUNDLE_DIR)

@@ -919,7 +919,7 @@ func doTestNetworkPolicy(
 	Context("customInterface", func() {
 		// Skip this test when multiPodPerHost is true and enabledTLS true because Network Policy contains all
 		// customInterface type, so no nodePort service will be created hence no port mapping with k8s host node
-		if !(multiPodPerHost && enableTLS) {
+		if !multiPodPerHost || !enableTLS {
 			It(
 				"Should add all custom interface IPs in aerospike.conf file", func() {
 					clusterName := fmt.Sprintf("np-custom-interface-%d", GinkgoParallelProcess())
@@ -1073,12 +1073,12 @@ func validateNetworkPolicy(
 	ctx goctx.Context, desired *asdbv1.AerospikeCluster,
 ) error {
 	current := &asdbv1.AerospikeCluster{}
+
 	err := k8sClient.Get(
 		ctx,
 		types.NamespacedName{Name: desired.Name, Namespace: desired.Namespace},
 		current,
 	)
-
 	if err != nil {
 		return fmt.Errorf("error reading cluster spec:%v", err)
 	}
@@ -1318,10 +1318,10 @@ func getIPs(ctx goctx.Context, pod *corev1.Pod) (
 	hostExternalIP = hostInternalIP
 
 	k8sNode := &corev1.Node{}
+
 	err = k8sClient.Get(
 		ctx, types.NamespacedName{Name: pod.Spec.NodeName}, k8sNode,
 	)
-
 	if err != nil {
 		return "", "", "", fmt.Errorf(
 			"failed to get k8s node %s for pod %v: %v", pod.Spec.NodeName,

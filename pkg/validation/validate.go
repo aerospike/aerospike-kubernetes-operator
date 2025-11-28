@@ -632,31 +632,9 @@ func isValueUpdated(m1, m2 map[string]interface{}, key string) bool {
 	return !reflect.DeepEqual(val1, val2)
 }
 
-func validateSecurityConfigUpdate(oldConfig, newConfig map[string]interface{}) error {
-	ovflag, err := asdbv1.IsSecurityEnabled(oldConfig)
-	if err != nil {
-		return fmt.Errorf(
-			"failed to validate Security context of old aerospike conf: %w", err,
-		)
-	}
-
-	ivflag, err := asdbv1.IsSecurityEnabled(newConfig)
-	if err != nil {
-		return fmt.Errorf(
-			"failed to validate Security context of new aerospike conf: %w", err,
-		)
-	}
-
-	if !ivflag && ovflag {
-		return fmt.Errorf("cannot disable cluster security in running cluster")
-	}
-
-	return nil
-}
-
 // ValidateAerospikeConfigUpdate validates the update of aerospikeConfig.
 // It validates the schema, security, tls, network and namespace configurations for the newConfig
-// It also validates the update of security, tls, network and namespace configurations.
+// It also validates the update of tls, network and namespace configurations.
 func ValidateAerospikeConfigUpdate(
 	aslog logr.Logger, version string,
 	oldConfig, newConfig map[string]interface{}, clSize int,
@@ -671,12 +649,8 @@ func ValidateAerospikeConfigUpdate(
 }
 
 // ValidateAerospikeConfigUpdateWithoutSchema validates the update of aerospikeConfig except for the schema.
-// It validates the update of security, tls, network and namespace configurations.
+// It validates the update of tls, network and namespace configurations.
 func ValidateAerospikeConfigUpdateWithoutSchema(oldConfig, newConfig map[string]interface{}) error {
-	if err := validateSecurityConfigUpdate(oldConfig, newConfig); err != nil {
-		return err
-	}
-
 	if err := validateTLSUpdate(oldConfig, newConfig); err != nil {
 		return err
 	}
@@ -753,7 +727,7 @@ func validateTLSUpdate(oldConf, newConf map[string]interface{}) error {
 			oldCAFile, oldCAFileOK := oldTLSCAFileMap[tlsMap["name"].(string)]
 			_, oldCAPathOK := oldTLSCAPathMap[tlsMap["name"].(string)]
 
-			if (oldCAFileOK || oldCAPathOK) && !(newCAPathOK || newCAFileOK) {
+			if (oldCAFileOK || oldCAPathOK) && !newCAPathOK && !newCAFileOK {
 				return fmt.Errorf(
 					"cannot remove used `ca-file` or `ca-path` from tls",
 				)
@@ -884,7 +858,7 @@ func validateNetworkPortUpdate(oldConnectionConfig, newConnectionConfig map[stri
 	}
 
 	if (!newTLSPortOk && oldTLSPortOk) || (!newPortOk && oldPortOk) {
-		if !(oldPortOk && oldTLSPortOk) {
+		if !oldPortOk || !oldTLSPortOk {
 			return fmt.Errorf("cannot remove tls or non-tls configurations unless both configurations have been set initially")
 		}
 	}

@@ -252,7 +252,6 @@ func (r *SingleClusterReconciler) appendCACertFromFileOrPath(
 			return nil
 		},
 	)
-
 	if err != nil {
 		r.Log.Error(
 			err, "Failed to load CA certs from dir.", "ca-path", caPath,
@@ -285,7 +284,7 @@ func (r *SingleClusterReconciler) appendCACertFromSecret(
 	if secretSource.CaCertsSource != nil {
 		secretName := namespacedSecret(secretSource.CaCertsSource.SecretNamespace,
 			secretSource.CaCertsSource.SecretName, defaultNamespace)
-		if err := r.Client.Get(context.TODO(), secretName, found); err != nil {
+		if err := r.Get(context.TODO(), secretName, found); err != nil {
 			r.Log.Error(
 				err,
 				"Failed to get CA certificates secret, returning empty certPool",
@@ -304,7 +303,7 @@ func (r *SingleClusterReconciler) appendCACertFromSecret(
 		}
 	} else {
 		secretName := namespacedSecret(secretSource.SecretNamespace, secretSource.SecretName, defaultNamespace)
-		if err := r.Client.Get(context.TODO(), secretName, found); err != nil {
+		if err := r.Get(context.TODO(), secretName, found); err != nil {
 			r.Log.Error(
 				err,
 				"Failed to get secret certificates to the pool, returning empty certPool",
@@ -358,7 +357,7 @@ func (r *SingleClusterReconciler) loadCertAndKeyFromSecret(
 	found := &corev1.Secret{}
 
 	secretName := namespacedSecret(secretSource.SecretNamespace, secretSource.SecretName, defaultNamespace)
-	if err := r.Client.Get(context.TODO(), secretName, found); err != nil {
+	if err := r.Get(context.TODO(), secretName, found); err != nil {
 		r.Log.Info(
 			"Warn: Failed to get secret certificates to the pool", "err", err,
 		)

@@ -70,10 +70,11 @@ func (r *SingleBackupServiceReconciler) Reconcile() (result ctrl.Result, recErr 
 	if err := asdbv1beta1.ValidateBackupSvcVersion(r.aeroBackupService.Spec.Image); err != nil {
 		r.Log.Info(fmt.Sprintf("Skipping reconcile as backup service version is less than %s",
 			asdbv1beta1.BackupSvcMinSupportedVersion))
+
 		return reconcile.Result{}, nil
 	}
 
-	if !r.aeroBackupService.ObjectMeta.DeletionTimestamp.IsZero() {
+	if !r.aeroBackupService.DeletionTimestamp.IsZero() {
 		r.Log.Info("Deleted AerospikeBackupService")
 		r.Recorder.Eventf(
 			r.aeroBackupService, corev1.EventTypeNormal, "Deleted",
@@ -143,7 +144,7 @@ func (r *SingleBackupServiceReconciler) Reconcile() (result ctrl.Result, recErr 
 func (r *SingleBackupServiceReconciler) reconcileConfigMap() error {
 	cm := &corev1.ConfigMap{}
 
-	if err := r.Client.Get(context.TODO(),
+	if err := r.Get(context.TODO(),
 		types.NamespacedName{
 			Namespace: r.aeroBackupService.Namespace,
 			Name:      r.aeroBackupService.Name,
@@ -173,7 +174,7 @@ func (r *SingleBackupServiceReconciler) reconcileConfigMap() error {
 			return err
 		}
 
-		if err = r.Client.Create(
+		if err = r.Create(
 			context.TODO(), cm, common.CreateOption,
 		); err != nil {
 			return fmt.Errorf(
@@ -235,7 +236,7 @@ func (r *SingleBackupServiceReconciler) reconcileConfigMap() error {
 
 	cm.Data[asdbv1beta1.BackupServiceConfigYAML] = string(updatedConfig)
 
-	if err = r.Client.Update(
+	if err = r.Update(
 		context.TODO(), cm, common.UpdateOption,
 	); err != nil {
 		return fmt.Errorf(
@@ -282,7 +283,7 @@ func (r *SingleBackupServiceReconciler) reconcileDeployment() error {
 			return err
 		}
 
-		err = r.Client.Create(context.TODO(), deployment, common.CreateOption)
+		err = r.Create(context.TODO(), deployment, common.CreateOption)
 		if err != nil {
 			return fmt.Errorf("failed to deploy Backup service deployment: %v", err)
 		}
@@ -309,7 +310,7 @@ func (r *SingleBackupServiceReconciler) reconcileDeployment() error {
 
 	deployment.Spec = desiredDeployObj.Spec
 
-	if err = r.Client.Update(context.TODO(), deployment, common.UpdateOption); err != nil {
+	if err = r.Update(context.TODO(), deployment, common.UpdateOption); err != nil {
 		return fmt.Errorf("failed to update Backup service deployment: %v", err)
 	}
 
@@ -321,6 +322,7 @@ func (r *SingleBackupServiceReconciler) reconcileDeployment() error {
 	if oldResourceVersion != deployment.ResourceVersion {
 		r.Log.Info("Deployment spec is updated, will result in rolling restart of Backup service pod",
 			"deployment", getBackupServiceName(r.aeroBackupService))
+
 		return r.waitForDeploymentToBeReady()
 	}
 
@@ -335,7 +337,7 @@ func (r *SingleBackupServiceReconciler) reconcileDeployment() error {
 func (r *SingleBackupServiceReconciler) getBackupSvcDeployment() (*app.Deployment, error) {
 	var deployment app.Deployment
 
-	if err := r.Client.Get(context.TODO(),
+	if err := r.Get(context.TODO(),
 		types.NamespacedName{
 			Namespace: r.aeroBackupService.Namespace,
 			Name:      r.aeroBackupService.Name,
@@ -425,7 +427,7 @@ func (r *SingleBackupServiceReconciler) restartBackupSvcPod() error {
 	for idx := range podList.Items {
 		pod := &podList.Items[idx]
 
-		err = r.Client.Delete(context.TODO(), pod)
+		err = r.Delete(context.TODO(), pod)
 		if err != nil {
 			return err
 		}
@@ -507,9 +509,9 @@ func (r *SingleBackupServiceReconciler) updateDeploymentFromPodSpec(deploy *app.
 	defaultLabels := utils.LabelsForAerospikeBackupService(r.aeroBackupService.Name)
 	userDefinedLabels := r.aeroBackupService.Spec.PodSpec.ObjectMeta.Labels
 	mergedLabels := utils.MergeLabels(defaultLabels, userDefinedLabels)
-	deploy.Spec.Template.ObjectMeta.Labels = mergedLabels
+	deploy.Spec.Template.Labels = mergedLabels
 
-	deploy.Spec.Template.ObjectMeta.Annotations = r.aeroBackupService.Spec.PodSpec.ObjectMeta.Annotations
+	deploy.Spec.Template.Annotations = r.aeroBackupService.Spec.PodSpec.ObjectMeta.Annotations
 
 	deploy.Spec.Template.Spec.ImagePullSecrets = r.aeroBackupService.Spec.PodSpec.ImagePullSecrets
 
@@ -576,7 +578,7 @@ func (r *SingleBackupServiceReconciler) getVolumeAndMounts() ([]corev1.VolumeMou
 func (r *SingleBackupServiceReconciler) reconcileService() error {
 	var service corev1.Service
 
-	if err := r.Client.Get(context.TODO(),
+	if err := r.Get(context.TODO(),
 		types.NamespacedName{
 			Namespace: r.aeroBackupService.Namespace,
 			Name:      r.aeroBackupService.Name,
@@ -602,7 +604,7 @@ func (r *SingleBackupServiceReconciler) reconcileService() error {
 			return err
 		}
 
-		err = r.Client.Create(context.TODO(), svc, common.CreateOption)
+		err = r.Create(context.TODO(), svc, common.CreateOption)
 		if err != nil {
 			return fmt.Errorf("failed to create Backup Service: %v", err)
 		}
@@ -627,7 +629,7 @@ func (r *SingleBackupServiceReconciler) reconcileService() error {
 
 	service.Spec = svc.Spec
 
-	if err = r.Client.Update(context.TODO(), &service, common.UpdateOption); err != nil {
+	if err = r.Update(context.TODO(), &service, common.UpdateOption); err != nil {
 		return fmt.Errorf("failed to update Backup service: %v", err)
 	}
 

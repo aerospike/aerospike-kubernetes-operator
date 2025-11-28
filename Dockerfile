@@ -1,5 +1,5 @@
 # Build the manager binary
-FROM --platform=$BUILDPLATFORM golang:1.23 AS builder
+FROM --platform=$BUILDPLATFORM golang:1.24 AS builder
 
 # OS and Arch args
 ARG TARGETOS
@@ -27,7 +27,7 @@ RUN CGO_ENABLED=0 GOOS=${TARGETOS:-linux} GOARCH=${TARGETARCH} GO111MODULE=on go
 FROM registry.access.redhat.com/ubi9/ubi-minimal:latest
 
 # Version of Operator (build arg)
-ARG VERSION="4.1.1"
+ARG VERSION="4.2.0-dev1"
 
 # User to run container as
 ARG USER="root"

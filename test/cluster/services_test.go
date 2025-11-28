@@ -9,7 +9,9 @@ import (
 	. "github.com/onsi/gomega"
 	corev1 "k8s.io/api/core/v1"
 	"k8s.io/apimachinery/pkg/api/errors"
+	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/types"
+	"k8s.io/utils/ptr"
 
 	asdbv1 "github.com/aerospike/aerospike-kubernetes-operator/v4/api/v1"
 	"github.com/aerospike/aerospike-kubernetes-operator/v4/test"
@@ -131,6 +133,59 @@ var _ = Describe(
 
 				By("Validate LB service is deleted")
 				validateLoadBalancerSvcDeleted(aeroCluster)
+			},
+		)
+
+		It(
+			"Validate LB service skip deletion when created from outside", func() {
+				By("DeployCluster without LB")
+				clusterNamespacedName := test.GetNamespacedName(
+					"load-balancer-skip", namespace,
+				)
+				aeroCluster = createDummyAerospikeCluster(
+					clusterNamespacedName, 2,
+				)
+				// Deploy cluster without LoadBalancer spec
+				aeroCluster.Spec.SeedsFinderServices.LoadBalancer = nil
+				Expect(DeployCluster(k8sClient, ctx, aeroCluster)).ToNot(HaveOccurred())
+
+				By("Manually create external LB service (without owner reference)")
+				externalLBService := &corev1.Service{
+					ObjectMeta: metav1.ObjectMeta{
+						Name:      aeroCluster.Name + "-lb",
+						Namespace: aeroCluster.Namespace,
+						Labels: map[string]string{
+							"external": "true",
+						},
+					},
+					Spec: corev1.ServiceSpec{
+						Type: corev1.ServiceTypeLoadBalancer,
+						Selector: map[string]string{
+							asdbv1.AerospikeCustomResourceLabel: aeroCluster.Name,
+						},
+						Ports: []corev1.ServicePort{
+							{
+								Name: "aerospike",
+								Port: 3000,
+							},
+						},
+					},
+				}
+				// Create service without owner reference (simulating external creation)
+				Expect(k8sClient.Create(ctx, externalLBService)).ToNot(HaveOccurred())
+
+				defer func() {
+					Expect(k8sClient.Delete(ctx, externalLBService)).ToNot(HaveOccurred())
+
+				}()
+
+				validateLoadBalancerExists(aeroCluster)
+
+				// trigger reconcile by updating spec to disable PDB (any spec change would do)
+				aeroCluster.Spec.DisablePDB = ptr.To(false)
+				Expect(updateCluster(k8sClient, ctx, aeroCluster)).ToNot(HaveOccurred())
+
+				validateLoadBalancerExists(aeroCluster)
 			},
 		)
 
@@ -285,6 +340,7 @@ func validateLoadBalancerExists(aeroCluster *asdbv1.AerospikeCluster) {
 func validateLoadBalancerSvcDeleted(aeroCluster *asdbv1.AerospikeCluster) {
 	Eventually(func() error {
 		service := &corev1.Service{}
+
 		err := k8sClient.Get(goctx.TODO(), loadBalancerName(aeroCluster), service)
 		if errors.IsNotFound(err) {
 			return nil

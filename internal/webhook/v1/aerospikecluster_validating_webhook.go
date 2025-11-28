@@ -63,7 +63,16 @@ func (acv *AerospikeClusterCustomValidator) ValidateCreate(_ context.Context, ob
 
 	aslog.Info("Validate create")
 
-	return validate(aslog, aerospikeCluster)
+	warns, vErr := validate(aslog, aerospikeCluster)
+	if vErr != nil {
+		return warns, vErr
+	}
+
+	if err := validateAccessControlCreate(&aerospikeCluster.Spec); err != nil {
+		return warns, err
+	}
+
+	return warns, nil
 }
 
 // ValidateDelete implements webhook.CustomValidator so a webhook will be registered for the type
@@ -152,6 +161,10 @@ func (acv *AerospikeClusterCustomValidator) ValidateUpdate(_ context.Context, ol
 		return warnings, err
 	}
 
+	if err := validateAccessControlUpdate(&oldObject.Spec, &aerospikeCluster.Spec); err != nil {
+		return warnings, err
+	}
+
 	// Validate AerospikeConfig update
 	if err := validateAerospikeConfigUpdate(
 		aslog, aerospikeCluster.Spec.AerospikeConfig, oldObject.Spec.AerospikeConfig,
@@ -161,7 +174,16 @@ func (acv *AerospikeClusterCustomValidator) ValidateUpdate(_ context.Context, ol
 	}
 
 	// Validate RackConfig update
-	return warnings, validateRackUpdate(aslog, oldObject, aerospikeCluster)
+	if err := validateRackUpdate(aslog, oldObject, aerospikeCluster); err != nil {
+		return warnings, err
+	}
+
+	// Validate concurrent rack revisions limit
+	if err := validateConcurrentRackRevisions(oldObject, aerospikeCluster); err != nil {
+		return warnings, err
+	}
+
+	return warnings, nil
 }
 
 func validate(aslog logr.Logger, cluster *asdbv1.AerospikeCluster) (admission.Warnings, error) {
@@ -318,6 +340,47 @@ func validate(aslog logr.Logger, cluster *asdbv1.AerospikeCluster) (admission.Wa
 	}
 
 	return warnings, validateSCNamespaces(cluster)
+}
+
+func validateAccessControlCreate(
+	aerospikeClusterSpec *asdbv1.AerospikeClusterSpec,
+) error {
+	enabled, err := asdbv1.IsSecurityEnabled(aerospikeClusterSpec.AerospikeConfig.Value)
+	if err != nil {
+		return err
+	}
+
+	if !enabled && aerospikeClusterSpec.AerospikeAccessControl != nil {
+		// Security is disabled however access control is specified.
+		return fmt.Errorf("security is disabled but access control is specified")
+	}
+
+	return nil
+}
+
+func validateAccessControlUpdate(
+	oldSpec *asdbv1.AerospikeClusterSpec,
+	newSpec *asdbv1.AerospikeClusterSpec,
+) error {
+	if reflect.DeepEqual(oldSpec.AerospikeAccessControl, newSpec.AerospikeAccessControl) {
+		return nil
+	}
+
+	if newSpec.AerospikeAccessControl == nil && oldSpec.AerospikeAccessControl != nil {
+		return fmt.Errorf("aerospikeAccessControl cannot be removed once set")
+	}
+
+	desiredSecurityEnabled, err := asdbv1.IsSecurityEnabled(newSpec.AerospikeConfig.Value)
+	if err != nil {
+		return err
+	}
+
+	// ACL changes are only allowed when security is enabled
+	if !desiredSecurityEnabled {
+		return fmt.Errorf("aerospikeAccessControl cannot be updated when security is disabled")
+	}
+
+	return nil
 }
 
 func validateOperation(cluster *asdbv1.AerospikeCluster) error {
@@ -507,8 +570,7 @@ func validateRackUpdate(
 		return nil
 	}
 
-	// Old racks cannot be updated
-	// Also need to exclude a default rack with default rack ID. No need to check here,
+	// Need to exclude a default rack with default rack ID. No need to check here,
 	// user should not provide or update default rackID
 	// Also when user add new rackIDs old default will be removed by reconciler.
 	for rackIdx := range oldObj.Spec.RackConfig.Racks {
@@ -555,16 +617,73 @@ func validateRackUpdate(
 					oldStorage := oldRack.Storage
 					newStorage := newRack.Storage
 
-					// Volume storage update is not allowed but cascadeDelete policy is allowed
-					if err := validateStorageSpecChange(&oldStorage, &newStorage); err != nil {
-						return fmt.Errorf(
-							"rack storage config cannot be updated: %v", err,
-						)
+					// Storage update is allowed only when rack revision is changed.
+					// In case of the same rack revision, check for storage update
+					if oldRack.Revision == newRack.Revision {
+						if err := validateStorageSpecChange(&oldStorage, &newStorage); err != nil {
+							return fmt.Errorf(
+								"rack storage config cannot be updated: %v", err,
+							)
+						}
+					} else {
+						// Even if revision changed, validate against current status storage
+						// for the same rack ID to prevent "revision bump and rollback" bypass
+						var statusStorage *asdbv1.AerospikeStorageSpec
+
+						for idx := range oldObj.Status.RackConfig.Racks {
+							if oldObj.Status.RackConfig.Racks[idx].ID == newRack.ID &&
+								oldObj.Status.RackConfig.Racks[idx].Revision == newRack.Revision {
+								statusStorage = &oldObj.Status.RackConfig.Racks[idx].Storage
+								break
+							}
+						}
+
+						if statusStorage != nil {
+							if err := validateStorageSpecChange(statusStorage, &newStorage); err != nil {
+								return fmt.Errorf(
+									"old rack with same revision %s already exists with different storage "+
+										"config: %v", newRack.Revision, err)
+							}
+						}
 					}
 				}
 
 				break
 			}
+		}
+	}
+
+	return nil
+}
+
+func validateConcurrentRackRevisions(oldObj, newObj *asdbv1.AerospikeCluster) error {
+	// Group racks by ID to check for concurrent revisions across all three sources:
+	// 1. Old Status
+	// 2. Old Spec
+	// 3. New Spec
+	rackRevisions := make(map[int]sets.Set[string])
+
+	addRackRevision := func(racks []asdbv1.Rack) {
+		for idx := range racks {
+			if rackRevisions[racks[idx].ID] == nil {
+				rackRevisions[racks[idx].ID] = sets.New[string]()
+			}
+
+			rackRevisions[racks[idx].ID] = rackRevisions[racks[idx].ID].Insert(racks[idx].Revision)
+		}
+	}
+
+	addRackRevision(oldObj.Status.RackConfig.Racks)
+	addRackRevision(oldObj.Spec.RackConfig.Racks)
+	addRackRevision(newObj.Spec.RackConfig.Racks)
+
+	// Check if any rack has more than 2 concurrent revisions
+	for rackID, revisions := range rackRevisions {
+		if len(revisions) > 2 {
+			return fmt.Errorf("rack %d has %d concurrent revisions (%v). "+
+				"Maximum allowed is 2 (old + new). "+
+				"Wait for the current migration to complete before starting a new one",
+				rackID, len(revisions), revisions.UnsortedList())
 		}
 	}
 
@@ -979,26 +1098,6 @@ func validateNamespaceConfig(
 	return nil
 }
 
-func validateSecurityConfigUpdateFromStatus(newSpec, currentStatus *asdbv1.AerospikeConfigSpec) error {
-	if currentStatus != nil {
-		currentSecurityEnabled, err := asdbv1.IsSecurityEnabled(currentStatus.Value)
-		if err != nil {
-			return err
-		}
-
-		desiredSecurityEnabled, err := asdbv1.IsSecurityEnabled(newSpec.Value)
-		if err != nil {
-			return err
-		}
-
-		if currentSecurityEnabled && !desiredSecurityEnabled {
-			return fmt.Errorf("cannot disable cluster security in running cluster")
-		}
-	}
-
-	return nil
-}
-
 func validateAerospikeConfigUpdate(
 	aslog logr.Logger,
 	incomingSpec, outgoingSpec, currentStatus *asdbv1.AerospikeConfigSpec,
@@ -1009,10 +1108,6 @@ func validateAerospikeConfigUpdate(
 	oldConf := outgoingSpec.Value
 
 	if err := validation.ValidateAerospikeConfigUpdateWithoutSchema(oldConf, newConf); err != nil {
-		return err
-	}
-
-	if err := validateSecurityConfigUpdateFromStatus(incomingSpec, currentStatus); err != nil {
 		return err
 	}
 

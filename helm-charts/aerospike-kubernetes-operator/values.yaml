@@ -4,7 +4,7 @@ replicas: 2
 ## Operator image
 operatorImage:
   repository: aerospike/aerospike-kubernetes-operator
-  tag: 4.1.1
+  tag: 4.2.0-dev1
   pullPolicy: IfNotPresent
 
 ## In case the above image is pulled from a registry that requires
@@ -34,6 +34,9 @@ certs:
 ##  Operator configurations
 watchNamespaces: "default,aerospike"
 
+# Grace period to delete/recover failed pods (in seconds)
+failedPodGracePeriodSeconds: "60"
+
 # Registry used to pull aerospike-init image
 aerospikeKubernetesInitRegistry: "docker.io"
 
@@ -41,7 +44,7 @@ aerospikeKubernetesInitRegistry: "docker.io"
 aerospikeKubernetesInitRegistryNamespace: "aerospike"
 
 # Name and tag of aerospike-init image
-aerospikeKubernetesInitNameTag: "aerospike-kubernetes-init:2.3.1"
+aerospikeKubernetesInitNameTag: "aerospike-kubernetes-init:2.4.0-dev2"
 
 ## Resources - limits / requests
 resources:

@@ -23,7 +23,7 @@ import (
 	"github.com/aerospike/aerospike-kubernetes-operator/v4/test"
 )
 
-const BackupServiceImage = "aerospike/aerospike-backup-service:3.2.0"
+const BackupServiceImage = "aerospike/aerospike-backup-service:3.4.0"
 const BackupServiceVersion2Image = "aerospike/aerospike-backup-service:2.0.0"
 
 const (
@@ -47,6 +47,40 @@ func NewBackupService(backupServiceNamespaceName types.NamespacedName) (*asdbv1b
 	backupService.Spec.Config = runtime.RawExtension{
 		Raw: configBytes,
 	}
+
+	return backupService, nil
+}
+
+func NewBackupServiceWithTLSSecretMounts(backupServiceNamespaceName types.NamespacedName,
+) (*asdbv1beta1.AerospikeBackupService, error) {
+	configBytes, err := getBackupServiceConfBytes()
+	if err != nil {
+		return nil, err
+	}
+
+	backupService := newBackupServiceWithEmptyConfig(backupServiceNamespaceName)
+	backupService.Spec.Config = runtime.RawExtension{
+		Raw: configBytes,
+	}
+
+	backupService.Spec.SecretMounts = append(backupService.Spec.SecretMounts,
+		asdbv1beta1.SecretMount{
+			SecretName: test.TLSCacertSecretName,
+			VolumeMount: corev1.VolumeMount{
+				Name:      test.TLSCacertSecretName,
+				ReadOnly:  true,
+				MountPath: "/etc/aerospike/secret/cacerts",
+			},
+		},
+		asdbv1beta1.SecretMount{
+			SecretName: test.AerospikeSecretName,
+			VolumeMount: corev1.VolumeMount{
+				Name:      test.AerospikeSecretName,
+				ReadOnly:  true,
+				MountPath: "/etc/aerospike/secret",
+			},
+		},
+	)
 
 	return backupService, nil
 }
@@ -297,7 +331,6 @@ func DeleteBackupService(
 	// Wait for all the dependent resources to be garbage collected by k8s
 	for {
 		_, err := getBackupServiceObj(k8sClient, utils.GetNamespacedName(backService))
-
 		if err != nil {
 			if k8serrors.IsNotFound(err) {
 				break
