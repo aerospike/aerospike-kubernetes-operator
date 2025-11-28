@@ -720,7 +720,7 @@ func (r *SingleClusterReconciler) getExternalStorageMounts(
 	for _, volumeMount := range container.VolumeMounts {
 		volumeInSpec := getStorageVolume(rackState.Rack.Storage.Volumes, volumeMount.Name)
 		volumeInStatus := getStorageVolume(rackStatusVolumes, volumeMount.Name)
-		volumeInDefault := getContainerVolumeMounts(getDefaultAerospikeInitContainerVolumeMounts(), volumeMount.Name)
+		volumeInDefault := getContainerVolumeMount(getDefaultAerospikeInitContainerVolumeMounts(), volumeMount.Name)
 
 		if volumeInSpec == nil && volumeInStatus == nil && volumeInDefault == nil {
 			externalMounts = append(externalMounts, volumeMount)
@@ -769,11 +769,11 @@ func (r *SingleClusterReconciler) updateSTSPVStorage(
 			addVolumeMountInContainer(
 				volume.Name, initContainerAttachments,
 				st.Spec.Template.Spec.InitContainers,
-				initContainerVolumePathPrefix,
+				initContainerVolumePathPrefix, r.aeroCluster.Spec.AerospikeConfig,
 			)
 			addVolumeMountInContainer(
 				volume.Name, containerAttachments,
-				st.Spec.Template.Spec.Containers, "",
+				st.Spec.Template.Spec.Containers, "", r.aeroCluster.Spec.AerospikeConfig,
 			)
 		default:
 			// Should never come here
@@ -821,10 +821,11 @@ func (r *SingleClusterReconciler) updateSTSNonPVStorage(
 		addVolumeMountInContainer(
 			volume.Name, initContainerAttachments,
 			st.Spec.Template.Spec.InitContainers, initContainerVolumePathPrefix,
+			r.aeroCluster.Spec.AerospikeConfig,
 		)
 		addVolumeMountInContainer(
 			volume.Name, containerAttachments, st.Spec.Template.Spec.Containers,
-			"",
+			"", r.aeroCluster.Spec.AerospikeConfig,
 		)
 
 		// Add volume in statefulSet template
@@ -1478,7 +1479,7 @@ func getFinalVolumeAttachmentsForVolume(volume *asdbv1.VolumeSpec) (
 
 func addVolumeMountInContainer(
 	volumeName string, volumeAttachments []asdbv1.VolumeAttachment,
-	containers []corev1.Container, pathPrefix string,
+	containers []corev1.Container, pathPrefix string, aeroConf *asdbv1.AerospikeConfigSpec,
 ) {
 	var (
 		mountPath   string
@@ -1494,6 +1495,32 @@ func addVolumeMountInContainer(
 					mountPath = pathPrefix + volumeAttachment.Path
 				} else {
 					mountPath = volumeAttachment.Path
+				}
+
+				if container.Name == asdbv1.AerospikeServerContainerName && mountPath == asdbv1.GetWorkDirectory(*aeroConf) {
+					volumeMount1 := corev1.VolumeMount{
+						Name:             volumeName,
+						MountPath:        mountPath + "/smd",
+						ReadOnly:         asdbv1.GetBool(volumeAttachment.ReadOnly),
+						SubPath:          "smd",
+						SubPathExpr:      volumeAttachment.SubPathExpr,
+						MountPropagation: volumeAttachment.MountPropagation,
+					}
+
+					volumeMount2 := corev1.VolumeMount{
+						Name:             volumeName,
+						MountPath:        mountPath + "/usr",
+						ReadOnly:         asdbv1.GetBool(volumeAttachment.ReadOnly),
+						SubPath:          "usr",
+						SubPathExpr:      volumeAttachment.SubPathExpr,
+						MountPropagation: volumeAttachment.MountPropagation,
+					}
+
+					container.VolumeMounts = append(
+						container.VolumeMounts, volumeMount1, volumeMount2,
+					)
+
+					break
 				}
 
 				volumeMount = corev1.VolumeMount{

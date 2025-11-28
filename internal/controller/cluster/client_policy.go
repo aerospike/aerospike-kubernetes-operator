@@ -162,7 +162,7 @@ func (r *SingleClusterReconciler) getClientPolicy() *as.ClientPolicy {
 
 	statusToSpec, err := asdbv1.CopyStatusToSpec(&r.aeroCluster.Status.AerospikeClusterStatusSpec)
 	if err != nil {
-		r.Log.Error(err, "Failed to copy spec in status", "err", err)
+		r.Log.Error(err, "Failed to copy status in spec", "err", err)
 	}
 
 	user, pass, err := AerospikeAdminCredentials(
@@ -175,6 +175,11 @@ func (r *SingleClusterReconciler) getClientPolicy() *as.ClientPolicy {
 	policy.Timeout = time.Minute * 1
 	policy.User = user
 	policy.Password = pass
+
+	adminUser := asdbv1.GetAdminUserFromSpec(&r.aeroCluster.Spec)
+	if adminUser != nil && adminUser.AerospikeAuthMode == asdbv1.AerospikeAuthModePKIOnly {
+		policy.AuthMode = as.AuthModePKI
+	}
 
 	return policy
 }
