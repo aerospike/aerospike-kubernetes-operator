@@ -150,27 +150,8 @@ var _ = Describe(
 				Expect(DeployCluster(k8sClient, ctx, aeroCluster)).ToNot(HaveOccurred())
 
 				By("Manually create external LB service (without owner reference)")
-				externalLBService := &corev1.Service{
-					ObjectMeta: metav1.ObjectMeta{
-						Name:      aeroCluster.Name + "-lb",
-						Namespace: aeroCluster.Namespace,
-						Labels: map[string]string{
-							"external": "true",
-						},
-					},
-					Spec: corev1.ServiceSpec{
-						Type: corev1.ServiceTypeLoadBalancer,
-						Selector: map[string]string{
-							asdbv1.AerospikeCustomResourceLabel: aeroCluster.Name,
-						},
-						Ports: []corev1.ServicePort{
-							{
-								Name: "aerospike",
-								Port: 3000,
-							},
-						},
-					},
-				}
+				externalLBService := getLBServiceObj(aeroCluster.Name, aeroCluster.Namespace)
+
 				// Create service without owner reference (simulating external creation)
 				Expect(k8sClient.Create(ctx, externalLBService)).ToNot(HaveOccurred())
 
@@ -184,6 +165,50 @@ var _ = Describe(
 				// trigger reconcile by updating spec to disable PDB (any spec change would do)
 				aeroCluster.Spec.DisablePDB = ptr.To(false)
 				Expect(updateCluster(k8sClient, ctx, aeroCluster)).ToNot(HaveOccurred())
+
+				validateLoadBalancerExists(aeroCluster)
+			},
+		)
+
+		It(
+			"Validate create LB service failure when LB service already created from outside", func() {
+				clusterNamespacedName := test.GetNamespacedName(
+					"load-balancer-skip", namespace,
+				)
+				aeroCluster = createDummyAerospikeCluster(
+					clusterNamespacedName, 2,
+				)
+
+				// LB service deletion takes time, ensure it's deleted before creating a new LB service
+				validateLoadBalancerSvcDeleted(aeroCluster)
+
+				By("DeployCluster without LB")
+
+				By("Manually create external LB service (without owner reference)")
+				externalLBService := getLBServiceObj(aeroCluster.Name, aeroCluster.Namespace)
+
+				// Create service without owner reference (simulating external creation)
+				Expect(k8sClient.Create(ctx, externalLBService)).ToNot(HaveOccurred())
+
+				defer func() {
+					_ = k8sClient.Delete(ctx, externalLBService)
+
+				}()
+
+				aeroCluster.Spec.SeedsFinderServices.LoadBalancer = createLoadBalancer()
+
+				err := deployClusterWithTO(k8sClient, ctx, aeroCluster, retryInterval, shortRetry)
+				Expect(err).To(HaveOccurred())
+
+				By("Delete external LB service and retry cluster deployment")
+				Expect(k8sClient.Delete(ctx, externalLBService)).ToNot(HaveOccurred())
+
+				By("Wait for cluster to be created. It should pass as LB service is deleted")
+				err = waitForAerospikeCluster(
+					k8sClient, ctx, aeroCluster, int(aeroCluster.Spec.Size), retryInterval,
+					getTimeout(aeroCluster.Spec.Size), []asdbv1.AerospikeClusterPhase{asdbv1.AerospikeClusterCompleted},
+				)
+				Expect(err).ToNot(HaveOccurred())
 
 				validateLoadBalancerExists(aeroCluster)
 			},
@@ -348,4 +373,28 @@ func validateLoadBalancerSvcDeleted(aeroCluster *asdbv1.AerospikeCluster) {
 
 		return fmt.Errorf("service still exists: %v", err)
 	}, 5*time.Minute, 10*time.Second).Should(Succeed())
+}
+
+func getLBServiceObj(name, namespace string) *corev1.Service {
+	return &corev1.Service{
+		ObjectMeta: metav1.ObjectMeta{
+			Name:      name + "-lb",
+			Namespace: namespace,
+			Labels: map[string]string{
+				"external": "true",
+			},
+		},
+		Spec: corev1.ServiceSpec{
+			Type: corev1.ServiceTypeLoadBalancer,
+			Selector: map[string]string{
+				asdbv1.AerospikeCustomResourceLabel: name,
+			},
+			Ports: []corev1.ServicePort{
+				{
+					Name: "aerospike",
+					Port: 3000,
+				},
+			},
+		},
+	}
 }
