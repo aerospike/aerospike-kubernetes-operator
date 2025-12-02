@@ -142,11 +142,11 @@ spec:
                           description: |-
                             SecretName has secret info created by user. User needs to create this secret from password literal.
                             eg: kubectl create secret generic dev-db-secret --from-literal=password='password'
+                            required when AerospikeAuthMode is Internal
                           type: string
                       required:
                       - name
                       - roles
-                      - secretName
                       type: object
                     type: array
                     x-kubernetes-list-map-keys:
@@ -9253,11 +9253,11 @@ spec:
                           description: |-
                             SecretName has secret info created by user. User needs to create this secret from password literal.
                             eg: kubectl create secret generic dev-db-secret --from-literal=password='password'
+                            required when AerospikeAuthMode is Internal
                           type: string
                       required:
                       - name
                       - roles
-                      - secretName
                       type: object
                     type: array
                     x-kubernetes-list-map-keys:

@@ -599,7 +599,9 @@ type AerospikeUserSpec struct {
 
 	// SecretName has secret info created by user. User needs to create this secret from password literal.
 	// eg: kubectl create secret generic dev-db-secret --from-literal=password='password'
-	SecretName string `json:"secretName"`
+	// required when AerospikeAuthMode is Internal
+	// +optional
+	SecretName string `json:"secretName,omitempty"`
 
 	// Roles is the list of roles granted to the user.
 	// +listType=set
