@@ -173,7 +173,7 @@ var _ = Describe(
 		It(
 			"Validate create LB service failure when LB service already created from outside", func() {
 				clusterNamespacedName := test.GetNamespacedName(
-					"load-balancer-skip", namespace,
+					"load-balancer-failure", namespace,
 				)
 				aeroCluster = createDummyAerospikeCluster(
 					clusterNamespacedName, 2,
