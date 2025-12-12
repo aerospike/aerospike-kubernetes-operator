@@ -178,11 +178,6 @@ func (r *SingleClusterReconciler) reconcileSTSLoadBalancerSvc() error {
 		"name", utils.NamespacedName(service.Namespace, service.Name))
 
 	if !utils.IsOwnedBy(service, r.aeroCluster) {
-		r.Log.Info(
-			"LoadBalancer service is not created/owned by operator",
-			"name", utils.NamespacedName(service.Namespace, service.Name),
-		)
-
 		return fmt.Errorf(
 			"failed to update LoadBalancer service, service is not "+
 				"created/owned by operator. name: %s", utils.NamespacedName(service.Namespace, service.Name),

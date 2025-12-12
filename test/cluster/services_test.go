@@ -203,6 +203,8 @@ var _ = Describe(
 				By("Delete external LB service and retry cluster deployment")
 				Expect(k8sClient.Delete(ctx, externalLBService)).ToNot(HaveOccurred())
 
+				validateLoadBalancerSvcDeleted(aeroCluster)
+
 				By("Wait for cluster to be created. It should pass as LB service is deleted")
 				err = waitForAerospikeCluster(
 					k8sClient, ctx, aeroCluster, int(aeroCluster.Spec.Size), retryInterval,
