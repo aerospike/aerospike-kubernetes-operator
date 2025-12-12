@@ -39,13 +39,12 @@ import (
 	"sigs.k8s.io/controller-runtime/pkg/metrics"
 
 	asdbv1 "github.com/aerospike/aerospike-kubernetes-operator/v4/api/v1"
+	"github.com/aerospike/aerospike-kubernetes-operator/v4/pkg/utils"
 )
 
 const (
-	// EvictionBlockedAnnotation is the annotation set on pods when eviction is blocked
-	EvictionBlockedAnnotation = "aerospike.com/eviction-blocked"
-	EvictionAllowed           = "allowed"
-	EvictionBlocked           = "blocked"
+	EvictionAllowed = "allowed"
+	EvictionBlocked = "blocked"
 )
 
 var (
@@ -69,26 +68,11 @@ type EvictionWebhook struct {
 	Enable    bool
 }
 
-// isAerospikePod checks if the given pod is an Aerospike pod
-func (ew *EvictionWebhook) isAerospikePod(pod *corev1.Pod) bool {
-	labels := pod.GetLabels()
-	if labels == nil {
-		return false
-	}
-
-	// Check for Aerospike-specific labels
-	appLabel, hasAppLabel := labels[asdbv1.AerospikeAppLabel]
-	_, hasCustomResourceLabel := labels[asdbv1.AerospikeCustomResourceLabel]
-
-	// Pod is considered an Aerospike pod if it has both required labels
-	return hasAppLabel && appLabel == asdbv1.AerospikeAppLabelValue && hasCustomResourceLabel
-}
-
 // setEvictionBlockedAnnotation sets an annotation on the pod indicating eviction was blocked
 func (ew *EvictionWebhook) setEvictionBlockedAnnotation(ctx context.Context, pod *corev1.Pod) error {
 	// Check if annotation already exists, no update needed
 	if pod.Annotations != nil {
-		if _, exists := pod.Annotations[EvictionBlockedAnnotation]; exists {
+		if _, exists := pod.Annotations[asdbv1.EvictionBlockedAnnotation]; exists {
 			return nil
 		}
 	}
@@ -100,7 +84,7 @@ func (ew *EvictionWebhook) setEvictionBlockedAnnotation(ctx context.Context, pod
 		pod.Annotations = make(map[string]string)
 	}
 
-	pod.Annotations[EvictionBlockedAnnotation] = time.Now().Format(time.RFC3339)
+	pod.Annotations[asdbv1.EvictionBlockedAnnotation] = time.Now().Format(time.RFC3339)
 
 	return ew.Client.Patch(ctx, pod, patch)
 }
@@ -184,7 +168,7 @@ func (ew *EvictionWebhook) isWebhookEnabled() bool {
 
 // recordMetric records an eviction webhook metric if the webhook is enabled
 func (ew *EvictionWebhook) recordMetric(namespace, decision string) {
-	if ew.Enable {
+	if ew.isWebhookEnabled() {
 		evictionRequestsTotal.WithLabelValues(namespace, decision).Inc()
 	}
 }
@@ -227,7 +211,7 @@ func (ew *EvictionWebhook) processEvictionRequest(ctx context.Context, admission
 	}
 
 	// Check if this is an Aerospike pod (runtime filtering required for pods/eviction subresource)
-	if !ew.isAerospikePod(pod) {
+	if !utils.IsAerospikePod(pod) {
 		log.V(1).Info("Allowing eviction of non-Aerospike pod", "pod", eviction.Name)
 		ew.recordMetric(admissionReview.Request.Namespace, EvictionAllowed)
 

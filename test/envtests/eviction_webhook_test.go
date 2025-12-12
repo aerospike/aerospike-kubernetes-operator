@@ -18,6 +18,7 @@ import (
 var _ = Describe("Pod eviction webhook", func() {
 	var (
 		ctx = context.Background()
+		pod = &corev1.Pod{}
 	)
 
 	const (
@@ -25,11 +26,12 @@ var _ = Describe("Pod eviction webhook", func() {
 		testNs  = "default"
 	)
 
+	BeforeEach(func() {
+		pod = getDummyPodWithAerospikeLabels(podName, testNs)
+	})
+
 	AfterEach(func() {
 		By("cleaning up test pod")
-		pod := &corev1.Pod{
-			ObjectMeta: metav1.ObjectMeta{Name: podName, Namespace: testNs}}
-
 		_ = k8sClient.Delete(ctx, pod)
 
 		Eventually(func() bool {
@@ -44,9 +46,6 @@ var _ = Describe("Pod eviction webhook", func() {
 		})
 
 		It("should allow eviction of a pod", func() {
-			// Create a simple pod
-			pod := getDummyPodWithAerospikeLabels(podName, testNs)
-
 			By("creating a pod")
 			Expect(k8sClient.Create(ctx, pod)).To(Succeed())
 
@@ -81,10 +80,6 @@ var _ = Describe("Pod eviction webhook", func() {
 
 		Context("Aerospike pods", func() {
 			It("should block eviction of Aerospike pod", func() {
-				evictionWebhook.Enable = true
-				// Create a simple pod
-				pod := getDummyPodWithAerospikeLabels(podName, testNs)
-
 				By("creating a pod")
 				Expect(k8sClient.Create(ctx, pod)).To(Succeed())
 
@@ -104,7 +99,7 @@ var _ = Describe("Pod eviction webhook", func() {
 				Expect(err).To(HaveOccurred())
 				Expect(err.Error()).To(ContainSubstring("blocked by admission webhook"))
 
-				By("verifying annotation is set")
+				By("verifying if eviction-blocked annotation is set")
 				Eventually(func() bool {
 					_ = k8sClient.Get(ctx, client.ObjectKey{Name: podName, Namespace: testNs}, pod)
 					return pod.Annotations != nil && pod.Annotations[asdbv1.EvictionBlockedAnnotation] != ""
@@ -114,7 +109,6 @@ var _ = Describe("Pod eviction webhook", func() {
 
 		Context("Non-Aerospike pods", func() {
 			It("should allow eviction of pod without Aerospike labels", func() {
-				pod := getDummyPodWithAerospikeLabels(podName, testNs)
 				pod.Labels = map[string]string{
 					"app": "nginx",
 				}

@@ -46,7 +46,7 @@ func (r *AerospikeClusterReconciler) SetupWithManager(mgr ctrl.Manager) error {
 			return false
 		},
 		UpdateFunc: func(e event.UpdateEvent) bool {
-			// Check if the annotation was added in this update
+			// Check if the eviction-blocked annotation was added in this update
 			oldPod, ok := e.ObjectOld.(*corev1.Pod)
 			if !ok {
 				return false
@@ -57,7 +57,6 @@ func (r *AerospikeClusterReconciler) SetupWithManager(mgr ctrl.Manager) error {
 				return false
 			}
 
-			// Check if eviction-blocked annotation was added
 			_, hadAnnotation := oldPod.Annotations[asdbv1.EvictionBlockedAnnotation]
 			_, hasAnnotation := newPod.Annotations[asdbv1.EvictionBlockedAnnotation]
 
