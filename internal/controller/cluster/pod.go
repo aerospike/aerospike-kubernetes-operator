@@ -952,10 +952,7 @@ func (r *SingleClusterReconciler) getIgnorablePods(
 	ignorableRacks = append(ignorableRacks, getRacksToBeBlockedFromRoster(r.Log, configuredRacks)...)
 
 	for rackIdx := range ignorableRacks {
-		r.Log.Info("Rack to delete found", "rackID",
-			racksToDelete[rackIdx].ID, "rackRevision", racksToDelete[rackIdx].Revision)
-
-		rackPods, err := r.getRackPodList(ignorableRacks[rackIdx].ID, racksToDelete[rackIdx].Revision)
+		rackPods, err := r.getRackPodList(ignorableRacks[rackIdx].ID, ignorableRacks[rackIdx].Revision)
 		if err != nil {
 			return nil, err
 		}
