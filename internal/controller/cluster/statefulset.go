@@ -1454,19 +1454,23 @@ func getFinalVolumeAttachmentsForVolume(volume *asdbv1.VolumeSpec) (
 	containerAttachments = append(containerAttachments, volume.Sidecars...)
 
 	if volume.Aerospike != nil {
-		containerAttachments = append(
-			containerAttachments, asdbv1.VolumeAttachment{
-				ContainerName: asdbv1.AerospikeServerContainerName,
-				Path:          volume.Aerospike.Path,
-				AttachmentOptions: asdbv1.AttachmentOptions{
-					MountOptions: volume.Aerospike.MountOptions,
-				},
-			},
-		)
-
-		aerosikeInitContainerAttachment.AttachmentOptions = asdbv1.AttachmentOptions{
-			MountOptions: volume.Aerospike.MountOptions,
+		containerAttachment := asdbv1.VolumeAttachment{
+			ContainerName: asdbv1.AerospikeServerContainerName,
+			Path:          volume.Aerospike.Path,
 		}
+
+		if volume.Source.HostPath != nil {
+			containerAttachment.AttachmentOptions = asdbv1.AttachmentOptions{
+				MountOptions: volume.Aerospike.MountOptions,
+			}
+
+			aerosikeInitContainerAttachment.AttachmentOptions = asdbv1.AttachmentOptions{
+				MountOptions: volume.Aerospike.MountOptions,
+			}
+		}
+
+		containerAttachments = append(containerAttachments, containerAttachment)
+
 	}
 
 	initContainerAttachments = append(
