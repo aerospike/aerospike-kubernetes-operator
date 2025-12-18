@@ -48,6 +48,9 @@ done
 
 operator-sdk run bundle "$BUNDLE_IMG"  --namespace=test --install-mode MultiNamespace=$(echo "$namespaces" | tr " " ",") --timeout=10m0s
 
+echo "Enabling safe pod eviction in operator by patching the subscription"
+kubectl patch subscription $(kubectl get subscriptions -n operators -o jsonpath='{.items[?(@.metadata.name contains "aerospike")].metadata.name}') -n operators --type='merge' -p '{"spec":{"config":{"env":[{"name":"ENABLE_SAFE_POD_EVICTION","value":"true"}]}}}'
+
 for namespace in $namespaces; do
   ATTEMPT=0
   until [ $ATTEMPT -eq 15 ] || kubectl get csv -n "$namespace" | grep Succeeded; do
