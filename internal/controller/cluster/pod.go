@@ -946,12 +946,13 @@ func (r *SingleClusterReconciler) getIgnorablePods(
 	racksToDelete []asdbv1.Rack, configuredRacks []RackState, revisionChangedRacks map[int]revisionChangedRack,
 ) (sets.Set[string], error) {
 	ignorablePodNames := sets.Set[string]{}
+	ignorableRackIDs := sets.Set[int]{}
 
-	for rackIdx := range racksToDelete {
-		r.Log.Info("Rack to delete found", "rackID",
-			racksToDelete[rackIdx].ID, "rackRevision", racksToDelete[rackIdx].Revision)
+	ignorableRacks := append([]asdbv1.Rack{}, racksToDelete...)
+	ignorableRacks = append(ignorableRacks, getRacksToBeBlockedFromRoster(r.Log, configuredRacks)...)
 
-		rackPods, err := r.getRackPodList(racksToDelete[rackIdx].ID, racksToDelete[rackIdx].Revision)
+	for rackIdx := range ignorableRacks {
+		rackPods, err := r.getRackPodList(ignorableRacks[rackIdx].ID, ignorableRacks[rackIdx].Revision)
 		if err != nil {
 			return nil, err
 		}
@@ -962,6 +963,8 @@ func (r *SingleClusterReconciler) getIgnorablePods(
 				ignorablePodNames.Insert(pod.Name)
 			}
 		}
+
+		ignorableRackIDs.Insert(ignorableRacks[rackIdx].ID)
 	}
 
 	// Handle failed pods from old revisions of revision-changed racks
@@ -993,21 +996,22 @@ func (r *SingleClusterReconciler) getIgnorablePods(
 	}
 
 	for idx := range configuredRacks {
-		rack := &configuredRacks[idx]
+		rackState := &configuredRacks[idx]
+		if ignorableRackIDs.Has(rackState.Rack.ID) {
+			// Already handled above
+			continue
+		}
 
 		failedAllowed, _ := intstr.GetScaledValueFromIntOrPercent(
-			r.aeroCluster.Spec.RackConfig.MaxIgnorablePods, int(rack.Size), false,
+			r.aeroCluster.Spec.RackConfig.MaxIgnorablePods, int(rackState.Size), false,
 		)
 
-		podList, err := r.getRackPodList(rack.Rack.ID, rack.Rack.Revision)
+		podList, err := r.getRackPodList(rackState.Rack.ID, rackState.Rack.Revision)
 		if err != nil {
 			return nil, err
 		}
 
-		var (
-			failedPod  []string
-			pendingPod []string
-		)
+		var failedPod, pendingPod []string
 
 		for podIdx := range podList.Items {
 			pod := &podList.Items[podIdx]
@@ -1038,6 +1042,7 @@ func (r *SingleClusterReconciler) getIgnorablePods(
 
 	return ignorablePodNames, nil
 }
+
 func (r *SingleClusterReconciler) getPodsPVCList(
 	podNames []string, rackID int, rackRevision string,
 ) ([]corev1.PersistentVolumeClaim, error) {
