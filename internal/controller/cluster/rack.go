@@ -1332,6 +1332,8 @@ func (r *SingleClusterReconciler) isRackStorageUpdatedInAeroCluster(
 				Path:          volume.Aerospike.Path,
 			}
 
+			// Mount options (ReadOnly, SubPath, SubPathExpr, MountPropagation...) are only applicable
+			// for hostPath volumes in aerospike containers, so we only include them in that case
 			if volume.Source.HostPath != nil {
 				containerAttachment.AttachmentOptions = asdbv1.AttachmentOptions{
 					MountOptions: volume.Aerospike.MountOptions,

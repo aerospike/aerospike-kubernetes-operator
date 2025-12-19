@@ -1459,6 +1459,8 @@ func getFinalVolumeAttachmentsForVolume(volume *asdbv1.VolumeSpec) (
 			Path:          volume.Aerospike.Path,
 		}
 
+		// Mount options (ReadOnly, SubPath, SubPathExpr, MountPropagation...) are only
+		// applicable and enforced for hostPath volumes in aerospike containers.
 		if volume.Source.HostPath != nil {
 			containerAttachment.AttachmentOptions = asdbv1.AttachmentOptions{
 				MountOptions: volume.Aerospike.MountOptions,
@@ -1470,7 +1472,6 @@ func getFinalVolumeAttachmentsForVolume(volume *asdbv1.VolumeSpec) (
 		}
 
 		containerAttachments = append(containerAttachments, containerAttachment)
-
 	}
 
 	initContainerAttachments = append(
