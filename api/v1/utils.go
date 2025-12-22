@@ -88,6 +88,7 @@ const (
 	AerospikeRackIDLabel                           = "aerospike.com/rack-id"
 	AerospikeRackRevisionLabel                     = "aerospike.com/rack-revision"
 	AerospikeAPIVersionLabel                       = "aerospike.com/api-version"
+	EvictionBlockedAnnotation                      = "aerospike.com/eviction-blocked"
 	AerospikeAPIVersion                            = "v1"
 )
 

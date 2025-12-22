@@ -1464,6 +1464,15 @@ func ValidateAerospikeObjectMeta(aerospikeObjectMeta *asdbv1.AerospikeObjectMeta
 		}
 	}
 
+	for annotation := range aerospikeObjectMeta.Annotations {
+		if annotation == asdbv1.EvictionBlockedAnnotation {
+			return fmt.Errorf(
+				"annotation: %s is reserved by operator and shouldn't be specified by user",
+				annotation,
+			)
+		}
+	}
+
 	return nil
 }
 
