@@ -124,10 +124,10 @@ spec:
                         aerospikeAuthMode:
                           default: Internal
                           description: AerospikeAuthMode specifies an authentication
-                            mode (Internal or PKI) enabled for the user.
+                            mode (Internal or PKIOnly) enabled for the user.
                           enum:
                           - Internal
-                          - PKI
+                          - PKIOnly
                           type: string
                         name:
                           description: Name is the user's username.
@@ -9235,10 +9235,10 @@ spec:
                         aerospikeAuthMode:
                           default: Internal
                           description: AerospikeAuthMode specifies an authentication
-                            mode (Internal or PKI) enabled for the user.
+                            mode (Internal or PKIOnly) enabled for the user.
                           enum:
                           - Internal
-                          - PKI
+                          - PKIOnly
                           type: string
                         name:
                           description: Name is the user's username.

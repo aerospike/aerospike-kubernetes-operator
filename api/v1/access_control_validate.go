@@ -145,6 +145,11 @@ func GetUsersFromSpec(spec *AerospikeClusterSpec) map[string]AerospikeUserSpec {
 	return users
 }
 
+// FederalImage indicates if the image is a federal image.
+func FederalImage(image string) bool {
+	return strings.Contains(strings.ToLower(image), "federal")
+}
+
 // GetAdminUserFromSpec returns admin user from the spec.
 func GetAdminUserFromSpec(spec *AerospikeClusterSpec) *AerospikeUserSpec {
 	if spec.AerospikeAccessControl != nil {

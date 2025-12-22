@@ -176,9 +176,15 @@ func (r *SingleClusterReconciler) getClientPolicy() *as.ClientPolicy {
 	policy.User = user
 	policy.Password = pass
 
-	adminUser := asdbv1.GetAdminUserFromSpec(&r.aeroCluster.Spec)
-	if adminUser != nil && adminUser.AerospikeAuthMode == asdbv1.AerospikeAuthModePKIOnly {
-		policy.AuthMode = as.AuthModePKI
+	adminUser := asdbv1.GetAdminUserFromSpec(statusToSpec)
+	if adminUser != nil {
+		if adminUser.AerospikeAuthMode == asdbv1.AerospikeAuthModePKIOnly {
+			policy.AuthMode = as.AuthModePKI
+		}
+	} else {
+		if asdbv1.FederalImage(r.aeroCluster.Spec.Image) {
+			policy.AuthMode = as.AuthModePKI
+		}
 	}
 
 	return policy

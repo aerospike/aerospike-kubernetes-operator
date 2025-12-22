@@ -42,6 +42,11 @@ func AerospikeAdminCredentials(
 		return "", "", nil
 	}
 
+	// If federal image, return empty user and empty password.
+	if asdbv1.FederalImage(desiredState.Image) {
+		return "", "", nil
+	}
+
 	if currentState.AerospikeAccessControl == nil {
 		// We haven't yet set up access control. Use default password.
 		return asdbv1.AdminUsername, passwordProvider.GetDefaultPassword(desiredState), nil
@@ -55,6 +60,7 @@ func AerospikeAdminCredentials(
 		)
 	}
 
+	// If authMode PKIOnly is set for admin user in status, return admin user and empty password.
 	if adminUserSpec.AerospikeAuthMode == asdbv1.AerospikeAuthModePKIOnly {
 		return asdbv1.AdminUsername, "", nil
 	}
@@ -97,7 +103,7 @@ func (r *SingleClusterReconciler) reconcileAccessControl(
 	currentUsers := asdbv1.GetUsersFromSpec(currentState)
 
 	return r.reconcileUsers(
-		desiredUsers, currentUsers, passwordProvider, client, adminPolicy,
+		desiredUsers, currentUsers, passwordProvider, client, adminPolicy, r.aeroCluster.Spec.Image,
 	)
 }
 
@@ -168,7 +174,7 @@ func (r *SingleClusterReconciler) reconcileUsers(
 	desired map[string]asdbv1.AerospikeUserSpec,
 	current map[string]asdbv1.AerospikeUserSpec,
 	passwordProvider AerospikeUserPasswordProvider, client *as.Client,
-	adminPolicy as.AdminPolicy,
+	adminPolicy as.AdminPolicy, image string,
 ) error {
 	// List users in the cluster.
 	currentUserNames := make([]string, 0, len(current))
@@ -204,8 +210,16 @@ func (r *SingleClusterReconciler) reconcileUsers(
 
 		if (!found || currUserSpec.AerospikeAuthMode == asdbv1.AerospikeAuthModeInternal) &&
 			userSpec.AerospikeAuthMode == asdbv1.AerospikeAuthModePKIOnly {
-			nop := "nopassword"
-			password = &nop
+			if asdbv1.FederalImage(image) {
+				// If federal image and admin user, don't set password.
+				if userName != asdbv1.AdminUsername {
+					nop := ""
+					password = &nop
+				}
+			} else {
+				nop := "nopassword"
+				password = &nop
+			}
 		}
 
 		if userSpec.AerospikeAuthMode == asdbv1.AerospikeAuthModeInternal {
