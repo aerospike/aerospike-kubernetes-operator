@@ -266,19 +266,26 @@ func validate(aslog logr.Logger, cluster *asdbv1.AerospikeCluster) (admission.Wa
 		return warnings, err
 	}
 
-	if err := validateOperation(cluster); err != nil {
+	err = validateOperation(cluster)
+	if err != nil {
 		return warnings, err
 	}
 
 	// Storage should be validated before validating aerospikeConfig and fileStorage
-	if err := validateStorage(&cluster.Spec.Storage, &cluster.Spec.PodSpec); err != nil {
+	warns, err = validateStorage(&cluster.Spec.Storage, &cluster.Spec.PodSpec)
+	warnings = append(warnings, warns...)
+
+	if err != nil {
 		return warnings, err
 	}
 
 	for idx := range cluster.Spec.RackConfig.Racks {
 		rack := &cluster.Spec.RackConfig.Racks[idx]
 		// Storage should be validated before validating aerospikeConfig and fileStorage
-		if err := validateStorage(&rack.Storage, &cluster.Spec.PodSpec); err != nil {
+		warns, err = validateStorage(&rack.Storage, &cluster.Spec.PodSpec)
+		warnings = append(warnings, warns...)
+
+		if err != nil {
 			return warnings, err
 		}
 

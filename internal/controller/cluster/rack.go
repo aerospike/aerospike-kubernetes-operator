@@ -1344,12 +1344,20 @@ func (r *SingleClusterReconciler) isRackStorageUpdatedInAeroCluster(
 		containerAttachments = append(containerAttachments, volume.Sidecars...)
 
 		if volume.Aerospike != nil {
-			containerAttachments = append(
-				containerAttachments, asdbv1.VolumeAttachment{
-					ContainerName: asdbv1.AerospikeServerContainerName,
-					Path:          volume.Aerospike.Path,
-				},
-			)
+			containerAttachment := asdbv1.VolumeAttachment{
+				ContainerName: asdbv1.AerospikeServerContainerName,
+				Path:          volume.Aerospike.Path,
+			}
+
+			// Mount options (ReadOnly, SubPath, SubPathExpr, MountPropagation...) are only applicable
+			// for hostPath volumes in aerospike containers, so we only include them in that case
+			if volume.Source.HostPath != nil {
+				containerAttachment.AttachmentOptions = asdbv1.AttachmentOptions{
+					MountOptions: volume.Aerospike.MountOptions,
+				}
+			}
+
+			containerAttachments = append(containerAttachments, containerAttachment)
 		}
 
 		if r.isVolumeAttachmentAddedOrUpdated(
