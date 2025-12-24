@@ -3,6 +3,7 @@ package cluster
 import (
 	goctx "context"
 	"fmt"
+	"reflect"
 
 	. "github.com/onsi/ginkgo/v2"
 	. "github.com/onsi/gomega"
@@ -354,160 +355,137 @@ var _ = Describe(
 						)
 					},
 				)
-				Context(
-					"When testing mount options for hostPath volumes", func() {
-						It(
-							"Should validate all mount options (ReadOnly, SubPath, SubPathExpr, MountPropagation) "+
-								"in Aerospike server, init, and sidecar containers",
-							func() {
-								aeroCluster := createDummyAerospikeCluster(clusterNamespacedName, 2)
 
-								mountOptionsForContainers := []asdbv1.MountOptions{
-									{
-										ReadOnly:         ptr.To(true),
-										SubPath:          "subdir",
-										MountPropagation: &[]v1.MountPropagationMode{v1.MountPropagationHostToContainer}[0],
-									},
-									{
-										ReadOnly:         ptr.To(true),
-										SubPath:          "custom-init-subdir",
-										MountPropagation: &[]v1.MountPropagationMode{v1.MountPropagationHostToContainer}[0],
-									},
-									{
-										ReadOnly:         ptr.To(true),
-										SubPath:          "sidecar-subdir",
-										MountPropagation: &[]v1.MountPropagationMode{v1.MountPropagationHostToContainer}[0],
-									},
-								}
+				Context("When testing mount options for hostPath volumes", func() {
+					var (
+						aeroCluster               *asdbv1.AerospikeCluster
+						mountOptionsForContainers []asdbv1.MountOptions
+					)
 
-								// Add sidecar container to pod spec
-								aeroCluster.Spec.PodSpec.Sidecars = []v1.Container{
-									{
-										Name:  "sidecar-container",
-										Image: "busybox:latest",
-										Command: []string{
-											"/bin/sh",
-											"-c",
-											"sleep 1000",
-										},
-									},
-								}
+					BeforeEach(func() {
+						aeroCluster = createDummyAerospikeCluster(clusterNamespacedName, 2)
 
-								// Add init container to pod spec
-								aeroCluster.Spec.PodSpec.InitContainers = []v1.Container{
-									{
-										Name:  "custom-init-container",
-										Image: "busybox:latest",
-										Command: []string{
-											"/bin/sh",
-											"-c",
-											"sleep 10",
-										},
-									},
-								}
-
-								// Create a hostPath volume with all mount options for all container types
-								hostPathVolume := asdbv1.VolumeSpec{
-									Name: "hostpath-mount-options-test",
-									Source: asdbv1.VolumeSource{
-										HostPath: &v1.HostPathVolumeSource{
-											Path: "/tmp/aerospike-test",
-											Type: &[]v1.HostPathType{v1.HostPathDirectoryOrCreate}[0],
-										},
-									},
-									// Aerospike server container mount options
-									Aerospike: &asdbv1.AerospikeServerVolumeAttachment{
-										Path: "/mnt/hostpath-data",
-										AttachmentOptions: asdbv1.AttachmentOptions{
-											MountOptions: mountOptionsForContainers[0],
-										},
-									},
-									// Init container mount options
-									InitContainers: []asdbv1.VolumeAttachment{
-										{
-											ContainerName: "custom-init-container",
-											Path:          "/mnt/hostpath-custom-init",
-											AttachmentOptions: asdbv1.AttachmentOptions{
-												MountOptions: mountOptionsForContainers[1],
-											},
-										},
-									},
-									// Sidecar container mount options
-									Sidecars: []asdbv1.VolumeAttachment{
-										{
-											ContainerName: "sidecar-container",
-											Path:          "/mnt/hostpath-sidecar",
-											AttachmentOptions: asdbv1.AttachmentOptions{
-												MountOptions: mountOptionsForContainers[2],
-											},
-										},
-									},
-								}
-
-								aeroCluster.Spec.Storage.Volumes = append(aeroCluster.Spec.Storage.Volumes, hostPathVolume)
-
-								// Deploy the cluster
-								err := DeployCluster(k8sClient, ctx, aeroCluster)
-								Expect(err).ToNot(HaveOccurred())
-
-								// Test Aerospike server container mount options
-								podNamespacedName := test.GetNamespacedName(aeroCluster.Name+"-0-1", aeroCluster.Namespace)
-								updatedPod := &v1.Pod{}
-
-								err = k8sClient.Get(context.TODO(), podNamespacedName, updatedPod)
-								Expect(err).ToNot(HaveOccurred())
-
-								// Validate Aerospike server container mount options
-								aerospikeMountOptions, err := getVolumeMountOptions(updatedPod,
-									asdbv1.AerospikeServerContainerName, "hostpath-mount-options-test")
-								Expect(err).ToNot(HaveOccurred())
-
-								validateMountOptions(aerospikeMountOptions, &mountOptionsForContainers[0])
-
-								// Validate init container mount options
-								initMountOptions, err := getVolumeMountOptions(updatedPod,
-									asdbv1.AerospikeInitContainerName, "hostpath-mount-options-test")
-								Expect(err).ToNot(HaveOccurred())
-
-								validateMountOptions(initMountOptions, &mountOptionsForContainers[0])
-
-								// Validate custom init container mount options
-								customInitMountOptions, err := getVolumeMountOptions(updatedPod,
-									"custom-init-container", "hostpath-mount-options-test")
-								Expect(err).ToNot(HaveOccurred())
-
-								validateMountOptions(customInitMountOptions, &mountOptionsForContainers[1])
-
-								// Validate sidecar container mount options
-								sidecarMountOptions, err := getVolumeMountOptions(updatedPod,
-									"sidecar-container", "hostpath-mount-options-test")
-								Expect(err).ToNot(HaveOccurred())
-
-								validateMountOptions(sidecarMountOptions, &mountOptionsForContainers[2])
-
-								volumeIndex := len(aeroCluster.Spec.Storage.Volumes) - 1
-
-								// Try to set read-write for sidecar (should fail)
-								aeroCluster.Spec.Storage.Volumes[volumeIndex].Sidecars[0].
-									ReadOnly = ptr.To(false)
-
-								err = updateCluster(k8sClient, ctx, aeroCluster)
-								Expect(err).Should(HaveOccurred())
-
-								aeroCluster.Spec.Storage.Volumes[volumeIndex].InitContainers[0].
-									ReadOnly = ptr.To(false)
-
-								err = updateCluster(k8sClient, ctx, aeroCluster)
-								Expect(err).Should(HaveOccurred())
-
-								aeroCluster.Spec.Storage.Volumes[volumeIndex].Aerospike.ReadOnly = ptr.To(false)
-
-								err = updateCluster(k8sClient, ctx, aeroCluster)
-								Expect(err).Should(HaveOccurred())
+						// Setup common mount options for all container types
+						mountOptionsForContainers = []asdbv1.MountOptions{
+							{
+								ReadOnly:         ptr.To(true),
+								SubPath:          "subdir",
+								MountPropagation: &[]v1.MountPropagationMode{v1.MountPropagationHostToContainer}[0],
 							},
-						)
-					},
-				)
+							{
+								ReadOnly:         ptr.To(true),
+								SubPath:          "custom-init-subdir",
+								MountPropagation: &[]v1.MountPropagationMode{v1.MountPropagationHostToContainer}[0],
+							},
+							{
+								ReadOnly:         ptr.To(true),
+								SubPath:          "sidecar-subdir",
+								MountPropagation: &[]v1.MountPropagationMode{v1.MountPropagationHostToContainer}[0],
+							},
+						}
+
+						// Add sidecar and init containers
+						setupContainersForMountOptionsTest(aeroCluster)
+					})
+
+					It("Should validate all mount options in all containers for hostPath volume", func() {
+						By("Creating hostPath volume with mount options")
+						hostPathVolume := createHostPathVolumeWithMountOptions(mountOptionsForContainers)
+						aeroCluster.Spec.Storage.Volumes = append(aeroCluster.Spec.Storage.Volumes, hostPathVolume)
+
+						By("Deploying the cluster")
+						err := DeployCluster(k8sClient, ctx, aeroCluster)
+						Expect(err).ToNot(HaveOccurred())
+
+						By("Getting the deployed pod")
+						pod := getPodForMountOptionsTest(aeroCluster)
+
+						By("Validating Aerospike server container mount options")
+						validateContainerMountOptions(pod, asdbv1.AerospikeServerContainerName,
+							"hostpath-mount-options-test", &mountOptionsForContainers[0])
+
+						By("Validating init container mount options")
+						validateContainerMountOptions(pod, asdbv1.AerospikeInitContainerName,
+							"hostpath-mount-options-test", &mountOptionsForContainers[0])
+
+						By("Validating custom init container mount options")
+						validateContainerMountOptions(pod, "custom-init-container",
+							"hostpath-mount-options-test", &mountOptionsForContainers[1])
+
+						By("Validating sidecar container mount options")
+						validateContainerMountOptions(pod, "sidecar-container",
+							"hostpath-mount-options-test", &mountOptionsForContainers[2])
+
+						By("Verifying that changing ReadOnly to false is rejected for hostPath volumes")
+						volumeIndex := len(aeroCluster.Spec.Storage.Volumes) - 1
+
+						// Try to set read-write for sidecar (should fail)
+						aeroCluster.Spec.Storage.Volumes[volumeIndex].Sidecars[0].ReadOnly = ptr.To(false)
+						err = updateCluster(k8sClient, ctx, aeroCluster)
+						Expect(err).Should(HaveOccurred())
+
+						// Try to set read-write for init container (should fail)
+						aeroCluster.Spec.Storage.Volumes[volumeIndex].InitContainers[0].ReadOnly = ptr.To(false)
+						err = updateCluster(k8sClient, ctx, aeroCluster)
+						Expect(err).Should(HaveOccurred())
+
+						// Try to set read-write for Aerospike server (should fail)
+						aeroCluster.Spec.Storage.Volumes[volumeIndex].Aerospike.ReadOnly = ptr.To(false)
+						err = updateCluster(k8sClient, ctx, aeroCluster)
+						Expect(err).Should(HaveOccurred())
+					})
+
+					It("Should not reflect mount options in aerospike containers for non-hostPath volumes", func() {
+						By("Creating emptyDir volume with mount options")
+						emptyDirVolume := createEmptyDirVolumeWithMountOptions(mountOptionsForContainers)
+						aeroCluster.Spec.Storage.Volumes = append(aeroCluster.Spec.Storage.Volumes, emptyDirVolume)
+
+						By("Deploying the cluster")
+						err := DeployCluster(k8sClient, ctx, aeroCluster)
+						Expect(err).ToNot(HaveOccurred())
+
+						By("Getting the deployed pod")
+						pod := getPodForMountOptionsTest(aeroCluster)
+
+						By("Validating that Aerospike server container ignores mount options for emptyDir")
+						validateContainerMountOptions(pod, asdbv1.AerospikeServerContainerName,
+							"emptydir-mount-options-test", &asdbv1.MountOptions{})
+
+						By("Validating that init container ignores mount options for emptyDir")
+						validateContainerMountOptions(pod, asdbv1.AerospikeInitContainerName,
+							"emptydir-mount-options-test", &asdbv1.MountOptions{})
+
+						By("Updating mount options for non-hostPath volume in sidecrs (should succeed)")
+						volumeIndex := len(aeroCluster.Spec.Storage.Volumes) - 1
+
+						aeroCluster.Spec.Storage.Volumes[volumeIndex].Sidecars[0].ReadOnly = ptr.To(false)
+						aeroCluster.Spec.Storage.Volumes[volumeIndex].InitContainers[0].ReadOnly = ptr.To(false)
+						aeroCluster.Spec.Storage.Volumes[volumeIndex].Aerospike.ReadOnly = ptr.To(true)
+
+						err = updateCluster(k8sClient, ctx, aeroCluster)
+						Expect(err).ToNot(HaveOccurred())
+
+						By("Verifying mount options after update")
+						err = k8sClient.Get(context.TODO(), test.GetNamespacedName(aeroCluster.Name+"-0-1", aeroCluster.Namespace), pod)
+						Expect(err).ToNot(HaveOccurred())
+
+						// Aerospike server should still ignore mount options
+						validateContainerMountOptions(pod, asdbv1.AerospikeServerContainerName,
+							"emptydir-mount-options-test", &asdbv1.MountOptions{})
+
+						// Custom init container should respect ReadOnly change
+						expectedInitMountOptions := mountOptionsForContainers[1]
+						expectedInitMountOptions.ReadOnly = ptr.To(false)
+						validateContainerMountOptions(pod, "custom-init-container",
+							"emptydir-mount-options-test", &expectedInitMountOptions)
+
+						// Sidecar should respect ReadOnly change
+						expectedSidecarMountOptions := mountOptionsForContainers[2]
+						expectedSidecarMountOptions.ReadOnly = ptr.To(false)
+						validateContainerMountOptions(pod, "sidecar-container",
+							"emptydir-mount-options-test", &expectedSidecarMountOptions)
+					})
+				})
 			},
 		)
 
@@ -622,7 +600,6 @@ var _ = Describe(
 						)
 					},
 				)
-
 				Context(
 					"When using volume source", func() {
 						It(
@@ -750,13 +727,12 @@ var _ = Describe(
 				)
 			},
 		)
-
 	},
 )
 
 // getVolumeMountOptions retrieves mount options for a specific volume in a container
 //
-//nolint:unparam // generic function
+
 func getVolumeMountOptions(pod *v1.Pod, containerName,
 	volumeName string) (*asdbv1.MountOptions, error) {
 	// Check containers first (includes Aerospike server and sidecars)
@@ -850,5 +826,123 @@ func validateMountOptions(currentMountOptions, expectedMountOptions *asdbv1.Moun
 	Expect(asdbv1.GetBool(currentMountOptions.ReadOnly)).To(Equal(asdbv1.GetBool(expectedMountOptions.ReadOnly)))
 	Expect(currentMountOptions.SubPath).To(Equal(expectedMountOptions.SubPath))
 	Expect(currentMountOptions.SubPathExpr).To(BeEmpty())
-	Expect(*currentMountOptions.MountPropagation).To(Equal(*expectedMountOptions.MountPropagation))
+	Expect(reflect.DeepEqual(expectedMountOptions.MountPropagation, currentMountOptions.MountPropagation)).To(BeTrue())
+}
+
+func setupContainersForMountOptionsTest(aeroCluster *asdbv1.AerospikeCluster) {
+	// Add sidecar container
+	aeroCluster.Spec.PodSpec.Sidecars = []v1.Container{
+		{
+			Name:  "sidecar-container",
+			Image: "busybox:latest",
+			Command: []string{
+				"/bin/sh",
+				"-c",
+				"sleep 1000",
+			},
+		},
+	}
+
+	// Add init container
+	aeroCluster.Spec.PodSpec.InitContainers = []v1.Container{
+		{
+			Name:  "custom-init-container",
+			Image: "busybox:latest",
+			Command: []string{
+				"/bin/sh",
+				"-c",
+				"sleep 10",
+			},
+		},
+	}
+}
+
+func createHostPathVolumeWithMountOptions(mountOptions []asdbv1.MountOptions) asdbv1.VolumeSpec {
+	return asdbv1.VolumeSpec{
+		Name: "hostpath-mount-options-test",
+		Source: asdbv1.VolumeSource{
+			HostPath: &v1.HostPathVolumeSource{
+				Path: "/tmp/aerospike-test",
+				Type: &[]v1.HostPathType{v1.HostPathDirectoryOrCreate}[0],
+			},
+		},
+		Aerospike: &asdbv1.AerospikeServerVolumeAttachment{
+			Path: "/mnt/hostpath-data",
+			AttachmentOptions: asdbv1.AttachmentOptions{
+				MountOptions: mountOptions[0],
+			},
+		},
+		InitContainers: []asdbv1.VolumeAttachment{
+			{
+				ContainerName: "custom-init-container",
+				Path:          "/mnt/hostpath-custom-init",
+				AttachmentOptions: asdbv1.AttachmentOptions{
+					MountOptions: mountOptions[1],
+				},
+			},
+		},
+		Sidecars: []asdbv1.VolumeAttachment{
+			{
+				ContainerName: "sidecar-container",
+				Path:          "/mnt/hostpath-sidecar",
+				AttachmentOptions: asdbv1.AttachmentOptions{
+					MountOptions: mountOptions[2],
+				},
+			},
+		},
+	}
+}
+
+func createEmptyDirVolumeWithMountOptions(mountOptions []asdbv1.MountOptions) asdbv1.VolumeSpec {
+	return asdbv1.VolumeSpec{
+		Name: "emptydir-mount-options-test",
+		Source: asdbv1.VolumeSource{
+			EmptyDir: &v1.EmptyDirVolumeSource{},
+		},
+		Aerospike: &asdbv1.AerospikeServerVolumeAttachment{
+			Path: "/mnt/hostpath-data",
+			AttachmentOptions: asdbv1.AttachmentOptions{
+				MountOptions: mountOptions[0],
+			},
+		},
+		InitContainers: []asdbv1.VolumeAttachment{
+			{
+				ContainerName: "custom-init-container",
+				Path:          "/mnt/hostpath-custom-init",
+				AttachmentOptions: asdbv1.AttachmentOptions{
+					MountOptions: mountOptions[1],
+				},
+			},
+		},
+		Sidecars: []asdbv1.VolumeAttachment{
+			{
+				ContainerName: "sidecar-container",
+				Path:          "/mnt/hostpath-sidecar",
+				AttachmentOptions: asdbv1.AttachmentOptions{
+					MountOptions: mountOptions[2],
+				},
+			},
+		},
+	}
+}
+
+func getPodForMountOptionsTest(aeroCluster *asdbv1.AerospikeCluster) *v1.Pod {
+	podNamespacedName := test.GetNamespacedName(aeroCluster.Name+"-0-1", aeroCluster.Namespace)
+	pod := &v1.Pod{}
+	err := k8sClient.Get(context.TODO(), podNamespacedName, pod)
+	Expect(err).ToNot(HaveOccurred())
+
+	return pod
+}
+
+func validateContainerMountOptions(
+	pod *v1.Pod,
+	containerName string,
+	volumeName string,
+	expectedMountOptions *asdbv1.MountOptions,
+) {
+	mountOptions, err := getVolumeMountOptions(pod, containerName, volumeName)
+	Expect(err).ToNot(HaveOccurred(),
+		"Failed to get mount options for container %s and volume %s", containerName, volumeName)
+	validateMountOptions(mountOptions, expectedMountOptions)
 }

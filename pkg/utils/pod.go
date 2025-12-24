@@ -17,7 +17,7 @@ import (
 	"k8s.io/client-go/tools/remotecommand"
 	"k8s.io/kubectl/pkg/scheme"
 
-	v1 "github.com/aerospike/aerospike-kubernetes-operator/v4/api/v1"
+	asdbv1 "github.com/aerospike/aerospike-kubernetes-operator/v4/api/v1"
 )
 
 // PodHealthState represents the health state of a pod
@@ -354,7 +354,7 @@ func getPodFailureSince(pod *corev1.Pod) time.Time {
 // GetFailedPodGracePeriod reads FAILED_POD_GRACE_PERIOD_SECONDS env.
 // Defaults to 60 seconds (1 minute) if unset or invalid.
 func GetFailedPodGracePeriod() time.Duration {
-	sec := v1.DefaultFailedPodGracePeriodSeconds
+	sec := asdbv1.DefaultFailedPodGracePeriodSeconds
 
 	if v := os.Getenv("FAILED_POD_GRACE_PERIOD_SECONDS"); v != "" {
 		if parsed, err := strconv.Atoi(v); err == nil && parsed > 0 {
@@ -363,4 +363,19 @@ func GetFailedPodGracePeriod() time.Duration {
 	}
 
 	return time.Duration(sec) * time.Second
+}
+
+// IsAerospikePod checks if the given pod is an Aerospike pod
+func IsAerospikePod(pod *corev1.Pod) bool {
+	labels := pod.GetLabels()
+	if labels == nil {
+		return false
+	}
+
+	// Check for Aerospike-specific labels
+	appLabel, hasAppLabel := labels[asdbv1.AerospikeAppLabel]
+	_, hasCustomResourceLabel := labels[asdbv1.AerospikeCustomResourceLabel]
+
+	// Pod is considered an Aerospike pod if it has both required labels
+	return hasAppLabel && appLabel == asdbv1.AerospikeAppLabelValue && hasCustomResourceLabel
 }

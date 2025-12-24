@@ -282,19 +282,26 @@ func validate(aslog logr.Logger, cluster *asdbv1.AerospikeCluster) (admission.Wa
 		return warnings, err
 	}
 
-	if err := validateOperation(cluster); err != nil {
+	err = validateOperation(cluster)
+	if err != nil {
 		return warnings, err
 	}
 
 	// Storage should be validated before validating aerospikeConfig and fileStorage
-	if err := validateStorage(&cluster.Spec.Storage, &cluster.Spec.PodSpec); err != nil {
+	warns, err = validateStorage(&cluster.Spec.Storage, &cluster.Spec.PodSpec)
+	warnings = append(warnings, warns...)
+
+	if err != nil {
 		return warnings, err
 	}
 
 	for idx := range cluster.Spec.RackConfig.Racks {
 		rack := &cluster.Spec.RackConfig.Racks[idx]
 		// Storage should be validated before validating aerospikeConfig and fileStorage
-		if err := validateStorage(&rack.Storage, &cluster.Spec.PodSpec); err != nil {
+		warns, err = validateStorage(&rack.Storage, &cluster.Spec.PodSpec)
+		warnings = append(warnings, warns...)
+
+		if err != nil {
 			return warnings, err
 		}
 
@@ -594,6 +601,8 @@ func validateRackUpdate(
 		return nil
 	}
 
+	forceBlockFromRosterChanged := false
+
 	// Need to exclude a default rack with default rack ID. No need to check here,
 	// user should not provide or update default rackID
 	// Also when user add new rackIDs old default will be removed by reconciler.
@@ -672,9 +681,48 @@ func validateRackUpdate(
 					}
 				}
 
+				if oldRack.ForceBlockFromRoster != newRack.ForceBlockFromRoster {
+					forceBlockFromRosterChanged = true
+				}
+
 				break
 			}
 		}
+	}
+
+	return validateForceBlockFromRosterUpdate(forceBlockFromRosterChanged, newObj)
+}
+
+func validateForceBlockFromRosterUpdate(forceBlockFromRosterChanged bool, newObj *asdbv1.AerospikeCluster) error {
+	if forceBlockFromRosterChanged && newObj.Status.AerospikeConfig == nil {
+		return fmt.Errorf("status is not updated yet, cannot change forceBlockFromRoster in rack")
+	}
+
+	racksBlockedFromRosterInSpec := sets.New[int]()
+	racksBlockedFromRosterInStatus := sets.New[int]()
+
+	for idx := range newObj.Spec.RackConfig.Racks {
+		rack := newObj.Spec.RackConfig.Racks[idx]
+		if asdbv1.GetBool(rack.ForceBlockFromRoster) {
+			racksBlockedFromRosterInSpec.Insert(rack.ID)
+		}
+	}
+
+	for idx := range newObj.Status.RackConfig.Racks {
+		rack := newObj.Status.RackConfig.Racks[idx]
+		if asdbv1.GetBool(rack.ForceBlockFromRoster) {
+			racksBlockedFromRosterInStatus.Insert(rack.ID)
+		}
+	}
+
+	remainingRacks := len(newObj.Status.RackConfig.Racks) - len(racksBlockedFromRosterInSpec)
+	if err := validateRackCountConstraints(remainingRacks, &newObj.Spec.RackConfig); err != nil {
+		return err
+	}
+
+	desiredRacksBlockedFromRoster := racksBlockedFromRosterInSpec.Difference(racksBlockedFromRosterInStatus)
+	if len(desiredRacksBlockedFromRoster) > 1 {
+		return fmt.Errorf("the forceBlockFromRoster flag can be applied to only one rack at a time")
 	}
 
 	return nil
@@ -790,6 +838,8 @@ func validateRackConfig(_ logr.Logger, cluster *asdbv1.AerospikeCluster) error {
 	rackMap := map[int]bool{}
 	migrateFillDelaySet := sets.Set[int]{}
 
+	var racksBlockedFromRoster int
+
 	for idx := range cluster.Spec.RackConfig.Racks {
 		rack := &cluster.Spec.RackConfig.Racks[idx]
 		// Check for duplicate
@@ -836,6 +886,14 @@ func validateRackConfig(_ logr.Logger, cluster *asdbv1.AerospikeCluster) error {
 		}
 
 		migrateFillDelaySet.Insert(migrateFillDelay)
+
+		if asdbv1.GetBool(rack.ForceBlockFromRoster) {
+			racksBlockedFromRoster++
+		}
+	}
+
+	if err := validateRackBlockedFromRoster(racksBlockedFromRoster, cluster); err != nil {
+		return err
 	}
 
 	// If len of migrateFillDelaySet is more than 1, it means that different migrate-fill-delay is set across racks
@@ -861,6 +919,38 @@ func validateRackConfig(_ logr.Logger, cluster *asdbv1.AerospikeCluster) error {
 		}
 	}
 	// TODO: should not use batch if racks are less than replication-factor
+	return nil
+}
+
+func validateRackBlockedFromRoster(racksBlockedFromRoster int, cluster *asdbv1.AerospikeCluster) error {
+	if racksBlockedFromRoster > 0 {
+		if cluster.Spec.RackConfig.MaxIgnorablePods != nil {
+			return fmt.Errorf("forceBlockFromRoster cannot be used together with maxIgnorablePods")
+		}
+
+		if len(cluster.Spec.RosterNodeBlockList) > 0 {
+			return fmt.Errorf("forceBlockFromRoster cannot be used together with RosterNodeBlockList")
+		}
+
+		remainingRacks := len(cluster.Spec.RackConfig.Racks) - racksBlockedFromRoster
+		if err := validateRackCountConstraints(remainingRacks, &cluster.Spec.RackConfig); err != nil {
+			return err
+		}
+	}
+
+	return nil
+}
+
+func validateRackCountConstraints(remainingRacks int, rackConfig *asdbv1.RackConfig) error {
+	if remainingRacks <= 0 {
+		return fmt.Errorf("all racks cannot have forceBlockFromRoster enabled. At least one rack must remain in the roster")
+	}
+
+	if remainingRacks == 1 &&
+		(rackConfig.RollingUpdateBatchSize != nil || rackConfig.ScaleDownBatchSize != nil) {
+		return fmt.Errorf("with only one rack in roster, cannot use rollingUpdateBatchSize or scaleDownBatchSize")
+	}
+
 	return nil
 }
 
@@ -1477,6 +1567,15 @@ func ValidateAerospikeObjectMeta(aerospikeObjectMeta *asdbv1.AerospikeObjectMeta
 			return fmt.Errorf(
 				"label: %s is automatically defined by operator and shouldn't be specified by user",
 				label,
+			)
+		}
+	}
+
+	for annotation := range aerospikeObjectMeta.Annotations {
+		if annotation == asdbv1.EvictionBlockedAnnotation {
+			return fmt.Errorf(
+				"annotation: %s is reserved by operator and shouldn't be specified by user",
+				annotation,
 			)
 		}
 	}

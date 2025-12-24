@@ -1,6 +1,8 @@
 package cluster
 
 import (
+	"strconv"
+
 	gosets "github.com/deckarep/golang-set/v2"
 	"k8s.io/apimachinery/pkg/util/sets"
 
@@ -13,6 +15,14 @@ func (r *SingleClusterReconciler) getAndSetRoster(
 	policy *as.ClientPolicy, rosterNodeBlockList []string,
 	ignorablePodNames sets.Set[string],
 ) error {
+	rackStateList := getConfiguredRackStateList(r.aeroCluster)
+	blockedRackIDs := gosets.NewSet[string]()
+
+	blockedRacks := getRacksToBeBlockedFromRoster(r.Log, rackStateList)
+	for idx := range blockedRacks {
+		blockedRackIDs.Add(strconv.Itoa(blockedRacks[idx].ID))
+	}
+
 	allHostConns, err := r.newAllHostConnWithOption(ignorablePodNames)
 	if err != nil {
 		return err
@@ -23,7 +33,8 @@ func (r *SingleClusterReconciler) getAndSetRoster(
 		return err
 	}
 
-	return deployment.GetAndSetRoster(r.Log, allHostConns, policy, rosterNodeBlockList, ignorableNamespaces)
+	return deployment.ManageRoster(r.Log, allHostConns, policy, rosterNodeBlockList,
+		ignorableNamespaces, blockedRackIDs)
 }
 
 func (r *SingleClusterReconciler) validateSCClusterState(policy *as.ClientPolicy, ignorablePodNames sets.Set[string],

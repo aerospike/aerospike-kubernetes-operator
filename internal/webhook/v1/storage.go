@@ -8,6 +8,7 @@ import (
 	v1 "k8s.io/api/core/v1"
 	"k8s.io/apimachinery/pkg/util/sets"
 	"k8s.io/apimachinery/pkg/util/validation"
+	"sigs.k8s.io/controller-runtime/pkg/webhook/admission"
 
 	asdbv1 "github.com/aerospike/aerospike-kubernetes-operator/v4/api/v1"
 )
@@ -241,9 +242,10 @@ func getAerospikeStorageList(storage *asdbv1.AerospikeStorageSpec, onlyPV bool) 
 
 func validateStorage(
 	storage *asdbv1.AerospikeStorageSpec, podSpec *asdbv1.AerospikePodSpec,
-) error {
+) (admission.Warnings, error) {
+	var warnings admission.Warnings
 	if asdbv1.GetBool(storage.DeleteLocalStorageOnRestart) && len(storage.LocalStorageClasses) == 0 {
-		return fmt.Errorf(
+		return warnings, fmt.Errorf(
 			"localStorageClasses cannot be empty if deleteLocalStorageOnRestart is set",
 		)
 	}
@@ -264,20 +266,20 @@ func validateStorage(
 
 		errors := validation.IsDNS1123Label(volume.Name)
 		if len(errors) > 0 {
-			return fmt.Errorf(
+			return warnings, fmt.Errorf(
 				"invalid volume name '%s' - %v", volume.Name,
 				errors,
 			)
 		}
 
 		if err := validateStorageVolumeSource(volume); err != nil {
-			return fmt.Errorf(
+			return warnings, fmt.Errorf(
 				"invalid volumeSource: %v, volume %v", err, volume,
 			)
 		}
 
 		if volume.Aerospike == nil && len(volume.Sidecars) == 0 && len(volume.InitContainers) == 0 {
-			return fmt.Errorf(
+			return warnings, fmt.Errorf(
 				"invalid volume, no container provided to attach the volume. "+
 					"At least one of the following must be provided: volume.Aerospike, volume.Sidecars, "+
 					"volume.InitContainers, volume %v",
@@ -287,20 +289,32 @@ func validateStorage(
 
 		// Validate Aerospike attachment
 		if volume.Aerospike != nil {
+			if volume.Source.HostPath == nil {
+				// TODO: Remove this warning code when support for MO is added for server container.
+				// Warn if user has specified mount options in aerospike volume attachment
+				if !reflect.DeepEqual(volume.Aerospike.MountOptions, asdbv1.MountOptions{}) {
+					warnings = append(warnings, fmt.Sprintf(
+						"Mount options for volume '%s' will be ignored (only effective for hostPath). "+
+							"Non-default values may cause rolling restart in future versions.",
+						volume.Name,
+					))
+				}
+			}
+
 			if !filepath.IsAbs(volume.Aerospike.Path) {
-				return fmt.Errorf(
+				return warnings, fmt.Errorf(
 					"volume path should be absolute: %s", volume.Aerospike.Path,
 				)
 			}
 
 			if _, ok := reservedPaths[volume.Aerospike.Path]; ok {
-				return fmt.Errorf(
+				return warnings, fmt.Errorf(
 					"reserved volume path %s", volume.Aerospike.Path,
 				)
 			}
 
 			if _, ok := storagePaths[volume.Aerospike.Path]; ok {
-				return fmt.Errorf(
+				return warnings, fmt.Errorf(
 					"duplicate volume path %s", volume.Aerospike.Path,
 				)
 			}
@@ -312,14 +326,14 @@ func validateStorage(
 		if err := validateAttachment(
 			volume.Sidecars, getContainerNames(podSpec.Sidecars),
 		); err != nil {
-			return fmt.Errorf("sidecar volumeMount validation failed, %v", err)
+			return warnings, fmt.Errorf("sidecar volumeMount validation failed, %v", err)
 		}
 
 		// Validate initContainer attachments
 		if err := validateAttachment(
 			volume.InitContainers, getContainerNames(podSpec.InitContainers),
 		); err != nil {
-			return fmt.Errorf(
+			return warnings, fmt.Errorf(
 				"initContainer volumeMount validation failed, %v", err,
 			)
 		}
@@ -328,21 +342,21 @@ func validateStorage(
 		if err := validateContainerAttachmentPaths(
 			volume.Sidecars, sidecarAttachmentPaths,
 		); err != nil {
-			return err
+			return warnings, err
 		}
 
 		if err := validateContainerAttachmentPaths(
 			volume.InitContainers, initContainerAttachmentPaths,
 		); err != nil {
-			return err
+			return warnings, err
 		}
 
 		if err := validateHostPathVolumeReadOnly(volume); err != nil {
-			return err
+			return warnings, err
 		}
 	}
 
-	return nil
+	return warnings, nil
 }
 
 func validateContainerAttachmentPaths(

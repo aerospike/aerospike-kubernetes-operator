@@ -10,6 +10,7 @@ import (
 	"strings"
 
 	v1 "k8s.io/api/core/v1"
+	"k8s.io/apimachinery/pkg/labels"
 	k8Runtime "k8s.io/apimachinery/pkg/runtime"
 	utilRuntime "k8s.io/apimachinery/pkg/util/runtime"
 	"k8s.io/client-go/kubernetes"
@@ -35,12 +36,10 @@ import (
 	backupservice "github.com/aerospike/aerospike-kubernetes-operator/v4/internal/controller/backup-service"
 	"github.com/aerospike/aerospike-kubernetes-operator/v4/internal/controller/cluster"
 	"github.com/aerospike/aerospike-kubernetes-operator/v4/internal/controller/restore"
-	"github.com/aerospike/aerospike-kubernetes-operator/v4/pkg/configschema"
-
-	webhookv1beta1 "github.com/aerospike/aerospike-kubernetes-operator/v4/internal/webhook/v1beta1"
-	// +kubebuilder:scaffold:imports
-	// to ensure that exec-entrypoint and run can make use of them.
+	evictionwebhook "github.com/aerospike/aerospike-kubernetes-operator/v4/internal/webhook/eviction"
 	webhookv1 "github.com/aerospike/aerospike-kubernetes-operator/v4/internal/webhook/v1"
+	webhookv1beta1 "github.com/aerospike/aerospike-kubernetes-operator/v4/internal/webhook/v1beta1"
+	"github.com/aerospike/aerospike-kubernetes-operator/v4/pkg/configschema"
 	"github.com/aerospike/aerospike-management-lib/asconfig"
 )
 
@@ -226,6 +225,16 @@ func main() {
 		}
 	}
 
+	// Optimize memory: Only cache Aerospike-related pods
+	// In cluster-scoped mode, this prevents caching ALL pods in the cluster
+	cacheOptions.ByObject = map[crClient.Object]cache.ByObject{
+		&v1.Pod{}: {
+			Label: labels.SelectorFromSet(labels.Set{
+				asdbv1.AerospikeAppLabel: asdbv1.AerospikeAppLabelValue,
+			}),
+		},
+	}
+
 	kubeConfig := ctrl.GetConfigOrDie()
 
 	mgr, err := ctrl.NewManager(kubeConfig, ctrl.Options{
@@ -353,6 +362,9 @@ func main() {
 		setupLog.Error(err, "unable to create webhook", "webhook", "AerospikeRestore")
 		os.Exit(1)
 	}
+
+	// Setup eviction webhook
+	_ = evictionwebhook.SetupEvictionWebhookWithManager(mgr)
 
 	// +kubebuilder:scaffold:builder
 

@@ -177,6 +177,13 @@ func (r *SingleClusterReconciler) reconcileSTSLoadBalancerSvc() error {
 	r.Log.Info("LoadBalancer service already exist for cluster, checking for update",
 		"name", utils.NamespacedName(service.Namespace, service.Name))
 
+	if !utils.IsOwnedBy(service, r.aeroCluster) {
+		return fmt.Errorf(
+			"failed to update LoadBalancer service, service is not "+
+				"created/owned by operator. name: %s", utils.NamespacedName(service.Namespace, service.Name),
+		)
+	}
+
 	return r.updateLBService(service, &servicePort, loadBalancer)
 }
 

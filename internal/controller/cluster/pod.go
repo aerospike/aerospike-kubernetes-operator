@@ -86,7 +86,10 @@ func (r *SingleClusterReconciler) getRollingRestartTypeMap(rackState *RackState,
 	requiredConfHash := confMap.Data[aerospikeConfHashFileName]
 
 	// Fetching all pods requested for on-demand operations.
-	onDemandQuickRestarts, onDemandPodRestarts := r.podsToRestart()
+	onDemandQuickRestarts, onDemandPodRestarts, err := r.podsToRestart()
+	if err != nil {
+		return nil, nil, err
+	}
 
 	for idx := range pods {
 		if ignorablePodNames.Has(pods[idx].Name) {
@@ -703,6 +706,14 @@ func (r *SingleClusterReconciler) deletePodAndEnsureImageUpdated(
 }
 
 func (r *SingleClusterReconciler) isLocalPVCDeletionRequired(rackState *RackState, pod *corev1.Pod) bool {
+	// Check if pod is being deleted due to eviction
+	if _, hasEvictionBlocked := pod.Annotations[asdbv1.EvictionBlockedAnnotation]; hasEvictionBlocked {
+		r.Log.Info("Pod has eviction-blocked annotation, deleting corresponding local PVCs if any",
+			"podName", pod.Name)
+
+		return true
+	}
+
 	if utils.ContainsString(r.aeroCluster.Spec.K8sNodeBlockList, pod.Spec.NodeName) {
 		r.Log.Info("Pod found in blocked nodes list, deleting corresponding local PVCs if any",
 			"podName", pod.Name)
@@ -946,12 +957,13 @@ func (r *SingleClusterReconciler) getIgnorablePods(
 	racksToDelete []asdbv1.Rack, configuredRacks []RackState, revisionChangedRacks map[int]revisionChangedRack,
 ) (sets.Set[string], error) {
 	ignorablePodNames := sets.Set[string]{}
+	ignorableRackIDs := sets.Set[int]{}
 
-	for rackIdx := range racksToDelete {
-		r.Log.Info("Rack to delete found", "rackID",
-			racksToDelete[rackIdx].ID, "rackRevision", racksToDelete[rackIdx].Revision)
+	ignorableRacks := append([]asdbv1.Rack{}, racksToDelete...)
+	ignorableRacks = append(ignorableRacks, getRacksToBeBlockedFromRoster(r.Log, configuredRacks)...)
 
-		rackPods, err := r.getRackPodList(racksToDelete[rackIdx].ID, racksToDelete[rackIdx].Revision)
+	for rackIdx := range ignorableRacks {
+		rackPods, err := r.getRackPodList(ignorableRacks[rackIdx].ID, ignorableRacks[rackIdx].Revision)
 		if err != nil {
 			return nil, err
 		}
@@ -962,6 +974,8 @@ func (r *SingleClusterReconciler) getIgnorablePods(
 				ignorablePodNames.Insert(pod.Name)
 			}
 		}
+
+		ignorableRackIDs.Insert(ignorableRacks[rackIdx].ID)
 	}
 
 	// Handle failed pods from old revisions of revision-changed racks
@@ -993,21 +1007,22 @@ func (r *SingleClusterReconciler) getIgnorablePods(
 	}
 
 	for idx := range configuredRacks {
-		rack := &configuredRacks[idx]
+		rackState := &configuredRacks[idx]
+		if ignorableRackIDs.Has(rackState.Rack.ID) {
+			// Already handled above
+			continue
+		}
 
 		failedAllowed, _ := intstr.GetScaledValueFromIntOrPercent(
-			r.aeroCluster.Spec.RackConfig.MaxIgnorablePods, int(rack.Size), false,
+			r.aeroCluster.Spec.RackConfig.MaxIgnorablePods, int(rackState.Size), false,
 		)
 
-		podList, err := r.getRackPodList(rack.Rack.ID, rack.Rack.Revision)
+		podList, err := r.getRackPodList(rackState.Rack.ID, rackState.Rack.Revision)
 		if err != nil {
 			return nil, err
 		}
 
-		var (
-			failedPod  []string
-			pendingPod []string
-		)
+		var failedPod, pendingPod []string
 
 		for podIdx := range podList.Items {
 			pod := &podList.Items[podIdx]
@@ -1038,6 +1053,7 @@ func (r *SingleClusterReconciler) getIgnorablePods(
 
 	return ignorablePodNames, nil
 }
+
 func (r *SingleClusterReconciler) getPodsPVCList(
 	podNames []string, rackID int, rackRevision string,
 ) ([]corev1.PersistentVolumeClaim, error) {
@@ -1746,7 +1762,7 @@ func (r *SingleClusterReconciler) updateOperationStatus(restartedASDPodNames, re
 }
 
 // podsToRestart returns the pods that need to be restarted(quick/pod restart) based on the on-demand operations.
-func (r *SingleClusterReconciler) podsToRestart() (quickRestarts, podRestarts sets.Set[string]) {
+func (r *SingleClusterReconciler) podsToRestart() (quickRestarts, podRestarts sets.Set[string], err error) {
 	quickRestarts = make(sets.Set[string])
 	podRestarts = make(sets.Set[string])
 
@@ -1754,10 +1770,21 @@ func (r *SingleClusterReconciler) podsToRestart() (quickRestarts, podRestarts se
 	statusOps := r.aeroCluster.Status.Operations
 	allPodNames := asdbv1.GetAllPodNames(r.aeroCluster.Status.Pods)
 
-	// If no spec operations, no pods to restart
-	// If the Spec.Operations and Status.Operations are equal, no pods to restart.
+	// Check for pods with eviction-blocked annotation that need restart
+	evictionBlockedPods, err := r.getEvictionBlockedPods()
+	if err != nil {
+		return quickRestarts, podRestarts, err
+	}
+
+	if evictionBlockedPods.Len() > 0 {
+		// Add eviction-blocked pods to podRestarts (they need full pod restart)
+		podRestarts.Insert(evictionBlockedPods.UnsortedList()...)
+	}
+
+	// If no spec operations, only return eviction-blocked pods
+	// If the Spec.Operations and Status.Operations are equal, only return eviction-blocked pods
 	if len(specOps) == 0 || reflect.DeepEqual(specOps, statusOps) {
-		return quickRestarts, podRestarts
+		return quickRestarts, podRestarts, err
 	}
 
 	// Assuming only one operation is present in the spec.
@@ -1810,7 +1837,32 @@ func (r *SingleClusterReconciler) podsToRestart() (quickRestarts, podRestarts se
 		}
 	}
 
-	return quickRestarts, podRestarts
+	return quickRestarts, podRestarts, err
+}
+
+// getEvictionBlockedPods returns pods that have eviction-blocked annotation and need restart
+func (r *SingleClusterReconciler) getEvictionBlockedPods() (sets.Set[string], error) {
+	evictionBlockedPods := make(sets.Set[string])
+
+	// List all pods in the cluster namespace
+	pods, err := r.getClusterPodList()
+	if err != nil {
+		r.Log.Error(err, "Failed to list pods for eviction-blocked check")
+		return evictionBlockedPods, err
+	}
+
+	for idx := range pods.Items {
+		// Check if pod has eviction-blocked annotation
+		_, hasEvictionBlocked := pods.Items[idx].Annotations[asdbv1.EvictionBlockedAnnotation]
+		if !hasEvictionBlocked {
+			continue
+		}
+
+		// Add to eviction-blocked pods list
+		evictionBlockedPods.Insert(pods.Items[idx].Name)
+	}
+
+	return evictionBlockedPods, nil
 }
 
 // shouldSetMigrateFillDelay determines if migrate-fill-delay should be set.

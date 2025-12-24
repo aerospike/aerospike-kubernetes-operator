@@ -132,11 +132,6 @@ func (r *SingleClusterReconciler) createOrUpdatePDB() error {
 	// This will ensure that the cluster is not deployed with PDB created by the user.
 	// If PDB is not created by operator then no need to even match the spec
 	if !utils.IsOwnedBy(pdb, r.aeroCluster) {
-		r.Log.Info(
-			"PodDisruptionBudget is not created/owned by operator. Skipping update",
-			"name", getPDBNamespacedName(r.aeroCluster),
-		)
-
 		return fmt.Errorf(
 			"failed to update PodDisruptionBudget, PodDisruptionBudget is not "+
 				"created/owned by operator. name: %s", getPDBNamespacedName(r.aeroCluster),

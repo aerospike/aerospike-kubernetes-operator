@@ -5,8 +5,10 @@ import (
 
 	"github.com/go-logr/logr"
 	appsv1 "k8s.io/api/apps/v1"
+	corev1 "k8s.io/api/core/v1"
 	"k8s.io/apimachinery/pkg/api/errors"
 	k8sRuntime "k8s.io/apimachinery/pkg/runtime"
+	"k8s.io/apimachinery/pkg/types"
 	"k8s.io/client-go/kubernetes"
 	"k8s.io/client-go/rest"
 	"k8s.io/client-go/tools/record"
@@ -15,6 +17,7 @@ import (
 	"sigs.k8s.io/controller-runtime/pkg/client"
 	"sigs.k8s.io/controller-runtime/pkg/controller"
 	"sigs.k8s.io/controller-runtime/pkg/event"
+	"sigs.k8s.io/controller-runtime/pkg/handler"
 	"sigs.k8s.io/controller-runtime/pkg/predicate"
 	"sigs.k8s.io/controller-runtime/pkg/reconcile"
 
@@ -37,6 +40,51 @@ type AerospikeClusterReconciler struct {
 
 // SetupWithManager sets up the controller with the Manager
 func (r *AerospikeClusterReconciler) SetupWithManager(mgr ctrl.Manager) error {
+	// Create predicate for pods with eviction-blocked annotation
+	podPredicate := predicate.Funcs{
+		CreateFunc: func(e event.CreateEvent) bool {
+			return false
+		},
+		UpdateFunc: func(e event.UpdateEvent) bool {
+			// Check if the eviction-blocked annotation was added in this update
+			oldPod, ok := e.ObjectOld.(*corev1.Pod)
+			if !ok {
+				return false
+			}
+
+			newPod, ok := e.ObjectNew.(*corev1.Pod)
+			if !ok {
+				return false
+			}
+
+			_, hadAnnotation := oldPod.Annotations[asdbv1.EvictionBlockedAnnotation]
+			_, hasAnnotation := newPod.Annotations[asdbv1.EvictionBlockedAnnotation]
+
+			return !hadAnnotation && hasAnnotation
+		},
+		DeleteFunc: func(e event.DeleteEvent) bool {
+			return false // Don't process delete events
+		},
+	}
+
+	podMapFunc := handler.EnqueueRequestsFromMapFunc(func(ctx context.Context, obj client.Object) []reconcile.Request {
+		pod := obj.(*corev1.Pod)
+
+		clusterName, exists := pod.Labels[asdbv1.AerospikeCustomResourceLabel]
+		if !exists {
+			// Pod is not part of any AerospikeCluster, skip
+			return nil
+		}
+
+		// Reconcile request for the owning AerospikeCluster
+		return []reconcile.Request{{
+			NamespacedName: types.NamespacedName{
+				Namespace: pod.Namespace,
+				Name:      clusterName,
+			},
+		}}
+	})
+
 	return ctrl.NewControllerManagedBy(mgr).
 		For(&asdbv1.AerospikeCluster{}).
 		Owns(
@@ -51,12 +99,18 @@ func (r *AerospikeClusterReconciler) SetupWithManager(mgr ctrl.Manager) error {
 				},
 			),
 		).
+		Watches(
+			&corev1.Pod{},
+			podMapFunc,
+			builder.WithPredicates(podPredicate),
+		).
 		WithOptions(
 			controller.Options{
 				MaxConcurrentReconciles: common.MaxConcurrentReconciles,
 			},
 		).
-		WithEventFilter(predicate.Or(predicate.GenerationChangedPredicate{}, predicate.LabelChangedPredicate{})).
+		WithEventFilter(predicate.Or(predicate.GenerationChangedPredicate{}, predicate.LabelChangedPredicate{},
+			predicate.AnnotationChangedPredicate{})).
 		Complete(r)
 }
 
@@ -66,7 +120,7 @@ type RackState struct {
 	Size int32
 }
 
-// +kubebuilder:rbac:groups=core,resources=pods,verbs=get;list;watch;delete;update
+// +kubebuilder:rbac:groups=core,resources=pods,verbs=get;list;watch;delete;update;patch
 // +kubebuilder:rbac:groups=core,resources=pods/exec,verbs=create
 // +kubebuilder:rbac:groups=core,resources=services,verbs=get;list;watch;create;update;patch;delete
 // +kubebuilder:rbac:groups=core,resources=persistentvolumeclaims,verbs=get;list;watch;create;update;patch;delete

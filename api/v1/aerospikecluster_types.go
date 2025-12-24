@@ -551,6 +551,13 @@ type Rack struct { //nolint:govet // for readability
 	// Effective/operative PodSpec. The resultant is user input if specified else global PodSpec
 	// +optional
 	PodSpec RackPodSpec `json:"effectivePodSpec,omitempty"`
+
+	// ForceBlockFromRoster, when set to true, forcefully removes all nodes in this rack from the roster.
+	// With this enabled, the operator ignores unavailable or dead partitions and proceeds with node removal.
+	// Additionally, any failed or pending pods in this rack are also ignored during this process.
+	// It may result in data loss. Use this with caution.
+	// +optional
+	ForceBlockFromRoster *bool `json:"forceBlockFromRoster,omitempty"`
 }
 
 // ValidationPolicySpec controls validation of the Aerospike cluster resource.
