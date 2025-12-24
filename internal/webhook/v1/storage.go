@@ -5,7 +5,6 @@ import (
 	"path/filepath"
 	"reflect"
 
-	"github.com/aws/smithy-go/ptr"
 	v1 "k8s.io/api/core/v1"
 	"k8s.io/apimachinery/pkg/util/sets"
 	"k8s.io/apimachinery/pkg/util/validation"
@@ -291,39 +290,12 @@ func validateStorage(
 		// Validate Aerospike attachment
 		if volume.Aerospike != nil {
 			if volume.Source.HostPath == nil {
-				mountOptions := volume.Aerospike.MountOptions
-
-				// Apply defaults for nil values to compare against default mount options
-				// Default: ReadOnly=false, MountPropagation=None
-				normalizedOptions := asdbv1.MountOptions{
-					ReadOnly:         mountOptions.ReadOnly,
-					SubPath:          mountOptions.SubPath,
-					SubPathExpr:      mountOptions.SubPathExpr,
-					MountPropagation: mountOptions.MountPropagation,
-				}
-
-				// Apply defaults if not explicitly set
-				if normalizedOptions.ReadOnly == nil {
-					normalizedOptions.ReadOnly = ptr.Bool(false)
-				}
-
-				if normalizedOptions.MountPropagation == nil {
-					normalizedOptions.MountPropagation = (*v1.MountPropagationMode)(ptr.String(string(v1.MountPropagationNone)))
-				}
-
-				// Default mount options (what Kubernetes applies by default)
-				defaultMountOptions := asdbv1.MountOptions{
-					ReadOnly:         ptr.Bool(false),
-					MountPropagation: (*v1.MountPropagationMode)(ptr.String(string(v1.MountPropagationNone))),
-				}
-
-				// Only warn if user has specified non-default values
-				// This means ReadOnly=false or MountPropagation=None won't trigger a warning
-				// since they match the defaults
-				if !reflect.DeepEqual(normalizedOptions, defaultMountOptions) {
+				// TODO: Remove this warning code when support for MO is added for server container.
+				// Warn if user has specified mount options in aerospike volume attachment
+				if !reflect.DeepEqual(volume.Aerospike.MountOptions, asdbv1.MountOptions{}) {
 					warnings = append(warnings, fmt.Sprintf(
-						"Mount options for volume '%s' attached to Aerospike container will be ignored. "+
-							"Mount options are only effective for hostPath volumes. Current volume type does not support these options.",
+						"Mount options for volume '%s' will be ignored (only effective for hostPath). "+
+							"Non-default values may cause rolling restart in future versions.",
 						volume.Name,
 					))
 				}
