@@ -58,6 +58,17 @@ const (
 	Empty           DynamicConfigUpdateStatus = ""
 )
 
+// +kubebuilder:validation:Enum=Internal;PKIOnly
+type AerospikeAuthMode string
+
+const (
+	// AerospikeAuthModeInternal indicates that Internal auth mode is enabled for the user.
+	AerospikeAuthModeInternal AerospikeAuthMode = "Internal"
+	// AerospikeAuthModePKIOnly indicates that PKIOnly auth mode is enabled for the user.
+	// once set, it is not allowed to reverse back to Internal auth mode.
+	AerospikeAuthModePKIOnly AerospikeAuthMode = "PKIOnly"
+)
+
 // NOTE: json tags are required.  Any new fields you add must have json tags for the fields to be serialized.
 
 // AerospikeClusterSpec defines the desired state of AerospikeCluster
@@ -585,12 +596,19 @@ type AerospikeRoleSpec struct {
 
 // AerospikeUserSpec specifies an Aerospike database user, the secret name for the password and, associated roles.
 type AerospikeUserSpec struct {
+	// AerospikeAuthMode specifies an authentication mode (Internal or PKIOnly) enabled for the user.
+	// +kubebuilder:default:=Internal
+	// +optional
+	AerospikeAuthMode AerospikeAuthMode `json:"aerospikeAuthMode,omitempty"`
+
 	// Name is the user's username.
 	Name string `json:"name"`
 
 	// SecretName has secret info created by user. User needs to create this secret from password literal.
 	// eg: kubectl create secret generic dev-db-secret --from-literal=password='password'
-	SecretName string `json:"secretName"`
+	// required when AerospikeAuthMode is Internal
+	// +optional
+	SecretName string `json:"secretName,omitempty"`
 
 	// Roles is the list of roles granted to the user.
 	// +listType=set

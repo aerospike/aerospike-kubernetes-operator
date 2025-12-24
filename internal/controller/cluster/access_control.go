@@ -42,6 +42,11 @@ func AerospikeAdminCredentials(
 		return "", "", nil
 	}
 
+	// If federal image, return empty user and empty password.
+	if asdbv1.FederalImage(desiredState.Image) {
+		return "", "", nil
+	}
+
 	if currentState.AerospikeAccessControl == nil {
 		// We haven't yet set up access control. Use default password.
 		return asdbv1.AdminUsername, passwordProvider.GetDefaultPassword(desiredState), nil
@@ -53,6 +58,11 @@ func AerospikeAdminCredentials(
 		return "", "", fmt.Errorf(
 			"%s user missing in access control", asdbv1.AdminUsername,
 		)
+	}
+
+	// If authMode PKIOnly is set for admin user in status, return empty user and empty password.
+	if adminUserSpec.AerospikeAuthMode == asdbv1.AerospikeAuthModePKIOnly {
+		return "", "", nil
 	}
 
 	password, err := passwordProvider.Get(
@@ -93,7 +103,7 @@ func (r *SingleClusterReconciler) reconcileAccessControl(
 	currentUsers := asdbv1.GetUsersFromSpec(currentState)
 
 	return r.reconcileUsers(
-		desiredUsers, currentUsers, passwordProvider, client, adminPolicy,
+		desiredUsers, currentUsers, passwordProvider, client, adminPolicy, r.aeroCluster.Spec.Image,
 	)
 }
 
@@ -164,7 +174,7 @@ func (r *SingleClusterReconciler) reconcileUsers(
 	desired map[string]asdbv1.AerospikeUserSpec,
 	current map[string]asdbv1.AerospikeUserSpec,
 	passwordProvider AerospikeUserPasswordProvider, client *as.Client,
-	adminPolicy as.AdminPolicy,
+	adminPolicy as.AdminPolicy, image string,
 ) error {
 	// List users in the cluster.
 	currentUserNames := make([]string, 0, len(current))
@@ -194,14 +204,37 @@ func (r *SingleClusterReconciler) reconcileUsers(
 
 	for userName := range desired {
 		userSpec := desired[userName]
+		currUserSpec, found := current[userName]
 
-		password, err := passwordProvider.Get(userName, &userSpec)
-		if err != nil {
-			return err
+		var password *string
+
+		if (!found || currUserSpec.AerospikeAuthMode == asdbv1.AerospikeAuthModeInternal) &&
+			userSpec.AerospikeAuthMode == asdbv1.AerospikeAuthModePKIOnly {
+			if asdbv1.FederalImage(image) {
+				// If federal image and admin user, don't set password.
+				if userName != asdbv1.AdminUsername {
+					nop := ""
+					password = &nop
+				}
+			} else {
+				nop := "nopassword"
+				password = &nop
+			}
 		}
 
+		if userSpec.AerospikeAuthMode == asdbv1.AerospikeAuthModeInternal {
+			nop, err := passwordProvider.Get(userName, &userSpec)
+			if err != nil {
+				return err
+			}
+
+			password = &nop
+		}
+
+		r.Log.Info("user: ", "userName", userName, "password", password)
+
 		cmd := aerospikeUserCreateUpdate{
-			name: userName, password: &password, roles: userSpec.Roles,
+			name: userName, password: password, roles: userSpec.Roles,
 		}
 		if userName == asdbv1.AdminUsername {
 			adminUpdateCmd = &cmd

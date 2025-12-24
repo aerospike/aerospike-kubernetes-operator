@@ -121,6 +121,14 @@ spec:
                       description: AerospikeUserSpec specifies an Aerospike database
                         user, the secret name for the password and, associated roles.
                       properties:
+                        aerospikeAuthMode:
+                          default: Internal
+                          description: AerospikeAuthMode specifies an authentication
+                            mode (Internal or PKIOnly) enabled for the user.
+                          enum:
+                          - Internal
+                          - PKIOnly
+                          type: string
                         name:
                           description: Name is the user's username.
                           type: string
@@ -134,11 +142,11 @@ spec:
                           description: |-
                             SecretName has secret info created by user. User needs to create this secret from password literal.
                             eg: kubectl create secret generic dev-db-secret --from-literal=password='password'
+                            required when AerospikeAuthMode is Internal
                           type: string
                       required:
                       - name
                       - roles
-                      - secretName
                       type: object
                     type: array
                     x-kubernetes-list-map-keys:
@@ -9231,6 +9239,14 @@ spec:
                       description: AerospikeUserSpec specifies an Aerospike database
                         user, the secret name for the password and, associated roles.
                       properties:
+                        aerospikeAuthMode:
+                          default: Internal
+                          description: AerospikeAuthMode specifies an authentication
+                            mode (Internal or PKIOnly) enabled for the user.
+                          enum:
+                          - Internal
+                          - PKIOnly
+                          type: string
                         name:
                           description: Name is the user's username.
                           type: string
@@ -9244,11 +9260,11 @@ spec:
                           description: |-
                             SecretName has secret info created by user. User needs to create this secret from password literal.
                             eg: kubectl create secret generic dev-db-secret --from-literal=password='password'
+                            required when AerospikeAuthMode is Internal
                           type: string
                       required:
                       - name
                       - roles
-                      - secretName
                       type: object
                     type: array
                     x-kubernetes-list-map-keys:
