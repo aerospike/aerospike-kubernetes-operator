@@ -60,9 +60,9 @@ func AerospikeAdminCredentials(
 		)
 	}
 
-	// If authMode PKIOnly is set for admin user in status, return admin user and empty password.
+	// If authMode PKIOnly is set for admin user in status, return empty user and empty password.
 	if adminUserSpec.AerospikeAuthMode == asdbv1.AerospikeAuthModePKIOnly {
-		return asdbv1.AdminUsername, "", nil
+		return "", "", nil
 	}
 
 	password, err := passwordProvider.Get(
@@ -230,6 +230,8 @@ func (r *SingleClusterReconciler) reconcileUsers(
 
 			password = &nop
 		}
+
+		r.Log.Info("user: ", "userName", userName, "password", password)
 
 		cmd := aerospikeUserCreateUpdate{
 			name: userName, password: password, roles: userSpec.Roles,
