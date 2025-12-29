@@ -1434,7 +1434,7 @@ func validateImage(spec *asdbv1.AerospikeClusterSpec) error {
 		users := asdbv1.GetUsersFromSpec(spec)
 		for _, user := range users {
 			if user.AerospikeAuthMode != asdbv1.AerospikeAuthModePKIOnly {
-				return fmt.Errorf("AuthMode for user %s is required to be PKI with Federal image", user.Name)
+				return fmt.Errorf("AuthMode for all users is required to be PKI with Federal image")
 			}
 		}
 	}
@@ -1965,6 +1965,10 @@ func validateUsersAuthModeUpdate(oldUsers, newUsers []asdbv1.AerospikeUserSpec) 
 
 func validatePKIAuthSupport(spec *asdbv1.AerospikeClusterSpec) error {
 	if asdbv1.FederalImage(spec.Image) {
+		return nil
+	}
+
+	if spec.AerospikeAccessControl == nil {
 		return nil
 	}
 

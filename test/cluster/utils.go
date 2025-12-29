@@ -287,6 +287,19 @@ func getOperatorCert() *asdbv1.AerospikeOperatorClientCertSpec {
 	}
 }
 
+func getAdminOperatorCert() *asdbv1.AerospikeOperatorClientCertSpec {
+	return &asdbv1.AerospikeOperatorClientCertSpec{
+		AerospikeOperatorCertSource: asdbv1.AerospikeOperatorCertSource{
+			SecretCertSource: &asdbv1.AerospikeSecretCertSource{
+				SecretName:         "aerospike-secret",
+				CaCertsFilename:    "cacert.pem",
+				ClientCertFilename: "admin_fed_chain.pem",
+				ClientKeyFilename:  "admin_fed.key",
+			},
+		},
+	}
+}
+
 func getNetworkTLSConfig() map[string]interface{} {
 	return map[string]interface{}{
 		"service": map[string]interface{}{
@@ -310,6 +323,35 @@ func getNetworkTLSConfig() map[string]interface{} {
 				"name":      "aerospike-a-0.test-runner",
 				"cert-file": "/etc/aerospike/secret/svc_cluster_chain.pem",
 				"key-file":  "/etc/aerospike/secret/svc_key.pem",
+				"ca-file":   "/etc/aerospike/secret/cacert.pem",
+			},
+		},
+	}
+}
+
+func getAdminNetworkTLSConfig() map[string]interface{} {
+	return map[string]interface{}{
+		"service": map[string]interface{}{
+			"tls-name": "admin",
+			"tls-port": serviceTLSPort,
+			"port":     serviceNonTLSPort,
+		},
+		"fabric": map[string]interface{}{
+			"tls-name": "admin",
+			"tls-port": 3011,
+			"port":     3001,
+		},
+		"heartbeat": map[string]interface{}{
+			"tls-name": "admin",
+			"tls-port": 3012,
+			"port":     3002,
+		},
+
+		"tls": []interface{}{
+			map[string]interface{}{
+				"name":      "admin",
+				"cert-file": "/etc/aerospike/secret/admin_fed_chain.pem",
+				"key-file":  "/etc/aerospike/secret/admin_fed.key",
 				"ca-file":   "/etc/aerospike/secret/cacert.pem",
 			},
 		},

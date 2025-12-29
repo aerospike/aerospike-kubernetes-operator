@@ -231,8 +231,6 @@ func (r *SingleClusterReconciler) reconcileUsers(
 			password = &nop
 		}
 
-		r.Log.Info("user: ", "userName", userName, "password", password)
-
 		cmd := aerospikeUserCreateUpdate{
 			name: userName, password: password, roles: userSpec.Roles,
 		}

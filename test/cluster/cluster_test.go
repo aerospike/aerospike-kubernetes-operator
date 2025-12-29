@@ -2932,4 +2932,58 @@ func negativeUpdateClusterValidationTest(
 			)
 		},
 	)
+
+	Context("Validate ImageUpdate", func() {
+		clusterName := fmt.Sprintf("image-update-%d", GinkgoParallelProcess())
+		clusterNamespacedName := test.GetNamespacedName(
+			clusterName, namespace,
+		)
+
+		AfterEach(
+			func() {
+				aeroCluster := &asdbv1.AerospikeCluster{
+					ObjectMeta: metav1.ObjectMeta{
+						Name:      clusterNamespacedName.Name,
+						Namespace: clusterNamespacedName.Namespace,
+					},
+				}
+
+				Expect(DeleteCluster(k8sClient, ctx, aeroCluster)).ToNot(HaveOccurred())
+				Expect(CleanupPVC(k8sClient, aeroCluster.Namespace, aeroCluster.Name)).ToNot(HaveOccurred())
+			},
+		)
+
+		It("Should fail if server image updated from enterprise to federal", func() {
+			aeroCluster := CreateAdminTLSCluster(
+				clusterNamespacedName, 2,
+			)
+			err := DeployCluster(
+				k8sClient, ctx, aeroCluster,
+			)
+			Expect(err).ToNot(HaveOccurred())
+			By("Updating cluster image from enterprise to federal")
+
+			aeroCluster.Spec.Image = federalImage
+			err = updateCluster(k8sClient, ctx, aeroCluster)
+			Expect(err).To(HaveOccurred())
+			Expect(err.Error()).To(ContainSubstring("enterprise image cannot be updated to federal image"))
+		})
+
+		It("Should fail if server image updated from federal to enterprise", func() {
+			aeroCluster := CreateAdminTLSCluster(
+				clusterNamespacedName, 2,
+			)
+			aeroCluster.Spec.Image = federalImage
+			err := DeployCluster(
+				k8sClient, ctx, aeroCluster,
+			)
+			Expect(err).ToNot(HaveOccurred())
+			By("Updating cluster image from federal to enterprise")
+
+			aeroCluster.Spec.Image = latestImage
+			err = updateCluster(k8sClient, ctx, aeroCluster)
+			Expect(err).To(HaveOccurred())
+			Expect(err.Error()).To(ContainSubstring("federal image cannot be updated to enterprise image"))
+		})
+	})
 }

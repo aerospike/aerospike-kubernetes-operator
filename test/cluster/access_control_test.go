@@ -14,6 +14,7 @@ import (
 	. "github.com/onsi/ginkgo/v2"
 	. "github.com/onsi/gomega"
 	corev1 "k8s.io/api/core/v1"
+	"k8s.io/apimachinery/pkg/api/resource"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/types"
 	"k8s.io/apimachinery/pkg/util/intstr"
@@ -1537,8 +1538,9 @@ var _ = Describe(
 									},
 									Users: []asdbv1.AerospikeUserSpec{
 										{
-											Name:       "admin",
-											SecretName: test.AuthSecretNameForUpdate,
+											Name:              "admin",
+											AerospikeAuthMode: asdbv1.AerospikeAuthModeInternal,
+											SecretName:        test.AuthSecretNameForUpdate,
 											Roles: []string{
 												"sys-admin",
 												"user-admin",
@@ -1546,8 +1548,9 @@ var _ = Describe(
 										},
 
 										{
-											Name:       "profileUser",
-											SecretName: test.AuthSecretNameForUpdate,
+											Name:              "profileUser",
+											AerospikeAuthMode: asdbv1.AerospikeAuthModeInternal,
+											SecretName:        test.AuthSecretNameForUpdate,
 											Roles: []string{
 												"data-admin",
 												"read-write-udf",
@@ -1590,8 +1593,9 @@ var _ = Describe(
 									},
 									Users: []asdbv1.AerospikeUserSpec{
 										{
-											Name:       "admin",
-											SecretName: test.AuthSecretNameForUpdate,
+											Name:              "admin",
+											AerospikeAuthMode: asdbv1.AerospikeAuthModeInternal,
+											SecretName:        test.AuthSecretNameForUpdate,
 											Roles: []string{
 												"sys-admin",
 												"user-admin",
@@ -1599,8 +1603,9 @@ var _ = Describe(
 										},
 
 										{
-											Name:       "profileUser",
-											SecretName: test.AuthSecretNameForUpdate,
+											Name:              "profileUser",
+											AerospikeAuthMode: asdbv1.AerospikeAuthModeInternal,
+											SecretName:        test.AuthSecretNameForUpdate,
 											Roles: []string{
 												"data-admin",
 												"read-write-udf",
@@ -1688,8 +1693,9 @@ var _ = Describe(
 									},
 									Users: []asdbv1.AerospikeUserSpec{
 										{
-											Name:       "admin",
-											SecretName: test.AuthSecretNameForUpdate,
+											Name:              "admin",
+											AerospikeAuthMode: asdbv1.AerospikeAuthModeInternal,
+											SecretName:        test.AuthSecretNameForUpdate,
 											Roles: []string{
 												"sys-admin",
 												"user-admin",
@@ -1697,8 +1703,9 @@ var _ = Describe(
 										},
 
 										{
-											Name:       "profileUser",
-											SecretName: test.AuthSecretNameForUpdate,
+											Name:              "profileUser",
+											AerospikeAuthMode: asdbv1.AerospikeAuthModeInternal,
+											SecretName:        test.AuthSecretNameForUpdate,
 											Roles: []string{
 												"profiler",
 											},
@@ -1765,8 +1772,9 @@ var _ = Describe(
 									},
 									Users: []asdbv1.AerospikeUserSpec{
 										{
-											Name:       "admin",
-											SecretName: test.AuthSecretNameForUpdate,
+											Name:              "admin",
+											AerospikeAuthMode: asdbv1.AerospikeAuthModeInternal,
+											SecretName:        test.AuthSecretNameForUpdate,
 											Roles: []string{
 												"sys-admin",
 												"user-admin",
@@ -1774,8 +1782,9 @@ var _ = Describe(
 										},
 
 										{
-											Name:       "profileUser",
-											SecretName: test.AuthSecretNameForUpdate,
+											Name:              "profileUser",
+											AerospikeAuthMode: asdbv1.AerospikeAuthModeInternal,
+											SecretName:        test.AuthSecretNameForUpdate,
 											Roles: []string{
 												"profiler",
 											},
@@ -1847,8 +1856,9 @@ var _ = Describe(
 									},
 									Users: []asdbv1.AerospikeUserSpec{
 										{
-											Name:       "admin",
-											SecretName: test.AuthSecretName,
+											Name:              "admin",
+											AerospikeAuthMode: asdbv1.AerospikeAuthModeInternal,
+											SecretName:        test.AuthSecretName,
 											Roles: []string{
 												"sys-admin",
 												"user-admin",
@@ -1856,8 +1866,9 @@ var _ = Describe(
 										},
 
 										{
-											Name:       "profileUser",
-											SecretName: test.AuthSecretName,
+											Name:              "profileUser",
+											AerospikeAuthMode: asdbv1.AerospikeAuthModeInternal,
+											SecretName:        test.AuthSecretName,
 											Roles: []string{
 												"profiler",
 												"sys-admin",
@@ -1865,8 +1876,9 @@ var _ = Describe(
 										},
 
 										{
-											Name:       "userToDrop",
-											SecretName: test.AuthSecretName,
+											Name:              "userToDrop",
+											AerospikeAuthMode: asdbv1.AerospikeAuthModeInternal,
+											SecretName:        test.AuthSecretName,
 											Roles: []string{
 												"profiler",
 											},
@@ -1911,8 +1923,9 @@ var _ = Describe(
 									},
 									Users: []asdbv1.AerospikeUserSpec{
 										{
-											Name:       "admin",
-											SecretName: test.AuthSecretNameForUpdate,
+											Name:              "admin",
+											AerospikeAuthMode: asdbv1.AerospikeAuthModeInternal,
+											SecretName:        test.AuthSecretNameForUpdate,
 											Roles: []string{
 												"sys-admin",
 												"user-admin",
@@ -1920,8 +1933,9 @@ var _ = Describe(
 										},
 
 										{
-											Name:       "profileUser",
-											SecretName: test.AuthSecretNameForUpdate,
+											Name:              "profileUser",
+											AerospikeAuthMode: asdbv1.AerospikeAuthModeInternal,
+											SecretName:        test.AuthSecretNameForUpdate,
 											Roles: []string{
 												"data-admin",
 												"read-write-udf",
@@ -1966,8 +1980,9 @@ var _ = Describe(
 									},
 									Users: []asdbv1.AerospikeUserSpec{
 										{
-											Name:       "admin",
-											SecretName: test.AuthSecretName,
+											Name:              "admin",
+											AerospikeAuthMode: asdbv1.AerospikeAuthModeInternal,
+											SecretName:        test.AuthSecretName,
 											Roles: []string{
 												"sys-admin",
 												"user-admin",
@@ -1975,8 +1990,9 @@ var _ = Describe(
 										},
 
 										{
-											Name:       "profileUser",
-											SecretName: test.AuthSecretName,
+											Name:              "profileUser",
+											AerospikeAuthMode: asdbv1.AerospikeAuthModeInternal,
+											SecretName:        test.AuthSecretName,
 											Roles: []string{
 												"profiler",
 												"sys-admin",
@@ -1984,8 +2000,9 @@ var _ = Describe(
 										},
 
 										{
-											Name:       "userToDrop",
-											SecretName: test.AuthSecretName,
+											Name:              "userToDrop",
+											AerospikeAuthMode: asdbv1.AerospikeAuthModeInternal,
+											SecretName:        test.AuthSecretName,
 											Roles: []string{
 												"profiler",
 											},
@@ -2048,8 +2065,9 @@ var _ = Describe(
 									},
 									Users: []asdbv1.AerospikeUserSpec{
 										{
-											Name:       "admin",
-											SecretName: test.AuthSecretName,
+											Name:              "admin",
+											AerospikeAuthMode: asdbv1.AerospikeAuthModeInternal,
+											SecretName:        test.AuthSecretName,
 											Roles: []string{
 												"sys-admin",
 												"user-admin",
@@ -2057,8 +2075,9 @@ var _ = Describe(
 										},
 
 										{
-											Name:       "profileUser",
-											SecretName: test.AuthSecretName,
+											Name:              "profileUser",
+											AerospikeAuthMode: asdbv1.AerospikeAuthModeInternal,
+											SecretName:        test.AuthSecretName,
 											Roles: []string{
 												"profiler",
 												"sys-admin",
@@ -2066,8 +2085,9 @@ var _ = Describe(
 										},
 
 										{
-											Name:       "userToDrop",
-											SecretName: test.AuthSecretName,
+											Name:              "userToDrop",
+											AerospikeAuthMode: asdbv1.AerospikeAuthModeInternal,
+											SecretName:        test.AuthSecretName,
 											Roles: []string{
 												"profiler",
 											},
@@ -2090,6 +2110,351 @@ var _ = Describe(
 						)
 					},
 				)
+
+				Context("PKIOnly AuthMode", func() {
+					clusterName := fmt.Sprintf("ac-pkionly-%d", GinkgoParallelProcess())
+					clusterNamespacedName := test.GetNamespacedName(
+						clusterName, namespace,
+					)
+
+					AfterEach(
+						func() {
+							aeroCluster := &asdbv1.AerospikeCluster{
+								ObjectMeta: metav1.ObjectMeta{
+									Name:      clusterNamespacedName.Name,
+									Namespace: clusterNamespacedName.Namespace,
+								},
+							}
+
+							Expect(DeleteCluster(k8sClient, ctx, aeroCluster)).ToNot(HaveOccurred())
+							Expect(CleanupPVC(k8sClient, aeroCluster.Namespace, aeroCluster.Name)).ToNot(HaveOccurred())
+						},
+					)
+					Context("when doing invalid operations", func() {
+						It("Should fail if PKIOnly auth mode is set for aerospike enterprise image below 8.1.0.0", func() {
+							accessControl := &asdbv1.AerospikeAccessControlSpec{
+								Users: []asdbv1.AerospikeUserSpec{
+									{
+										Name:              "admin",
+										AerospikeAuthMode: asdbv1.AerospikeAuthModePKIOnly,
+										Roles: []string{
+											"sys-admin",
+											"user-admin",
+										},
+									},
+								},
+							}
+
+							aeroCluster := getTLSAerospikeClusterSpecWithAccessControl(
+								clusterNamespacedName, accessControl,
+							)
+							aeroCluster.Spec.Image = pre810Image
+							err := DeployCluster(
+								k8sClient, ctx, aeroCluster,
+							)
+							Expect(err).To(HaveOccurred())
+							Expect(err.Error()).To(ContainSubstring("PKI authentication requires Aerospike server version 8.1.0.0 or later"))
+						})
+
+						It("Should fail if server image is federal and auth mode of all users are not set to PKIOnly", func() {
+							accessControl := &asdbv1.AerospikeAccessControlSpec{
+								Users: []asdbv1.AerospikeUserSpec{
+									{
+										Name:              "admin",
+										AerospikeAuthMode: asdbv1.AerospikeAuthModePKIOnly,
+										Roles: []string{
+											"sys-admin",
+											"user-admin",
+										},
+									},
+									{
+										Name:              "user01",
+										AerospikeAuthMode: asdbv1.AerospikeAuthModeInternal,
+										SecretName:        test.AuthSecretName,
+										Roles: []string{
+											"sys-admin",
+											"user-admin",
+										},
+									},
+								},
+							}
+
+							aeroCluster := getTLSAerospikeClusterSpecWithAccessControl(
+								clusterNamespacedName, accessControl,
+							)
+							aeroCluster.Spec.Image = federalImage
+							err := DeployCluster(
+								k8sClient, ctx, aeroCluster,
+							)
+							Expect(err).To(HaveOccurred())
+							Expect(err.Error()).To(ContainSubstring("AuthMode for all users is required to be PKI with Federal image"))
+						})
+
+						It("Should fail if any user's auth mode change from PKIOnly to Internal", func() {
+							accessControl := &asdbv1.AerospikeAccessControlSpec{
+								Users: []asdbv1.AerospikeUserSpec{
+									{
+										Name:              "admin",
+										AerospikeAuthMode: asdbv1.AerospikeAuthModePKIOnly,
+										Roles: []string{
+											"sys-admin",
+											"user-admin",
+										},
+									},
+								},
+							}
+
+							aeroCluster := getTLSAerospikeClusterSpecWithAccessControl(
+								clusterNamespacedName, accessControl,
+							)
+							err := DeployCluster(
+								k8sClient, ctx, aeroCluster,
+							)
+							Expect(err).ToNot(HaveOccurred())
+							accessControl = &asdbv1.AerospikeAccessControlSpec{
+								Users: []asdbv1.AerospikeUserSpec{
+									{
+										Name:              "admin",
+										AerospikeAuthMode: asdbv1.AerospikeAuthModeInternal,
+										SecretName:        test.AuthSecretName,
+										Roles: []string{
+											"sys-admin",
+											"user-admin",
+										},
+									},
+								},
+							}
+
+							aeroCluster = getTLSAerospikeClusterSpecWithAccessControl(
+								clusterNamespacedName, accessControl,
+							)
+							err = updateCluster(k8sClient, ctx, aeroCluster)
+							Expect(err).To(HaveOccurred())
+							Expect(err.Error()).To(ContainSubstring("user admin cannot be allowed to update auth mode from PKI to Internal"))
+						})
+						It("Should fail if any user's auth mode is PKIOnly and password secret is also set", func() {
+							accessControl := &asdbv1.AerospikeAccessControlSpec{
+								Users: []asdbv1.AerospikeUserSpec{
+									{
+										Name:              "admin",
+										AerospikeAuthMode: asdbv1.AerospikeAuthModePKIOnly,
+										SecretName:        test.AuthSecretName,
+										Roles: []string{
+											"sys-admin",
+											"user-admin",
+										},
+									},
+								},
+							}
+
+							aeroCluster := getTLSAerospikeClusterSpecWithAccessControl(
+								clusterNamespacedName, accessControl,
+							)
+							err := DeployCluster(
+								k8sClient, ctx, aeroCluster,
+							)
+							Expect(err).To(HaveOccurred())
+							Expect(err.Error()).To(ContainSubstring("user admin doesn't require password when authmode is PKIOnly"))
+						})
+					})
+
+					Context("when doing valid operations", func() {
+						It("Should allow PKIOnly auth mode on enterprise 8.1.0.0 or later image", func() {
+							accessControl := &asdbv1.AerospikeAccessControlSpec{
+								Users: []asdbv1.AerospikeUserSpec{
+									{
+										Name:              "admin",
+										AerospikeAuthMode: asdbv1.AerospikeAuthModePKIOnly,
+										Roles: []string{
+											"sys-admin",
+											"user-admin",
+										},
+									},
+									{
+										Name:              "user01",
+										AerospikeAuthMode: asdbv1.AerospikeAuthModeInternal,
+										SecretName:        test.AuthSecretName,
+										Roles: []string{
+											"sys-admin",
+											"user-admin",
+										},
+									},
+								},
+							}
+
+							aeroCluster := getTLSAerospikeClusterSpecWithAccessControl(
+								clusterNamespacedName, accessControl,
+							)
+
+							err := testAccessControlReconcile(aeroCluster, ctx)
+							Expect(err).ToNot(HaveOccurred())
+						})
+
+						It("Should allow updating users auth mode from Internal to PKIOnly", func() {
+							// Create with admin user with Internal auth (password-based).
+							accessControl := &asdbv1.AerospikeAccessControlSpec{
+								Users: []asdbv1.AerospikeUserSpec{
+									{
+										Name:              "admin",
+										AerospikeAuthMode: asdbv1.AerospikeAuthModeInternal,
+										SecretName:        test.AuthSecretName,
+										Roles:             []string{"sys-admin", "user-admin"},
+									},
+									{
+										Name:              "user01",
+										AerospikeAuthMode: asdbv1.AerospikeAuthModeInternal,
+										SecretName:        test.AuthSecretName,
+										Roles: []string{
+											"sys-admin",
+											"user-admin",
+										},
+									},
+								},
+							}
+
+							aeroCluster := getTLSAerospikeClusterSpecWithAccessControl(
+								clusterNamespacedName, accessControl,
+							)
+
+							Expect(testAccessControlReconcile(aeroCluster, ctx)).To(Succeed())
+
+							// Update admin user with Internal auth to PKIOnly (certificate-based).
+							accessControl = &asdbv1.AerospikeAccessControlSpec{
+								Users: []asdbv1.AerospikeUserSpec{
+									{
+										Name:              "admin",
+										AerospikeAuthMode: asdbv1.AerospikeAuthModePKIOnly,
+										Roles:             []string{"sys-admin", "user-admin"},
+									},
+									{
+										Name:              "user01",
+										AerospikeAuthMode: asdbv1.AerospikeAuthModeInternal,
+										SecretName:        test.AuthSecretName,
+										Roles: []string{
+											"sys-admin",
+											"user-admin",
+										},
+									},
+								},
+							}
+							aeroCluster.Spec.AerospikeAccessControl = accessControl
+
+							Expect(testAccessControlReconcile(aeroCluster, ctx)).To(Succeed())
+						})
+
+						It("Should allow only certificate based login for PKIOnly user and reject password based login", func() {
+							accessControl := &asdbv1.AerospikeAccessControlSpec{
+								Users: []asdbv1.AerospikeUserSpec{
+									{
+										Name:              "admin",
+										AerospikeAuthMode: asdbv1.AerospikeAuthModeInternal,
+										SecretName:        test.AuthSecretName,
+										Roles:             []string{"sys-admin", "user-admin"},
+									},
+								},
+							}
+
+							aeroCluster := getTLSAerospikeClusterSpecWithAccessControl(
+								clusterNamespacedName, accessControl,
+							)
+							Expect(testAccessControlReconcile(aeroCluster, ctx)).To(Succeed())
+
+							By("Password-based auth should succeed for Internal auth mode user")
+							// Password-based auth should succeed.
+							cp := getClientPolicy(aeroCluster, k8sClient)
+							cp.User = "admin"
+							cp.Password = "admin123"
+							cp.AuthMode = as.AuthModeInternal
+							cp.FailIfNotConnected = true
+							Eventually(func() error {
+								client, err := getClientWithPolicy(pkgLog, aeroCluster, k8sClient, cp)
+								if err != nil {
+									return err
+								}
+								defer client.Close()
+								if len(client.GetNodeNames()) == 0 {
+									return fmt.Errorf("not connected")
+								}
+								return nil
+							}, 2*time.Minute, 5*time.Second).Should(Succeed())
+
+							accessControl = &asdbv1.AerospikeAccessControlSpec{
+								Users: []asdbv1.AerospikeUserSpec{
+									{
+										Name:              "admin",
+										AerospikeAuthMode: asdbv1.AerospikeAuthModePKIOnly,
+										Roles:             []string{"sys-admin", "user-admin"},
+									},
+								},
+							}
+
+							aeroCluster = getTLSAerospikeClusterSpecWithAccessControl(
+								clusterNamespacedName, accessControl,
+							)
+							Expect(testAccessControlReconcile(aeroCluster, ctx)).To(Succeed())
+
+							By("Password-based auth should fail for PKIOnly auth mode user")
+							// Password-based auth should fail.
+							Eventually(func() error {
+								cp = getClientPolicy(aeroCluster, k8sClient)
+								cp.User = "admin"
+								cp.Password = "admin123"
+								cp.AuthMode = as.AuthModeInternal
+								cp.FailIfNotConnected = true
+								_, err := getClientWithPolicy(pkgLog, aeroCluster, k8sClient, cp)
+								return err
+							}, 2*time.Minute, 5*time.Second).Should(HaveOccurred())
+
+							By("PKI auth should succeed for PKIOnly auth mode user")
+							// PKI auth should succeed.
+							cp = getClientPolicy(aeroCluster, k8sClient)
+							cp.User = ""
+							cp.Password = "" // no password
+							cp.AuthMode = as.AuthModePKI
+							cp.FailIfNotConnected = true
+
+							Eventually(func() error {
+								client, err := getClientWithPolicy(pkgLog, aeroCluster, k8sClient, cp)
+								if err != nil {
+									return err
+								}
+								defer client.Close()
+								if len(client.GetNodeNames()) == 0 {
+									return fmt.Errorf("not connected")
+								}
+								return nil
+							}, 2*time.Minute, 5*time.Second).Should(Succeed())
+						})
+
+						It("Should allow users with PKIOnly auth mode for federal image", func() {
+
+							accessControl := &asdbv1.AerospikeAccessControlSpec{
+								Users: []asdbv1.AerospikeUserSpec{
+									{
+										Name:              "admin",
+										AerospikeAuthMode: asdbv1.AerospikeAuthModePKIOnly,
+										Roles:             []string{"sys-admin", "user-admin"},
+									},
+									{
+										Name:              "user01",
+										AerospikeAuthMode: asdbv1.AerospikeAuthModePKIOnly,
+										Roles: []string{
+											"sys-admin",
+											"user-admin",
+										},
+									},
+								},
+							}
+
+							aeroCluster := getTLSAerospikeClusterSpecWithAccessControl(
+								clusterNamespacedName, accessControl,
+							)
+							aeroCluster.Spec.Image = federalImage
+							Expect(testAccessControlReconcile(aeroCluster, ctx)).To(Succeed())
+						},
+						)
+					})
+				})
 			},
 		)
 
@@ -2295,6 +2660,70 @@ func getAerospikeClusterSpecWithAccessControl(
 			AerospikeConfig: &asdbv1.AerospikeConfigSpec{
 				Value: aerospikeConfSpec.getSpec(),
 			},
+		},
+	}
+}
+
+func getTLSAerospikeClusterSpecWithAccessControl(
+	clusterNamespacedName types.NamespacedName,
+	accessControl *asdbv1.AerospikeAccessControlSpec,
+) *asdbv1.AerospikeCluster {
+
+	return &asdbv1.AerospikeCluster{
+		ObjectMeta: metav1.ObjectMeta{
+			Name:      clusterNamespacedName.Name,
+			Namespace: clusterNamespacedName.Namespace,
+		},
+		Spec: asdbv1.AerospikeClusterSpec{
+			Size:                   testClusterSize,
+			Image:                  latestImage,
+			AerospikeAccessControl: accessControl,
+			Storage: asdbv1.AerospikeStorageSpec{
+				FileSystemVolumePolicy: asdbv1.AerospikePersistentVolumePolicySpec{
+					InputInitMethod:    &aerospikeVolumeInitMethodDeleteFiles,
+					InputCascadeDelete: &cascadeDeleteTrue,
+				},
+				Volumes: []asdbv1.VolumeSpec{
+					{
+						Name: "workdir",
+						Source: asdbv1.VolumeSource{
+							PersistentVolume: &asdbv1.PersistentVolumeSpec{
+								Size:         resource.MustParse("1Gi"),
+								StorageClass: storageClass,
+								VolumeMode:   corev1.PersistentVolumeFilesystem,
+							},
+						},
+						Aerospike: &asdbv1.AerospikeServerVolumeAttachment{
+							Path: "/opt/aerospike",
+						},
+					},
+					getStorageVolumeForSecret(),
+				},
+			},
+			PodSpec: asdbv1.AerospikePodSpec{
+				MultiPodPerHost: ptr.To(true),
+			},
+			AerospikeConfig: &asdbv1.AerospikeConfigSpec{
+				Value: map[string]interface{}{
+
+					asdbv1.ConfKeyService: map[string]interface{}{
+						"feature-key-file": "/etc/aerospike/secret/features.conf",
+					},
+					asdbv1.ConfKeySecurity: map[string]interface{}{},
+					asdbv1.ConfKeyNetwork:  getAdminNetworkTLSConfig(),
+					asdbv1.ConfKeyNamespace: []interface{}{
+						map[string]interface{}{
+							"name":               "test",
+							"replication-factor": 2,
+							"storage-engine": map[string]interface{}{
+								"type":      "memory",
+								"data-size": 1073741824,
+							},
+						},
+					},
+				},
+			},
+			OperatorClientCertSpec: getAdminOperatorCert(),
 		},
 	}
 }

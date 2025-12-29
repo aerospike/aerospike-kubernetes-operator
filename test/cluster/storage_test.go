@@ -7,7 +7,7 @@ import (
 
 	. "github.com/onsi/ginkgo/v2"
 	. "github.com/onsi/gomega"
-	"golang.org/x/net/context"
+	"golang.org/x/net/context" //nolint:staticcheck // code still use it, migrate later
 	v1 "k8s.io/api/core/v1"
 	"k8s.io/apimachinery/pkg/api/resource"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
@@ -486,6 +486,44 @@ var _ = Describe(
 							"emptydir-mount-options-test", &expectedSidecarMountOptions)
 					})
 				})
+
+				Context(
+					"When testing Federal Image Support", func() {
+						It("Should validate mounting of workdir volume for Federal Image Cluster", func() {
+							aeroCluster := CreateAdminTLSCluster(clusterNamespacedName, 2)
+							aeroCluster.Spec.Image = federalImage
+
+							By("Deploying the cluster")
+							Expect(DeployCluster(k8sClient, ctx, aeroCluster)).ToNot(HaveOccurred())
+
+							By("Getting the deployed pod")
+							pod := getPodForMountOptionsTest(aeroCluster)
+
+							By("Validating the mountpath and subpath in the pod")
+							validateMount := func(volumeName, wantPath, wantSubPath string) {
+								var vm *v1.VolumeMount
+								for containerIdx := range pod.Spec.Containers {
+									if pod.Spec.Containers[containerIdx].Name != asdbv1.AerospikeServerContainerName {
+										continue
+									}
+									for volumeMountIdx := range pod.Spec.Containers[containerIdx].VolumeMounts {
+										if pod.Spec.Containers[containerIdx].VolumeMounts[volumeMountIdx].Name == volumeName &&
+											pod.Spec.Containers[containerIdx].VolumeMounts[volumeMountIdx].SubPath == wantSubPath &&
+											pod.Spec.Containers[containerIdx].VolumeMounts[volumeMountIdx].MountPath == wantPath {
+											vm = &pod.Spec.Containers[containerIdx].VolumeMounts[volumeMountIdx]
+											break
+										}
+									}
+								}
+								Expect(vm).ToNot(BeNil(), "volume %s not mounted on server container with path %s "+
+									"and subpath %s", volumeName, wantPath, wantSubPath)
+							}
+
+							validateMount("workdir", "/opt/aerospike/smd", "smd")
+							validateMount("workdir", "/opt/aerospike/usr", "usr")
+						})
+					},
+				)
 			},
 		)
 
