@@ -613,11 +613,15 @@ func validateRackUpdate(
 		}
 	}
 
-	return validateForceBlockFromRosterUpdate(forceBlockFromRosterChanged, newObj)
+	if forceBlockFromRosterChanged {
+		return validateForceBlockFromRosterUpdate(newObj)
+	}
+
+	return nil
 }
 
-func validateForceBlockFromRosterUpdate(forceBlockFromRosterChanged bool, newObj *asdbv1.AerospikeCluster) error {
-	if forceBlockFromRosterChanged && newObj.Status.AerospikeConfig == nil {
+func validateForceBlockFromRosterUpdate(newObj *asdbv1.AerospikeCluster) error {
+	if newObj.Status.AerospikeConfig == nil {
 		return fmt.Errorf("status is not updated yet, cannot change forceBlockFromRoster in rack")
 	}
 
