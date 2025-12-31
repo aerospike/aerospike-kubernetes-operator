@@ -203,7 +203,7 @@ func validate(aslog logr.Logger, cluster *asdbv1.AerospikeCluster) (admission.Wa
 
 	if strings.Contains(cluster.Namespace, " ") {
 		// Few parsing logic depend on this
-		return warnings, fmt.Errorf("aerospikeCluster name cannot have spaces")
+		return warnings, fmt.Errorf("aerospikeCluster namespace cannot have spaces")
 	}
 
 	// Validate image type. Only enterprise image allowed for now

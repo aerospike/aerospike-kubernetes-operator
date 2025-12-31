@@ -133,6 +133,16 @@ var _ = Describe(
 						)
 						Expect(err).ToNot(HaveOccurred())
 
+						By("Replacing existing rack with new rack")
+						aeroCluster.Spec.RackConfig.Racks[0].ID = 3
+						err = updateCluster(k8sClient, ctx, aeroCluster)
+						Expect(err).ToNot(HaveOccurred())
+
+						err = validateRackEnabledCluster(
+							k8sClient, ctx, clusterNamespacedName,
+						)
+						Expect(err).ToNot(HaveOccurred())
+
 						By("Removing all racks")
 
 						rackConf := asdbv1.RackConfig{}
