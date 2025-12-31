@@ -329,35 +329,6 @@ func getNetworkTLSConfig() map[string]interface{} {
 	}
 }
 
-func getAdminNetworkTLSConfig() map[string]interface{} {
-	return map[string]interface{}{
-		"service": map[string]interface{}{
-			"tls-name": "admin",
-			"tls-port": serviceTLSPort,
-			"port":     serviceNonTLSPort,
-		},
-		"fabric": map[string]interface{}{
-			"tls-name": "admin",
-			"tls-port": 3011,
-			"port":     3001,
-		},
-		"heartbeat": map[string]interface{}{
-			"tls-name": "admin",
-			"tls-port": 3012,
-			"port":     3002,
-		},
-
-		"tls": []interface{}{
-			map[string]interface{}{
-				"name":      "admin",
-				"cert-file": "/etc/aerospike/secret/admin_chain.pem",
-				"key-file":  "/etc/aerospike/secret/admin_key.pem",
-				"ca-file":   "/etc/aerospike/secret/cacert.pem",
-			},
-		},
-	}
-}
-
 func getNetworkConfig() map[string]interface{} {
 	return map[string]interface{}{
 		"service": map[string]interface{}{

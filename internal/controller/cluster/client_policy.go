@@ -176,15 +176,15 @@ func (r *SingleClusterReconciler) getClientPolicy() *as.ClientPolicy {
 	policy.User = user
 	policy.Password = pass
 
-	//
+	// If admin user is present in status, use its auth mode
+	// Else if federal image, use PKI auth mode.
+	// We can't use spec admin user because for EE the spec can have PKI or Internal but for new EE clusters,
+	// the authMode must be Internal always for the first time.
 	adminUser := asdbv1.GetAdminUserFromSpec(statusToSpec)
 	if adminUser != nil {
 		policy.AuthMode = asdbv1.GetClientAuthMode(adminUser.AuthMode)
-	} else {
-		adminUserFromSpec := asdbv1.GetAdminUserFromSpec(&r.aeroCluster.Spec)
-		if adminUserFromSpec != nil {
-			policy.AuthMode = asdbv1.GetClientAuthMode(adminUserFromSpec.AuthMode)
-		}
+	} else if asdbv1.IsFederal(r.aeroCluster.Spec.Image) {
+		policy.AuthMode = as.AuthModePKI
 	}
 
 	return policy

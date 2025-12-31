@@ -32,7 +32,7 @@ import (
 )
 
 const (
-	baseImage           = "aerospike/aerospike-server-enterprise"
+	baseEnterpriseImage = "aerospike/aerospike-server-enterprise"
 	baseFederalImage    = "aerospike/aerospike-server-federal"
 	wrongImage          = "wrong-image"
 	nextServerVersion   = "8.1.0.0_1"
@@ -68,21 +68,21 @@ const (
 var aerospikeVolumeInitMethodDeleteFiles = asdbv1.AerospikeVolumeMethodDeleteFiles
 
 var (
-	retryInterval      = time.Second * 30
-	shortRetryInterval = time.Second * 1
-	versionV1          = "v1"
-	versionV2          = "v2"
-	cascadeDeleteFalse = false
-	cascadeDeleteTrue  = true
-	logger             = logr.Discard()
-	nextImage          = fmt.Sprintf("%s:%s", baseImage, nextServerVersion)
-	latestImage        = fmt.Sprintf("%s:%s", baseImage, latestServerVersion)
-	invalidImage       = fmt.Sprintf("%s:%s", baseImage, invalidVersion)
-	pre810Image        = fmt.Sprintf("%s:%s", baseImage, pre810Version)
-	federalImage       = fmt.Sprintf("%s:%s", baseFederalImage, latestServerVersion)
+	retryInterval         = time.Second * 30
+	shortRetryInterval    = time.Second * 1
+	versionV1             = "v1"
+	versionV2             = "v2"
+	cascadeDeleteFalse    = false
+	cascadeDeleteTrue     = true
+	logger                = logr.Discard()
+	nextImage             = fmt.Sprintf("%s:%s", baseEnterpriseImage, nextServerVersion)
+	latestImage           = fmt.Sprintf("%s:%s", baseEnterpriseImage, latestServerVersion)
+	invalidImage          = fmt.Sprintf("%s:%s", baseEnterpriseImage, invalidVersion)
+	pre810EnterpriseImage = fmt.Sprintf("%s:%s", baseEnterpriseImage, pre810Version)
+	latestFederalImage    = fmt.Sprintf("%s:%s", baseFederalImage, latestServerVersion)
 	// Storage wipe test
-	post6Image    = fmt.Sprintf("%s:%s", baseImage, post6Version)
-	version6Image = fmt.Sprintf("%s:%s", baseImage, version6)
+	post6Image    = fmt.Sprintf("%s:%s", baseEnterpriseImage, post6Version)
+	version6Image = fmt.Sprintf("%s:%s", baseEnterpriseImage, version6)
 )
 
 func rollingRestartClusterByEnablingTLS(
@@ -1368,79 +1368,16 @@ func CreateBasicTLSCluster(
 	return aeroCluster
 }
 
-func CreateAdminTLSCluster(
+func CreatePKIAuthEnabledCluster(
 	clusterNamespacedName types.NamespacedName,
 	size int32,
 ) *asdbv1.AerospikeCluster {
-	return &asdbv1.AerospikeCluster{
-		ObjectMeta: metav1.ObjectMeta{
-			Name:      clusterNamespacedName.Name,
-			Namespace: clusterNamespacedName.Namespace,
-		},
-		Spec: asdbv1.AerospikeClusterSpec{
-			Size:  size,
-			Image: latestImage,
-			AerospikeAccessControl: &asdbv1.AerospikeAccessControlSpec{
-				Users: []asdbv1.AerospikeUserSpec{
-					{
-						Name:     "admin",
-						AuthMode: asdbv1.AerospikeAuthModePKIOnly,
-						Roles: []string{
-							"sys-admin",
-							"user-admin",
-							"read-write",
-						},
-					},
-				},
-			},
-			Storage: asdbv1.AerospikeStorageSpec{
-				FileSystemVolumePolicy: asdbv1.AerospikePersistentVolumePolicySpec{
-					InputInitMethod:    &aerospikeVolumeInitMethodDeleteFiles,
-					InputCascadeDelete: &cascadeDeleteTrue,
-				},
-				Volumes: []asdbv1.VolumeSpec{
-					{
-						Name: "workdir",
-						Source: asdbv1.VolumeSource{
-							PersistentVolume: &asdbv1.PersistentVolumeSpec{
-								Size:         resource.MustParse("1Gi"),
-								StorageClass: storageClass,
-								VolumeMode:   corev1.PersistentVolumeFilesystem,
-							},
-						},
-						Aerospike: &asdbv1.AerospikeServerVolumeAttachment{
-							Path: "/opt/aerospike",
-						},
-					},
-					getStorageVolumeForSecret(),
-				},
-			},
-			PodSpec: asdbv1.AerospikePodSpec{
-				MultiPodPerHost: ptr.To(true),
-			},
-			AerospikeConfig: &asdbv1.AerospikeConfigSpec{
-				Value: map[string]interface{}{
+	aeroCluster := createBasicTLSCluster(clusterNamespacedName, size)
+	// Add admin user certs for PKI authentication
+	aeroCluster.Spec.OperatorClientCertSpec = getAdminOperatorCert()
+	aeroCluster.Spec.AerospikeAccessControl.Users[0].AuthMode = asdbv1.AerospikeAuthModePKIOnly
 
-					asdbv1.ConfKeyService: map[string]interface{}{
-						"feature-key-file": "/etc/aerospike/secret/features.conf",
-					},
-					asdbv1.ConfKeySecurity: map[string]interface{}{},
-					asdbv1.ConfKeyNetwork:  getAdminNetworkTLSConfig(),
-					asdbv1.ConfKeyNamespace: []interface{}{
-						map[string]interface{}{
-							"name":               "test",
-							"replication-factor": 2,
-							"storage-engine": map[string]interface{}{
-								"type":      "memory",
-								"data-size": 1073741824,
-							},
-						},
-					},
-				},
-			},
-			OperatorClientCertSpec: getAdminOperatorCert(),
-		},
-	}
+	return aeroCluster
 }
 
 func createSSDStorageCluster(

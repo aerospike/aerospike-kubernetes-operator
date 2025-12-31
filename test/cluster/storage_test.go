@@ -7,7 +7,6 @@ import (
 
 	. "github.com/onsi/ginkgo/v2"
 	. "github.com/onsi/gomega"
-	"golang.org/x/net/context" //nolint:staticcheck // code still use it, migrate later
 	v1 "k8s.io/api/core/v1"
 	"k8s.io/apimachinery/pkg/api/resource"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
@@ -466,7 +465,7 @@ var _ = Describe(
 						Expect(err).ToNot(HaveOccurred())
 
 						By("Verifying mount options after update")
-						err = k8sClient.Get(context.TODO(), test.GetNamespacedName(aeroCluster.Name+"-0-1", aeroCluster.Namespace), pod)
+						err = k8sClient.Get(goctx.TODO(), test.GetNamespacedName(aeroCluster.Name+"-0-1", aeroCluster.Namespace), pod)
 						Expect(err).ToNot(HaveOccurred())
 
 						// Aerospike server should still ignore mount options
@@ -490,8 +489,8 @@ var _ = Describe(
 				Context(
 					"When testing Federal Image Support", func() {
 						It("Should validate mounting of workdir volume for Federal Image Cluster", func() {
-							aeroCluster := CreateAdminTLSCluster(clusterNamespacedName, 2)
-							aeroCluster.Spec.Image = federalImage
+							aeroCluster := CreatePKIAuthEnabledCluster(clusterNamespacedName, 2)
+							aeroCluster.Spec.Image = latestFederalImage
 
 							By("Deploying the cluster")
 							Expect(DeployCluster(k8sClient, ctx, aeroCluster)).ToNot(HaveOccurred())
@@ -967,7 +966,7 @@ func createEmptyDirVolumeWithMountOptions(mountOptions []asdbv1.MountOptions) as
 func getPodForMountOptionsTest(aeroCluster *asdbv1.AerospikeCluster) *v1.Pod {
 	podNamespacedName := test.GetNamespacedName(aeroCluster.Name+"-0-1", aeroCluster.Namespace)
 	pod := &v1.Pod{}
-	err := k8sClient.Get(context.TODO(), podNamespacedName, pod)
+	err := k8sClient.Get(goctx.TODO(), podNamespacedName, pod)
 	Expect(err).ToNot(HaveOccurred())
 
 	return pod

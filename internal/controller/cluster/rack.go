@@ -1529,7 +1529,12 @@ func (r *SingleClusterReconciler) isVolumeAttachmentAddedOrUpdated(
 			if (attachment.Path == filepath.Join(workDir, asdbv1.WorkDirSubPathSmd) ||
 				attachment.Path == filepath.Join(workDir, asdbv1.WorkDirSubPathUsr)) &&
 				volumeMount.MountPath == workDir {
+				r.Log.Info(
+					"workDir volume mount found with legacy style, will be updated in next rolling restart, skipping",
+				)
+
 				found = true
+
 				break
 			}
 

@@ -1456,7 +1456,7 @@ func getFinalVolumeAttachmentsForVolume(volume *asdbv1.VolumeSpec, workDirPath s
 	containerAttachments = append(containerAttachments, volume.Sidecars...)
 
 	if volume.Aerospike != nil {
-		// Special handling for workdir mount in aerospike server container for FIPs compliance.
+		// Special handling for workdir mount in aerospike server container for FIPS compliance.
 		// workdir has sub directories (smd, usr) that need to be mounted separately.
 		if volume.Aerospike.Path == workDirPath {
 			containerAttachments = append(containerAttachments,

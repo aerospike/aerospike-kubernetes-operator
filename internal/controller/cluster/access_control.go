@@ -228,7 +228,7 @@ func (r *SingleClusterReconciler) reconcileUsers(
 				password = &pwd
 			}
 
-		case userSpec.AuthMode == asdbv1.AerospikeAuthModeInternal:
+		case asdbv1.IsAuthModeInternal(userSpec.AuthMode):
 			// Enterprise with Internal auth: real password from provider
 			pwd, err := passwordProvider.Get(userName, &userSpec)
 			if err != nil {
@@ -237,7 +237,7 @@ func (r *SingleClusterReconciler) reconcileUsers(
 
 			password = &pwd
 
-		case (!found || currUserSpec.AuthMode == asdbv1.AerospikeAuthModeInternal) &&
+		case (!found || asdbv1.IsAuthModeInternal(currUserSpec.AuthMode)) &&
 			userSpec.AuthMode == asdbv1.AerospikeAuthModePKIOnly:
 			// Enterprise with PKIOnly or transitioning to PKIOnly: set "nopassword" to disable password auth
 			pwd := "nopassword"
@@ -247,7 +247,8 @@ func (r *SingleClusterReconciler) reconcileUsers(
 		cmd := aerospikeUserCreateUpdate{
 			name: userName, password: password, roles: userSpec.Roles,
 		}
-		if userName == asdbv1.AdminUsername {
+
+		if isAdmin {
 			adminUpdateCmd = &cmd
 		} else {
 			userReconcileCmds = append(userReconcileCmds, cmd)

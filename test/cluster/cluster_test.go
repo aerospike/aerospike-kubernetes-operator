@@ -649,7 +649,7 @@ func ValidateAerospikeBenchmarkConfigs(ctx goctx.Context) {
 				"benchmarking should work in all aerospike server version", func() {
 					By("Deploying cluster which does not have the fix for AER-6767")
 
-					imageBeforeFix := fmt.Sprintf("%s:%s", baseImage, "7.1.0.2")
+					imageBeforeFix := fmt.Sprintf("%s:%s", baseEnterpriseImage, "7.1.0.2")
 					aeroCluster := createAerospikeClusterPost640(clusterNamespacedName, 2, imageBeforeFix)
 					namespaceConfig :=
 						aeroCluster.Spec.AerospikeConfig.Value[asdbv1.ConfKeyNamespace].([]interface{})[0].(map[string]interface{})
@@ -681,7 +681,7 @@ func ValidateAerospikeBenchmarkConfigs(ctx goctx.Context) {
 
 					By("Updating cluster server to version which has the fix for AER-6767")
 
-					imageAfterFix := fmt.Sprintf("%s:%s", baseImage, "7.1.0.10")
+					imageAfterFix := fmt.Sprintf("%s:%s", baseEnterpriseImage, "7.1.0.10")
 					aeroCluster.Spec.Image = imageAfterFix
 
 					err = updateCluster(k8sClient, ctx, aeroCluster)
@@ -2954,7 +2954,7 @@ func negativeUpdateClusterValidationTest(
 		)
 
 		It("Should fail if server image updated from enterprise to federal", func() {
-			aeroCluster := CreateAdminTLSCluster(
+			aeroCluster := CreatePKIAuthEnabledCluster(
 				clusterNamespacedName, 2,
 			)
 			err := DeployCluster(
@@ -2963,17 +2963,17 @@ func negativeUpdateClusterValidationTest(
 			Expect(err).ToNot(HaveOccurred())
 			By("Updating cluster image from enterprise to federal")
 
-			aeroCluster.Spec.Image = federalImage
+			aeroCluster.Spec.Image = latestFederalImage
 			err = updateCluster(k8sClient, ctx, aeroCluster)
 			Expect(err).To(HaveOccurred())
 			Expect(err.Error()).To(ContainSubstring("enterprise image cannot be updated to federal image"))
 		})
 
 		It("Should fail if server image updated from federal to enterprise", func() {
-			aeroCluster := CreateAdminTLSCluster(
+			aeroCluster := CreatePKIAuthEnabledCluster(
 				clusterNamespacedName, 2,
 			)
-			aeroCluster.Spec.Image = federalImage
+			aeroCluster.Spec.Image = latestFederalImage
 			err := DeployCluster(
 				k8sClient, ctx, aeroCluster,
 			)

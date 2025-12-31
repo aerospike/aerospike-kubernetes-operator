@@ -2148,7 +2148,7 @@ var _ = Describe(
 							aeroCluster := getTLSAerospikeClusterSpecWithAccessControl(
 								clusterNamespacedName, accessControl,
 							)
-							aeroCluster.Spec.Image = pre810Image
+							aeroCluster.Spec.Image = pre810EnterpriseImage
 							err := DeployCluster(
 								k8sClient, ctx, aeroCluster,
 							)
@@ -2182,7 +2182,7 @@ var _ = Describe(
 							aeroCluster := getTLSAerospikeClusterSpecWithAccessControl(
 								clusterNamespacedName, accessControl,
 							)
-							aeroCluster.Spec.Image = federalImage
+							aeroCluster.Spec.Image = latestFederalImage
 							err := DeployCluster(
 								k8sClient, ctx, aeroCluster,
 							)
@@ -2449,7 +2449,7 @@ var _ = Describe(
 							aeroCluster := getTLSAerospikeClusterSpecWithAccessControl(
 								clusterNamespacedName, accessControl,
 							)
-							aeroCluster.Spec.Image = federalImage
+							aeroCluster.Spec.Image = latestFederalImage
 							Expect(testAccessControlReconcile(aeroCluster, ctx)).To(Succeed())
 						},
 						)
@@ -2642,7 +2642,7 @@ func getAerospikeClusterSpecWithAccessControl(
 			},
 			Size: testClusterSize,
 			Image: fmt.Sprintf(
-				"%s:%s", baseImage, aerospikeConfSpec.getVersion(),
+				"%s:%s", baseEnterpriseImage, aerospikeConfSpec.getVersion(),
 			),
 			ValidationPolicy: &asdbv1.ValidationPolicySpec{
 				SkipWorkDirValidate:     true,
@@ -2709,7 +2709,7 @@ func getTLSAerospikeClusterSpecWithAccessControl(
 						"feature-key-file": "/etc/aerospike/secret/features.conf",
 					},
 					asdbv1.ConfKeySecurity: map[string]interface{}{},
-					asdbv1.ConfKeyNetwork:  getAdminNetworkTLSConfig(),
+					asdbv1.ConfKeyNetwork:  getNetworkTLSConfig(),
 					asdbv1.ConfKeyNamespace: []interface{}{
 						map[string]interface{}{
 							"name":               "test",

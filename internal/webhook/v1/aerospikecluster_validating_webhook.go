@@ -1928,8 +1928,7 @@ func validateUsersAuthModeUpdate(oldUsers, newUsers []asdbv1.AerospikeUserSpec) 
 
 	for _, userSpec := range newUsers {
 		if oldUserSpec, found := oldUsersMap[userSpec.Name]; found {
-			if oldUserSpec.AuthMode == asdbv1.AerospikeAuthModePKIOnly &&
-				userSpec.AuthMode == asdbv1.AerospikeAuthModeInternal {
+			if oldUserSpec.AuthMode == asdbv1.AerospikeAuthModePKIOnly && asdbv1.IsAuthModeInternal(userSpec.AuthMode) {
 				return fmt.Errorf("user %s is not allowed to update authMode from PKI to Internal", userSpec.Name)
 			}
 		}
@@ -1968,7 +1967,7 @@ func validatePKIAuthSupportForEE(spec *asdbv1.AerospikeClusterSpec) error {
 
 	if val < 0 {
 		return fmt.Errorf(
-			"PKIOnly authMode can be used with Enterprise Edition version %s or later (cluster image %s)",
+			"PKIOnly authMode can be used with Enterprise Edition version %s or later (found version %s)",
 			minVersionForEnterprisePKIOnlyAuthMode, version,
 		)
 	}
