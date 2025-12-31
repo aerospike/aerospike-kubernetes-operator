@@ -294,7 +294,7 @@ func getAdminOperatorCert() *asdbv1.AerospikeOperatorClientCertSpec {
 				SecretName:         "aerospike-secret",
 				CaCertsFilename:    "cacert.pem",
 				ClientCertFilename: "admin_chain.pem",
-				ClientKeyFilename:  "admin.key",
+				ClientKeyFilename:  "admin_key.pem",
 			},
 		},
 	}
@@ -351,7 +351,7 @@ func getAdminNetworkTLSConfig() map[string]interface{} {
 			map[string]interface{}{
 				"name":      "admin",
 				"cert-file": "/etc/aerospike/secret/admin_chain.pem",
-				"key-file":  "/etc/aerospike/secret/admin.key",
+				"key-file":  "/etc/aerospike/secret/admin_key.pem",
 				"ca-file":   "/etc/aerospike/secret/cacert.pem",
 			},
 		},

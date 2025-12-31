@@ -1326,6 +1326,7 @@ func (r *SingleClusterReconciler) isRackStorageUpdatedInAeroCluster(
 	rackState *RackState, pod *corev1.Pod,
 ) bool {
 	volumes := rackState.Rack.Storage.Volumes
+	workDir := asdbv1.GetWorkDirectory(rackState.Rack.AerospikeConfig)
 
 	for idx := range volumes {
 		volume := &volumes[idx]
@@ -1348,7 +1349,7 @@ func (r *SingleClusterReconciler) isRackStorageUpdatedInAeroCluster(
 			// Workdir volume is always mounted as subPath volumes for smd and usr subPath.
 			// So, we need to handle workdir volume mount separately here.
 			// Add different subPath volume mounts for workdir volume for storage update check
-			if volume.Aerospike.Path == asdbv1.GetWorkDirectory(*r.aeroCluster.Spec.AerospikeConfig) {
+			if volume.Aerospike.Path == workDir {
 				containerAttachments = append(
 					containerAttachments, getWorkDirSubPathVolumeMounts(volume.Aerospike.Path)...)
 			} else {
@@ -1370,10 +1371,10 @@ func (r *SingleClusterReconciler) isRackStorageUpdatedInAeroCluster(
 		}
 
 		if r.isVolumeAttachmentAddedOrUpdated(
-			volume.Name, containerAttachments, pod.Spec.Containers,
+			volume.Name, containerAttachments, pod.Spec.Containers, workDir,
 		) ||
 			r.isVolumeAttachmentAddedOrUpdated(
-				volume.Name, volume.InitContainers, pod.Spec.InitContainers,
+				volume.Name, volume.InitContainers, pod.Spec.InitContainers, workDir,
 			) {
 			r.Log.Info(
 				"New volume or volume attachment added/updated in rack" +
@@ -1487,10 +1488,8 @@ func (r *SingleClusterReconciler) isStorageVolumeSourceUpdated(volume *asdbv1.Vo
 
 func (r *SingleClusterReconciler) isVolumeAttachmentAddedOrUpdated(
 	volumeName string, volumeAttachments []asdbv1.VolumeAttachment,
-	podContainers []corev1.Container,
+	podContainers []corev1.Container, workDir string,
 ) bool {
-	workDir := asdbv1.GetWorkDirectory(*r.aeroCluster.Spec.AerospikeConfig)
-
 	for _, attachment := range volumeAttachments {
 		container := getContainer(podContainers, attachment.ContainerName)
 		// Not possible, only valid containerName should be there in attachment

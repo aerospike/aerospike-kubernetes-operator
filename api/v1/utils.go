@@ -39,6 +39,9 @@ const (
 
 	DefaultFailedPodGracePeriodSeconds = 60
 	RequeueIntervalSeconds10           = 10
+
+	WorkDirSubPathSmd = "smd"
+	WorkDirSubPathUsr = "usr"
 )
 
 const (

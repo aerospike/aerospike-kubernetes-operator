@@ -741,11 +741,11 @@ func (r *SingleClusterReconciler) updateSTSPVStorage(
 	st *appsv1.StatefulSet, rackState *RackState,
 ) {
 	volumes := webhookv1.GetPVsVolumesFromStorage(&rackState.Rack.Storage)
+	workDir := asdbv1.GetWorkDirectory(rackState.Rack.AerospikeConfig)
 
 	for idx := range volumes {
 		volume := &volumes[idx]
-		initContainerAttachments, containerAttachments := getFinalVolumeAttachmentsForVolume(volume,
-			asdbv1.GetWorkDirectory(rackState.Rack.AerospikeConfig))
+		initContainerAttachments, containerAttachments := getFinalVolumeAttachmentsForVolume(volume, workDir)
 
 		switch volume.Source.PersistentVolume.VolumeMode {
 		case corev1.PersistentVolumeBlock:
@@ -808,11 +808,11 @@ func (r *SingleClusterReconciler) updateSTSNonPVStorage(
 ) {
 	volumes := webhookv1.GetNonPVsVolumesFromStorage(&rackState.Rack.Storage)
 	initContainerVolumePathPrefix := "/workdir/filesystem-volumes"
+	workDir := asdbv1.GetWorkDirectory(rackState.Rack.AerospikeConfig)
 
 	for idx := range volumes {
 		volume := &volumes[idx]
-		initContainerAttachments, containerAttachments := getFinalVolumeAttachmentsForVolume(volume,
-			asdbv1.GetWorkDirectory(rackState.Rack.AerospikeConfig))
+		initContainerAttachments, containerAttachments := getFinalVolumeAttachmentsForVolume(volume, workDir)
 
 		r.Log.V(1).Info(
 			"Added volume mount in statefulSet pod containers for volume",
