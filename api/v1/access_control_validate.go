@@ -145,11 +145,6 @@ func GetUsersFromSpec(spec *AerospikeClusterSpec) map[string]AerospikeUserSpec {
 	return users
 }
 
-// FederalImage indicates if the image is a federal image.
-func FederalImage(image string) bool {
-	return strings.Contains(strings.ToLower(image), "federal")
-}
-
 // GetAdminUserFromSpec returns admin user from the spec.
 func GetAdminUserFromSpec(spec *AerospikeClusterSpec) *AerospikeUserSpec {
 	if spec.AerospikeAccessControl != nil {
@@ -452,17 +447,21 @@ func isUserSpecValid(
 			}
 		}
 
-		if userSpec.AerospikeAuthMode == AerospikeAuthModePKIOnly && strings.TrimSpace(userSpec.SecretName) != "" {
-			return false, fmt.Errorf(
-				"user %s doesn't require password when authmode is PKI", userSpec.Name,
-			)
-		}
-		// TODO We should validate actual password here but we cannot read the secret here.
-		// Will have to be done at the time of creating the user!
-		if strings.TrimSpace(userSpec.SecretName) == "" && userSpec.AerospikeAuthMode != AerospikeAuthModePKIOnly {
-			return false, fmt.Errorf(
-				"user %s has empty secret name", userSpec.Name,
-			)
+		hasSecret := strings.TrimSpace(userSpec.SecretName) != ""
+
+		//nolint:exhaustive // As new auth modes are added, we may need to update this code.
+		switch userSpec.AuthMode {
+		case AerospikeAuthModePKIOnly:
+			if hasSecret {
+				return false, fmt.Errorf("user %s cannot set secretName when authMode is PKIOnly", userSpec.Name)
+			}
+		default:
+			// TODO: We should validate actual password here but we cannot read the secret here.
+			// Will have to be done at the time of creating the user!
+			// Internal or empty authMode requires a secret for password
+			if !hasSecret {
+				return false, fmt.Errorf("user %s has empty secret name", userSpec.Name)
+			}
 		}
 
 		if subset(

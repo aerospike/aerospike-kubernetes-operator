@@ -11,6 +11,7 @@ import (
 	"k8s.io/apimachinery/pkg/util/sets"
 	"k8s.io/utils/ptr"
 
+	as "github.com/aerospike/aerospike-client-go/v8"
 	internalerrors "github.com/aerospike/aerospike-kubernetes-operator/v4/errors"
 )
 
@@ -622,4 +623,20 @@ func IsPathParentOrSame(dir1, dir2 string) bool {
 
 	// Paths are unrelated.
 	return false
+}
+
+// IsFederal indicates if the image is a federal image.
+func IsFederal(image string) bool {
+	return strings.Contains(strings.ToLower(image), "federal")
+}
+
+func GetClientAuthMode(authMode AerospikeAuthMode) as.AuthMode {
+	switch authMode {
+	case AerospikeAuthModeInternal:
+		return as.AuthModeInternal
+	case AerospikeAuthModePKIOnly:
+		return as.AuthModePKI
+	default:
+		return as.AuthModeInternal
+	}
 }

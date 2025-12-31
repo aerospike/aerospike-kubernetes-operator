@@ -3,6 +3,7 @@ package cluster
 import (
 	"context"
 	"fmt"
+	"path/filepath"
 	"reflect"
 	"strconv"
 	"strings"
@@ -1344,27 +1345,12 @@ func (r *SingleClusterReconciler) isRackStorageUpdatedInAeroCluster(
 		containerAttachments = append(containerAttachments, volume.Sidecars...)
 
 		if volume.Aerospike != nil {
+			// Workdir volume is always mounted as subPath volumes for smd and usr subPath.
+			// So, we need to handle workdir volume mount separately here.
+			// Add different subPath volume mounts for workdir volume for storage update check
 			if volume.Aerospike.Path == asdbv1.GetWorkDirectory(*r.aeroCluster.Spec.AerospikeConfig) {
 				containerAttachments = append(
-					containerAttachments, asdbv1.VolumeAttachment{
-						ContainerName: asdbv1.AerospikeServerContainerName,
-						Path:          volume.Aerospike.Path + "/smd",
-						AttachmentOptions: asdbv1.AttachmentOptions{
-							MountOptions: asdbv1.MountOptions{
-								SubPath: "smd",
-							},
-						},
-					},
-					asdbv1.VolumeAttachment{
-						ContainerName: asdbv1.AerospikeServerContainerName,
-						Path:          volume.Aerospike.Path + "/usr",
-						AttachmentOptions: asdbv1.AttachmentOptions{
-							MountOptions: asdbv1.MountOptions{
-								SubPath: "usr",
-							},
-						},
-					},
-				)
+					containerAttachments, getWorkDirSubPathVolumeMounts(volume.Aerospike.Path)...)
 			} else {
 				containerAttachment := asdbv1.VolumeAttachment{
 					ContainerName: asdbv1.AerospikeServerContainerName,
@@ -1503,6 +1489,8 @@ func (r *SingleClusterReconciler) isVolumeAttachmentAddedOrUpdated(
 	volumeName string, volumeAttachments []asdbv1.VolumeAttachment,
 	podContainers []corev1.Container,
 ) bool {
+	workDir := asdbv1.GetWorkDirectory(*r.aeroCluster.Spec.AerospikeConfig)
+
 	for _, attachment := range volumeAttachments {
 		container := getContainer(podContainers, attachment.ContainerName)
 		// Not possible, only valid containerName should be there in attachment
@@ -1535,10 +1523,13 @@ func (r *SingleClusterReconciler) isVolumeAttachmentAddedOrUpdated(
 				continue
 			}
 
-			if (attachment.Path == asdbv1.GetWorkDirectory(*r.aeroCluster.Spec.AerospikeConfig)+"/smd" ||
-				attachment.Path == asdbv1.GetWorkDirectory(*r.aeroCluster.Spec.AerospikeConfig)+"/usr") &&
-				volumeMount.MountPath == asdbv1.GetWorkDirectory(*r.aeroCluster.Spec.AerospikeConfig) {
-				// Accept direct workdir mount as compatible for workdir sub-directories attachments
+			// This is to support backward compatibility for workdir volume mounts which were mounted directly
+			// on workdir path earlier. Now we are mounting smd and usr subPath of workdir volume.
+			// This condition will be true only for older existing clusters.
+			// No need to check the mount options for this case as this is only for backward compatibility.
+			if (attachment.Path == filepath.Join(workDir, asdbv1.WorkDirSubPathSmd) ||
+				attachment.Path == filepath.Join(workDir, asdbv1.WorkDirSubPathUsr)) &&
+				volumeMount.MountPath == workDir {
 				found = true
 				break
 			}
@@ -2244,4 +2235,24 @@ func (r *SingleClusterReconciler) categoriseRacks() (configuredRacks []RackState
 	}
 
 	return configuredRacks, revisionChangedRacks, racksToDelete, err
+}
+
+func getWorkDirSubPathVolumeMounts(basePath string) []asdbv1.VolumeAttachment {
+	subDirs := []string{asdbv1.WorkDirSubPathSmd, asdbv1.WorkDirSubPathUsr}
+
+	volumeMounts := make([]asdbv1.VolumeAttachment, 0, len(subDirs))
+
+	for _, dir := range subDirs {
+		volumeMounts = append(volumeMounts, asdbv1.VolumeAttachment{
+			ContainerName: asdbv1.AerospikeServerContainerName,
+			Path:          filepath.Join(basePath, dir),
+			AttachmentOptions: asdbv1.AttachmentOptions{
+				MountOptions: asdbv1.MountOptions{
+					SubPath: dir,
+				},
+			},
+		})
+	}
+
+	return volumeMounts
 }

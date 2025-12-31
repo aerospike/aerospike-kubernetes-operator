@@ -1538,9 +1538,9 @@ var _ = Describe(
 									},
 									Users: []asdbv1.AerospikeUserSpec{
 										{
-											Name:              "admin",
-											AerospikeAuthMode: asdbv1.AerospikeAuthModeInternal,
-											SecretName:        test.AuthSecretNameForUpdate,
+											Name:       "admin",
+											AuthMode:   asdbv1.AerospikeAuthModeInternal,
+											SecretName: test.AuthSecretNameForUpdate,
 											Roles: []string{
 												"sys-admin",
 												"user-admin",
@@ -1548,9 +1548,9 @@ var _ = Describe(
 										},
 
 										{
-											Name:              "profileUser",
-											AerospikeAuthMode: asdbv1.AerospikeAuthModeInternal,
-											SecretName:        test.AuthSecretNameForUpdate,
+											Name:       "profileUser",
+											AuthMode:   asdbv1.AerospikeAuthModeInternal,
+											SecretName: test.AuthSecretNameForUpdate,
 											Roles: []string{
 												"data-admin",
 												"read-write-udf",
@@ -1593,9 +1593,9 @@ var _ = Describe(
 									},
 									Users: []asdbv1.AerospikeUserSpec{
 										{
-											Name:              "admin",
-											AerospikeAuthMode: asdbv1.AerospikeAuthModeInternal,
-											SecretName:        test.AuthSecretNameForUpdate,
+											Name:       "admin",
+											AuthMode:   asdbv1.AerospikeAuthModeInternal,
+											SecretName: test.AuthSecretNameForUpdate,
 											Roles: []string{
 												"sys-admin",
 												"user-admin",
@@ -1603,9 +1603,9 @@ var _ = Describe(
 										},
 
 										{
-											Name:              "profileUser",
-											AerospikeAuthMode: asdbv1.AerospikeAuthModeInternal,
-											SecretName:        test.AuthSecretNameForUpdate,
+											Name:       "profileUser",
+											AuthMode:   asdbv1.AerospikeAuthModeInternal,
+											SecretName: test.AuthSecretNameForUpdate,
 											Roles: []string{
 												"data-admin",
 												"read-write-udf",
@@ -1693,9 +1693,9 @@ var _ = Describe(
 									},
 									Users: []asdbv1.AerospikeUserSpec{
 										{
-											Name:              "admin",
-											AerospikeAuthMode: asdbv1.AerospikeAuthModeInternal,
-											SecretName:        test.AuthSecretNameForUpdate,
+											Name:       "admin",
+											AuthMode:   asdbv1.AerospikeAuthModeInternal,
+											SecretName: test.AuthSecretNameForUpdate,
 											Roles: []string{
 												"sys-admin",
 												"user-admin",
@@ -1703,9 +1703,9 @@ var _ = Describe(
 										},
 
 										{
-											Name:              "profileUser",
-											AerospikeAuthMode: asdbv1.AerospikeAuthModeInternal,
-											SecretName:        test.AuthSecretNameForUpdate,
+											Name:       "profileUser",
+											AuthMode:   asdbv1.AerospikeAuthModeInternal,
+											SecretName: test.AuthSecretNameForUpdate,
 											Roles: []string{
 												"profiler",
 											},
@@ -1772,9 +1772,9 @@ var _ = Describe(
 									},
 									Users: []asdbv1.AerospikeUserSpec{
 										{
-											Name:              "admin",
-											AerospikeAuthMode: asdbv1.AerospikeAuthModeInternal,
-											SecretName:        test.AuthSecretNameForUpdate,
+											Name:       "admin",
+											AuthMode:   asdbv1.AerospikeAuthModeInternal,
+											SecretName: test.AuthSecretNameForUpdate,
 											Roles: []string{
 												"sys-admin",
 												"user-admin",
@@ -1782,9 +1782,9 @@ var _ = Describe(
 										},
 
 										{
-											Name:              "profileUser",
-											AerospikeAuthMode: asdbv1.AerospikeAuthModeInternal,
-											SecretName:        test.AuthSecretNameForUpdate,
+											Name:       "profileUser",
+											AuthMode:   asdbv1.AerospikeAuthModeInternal,
+											SecretName: test.AuthSecretNameForUpdate,
 											Roles: []string{
 												"profiler",
 											},
@@ -1856,9 +1856,9 @@ var _ = Describe(
 									},
 									Users: []asdbv1.AerospikeUserSpec{
 										{
-											Name:              "admin",
-											AerospikeAuthMode: asdbv1.AerospikeAuthModeInternal,
-											SecretName:        test.AuthSecretName,
+											Name:       "admin",
+											AuthMode:   asdbv1.AerospikeAuthModeInternal,
+											SecretName: test.AuthSecretName,
 											Roles: []string{
 												"sys-admin",
 												"user-admin",
@@ -1866,9 +1866,9 @@ var _ = Describe(
 										},
 
 										{
-											Name:              "profileUser",
-											AerospikeAuthMode: asdbv1.AerospikeAuthModeInternal,
-											SecretName:        test.AuthSecretName,
+											Name:       "profileUser",
+											AuthMode:   asdbv1.AerospikeAuthModeInternal,
+											SecretName: test.AuthSecretName,
 											Roles: []string{
 												"profiler",
 												"sys-admin",
@@ -1876,9 +1876,9 @@ var _ = Describe(
 										},
 
 										{
-											Name:              "userToDrop",
-											AerospikeAuthMode: asdbv1.AerospikeAuthModeInternal,
-											SecretName:        test.AuthSecretName,
+											Name:       "userToDrop",
+											AuthMode:   asdbv1.AerospikeAuthModeInternal,
+											SecretName: test.AuthSecretName,
 											Roles: []string{
 												"profiler",
 											},
@@ -1923,9 +1923,9 @@ var _ = Describe(
 									},
 									Users: []asdbv1.AerospikeUserSpec{
 										{
-											Name:              "admin",
-											AerospikeAuthMode: asdbv1.AerospikeAuthModeInternal,
-											SecretName:        test.AuthSecretNameForUpdate,
+											Name:       "admin",
+											AuthMode:   asdbv1.AerospikeAuthModeInternal,
+											SecretName: test.AuthSecretNameForUpdate,
 											Roles: []string{
 												"sys-admin",
 												"user-admin",
@@ -1933,9 +1933,9 @@ var _ = Describe(
 										},
 
 										{
-											Name:              "profileUser",
-											AerospikeAuthMode: asdbv1.AerospikeAuthModeInternal,
-											SecretName:        test.AuthSecretNameForUpdate,
+											Name:       "profileUser",
+											AuthMode:   asdbv1.AerospikeAuthModeInternal,
+											SecretName: test.AuthSecretNameForUpdate,
 											Roles: []string{
 												"data-admin",
 												"read-write-udf",
@@ -1980,9 +1980,9 @@ var _ = Describe(
 									},
 									Users: []asdbv1.AerospikeUserSpec{
 										{
-											Name:              "admin",
-											AerospikeAuthMode: asdbv1.AerospikeAuthModeInternal,
-											SecretName:        test.AuthSecretName,
+											Name:       "admin",
+											AuthMode:   asdbv1.AerospikeAuthModeInternal,
+											SecretName: test.AuthSecretName,
 											Roles: []string{
 												"sys-admin",
 												"user-admin",
@@ -1990,9 +1990,9 @@ var _ = Describe(
 										},
 
 										{
-											Name:              "profileUser",
-											AerospikeAuthMode: asdbv1.AerospikeAuthModeInternal,
-											SecretName:        test.AuthSecretName,
+											Name:       "profileUser",
+											AuthMode:   asdbv1.AerospikeAuthModeInternal,
+											SecretName: test.AuthSecretName,
 											Roles: []string{
 												"profiler",
 												"sys-admin",
@@ -2000,9 +2000,9 @@ var _ = Describe(
 										},
 
 										{
-											Name:              "userToDrop",
-											AerospikeAuthMode: asdbv1.AerospikeAuthModeInternal,
-											SecretName:        test.AuthSecretName,
+											Name:       "userToDrop",
+											AuthMode:   asdbv1.AerospikeAuthModeInternal,
+											SecretName: test.AuthSecretName,
 											Roles: []string{
 												"profiler",
 											},
@@ -2065,9 +2065,9 @@ var _ = Describe(
 									},
 									Users: []asdbv1.AerospikeUserSpec{
 										{
-											Name:              "admin",
-											AerospikeAuthMode: asdbv1.AerospikeAuthModeInternal,
-											SecretName:        test.AuthSecretName,
+											Name:       "admin",
+											AuthMode:   asdbv1.AerospikeAuthModeInternal,
+											SecretName: test.AuthSecretName,
 											Roles: []string{
 												"sys-admin",
 												"user-admin",
@@ -2075,9 +2075,9 @@ var _ = Describe(
 										},
 
 										{
-											Name:              "profileUser",
-											AerospikeAuthMode: asdbv1.AerospikeAuthModeInternal,
-											SecretName:        test.AuthSecretName,
+											Name:       "profileUser",
+											AuthMode:   asdbv1.AerospikeAuthModeInternal,
+											SecretName: test.AuthSecretName,
 											Roles: []string{
 												"profiler",
 												"sys-admin",
@@ -2085,9 +2085,9 @@ var _ = Describe(
 										},
 
 										{
-											Name:              "userToDrop",
-											AerospikeAuthMode: asdbv1.AerospikeAuthModeInternal,
-											SecretName:        test.AuthSecretName,
+											Name:       "userToDrop",
+											AuthMode:   asdbv1.AerospikeAuthModeInternal,
+											SecretName: test.AuthSecretName,
 											Roles: []string{
 												"profiler",
 											},
@@ -2135,8 +2135,8 @@ var _ = Describe(
 							accessControl := &asdbv1.AerospikeAccessControlSpec{
 								Users: []asdbv1.AerospikeUserSpec{
 									{
-										Name:              "admin",
-										AerospikeAuthMode: asdbv1.AerospikeAuthModePKIOnly,
+										Name:     "admin",
+										AuthMode: asdbv1.AerospikeAuthModePKIOnly,
 										Roles: []string{
 											"sys-admin",
 											"user-admin",
@@ -2160,17 +2160,17 @@ var _ = Describe(
 							accessControl := &asdbv1.AerospikeAccessControlSpec{
 								Users: []asdbv1.AerospikeUserSpec{
 									{
-										Name:              "admin",
-										AerospikeAuthMode: asdbv1.AerospikeAuthModePKIOnly,
+										Name:     "admin",
+										AuthMode: asdbv1.AerospikeAuthModePKIOnly,
 										Roles: []string{
 											"sys-admin",
 											"user-admin",
 										},
 									},
 									{
-										Name:              "user01",
-										AerospikeAuthMode: asdbv1.AerospikeAuthModeInternal,
-										SecretName:        test.AuthSecretName,
+										Name:       "user01",
+										AuthMode:   asdbv1.AerospikeAuthModeInternal,
+										SecretName: test.AuthSecretName,
 										Roles: []string{
 											"sys-admin",
 											"user-admin",
@@ -2194,8 +2194,8 @@ var _ = Describe(
 							accessControl := &asdbv1.AerospikeAccessControlSpec{
 								Users: []asdbv1.AerospikeUserSpec{
 									{
-										Name:              "admin",
-										AerospikeAuthMode: asdbv1.AerospikeAuthModePKIOnly,
+										Name:     "admin",
+										AuthMode: asdbv1.AerospikeAuthModePKIOnly,
 										Roles: []string{
 											"sys-admin",
 											"user-admin",
@@ -2214,9 +2214,9 @@ var _ = Describe(
 							accessControl = &asdbv1.AerospikeAccessControlSpec{
 								Users: []asdbv1.AerospikeUserSpec{
 									{
-										Name:              "admin",
-										AerospikeAuthMode: asdbv1.AerospikeAuthModeInternal,
-										SecretName:        test.AuthSecretName,
+										Name:       "admin",
+										AuthMode:   asdbv1.AerospikeAuthModeInternal,
+										SecretName: test.AuthSecretName,
 										Roles: []string{
 											"sys-admin",
 											"user-admin",
@@ -2236,9 +2236,9 @@ var _ = Describe(
 							accessControl := &asdbv1.AerospikeAccessControlSpec{
 								Users: []asdbv1.AerospikeUserSpec{
 									{
-										Name:              "admin",
-										AerospikeAuthMode: asdbv1.AerospikeAuthModePKIOnly,
-										SecretName:        test.AuthSecretName,
+										Name:       "admin",
+										AuthMode:   asdbv1.AerospikeAuthModePKIOnly,
+										SecretName: test.AuthSecretName,
 										Roles: []string{
 											"sys-admin",
 											"user-admin",
@@ -2263,17 +2263,17 @@ var _ = Describe(
 							accessControl := &asdbv1.AerospikeAccessControlSpec{
 								Users: []asdbv1.AerospikeUserSpec{
 									{
-										Name:              "admin",
-										AerospikeAuthMode: asdbv1.AerospikeAuthModePKIOnly,
+										Name:     "admin",
+										AuthMode: asdbv1.AerospikeAuthModePKIOnly,
 										Roles: []string{
 											"sys-admin",
 											"user-admin",
 										},
 									},
 									{
-										Name:              "user01",
-										AerospikeAuthMode: asdbv1.AerospikeAuthModeInternal,
-										SecretName:        test.AuthSecretName,
+										Name:       "user01",
+										AuthMode:   asdbv1.AerospikeAuthModeInternal,
+										SecretName: test.AuthSecretName,
 										Roles: []string{
 											"sys-admin",
 											"user-admin",
@@ -2295,15 +2295,15 @@ var _ = Describe(
 							accessControl := &asdbv1.AerospikeAccessControlSpec{
 								Users: []asdbv1.AerospikeUserSpec{
 									{
-										Name:              "admin",
-										AerospikeAuthMode: asdbv1.AerospikeAuthModeInternal,
-										SecretName:        test.AuthSecretName,
-										Roles:             []string{"sys-admin", "user-admin"},
+										Name:       "admin",
+										AuthMode:   asdbv1.AerospikeAuthModeInternal,
+										SecretName: test.AuthSecretName,
+										Roles:      []string{"sys-admin", "user-admin"},
 									},
 									{
-										Name:              "user01",
-										AerospikeAuthMode: asdbv1.AerospikeAuthModeInternal,
-										SecretName:        test.AuthSecretName,
+										Name:       "user01",
+										AuthMode:   asdbv1.AerospikeAuthModeInternal,
+										SecretName: test.AuthSecretName,
 										Roles: []string{
 											"sys-admin",
 											"user-admin",
@@ -2322,14 +2322,14 @@ var _ = Describe(
 							accessControl = &asdbv1.AerospikeAccessControlSpec{
 								Users: []asdbv1.AerospikeUserSpec{
 									{
-										Name:              "admin",
-										AerospikeAuthMode: asdbv1.AerospikeAuthModePKIOnly,
-										Roles:             []string{"sys-admin", "user-admin"},
+										Name:     "admin",
+										AuthMode: asdbv1.AerospikeAuthModePKIOnly,
+										Roles:    []string{"sys-admin", "user-admin"},
 									},
 									{
-										Name:              "user01",
-										AerospikeAuthMode: asdbv1.AerospikeAuthModeInternal,
-										SecretName:        test.AuthSecretName,
+										Name:       "user01",
+										AuthMode:   asdbv1.AerospikeAuthModeInternal,
+										SecretName: test.AuthSecretName,
 										Roles: []string{
 											"sys-admin",
 											"user-admin",
@@ -2346,10 +2346,10 @@ var _ = Describe(
 							accessControl := &asdbv1.AerospikeAccessControlSpec{
 								Users: []asdbv1.AerospikeUserSpec{
 									{
-										Name:              "admin",
-										AerospikeAuthMode: asdbv1.AerospikeAuthModeInternal,
-										SecretName:        test.AuthSecretName,
-										Roles:             []string{"sys-admin", "user-admin"},
+										Name:       "admin",
+										AuthMode:   asdbv1.AerospikeAuthModeInternal,
+										SecretName: test.AuthSecretName,
+										Roles:      []string{"sys-admin", "user-admin"},
 									},
 								},
 							}
@@ -2381,9 +2381,9 @@ var _ = Describe(
 							accessControl = &asdbv1.AerospikeAccessControlSpec{
 								Users: []asdbv1.AerospikeUserSpec{
 									{
-										Name:              "admin",
-										AerospikeAuthMode: asdbv1.AerospikeAuthModePKIOnly,
-										Roles:             []string{"sys-admin", "user-admin"},
+										Name:     "admin",
+										AuthMode: asdbv1.AerospikeAuthModePKIOnly,
+										Roles:    []string{"sys-admin", "user-admin"},
 									},
 								},
 							}
@@ -2431,13 +2431,13 @@ var _ = Describe(
 							accessControl := &asdbv1.AerospikeAccessControlSpec{
 								Users: []asdbv1.AerospikeUserSpec{
 									{
-										Name:              "admin",
-										AerospikeAuthMode: asdbv1.AerospikeAuthModePKIOnly,
-										Roles:             []string{"sys-admin", "user-admin"},
+										Name:     "admin",
+										AuthMode: asdbv1.AerospikeAuthModePKIOnly,
+										Roles:    []string{"sys-admin", "user-admin"},
 									},
 									{
-										Name:              "user01",
-										AerospikeAuthMode: asdbv1.AerospikeAuthModePKIOnly,
+										Name:     "user01",
+										AuthMode: asdbv1.AerospikeAuthModePKIOnly,
 										Roles: []string{
 											"sys-admin",
 											"user-admin",
@@ -2668,7 +2668,6 @@ func getTLSAerospikeClusterSpecWithAccessControl(
 	clusterNamespacedName types.NamespacedName,
 	accessControl *asdbv1.AerospikeAccessControlSpec,
 ) *asdbv1.AerospikeCluster {
-
 	return &asdbv1.AerospikeCluster{
 		ObjectMeta: metav1.ObjectMeta{
 			Name:      clusterNamespacedName.Name,

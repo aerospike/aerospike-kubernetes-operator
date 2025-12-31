@@ -744,7 +744,8 @@ func (r *SingleClusterReconciler) updateSTSPVStorage(
 
 	for idx := range volumes {
 		volume := &volumes[idx]
-		initContainerAttachments, containerAttachments := getFinalVolumeAttachmentsForVolume(volume)
+		initContainerAttachments, containerAttachments := getFinalVolumeAttachmentsForVolume(volume,
+			asdbv1.GetWorkDirectory(rackState.Rack.AerospikeConfig))
 
 		switch volume.Source.PersistentVolume.VolumeMode {
 		case corev1.PersistentVolumeBlock:
@@ -769,11 +770,11 @@ func (r *SingleClusterReconciler) updateSTSPVStorage(
 			addVolumeMountInContainer(
 				volume.Name, initContainerAttachments,
 				st.Spec.Template.Spec.InitContainers,
-				initContainerVolumePathPrefix, r.aeroCluster.Spec.AerospikeConfig,
+				initContainerVolumePathPrefix,
 			)
 			addVolumeMountInContainer(
 				volume.Name, containerAttachments,
-				st.Spec.Template.Spec.Containers, "", r.aeroCluster.Spec.AerospikeConfig,
+				st.Spec.Template.Spec.Containers, "",
 			)
 		default:
 			// Should never come here
@@ -810,7 +811,8 @@ func (r *SingleClusterReconciler) updateSTSNonPVStorage(
 
 	for idx := range volumes {
 		volume := &volumes[idx]
-		initContainerAttachments, containerAttachments := getFinalVolumeAttachmentsForVolume(volume)
+		initContainerAttachments, containerAttachments := getFinalVolumeAttachmentsForVolume(volume,
+			asdbv1.GetWorkDirectory(rackState.Rack.AerospikeConfig))
 
 		r.Log.V(1).Info(
 			"Added volume mount in statefulSet pod containers for volume",
@@ -821,11 +823,10 @@ func (r *SingleClusterReconciler) updateSTSNonPVStorage(
 		addVolumeMountInContainer(
 			volume.Name, initContainerAttachments,
 			st.Spec.Template.Spec.InitContainers, initContainerVolumePathPrefix,
-			r.aeroCluster.Spec.AerospikeConfig,
 		)
 		addVolumeMountInContainer(
 			volume.Name, containerAttachments, st.Spec.Template.Spec.Containers,
-			"", r.aeroCluster.Spec.AerospikeConfig,
+			"",
 		)
 
 		// Add volume in statefulSet template
@@ -1434,7 +1435,7 @@ func createVolumeForVolumeAttachment(volume *asdbv1.VolumeSpec) corev1.Volume {
 }
 
 // Add dummy volumeAttachment for aerospike, init container
-func getFinalVolumeAttachmentsForVolume(volume *asdbv1.VolumeSpec) (
+func getFinalVolumeAttachmentsForVolume(volume *asdbv1.VolumeSpec, workDirPath string) (
 	initContainerAttachments,
 	containerAttachments []asdbv1.VolumeAttachment,
 ) {
@@ -1455,24 +1456,31 @@ func getFinalVolumeAttachmentsForVolume(volume *asdbv1.VolumeSpec) (
 	containerAttachments = append(containerAttachments, volume.Sidecars...)
 
 	if volume.Aerospike != nil {
-		containerAttachment := asdbv1.VolumeAttachment{
-			ContainerName: asdbv1.AerospikeServerContainerName,
-			Path:          volume.Aerospike.Path,
-		}
-
-		// Mount options (ReadOnly, SubPath, SubPathExpr, MountPropagation...) are only
-		// applicable and enforced for hostPath volumes in aerospike containers.
-		if volume.Source.HostPath != nil {
-			containerAttachment.AttachmentOptions = asdbv1.AttachmentOptions{
-				MountOptions: volume.Aerospike.MountOptions,
+		// Special handling for workdir mount in aerospike server container for FIPs compliance.
+		// workdir has sub directories (smd, usr) that need to be mounted separately.
+		if volume.Aerospike.Path == workDirPath {
+			containerAttachments = append(containerAttachments,
+				getWorkDirSubPathVolumeMounts(volume.Aerospike.Path)...)
+		} else {
+			containerAttachment := asdbv1.VolumeAttachment{
+				ContainerName: asdbv1.AerospikeServerContainerName,
+				Path:          volume.Aerospike.Path,
 			}
 
-			aerosikeInitContainerAttachment.AttachmentOptions = asdbv1.AttachmentOptions{
-				MountOptions: volume.Aerospike.MountOptions,
-			}
-		}
+			// Mount options (ReadOnly, SubPath, SubPathExpr, MountPropagation...) are only
+			// applicable and enforced for hostPath volumes in aerospike containers.
+			if volume.Source.HostPath != nil {
+				containerAttachment.AttachmentOptions = asdbv1.AttachmentOptions{
+					MountOptions: volume.Aerospike.MountOptions,
+				}
 
-		containerAttachments = append(containerAttachments, containerAttachment)
+				aerosikeInitContainerAttachment.AttachmentOptions = asdbv1.AttachmentOptions{
+					MountOptions: volume.Aerospike.MountOptions,
+				}
+			}
+
+			containerAttachments = append(containerAttachments, containerAttachment)
+		}
 	}
 
 	initContainerAttachments = append(
@@ -1484,7 +1492,7 @@ func getFinalVolumeAttachmentsForVolume(volume *asdbv1.VolumeSpec) (
 
 func addVolumeMountInContainer(
 	volumeName string, volumeAttachments []asdbv1.VolumeAttachment,
-	containers []corev1.Container, pathPrefix string, aeroConf *asdbv1.AerospikeConfigSpec,
+	containers []corev1.Container, pathPrefix string,
 ) {
 	var (
 		mountPath   string
@@ -1495,54 +1503,30 @@ func addVolumeMountInContainer(
 		for idx := range containers {
 			container := &containers[idx]
 
-			if container.Name == volumeAttachment.ContainerName {
-				if container.Name == asdbv1.AerospikeInitContainerName {
-					mountPath = pathPrefix + volumeAttachment.Path
-				} else {
-					mountPath = volumeAttachment.Path
-				}
-
-				if container.Name == asdbv1.AerospikeServerContainerName && mountPath == asdbv1.GetWorkDirectory(*aeroConf) {
-					volumeMount1 := corev1.VolumeMount{
-						Name:             volumeName,
-						MountPath:        mountPath + "/smd",
-						ReadOnly:         asdbv1.GetBool(volumeAttachment.ReadOnly),
-						SubPath:          "smd",
-						SubPathExpr:      volumeAttachment.SubPathExpr,
-						MountPropagation: volumeAttachment.MountPropagation,
-					}
-
-					volumeMount2 := corev1.VolumeMount{
-						Name:             volumeName,
-						MountPath:        mountPath + "/usr",
-						ReadOnly:         asdbv1.GetBool(volumeAttachment.ReadOnly),
-						SubPath:          "usr",
-						SubPathExpr:      volumeAttachment.SubPathExpr,
-						MountPropagation: volumeAttachment.MountPropagation,
-					}
-
-					container.VolumeMounts = append(
-						container.VolumeMounts, volumeMount1, volumeMount2,
-					)
-
-					break
-				}
-
-				volumeMount = corev1.VolumeMount{
-					Name:             volumeName,
-					MountPath:        mountPath,
-					ReadOnly:         asdbv1.GetBool(volumeAttachment.ReadOnly),
-					SubPath:          volumeAttachment.SubPath,
-					SubPathExpr:      volumeAttachment.SubPathExpr,
-					MountPropagation: volumeAttachment.MountPropagation,
-				}
-
-				container.VolumeMounts = append(
-					container.VolumeMounts, volumeMount,
-				)
-
-				break
+			if container.Name != volumeAttachment.ContainerName {
+				continue
 			}
+
+			if container.Name == asdbv1.AerospikeInitContainerName {
+				mountPath = pathPrefix + volumeAttachment.Path
+			} else {
+				mountPath = volumeAttachment.Path
+			}
+
+			volumeMount = corev1.VolumeMount{
+				Name:             volumeName,
+				MountPath:        mountPath,
+				ReadOnly:         asdbv1.GetBool(volumeAttachment.ReadOnly),
+				SubPath:          volumeAttachment.SubPath,
+				SubPathExpr:      volumeAttachment.SubPathExpr,
+				MountPropagation: volumeAttachment.MountPropagation,
+			}
+
+			container.VolumeMounts = append(
+				container.VolumeMounts, volumeMount,
+			)
+
+			break
 		}
 	}
 }

@@ -1372,7 +1372,6 @@ func CreateAdminTLSCluster(
 	clusterNamespacedName types.NamespacedName,
 	size int32,
 ) *asdbv1.AerospikeCluster {
-
 	return &asdbv1.AerospikeCluster{
 		ObjectMeta: metav1.ObjectMeta{
 			Name:      clusterNamespacedName.Name,
@@ -1384,8 +1383,8 @@ func CreateAdminTLSCluster(
 			AerospikeAccessControl: &asdbv1.AerospikeAccessControlSpec{
 				Users: []asdbv1.AerospikeUserSpec{
 					{
-						Name:              "admin",
-						AerospikeAuthMode: asdbv1.AerospikeAuthModePKIOnly,
+						Name:     "admin",
+						AuthMode: asdbv1.AerospikeAuthModePKIOnly,
 						Roles: []string{
 							"sys-admin",
 							"user-admin",
