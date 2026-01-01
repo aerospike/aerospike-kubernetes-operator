@@ -2517,6 +2517,21 @@ func negativeUpdateClusterValidationTest(
 								},
 							)
 
+							It(
+								"Namespace name missing: should fail for nil aerospikeConfig.namespace.name",
+								func() {
+									aeroCluster, err := getCluster(
+										k8sClient, ctx, clusterNamespacedName,
+									)
+									Expect(err).ToNot(HaveOccurred())
+
+									delete(aeroCluster.Spec.AerospikeConfig.
+										Value[asdbv1.ConfKeyNamespace].([]interface{})[0].(map[string]interface{}), "name")
+									err = k8sClient.Update(ctx, aeroCluster)
+									Expect(err).Should(HaveOccurred())
+								},
+							)
+
 							// Should we test for overridden fields
 							Context(
 								"InvalidStorage", func() {

@@ -263,6 +263,10 @@ func validateNamespaceConfig(
 			)
 		}
 
+		if _, ok := nsConf["name"]; !ok {
+			return fmt.Errorf("namespace name not found in namespace config %v", nsConf)
+		}
+
 		if nErr := validateNamespaceReplicationFactor(
 			nsConf, clSize,
 		); nErr != nil {
