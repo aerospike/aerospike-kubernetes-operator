@@ -165,7 +165,9 @@ func (acv *AerospikeClusterCustomValidator) ValidateUpdate(_ context.Context, ol
 	}
 
 	// Block single-step TLS + PKIOnly update
-	if err := validateTLSAndPKIOnlyUpdate(&oldObject.Spec, &aerospikeCluster.Spec); err != nil {
+	if err := validateTLSAndPKIOnlyUpdate(
+		&oldObject.Spec, &aerospikeCluster.Spec, &aerospikeCluster.Status,
+	); err != nil {
 		return warnings, err
 	}
 
@@ -1999,15 +2001,27 @@ func hasPKIOnlyUser(spec *asdbv1.AerospikeClusterSpec) bool {
 // When enabling TLS with PKIOnly, ACL reconciliation happens during rolling restart
 // before all pods have TLS. If admin is set to PKIOnly (nopassword), the operator cannot connect
 // to non-TLS pods because PKI auth requires TLS certificates.
-func validateTLSAndPKIOnlyUpdate(oldSpec, newSpec *asdbv1.AerospikeClusterSpec) error {
+func validateTLSAndPKIOnlyUpdate(oldSpec, newSpec *asdbv1.AerospikeClusterSpec,
+	status *asdbv1.AerospikeClusterStatus) error {
 	oldTLSName, _ := asdbv1.GetServiceTLSNameAndPort(oldSpec.AerospikeConfig)
 	newTLSName, _ := asdbv1.GetServiceTLSNameAndPort(newSpec.AerospikeConfig)
+	hasPKIUser := hasPKIOnlyUser(newSpec)
 
 	// Check if TLS is being enabled
 	if oldTLSName == "" && newTLSName != "" {
-		if hasPKIOnlyUser(newSpec) {
+		if hasPKIUser {
 			return fmt.Errorf("cannot enable TLS and PKIOnly authMode in a single update; " +
 				"first enable TLS, then switch to PKIOnly auth mode")
+		}
+	}
+
+	// Block PKIOnly if TLS rollout is still in progress
+	if hasPKIUser && status != nil && status.AerospikeConfig != nil {
+		statusTLSName, _ := asdbv1.GetServiceTLSNameAndPort(status.AerospikeConfig)
+		// Spec has TLS but status doesn't = TLS rollout in progress
+		if newTLSName != "" && statusTLSName == "" {
+			return fmt.Errorf("cannot enable PKIOnly authMode while TLS rollout is in progress; " +
+				"wait for TLS to be fully deployed first")
 		}
 	}
 

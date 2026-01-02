@@ -2249,6 +2249,29 @@ var _ = Describe(
 								"cannot enable TLS and PKIOnly authMode in a single update"))
 						})
 
+						It("Should block PKIOnly authMode while TLS rollout is in progress", func() {
+							// Create a non-TLS cluster
+							aeroCluster := createDummyAerospikeCluster(clusterNamespacedName, 2)
+							Expect(DeployCluster(k8sClient, ctx, aeroCluster)).ToNot(HaveOccurred())
+
+							By("Enable TLS first")
+							aeroCluster.Spec.AerospikeConfig.Value[asdbv1.ConfKeyNetwork] = getNetworkTLSConfig()
+							aeroCluster.Spec.OperatorClientCertSpec = getAdminOperatorCert()
+
+							err := updateClusterWithNoWait(k8sClient, ctx, aeroCluster)
+							Expect(err).ToNot(HaveOccurred())
+
+							// Now try to enable PKIOnly while TLS is still rolling out
+							// At this point: spec has TLS, but status doesn't have TLS yet
+							aeroCluster.Spec.AerospikeAccessControl.Users[0].AuthMode = asdbv1.AerospikeAuthModePKIOnly
+							aeroCluster.Spec.AerospikeAccessControl.Users[0].SecretName = ""
+
+							err = updateClusterWithNoWait(k8sClient, ctx, aeroCluster)
+							Expect(err).To(HaveOccurred())
+							Expect(err.Error()).To(ContainSubstring(
+								"cannot enable PKIOnly authMode while TLS rollout is in progress"))
+						})
+
 					})
 
 					Context("when doing valid operations", func() {
