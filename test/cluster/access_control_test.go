@@ -14,11 +14,11 @@ import (
 	. "github.com/onsi/ginkgo/v2"
 	. "github.com/onsi/gomega"
 	corev1 "k8s.io/api/core/v1"
-	"k8s.io/apimachinery/pkg/api/resource"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/types"
 	"k8s.io/apimachinery/pkg/util/intstr"
 	"k8s.io/utils/ptr"
+	"sigs.k8s.io/controller-runtime/pkg/client"
 
 	as "github.com/aerospike/aerospike-client-go/v8"
 	asdbv1 "github.com/aerospike/aerospike-kubernetes-operator/v4/api/v1"
@@ -1539,7 +1539,6 @@ var _ = Describe(
 									Users: []asdbv1.AerospikeUserSpec{
 										{
 											Name:       "admin",
-											AuthMode:   asdbv1.AerospikeAuthModeInternal,
 											SecretName: test.AuthSecretNameForUpdate,
 											Roles: []string{
 												"sys-admin",
@@ -1549,7 +1548,6 @@ var _ = Describe(
 
 										{
 											Name:       "profileUser",
-											AuthMode:   asdbv1.AerospikeAuthModeInternal,
 											SecretName: test.AuthSecretNameForUpdate,
 											Roles: []string{
 												"data-admin",
@@ -1594,7 +1592,6 @@ var _ = Describe(
 									Users: []asdbv1.AerospikeUserSpec{
 										{
 											Name:       "admin",
-											AuthMode:   asdbv1.AerospikeAuthModeInternal,
 											SecretName: test.AuthSecretNameForUpdate,
 											Roles: []string{
 												"sys-admin",
@@ -1604,7 +1601,6 @@ var _ = Describe(
 
 										{
 											Name:       "profileUser",
-											AuthMode:   asdbv1.AerospikeAuthModeInternal,
 											SecretName: test.AuthSecretNameForUpdate,
 											Roles: []string{
 												"data-admin",
@@ -1694,7 +1690,6 @@ var _ = Describe(
 									Users: []asdbv1.AerospikeUserSpec{
 										{
 											Name:       "admin",
-											AuthMode:   asdbv1.AerospikeAuthModeInternal,
 											SecretName: test.AuthSecretNameForUpdate,
 											Roles: []string{
 												"sys-admin",
@@ -1704,7 +1699,6 @@ var _ = Describe(
 
 										{
 											Name:       "profileUser",
-											AuthMode:   asdbv1.AerospikeAuthModeInternal,
 											SecretName: test.AuthSecretNameForUpdate,
 											Roles: []string{
 												"profiler",
@@ -1773,7 +1767,6 @@ var _ = Describe(
 									Users: []asdbv1.AerospikeUserSpec{
 										{
 											Name:       "admin",
-											AuthMode:   asdbv1.AerospikeAuthModeInternal,
 											SecretName: test.AuthSecretNameForUpdate,
 											Roles: []string{
 												"sys-admin",
@@ -1783,7 +1776,6 @@ var _ = Describe(
 
 										{
 											Name:       "profileUser",
-											AuthMode:   asdbv1.AerospikeAuthModeInternal,
 											SecretName: test.AuthSecretNameForUpdate,
 											Roles: []string{
 												"profiler",
@@ -1857,7 +1849,6 @@ var _ = Describe(
 									Users: []asdbv1.AerospikeUserSpec{
 										{
 											Name:       "admin",
-											AuthMode:   asdbv1.AerospikeAuthModeInternal,
 											SecretName: test.AuthSecretName,
 											Roles: []string{
 												"sys-admin",
@@ -1867,7 +1858,6 @@ var _ = Describe(
 
 										{
 											Name:       "profileUser",
-											AuthMode:   asdbv1.AerospikeAuthModeInternal,
 											SecretName: test.AuthSecretName,
 											Roles: []string{
 												"profiler",
@@ -1877,7 +1867,6 @@ var _ = Describe(
 
 										{
 											Name:       "userToDrop",
-											AuthMode:   asdbv1.AerospikeAuthModeInternal,
 											SecretName: test.AuthSecretName,
 											Roles: []string{
 												"profiler",
@@ -2001,7 +1990,6 @@ var _ = Describe(
 
 										{
 											Name:       "userToDrop",
-											AuthMode:   asdbv1.AerospikeAuthModeInternal,
 											SecretName: test.AuthSecretName,
 											Roles: []string{
 												"profiler",
@@ -2066,7 +2054,6 @@ var _ = Describe(
 									Users: []asdbv1.AerospikeUserSpec{
 										{
 											Name:       "admin",
-											AuthMode:   asdbv1.AerospikeAuthModeInternal,
 											SecretName: test.AuthSecretName,
 											Roles: []string{
 												"sys-admin",
@@ -2076,7 +2063,6 @@ var _ = Describe(
 
 										{
 											Name:       "profileUser",
-											AuthMode:   asdbv1.AerospikeAuthModeInternal,
 											SecretName: test.AuthSecretName,
 											Roles: []string{
 												"profiler",
@@ -2086,7 +2072,6 @@ var _ = Describe(
 
 										{
 											Name:       "userToDrop",
-											AuthMode:   asdbv1.AerospikeAuthModeInternal,
 											SecretName: test.AuthSecretName,
 											Roles: []string{
 												"profiler",
@@ -2131,41 +2116,33 @@ var _ = Describe(
 						},
 					)
 					Context("when doing invalid operations", func() {
-						It("Should fail if PKIOnly auth mode is set for aerospike enterprise image below 8.1.0.0", func() {
+						It("Should fail if PKIOnly auth mode is set for Aerospike EE below 8.1.0.0", func() {
 							accessControl := &asdbv1.AerospikeAccessControlSpec{
 								Users: []asdbv1.AerospikeUserSpec{
 									{
 										Name:     "admin",
 										AuthMode: asdbv1.AerospikeAuthModePKIOnly,
-										Roles: []string{
-											"sys-admin",
-											"user-admin",
-										},
+										Roles:    []string{"sys-admin", "user-admin"},
 									},
 								},
 							}
 
-							aeroCluster := getTLSAerospikeClusterSpecWithAccessControl(
+							aeroCluster := getPKIAuthAerospikeClusterWithAccessControl(
 								clusterNamespacedName, accessControl,
 							)
 							aeroCluster.Spec.Image = pre810EnterpriseImage
-							err := DeployCluster(
-								k8sClient, ctx, aeroCluster,
-							)
+							err := DeployCluster(k8sClient, ctx, aeroCluster)
 							Expect(err).To(HaveOccurred())
-							Expect(err.Error()).To(ContainSubstring("PKI authentication requires Aerospike server version 8.1.0.0 or later"))
+							Expect(err.Error()).To(ContainSubstring("PKIOnly authMode requires Enterprise Edition version 8.1.0.0 or later"))
 						})
 
-						It("Should fail if server image is federal and auth mode of all users are not set to PKIOnly", func() {
+						It("Should fail if FE and auth mode of all users is not set to PKIOnly", func() {
 							accessControl := &asdbv1.AerospikeAccessControlSpec{
 								Users: []asdbv1.AerospikeUserSpec{
 									{
 										Name:     "admin",
 										AuthMode: asdbv1.AerospikeAuthModePKIOnly,
-										Roles: []string{
-											"sys-admin",
-											"user-admin",
-										},
+										Roles:    []string{"sys-admin", "user-admin"},
 									},
 									{
 										Name:       "user01",
@@ -2179,18 +2156,16 @@ var _ = Describe(
 								},
 							}
 
-							aeroCluster := getTLSAerospikeClusterSpecWithAccessControl(
+							aeroCluster := getPKIAuthAerospikeClusterWithAccessControl(
 								clusterNamespacedName, accessControl,
 							)
 							aeroCluster.Spec.Image = latestFederalImage
-							err := DeployCluster(
-								k8sClient, ctx, aeroCluster,
-							)
+							err := DeployCluster(k8sClient, ctx, aeroCluster)
 							Expect(err).To(HaveOccurred())
-							Expect(err.Error()).To(ContainSubstring("AuthMode for all users is required to be PKI with Federal image"))
+							Expect(err.Error()).To(ContainSubstring("authMode for all users must be PKI with Federal Edition"))
 						})
 
-						It("Should fail if any user's auth mode change from PKIOnly to Internal", func() {
+						It("Should fail if any user's auth mode is changed from PKIOnly to Internal", func() {
 							accessControl := &asdbv1.AerospikeAccessControlSpec{
 								Users: []asdbv1.AerospikeUserSpec{
 									{
@@ -2204,35 +2179,21 @@ var _ = Describe(
 								},
 							}
 
-							aeroCluster := getTLSAerospikeClusterSpecWithAccessControl(
+							aeroCluster := getPKIAuthAerospikeClusterWithAccessControl(
 								clusterNamespacedName, accessControl,
 							)
-							err := DeployCluster(
-								k8sClient, ctx, aeroCluster,
-							)
+							err := DeployCluster(k8sClient, ctx, aeroCluster)
 							Expect(err).ToNot(HaveOccurred())
-							accessControl = &asdbv1.AerospikeAccessControlSpec{
-								Users: []asdbv1.AerospikeUserSpec{
-									{
-										Name:       "admin",
-										AuthMode:   asdbv1.AerospikeAuthModeInternal,
-										SecretName: test.AuthSecretName,
-										Roles: []string{
-											"sys-admin",
-											"user-admin",
-										},
-									},
-								},
-							}
 
-							aeroCluster = getTLSAerospikeClusterSpecWithAccessControl(
-								clusterNamespacedName, accessControl,
-							)
+							aeroCluster.Spec.AerospikeAccessControl.Users[0].AuthMode = asdbv1.AerospikeAuthModeInternal
+							aeroCluster.Spec.AerospikeAccessControl.Users[0].SecretName = test.AuthSecretName
+
 							err = updateCluster(k8sClient, ctx, aeroCluster)
 							Expect(err).To(HaveOccurred())
-							Expect(err.Error()).To(ContainSubstring("user admin cannot be allowed to update auth mode from PKI to Internal"))
+							Expect(err.Error()).To(ContainSubstring("user admin is not allowed to update authMode from PKI to Internal"))
 						})
-						It("Should fail if any user's auth mode is PKIOnly and password secret is also set", func() {
+
+						It("Should fail when password secret is set with PKIOnly authMode", func() {
 							accessControl := &asdbv1.AerospikeAccessControlSpec{
 								Users: []asdbv1.AerospikeUserSpec{
 									{
@@ -2247,42 +2208,68 @@ var _ = Describe(
 								},
 							}
 
-							aeroCluster := getTLSAerospikeClusterSpecWithAccessControl(
+							aeroCluster := getPKIAuthAerospikeClusterWithAccessControl(
 								clusterNamespacedName, accessControl,
 							)
-							err := DeployCluster(
-								k8sClient, ctx, aeroCluster,
-							)
+							err := DeployCluster(k8sClient, ctx, aeroCluster)
 							Expect(err).To(HaveOccurred())
-							Expect(err.Error()).To(ContainSubstring("user admin doesn't require password when authmode is PKIOnly"))
+							Expect(err.Error()).To(ContainSubstring("user admin cannot set secretName when authMode is PKIOnly"))
 						})
+
+						It("Should fail PKIOnly authMode with non TLS cluster", func() {
+							aeroCluster := createDummyAerospikeCluster(clusterNamespacedName, 2)
+							aeroCluster.Spec.AerospikeAccessControl.Users[0].AuthMode = asdbv1.AerospikeAuthModePKIOnly
+							aeroCluster.Spec.AerospikeAccessControl.Users[0].SecretName = ""
+
+							err := DeployCluster(k8sClient, ctx, aeroCluster)
+							Expect(err).To(HaveOccurred())
+							Expect(err.Error()).To(ContainSubstring("PKIOnly authMode requires Aerospike cluster to be mTLS enabled"))
+						})
+
+						It("Should block upgrading to TLS and PKIOnly in a single update", func() {
+							aeroCluster := createDummyAerospikeCluster(clusterNamespacedName, 2)
+							Expect(DeployCluster(k8sClient, ctx, aeroCluster)).ToNot(HaveOccurred())
+
+							// Enable TLS + PKIOnly in a single update
+							aeroCluster.Spec.AerospikeConfig.Value[asdbv1.ConfKeyNetwork] = getNetworkTLSConfig()
+							aeroCluster.Spec.OperatorClientCertSpec = getAdminOperatorCert()
+							aeroCluster.Spec.AerospikeAccessControl = &asdbv1.AerospikeAccessControlSpec{
+								Users: []asdbv1.AerospikeUserSpec{
+									{
+										Name:     "admin",
+										AuthMode: asdbv1.AerospikeAuthModePKIOnly,
+										Roles:    []string{"sys-admin", "user-admin"},
+									},
+								},
+							}
+
+							err := updateClusterWithNoWait(k8sClient, ctx, aeroCluster)
+							Expect(err).To(HaveOccurred())
+							Expect(err.Error()).To(ContainSubstring(
+								"cannot enable TLS and PKIOnly authMode in a single update"))
+						})
+
 					})
 
 					Context("when doing valid operations", func() {
-						It("Should allow PKIOnly auth mode on enterprise 8.1.0.0 or later image", func() {
+						It("Should allow PKIOnly authMode with EE 8.1.0.0 or later", func() {
 							accessControl := &asdbv1.AerospikeAccessControlSpec{
 								Users: []asdbv1.AerospikeUserSpec{
 									{
 										Name:     "admin",
 										AuthMode: asdbv1.AerospikeAuthModePKIOnly,
-										Roles: []string{
-											"sys-admin",
-											"user-admin",
-										},
+										Roles:    []string{"sys-admin", "user-admin"},
 									},
 									{
 										Name:       "user01",
 										AuthMode:   asdbv1.AerospikeAuthModeInternal,
 										SecretName: test.AuthSecretName,
-										Roles: []string{
-											"sys-admin",
-											"user-admin",
-										},
+										Roles:      []string{"sys-admin", "user-admin"},
 									},
 								},
 							}
 
-							aeroCluster := getTLSAerospikeClusterSpecWithAccessControl(
+							aeroCluster := getPKIAuthAerospikeClusterWithAccessControl(
 								clusterNamespacedName, accessControl,
 							)
 
@@ -2290,7 +2277,7 @@ var _ = Describe(
 							Expect(err).ToNot(HaveOccurred())
 						})
 
-						It("Should allow updating users auth mode from Internal to PKIOnly", func() {
+						It("Should allow updating users from Internal to PKIOnly authMode", func() {
 							// Create with admin user with Internal auth (password-based).
 							accessControl := &asdbv1.AerospikeAccessControlSpec{
 								Users: []asdbv1.AerospikeUserSpec{
@@ -2304,45 +2291,27 @@ var _ = Describe(
 										Name:       "user01",
 										AuthMode:   asdbv1.AerospikeAuthModeInternal,
 										SecretName: test.AuthSecretName,
-										Roles: []string{
-											"sys-admin",
-											"user-admin",
-										},
+										Roles:      []string{"sys-admin", "user-admin"},
 									},
 								},
 							}
 
-							aeroCluster := getTLSAerospikeClusterSpecWithAccessControl(
+							aeroCluster := getPKIAuthAerospikeClusterWithAccessControl(
 								clusterNamespacedName, accessControl,
 							)
 
 							Expect(testAccessControlReconcile(aeroCluster, ctx)).To(Succeed())
 
-							// Update admin user with Internal auth to PKIOnly (certificate-based).
-							accessControl = &asdbv1.AerospikeAccessControlSpec{
-								Users: []asdbv1.AerospikeUserSpec{
-									{
-										Name:     "admin",
-										AuthMode: asdbv1.AerospikeAuthModePKIOnly,
-										Roles:    []string{"sys-admin", "user-admin"},
-									},
-									{
-										Name:       "user01",
-										AuthMode:   asdbv1.AerospikeAuthModeInternal,
-										SecretName: test.AuthSecretName,
-										Roles: []string{
-											"sys-admin",
-											"user-admin",
-										},
-									},
-								},
-							}
-							aeroCluster.Spec.AerospikeAccessControl = accessControl
+							// Update all users with Internal auth to PKIOnly (certificate-based).
+							aeroCluster.Spec.AerospikeAccessControl.Users[0].AuthMode = asdbv1.AerospikeAuthModePKIOnly
+							aeroCluster.Spec.AerospikeAccessControl.Users[0].SecretName = ""
+							aeroCluster.Spec.AerospikeAccessControl.Users[1].AuthMode = asdbv1.AerospikeAuthModePKIOnly
+							aeroCluster.Spec.AerospikeAccessControl.Users[1].SecretName = ""
 
 							Expect(testAccessControlReconcile(aeroCluster, ctx)).To(Succeed())
 						})
 
-						It("Should allow only certificate based login for PKIOnly user and reject password based login", func() {
+						It("Should allow only PKI login and reject password based login", func() {
 							accessControl := &asdbv1.AerospikeAccessControlSpec{
 								Users: []asdbv1.AerospikeUserSpec{
 									{
@@ -2354,80 +2323,52 @@ var _ = Describe(
 								},
 							}
 
-							aeroCluster := getTLSAerospikeClusterSpecWithAccessControl(
+							aeroCluster := getPKIAuthAerospikeClusterWithAccessControl(
 								clusterNamespacedName, accessControl,
 							)
 							Expect(testAccessControlReconcile(aeroCluster, ctx)).To(Succeed())
 
+							aeroCluster, err := getCluster(k8sClient, ctx, clusterNamespacedName)
+							Expect(err).ToNot(HaveOccurred())
+
 							By("Password-based auth should succeed for Internal auth mode user")
 							// Password-based auth should succeed.
-							cp := getClientPolicy(aeroCluster, k8sClient)
-							cp.User = "admin"
-							cp.Password = "admin123"
-							cp.AuthMode = as.AuthModeInternal
-							cp.FailIfNotConnected = true
+							policy := getClientPolicy(aeroCluster, k8sClient)
+
 							Eventually(func() error {
-								client, err := getClientWithPolicy(pkgLog, aeroCluster, k8sClient, cp)
-								if err != nil {
-									return err
-								}
-								defer client.Close()
-								if len(client.GetNodeNames()) == 0 {
-									return fmt.Errorf("not connected")
-								}
-								return nil
-							}, 2*time.Minute, 5*time.Second).Should(Succeed())
+								return checkClientConnection(aeroCluster, k8sClient, policy)
+							}, 1*time.Minute, 5*time.Second).Should(Succeed())
 
-							accessControl = &asdbv1.AerospikeAccessControlSpec{
-								Users: []asdbv1.AerospikeUserSpec{
-									{
-										Name:     "admin",
-										AuthMode: asdbv1.AerospikeAuthModePKIOnly,
-										Roles:    []string{"sys-admin", "user-admin"},
-									},
-								},
-							}
+							By("Updating user to PKIOnly auth mode")
 
-							aeroCluster = getTLSAerospikeClusterSpecWithAccessControl(
-								clusterNamespacedName, accessControl,
-							)
+							aeroCluster.Spec.AerospikeAccessControl.Users[0].AuthMode = asdbv1.AerospikeAuthModePKIOnly
+							aeroCluster.Spec.AerospikeAccessControl.Users[0].SecretName = ""
 							Expect(testAccessControlReconcile(aeroCluster, ctx)).To(Succeed())
 
 							By("Password-based auth should fail for PKIOnly auth mode user")
 							// Password-based auth should fail.
+							policy = getClientPolicy(aeroCluster, k8sClient)
+							policy.User = "admin"
+							policy.Password = "admin123"
+							policy.AuthMode = as.AuthModeInternal
+							policy.FailIfNotConnected = true
+
 							Eventually(func() error {
-								cp = getClientPolicy(aeroCluster, k8sClient)
-								cp.User = "admin"
-								cp.Password = "admin123"
-								cp.AuthMode = as.AuthModeInternal
-								cp.FailIfNotConnected = true
-								_, err := getClientWithPolicy(pkgLog, aeroCluster, k8sClient, cp)
-								return err
-							}, 2*time.Minute, 5*time.Second).Should(HaveOccurred())
+								return checkClientConnection(aeroCluster, k8sClient, policy)
+							}, 1*time.Minute, 5*time.Second).Should(HaveOccurred())
 
 							By("PKI auth should succeed for PKIOnly auth mode user")
+							aeroCluster, err = getCluster(k8sClient, ctx, clusterNamespacedName)
+							Expect(err).ToNot(HaveOccurred())
 							// PKI auth should succeed.
-							cp = getClientPolicy(aeroCluster, k8sClient)
-							cp.User = ""
-							cp.Password = "" // no password
-							cp.AuthMode = as.AuthModePKI
-							cp.FailIfNotConnected = true
+							policy = getClientPolicy(aeroCluster, k8sClient)
 
 							Eventually(func() error {
-								client, err := getClientWithPolicy(pkgLog, aeroCluster, k8sClient, cp)
-								if err != nil {
-									return err
-								}
-								defer client.Close()
-								if len(client.GetNodeNames()) == 0 {
-									return fmt.Errorf("not connected")
-								}
-								return nil
-							}, 2*time.Minute, 5*time.Second).Should(Succeed())
+								return checkClientConnection(aeroCluster, k8sClient, policy)
+							}, 1*time.Minute, 5*time.Second).Should(Succeed())
 						})
 
 						It("Should allow users with PKIOnly auth mode for federal image", func() {
-
 							accessControl := &asdbv1.AerospikeAccessControlSpec{
 								Users: []asdbv1.AerospikeUserSpec{
 									{
@@ -2438,21 +2379,25 @@ var _ = Describe(
 									{
 										Name:     "user01",
 										AuthMode: asdbv1.AerospikeAuthModePKIOnly,
-										Roles: []string{
-											"sys-admin",
-											"user-admin",
-										},
+										Roles:    []string{"sys-admin", "user-admin"},
 									},
 								},
 							}
 
-							aeroCluster := getTLSAerospikeClusterSpecWithAccessControl(
+							aeroCluster := getPKIAuthAerospikeClusterWithAccessControl(
 								clusterNamespacedName, accessControl,
 							)
 							aeroCluster.Spec.Image = latestFederalImage
 							Expect(testAccessControlReconcile(aeroCluster, ctx)).To(Succeed())
-						},
-						)
+						})
+
+						It("Should allow EE security enable/disable with mTLS cluster", func() {
+							securityLifecycleWithPKITest(k8sClient, ctx, clusterNamespacedName, latestImage)
+						})
+
+						It("Should allow FE security enable/disable with mTLS cluster", func() {
+							securityLifecycleWithPKITest(k8sClient, ctx, clusterNamespacedName, latestFederalImage)
+						})
 					})
 				})
 			},
@@ -2664,67 +2609,14 @@ func getAerospikeClusterSpecWithAccessControl(
 	}
 }
 
-func getTLSAerospikeClusterSpecWithAccessControl(
+func getPKIAuthAerospikeClusterWithAccessControl(
 	clusterNamespacedName types.NamespacedName,
 	accessControl *asdbv1.AerospikeAccessControlSpec,
 ) *asdbv1.AerospikeCluster {
-	return &asdbv1.AerospikeCluster{
-		ObjectMeta: metav1.ObjectMeta{
-			Name:      clusterNamespacedName.Name,
-			Namespace: clusterNamespacedName.Namespace,
-		},
-		Spec: asdbv1.AerospikeClusterSpec{
-			Size:                   testClusterSize,
-			Image:                  latestImage,
-			AerospikeAccessControl: accessControl,
-			Storage: asdbv1.AerospikeStorageSpec{
-				FileSystemVolumePolicy: asdbv1.AerospikePersistentVolumePolicySpec{
-					InputInitMethod:    &aerospikeVolumeInitMethodDeleteFiles,
-					InputCascadeDelete: &cascadeDeleteTrue,
-				},
-				Volumes: []asdbv1.VolumeSpec{
-					{
-						Name: "workdir",
-						Source: asdbv1.VolumeSource{
-							PersistentVolume: &asdbv1.PersistentVolumeSpec{
-								Size:         resource.MustParse("1Gi"),
-								StorageClass: storageClass,
-								VolumeMode:   corev1.PersistentVolumeFilesystem,
-							},
-						},
-						Aerospike: &asdbv1.AerospikeServerVolumeAttachment{
-							Path: "/opt/aerospike",
-						},
-					},
-					getStorageVolumeForSecret(),
-				},
-			},
-			PodSpec: asdbv1.AerospikePodSpec{
-				MultiPodPerHost: ptr.To(true),
-			},
-			AerospikeConfig: &asdbv1.AerospikeConfigSpec{
-				Value: map[string]interface{}{
+	aeroCluster := CreatePKIAuthEnabledCluster(clusterNamespacedName, testClusterSize)
+	aeroCluster.Spec.AerospikeAccessControl = accessControl
 
-					asdbv1.ConfKeyService: map[string]interface{}{
-						"feature-key-file": "/etc/aerospike/secret/features.conf",
-					},
-					asdbv1.ConfKeySecurity: map[string]interface{}{},
-					asdbv1.ConfKeyNetwork:  getNetworkTLSConfig(),
-					asdbv1.ConfKeyNamespace: []interface{}{
-						map[string]interface{}{
-							"name":               "test",
-							"replication-factor": 2,
-							"storage-engine": map[string]interface{}{
-								"type":      "memory",
-								"data-size": 1073741824,
-							},
-						},
-					},
-				},
-			},
-			OperatorClientCertSpec: getAdminOperatorCert(),
-		},
-	}
+	return aeroCluster
 }
 
 // validateAccessControl validates that the new access control have been applied correctly.
@@ -2980,4 +2872,40 @@ func randString(n int) string {
 	}
 
 	return string(b)
+}
+
+func securityLifecycleWithPKITest(
+	k8sClient client.Client,
+	ctx goctx.Context,
+	clusterNamespacedName types.NamespacedName, image string,
+) {
+	By("Create security disabled cluster")
+
+	aeroCluster := CreatePKIAuthEnabledCluster(clusterNamespacedName, 2)
+	aeroCluster.Spec.Image = image
+
+	aeroCluster.Spec.AerospikeAccessControl = nil
+	delete(aeroCluster.Spec.AerospikeConfig.Value, asdbv1.ConfKeySecurity)
+
+	Expect(DeployCluster(k8sClient, ctx, aeroCluster)).To(Succeed())
+
+	By("Enable security with PKIOnly authMode")
+
+	accessControl := &asdbv1.AerospikeAccessControlSpec{
+		Users: []asdbv1.AerospikeUserSpec{
+			{
+				Name:     "admin",
+				AuthMode: asdbv1.AerospikeAuthModePKIOnly,
+				Roles:    []string{"sys-admin", "user-admin"},
+			},
+		},
+	}
+
+	aeroCluster.Spec.AerospikeAccessControl = accessControl
+	aeroCluster.Spec.AerospikeConfig.Value[asdbv1.ConfKeySecurity] = map[string]interface{}{}
+	Expect(testAccessControlReconcile(aeroCluster, ctx)).To(Succeed())
+
+	By("Disable security")
+	delete(aeroCluster.Spec.AerospikeConfig.Value, asdbv1.ConfKeySecurity)
+	Expect(updateCluster(k8sClient, ctx, aeroCluster)).To(Succeed())
 }

@@ -56,6 +56,7 @@ const aerospikeConfigSecret string = "aerospike-config-secret" //nolint:gosec //
 
 const serviceTLSPort = 4333
 const serviceNonTLSPort = 3000
+const workDirectory = "workdir"
 
 // constants for writing data to aerospike
 const (
@@ -1297,7 +1298,7 @@ func createBasicTLSCluster(
 				},
 				Volumes: []asdbv1.VolumeSpec{
 					{
-						Name: "workdir",
+						Name: workDirectory,
 						Source: asdbv1.VolumeSource{
 							PersistentVolume: &asdbv1.PersistentVolumeSpec{
 								Size:         resource.MustParse("1Gi"),
@@ -1372,10 +1373,11 @@ func CreatePKIAuthEnabledCluster(
 	clusterNamespacedName types.NamespacedName,
 	size int32,
 ) *asdbv1.AerospikeCluster {
-	aeroCluster := createBasicTLSCluster(clusterNamespacedName, size)
+	aeroCluster := CreateBasicTLSCluster(clusterNamespacedName, size)
 	// Add admin user certs for PKI authentication
 	aeroCluster.Spec.OperatorClientCertSpec = getAdminOperatorCert()
 	aeroCluster.Spec.AerospikeAccessControl.Users[0].AuthMode = asdbv1.AerospikeAuthModePKIOnly
+	aeroCluster.Spec.AerospikeAccessControl.Users[0].SecretName = ""
 
 	return aeroCluster
 }
@@ -1533,7 +1535,7 @@ func getBasicStorageSpecObject() asdbv1.AerospikeStorageSpec {
 				},
 			},
 			{
-				Name: "workdir",
+				Name: workDirectory,
 				Source: asdbv1.VolumeSource{
 					PersistentVolume: &asdbv1.PersistentVolumeSpec{
 						Size:         resource.MustParse("1Gi"),
@@ -1831,4 +1833,21 @@ func markPodAsFailed(ctx goctx.Context, k8sClient client.Client, name, namespace
 	pod.Spec.Containers[0].Image = wrongImage
 
 	return k8sClient.Update(ctx, pod)
+}
+
+func checkClientConnection(
+	aeroCluster *asdbv1.AerospikeCluster,
+	k8sClient client.Client, policy *as.ClientPolicy,
+) error {
+	cl, err := getClientWithPolicy(pkgLog, aeroCluster, k8sClient, policy)
+	if err != nil {
+		return err
+	}
+	defer cl.Close()
+
+	if len(cl.GetNodeNames()) == 0 {
+		return fmt.Errorf("not connected")
+	}
+
+	return nil
 }

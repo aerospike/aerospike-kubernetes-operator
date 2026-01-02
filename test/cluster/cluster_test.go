@@ -1843,7 +1843,7 @@ func UpdateClusterTest(ctx goctx.Context) {
 									},
 								},
 								{
-									Name: "workdir",
+									Name: workDirectory,
 									Source: asdbv1.VolumeSource{
 										PersistentVolume: &asdbv1.PersistentVolumeSpec{
 											StorageClass: storageClass,
@@ -2933,8 +2933,8 @@ func negativeUpdateClusterValidationTest(
 		},
 	)
 
-	Context("Validate ImageUpdate", func() {
-		clusterName := fmt.Sprintf("image-update-%d", GinkgoParallelProcess())
+	Context("InvalidServerEditionChange", func() {
+		clusterName := fmt.Sprintf("edition-change-%d", GinkgoParallelProcess())
 		clusterNamespacedName := test.GetNamespacedName(
 			clusterName, namespace,
 		)
@@ -2953,37 +2953,30 @@ func negativeUpdateClusterValidationTest(
 			},
 		)
 
-		It("Should fail if server image updated from enterprise to federal", func() {
-			aeroCluster := CreatePKIAuthEnabledCluster(
-				clusterNamespacedName, 2,
-			)
-			err := DeployCluster(
-				k8sClient, ctx, aeroCluster,
-			)
+		It("Should fail if server edition is updated from enterprise to federal", func() {
+			aeroCluster := CreatePKIAuthEnabledCluster(clusterNamespacedName, 2)
+			err := DeployCluster(k8sClient, ctx, aeroCluster)
 			Expect(err).ToNot(HaveOccurred())
 			By("Updating cluster image from enterprise to federal")
 
 			aeroCluster.Spec.Image = latestFederalImage
 			err = updateCluster(k8sClient, ctx, aeroCluster)
 			Expect(err).To(HaveOccurred())
-			Expect(err.Error()).To(ContainSubstring("enterprise image cannot be updated to federal image"))
+			Expect(err.Error()).To(ContainSubstring("enterprise to federal edition upgrade is not supported"))
 		})
 
 		It("Should fail if server image updated from federal to enterprise", func() {
-			aeroCluster := CreatePKIAuthEnabledCluster(
-				clusterNamespacedName, 2,
-			)
+			aeroCluster := CreatePKIAuthEnabledCluster(clusterNamespacedName, 2)
 			aeroCluster.Spec.Image = latestFederalImage
-			err := DeployCluster(
-				k8sClient, ctx, aeroCluster,
-			)
+			err := DeployCluster(k8sClient, ctx, aeroCluster)
 			Expect(err).ToNot(HaveOccurred())
+
 			By("Updating cluster image from federal to enterprise")
 
 			aeroCluster.Spec.Image = latestImage
 			err = updateCluster(k8sClient, ctx, aeroCluster)
 			Expect(err).To(HaveOccurred())
-			Expect(err.Error()).To(ContainSubstring("federal image cannot be updated to enterprise image"))
+			Expect(err.Error()).To(ContainSubstring("federal to enterprise edition upgrade is not supported"))
 		})
 	})
 }

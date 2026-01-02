@@ -1377,7 +1377,7 @@ func getAerospikeClusterSpecWithNetworkPolicy(
 				},
 				Volumes: []asdbv1.VolumeSpec{
 					{
-						Name: "workdir",
+						Name: workDirectory,
 						Source: asdbv1.VolumeSource{
 							PersistentVolume: &asdbv1.PersistentVolumeSpec{
 								Size:         resource.MustParse("1Gi"),
