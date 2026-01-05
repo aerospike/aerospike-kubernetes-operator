@@ -251,6 +251,13 @@ func getClientPolicy(
 	policy.User = user
 	policy.Password = pass
 
+	adminUser := asdbv1.GetAdminUserFromSpec(statusToSpec)
+	if adminUser != nil {
+		policy.AuthMode = asdbv1.GetClientAuthMode(adminUser.AuthMode)
+	} else if asdbv1.IsFederal(aeroCluster.Spec.Image) {
+		policy.AuthMode = as.AuthModePKI
+	}
+
 	return policy
 }
 

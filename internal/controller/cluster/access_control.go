@@ -42,6 +42,11 @@ func AerospikeAdminCredentials(
 		return "", "", nil
 	}
 
+	// If federal image, return empty user and empty password.
+	if asdbv1.IsFederal(desiredState.Image) {
+		return "", "", nil
+	}
+
 	if currentState.AerospikeAccessControl == nil {
 		// We haven't yet set up access control. Use default password.
 		return asdbv1.AdminUsername, passwordProvider.GetDefaultPassword(desiredState), nil
@@ -53,6 +58,11 @@ func AerospikeAdminCredentials(
 		return "", "", fmt.Errorf(
 			"%s user missing in access control", asdbv1.AdminUsername,
 		)
+	}
+
+	// If authMode PKIOnly is set for admin user in status, return empty user and empty password.
+	if adminUserSpec.AuthMode == asdbv1.AerospikeAuthModePKIOnly {
+		return "", "", nil
 	}
 
 	password, err := passwordProvider.Get(
@@ -192,18 +202,53 @@ func (r *SingleClusterReconciler) reconcileUsers(
 	// update does not disrupt reconciliation.
 	var adminUpdateCmd *aerospikeUserCreateUpdate
 
+	isFederal := asdbv1.IsFederal(r.aeroCluster.Spec.Image)
+
 	for userName := range desired {
 		userSpec := desired[userName]
+		currUserSpec, found := current[userName]
 
-		password, err := passwordProvider.Get(userName, &userSpec)
-		if err != nil {
-			return err
+		// password determines whether to set/update the user's password:
+		//   - nil: don't change the password (user already configured correctly)
+		//   - "": empty password (for PKIOnly users on federal images)
+		//   - "nopassword": disable password auth (for PKIOnly users on Enterprise images)
+		//   - <real password>: actual password from secret for Internal auth users
+
+		var password *string
+
+		isAdmin := userName == asdbv1.AdminUsername
+
+		switch {
+		case isFederal:
+			// Federal images only support PKIOnly authentication mode.
+			// For new non-admin users, set an empty password.
+			// Admin users and existing users don't need password changes.
+			if !found && !isAdmin {
+				pwd := ""
+				password = &pwd
+			}
+
+		case asdbv1.IsAuthModeInternal(userSpec.AuthMode):
+			// Enterprise with Internal auth: real password from provider
+			pwd, err := passwordProvider.Get(userName, &userSpec)
+			if err != nil {
+				return err
+			}
+
+			password = &pwd
+
+		case (!found || asdbv1.IsAuthModeInternal(currUserSpec.AuthMode)) &&
+			userSpec.AuthMode == asdbv1.AerospikeAuthModePKIOnly:
+			// Enterprise with PKIOnly or transitioning to PKIOnly: set "nopassword" to disable password auth
+			pwd := "nopassword"
+			password = &pwd
 		}
 
 		cmd := aerospikeUserCreateUpdate{
-			name: userName, password: &password, roles: userSpec.Roles,
+			name: userName, password: password, roles: userSpec.Roles,
 		}
-		if userName == asdbv1.AdminUsername {
+
+		if isAdmin {
 			adminUpdateCmd = &cmd
 		} else {
 			userReconcileCmds = append(userReconcileCmds, cmd)

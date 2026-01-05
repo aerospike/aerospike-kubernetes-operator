@@ -110,7 +110,7 @@ func IsAerospikeAccessControlValid(aerospikeClusterSpec *AerospikeClusterSpec) (
 
 	// Validate users.
 	_, err = isUserSpecValid(
-		aerospikeClusterSpec.AerospikeAccessControl.Users, roleMap,
+		aerospikeClusterSpec.Image, aerospikeClusterSpec.AerospikeAccessControl.Users, roleMap,
 	)
 	if err != nil {
 		return false, err
@@ -143,6 +143,19 @@ func GetUsersFromSpec(spec *AerospikeClusterSpec) map[string]AerospikeUserSpec {
 	}
 
 	return users
+}
+
+// GetAdminUserFromSpec returns admin user from the spec.
+func GetAdminUserFromSpec(spec *AerospikeClusterSpec) *AerospikeUserSpec {
+	if spec.AerospikeAccessControl != nil {
+		for _, userSpec := range spec.AerospikeAccessControl.Users {
+			if userSpec.Name == AdminUsername {
+				return &userSpec
+			}
+		}
+	}
+
+	return nil
 }
 
 func validateRoleQuotaParam(
@@ -384,10 +397,11 @@ func subset(first, second []string) bool {
 
 // isUserSpecValid indicates if input user specification is valid.
 func isUserSpecValid(
-	users []AerospikeUserSpec, roles map[string]AerospikeRoleSpec,
+	image string, users []AerospikeUserSpec, roles map[string]AerospikeRoleSpec,
 ) (bool, error) {
 	requiredRolesUserFound := false
 	seenUsers := map[string]bool{}
+	isFederal := IsFederal(image)
 
 	for _, userSpec := range users {
 		_, isSeen := seenUsers[userSpec.Name]
@@ -434,12 +448,25 @@ func isUserSpecValid(
 			}
 		}
 
-		// TODO We should validate actual password here but we cannot read the secret here.
-		// Will have to be done at the time of creating the user!
-		if strings.TrimSpace(userSpec.SecretName) == "" {
-			return false, fmt.Errorf(
-				"user %s has empty secret name", userSpec.Name,
-			)
+		hasSecret := strings.TrimSpace(userSpec.SecretName) != ""
+
+		//nolint:exhaustive // As new auth modes are added, we may need to update this code.
+		switch userSpec.AuthMode {
+		case AerospikeAuthModePKIOnly:
+			if hasSecret {
+				return false, fmt.Errorf("user %s cannot set secretName when authMode is PKIOnly", userSpec.Name)
+			}
+		default:
+			if isFederal {
+				return false, fmt.Errorf("authMode for all users must be PKI with Federal Edition")
+			}
+
+			// TODO: We should validate actual password here but we cannot read the secret here.
+			// Will have to be done at the time of creating the user!
+			// Internal or empty authMode requires a secret for password
+			if !hasSecret {
+				return false, fmt.Errorf("user %s has empty secret name", userSpec.Name)
+			}
 		}
 
 		if subset(

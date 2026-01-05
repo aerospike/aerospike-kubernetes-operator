@@ -3,11 +3,11 @@ package cluster
 import (
 	goctx "context"
 	"fmt"
+	"path/filepath"
 	"reflect"
 
 	. "github.com/onsi/ginkgo/v2"
 	. "github.com/onsi/gomega"
-	"golang.org/x/net/context"
 	v1 "k8s.io/api/core/v1"
 	"k8s.io/apimachinery/pkg/api/resource"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
@@ -315,46 +315,72 @@ var _ = Describe(
 						)
 					},
 				)
-				Context(
-					"When configuring Non PV workdir", func() {
-						It(
-							"Should allow emptydir volume for default workdir", func() {
-								aeroCluster := createDummyAerospikeClusterWithNonPVWorkdir(
-									clusterNamespacedName, "/opt/aerospike", "",
-								)
 
+				Context("When configuring workdir", func() {
+					Context(
+						"With PV workdir", func() {
+							It("Should validate workdir subPath mounts", func() {
+								aeroCluster := createDummyAerospikeCluster(clusterNamespacedName, 2)
 								Expect(DeployCluster(k8sClient, ctx, aeroCluster)).ShouldNot(HaveOccurred())
-							},
-						)
-						It(
-							"Should allow emptydir volume for any workdir", func() {
-								aeroCluster := createDummyAerospikeClusterWithNonPVWorkdir(
-									clusterNamespacedName, "/opt/aerospike/data", "/opt/aerospike/data",
-								)
 
-								Expect(DeployCluster(k8sClient, ctx, aeroCluster)).ShouldNot(HaveOccurred())
-							},
-						)
-						It(
-							"Should allow default workdir without any configured volume", func() {
-								aeroCluster := createDummyAerospikeClusterWithNonPVWorkdir(
-									clusterNamespacedName, "", "",
-								)
+								By("Getting the deployed pod")
+								pod := getPodForMountOptionsTest(aeroCluster)
 
-								Expect(DeployCluster(k8sClient, ctx, aeroCluster)).ShouldNot(HaveOccurred())
-							},
-						)
-						It(
-							"Should fail if workdir configured but volume is not", func() {
-								aeroCluster := createDummyAerospikeClusterWithNonPVWorkdir(
-									clusterNamespacedName, "", "/opt/aerospike",
-								)
+								validateWorkDirSubPathMounts(pod, workDirectory, asdbv1.DefaultWorkDirectory)
+							})
+						})
 
-								Expect(DeployCluster(k8sClient, ctx, aeroCluster)).Should(HaveOccurred())
-							},
-						)
-					},
-				)
+					Context(
+						"With Non PV workdir", func() {
+							It(
+								"Should allow emptydir volume for default workdir", func() {
+									aeroCluster := createDummyAerospikeClusterWithNonPVWorkdir(
+										clusterNamespacedName, asdbv1.DefaultWorkDirectory, "",
+									)
+
+									Expect(DeployCluster(k8sClient, ctx, aeroCluster)).ShouldNot(HaveOccurred())
+
+									By("Getting the deployed pod")
+									pod := getPodForMountOptionsTest(aeroCluster)
+
+									validateWorkDirSubPathMounts(pod, workDirectory, asdbv1.DefaultWorkDirectory)
+								},
+							)
+
+							It(
+								"Should allow emptydir volume for any workdir", func() {
+									aeroCluster := createDummyAerospikeClusterWithNonPVWorkdir(
+										clusterNamespacedName, "/opt/aerospike/data", "/opt/aerospike/data",
+									)
+
+									Expect(DeployCluster(k8sClient, ctx, aeroCluster)).ShouldNot(HaveOccurred())
+									By("Getting the deployed pod")
+									pod := getPodForMountOptionsTest(aeroCluster)
+
+									validateWorkDirSubPathMounts(pod, workDirectory, "/opt/aerospike/data")
+								},
+							)
+							It(
+								"Should allow default workdir without any configured volume", func() {
+									aeroCluster := createDummyAerospikeClusterWithNonPVWorkdir(
+										clusterNamespacedName, "", "",
+									)
+
+									Expect(DeployCluster(k8sClient, ctx, aeroCluster)).ShouldNot(HaveOccurred())
+								},
+							)
+							It(
+								"Should fail if workdir configured but volume is not", func() {
+									aeroCluster := createDummyAerospikeClusterWithNonPVWorkdir(
+										clusterNamespacedName, "", asdbv1.DefaultWorkDirectory,
+									)
+
+									Expect(DeployCluster(k8sClient, ctx, aeroCluster)).Should(HaveOccurred())
+								},
+							)
+						},
+					)
+				})
 
 				Context("When testing mount options for hostPath volumes", func() {
 					var (
@@ -466,7 +492,7 @@ var _ = Describe(
 						Expect(err).ToNot(HaveOccurred())
 
 						By("Verifying mount options after update")
-						err = k8sClient.Get(context.TODO(), test.GetNamespacedName(aeroCluster.Name+"-0-1", aeroCluster.Namespace), pod)
+						err = k8sClient.Get(goctx.TODO(), test.GetNamespacedName(aeroCluster.Name+"-0-1", aeroCluster.Namespace), pod)
 						Expect(err).ToNot(HaveOccurred())
 
 						// Aerospike server should still ignore mount options
@@ -796,7 +822,7 @@ func createDummyAerospikeClusterWithNonPVWorkdir(
 
 	if workdirVolumePath != "" {
 		workdirVolume := asdbv1.VolumeSpec{
-			Name: "workdir",
+			Name: workDirectory,
 			Source: asdbv1.VolumeSource{
 				EmptyDir: &v1.EmptyDirVolumeSource{},
 			},
@@ -929,7 +955,7 @@ func createEmptyDirVolumeWithMountOptions(mountOptions []asdbv1.MountOptions) as
 func getPodForMountOptionsTest(aeroCluster *asdbv1.AerospikeCluster) *v1.Pod {
 	podNamespacedName := test.GetNamespacedName(aeroCluster.Name+"-0-1", aeroCluster.Namespace)
 	pod := &v1.Pod{}
-	err := k8sClient.Get(context.TODO(), podNamespacedName, pod)
+	err := k8sClient.Get(goctx.TODO(), podNamespacedName, pod)
 	Expect(err).ToNot(HaveOccurred())
 
 	return pod
@@ -945,4 +971,30 @@ func validateContainerMountOptions(
 	Expect(err).ToNot(HaveOccurred(),
 		"Failed to get mount options for container %s and volume %s", containerName, volumeName)
 	validateMountOptions(mountOptions, expectedMountOptions)
+}
+
+// validateWorkDirSubPathMounts validates that workdir volume has both smd and usr subpath mounts
+// on the aerospike server container.
+func validateWorkDirSubPathMounts(pod *v1.Pod, volumeName, workDirPath string) {
+	for _, subPath := range []string{asdbv1.WorkDirSubPathSmd, asdbv1.WorkDirSubPathUsr} {
+		var found bool
+
+		expectedPath := filepath.Join(workDirPath, subPath)
+
+		for idx := range pod.Spec.Containers {
+			if pod.Spec.Containers[idx].Name != asdbv1.AerospikeServerContainerName {
+				continue
+			}
+
+			for _, vm := range pod.Spec.Containers[idx].VolumeMounts {
+				if vm.Name == volumeName && vm.SubPath == subPath && vm.MountPath == expectedPath {
+					found = true
+					break
+				}
+			}
+		}
+
+		Expect(found).To(BeTrue(), "volume %s not mounted with subPath %s at path %s",
+			volumeName, subPath, expectedPath)
+	}
 }
