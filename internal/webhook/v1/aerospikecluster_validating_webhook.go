@@ -750,18 +750,7 @@ func validateAccessControl(_ logr.Logger, cluster *asdbv1.AerospikeCluster) erro
 		return err
 	}
 
-	if asdbv1.IsFederal(cluster.Spec.Image) {
-		users := asdbv1.GetUsersFromSpec(&cluster.Spec)
-		for _, user := range users {
-			if user.AuthMode != asdbv1.AerospikeAuthModePKIOnly {
-				return fmt.Errorf("authMode for all users must be PKI with Federal Edition")
-			}
-		}
-	} else {
-		return validatePKIAuthSupportForEE(&cluster.Spec)
-	}
-
-	return nil
+	return validatePKIAuthSupportForEE(&cluster.Spec)
 }
 
 func validatePodSpecResourceAndLimits(_ logr.Logger, cluster *asdbv1.AerospikeCluster) error {
@@ -1945,20 +1934,11 @@ func validateUsersAuthModeUpdate(oldUsers, newUsers []asdbv1.AerospikeUserSpec) 
 }
 
 func validatePKIAuthSupportForEE(spec *asdbv1.AerospikeClusterSpec) error {
-	if spec.AerospikeAccessControl == nil {
+	if !isEnterprise(spec.Image) {
 		return nil
 	}
 
-	requiresPKIOnlyAuth := false
-
-	for _, userSpec := range spec.AerospikeAccessControl.Users {
-		if userSpec.AuthMode == asdbv1.AerospikeAuthModePKIOnly {
-			requiresPKIOnlyAuth = true
-			break
-		}
-	}
-
-	if !requiresPKIOnlyAuth {
+	if !hasPKIOnlyUser(spec) {
 		return nil
 	}
 
