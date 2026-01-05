@@ -162,7 +162,7 @@ func (r *SingleClusterReconciler) getClientPolicy() *as.ClientPolicy {
 
 	statusToSpec, err := asdbv1.CopyStatusToSpec(&r.aeroCluster.Status.AerospikeClusterStatusSpec)
 	if err != nil {
-		r.Log.Error(err, "Failed to copy spec in status", "err", err)
+		r.Log.Error(err, "Failed to copy status in spec", "err", err)
 	}
 
 	user, pass, err := AerospikeAdminCredentials(
@@ -175,6 +175,17 @@ func (r *SingleClusterReconciler) getClientPolicy() *as.ClientPolicy {
 	policy.Timeout = time.Minute * 1
 	policy.User = user
 	policy.Password = pass
+
+	// If admin user is present in status, use its auth mode
+	// Else if federal image, use PKI auth mode.
+	// We can't use spec admin user because for EE the spec can have PKI or Internal but for new EE clusters,
+	// the authMode must be Internal always for the first time.
+	adminUser := asdbv1.GetAdminUserFromSpec(statusToSpec)
+	if adminUser != nil {
+		policy.AuthMode = asdbv1.GetClientAuthMode(adminUser.AuthMode)
+	} else if asdbv1.IsFederal(r.aeroCluster.Spec.Image) {
+		policy.AuthMode = as.AuthModePKI
+	}
 
 	return policy
 }

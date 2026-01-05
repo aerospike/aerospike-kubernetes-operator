@@ -117,6 +117,10 @@ func (acv *AerospikeClusterCustomValidator) ValidateUpdate(_ context.Context, ol
 		return warnings, err
 	}
 
+	if err := validateImageUpdate(oldObject.Spec.Image, aerospikeCluster.Spec.Image); err != nil {
+		return warnings, err
+	}
+
 	outgoingVersion, err := asdbv1.GetImageVersion(oldObject.Spec.Image)
 	if err != nil {
 		return warnings, err
@@ -157,6 +161,13 @@ func (acv *AerospikeClusterCustomValidator) ValidateUpdate(_ context.Context, ol
 	}
 
 	if err := validateAccessControlUpdate(&oldObject.Spec, &aerospikeCluster.Spec); err != nil {
+		return warnings, err
+	}
+
+	// Block single-step TLS + PKIOnly update
+	if err := validateTLSAndPKIOnlyUpdate(
+		&oldObject.Spec, &aerospikeCluster.Spec, &aerospikeCluster.Status,
+	); err != nil {
 		return warnings, err
 	}
 
@@ -206,9 +217,8 @@ func validate(aslog logr.Logger, cluster *asdbv1.AerospikeCluster) (admission.Wa
 		return warnings, fmt.Errorf("aerospikeCluster namespace cannot have spaces")
 	}
 
-	// Validate image type. Only enterprise image allowed for now
-	if !isEnterprise(cluster.Spec.Image) {
-		return warnings, fmt.Errorf("CommunityEdition Cluster not supported")
+	if err := validateImage(&cluster.Spec); err != nil {
+		return warnings, err
 	}
 
 	// Validate size
@@ -379,6 +389,27 @@ func validateAccessControlUpdate(
 		return fmt.Errorf("aerospikeAccessControl cannot be updated when security is disabled")
 	}
 
+	var oldUsers, newUsers []asdbv1.AerospikeUserSpec
+	if oldSpec.AerospikeAccessControl != nil {
+		oldUsers = oldSpec.AerospikeAccessControl.Users
+	}
+
+	if newSpec.AerospikeAccessControl != nil {
+		newUsers = newSpec.AerospikeAccessControl.Users
+	}
+
+	return validateUsersAuthModeUpdate(oldUsers, newUsers)
+}
+
+func validateImageUpdate(oldImage, newImage string) error {
+	if isEnterprise(oldImage) && asdbv1.IsFederal(newImage) {
+		return fmt.Errorf("enterprise to federal edition upgrade is not supported")
+	}
+
+	if asdbv1.IsFederal(oldImage) && isEnterprise(newImage) {
+		return fmt.Errorf("federal to enterprise edition upgrade is not supported")
+	}
+
 	return nil
 }
 
@@ -474,21 +505,41 @@ func validateOperatorClientCert(clientCert *asdbv1.AerospikeOperatorClientCertSp
 func validateClientCertSpec(cluster *asdbv1.AerospikeCluster) error {
 	networkConf, networkConfExist := cluster.Spec.AerospikeConfig.Value[asdbv1.ConfKeyNetwork]
 	if !networkConfExist {
-		return nil
+		return fmt.Errorf("aerospikeConfig.network cannot be nil")
 	}
 
 	serviceConf, serviceConfExists := networkConf.(map[string]interface{})[asdbv1.ConfKeyNetworkService]
 	if !serviceConfExists {
-		return nil
+		return fmt.Errorf("aerospikeConfig.network.service cannot be nil")
 	}
 
-	tlsAuthenticateClientConfig, ok := serviceConf.(map[string]interface{})["tls-authenticate-client"]
+	serviceConfMap := serviceConf.(map[string]interface{})
+
+	isPKIOnlyEnabled := hasPKIOnlyUser(&cluster.Spec)
+
+	// PKIOnly mode requires mTLS configuration
+	if isPKIOnlyEnabled {
+		// Validate that service TLS is enabled (tls-name must be set)
+		if _, tlsEnabled := serviceConfMap[asdbv1.ConfKeyTLSName]; !tlsEnabled {
+			return fmt.Errorf("PKIOnly authMode requires Aerospike cluster to be mTLS enabled")
+		}
+	}
+
+	tlsAuthenticateClientConfig, ok := serviceConfMap["tls-authenticate-client"]
 	if !ok {
+		// tls-authenticate-client not set - mutation webhook will default to "any" if TLS is enabled
+		// If any user has PKIOnly mode and TLS is not enabled, we already returned error above
 		return nil
 	}
 
 	switch {
 	case reflect.DeepEqual("false", tlsAuthenticateClientConfig):
+		// tls-authenticate-client: false is not allowed when any user has PKIOnly mode
+		if isPKIOnlyEnabled {
+			return fmt.Errorf("tls-authenticate-client cannot be 'false' when any user has PKIOnly authMode," +
+				" it should be 'any' or a list of specific client names")
+		}
+
 		return nil
 	case reflect.DeepEqual("any", tlsAuthenticateClientConfig):
 		if cluster.Spec.OperatorClientCertSpec == nil {
@@ -501,12 +552,20 @@ func validateClientCertSpec(cluster *asdbv1.AerospikeCluster) error {
 
 		return nil
 	default:
+		// tls-authenticate-client is a list of specific client names
 		if cluster.Spec.OperatorClientCertSpec == nil {
 			return fmt.Errorf("operator client cert is not specified")
 		}
 
 		if cluster.Spec.OperatorClientCertSpec.TLSClientName == "" {
 			return fmt.Errorf("operator TLSClientName is not specified")
+		}
+
+		// When PKIOnly is used with tls-authenticate-client as a list,
+		// TLSClientName must be "admin" for the operator to authenticate as admin user
+		if isPKIOnlyEnabled && cluster.Spec.OperatorClientCertSpec.TLSClientName != asdbv1.AdminUsername {
+			return fmt.Errorf("PKIOnly authMode with tls-authenticate-client as a list requires "+
+				"operatorClientCertSpec.tlsClientName to be '%s'", asdbv1.AdminUsername)
 		}
 
 		if err := validateOperatorClientCert(cluster.Spec.OperatorClientCertSpec); err != nil {
@@ -691,8 +750,11 @@ func validateConcurrentRackRevisions(oldObj, newObj *asdbv1.AerospikeCluster) er
 
 // TODO: FIX
 func validateAccessControl(_ logr.Logger, cluster *asdbv1.AerospikeCluster) error {
-	_, err := asdbv1.IsAerospikeAccessControlValid(&cluster.Spec)
-	return err
+	if _, err := asdbv1.IsAerospikeAccessControlValid(&cluster.Spec); err != nil {
+		return err
+	}
+
+	return validatePKIAuthSupportForEE(&cluster.Spec)
 }
 
 func validatePodSpecResourceAndLimits(_ logr.Logger, cluster *asdbv1.AerospikeCluster) error {
@@ -1346,6 +1408,15 @@ func isEnterprise(image string) bool {
 	return strings.Contains(strings.ToLower(image), "enterprise")
 }
 
+func validateImage(spec *asdbv1.AerospikeClusterSpec) error {
+	// Validate image type. Only enterprise and federal image allowed for now.
+	if !isEnterprise(spec.Image) && !asdbv1.IsFederal(spec.Image) {
+		return fmt.Errorf("CommunityEdition Cluster not supported")
+	}
+
+	return nil
+}
+
 func getFeatureKeyFilePaths(configSpec asdbv1.AerospikeConfigSpec) []string {
 	config := configSpec.Value
 
@@ -1843,4 +1914,100 @@ func getMinRunningInitVersion(pods map[string]asdbv1.AerospikePodStatus) (string
 	}
 
 	return minVersion, nil
+}
+
+func validateUsersAuthModeUpdate(oldUsers, newUsers []asdbv1.AerospikeUserSpec) error {
+	if len(oldUsers) == 0 {
+		return nil
+	}
+
+	oldUsersMap := make(map[string]asdbv1.AerospikeUserSpec)
+	for _, userSpec := range oldUsers {
+		oldUsersMap[userSpec.Name] = userSpec
+	}
+
+	for _, userSpec := range newUsers {
+		if oldUserSpec, found := oldUsersMap[userSpec.Name]; found {
+			if oldUserSpec.AuthMode == asdbv1.AerospikeAuthModePKIOnly && asdbv1.IsAuthModeInternal(userSpec.AuthMode) {
+				return fmt.Errorf("user %s is not allowed to update authMode from PKI to Internal", userSpec.Name)
+			}
+		}
+	}
+
+	return nil
+}
+
+func validatePKIAuthSupportForEE(spec *asdbv1.AerospikeClusterSpec) error {
+	if !isEnterprise(spec.Image) {
+		return nil
+	}
+
+	if !hasPKIOnlyUser(spec) {
+		return nil
+	}
+
+	version, err := asdbv1.GetImageVersion(spec.Image)
+	if err != nil {
+		return fmt.Errorf("failed to get Aerospike server version: %w", err)
+	}
+
+	val, err := lib.CompareVersions(version, minVersionForEnterprisePKIOnlyAuthMode)
+	if err != nil {
+		return fmt.Errorf("failed to compare Aerospike server version: %w", err)
+	}
+
+	if val < 0 {
+		return fmt.Errorf(
+			"PKIOnly authMode requires Enterprise Edition version %s or later (found version %s)",
+			minVersionForEnterprisePKIOnlyAuthMode, version,
+		)
+	}
+
+	return nil
+}
+
+// hasPKIOnlyUser checks if any user in the spec has PKIOnly authentication mode.
+func hasPKIOnlyUser(spec *asdbv1.AerospikeClusterSpec) bool {
+	if spec.AerospikeAccessControl == nil {
+		return false
+	}
+
+	for _, user := range spec.AerospikeAccessControl.Users {
+		if user.AuthMode == asdbv1.AerospikeAuthModePKIOnly {
+			return true
+		}
+	}
+
+	return false
+}
+
+// validateTLSAndPKIOnlyUpdate blocks upgrading to TLS and PKIOnly in a single update.
+// When enabling TLS with PKIOnly, ACL reconciliation happens during rolling restart
+// before all pods have TLS. If admin is set to PKIOnly (nopassword), the operator cannot connect
+// to non-TLS pods because PKI auth requires TLS certificates.
+func validateTLSAndPKIOnlyUpdate(oldSpec, newSpec *asdbv1.AerospikeClusterSpec,
+	status *asdbv1.AerospikeClusterStatus) error {
+	oldTLSName, _ := asdbv1.GetServiceTLSNameAndPort(oldSpec.AerospikeConfig)
+	newTLSName, _ := asdbv1.GetServiceTLSNameAndPort(newSpec.AerospikeConfig)
+	hasPKIUser := hasPKIOnlyUser(newSpec)
+
+	// Check if TLS is being enabled
+	if oldTLSName == "" && newTLSName != "" {
+		if hasPKIUser {
+			return fmt.Errorf("cannot enable TLS and PKIOnly authMode in a single update; " +
+				"first enable TLS, then switch to PKIOnly auth mode")
+		}
+	}
+
+	// Block PKIOnly if TLS rollout is still in progress
+	if hasPKIUser && status != nil && status.AerospikeConfig != nil {
+		statusTLSName, _ := asdbv1.GetServiceTLSNameAndPort(status.AerospikeConfig)
+		// Spec has TLS but status doesn't = TLS rollout in progress
+		if newTLSName != "" && statusTLSName == "" {
+			return fmt.Errorf("cannot enable PKIOnly authMode while TLS rollout is in progress; " +
+				"wait for TLS to be fully deployed first")
+		}
+	}
+
+	return nil
 }

@@ -295,7 +295,7 @@ func validateStorage(
 				if !reflect.DeepEqual(volume.Aerospike.MountOptions, asdbv1.MountOptions{}) {
 					warnings = append(warnings, fmt.Sprintf(
 						"Mount options for volume '%s' will be ignored (only effective for hostPath). "+
-							"Non-default values may cause rolling restart in future versions.",
+							"Non-default mount options may cause rolling restart in future versions.",
 						volume.Name,
 					))
 				}

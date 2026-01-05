@@ -276,7 +276,7 @@ var _ = Describe(
 							},
 						},
 						{
-							Name: "workdir",
+							Name: workDirectory,
 							Source: asdbv1.VolumeSource{
 								PersistentVolume: &asdbv1.PersistentVolumeSpec{
 									Size:         resource.MustParse("1Gi"),
@@ -447,7 +447,7 @@ var _ = Describe(
 									},
 									Volumes: []asdbv1.VolumeSpec{
 										{
-											Name: "workdir",
+											Name: workDirectory,
 											Source: asdbv1.VolumeSource{
 												PersistentVolume: &asdbv1.PersistentVolumeSpec{
 													Size:         resource.MustParse("1Gi"),
@@ -482,7 +482,7 @@ var _ = Describe(
 								// Rack is completely replaced
 								volumes := []asdbv1.VolumeSpec{
 									{
-										Name: "workdir",
+										Name: workDirectory,
 										Source: asdbv1.VolumeSource{
 											PersistentVolume: &asdbv1.PersistentVolumeSpec{
 												Size:         resource.MustParse("1Gi"),

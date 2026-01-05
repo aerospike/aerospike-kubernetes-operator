@@ -32,11 +32,13 @@ import (
 )
 
 const (
-	baseImage           = "aerospike/aerospike-server-enterprise"
+	baseEnterpriseImage = "aerospike/aerospike-server-enterprise"
+	baseFederalImage    = "aerospike/aerospike-server-federal"
 	wrongImage          = "wrong-image"
 	nextServerVersion   = "8.1.0.0_1"
 	latestServerVersion = "8.1.0.0"
 	invalidVersion      = "3.0.0.4"
+	pre810Version       = "8.0.0.0"
 
 	post6Version = "7.0.0.0"
 	version6     = "6.0.0.5"
@@ -54,6 +56,7 @@ const aerospikeConfigSecret string = "aerospike-config-secret" //nolint:gosec //
 
 const serviceTLSPort = 4333
 const serviceNonTLSPort = 3000
+const workDirectory = "workdir"
 
 // constants for writing data to aerospike
 const (
@@ -66,20 +69,21 @@ const (
 var aerospikeVolumeInitMethodDeleteFiles = asdbv1.AerospikeVolumeMethodDeleteFiles
 
 var (
-	retryInterval      = time.Second * 30
-	shortRetryInterval = time.Second * 1
-	versionV1          = "v1"
-	versionV2          = "v2"
-	cascadeDeleteFalse = false
-	cascadeDeleteTrue  = true
-	logger             = logr.Discard()
-	nextImage          = fmt.Sprintf("%s:%s", baseImage, nextServerVersion)
-	latestImage        = fmt.Sprintf("%s:%s", baseImage, latestServerVersion)
-	invalidImage       = fmt.Sprintf("%s:%s", baseImage, invalidVersion)
-
+	retryInterval         = time.Second * 30
+	shortRetryInterval    = time.Second * 1
+	versionV1             = "v1"
+	versionV2             = "v2"
+	cascadeDeleteFalse    = false
+	cascadeDeleteTrue     = true
+	logger                = logr.Discard()
+	nextImage             = fmt.Sprintf("%s:%s", baseEnterpriseImage, nextServerVersion)
+	latestImage           = fmt.Sprintf("%s:%s", baseEnterpriseImage, latestServerVersion)
+	invalidImage          = fmt.Sprintf("%s:%s", baseEnterpriseImage, invalidVersion)
+	pre810EnterpriseImage = fmt.Sprintf("%s:%s", baseEnterpriseImage, pre810Version)
+	latestFederalImage    = fmt.Sprintf("%s:%s", baseFederalImage, latestServerVersion)
 	// Storage wipe test
-	post6Image    = fmt.Sprintf("%s:%s", baseImage, post6Version)
-	version6Image = fmt.Sprintf("%s:%s", baseImage, version6)
+	post6Image    = fmt.Sprintf("%s:%s", baseEnterpriseImage, post6Version)
+	version6Image = fmt.Sprintf("%s:%s", baseEnterpriseImage, version6)
 )
 
 func rollingRestartClusterByEnablingTLS(
@@ -1294,7 +1298,7 @@ func createBasicTLSCluster(
 				},
 				Volumes: []asdbv1.VolumeSpec{
 					{
-						Name: "workdir",
+						Name: workDirectory,
 						Source: asdbv1.VolumeSource{
 							PersistentVolume: &asdbv1.PersistentVolumeSpec{
 								Size:         resource.MustParse("1Gi"),
@@ -1361,6 +1365,19 @@ func CreateBasicTLSCluster(
 		getSCNamespaceConfig("test", "/test/dev/xvdf"),
 	}
 	aeroCluster.Spec.Storage = getBasicStorageSpecObject()
+
+	return aeroCluster
+}
+
+func CreatePKIAuthEnabledCluster(
+	clusterNamespacedName types.NamespacedName,
+	size int32,
+) *asdbv1.AerospikeCluster {
+	aeroCluster := CreateBasicTLSCluster(clusterNamespacedName, size)
+	// Add admin user certs for PKI authentication
+	aeroCluster.Spec.OperatorClientCertSpec = getAdminOperatorCert()
+	aeroCluster.Spec.AerospikeAccessControl.Users[0].AuthMode = asdbv1.AerospikeAuthModePKIOnly
+	aeroCluster.Spec.AerospikeAccessControl.Users[0].SecretName = ""
 
 	return aeroCluster
 }
@@ -1518,7 +1535,7 @@ func getBasicStorageSpecObject() asdbv1.AerospikeStorageSpec {
 				},
 			},
 			{
-				Name: "workdir",
+				Name: workDirectory,
 				Source: asdbv1.VolumeSource{
 					PersistentVolume: &asdbv1.PersistentVolumeSpec{
 						Size:         resource.MustParse("1Gi"),
@@ -1816,4 +1833,21 @@ func markPodAsFailed(ctx goctx.Context, k8sClient client.Client, name, namespace
 	pod.Spec.Containers[0].Image = wrongImage
 
 	return k8sClient.Update(ctx, pod)
+}
+
+func checkClientConnection(
+	aeroCluster *asdbv1.AerospikeCluster,
+	k8sClient client.Client, policy *as.ClientPolicy,
+) error {
+	cl, err := getClientWithPolicy(pkgLog, aeroCluster, k8sClient, policy)
+	if err != nil {
+		return err
+	}
+	defer cl.Close()
+
+	if len(cl.GetNodeNames()) == 0 {
+		return fmt.Errorf("not connected")
+	}
+
+	return nil
 }

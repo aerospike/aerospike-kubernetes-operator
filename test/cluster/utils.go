@@ -287,6 +287,19 @@ func getOperatorCert() *asdbv1.AerospikeOperatorClientCertSpec {
 	}
 }
 
+func getAdminOperatorCert() *asdbv1.AerospikeOperatorClientCertSpec {
+	return &asdbv1.AerospikeOperatorClientCertSpec{
+		AerospikeOperatorCertSource: asdbv1.AerospikeOperatorCertSource{
+			SecretCertSource: &asdbv1.AerospikeSecretCertSource{
+				SecretName:         "aerospike-secret",
+				CaCertsFilename:    "cacert.pem",
+				ClientCertFilename: "admin_chain.pem",
+				ClientKeyFilename:  "admin_key.pem",
+			},
+		},
+	}
+}
+
 func getNetworkTLSConfig() map[string]interface{} {
 	return map[string]interface{}{
 		"service": map[string]interface{}{

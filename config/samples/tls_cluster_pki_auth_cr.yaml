@@ -1,0 +1,82 @@
+apiVersion: asdb.aerospike.com/v1
+kind: AerospikeCluster
+metadata:
+  name: aerocluster
+  namespace: aerospike
+
+spec:
+  size: 2
+  image: aerospike/aerospike-server-enterprise:8.1.0.0
+  storage:
+    filesystemVolumePolicy:
+      cascadeDelete: true
+      initMethod: deleteFiles
+    volumes:
+      - name: workdir
+        aerospike:
+          path: /opt/aerospike
+        source:
+          persistentVolume:
+            storageClass: ssd
+            volumeMode: Filesystem
+            size: 1Gi
+      - name: ns
+        aerospike:
+          path: /test/dev/xvdf
+        source:
+          persistentVolume:
+            storageClass: ssd
+            volumeMode: Block
+            size: 3Gi
+      - name: aerospike-config-secret
+        source:
+          secret:
+            secretName: aerospike-secret
+        aerospike:
+          path: /etc/aerospike/secret
+
+  podSpec:
+    multiPodPerHost: true
+
+  aerospikeAccessControl:
+    users:
+      - name: admin
+        authMode: PKIOnly
+        roles:
+          - sys-admin
+          - user-admin
+
+  operatorClientCert:
+    secretCertSource:
+      secretName: aerospike-secret
+      caCertsFilename: cacert.pem
+      clientCertFilename: admin_chain.pem
+      clientKeyFilename: admin_key.pem
+
+  aerospikeConfig:
+    service:
+      feature-key-file: /etc/aerospike/secret/features.conf
+    security: {}
+    network:
+      service:
+        tls-name: aerospike-a-0.test-runner
+        tls-authenticate-client: any
+        tls-port: 4333
+      heartbeat:
+        tls-name: aerospike-a-0.test-runner
+        tls-port: 3012
+      fabric:
+        tls-name: aerospike-a-0.test-runner
+        tls-port: 3011
+      tls:
+        - name: aerospike-a-0.test-runner
+          cert-file: /etc/aerospike/secret/svc_cluster_chain.pem
+          key-file: /etc/aerospike/secret/svc_key.pem
+          ca-file: /etc/aerospike/secret/cacert.pem
+    namespaces:
+      - name: test
+        replication-factor: 1
+        storage-engine:
+          type: device
+          devices:
+            - /test/dev/xvdf

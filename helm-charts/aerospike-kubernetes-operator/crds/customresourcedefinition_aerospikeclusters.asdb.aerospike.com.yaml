@@ -121,6 +121,13 @@ spec:
                       description: AerospikeUserSpec specifies an Aerospike database
                         user, the secret name for the password and, associated roles.
                       properties:
+                        authMode:
+                          description: AuthMode specifies an authentication mode (Internal
+                            or PKIOnly) enabled for the user.
+                          enum:
+                          - Internal
+                          - PKIOnly
+                          type: string
                         name:
                           description: Name is the user's username.
                           type: string
@@ -132,13 +139,13 @@ spec:
                           x-kubernetes-list-type: set
                         secretName:
                           description: |-
-                            SecretName has secret info created by user. User needs to create this secret from password literal.
+                            SecretName has secret info created by the user. User needs to create this secret from password literal.
+                            It is a required field in case of 'Internal' AuthMode.
                             eg: kubectl create secret generic dev-db-secret --from-literal=password='password'
                           type: string
                       required:
                       - name
                       - roles
-                      - secretName
                       type: object
                     type: array
                     x-kubernetes-list-map-keys:
@@ -9231,6 +9238,13 @@ spec:
                       description: AerospikeUserSpec specifies an Aerospike database
                         user, the secret name for the password and, associated roles.
                       properties:
+                        authMode:
+                          description: AuthMode specifies an authentication mode (Internal
+                            or PKIOnly) enabled for the user.
+                          enum:
+                          - Internal
+                          - PKIOnly
+                          type: string
                         name:
                           description: Name is the user's username.
                           type: string
@@ -9242,13 +9256,13 @@ spec:
                           x-kubernetes-list-type: set
                         secretName:
                           description: |-
-                            SecretName has secret info created by user. User needs to create this secret from password literal.
+                            SecretName has secret info created by the user. User needs to create this secret from password literal.
+                            It is a required field in case of 'Internal' AuthMode.
                             eg: kubectl create secret generic dev-db-secret --from-literal=password='password'
                           type: string
                       required:
                       - name
                       - roles
-                      - secretName
                       type: object
                     type: array
                     x-kubernetes-list-map-keys:
