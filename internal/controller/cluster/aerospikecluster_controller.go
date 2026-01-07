@@ -71,7 +71,7 @@ func (r *AerospikeClusterReconciler) SetupWithManager(mgr ctrl.Manager) error {
 		pod := obj.(*corev1.Pod)
 
 		clusterName, exists := pod.Labels[asdbv1.AerospikeCustomResourceLabel]
-		if !exists {
+		if !exists || clusterName == "" {
 			// Pod is not part of any AerospikeCluster, skip
 			return nil
 		}
