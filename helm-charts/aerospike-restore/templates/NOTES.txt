@@ -17,3 +17,5 @@ Run the following commands to get more information about deployment:
 
 $ helm status {{ .Release.Name }} --namespace {{ .Release.Namespace }}
 $ helm get all {{ .Release.Name }} --namespace {{ .Release.Namespace }}
+
+$ kubectl get aerospikerestore --namespace {{ .Release.Namespace }} {{ template "aerospike-restore.commonName" . }}
