@@ -317,14 +317,10 @@ var _ = Describe(
 						)
 						Expect(err).ToNot(HaveOccurred())
 
-						// There is only single rack
-						pvcName := devPVCName
-						Expect(err).ToNot(HaveOccurred())
-
 						stsName := aeroCluster.Name + "-" + strconv.Itoa(racks[0].ID)
-						pvcNamePrefix := pvcName + "-" + stsName
+						pvcNamePrefix := devPVCName + "-" + stsName
 
-						// If PVC is created and no error in deployment then it mean aerospikeConfig
+						// If PVC is created and no error in deployment, it means aerospikeConfig
 						// has successfully used rack storage
 						var found bool
 						for _, pvc := range newPVCList {

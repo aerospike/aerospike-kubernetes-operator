@@ -18,4 +18,5 @@ Run the following commands to get more information about deployment:
 $ helm status {{ .Release.Name }} --namespace {{ .Release.Namespace }}
 $ helm get all {{ .Release.Name }} --namespace {{ .Release.Namespace }}
 
-$ kubectl get all --namespace {{ .Release.Namespace }} -l "release={{ .Release.Name }}, chart={{ $.Chart.Name }}"
+$ kubectl get aerospikebackupservice --namespace {{ .Release.Namespace }} {{ template "aerospike-backup-service.commonName" . }}
+$ kubectl get all --namespace {{ .Release.Namespace }} -l "aerospike.com/cr={{ template "aerospike-backup-service.commonName" . }}"

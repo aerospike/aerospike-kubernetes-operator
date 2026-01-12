@@ -140,11 +140,11 @@ func (ew *EvictionWebhook) Handle(w http.ResponseWriter, r *http.Request) {
 	}
 
 	// Process eviction request
-	response := ew.processEvictionRequest(ctx, admissionReview, log)
+	podName, response := ew.processEvictionRequest(ctx, admissionReview, log)
 
 	// Send final response
 	ew.sendResponse(w, admissionReview, response)
-	log.Info("Eviction webhook request processed", "allowed", response.Allowed)
+	log.Info("Eviction webhook request processed", "allowed", response.Allowed, "pod", podName)
 }
 
 // parseAdmissionReview parses the admission review from the request
@@ -175,13 +175,13 @@ func (ew *EvictionWebhook) recordMetric(namespace, decision string) {
 
 // processEvictionRequest processes the eviction request and returns the response
 func (ew *EvictionWebhook) processEvictionRequest(ctx context.Context, admissionReview *admissionv1.AdmissionReview,
-	log logr.Logger) *admissionv1.AdmissionResponse {
+	log logr.Logger) (string, *admissionv1.AdmissionResponse) {
 	// Parse eviction object
 	eviction, err := ew.parseEvictionObject(admissionReview.Request.Object.Raw)
 	if err != nil {
 		log.Error(err, "Failed to parse eviction object")
 
-		return getFailureResponse(
+		return "", getFailureResponse(
 			admissionReview.Request.UID,
 			fmt.Sprintf("Failed to parse eviction object: %v", err),
 			metav1.StatusReasonBadRequest,
@@ -189,20 +189,25 @@ func (ew *EvictionWebhook) processEvictionRequest(ctx context.Context, admission
 	}
 
 	// Get pod information
-	pod, err := ew.getPodForEviction(ctx, eviction, admissionReview.Request.Namespace)
+	podKey := types.NamespacedName{
+		Name:      eviction.Name,
+		Namespace: admissionReview.Request.Namespace,
+	}
+
+	pod, err := ew.getPodForEviction(ctx, podKey)
 	if err != nil {
 		// If pod doesn't exist, allow the eviction request to proceed
 		if apierrors.IsNotFound(err) {
-			log.V(1).Info("Pod not found, allowing eviction request to proceed", "pod", eviction.Name)
+			log.V(1).Info("Pod not found, allowing eviction request to proceed", "pod", podKey.String())
 			ew.recordMetric(admissionReview.Request.Namespace, EvictionAllowed)
 
-			return getSuccessResponse(admissionReview.Request.UID)
+			return podKey.String(), getSuccessResponse(admissionReview.Request.UID)
 		}
 
 		// For other errors (timeout, permission, etc.), return error
-		log.Error(err, "Failed to get pod for eviction", "pod", eviction.Name)
+		log.Error(err, "Failed to get pod for eviction", "pod", podKey.String())
 
-		return getFailureResponse(
+		return podKey.String(), getFailureResponse(
 			admissionReview.Request.UID,
 			err.Error(),
 			metav1.StatusReasonInternalError,
@@ -212,23 +217,23 @@ func (ew *EvictionWebhook) processEvictionRequest(ctx context.Context, admission
 
 	// Check if this is an Aerospike pod (runtime filtering required for pods/eviction subresource)
 	if !utils.IsAerospikePod(pod) {
-		log.V(1).Info("Allowing eviction of non-Aerospike pod", "pod", eviction.Name)
+		log.V(1).Info("Allowing eviction of non-Aerospike pod", "pod", podKey.String())
 		ew.recordMetric(admissionReview.Request.Namespace, EvictionAllowed)
 
-		return getSuccessResponse(admissionReview.Request.UID)
+		return podKey.String(), getSuccessResponse(admissionReview.Request.UID)
 	}
 
 	// Block Aerospike pod eviction
-	log.Info("Blocking eviction of Aerospike pod", "pod", eviction.Name)
+	log.Info("Blocking eviction of Aerospike pod", "pod", podKey.String())
 
 	if err := ew.setEvictionBlockedAnnotation(ctx, pod); err != nil {
 		log.Info("Failed to set eviction blocked annotation (eviction still blocked)",
-			"pod", pod.Name, "namespace", pod.Namespace, "error", err)
+			"pod", podKey.String(), "error", err)
 
-		return getFailureResponse(
+		return podKey.String(), getFailureResponse(
 			admissionReview.Request.UID,
-			fmt.Sprintf("Failed to set eviction blocked annotation on pod %s/%s: %v",
-				admissionReview.Request.Namespace, eviction.Name, err),
+			fmt.Sprintf("Failed to set eviction blocked annotation on pod %s: %v",
+				podKey.String(), err),
 			metav1.StatusReasonInternalError,
 			http.StatusInternalServerError,
 		)
@@ -236,11 +241,10 @@ func (ew *EvictionWebhook) processEvictionRequest(ctx context.Context, admission
 
 	ew.recordMetric(admissionReview.Request.Namespace, EvictionBlocked)
 	// Block eviction regardless of annotation success/failure
-	return getFailureResponse(
+	return podKey.String(), getFailureResponse(
 		admissionReview.Request.UID,
-		fmt.Sprintf("Eviction of Aerospike pod %s/%s is blocked by admission webhook,"+
-			" Aerospike Operator will handle Aerospike pod eviction.",
-			admissionReview.Request.Namespace, eviction.Name),
+		fmt.Sprintf("Eviction of Aerospike pod %s is blocked by admission webhook,"+
+			" Aerospike Operator will handle Aerospike pod eviction safely.", podKey.String()),
 		metav1.StatusReasonForbidden,
 		http.StatusForbidden,
 	)
@@ -260,13 +264,8 @@ func (ew *EvictionWebhook) parseEvictionObject(raw []byte) (*policyv1.Eviction, 
 // It tries the cache first (fast path for Aerospike pods), and falls back to
 // the API server if not found (for non-Aerospike pods filtered out by cache)
 func (ew *EvictionWebhook) getPodForEviction(
-	ctx context.Context, eviction *policyv1.Eviction, namespace string,
+	ctx context.Context, podKey types.NamespacedName,
 ) (*corev1.Pod, error) {
-	podKey := types.NamespacedName{
-		Name:      eviction.Name,
-		Namespace: namespace,
-	}
-
 	pod := &corev1.Pod{}
 
 	// Try cache first (fast path for Aerospike pods)
