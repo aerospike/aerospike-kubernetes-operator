@@ -1011,60 +1011,55 @@ func (r *SingleClusterReconciler) updateSTSFromPodSpec(
 	r.updateReservedContainers(st)
 }
 
+// updateSTSContainers updates containers with custom containers from spec, maintaining order.
 func updateSTSContainers(
-	stsContainers []corev1.Container, specContainers []corev1.Container,
+	stsContainers []corev1.Container,
+	specContainers []corev1.Container,
 ) []corev1.Container {
-	// Add new sidecars.
-	for specIdx := range specContainers {
-		specContainer := &specContainers[specIdx]
-		found := false
-
-		// Create a copy because updating stateful sets defaults
-		// on the sidecar container object which mutates original aeroCluster object.
-		specContainerCopy := lib.DeepCopy(specContainer).(*corev1.Container)
-
-		for stsIdx := range stsContainers {
-			if specContainer.Name != stsContainers[stsIdx].Name {
-				continue
-			}
-			// Update the sidecar in case something has changed.
-			// Retain volume mounts and devices to make sure external storage will not lose.
-			specContainerCopy.VolumeMounts = stsContainers[stsIdx].VolumeMounts
-			specContainerCopy.VolumeDevices = stsContainers[stsIdx].VolumeDevices
-			stsContainers[stsIdx] = *specContainerCopy
-			found = true
-
-			break
-		}
-
-		if !found {
-			// Add to stateful set containers.
-			stsContainers = append(stsContainers, *specContainerCopy)
-		}
-	}
-
-	// Remove deleted sidecars.
-	idx := 0
+	reservedContainersValues := make(map[string]corev1.Container)
+	var finalContainers []corev1.Container
 
 	for stsIdx := range stsContainers {
-		stsContainer := stsContainers[stsIdx]
-		found := stsIdx == 0
-
-		for specIdx := range specContainers {
-			if specContainers[specIdx].Name == stsContainer.Name {
-				found = true
-				break
+		if stsContainers[stsIdx].Name == asdbv1.AerospikeServerContainerName {
+			reservedCopy := lib.DeepCopy(&stsContainers[stsIdx]).(*corev1.Container)
+			finalContainers = append(finalContainers, *reservedCopy)
+		} else if stsContainers[stsIdx].Name == asdbv1.AerospikeInitContainerName {
+			reservedContainersValues[stsContainers[stsIdx].Name] = stsContainers[stsIdx]
+		} else {
+			reservedContainersValues[stsContainers[stsIdx].Name] = corev1.Container{
+				VolumeMounts:  stsContainers[stsIdx].VolumeMounts,
+				VolumeDevices: stsContainers[stsIdx].VolumeDevices,
 			}
-		}
-
-		if found {
-			// Retain main aerospike container or a matched sidecar.
-			stsContainers[idx] = stsContainer
-			idx++
 		}
 	}
 
-	return stsContainers[:idx]
+	// Add new sidecars.
+	initContainerFound := false
+	for specIdx := range specContainers {
+		specContainer := &specContainers[specIdx]
+		specContainerCopy := lib.DeepCopy(specContainer).(*corev1.Container)
+		if _, ok := reservedContainersValues[specContainer.Name]; ok {
+			containerValue := reservedContainersValues[specContainer.Name]
+			if specContainer.Name != asdbv1.AerospikeInitContainerName {
+				specContainerCopy.VolumeMounts = containerValue.VolumeMounts
+				specContainerCopy.VolumeDevices = containerValue.VolumeDevices
+			} else {
+				specContainerCopy = lib.DeepCopy(&containerValue).(*corev1.Container)
+				initContainerFound = true
+			}
+		}
+
+		finalContainers = append(finalContainers, *specContainerCopy)
+	}
+
+	if !initContainerFound {
+		// Add back the init container if it was not in specContainers
+		if initContainer, ok := reservedContainersValues[asdbv1.AerospikeInitContainerName]; ok {
+			finalContainers = append([]corev1.Container{initContainer}, finalContainers...)
+		}
+	}
+
+	return finalContainers
 }
 
 func (r *SingleClusterReconciler) waitForAllSTSToBeReady(ignorablePodNames sets.Set[string]) error {
@@ -1230,6 +1225,20 @@ func (r *SingleClusterReconciler) updateAerospikeContainer(st *appsv1.StatefulSe
 }
 
 func (r *SingleClusterReconciler) updateAerospikeInitContainer(st *appsv1.StatefulSet) {
+	// Find aerospike-init container by name instead of assuming index 0
+	var aerospikeInitContainer *corev1.Container
+	for idx := range st.Spec.Template.Spec.InitContainers {
+		if st.Spec.Template.Spec.InitContainers[idx].Name == asdbv1.AerospikeInitContainerName {
+			aerospikeInitContainer = &st.Spec.Template.Spec.InitContainers[idx]
+			break
+		}
+	}
+
+	// If not found, nothing to update
+	if aerospikeInitContainer == nil {
+		return
+	}
+
 	var resources *corev1.ResourceRequirements
 	if r.aeroCluster.Spec.PodSpec.AerospikeInitContainerSpec != nil {
 		resources = r.aeroCluster.Spec.PodSpec.AerospikeInitContainerSpec.Resources
@@ -1237,18 +1246,18 @@ func (r *SingleClusterReconciler) updateAerospikeInitContainer(st *appsv1.Statef
 
 	if resources != nil {
 		// These resources are for main aerospike-init container. Other init containers can mention their own resources.
-		st.Spec.Template.Spec.InitContainers[0].Resources = *resources
+		aerospikeInitContainer.Resources = *resources
 	} else {
-		st.Spec.Template.Spec.InitContainers[0].Resources = corev1.ResourceRequirements{}
+		aerospikeInitContainer.Resources = corev1.ResourceRequirements{}
 	}
 
 	// This SecurityContext is for main aerospike-init container.
 	// Other init containers can mention their own SecurityContext.
 	if r.aeroCluster.Spec.PodSpec.AerospikeInitContainerSpec != nil {
-		st.Spec.Template.Spec.InitContainers[0].SecurityContext = r.aeroCluster.Spec.PodSpec.
+		aerospikeInitContainer.SecurityContext = r.aeroCluster.Spec.PodSpec.
 			AerospikeInitContainerSpec.SecurityContext
 	} else {
-		st.Spec.Template.Spec.InitContainers[0].SecurityContext = nil
+		aerospikeInitContainer.SecurityContext = nil
 	}
 }
 
@@ -1314,7 +1323,8 @@ func (r *SingleClusterReconciler) initializeSTSStorage(
 
 		specVolumes = append(specVolumes, volumesForMount...)
 
-		if idx == 0 {
+		// Check by name instead of index to handle cases where aerospike-init is not at index 0
+		if st.Spec.Template.Spec.InitContainers[idx].Name == asdbv1.AerospikeInitContainerName {
 			st.Spec.Template.Spec.InitContainers[idx].VolumeMounts = getDefaultAerospikeInitContainerVolumeMounts()
 		} else {
 			st.Spec.Template.Spec.InitContainers[idx].VolumeMounts = []corev1.VolumeMount{}

@@ -191,6 +191,15 @@ type AerospikeClusterSpec struct { //nolint:govet // for readability
 	// +kubebuilder:validation:MaxItems:=1
 	// +optional
 	Operations []OperationSpec `json:"operations,omitempty"`
+
+	// EnableDynamicRackID enables dynamic allocation of rack IDs to pods after they get scheduled.
+	// When enabled, the operator will watch for changes to the aerospike.com/effective-rack-id annotation on pods
+	// and reconcile when this annotation value changes. This allows rack IDs to be dynamically assigned to pods
+	// based on their scheduling location or other external factors.
+	// This feature requires a single rack configuration (multiple racks are not allowed when enabled).
+	// +operator-sdk:csv:customresourcedefinitions:type=spec,displayName="Enable Dynamic Rack ID"
+	// +optional
+	EnableDynamicRackID *bool `json:"enableDynamicRackID,omitempty"`
 }
 
 type OperationKind string
@@ -355,6 +364,10 @@ type AerospikePodSpec struct { //nolint:govet // for readability
 	Sidecars []corev1.Container `json:"sidecars,omitempty"`
 
 	// InitContainers to add to the pods.
+	// To control the position of custom init containers relative to aerospike-init, include a placeholder
+	// container with name "aerospike-init" at the desired position. Only the name field is required for the placeholder;
+	// all other fields will be ignored and replaced with the actual aerospike-init container configuration.
+	// If no placeholder is found, all custom init containers will be placed after aerospike-init (for backward compatibility).
 	// +optional
 	InitContainers []corev1.Container `json:"initContainers,omitempty"`
 

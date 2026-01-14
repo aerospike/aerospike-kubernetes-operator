@@ -330,8 +330,16 @@ func validateStorage(
 		}
 
 		// Validate initContainer attachments
+		// Collect container names from InitContainers (excluding placeholder)
+		initContainerNames := make([]string, 0, len(podSpec.InitContainers))
+		for idx := range podSpec.InitContainers {
+			// Skip placeholder (aerospike-init) as it's not a real container in the spec
+			if podSpec.InitContainers[idx].Name != asdbv1.AerospikeInitContainerName {
+				initContainerNames = append(initContainerNames, podSpec.InitContainers[idx].Name)
+			}
+		}
 		if err := validateAttachment(
-			volume.InitContainers, getContainerNames(podSpec.InitContainers),
+			volume.InitContainers, initContainerNames,
 		); err != nil {
 			return warnings, fmt.Errorf(
 				"initContainer volumeMount validation failed, %v", err,

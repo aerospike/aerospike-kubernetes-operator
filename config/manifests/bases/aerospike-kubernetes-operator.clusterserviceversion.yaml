@@ -111,6 +111,14 @@ spec:
         displayName: Enable Dynamic Config Update
         path: enableDynamicConfigUpdate
       - description: |-
+          EnableDynamicRackID enables dynamic allocation of rack IDs to pods after they get scheduled.
+          When enabled, the operator will watch for changes to the aerospike.com/effective-rack-id annotation on pods
+          and reconcile when this annotation value changes. This allows rack IDs to be dynamically assigned to pods
+          based on their scheduling location or other external factors.
+          This feature requires a single rack configuration (multiple racks are not allowed when enabled).
+        displayName: Enable Dynamic Rack ID
+        path: enableDynamicRackID
+      - description: |-
           HeadlessService defines additional configuration parameters for the headless service created to discover
           Aerospike Cluster nodes
         displayName: Headless Service
