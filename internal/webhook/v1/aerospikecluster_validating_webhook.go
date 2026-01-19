@@ -214,7 +214,7 @@ func validate(aslog logr.Logger, cluster *asdbv1.AerospikeCluster) (admission.Wa
 
 	if strings.Contains(cluster.Namespace, " ") {
 		// Few parsing logic depend on this
-		return warnings, fmt.Errorf("aerospikeCluster name cannot have spaces")
+		return warnings, fmt.Errorf("aerospikeCluster namespace cannot have spaces")
 	}
 
 	if err := validateImage(&cluster.Spec); err != nil {
@@ -674,11 +674,15 @@ func validateRackUpdate(
 		}
 	}
 
-	return validateForceBlockFromRosterUpdate(forceBlockFromRosterChanged, newObj)
+	if forceBlockFromRosterChanged {
+		return validateForceBlockFromRosterUpdate(newObj)
+	}
+
+	return nil
 }
 
-func validateForceBlockFromRosterUpdate(forceBlockFromRosterChanged bool, newObj *asdbv1.AerospikeCluster) error {
-	if forceBlockFromRosterChanged && newObj.Status.AerospikeConfig == nil {
+func validateForceBlockFromRosterUpdate(newObj *asdbv1.AerospikeCluster) error {
+	if newObj.Status.AerospikeConfig == nil {
 		return fmt.Errorf("status is not updated yet, cannot change forceBlockFromRoster in rack")
 	}
 

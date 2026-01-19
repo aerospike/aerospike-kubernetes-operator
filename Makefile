@@ -11,7 +11,7 @@ OPENSHIFT_VERSION="v4.10"
 # - use the VERSION as arg of the bundle target (e.g make bundle VERSION=0.0.2)
 # - use environment variables to overwrite this value (e.g export VERSION=0.0.2)
 # TODO: Version must be pulled from git tags
-VERSION ?= 4.2.0-dev1
+VERSION ?= 4.2.0
 
 # Platforms supported
 PLATFORMS ?= linux/amd64,linux/arm64
@@ -188,14 +188,14 @@ run: manifests generate fmt vet ## Run a controller from your host.
 docker-buildx: ## Build and push docker image for the manager for cross-platform support
 	- docker buildx create --name project-v3-builder
 	docker buildx use project-v3-builder
-	- docker buildx build --push --no-cache --provenance=false --platform=$(PLATFORMS) --tag ${IMG} --build-arg VERSION=$(VERSION) .
+	docker buildx build --push --no-cache --provenance=false --platform=$(PLATFORMS) --tag ${IMG} --build-arg VERSION=$(VERSION) .
 	- docker buildx rm project-v3-builder
 
 .PHONY: docker-buildx-openshift
 docker-buildx-openshift: ## Build and push docker image for the manager for openshift cross-platform support
 	- docker buildx create --name project-v3-builder
 	docker buildx use project-v3-builder
-	- docker buildx build --push --no-cache --provenance=false --platform=$(PLATFORMS) --tag ${IMG} --build-arg VERSION=$(VERSION) --build-arg USER=1001 .
+	docker buildx build --push --no-cache --provenance=false --platform=$(PLATFORMS) --tag ${IMG} --build-arg VERSION=$(VERSION) --build-arg USER=1001 .
 	- docker buildx rm project-v3-builder
 
 .PHONY: docker-push
@@ -339,7 +339,7 @@ submodules: ## Pull and update git submodules recursively
 
 # Generate bundle manifests and metadata, then validate generated files.
 # For OpenShift bundles run
-# CHANNELS=stable DEFAULT_CHANNEL=stable OPENSHIFT_VERSION=v4.10 IMG=docker.io/aerospike/aerospike-kubernetes-operator-nightly:4.2.0-dev1 make bundle
+# CHANNELS=stable DEFAULT_CHANNEL=stable OPENSHIFT_VERSION=v4.10 IMG=docker.io/aerospike/aerospike-kubernetes-operator-nightly:4.2.0 make bundle
 .PHONY: bundle
 bundle: manifests kustomize operator-sdk
 	rm -rf $(ROOT_DIR)/bundle.Dockerfile $(BUNDLE_DIR)
@@ -417,5 +417,5 @@ catalog: opm ## Generate a file-based catalog and its dockerfile.
 docker-buildx-catalog: catalog
 	- docker buildx create --name project-v3-builder
 	docker buildx use project-v3-builder
-	- docker buildx build --push --no-cache --platform=$(PLATFORMS) --tag $(CATALOG_IMG) -f $(CATALOG_DIR).Dockerfile .
+	docker buildx build --push --no-cache --platform=$(PLATFORMS) --tag $(CATALOG_IMG) -f $(CATALOG_DIR).Dockerfile .
 	- docker buildx rm project-v3-builder

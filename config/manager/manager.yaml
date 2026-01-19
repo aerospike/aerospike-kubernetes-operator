@@ -62,7 +62,7 @@ spec:
           value: aerospike
         - name: FAILED_POD_GRACE_PERIOD_SECONDS
             # for setting the grace period to delete/recover failed pods, default is 60 seconds
-          value: 60
+          value: "60"
         - name: ENABLE_SAFE_POD_EVICTION
           # enables the eviction webhook to safely block Aerospike pod evictions
           # also enables eviction webhook Prometheus metrics (aerospike_ako_eviction_webhook_requests_total)
@@ -75,7 +75,7 @@ spec:
           value: aerospike
         - name: AEROSPIKE_KUBERNETES_INIT_NAME_TAG
           # this is the name and tag of aerospike-init image
-          value: aerospike-kubernetes-init:2.4.0-dev3
+          value: aerospike-kubernetes-init:2.4.0
       volumes: []
       serviceAccountName: controller-manager
 
