@@ -367,7 +367,7 @@ type AerospikePodSpec struct { //nolint:govet // for readability
 	// To control the position of custom init containers relative to aerospike-init, include a placeholder
 	// container with name "aerospike-init" at the desired position. Only the name field is required for the placeholder;
 	// all other fields will be ignored and replaced with the actual aerospike-init container configuration.
-	// If no placeholder is found, all custom init containers will be placed after aerospike-init (for backward compatibility).
+	// If no placeholder is found, all custom init containers will be placed after aerospike-init (backward compatible).
 	// +optional
 	InitContainers []corev1.Container `json:"initContainers,omitempty"`
 
@@ -1270,6 +1270,12 @@ type AerospikePodStatus struct { //nolint:govet // for readability
 	// Empty "" status means successful update.
 	// +optional
 	DynamicConfigUpdateStatus DynamicConfigUpdateStatus `json:"dynamicConfigUpdateStatus,omitempty"`
+
+	// DynamicRackID indicates whether this pod is picking rackID dynamically based on
+	// the effective-rack-id annotation. When true, the pod's rackID is determined
+	// from the pod annotation rather than the static rack configuration.
+	// +optional
+	DynamicRackID bool `json:"dynamicRackID,omitempty"`
 }
 
 // +kubebuilder:object:root=true

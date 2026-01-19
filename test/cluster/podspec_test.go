@@ -14,6 +14,7 @@ import (
 	"sigs.k8s.io/controller-runtime/pkg/client"
 
 	asdbv1 "github.com/aerospike/aerospike-kubernetes-operator/v4/api/v1"
+	"github.com/aerospike/aerospike-kubernetes-operator/v4/pkg/utils"
 	"github.com/aerospike/aerospike-kubernetes-operator/v4/test"
 )
 
@@ -597,7 +598,13 @@ func validateInitImage(
 	expectedImage := fmt.Sprintf("%s/%s/%s", registry, namespace, nameAndTag)
 
 	for stsIndex := range stsList.Items {
-		image := stsList.Items[stsIndex].Spec.Template.Spec.InitContainers[0].Image
+		// Find aerospike-init container by name
+		aerospikeInitContainer := utils.GetContainerByName(
+			stsList.Items[stsIndex].Spec.Template.Spec.InitContainers,
+			asdbv1.AerospikeInitContainerName,
+		)
+		Expect(aerospikeInitContainer).NotTo(BeNil(), "aerospike-init container not found")
+		image := aerospikeInitContainer.Image
 		Expect(image).To(Equal(expectedImage), fmt.Sprintf(
 			"expected init image %s, found image %s",
 			expectedImage, image,

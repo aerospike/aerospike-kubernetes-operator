@@ -1017,15 +1017,17 @@ func updateSTSContainers(
 	specContainers []corev1.Container,
 ) []corev1.Container {
 	reservedContainersValues := make(map[string]corev1.Container)
-	var finalContainers []corev1.Container
+
+	finalContainers := make([]corev1.Container, 0, len(stsContainers)+len(specContainers))
 
 	for stsIdx := range stsContainers {
-		if stsContainers[stsIdx].Name == asdbv1.AerospikeServerContainerName {
+		switch stsContainers[stsIdx].Name {
+		case asdbv1.AerospikeServerContainerName:
 			reservedCopy := lib.DeepCopy(&stsContainers[stsIdx]).(*corev1.Container)
 			finalContainers = append(finalContainers, *reservedCopy)
-		} else if stsContainers[stsIdx].Name == asdbv1.AerospikeInitContainerName {
+		case asdbv1.AerospikeInitContainerName:
 			reservedContainersValues[stsContainers[stsIdx].Name] = stsContainers[stsIdx]
-		} else {
+		default:
 			reservedContainersValues[stsContainers[stsIdx].Name] = corev1.Container{
 				VolumeMounts:  stsContainers[stsIdx].VolumeMounts,
 				VolumeDevices: stsContainers[stsIdx].VolumeDevices,
@@ -1035,8 +1037,10 @@ func updateSTSContainers(
 
 	// Add new sidecars.
 	initContainerFound := false
+
 	for specIdx := range specContainers {
 		specContainer := &specContainers[specIdx]
+
 		specContainerCopy := lib.DeepCopy(specContainer).(*corev1.Container)
 		if _, ok := reservedContainersValues[specContainer.Name]; ok {
 			containerValue := reservedContainersValues[specContainer.Name]
@@ -1227,6 +1231,7 @@ func (r *SingleClusterReconciler) updateAerospikeContainer(st *appsv1.StatefulSe
 func (r *SingleClusterReconciler) updateAerospikeInitContainer(st *appsv1.StatefulSet) {
 	// Find aerospike-init container by name instead of assuming index 0
 	var aerospikeInitContainer *corev1.Container
+
 	for idx := range st.Spec.Template.Spec.InitContainers {
 		if st.Spec.Template.Spec.InitContainers[idx].Name == asdbv1.AerospikeInitContainerName {
 			aerospikeInitContainer = &st.Spec.Template.Spec.InitContainers[idx]
@@ -1315,7 +1320,6 @@ func (r *SingleClusterReconciler) initializeSTSStorage(
 	// Initialize sts storage
 	var specVolumes []corev1.Volume
 
-	//nolint:dupl // not duplicate
 	for idx := range st.Spec.Template.Spec.InitContainers {
 		externalMounts, volumesForMount := r.getExternalStorageMounts(
 			&st.Spec.Template.Spec.InitContainers[idx], rackState, st.Spec.Template.Spec.Volumes,
@@ -1349,7 +1353,6 @@ func (r *SingleClusterReconciler) initializeSTSStorage(
 		)
 	}
 
-	//nolint:dupl // not duplicate
 	for idx := range st.Spec.Template.Spec.Containers {
 		externalMounts, volumesForMount := r.getExternalStorageMounts(
 			&st.Spec.Template.Spec.Containers[idx], rackState, st.Spec.Template.Spec.Volumes,

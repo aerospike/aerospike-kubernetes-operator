@@ -338,6 +338,7 @@ func validateStorage(
 				initContainerNames = append(initContainerNames, podSpec.InitContainers[idx].Name)
 			}
 		}
+
 		if err := validateAttachment(
 			volume.InitContainers, initContainerNames,
 		); err != nil {

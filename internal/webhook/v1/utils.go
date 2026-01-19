@@ -6,6 +6,7 @@ const (
 	baseVersion                            = "6.0.0.0"
 	baseInitVersion                        = "1.0.0"
 	minInitVersionForDynamicConf           = "2.2.0"
+	minInitVersionForDynamicRackID         = "2.5.0"
 	minVersionForEnterprisePKIOnlyAuthMode = "8.1.0.0"
 )
 

@@ -62,8 +62,8 @@ func (r *AerospikeClusterReconciler) SetupWithManager(mgr ctrl.Manager) error {
 			evictionBlockedAdded := !hadAnnotation && hasAnnotation
 
 			// Check if the effective-rack-id annotation value changed
-			oldEffectiveRackID, _ := oldPod.Annotations[asdbv1.EffectiveRackIDAnnotation]
-			newEffectiveRackID, _ := newPod.Annotations[asdbv1.EffectiveRackIDAnnotation]
+			oldEffectiveRackID := oldPod.Annotations[asdbv1.EffectiveRackIDAnnotation]
+			newEffectiveRackID := newPod.Annotations[asdbv1.EffectiveRackIDAnnotation]
 			effectiveRackIDChanged := oldEffectiveRackID != newEffectiveRackID
 
 			return evictionBlockedAdded || effectiveRackIDChanged

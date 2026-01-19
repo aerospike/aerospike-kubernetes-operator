@@ -14,6 +14,7 @@ import (
 	"sigs.k8s.io/controller-runtime/pkg/client"
 
 	asdbv1 "github.com/aerospike/aerospike-kubernetes-operator/v4/api/v1"
+	"github.com/aerospike/aerospike-kubernetes-operator/v4/pkg/utils"
 	"github.com/aerospike/aerospike-kubernetes-operator/v4/test"
 )
 
@@ -259,7 +260,16 @@ func validateClusterResource(
 				return fmt.Errorf("resource not matching. want %v, got %v", *res, cnt.Resources)
 			}
 		} else {
-			cnt = stsList.Items[stsIndex].Spec.Template.Spec.InitContainers[0]
+			// Find aerospike-init container by name
+			aerospikeInitContainer := utils.GetContainerByName(
+				stsList.Items[stsIndex].Spec.Template.Spec.InitContainers,
+				asdbv1.AerospikeInitContainerName,
+			)
+			if aerospikeInitContainer == nil {
+				return fmt.Errorf("aerospike-init container not found")
+			}
+
+			cnt = *aerospikeInitContainer
 			if !reflect.DeepEqual(&cnt.Resources, res) {
 				return fmt.Errorf("resource not matching. want %v, got %v", *res, cnt.Resources)
 			}

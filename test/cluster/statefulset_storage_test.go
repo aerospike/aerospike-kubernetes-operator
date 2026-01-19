@@ -137,7 +137,14 @@ var _ = Describe(
 							Name: "tzdata", MountPath: "/etc/localtime",
 						})
 
-						initcontainerMountedVolumes := sts.Spec.Template.Spec.InitContainers[0].VolumeMounts
+						// Find aerospike-init container by name
+						aerospikeInitContainer := utils.GetContainerByName(
+							sts.Spec.Template.Spec.InitContainers,
+							asdbv1.AerospikeInitContainerName,
+						)
+						Expect(aerospikeInitContainer).NotTo(BeNil(), "aerospike-init container not found")
+
+						initcontainerMountedVolumes := aerospikeInitContainer.VolumeMounts
 						initcontainerMountedVolumes = append(initcontainerMountedVolumes, v1.VolumeMount{
 							Name: "tzdata", MountPath: "/etc/localtime",
 						})

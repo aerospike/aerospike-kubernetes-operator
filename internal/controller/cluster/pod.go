@@ -161,11 +161,6 @@ func (r *SingleClusterReconciler) getRollingRestartTypeMap(rackState *RackState,
 		}
 
 		restartTypeMap[pods[idx].Name] = restartType
-
-		// Fallback to rolling restart in case of partial failure to recover with the desired Aerospike config
-		if podStatus.DynamicConfigUpdateStatus == asdbv1.PartiallyFailed {
-			restartTypeMap[pods[idx].Name] = mergeRestartType(restartTypeMap[pods[idx].Name], quickRestart)
-		}
 	}
 
 	return restartTypeMap, dynamicConfDiffPerPod, nil
@@ -255,6 +250,30 @@ func (r *SingleClusterReconciler) getRollingRestartTypePod(
 
 		r.Log.Info("Pod warm/cold restart requested. Need rolling restart",
 			"pod name", pod.Name, "operation", opType, "restartType", restartType)
+	}
+
+	// Check if EnableDynamicRackID in spec differs from DynamicRackID in pod status
+	specEnableDynamicRackID := asdbv1.GetBool(r.aeroCluster.Spec.EnableDynamicRackID)
+
+	podStatusDynamicRackID := podStatus.DynamicRackID
+	if specEnableDynamicRackID != podStatusDynamicRackID {
+		restartType = mergeRestartType(restartType, quickRestart)
+
+		r.Log.Info(
+			"EnableDynamicRackID changed. Need quick restart",
+			"specEnableDynamicRackID", specEnableDynamicRackID,
+			"podStatusDynamicRackID", podStatusDynamicRackID,
+		)
+	}
+
+	// Fallback to rolling restart in case of partial failure to recover with the desired Aerospike config
+	if podStatus.DynamicConfigUpdateStatus == asdbv1.PartiallyFailed {
+		restartType = mergeRestartType(restartType, quickRestart)
+
+		r.Log.Info(
+			"DynamicConfigUpdateStatus is PartiallyFailed. Need quick restart",
+			"pod", pod.Name,
+		)
 	}
 
 	return restartType, nil

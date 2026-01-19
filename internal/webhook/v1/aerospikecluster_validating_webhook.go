@@ -117,6 +117,10 @@ func (acv *AerospikeClusterCustomValidator) ValidateUpdate(_ context.Context, ol
 		return warnings, err
 	}
 
+	if err := validateEnableDynamicRackIDUpdate(aerospikeCluster); err != nil {
+		return warnings, err
+	}
+
 	if err := validateImageUpdate(oldObject.Spec.Image, aerospikeCluster.Spec.Image); err != nil {
 		return warnings, err
 	}
@@ -300,38 +304,44 @@ func validate(aslog logr.Logger, cluster *asdbv1.AerospikeCluster) (admission.Wa
 		}
 
 		// Validate common aerospike config schema and fields
-		if err := validateAerospikeConfig(aslog, version,
+		err = validateAerospikeConfig(aslog, version,
 			&rack.AerospikeConfig, &rack.Storage, int(cluster.Spec.Size),
 			cluster.Spec.OperatorClientCertSpec,
-		); err != nil {
+		)
+		if err != nil {
 			return warnings, err
 		}
 
-		if err := validateRequiredFileStorageForMetadata(
+		err = validateRequiredFileStorageForMetadata(
 			rack.AerospikeConfig, &rack.Storage, cluster.Spec.ValidationPolicy,
-		); err != nil {
+		)
+		if err != nil {
 			return warnings, err
 		}
 
-		if err := validateRequiredFileStorageForAerospikeConfig(
+		err = validateRequiredFileStorageForAerospikeConfig(
 			rack.AerospikeConfig, &rack.Storage,
-		); err != nil {
+		)
+		if err != nil {
 			return warnings, err
 		}
 	}
 
 	// Validate resource and limit
-	if err := validatePodSpecResourceAndLimits(aslog, cluster); err != nil {
+	err = validatePodSpecResourceAndLimits(aslog, cluster)
+	if err != nil {
 		return warnings, err
 	}
 
 	// Validate access control
-	if err := validateAccessControl(aslog, cluster); err != nil {
+	err = validateAccessControl(aslog, cluster)
+	if err != nil {
 		return warnings, err
 	}
 
 	// Validate rackConfig
 	warns, err = validateRackConfig(aslog, cluster)
+
 	warnings = append(warnings, warns...)
 	if err != nil {
 		return warnings, err
@@ -1866,6 +1876,35 @@ func validateEnableDynamicConfigUpdate(cluster *asdbv1.AerospikeCluster) error {
 			" than %s. Please visit https://aerospike.com/docs/cloud/kubernetes/operator/Cluster-configuration-settings#spec"+
 			" for more details about enableDynamicConfigUpdate flag",
 			minInitVersionForDynamicConf)
+	}
+
+	return nil
+}
+
+func validateEnableDynamicRackIDUpdate(cluster *asdbv1.AerospikeCluster) error {
+	if !asdbv1.GetBool(cluster.Spec.EnableDynamicRackID) {
+		return nil
+	}
+
+	if len(cluster.Status.Pods) == 0 {
+		return nil
+	}
+
+	minInitVersion, err := getMinRunningInitVersion(cluster.Status.Pods)
+	if err != nil {
+		return err
+	}
+
+	val, err := lib.CompareVersions(minInitVersion, minInitVersionForDynamicRackID)
+	if err != nil {
+		return fmt.Errorf("failed to check image version: %v", err)
+	}
+
+	if val < 0 {
+		return fmt.Errorf("cannot enable enableDynamicRackID flag, some init containers are running version less"+
+			" than %s. Please visit https://aerospike.com/docs/cloud/kubernetes/operator/Cluster-configuration-settings#spec"+
+			" for more details about enableDynamicRackID flag",
+			minInitVersionForDynamicRackID)
 	}
 
 	return nil

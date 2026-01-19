@@ -14403,6 +14403,12 @@ spec:
                       - PartiallyFailed
                       - ""
                       type: string
+                    dynamicRackID:
+                      description: |-
+                        DynamicRackID indicates whether this pod is picking rackID dynamically based on
+                        the effective-rack-id annotation. When true, the pod's rackID is determined
+                        from the pod annotation rather than the static rack configuration.
+                      type: boolean
                     hostExternalIP:
                       description: HostExternalIP of the K8s host this pod is scheduled
                         on.
