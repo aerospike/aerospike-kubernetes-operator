@@ -120,6 +120,9 @@ func (r *SingleClusterReconciler) getRollingRestartTypeMap(rackState *RackState,
 			}
 
 			if len(specToStatusDiffs) != 0 {
+				enableDynamicRackID := asdbv1.GetBool(r.aeroCluster.Spec.EnableDynamicRackID)
+				const rackIDSuffix = ".rack-id"
+
 				for key := range specToStatusDiffs {
 					// To update in-memory namespace data-size, we need to restart the pod.
 					// Just a warm restart is not enough.
@@ -131,7 +134,7 @@ func (r *SingleClusterReconciler) getRollingRestartTypeMap(rackState *RackState,
 					}
 
 					// Skip rack-id change for dynamic rack-id enabled clusters.
-					if strings.HasSuffix(key, ".rack-id") && asdbv1.GetBool(r.aeroCluster.Spec.EnableDynamicRackID) {
+					if enableDynamicRackID && strings.HasSuffix(key, rackIDSuffix) {
 						delete(specToStatusDiffs, key)
 					}
 				}

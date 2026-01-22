@@ -6,4 +6,4 @@ resources:
 
 commonAnnotations:
   containerImage: controller:latest
-  createdAt: 2026-01-14T05:42:42UTC
+  createdAt: dateplaceholder

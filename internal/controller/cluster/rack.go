@@ -1398,9 +1398,6 @@ func (r *SingleClusterReconciler) isRackStorageUpdatedInAeroCluster(
 
 	// Include InitContainers (excluding placeholder)
 	for idx := range r.aeroCluster.Spec.PodSpec.InitContainers {
-		allConfiguredInitContainers = append(
-			allConfiguredInitContainers, r.aeroCluster.Spec.PodSpec.InitContainers[idx].Name,
-		)
 		// Skip placeholder (aerospike-init) as it's not a real container in the spec
 		if r.aeroCluster.Spec.PodSpec.InitContainers[idx].Name != asdbv1.AerospikeInitContainerName {
 			allConfiguredInitContainers = append(
