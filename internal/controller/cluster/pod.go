@@ -129,6 +129,11 @@ func (r *SingleClusterReconciler) getRollingRestartTypeMap(rackState *RackState,
 
 						break
 					}
+
+					// Skip rack-id change for dynamic rack-id enabled clusters.
+					if strings.HasSuffix(key, ".rack-id") && asdbv1.GetBool(r.aeroCluster.Spec.EnableDynamicRackID) {
+						delete(specToStatusDiffs, key)
+					}
 				}
 
 				if restartTypeMap[pods[idx].Name] == podRestart {
@@ -1570,7 +1575,7 @@ func isAllDynamicConfig(log logger, specToStatusDiffs asconfig.DynamicConfigMap,
 	}
 
 	if !isDynamic {
-		log.Info("Config contains static field changes; dynamic update not possible.")
+		log.Info("Config contains static field changes; dynamic update not possible.", "specToStatusDiffs", specToStatusDiffs)
 		return false
 	}
 

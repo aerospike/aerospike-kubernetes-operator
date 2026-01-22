@@ -289,6 +289,11 @@ func (in *AerospikeClusterStatusSpec) DeepCopyInto(out *AerospikeClusterStatusSp
 		*out = new(bool)
 		**out = **in
 	}
+	if in.EnableDynamicRackID != nil {
+		in, out := &in.EnableDynamicRackID, &out.EnableDynamicRackID
+		*out = new(bool)
+		**out = **in
+	}
 	if in.Resources != nil {
 		in, out := &in.Resources, &out.Resources
 		*out = new(corev1.ResourceRequirements)

@@ -72,10 +72,10 @@ spec:
           value: docker.io
         - name: AEROSPIKE_KUBERNETES_INIT_REGISTRY_NAMESPACE
           # this is the namespace in registry used to pull aerospike-init image
-          value: aerospike
+          value: tanmayj10
         - name: AEROSPIKE_KUBERNETES_INIT_NAME_TAG
           # this is the name and tag of aerospike-init image
-          value: aerospike-kubernetes-init:2.4.0
+          value: aerospike-kubernetes-init:2.5.0-dev6
       volumes: []
       serviceAccountName: controller-manager
 

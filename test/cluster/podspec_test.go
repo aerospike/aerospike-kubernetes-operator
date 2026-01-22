@@ -10,6 +10,7 @@ import (
 	. "github.com/onsi/ginkgo/v2"
 	. "github.com/onsi/gomega"
 	corev1 "k8s.io/api/core/v1"
+	"k8s.io/apimachinery/pkg/api/resource"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 
@@ -50,19 +51,17 @@ var _ = Describe(
 			},
 		}
 
-		initCont1 := corev1.Container{
-			Name:    "init-myservice",
+		customInit1 := corev1.Container{
+			Name:    "custom-init-1",
 			Image:   "busybox:1.28",
-			Command: []string{"sh", "-c", "echo The app is running; sleep 2"},
+			Command: []string{"sh", "-c", "echo custom-init-1; sleep 2"},
 		}
 
-		// initCont2 := corev1.Container{
-		// 	Name:    "init-mydb",
-		// 	Image:   "busybox:1.28",
-		// 	Command: []string{"sh", "-c",
-		//	"until nslookup mydb.$(cat /var/run/secrets/kubernetes.io/serviceaccount/namespace).svc.cluster.local;
-		//	do echo waiting for mydb; sleep 2; done"},
-		// }
+		customInit2 := corev1.Container{
+			Name:    "custom-init-2",
+			Image:   "busybox:1.28",
+			Command: []string{"sh", "-c", "echo custom-init-2; sleep 1"},
+		}
 
 		Context(
 			"When doing valid operation", func() {
@@ -87,6 +86,10 @@ var _ = Describe(
 						aeroCluster.Spec.PodSpec.AerospikeObjectMeta.Labels = map[string]string{
 							"label-test-1": "test-1",
 						}
+
+						// TODO: remove it before merging
+						aeroCluster.Spec.PodSpec.AerospikeInitContainerSpec.ImageNameAndTag = "aerospike-kubernetes-init:2.5.0-dev6"
+
 						Expect(DeployCluster(k8sClient, ctx, aeroCluster)).ToNot(HaveOccurred())
 					},
 				)
@@ -219,66 +222,286 @@ var _ = Describe(
 					},
 				)
 
-				It(
-					"Should validate the initcontainer workflow", func() {
+				Context(
+					"When doing custom initcontainer operation", func() {
+						It(
+							"Should validate the initcontainer workflow", func() {
 
-						By("Adding the container1")
+								By("Adding the container1")
 
-						aeroCluster, err := getCluster(
-							k8sClient, ctx, clusterNamespacedName,
-						)
-						Expect(err).ToNot(HaveOccurred())
+								aeroCluster, err := getCluster(
+									k8sClient, ctx, clusterNamespacedName,
+								)
+								Expect(err).ToNot(HaveOccurred())
 
-						aeroCluster.Spec.PodSpec.InitContainers = append(
-							aeroCluster.Spec.PodSpec.InitContainers, initCont1,
-						)
+								aeroCluster.Spec.PodSpec.InitContainers = append(
+									aeroCluster.Spec.PodSpec.InitContainers, customInit1,
+								)
 
-						aeroCluster.Spec.Storage.Volumes[1].InitContainers = []asdbv1.VolumeAttachment{
-							{
-								ContainerName: "init-myservice",
-								Path:          "/workdir",
+								aeroCluster.Spec.Storage.Volumes[1].InitContainers = []asdbv1.VolumeAttachment{
+									{
+										ContainerName: "custom-init-1",
+										Path:          "/workdir",
+									},
+								}
+
+								err = updateCluster(k8sClient, ctx, aeroCluster)
+								Expect(err).ToNot(HaveOccurred())
+
+								// validate
+								stsList, err := getSTSList(aeroCluster, k8sClient)
+								Expect(err).ToNot(HaveOccurred())
+								Expect(stsList.Items).ToNot(BeEmpty())
+
+								for _, sts := range stsList.Items {
+									stsInitMountPath := sts.Spec.Template.Spec.InitContainers[1].VolumeMounts[0].MountPath
+									Expect(stsInitMountPath).To(Equal("/workdir"))
+									Expect(sts.Spec.Template.Spec.InitContainers[1].Name).To(Equal("custom-init-1"))
+								}
+
+								By("Updating the container1")
+
+								aeroCluster.Spec.PodSpec.InitContainers[0].Command = []string{
+									"sh", "-c", "echo The app is running; sleep 5",
+								}
+
+								err = updateCluster(k8sClient, ctx, aeroCluster)
+								Expect(err).ToNot(HaveOccurred())
+
+								By("Removing all the containers")
+
+								aeroCluster.Spec.PodSpec.InitContainers = []corev1.Container{}
+								aeroCluster.Spec.Storage.Volumes[1].InitContainers = []asdbv1.VolumeAttachment{}
+
+								err = updateCluster(k8sClient, ctx, aeroCluster)
+								Expect(err).ToNot(HaveOccurred())
 							},
-						}
+						)
 
-						err = updateCluster(k8sClient, ctx, aeroCluster)
-						Expect(err).ToNot(HaveOccurred())
+						It(
+							"Should place aerospike-init at placeholder position", func() {
+								By("Adding custom init containers with placeholder in the middle")
+								aeroCluster, err := getCluster(
+									k8sClient, ctx, clusterNamespacedName,
+								)
+								Expect(err).ToNot(HaveOccurred())
 
-						// validate
-						stsList, err := getSTSList(aeroCluster, k8sClient)
-						Expect(err).ToNot(HaveOccurred())
-						Expect(stsList.Items).ToNot(BeEmpty())
+								placeholder := corev1.Container{
+									Name: asdbv1.AerospikeInitContainerName,
+									// Only name is required, other fields are ignored
+								}
 
-						for _, sts := range stsList.Items {
-							stsInitMountPath := sts.Spec.Template.Spec.InitContainers[1].VolumeMounts[0].MountPath
-							Expect(stsInitMountPath).To(Equal("/workdir"))
-						}
+								aeroCluster.Spec.PodSpec.InitContainers = []corev1.Container{
+									customInit1,
+									placeholder,
+									customInit2,
+								}
 
-						// By("Adding the container2")
+								err = updateCluster(k8sClient, ctx, aeroCluster)
+								Expect(err).ToNot(HaveOccurred())
 
-						// aeroCluster, err := getCluster(k8sClient, ctx, clusterNamespacedName)
-						// Expect(err).ToNot(HaveOccurred())
+								By("Validating init container order in StatefulSet")
+								stsList, err := getSTSList(aeroCluster, k8sClient)
+								Expect(err).ToNot(HaveOccurred())
+								Expect(stsList.Items).ToNot(BeEmpty())
 
-						// aeroCluster.Spec.PodSpec.InitContainers = append(aeroCluster.Spec.PodSpec.InitContainers, initCont2)
+								for _, sts := range stsList.Items {
+									initContainers := sts.Spec.Template.Spec.InitContainers
+									Expect(initContainers).To(HaveLen(3),
+										"Should have 3 init containers: custom-init-1, aerospike-init, custom-init-2")
 
-						// err = updateCluster(k8sClient, ctx, aeroCluster)
-						// Expect(err).ToNot(HaveOccurred())
+									// First should be custom-init-1
+									Expect(initContainers[0].Name).To(Equal("custom-init-1"))
+									// Second should be aerospike-init (replaced placeholder)
+									Expect(initContainers[1].Name).To(Equal(asdbv1.AerospikeInitContainerName))
+									// Verify it's the actual aerospike-init container (not just placeholder)
+									Expect(initContainers[1].Image).ToNot(BeEmpty())
+									// Third should be custom-init-2
+									Expect(initContainers[2].Name).To(Equal("custom-init-2"))
+								}
+							},
+						)
 
-						By("Updating the container2")
+						It(
+							"Should maintain order when updating init containers", func() {
+								By("Adding init containers in initial order")
+								aeroCluster, err := getCluster(
+									k8sClient, ctx, clusterNamespacedName,
+								)
+								Expect(err).ToNot(HaveOccurred())
 
-						aeroCluster.Spec.PodSpec.InitContainers[0].Command = []string{
-							"sh", "-c", "echo The app is running; sleep 5",
-						}
+								placeholder := corev1.Container{
+									Name: asdbv1.AerospikeInitContainerName,
+								}
 
-						err = updateCluster(k8sClient, ctx, aeroCluster)
-						Expect(err).ToNot(HaveOccurred())
+								aeroCluster.Spec.PodSpec.InitContainers = []corev1.Container{
+									customInit1,
+									placeholder,
+									customInit2,
+								}
 
-						By("Removing all the containers")
+								err = updateCluster(k8sClient, ctx, aeroCluster)
+								Expect(err).ToNot(HaveOccurred())
 
-						aeroCluster.Spec.PodSpec.InitContainers = []corev1.Container{}
-						aeroCluster.Spec.Storage.Volumes[1].InitContainers = []asdbv1.VolumeAttachment{}
+								By("Reordering init containers")
+								aeroCluster, err = getCluster(
+									k8sClient, ctx, clusterNamespacedName,
+								)
+								Expect(err).ToNot(HaveOccurred())
 
-						err = updateCluster(k8sClient, ctx, aeroCluster)
-						Expect(err).ToNot(HaveOccurred())
+								// Reorder: move placeholder to the end
+								aeroCluster.Spec.PodSpec.InitContainers = []corev1.Container{
+									customInit1,
+									customInit2,
+									placeholder,
+								}
+
+								err = updateCluster(k8sClient, ctx, aeroCluster)
+								Expect(err).ToNot(HaveOccurred())
+
+								By("Validating updated init container order in StatefulSet")
+								stsList, err := getSTSList(aeroCluster, k8sClient)
+								Expect(err).ToNot(HaveOccurred())
+								Expect(stsList.Items).ToNot(BeEmpty())
+
+								for _, sts := range stsList.Items {
+									initContainers := sts.Spec.Template.Spec.InitContainers
+									Expect(initContainers).To(HaveLen(3),
+										"Should have 3 init containers: custom-init-1, custom-init-2, aerospike-init")
+
+									// First should be custom-init-1
+									Expect(initContainers[0].Name).To(Equal("custom-init-1"))
+									// Second should be custom-init-2
+									Expect(initContainers[1].Name).To(Equal("custom-init-2"))
+									// Third should be aerospike-init
+									Expect(initContainers[2].Name).To(Equal(asdbv1.AerospikeInitContainerName))
+								}
+							},
+						)
+
+						It(
+							"Should maintain aerospike-init configuration when using placeholder", func() {
+								By("Adding placeholder and verifying aerospike-init configuration is preserved")
+								aeroCluster, err := getCluster(
+									k8sClient, ctx, clusterNamespacedName,
+								)
+								Expect(err).ToNot(HaveOccurred())
+
+								// Set resources for aerospike-init
+								resources := &corev1.ResourceRequirements{
+									Requests: corev1.ResourceList{
+										corev1.ResourceCPU:    resource.MustParse("100m"),
+										corev1.ResourceMemory: resource.MustParse("128Mi"),
+									},
+									Limits: corev1.ResourceList{
+										corev1.ResourceCPU:    resource.MustParse("200m"),
+										corev1.ResourceMemory: resource.MustParse("256Mi"),
+									},
+								}
+
+								aeroCluster.Spec.PodSpec.AerospikeInitContainerSpec.Resources = resources
+
+								placeholder := corev1.Container{
+									Name: asdbv1.AerospikeInitContainerName,
+									// Placeholder with different image (should be ignored)
+									Image: "busybox:1.28",
+								}
+
+								aeroCluster.Spec.PodSpec.InitContainers = []corev1.Container{
+									customInit1,
+									placeholder,
+								}
+
+								err = updateCluster(k8sClient, ctx, aeroCluster)
+								Expect(err).ToNot(HaveOccurred())
+
+								By("Validating aerospike-init configuration is preserved")
+								stsList, err := getSTSList(aeroCluster, k8sClient)
+								Expect(err).ToNot(HaveOccurred())
+								Expect(stsList.Items).ToNot(BeEmpty())
+
+								for _, sts := range stsList.Items {
+									initContainers := sts.Spec.Template.Spec.InitContainers
+									Expect(initContainers).To(HaveLen(2))
+
+									// Find aerospike-init container
+									aerospikeInitContainer := utils.GetContainerByName(
+										initContainers,
+										asdbv1.AerospikeInitContainerName,
+									)
+									Expect(aerospikeInitContainer).ToNot(BeNil())
+									// Verify resources are set (not from placeholder)
+									Expect(aerospikeInitContainer.Resources.Requests).ToNot(BeEmpty())
+									Expect(aerospikeInitContainer.Resources.Requests[corev1.ResourceCPU]).To(Equal(resource.MustParse("100m")))
+									// Verify image is from actual aerospike-init (not placeholder)
+									Expect(aerospikeInitContainer.Image).ToNot(Equal("busybox:1.28"))
+									Expect(aerospikeInitContainer.Image).To(ContainSubstring("aerospike-kubernetes-init"))
+								}
+							},
+						)
+
+						It(
+							"Should handle adding init containers dynamically", func() {
+								By("Starting with no custom init containers")
+								aeroCluster, err := getCluster(
+									k8sClient, ctx, clusterNamespacedName,
+								)
+								Expect(err).ToNot(HaveOccurred())
+
+								// Verify initial state: only aerospike-init
+								stsList, err := getSTSList(aeroCluster, k8sClient)
+								Expect(err).ToNot(HaveOccurred())
+								for _, sts := range stsList.Items {
+									initContainers := sts.Spec.Template.Spec.InitContainers
+									Expect(initContainers).To(HaveLen(1))
+									Expect(initContainers[0].Name).To(Equal(asdbv1.AerospikeInitContainerName))
+								}
+
+								By("Adding first custom init container")
+
+								aeroCluster.Spec.PodSpec.InitContainers = []corev1.Container{
+									customInit1,
+								}
+
+								err = updateCluster(k8sClient, ctx, aeroCluster)
+								Expect(err).ToNot(HaveOccurred())
+
+								// Verify: aerospike-init, custom-init-1
+								stsList, err = getSTSList(aeroCluster, k8sClient)
+								Expect(err).ToNot(HaveOccurred())
+								for _, sts := range stsList.Items {
+									initContainers := sts.Spec.Template.Spec.InitContainers
+									Expect(initContainers).To(HaveLen(2))
+									Expect(initContainers[0].Name).To(Equal(asdbv1.AerospikeInitContainerName))
+									Expect(initContainers[1].Name).To(Equal("custom-init-1"))
+								}
+
+								By("Adding second custom init container")
+								aeroCluster, err = getCluster(
+									k8sClient, ctx, clusterNamespacedName,
+								)
+								Expect(err).ToNot(HaveOccurred())
+
+								aeroCluster.Spec.PodSpec.InitContainers = []corev1.Container{
+									customInit1,
+									customInit2,
+								}
+
+								err = updateCluster(k8sClient, ctx, aeroCluster)
+								Expect(err).ToNot(HaveOccurred())
+
+								// Verify: aerospike-init, custom-init-1, custom-init-2
+								stsList, err = getSTSList(aeroCluster, k8sClient)
+								Expect(err).ToNot(HaveOccurred())
+								for _, sts := range stsList.Items {
+									initContainers := sts.Spec.Template.Spec.InitContainers
+									Expect(initContainers).To(HaveLen(3))
+									Expect(initContainers[0].Name).To(Equal(asdbv1.AerospikeInitContainerName))
+									Expect(initContainers[1].Name).To(Equal("custom-init-1"))
+									Expect(initContainers[2].Name).To(Equal("custom-init-2"))
+								}
+							},
+						)
 					},
 				)
 
@@ -566,10 +789,10 @@ var _ = Describe(
 						)
 
 						aeroCluster.Spec.PodSpec.InitContainers = append(
-							aeroCluster.Spec.PodSpec.InitContainers, initCont1,
+							aeroCluster.Spec.PodSpec.InitContainers, customInit1,
 						)
 						aeroCluster.Spec.PodSpec.InitContainers = append(
-							aeroCluster.Spec.PodSpec.InitContainers, initCont1,
+							aeroCluster.Spec.PodSpec.InitContainers, customInit2,
 						)
 
 						err := k8sClient.Create(ctx, aeroCluster)

@@ -22,8 +22,8 @@ pipeline {
         BUNDLE_IMG="${OPERATOR_BUNDLE_IMAGE_CANDIDATE_NAME}"
 
         AEROSPIKE_CUSTOM_INIT_REGISTRY="568976754000.dkr.ecr.ap-south-1.amazonaws.com"
-        AEROSPIKE_CUSTOM_INIT_REGISTRY_NAMESPACE="aerospike"
-        AEROSPIKE_CUSTOM_INIT_NAME_TAG="aerospike-kubernetes-init:2.4.0"
+        AEROSPIKE_CUSTOM_INIT_REGISTRY_NAMESPACE="tanmayj10"
+        AEROSPIKE_CUSTOM_INIT_NAME_TAG="aerospike-kubernetes-init:2.5.0-dev6"
     }
 
     stages {

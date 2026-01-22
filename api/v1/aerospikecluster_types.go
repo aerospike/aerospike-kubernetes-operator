@@ -944,6 +944,15 @@ type AerospikeClusterStatusSpec struct { //nolint:govet // for readability
 	// +optional
 	EnableDynamicConfigUpdate *bool `json:"enableDynamicConfigUpdate,omitempty"`
 
+	// EnableDynamicRackID enables dynamic allocation of rack IDs to pods after they get scheduled.
+	// When enabled, the operator will watch for changes to the aerospike.com/effective-rack-id annotation on pods
+	// and reconcile when this annotation value changes. This allows rack IDs to be dynamically assigned to pods
+	// based on their scheduling location or other external factors.
+	// This feature requires a single rack configuration (multiple racks are not allowed when enabled).
+	// +operator-sdk:csv:customresourcedefinitions:type=spec,displayName="Enable Dynamic Rack ID"
+	// +optional
+	EnableDynamicRackID *bool `json:"enableDynamicRackID,omitempty"`
+
 	// IsReadinessProbeEnabled tells whether the readiness probe is present in all pods or not.
 	// Moreover, PodDisruptionBudget should be created for the Aerospike cluster only when this field is enabled.
 	// +optional
@@ -1381,6 +1390,11 @@ func CopySpecToStatus(spec *AerospikeClusterSpec) (*AerospikeClusterStatusSpec, 
 		status.EnableDynamicConfigUpdate = &enableDynamicConfigUpdate
 	}
 
+	if spec.EnableDynamicRackID != nil {
+		enableDynamicRackID := *spec.EnableDynamicRackID
+		status.EnableDynamicRackID = &enableDynamicRackID
+	}
+
 	if spec.DisablePDB != nil {
 		disablePDB := *spec.DisablePDB
 		status.DisablePDB = &disablePDB
@@ -1497,6 +1511,11 @@ func CopyStatusToSpec(status *AerospikeClusterStatusSpec) (*AerospikeClusterSpec
 	if status.EnableDynamicConfigUpdate != nil {
 		enableDynamicConfigUpdate := *status.EnableDynamicConfigUpdate
 		spec.EnableDynamicConfigUpdate = &enableDynamicConfigUpdate
+	}
+
+	if status.EnableDynamicRackID != nil {
+		enableDynamicRackID := *status.EnableDynamicRackID
+		spec.EnableDynamicRackID = &enableDynamicRackID
 	}
 
 	if status.DisablePDB != nil {

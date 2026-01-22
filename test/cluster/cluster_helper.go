@@ -1036,6 +1036,35 @@ func createDummyRackAwareWithStorageAerospikeCluster(
 	return aeroCluster
 }
 
+func createDummyAerospikeClusterWithDynRackID(
+	clusterNamespacedName types.NamespacedName, size int32,
+) *asdbv1.AerospikeCluster {
+	// Will be used in Update also
+	aeroCluster := createDummyAerospikeCluster(clusterNamespacedName, size)
+	// This needs to be changed based on setup. update zone, region, nodeName according to setup
+	racks := []asdbv1.Rack{{ID: 1}}
+	rackConf := asdbv1.RackConfig{Racks: racks,
+		Namespaces: []string{
+			"test",
+		}}
+	aeroCluster.Spec.RackConfig = rackConf
+
+	aeroCluster.Spec.EnableDynamicRackID = ptr.To(true)
+
+	aeroCluster.Spec.PodSpec.InitContainers = []corev1.Container{
+		randomAnnotatorInitContainer(),
+		{
+			Name: asdbv1.AerospikeInitContainerName,
+		},
+	}
+
+	// TODO: REMOVE IT BEFORE MERGE
+	aeroCluster.Spec.PodSpec.AerospikeInitContainerSpec.ImageNameAndTag = "aerospike-kubernetes-init:2.5.0-dev6"
+	aeroCluster.Spec.PodSpec.AerospikeInitContainerSpec.ImageRegistryNamespace = ptr.To("tanmayj10")
+
+	return aeroCluster
+}
+
 //nolint:unparam // generic function
 func createDummyRackAwareAerospikeCluster(
 	clusterNamespacedName types.NamespacedName, size int32,
