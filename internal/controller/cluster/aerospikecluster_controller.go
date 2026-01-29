@@ -65,6 +65,9 @@ func (r *AerospikeClusterReconciler) SetupWithManager(mgr ctrl.Manager) error {
 			evictionBlockedAdded := !hadEvictionBlocked && hasEvictionBlocked
 
 			// Check if the effective-rack-id annotation value changed
+			// When a pod is deleted, oldAnnotations is nil. As a result, oldEffectiveRackID and
+			// newEffectiveRackID will not match, which triggers reconciliation even if the
+			// aerospike.com/effective-rack-id value itself has not actually changed.
 			oldEffectiveRackID := oldAnnotations[asdbv1.EffectiveRackIDAnnotation]
 			newEffectiveRackID := newAnnotations[asdbv1.EffectiveRackIDAnnotation]
 			effectiveRackIDChanged := oldEffectiveRackID != newEffectiveRackID

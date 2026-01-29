@@ -43,33 +43,6 @@ var _ = Describe(
 				)
 
 				It(
-					"Should reject EnableDynamicRackID when init container version is less than 2.5.0", func() {
-						By("Creating cluster with old init container version")
-						aeroCluster := createDummyAerospikeCluster(
-							clusterNamespacedName, 2,
-						)
-						// Set init container image to version < 2.5.0
-						aeroCluster.Spec.PodSpec.AerospikeInitContainerSpec = &asdbv1.AerospikeInitContainerSpec{
-							Resources: &v1.ResourceRequirements{},
-						}
-						// Use a version < 2.5.0 (e.g., 2.4.0)
-						// Replace version in image
-						aeroCluster.Spec.PodSpec.AerospikeInitContainerSpec.ImageNameAndTag = "aerospike-kubernetes-init:2.4.0"
-
-						err := DeployCluster(k8sClient, ctx, aeroCluster)
-						Expect(err).ToNot(HaveOccurred())
-
-						aeroCluster, err = GetCluster(k8sClient, ctx, clusterNamespacedName)
-						Expect(err).ToNot(HaveOccurred())
-
-						aeroCluster.Spec.EnableDynamicRackID = ptr.To(true)
-						err = updateClusterWithNoWait(k8sClient, ctx, aeroCluster)
-						Expect(err.Error()).To(ContainSubstring("cannot enable enableDynamicRackID flag," +
-							" some init containers are running version less than 2.5.0"))
-					},
-				)
-
-				It(
 					"Should reject EnableDynamicRackID when multiple racks are configured", func() {
 						By("Creating cluster with multiple racks")
 						aeroCluster := createDummyAerospikeCluster(

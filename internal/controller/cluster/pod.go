@@ -46,6 +46,8 @@ const (
 	quickRestart
 )
 
+const minInitVersionForDynamicRackID = "2.5.0"
+
 // mergeRestartType generates the updated restart type based on precedence.
 // podRestart > quickRestart > noRestartUpdateConf > noRestart
 func mergeRestartType(current, incoming RestartType) RestartType {
@@ -121,6 +123,7 @@ func (r *SingleClusterReconciler) getRollingRestartTypeMap(rackState *RackState,
 
 			if len(specToStatusDiffs) != 0 {
 				enableDynamicRackID := asdbv1.GetBool(r.aeroCluster.Spec.EnableDynamicRackID)
+
 				const rackIDSuffix = ".rack-id"
 
 				for key := range specToStatusDiffs {
@@ -265,10 +268,24 @@ func (r *SingleClusterReconciler) getRollingRestartTypePod(
 
 	podStatusDynamicRackID := podStatus.DynamicRackID
 	if specEnableDynamicRackID != podStatusDynamicRackID {
-		restartType = mergeRestartType(restartType, quickRestart)
+		version, err := asdbv1.GetImageVersion(podStatus.InitImage)
+		if err != nil {
+			return restartType, err
+		}
+
+		val, err := lib.CompareVersions(version, minInitVersionForDynamicRackID)
+		if err != nil {
+			return restartType, err
+		}
+
+		if val < 0 {
+			restartType = mergeRestartType(restartType, podRestart)
+		} else {
+			restartType = mergeRestartType(restartType, quickRestart)
+		}
 
 		r.Log.Info(
-			"EnableDynamicRackID changed. Need quick restart",
+			"EnableDynamicRackID changed. Need rolling restart",
 			"specEnableDynamicRackID", specEnableDynamicRackID,
 			"podStatusDynamicRackID", podStatusDynamicRackID,
 		)
