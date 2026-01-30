@@ -8498,7 +8498,10 @@ spec:
                           type: string
                         type: object
                       externalTrafficPolicy:
-                        description: for backwards compat
+                        description: |-
+                          ServiceExternalTrafficPolicy describes how nodes distribute service traffic they
+                          receive on one of the Service's "externally-facing" addresses (NodePorts, ExternalIPs,
+                          and LoadBalancer IPs.
                         enum:
                         - Local
                         - Cluster
@@ -17841,7 +17844,10 @@ spec:
                           type: string
                         type: object
                       externalTrafficPolicy:
-                        description: for backwards compat
+                        description: |-
+                          ServiceExternalTrafficPolicy describes how nodes distribute service traffic they
+                          receive on one of the Service's "externally-facing" addresses (NodePorts, ExternalIPs,
+                          and LoadBalancer IPs.
                         enum:
                         - Local
                         - Cluster
