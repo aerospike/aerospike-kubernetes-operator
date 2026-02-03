@@ -29,10 +29,6 @@ func (r *SingleClusterReconciler) createOrUpdateSTSHeadlessSvc() error {
 	service := &corev1.Service{}
 
 	defaultMetadata := asdbv1.AerospikeObjectMeta{
-		Annotations: map[string]string{
-			// deprecation in 1.10, supported until at least 1.13, breaks peer-finder/kube-dns if not used
-			"service.alpha.kubernetes.io/tolerate-unready-endpoints": "true",
-		},
 		Labels: utils.LabelsForAerospikeCluster(r.aeroCluster.Name),
 	}
 
@@ -64,8 +60,6 @@ func (r *SingleClusterReconciler) createOrUpdateSTSHeadlessSvc() error {
 				Labels:      defaultMetadata.Labels,
 			},
 			Spec: corev1.ServiceSpec{
-				// deprecates service.alpha.kubernetes.io/tolerate-unready-endpoints as of 1.
-				// 10? see: kubernetes/kubernetes#49239 Fixed in 1.11 as of #63742
 				PublishNotReadyAddresses: true,
 				ClusterIP:                corev1.ClusterIPNone,
 				Selector:                 utils.LabelsForAerospikeCluster(r.aeroCluster.Name),

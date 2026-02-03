@@ -231,7 +231,7 @@ type SeedsFinderServices struct {
 type LoadBalancerSpec struct { //nolint:govet // for readability
 	// +kubebuilder:validation:Enum=Local;Cluster
 	// +optional
-	ExternalTrafficPolicy corev1.ServiceExternalTrafficPolicyType `json:"externalTrafficPolicy,omitempty"`
+	ExternalTrafficPolicy corev1.ServiceExternalTrafficPolicy `json:"externalTrafficPolicy,omitempty"`
 
 	// +patchStrategy=merge
 	// +optional
