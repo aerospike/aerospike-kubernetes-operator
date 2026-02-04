@@ -29,7 +29,7 @@ done
 # Defaults
 CRED_PATH=${CRED_PATH:-$HOME/.docker/config.json}
 REGISTRY=${REGISTRY:-568976754000.dkr.ecr.ap-south-1.amazonaws.com}
-REGISTRY_NAMESPACE=${REGISTRY_NAMESPACE:-aerospike}
+REGISTRY_NAMESPACE=${REGISTRY_NAMESPACE:-tanmayj10}
 INIT_IMAGE_NAME_TAG=${INIT_IMAGE_NAME_TAG:-aerospike-kubernetes-init:2.5.0-dev6}
 
 
