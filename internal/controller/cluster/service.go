@@ -45,6 +45,10 @@ func (r *SingleClusterReconciler) createOrUpdateSTSHeadlessSvc() error {
 		r.Log.Info("Creating headless service for statefulSet")
 
 		if specHeadlessSvc.Metadata.Annotations != nil {
+			if defaultMetadata.Annotations == nil {
+				defaultMetadata.Annotations = make(map[string]string)
+			}
+
 			maps.Copy(defaultMetadata.Annotations, specHeadlessSvc.Metadata.Annotations)
 		}
 

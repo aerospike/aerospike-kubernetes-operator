@@ -121,10 +121,16 @@ func (r *SingleClusterReconciler) deleteLocalPVCs(rackState *RackState, pod *cor
 		}
 
 		if utils.ContainsString(rackState.Rack.Storage.LocalStorageClasses, *pvcStorageClass) {
-			if err := r.Delete(context.TODO(), &pvcItems[idx]); err != nil && !errors.IsNotFound(err) {
-				return fmt.Errorf(
-					"could not delete pvc %s: %v", pvcItems[idx].Name, err,
-				)
+			if err := r.Delete(context.TODO(), &pvcItems[idx]); err != nil {
+				if !errors.IsNotFound(err) {
+					return fmt.Errorf(
+						"could not delete pvc %s: %v", pvcItems[idx].Name, err,
+					)
+				}
+
+				r.Log.Info("PVC not found, may have been already deleted", "pvcName", pvcItems[idx].Name)
+			} else {
+				r.Log.Info("Successfully deleted local PVC", "pvcName", pvcItems[idx].Name, "storageClass", *pvcStorageClass)
 			}
 		}
 	}

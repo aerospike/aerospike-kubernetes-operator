@@ -231,7 +231,6 @@ var _ = Describe(
 					Namespace: clusterNamespacedName.Namespace,
 				}, svc)
 				Expect(err).ToNot(HaveOccurred())
-				Expect(svc.GetAnnotations()["service.alpha.kubernetes.io/tolerate-unready-endpoints"]).To(Equal("true"))
 				Expect(svc.GetLabels()[asdbv1.AerospikeCustomResourceLabel]).To(Equal(clusterNamespacedName.Name))
 				Expect(svc.GetLabels()[asdbv1.AerospikeAppLabel]).To(Equal(asdbv1.AerospikeAppLabelValue))
 			})
@@ -259,7 +258,6 @@ var _ = Describe(
 				}, svc)
 				Expect(err).ToNot(HaveOccurred())
 				Expect(svc.GetAnnotations()["test-annotation"]).To(Equal("test-annotation-value"))
-				Expect(svc.GetAnnotations()["service.alpha.kubernetes.io/tolerate-unready-endpoints"]).To(Equal("true"))
 				Expect(svc.GetLabels()["test-label"]).To(Equal("test-label-value"))
 				Expect(svc.GetLabels()[asdbv1.AerospikeCustomResourceLabel]).To(Equal(clusterNamespacedName.Name))
 				Expect(svc.GetLabels()[asdbv1.AerospikeAppLabel]).To(Equal(asdbv1.AerospikeAppLabelValue))
@@ -281,7 +279,6 @@ var _ = Describe(
 				Expect(svc.GetAnnotations()).ToNot(HaveKey("test-annotation"))
 				Expect(svc.GetLabels()).ToNot(HaveKey("test-label"))
 				Expect(svc.GetAnnotations()["new-annotation"]).To(Equal("new-annotation-value"))
-				Expect(svc.GetAnnotations()["service.alpha.kubernetes.io/tolerate-unready-endpoints"]).To(Equal("true"))
 				Expect(svc.GetLabels()["new-label"]).To(Equal("new-label-value"))
 				Expect(svc.GetLabels()[asdbv1.AerospikeCustomResourceLabel]).To(Equal(clusterNamespacedName.Name))
 				Expect(svc.GetLabels()[asdbv1.AerospikeAppLabel]).To(Equal(asdbv1.AerospikeAppLabelValue))
