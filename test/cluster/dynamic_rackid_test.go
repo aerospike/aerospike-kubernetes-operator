@@ -27,7 +27,7 @@ var _ = Describe(
 		)
 
 		Context(
-			"When doing invalid operations around EnableDynamicRackID feature", func() {
+			"When doing invalid operations around EnableRackIDOverride feature", func() {
 
 				AfterEach(
 					func() {
@@ -43,7 +43,7 @@ var _ = Describe(
 				)
 
 				It(
-					"Should reject EnableDynamicRackID when multiple racks are configured", func() {
+					"Should reject EnableRackIDOverride when multiple racks are configured", func() {
 						By("Creating cluster with multiple racks")
 						aeroCluster := createDummyAerospikeCluster(
 							clusterNamespacedName, 2,
@@ -52,7 +52,7 @@ var _ = Describe(
 							{ID: 1},
 							{ID: 2},
 						}
-						aeroCluster.Spec.EnableDynamicRackID = ptr.To(true)
+						aeroCluster.Spec.EnableRackIDOverride = ptr.To(true)
 
 						err := DeployCluster(k8sClient, ctx, aeroCluster)
 						Expect(err).To(HaveOccurred())
@@ -63,7 +63,7 @@ var _ = Describe(
 		)
 
 		Context(
-			"When doing valid operations around EnableDynamicRackID feature", func() {
+			"When doing valid operations around EnableRackIDOverride feature", func() {
 
 				AfterEach(
 					func() {
@@ -79,11 +79,11 @@ var _ = Describe(
 				)
 
 				Context(
-					"When EnableDynamicRackID is enabled", func() {
+					"When EnableRackIDOverride is enabled", func() {
 
 						BeforeEach(
 							func() {
-								By("Creating cluster with EnableDynamicRackID enabled")
+								By("Creating cluster with EnableRackIDOverride enabled")
 								aeroCluster := createDummyAerospikeClusterWithDynRackID(
 									clusterNamespacedName, 2,
 								)
@@ -92,13 +92,13 @@ var _ = Describe(
 						)
 
 						It(
-							"Should trigger reconciliation when effective-rack-id annotation changes", func() {
+							"Should trigger reconciliation when override-rack-id annotation changes", func() {
 								aeroCluster, err := GetCluster(k8sClient, ctx, clusterNamespacedName)
 								Expect(err).ToNot(HaveOccurred())
 
 								validateDynamicRackIDInConfig(ctx, aeroCluster, true)
 
-								By("Updating effective-rack-id annotation")
+								By("Updating override-rack-id annotation")
 								pod := &v1.Pod{
 									ObjectMeta: metav1.ObjectMeta{
 										Name:      aeroCluster.Name + "-1-0",
@@ -118,16 +118,16 @@ var _ = Describe(
 				)
 
 				Context(
-					"When EnableDynamicRackID is disabled", func() {
+					"When EnableRackIDOverride is disabled", func() {
 
 						BeforeEach(
 							func() {
-								By("Creating cluster without EnableDynamicRackID")
+								By("Creating cluster without EnableRackIDOverride")
 								aeroCluster := createDummyAerospikeClusterWithDynRackID(
 									clusterNamespacedName, 2,
 								)
 
-								aeroCluster.Spec.EnableDynamicRackID = ptr.To(false)
+								aeroCluster.Spec.EnableRackIDOverride = ptr.To(false)
 								Expect(DeployCluster(k8sClient, ctx, aeroCluster)).ToNot(HaveOccurred())
 							},
 						)
@@ -138,7 +138,7 @@ var _ = Describe(
 								aeroCluster, err := GetCluster(k8sClient, ctx, clusterNamespacedName)
 								Expect(err).ToNot(HaveOccurred())
 
-								By("Updating effective-rack-id annotation")
+								By("Updating override-rack-id annotation")
 								pod := &v1.Pod{
 									ObjectMeta: metav1.ObjectMeta{
 										Name:      aeroCluster.Name + "-1-0",
@@ -159,7 +159,7 @@ var _ = Describe(
 						)
 
 						It(
-							"Should allow enabling EnableDynamicRackID after cluster is running", func() {
+							"Should allow enabling EnableRackIDOverride after cluster is running", func() {
 								By("Getting cluster")
 								aeroCluster, err := getCluster(k8sClient, ctx, clusterNamespacedName)
 								Expect(err).ToNot(HaveOccurred())
@@ -167,8 +167,8 @@ var _ = Describe(
 								podPIDMap, err := getPodIDs(ctx, aeroCluster)
 								Expect(err).ToNot(HaveOccurred())
 
-								By("Enabling EnableDynamicRackID")
-								aeroCluster.Spec.EnableDynamicRackID = ptr.To(true)
+								By("Enabling EnableRackIDOverride")
+								aeroCluster.Spec.EnableRackIDOverride = ptr.To(true)
 								err = updateCluster(k8sClient, ctx, aeroCluster)
 								Expect(err).ToNot(HaveOccurred())
 
@@ -193,32 +193,26 @@ func validateDynamicRackIDInConfig(ctx goctx.Context, aeroCluster *asdbv1.Aerosp
 	}, pod)
 	Expect(err).ToNot(HaveOccurred())
 
-	originalAnnotation := pod.Annotations[asdbv1.EffectiveRackIDAnnotation]
+	originalAnnotation := pod.Annotations[asdbv1.OverrideRackIDAnnotation]
 
 	aerospikeConf := pod.Annotations["aerospikeConf"]
 	re := regexp.MustCompile(`^\s*rack-id\s+(.+)$`)
 
-	println(aerospikeConf)
-
 	scanner := bufio.NewScanner(strings.NewReader(aerospikeConf))
 
-	var effectiveRackID string
+	var overrideRackID string
 
 	for scanner.Scan() {
 		line := scanner.Text()
-		println(line)
 
 		if m := re.FindStringSubmatch(line); len(m) == 2 {
-			effectiveRackID = m[1]
+			overrideRackID = m[1]
 		}
 	}
 
-	println("original", originalAnnotation)
-	println("effective", effectiveRackID)
-
 	if isDynamicRackID {
-		Expect(originalAnnotation).To(Equal(effectiveRackID))
+		Expect(originalAnnotation).To(Equal(overrideRackID))
 	} else {
-		Expect(originalAnnotation).ToNot(Equal(effectiveRackID))
+		Expect(originalAnnotation).ToNot(Equal(overrideRackID))
 	}
 }

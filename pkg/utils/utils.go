@@ -278,15 +278,3 @@ func IsOwnedBy(obj, parent client.Object) bool {
 
 	return false
 }
-
-// GetContainerByName finds a container by name in a slice of containers.
-// Returns the container pointer if found, nil otherwise.
-func GetContainerByName(containers []corev1.Container, name string) *corev1.Container {
-	for idx := range containers {
-		if containers[idx].Name == name {
-			return &containers[idx]
-		}
-	}
-
-	return nil
-}

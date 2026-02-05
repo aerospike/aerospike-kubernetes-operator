@@ -1049,7 +1049,7 @@ func createDummyAerospikeClusterWithDynRackID(
 		}}
 	aeroCluster.Spec.RackConfig = rackConf
 
-	aeroCluster.Spec.EnableDynamicRackID = ptr.To(true)
+	aeroCluster.Spec.EnableRackIDOverride = ptr.To(true)
 
 	aeroCluster.Spec.PodSpec.InitContainers = []corev1.Container{
 		randomAnnotatorInitContainer(),

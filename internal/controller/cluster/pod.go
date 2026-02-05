@@ -46,7 +46,7 @@ const (
 	quickRestart
 )
 
-const minInitVersionForDynamicRackID = "2.5.0"
+const minInitVersionForOverrideRackID = "2.5.0"
 
 // mergeRestartType generates the updated restart type based on precedence.
 // podRestart > quickRestart > noRestartUpdateConf > noRestart
@@ -122,7 +122,7 @@ func (r *SingleClusterReconciler) getRollingRestartTypeMap(rackState *RackState,
 			}
 
 			if len(specToStatusDiffs) != 0 {
-				enableDynamicRackID := asdbv1.GetBool(r.aeroCluster.Spec.EnableDynamicRackID)
+				enableRackIDOverride := asdbv1.GetBool(r.aeroCluster.Spec.EnableRackIDOverride)
 
 				const rackIDSuffix = ".rack-id"
 
@@ -137,7 +137,7 @@ func (r *SingleClusterReconciler) getRollingRestartTypeMap(rackState *RackState,
 					}
 
 					// Skip rack-id change for dynamic rack-id enabled clusters.
-					if enableDynamicRackID && strings.HasSuffix(key, rackIDSuffix) {
+					if enableRackIDOverride && strings.HasSuffix(key, rackIDSuffix) {
 						delete(specToStatusDiffs, key)
 					}
 				}
@@ -263,31 +263,42 @@ func (r *SingleClusterReconciler) getRollingRestartTypePod(
 			"pod name", pod.Name, "operation", opType, "restartType", restartType)
 	}
 
-	// Check if EnableDynamicRackID in spec differs from DynamicRackID in pod status
-	specEnableDynamicRackID := asdbv1.GetBool(r.aeroCluster.Spec.EnableDynamicRackID)
+	// Check if EnableRackIDOverride in spec differs from DynamicRackID in pod status
+	// The restart type depends on the init container version:
+	// - If the init container version is older than minInitVersionForOverrideRackID, a full pod
+	//   restart (podRestart) is required because older init containers don't support dynamic rack ID
+	//   changes.
+	// - If the init container version is at or above minInitVersionForOverrideRackID, a quick restart
+	//   (quickRestart) is sufficient.
+	specEnableRackIDOverride := asdbv1.GetBool(r.aeroCluster.Spec.EnableRackIDOverride)
 
-	podStatusDynamicRackID := podStatus.DynamicRackID
-	if specEnableDynamicRackID != podStatusDynamicRackID {
+	podStatusOverrideRackID := podStatus.OverrideRackID
+	if specEnableRackIDOverride != podStatusOverrideRackID {
 		version, err := asdbv1.GetImageVersion(podStatus.InitImage)
 		if err != nil {
 			return restartType, err
 		}
 
-		val, err := lib.CompareVersions(version, minInitVersionForDynamicRackID)
+		val, err := lib.CompareVersions(version, minInitVersionForOverrideRackID)
 		if err != nil {
 			return restartType, err
 		}
 
 		if val < 0 {
+			r.Log.Info(
+				"Init container version is older than minimum required, full pod restart needed",
+				"initImageVersion", version,
+				"minRequiredVersion", minInitVersionForOverrideRackID)
+
 			restartType = mergeRestartType(restartType, podRestart)
 		} else {
 			restartType = mergeRestartType(restartType, quickRestart)
 		}
 
 		r.Log.Info(
-			"EnableDynamicRackID changed. Need rolling restart",
-			"specEnableDynamicRackID", specEnableDynamicRackID,
-			"podStatusDynamicRackID", podStatusDynamicRackID,
+			"EnableRackIDOverride changed. Need rolling restart",
+			"enableRackIDOverride", specEnableRackIDOverride,
+			"overrideRackID", podStatusOverrideRackID,
 		)
 	}
 

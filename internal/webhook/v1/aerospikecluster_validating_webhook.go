@@ -289,6 +289,14 @@ func validate(aslog logr.Logger, cluster *asdbv1.AerospikeCluster) (admission.Wa
 		return warnings, err
 	}
 
+	// Validate rackConfig
+	warns, err = validateRackConfig(aslog, cluster)
+
+	warnings = append(warnings, warns...)
+	if err != nil {
+		return warnings, err
+	}
+
 	for idx := range cluster.Spec.RackConfig.Racks {
 		rack := &cluster.Spec.RackConfig.Racks[idx]
 		// Storage should be validated before validating aerospikeConfig and fileStorage
@@ -331,14 +339,6 @@ func validate(aslog logr.Logger, cluster *asdbv1.AerospikeCluster) (admission.Wa
 
 	// Validate access control
 	err = validateAccessControl(aslog, cluster)
-	if err != nil {
-		return warnings, err
-	}
-
-	// Validate rackConfig
-	warns, err = validateRackConfig(aslog, cluster)
-
-	warnings = append(warnings, warns...)
 	if err != nil {
 		return warnings, err
 	}
@@ -823,23 +823,21 @@ func validateResourceAndLimits(
 func validateRackConfig(_ logr.Logger, cluster *asdbv1.AerospikeCluster) (admission.Warnings, error) {
 	var warnings admission.Warnings
 
-	// If EnableDynamicRackID is enabled, only single rack is allowed
-	if asdbv1.GetBool(cluster.Spec.EnableDynamicRackID) {
+	// If EnableRackIDOverride is enabled, only single rack is allowed
+	if asdbv1.GetBool(cluster.Spec.EnableRackIDOverride) {
 		rackCount := len(cluster.Spec.RackConfig.Racks)
 		if rackCount > 1 {
 			return warnings, fmt.Errorf(
-				"enableDynamicRackID requires a single rack configuration, but %d racks are specified",
+				"enableRackIDOverride requires a single rack configuration, but %d racks are specified",
 				rackCount,
 			)
 		}
-		// rackCount == 0 means default rack (single rack), which is allowed
-		// rackCount == 1 means one explicit rack, which is allowed
 
-		// Warn if namespaces is empty when EnableDynamicRackID is set
+		// Warn if namespaces is empty when EnableRackIDOverride is set
 		if len(cluster.Spec.RackConfig.Namespaces) == 0 {
 			warnings = append(warnings,
-				"enableDynamicRackID is set but rackConfig.namespaces is empty. "+
-					"Consider specifying namespaces for better rack management.",
+				"enableRackIDOverride is set but rackConfig.namespaces is empty. "+
+					"Consider specifying namespaces for namespace rack-aware setup.",
 			)
 		}
 	}
@@ -1531,13 +1529,7 @@ func validatePodSpec(cluster *asdbv1.AerospikeCluster) error {
 	var allContainers []v1.Container
 
 	allContainers = append(allContainers, cluster.Spec.PodSpec.Sidecars...)
-	// Include InitContainers (excluding placeholder for validation)
-	for idx := range cluster.Spec.PodSpec.InitContainers {
-		// Skip placeholder in validation (it will be replaced by actual aerospike-init)
-		if cluster.Spec.PodSpec.InitContainers[idx].Name != asdbv1.AerospikeInitContainerName {
-			allContainers = append(allContainers, cluster.Spec.PodSpec.InitContainers[idx])
-		}
-	}
+	allContainers = append(allContainers, cluster.Spec.PodSpec.InitContainers...)
 
 	if err := ValidateAerospikeObjectMeta(&cluster.Spec.PodSpec.AerospikeObjectMeta); err != nil {
 		return err
@@ -1553,7 +1545,7 @@ func validatePodSpecContainer(containers []v1.Container) error {
 	for idx := range containers {
 		container := &containers[idx]
 		// Check for reserved container name
-		if container.Name == asdbv1.AerospikeServerContainerName || container.Name == asdbv1.AerospikeInitContainerName {
+		if container.Name == asdbv1.AerospikeServerContainerName {
 			return fmt.Errorf(
 				"cannot use reserved container name: %v", container.Name,
 			)

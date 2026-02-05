@@ -138,7 +138,7 @@ var _ = Describe(
 						})
 
 						// Find aerospike-init container by name
-						aerospikeInitContainer := utils.GetContainerByName(
+						aerospikeInitContainer := test.GetContainerByName(
 							sts.Spec.Template.Spec.InitContainers,
 							asdbv1.AerospikeInitContainerName,
 						)

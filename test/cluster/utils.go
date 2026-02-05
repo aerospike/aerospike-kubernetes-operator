@@ -927,7 +927,7 @@ func randomAnnotatorInitContainer() corev1.Container {
 			"-c",
 			`
 RAND=$(shuf -i 1000-9999 -n 1)
-kubectl annotate pod ${POD_NAME} aerospike.com/effective-rack-id=${RAND} --overwrite -n ${POD_NAMESPACE}
+kubectl annotate pod ${POD_NAME} aerospike.com/override-rack-id=${RAND} --overwrite -n ${POD_NAMESPACE}
 `,
 		},
 		Env: []corev1.EnvVar{

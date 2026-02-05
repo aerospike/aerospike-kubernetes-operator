@@ -192,14 +192,15 @@ type AerospikeClusterSpec struct { //nolint:govet // for readability
 	// +optional
 	Operations []OperationSpec `json:"operations,omitempty"`
 
-	// EnableDynamicRackID enables dynamic allocation of rack IDs to pods after they get scheduled.
-	// When enabled, the operator will watch for changes to the aerospike.com/effective-rack-id annotation on pods
+	// EnableRackIDOverride enables dynamic allocation of rack IDs to pods after they get scheduled.
+	// When enabled, the operator will watch for changes to the aerospike.com/override-rack-id annotation on pods
 	// and reconcile when this annotation value changes. This allows rack IDs to be dynamically assigned to pods
 	// based on their scheduling location or other external factors.
+	// AKO does not manage node distribution across racks, which may result in uneven rack placement. Use with caution.
 	// This feature requires a single rack configuration (multiple racks are not allowed when enabled).
-	// +operator-sdk:csv:customresourcedefinitions:type=spec,displayName="Enable Dynamic Rack ID"
+	// +operator-sdk:csv:customresourcedefinitions:type=spec,displayName="Enable Rack ID Override"
 	// +optional
-	EnableDynamicRackID *bool `json:"enableDynamicRackID,omitempty"`
+	EnableRackIDOverride *bool `json:"enableRackIDOverride,omitempty"`
 }
 
 type OperationKind string
@@ -364,10 +365,10 @@ type AerospikePodSpec struct { //nolint:govet // for readability
 	Sidecars []corev1.Container `json:"sidecars,omitempty"`
 
 	// InitContainers to add to the pods.
-	// To control the position of custom init containers relative to aerospike-init, include a placeholder
+	// To control the sequence of custom init containers relative to "aerospike-init" init container, include a placeholder
 	// container with name "aerospike-init" at the desired position. Only the name field is required for the placeholder;
-	// all other fields will be ignored and replaced with the actual aerospike-init container configuration.
-	// If no placeholder is found, all custom init containers will be placed after aerospike-init (backward compatible).
+	// all other fields will be ignored and replaced with the actual "aerospike-init" init container configuration.
+	// If no placeholder is found, all custom init containers will be placed after "aerospike-init" (backward compatible).
 	// +optional
 	InitContainers []corev1.Container `json:"initContainers,omitempty"`
 
@@ -944,14 +945,15 @@ type AerospikeClusterStatusSpec struct { //nolint:govet // for readability
 	// +optional
 	EnableDynamicConfigUpdate *bool `json:"enableDynamicConfigUpdate,omitempty"`
 
-	// EnableDynamicRackID enables dynamic allocation of rack IDs to pods after they get scheduled.
-	// When enabled, the operator will watch for changes to the aerospike.com/effective-rack-id annotation on pods
+	// EnableRackIDOverride enables dynamic allocation of rack IDs to pods after they get scheduled.
+	// When enabled, the operator will watch for changes to the aerospike.com/override-rack-id annotation on pods
 	// and reconcile when this annotation value changes. This allows rack IDs to be dynamically assigned to pods
 	// based on their scheduling location or other external factors.
+	// AKO does not manage node distribution across racks, which may result in uneven rack placement. Use with caution.
 	// This feature requires a single rack configuration (multiple racks are not allowed when enabled).
-	// +operator-sdk:csv:customresourcedefinitions:type=spec,displayName="Enable Dynamic Rack ID"
+	// +operator-sdk:csv:customresourcedefinitions:type=spec,displayName="Enable Rack ID Override"
 	// +optional
-	EnableDynamicRackID *bool `json:"enableDynamicRackID,omitempty"`
+	EnableRackIDOverride *bool `json:"enableRackIDOverride,omitempty"`
 
 	// IsReadinessProbeEnabled tells whether the readiness probe is present in all pods or not.
 	// Moreover, PodDisruptionBudget should be created for the Aerospike cluster only when this field is enabled.
@@ -1280,11 +1282,11 @@ type AerospikePodStatus struct { //nolint:govet // for readability
 	// +optional
 	DynamicConfigUpdateStatus DynamicConfigUpdateStatus `json:"dynamicConfigUpdateStatus,omitempty"`
 
-	// DynamicRackID indicates whether this pod is picking rackID dynamically based on
-	// the effective-rack-id annotation. When true, the pod's rackID is determined
+	// OverrideRackID indicates whether this pod is picking rackID dynamically based on
+	// the override-rack-id annotation. When true, the pod's rackID is determined
 	// from the pod annotation rather than the static rack configuration.
 	// +optional
-	DynamicRackID bool `json:"dynamicRackID,omitempty"`
+	OverrideRackID bool `json:"dynamicRackID,omitempty"`
 }
 
 // +kubebuilder:object:root=true
@@ -1390,9 +1392,9 @@ func CopySpecToStatus(spec *AerospikeClusterSpec) (*AerospikeClusterStatusSpec, 
 		status.EnableDynamicConfigUpdate = &enableDynamicConfigUpdate
 	}
 
-	if spec.EnableDynamicRackID != nil {
-		enableDynamicRackID := *spec.EnableDynamicRackID
-		status.EnableDynamicRackID = &enableDynamicRackID
+	if spec.EnableRackIDOverride != nil {
+		enableRackIDOverride := *spec.EnableRackIDOverride
+		status.EnableRackIDOverride = &enableRackIDOverride
 	}
 
 	if spec.DisablePDB != nil {
@@ -1513,9 +1515,9 @@ func CopyStatusToSpec(status *AerospikeClusterStatusSpec) (*AerospikeClusterSpec
 		spec.EnableDynamicConfigUpdate = &enableDynamicConfigUpdate
 	}
 
-	if status.EnableDynamicRackID != nil {
-		enableDynamicRackID := *status.EnableDynamicRackID
-		spec.EnableDynamicRackID = &enableDynamicRackID
+	if status.EnableRackIDOverride != nil {
+		enableRackIDOverride := *status.EnableRackIDOverride
+		spec.EnableRackIDOverride = &enableRackIDOverride
 	}
 
 	if status.DisablePDB != nil {

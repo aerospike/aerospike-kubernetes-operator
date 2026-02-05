@@ -1016,6 +1016,8 @@ func updateSTSContainers(
 	stsContainers []corev1.Container,
 	specContainers []corev1.Container,
 ) []corev1.Container {
+	// This will hold all the configurations of containers from STS that need to be preserved.
+	// For e.g. volume mounts, volume devices for all sidecars. and full config for aerospike-init container.
 	reservedContainersValues := make(map[string]corev1.Container)
 
 	finalContainers := make([]corev1.Container, 0, len(stsContainers)+len(specContainers))
@@ -1023,11 +1025,14 @@ func updateSTSContainers(
 	for stsIdx := range stsContainers {
 		switch stsContainers[stsIdx].Name {
 		case asdbv1.AerospikeServerContainerName:
+			// Keep the aerospike server container as is at 1st position.
 			reservedCopy := lib.DeepCopy(&stsContainers[stsIdx]).(*corev1.Container)
 			finalContainers = append(finalContainers, *reservedCopy)
 		case asdbv1.AerospikeInitContainerName:
+			// Keep the aerospike init container configurations as is.
 			reservedContainersValues[stsContainers[stsIdx].Name] = stsContainers[stsIdx]
 		default:
+			// Keep only volume mounts and volume devices for sidecars.
 			reservedContainersValues[stsContainers[stsIdx].Name] = corev1.Container{
 				VolumeMounts:  stsContainers[stsIdx].VolumeMounts,
 				VolumeDevices: stsContainers[stsIdx].VolumeDevices,
@@ -1035,21 +1040,27 @@ func updateSTSContainers(
 		}
 	}
 
-	// Add new sidecars.
 	initContainerFound := false
 
+	// Now process spec containers to form final containers list.
+	// For any new containers (including init-container placeholder) in spec,
+	// they will be added at their respective positions.
+	// If init-container placeholder is removed from spec, it will be added at 1st position.
 	for specIdx := range specContainers {
 		specContainer := &specContainers[specIdx]
 
 		specContainerCopy := lib.DeepCopy(specContainer).(*corev1.Container)
 		if _, ok := reservedContainersValues[specContainer.Name]; ok {
+			// For existing containers, preserve certain configurations.
+			// For aerospike-init, preserve full config.
+			// For sidecars, preserve volume mounts and volume devices.
 			containerValue := reservedContainersValues[specContainer.Name]
-			if specContainer.Name != asdbv1.AerospikeInitContainerName {
-				specContainerCopy.VolumeMounts = containerValue.VolumeMounts
-				specContainerCopy.VolumeDevices = containerValue.VolumeDevices
-			} else {
+			if specContainer.Name == asdbv1.AerospikeInitContainerName {
 				specContainerCopy = lib.DeepCopy(&containerValue).(*corev1.Container)
 				initContainerFound = true
+			} else {
+				specContainerCopy.VolumeMounts = containerValue.VolumeMounts
+				specContainerCopy.VolumeDevices = containerValue.VolumeDevices
 			}
 		}
 
@@ -1057,7 +1068,7 @@ func updateSTSContainers(
 	}
 
 	if !initContainerFound {
-		// Add back the init container if it was not in specContainers
+		// Add back the init container at 1st position if it was not in specContainers
 		if initContainer, ok := reservedContainersValues[asdbv1.AerospikeInitContainerName]; ok {
 			finalContainers = append([]corev1.Container{initContainer}, finalContainers...)
 		}

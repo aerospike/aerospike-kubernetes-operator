@@ -14,7 +14,6 @@ import (
 	"sigs.k8s.io/controller-runtime/pkg/client"
 
 	asdbv1 "github.com/aerospike/aerospike-kubernetes-operator/v4/api/v1"
-	"github.com/aerospike/aerospike-kubernetes-operator/v4/pkg/utils"
 	"github.com/aerospike/aerospike-kubernetes-operator/v4/test"
 )
 
@@ -261,7 +260,7 @@ func validateClusterResource(
 			}
 		} else {
 			// Find aerospike-init container by name
-			aerospikeInitContainer := utils.GetContainerByName(
+			aerospikeInitContainer := test.GetContainerByName(
 				stsList.Items[stsIndex].Spec.Template.Spec.InitContainers,
 				asdbv1.AerospikeInitContainerName,
 			)

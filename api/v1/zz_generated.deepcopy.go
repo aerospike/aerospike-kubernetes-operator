@@ -216,8 +216,8 @@ func (in *AerospikeClusterSpec) DeepCopyInto(out *AerospikeClusterSpec) {
 			(*in)[i].DeepCopyInto(&(*out)[i])
 		}
 	}
-	if in.EnableDynamicRackID != nil {
-		in, out := &in.EnableDynamicRackID, &out.EnableDynamicRackID
+	if in.EnableRackIDOverride != nil {
+		in, out := &in.EnableRackIDOverride, &out.EnableRackIDOverride
 		*out = new(bool)
 		**out = **in
 	}
@@ -289,8 +289,8 @@ func (in *AerospikeClusterStatusSpec) DeepCopyInto(out *AerospikeClusterStatusSp
 		*out = new(bool)
 		**out = **in
 	}
-	if in.EnableDynamicRackID != nil {
-		in, out := &in.EnableDynamicRackID, &out.EnableDynamicRackID
+	if in.EnableRackIDOverride != nil {
+		in, out := &in.EnableRackIDOverride, &out.EnableRackIDOverride
 		*out = new(bool)
 		**out = **in
 	}

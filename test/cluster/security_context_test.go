@@ -10,7 +10,6 @@ import (
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 
 	asdbv1 "github.com/aerospike/aerospike-kubernetes-operator/v4/api/v1"
-	"github.com/aerospike/aerospike-kubernetes-operator/v4/pkg/utils"
 	"github.com/aerospike/aerospike-kubernetes-operator/v4/test"
 )
 
@@ -172,7 +171,7 @@ func validateSecurityContext(
 		if aeroCluster.Spec.PodSpec.AerospikeInitContainerSpec != nil &&
 			aeroCluster.Spec.PodSpec.AerospikeInitContainerSpec.SecurityContext != nil {
 			// Find aerospike-init container by name
-			aerospikeInitContainer := utils.GetContainerByName(
+			aerospikeInitContainer := test.GetContainerByName(
 				pods.Items[podIndex].Spec.InitContainers,
 				asdbv1.AerospikeInitContainerName,
 			)

@@ -306,12 +306,13 @@ spec:
                   If enabled, operator will try to update the Aerospike config dynamically.
                   In case of inconsistent state during dynamic config update, operator falls back to rolling restart.
                 type: boolean
-              enableDynamicRackID:
+              enableRackIDOverride:
                 description: |-
-                  EnableDynamicRackID enables dynamic allocation of rack IDs to pods after they get scheduled.
-                  When enabled, the operator will watch for changes to the aerospike.com/effective-rack-id annotation on pods
+                  EnableRackIDOverride enables dynamic allocation of rack IDs to pods after they get scheduled.
+                  When enabled, the operator will watch for changes to the aerospike.com/override-rack-id annotation on pods
                   and reconcile when this annotation value changes. This allows rack IDs to be dynamically assigned to pods
                   based on their scheduling location or other external factors.
+                  AKO does not manage node distribution across racks, which may result in uneven rack placement. Use with caution.
                   This feature requires a single rack configuration (multiple racks are not allowed when enabled).
                 type: boolean
               headlessService:
@@ -1999,10 +2000,10 @@ spec:
                   initContainers:
                     description: |-
                       InitContainers to add to the pods.
-                      To control the position of custom init containers relative to aerospike-init, include a placeholder
+                      To control the sequence of custom init containers relative to "aerospike-init" init container, include a placeholder
                       container with name "aerospike-init" at the desired position. Only the name field is required for the placeholder;
-                      all other fields will be ignored and replaced with the actual aerospike-init container configuration.
-                      If no placeholder is found, all custom init containers will be placed after aerospike-init (backward compatible).
+                      all other fields will be ignored and replaced with the actual "aerospike-init" init container configuration.
+                      If no placeholder is found, all custom init containers will be placed after "aerospike-init" (backward compatible).
                     items:
                       description: A single application container that you want to
                         run within a pod.
@@ -9440,12 +9441,13 @@ spec:
                   If enabled, operator will try to update the Aerospike config dynamically.
                   In case of inconsistent state during dynamic config update, operator falls back to rolling restart.
                 type: boolean
-              enableDynamicRackID:
+              enableRackIDOverride:
                 description: |-
-                  EnableDynamicRackID enables dynamic allocation of rack IDs to pods after they get scheduled.
-                  When enabled, the operator will watch for changes to the aerospike.com/effective-rack-id annotation on pods
+                  EnableRackIDOverride enables dynamic allocation of rack IDs to pods after they get scheduled.
+                  When enabled, the operator will watch for changes to the aerospike.com/override-rack-id annotation on pods
                   and reconcile when this annotation value changes. This allows rack IDs to be dynamically assigned to pods
                   based on their scheduling location or other external factors.
+                  AKO does not manage node distribution across racks, which may result in uneven rack placement. Use with caution.
                   This feature requires a single rack configuration (multiple racks are not allowed when enabled).
                 type: boolean
               headlessService:
@@ -11153,10 +11155,10 @@ spec:
                   initContainers:
                     description: |-
                       InitContainers to add to the pods.
-                      To control the position of custom init containers relative to aerospike-init, include a placeholder
+                      To control the sequence of custom init containers relative to "aerospike-init" init container, include a placeholder
                       container with name "aerospike-init" at the desired position. Only the name field is required for the placeholder;
-                      all other fields will be ignored and replaced with the actual aerospike-init container configuration.
-                      If no placeholder is found, all custom init containers will be placed after aerospike-init (backward compatible).
+                      all other fields will be ignored and replaced with the actual "aerospike-init" init container configuration.
+                      If no placeholder is found, all custom init containers will be placed after "aerospike-init" (backward compatible).
                     items:
                       description: A single application container that you want to
                         run within a pod.
@@ -14416,8 +14418,8 @@ spec:
                       type: string
                     dynamicRackID:
                       description: |-
-                        DynamicRackID indicates whether this pod is picking rackID dynamically based on
-                        the effective-rack-id annotation. When true, the pod's rackID is determined
+                        OverrideRackID indicates whether this pod is picking rackID dynamically based on
+                        the override-rack-id annotation. When true, the pod's rackID is determined
                         from the pod annotation rather than the static rack configuration.
                       type: boolean
                     hostExternalIP:
