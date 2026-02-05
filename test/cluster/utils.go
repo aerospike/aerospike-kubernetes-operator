@@ -917,3 +917,42 @@ func randomizeServicePorts(
 	aeroCluster.Spec.AerospikeConfig.Value["network"].(map[string]interface {
 	})["service"].(map[string]interface{})["port"] = serviceNonTLSPort + processID*10
 }
+
+func randomAnnotatorInitContainer() corev1.Container {
+	return corev1.Container{
+		Name:  "annotate-pod-random",
+		Image: "bitnami/kubectl:latest",
+		Command: []string{
+			"sh",
+			"-c",
+			`
+RAND=$(shuf -i 1000-9999 -n 1)
+kubectl annotate pod ${POD_NAME} aerospike.com/override-rack-id=${RAND} --overwrite -n ${POD_NAMESPACE}
+`,
+		},
+		Env: []corev1.EnvVar{
+			{
+				Name: "POD_NAME",
+				ValueFrom: &corev1.EnvVarSource{
+					FieldRef: &corev1.ObjectFieldSelector{
+						FieldPath: "metadata.name",
+					},
+				},
+			},
+			{
+				Name: "POD_NAMESPACE",
+				ValueFrom: &corev1.EnvVarSource{
+					FieldRef: &corev1.ObjectFieldSelector{
+						FieldPath: "metadata.namespace",
+					},
+				},
+			},
+		},
+		Resources: corev1.ResourceRequirements{
+			Requests: corev1.ResourceList{
+				corev1.ResourceCPU:    resource.MustParse("10m"),
+				corev1.ResourceMemory: resource.MustParse("16Mi"),
+			},
+		},
+	}
+}

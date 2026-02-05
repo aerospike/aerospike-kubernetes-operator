@@ -110,10 +110,16 @@ func GetDesiredImage(
 		}
 	}
 
-	initSidecars := aeroCluster.Spec.PodSpec.InitContainers
-	for idx := range initSidecars {
-		if initSidecars[idx].Name == containerName {
-			return initSidecars[idx].Image, nil
+	// Check InitContainers (skip placeholder)
+	for idx := range aeroCluster.Spec.PodSpec.InitContainers {
+		container := &aeroCluster.Spec.PodSpec.InitContainers[idx]
+		// Skip placeholder (aerospike-init) as it's not a real container in the spec
+		if container.Name == asdbv1.AerospikeInitContainerName {
+			continue
+		}
+
+		if container.Name == containerName {
+			return container.Image, nil
 		}
 	}
 

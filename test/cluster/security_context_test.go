@@ -170,7 +170,13 @@ func validateSecurityContext(
 
 		if aeroCluster.Spec.PodSpec.AerospikeInitContainerSpec != nil &&
 			aeroCluster.Spec.PodSpec.AerospikeInitContainerSpec.SecurityContext != nil {
-			Expect(pods.Items[podIndex].Spec.InitContainers[0].SecurityContext).To(Equal(
+			// Find aerospike-init container by name
+			aerospikeInitContainer := test.GetContainerByName(
+				pods.Items[podIndex].Spec.InitContainers,
+				asdbv1.AerospikeInitContainerName,
+			)
+			Expect(aerospikeInitContainer).NotTo(BeNil(), "aerospike-init container not found")
+			Expect(aerospikeInitContainer.SecurityContext).To(Equal(
 				aeroCluster.Spec.PodSpec.AerospikeInitContainerSpec.SecurityContext,
 			),
 			)
