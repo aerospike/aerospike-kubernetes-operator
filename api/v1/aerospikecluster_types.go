@@ -1282,11 +1282,11 @@ type AerospikePodStatus struct { //nolint:govet // for readability
 	// +optional
 	DynamicConfigUpdateStatus DynamicConfigUpdateStatus `json:"dynamicConfigUpdateStatus,omitempty"`
 
-	// OverrideRackID indicates whether this pod is picking rackID dynamically based on
+	// RackIDOverridden indicates whether this pod is picking rackID dynamically based on
 	// the override-rack-id annotation. When true, the pod's rackID is determined
 	// from the pod annotation rather than the static rack configuration.
 	// +optional
-	OverrideRackID bool `json:"dynamicRackID,omitempty"`
+	RackIDOverridden bool `json:"rackIDOverridden,omitempty"`
 }
 
 // +kubebuilder:object:root=true

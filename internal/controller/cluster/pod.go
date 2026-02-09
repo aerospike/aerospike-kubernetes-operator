@@ -263,7 +263,7 @@ func (r *SingleClusterReconciler) getRollingRestartTypePod(
 			"pod name", pod.Name, "operation", opType, "restartType", restartType)
 	}
 
-	// Check if EnableRackIDOverride in spec differs from DynamicRackID in pod status
+	// Check if EnableRackIDOverride in spec differs from RackIDOverridden in pod status
 	// The restart type depends on the init container version:
 	// - If the init container version is older than minInitVersionForOverrideRackID, a full pod
 	//   restart (podRestart) is required because older init containers don't support dynamic rack ID
@@ -272,7 +272,7 @@ func (r *SingleClusterReconciler) getRollingRestartTypePod(
 	//   (quickRestart) is sufficient.
 	specEnableRackIDOverride := asdbv1.GetBool(r.aeroCluster.Spec.EnableRackIDOverride)
 
-	podStatusOverrideRackID := podStatus.OverrideRackID
+	podStatusOverrideRackID := podStatus.RackIDOverridden
 	if specEnableRackIDOverride != podStatusOverrideRackID {
 		version, err := asdbv1.GetImageVersion(podStatus.InitImage)
 		if err != nil {

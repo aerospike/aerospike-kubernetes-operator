@@ -14416,12 +14416,6 @@ spec:
                       - PartiallyFailed
                       - ""
                       type: string
-                    dynamicRackID:
-                      description: |-
-                        OverrideRackID indicates whether this pod is picking rackID dynamically based on
-                        the override-rack-id annotation. When true, the pod's rackID is determined
-                        from the pod annotation rather than the static rack configuration.
-                      type: boolean
                     hostExternalIP:
                       description: HostExternalIP of the K8s host this pod is scheduled
                         on.
@@ -14466,6 +14460,12 @@ spec:
                       description: PodSpecHash is ripemd160 hash of PodSpec used by
                         this pod
                       type: string
+                    rackIDOverridden:
+                      description: |-
+                        RackIDOverridden indicates whether this pod is picking rackID dynamically based on
+                        the override-rack-id annotation. When true, the pod's rackID is determined
+                        from the pod annotation rather than the static rack configuration.
+                      type: boolean
                     serviceAdminPort:
                       description: |-
                         ServiceAdminPort is the admin port Aerospike clients outside K8s can connect to.
