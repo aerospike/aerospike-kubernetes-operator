@@ -42,6 +42,11 @@ var _ = Describe(
 			},
 		}
 
+		const (
+			customInitContainer1 = "custom-init-1"
+			customInitContainer2 = "custom-init-2"
+		)
+
 		sidecar2 := corev1.Container{
 			Name:  "box",
 			Image: "busybox:1.28",
@@ -51,13 +56,13 @@ var _ = Describe(
 		}
 
 		customInit1 := corev1.Container{
-			Name:    "custom-init-1",
+			Name:    customInitContainer1,
 			Image:   "busybox:1.28",
 			Command: []string{"sh", "-c", "echo custom-init-1; sleep 2"},
 		}
 
 		customInit2 := corev1.Container{
-			Name:    "custom-init-2",
+			Name:    customInitContainer2,
 			Image:   "busybox:1.28",
 			Command: []string{"sh", "-c", "echo custom-init-2; sleep 1"},
 		}
@@ -310,37 +315,14 @@ var _ = Describe(
 										"Should have 3 init containers: custom-init-1, aerospike-init, custom-init-2")
 
 									// First should be custom-init-1
-									Expect(initContainers[0].Name).To(Equal("custom-init-1"))
+									Expect(initContainers[0].Name).To(Equal(customInitContainer1))
 									// Second should be aerospike-init (replaced placeholder)
 									Expect(initContainers[1].Name).To(Equal(asdbv1.AerospikeInitContainerName))
 									// Verify it's the actual aerospike-init container (not just placeholder)
 									Expect(initContainers[1].Image).ToNot(BeEmpty())
 									// Third should be custom-init-2
-									Expect(initContainers[2].Name).To(Equal("custom-init-2"))
+									Expect(initContainers[2].Name).To(Equal(customInitContainer2))
 								}
-							},
-						)
-
-						It(
-							"Should maintain order when updating init containers", func() {
-								By("Adding init containers in initial order")
-								aeroCluster, err := getCluster(
-									k8sClient, ctx, clusterNamespacedName,
-								)
-								Expect(err).ToNot(HaveOccurred())
-
-								placeholder := corev1.Container{
-									Name: asdbv1.AerospikeInitContainerName,
-								}
-
-								aeroCluster.Spec.PodSpec.InitContainers = []corev1.Container{
-									customInit1,
-									placeholder,
-									customInit2,
-								}
-
-								err = updateCluster(k8sClient, ctx, aeroCluster)
-								Expect(err).ToNot(HaveOccurred())
 
 								By("Reordering init containers")
 								aeroCluster, err = getCluster(
@@ -359,7 +341,7 @@ var _ = Describe(
 								Expect(err).ToNot(HaveOccurred())
 
 								By("Validating updated init container order in StatefulSet")
-								stsList, err := getSTSList(aeroCluster, k8sClient)
+								stsList, err = getSTSList(aeroCluster, k8sClient)
 								Expect(err).ToNot(HaveOccurred())
 								Expect(stsList.Items).ToNot(BeEmpty())
 
@@ -369,9 +351,9 @@ var _ = Describe(
 										"Should have 3 init containers: custom-init-1, custom-init-2, aerospike-init")
 
 									// First should be custom-init-1
-									Expect(initContainers[0].Name).To(Equal("custom-init-1"))
+									Expect(initContainers[0].Name).To(Equal(customInitContainer1))
 									// Second should be custom-init-2
-									Expect(initContainers[1].Name).To(Equal("custom-init-2"))
+									Expect(initContainers[1].Name).To(Equal(customInitContainer2))
 									// Third should be aerospike-init
 									Expect(initContainers[2].Name).To(Equal(asdbv1.AerospikeInitContainerName))
 								}
@@ -496,8 +478,8 @@ var _ = Describe(
 									initContainers := sts.Spec.Template.Spec.InitContainers
 									Expect(initContainers).To(HaveLen(3))
 									Expect(initContainers[0].Name).To(Equal(asdbv1.AerospikeInitContainerName))
-									Expect(initContainers[1].Name).To(Equal("custom-init-1"))
-									Expect(initContainers[2].Name).To(Equal("custom-init-2"))
+									Expect(initContainers[1].Name).To(Equal(customInitContainer1))
+									Expect(initContainers[2].Name).To(Equal(customInitContainer2))
 								}
 							},
 						)
@@ -791,7 +773,7 @@ var _ = Describe(
 							aeroCluster.Spec.PodSpec.InitContainers, customInit1,
 						)
 						aeroCluster.Spec.PodSpec.InitContainers = append(
-							aeroCluster.Spec.PodSpec.InitContainers, customInit2,
+							aeroCluster.Spec.PodSpec.InitContainers, customInit1,
 						)
 
 						err := k8sClient.Create(ctx, aeroCluster)
