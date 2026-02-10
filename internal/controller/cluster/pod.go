@@ -272,8 +272,8 @@ func (r *SingleClusterReconciler) getRollingRestartTypePod(
 	//   (quickRestart) is sufficient.
 	specEnableRackIDOverride := asdbv1.GetBool(r.aeroCluster.Spec.EnableRackIDOverride)
 
-	podStatusOverrideRackID := podStatus.RackIDOverridden
-	if specEnableRackIDOverride != podStatusOverrideRackID {
+	podStatusRackIDOverridden := podStatus.RackIDOverridden
+	if specEnableRackIDOverride != podStatusRackIDOverridden {
 		version, err := asdbv1.GetImageVersion(podStatus.InitImage)
 		if err != nil {
 			return restartType, err
@@ -286,7 +286,7 @@ func (r *SingleClusterReconciler) getRollingRestartTypePod(
 
 		if val < 0 {
 			r.Log.Info(
-				"Init container version is older than minimum required, full pod restart needed",
+				"Init container version is older than minimum required for enableRackIDOverride support, full pod restart needed",
 				"initImageVersion", version,
 				"minRequiredVersion", minInitVersionForOverrideRackID)
 
@@ -298,7 +298,7 @@ func (r *SingleClusterReconciler) getRollingRestartTypePod(
 		r.Log.Info(
 			"EnableRackIDOverride changed. Need rolling restart",
 			"enableRackIDOverride", specEnableRackIDOverride,
-			"overrideRackID", podStatusOverrideRackID,
+			"rackIDOverridden", podStatusRackIDOverridden,
 		)
 	}
 

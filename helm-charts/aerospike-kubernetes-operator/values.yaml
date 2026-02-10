@@ -51,7 +51,7 @@ aerospikeKubernetesInitRegistry: "docker.io"
 aerospikeKubernetesInitRegistryNamespace: "tanmayj10"
 
 # Name and tag of aerospike-init image
-aerospikeKubernetesInitNameTag: "aerospike-kubernetes-init:2.5.0-dev6"
+aerospikeKubernetesInitNameTag: "aerospike-kubernetes-init:2.5.0-dev8"
 
 ## Resources - limits / requests
 resources:

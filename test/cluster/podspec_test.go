@@ -92,7 +92,7 @@ var _ = Describe(
 						}
 
 						// TODO: remove it before merging
-						aeroCluster.Spec.PodSpec.AerospikeInitContainerSpec.ImageNameAndTag = "aerospike-kubernetes-init:2.5.0-dev6"
+						aeroCluster.Spec.PodSpec.AerospikeInitContainerSpec.ImageNameAndTag = "aerospike-kubernetes-init:2.5.0-dev8"
 
 						Expect(DeployCluster(k8sClient, ctx, aeroCluster)).ToNot(HaveOccurred())
 					},

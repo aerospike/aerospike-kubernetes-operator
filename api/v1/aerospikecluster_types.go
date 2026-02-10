@@ -196,7 +196,7 @@ type AerospikeClusterSpec struct { //nolint:govet // for readability
 	// When enabled, the operator will watch for changes to the aerospike.com/override-rack-id annotation on pods
 	// and reconcile when this annotation value changes. This allows rack IDs to be dynamically assigned to pods
 	// based on their scheduling location or other external factors.
-	// AKO does not manage node distribution across racks, which may result in uneven rack placement. Use with caution.
+	// AKO does not manage pod distribution across racks, which may result in skewed rack. Use with caution.
 	// This feature requires a single rack configuration (multiple racks are not allowed when enabled).
 	// +operator-sdk:csv:customresourcedefinitions:type=spec,displayName="Enable Rack ID Override"
 	// +optional

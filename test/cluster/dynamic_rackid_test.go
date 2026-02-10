@@ -136,25 +136,7 @@ var _ = Describe(
 									Namespace: aeroCluster.Namespace,
 								}
 
-								validateDynamicRackIDInConfig(ctx, podNamespaceName, true)
-
-								pods, err := getClusterPodList(k8sClient, ctx, aeroCluster)
-								Expect(err).ToNot(HaveOccurred())
-
-								firstPodRackAnnotation, ok := pods.Items[0].Annotations[asdbv1.OverrideRackIDAnnotation]
-								Expect(ok).To(BeTrue())
-								secondPodRackAnnotation, ok := pods.Items[1].Annotations[asdbv1.OverrideRackIDAnnotation]
-								Expect(ok).To(BeTrue())
-
-								hostConns, err := newAllHostConn(logger, aeroCluster, k8sClient)
-								Expect(err).ToNot(HaveOccurred())
-
-								expectedRoster := fmt.Sprintf("1A1@%s,1A0@%s", secondPodRackAnnotation, firstPodRackAnnotation)
-								isEqual, currentRoster, err := compareRoster(hostConns[0], expectedRoster, aeroCluster)
-								Expect(err).ToNot(HaveOccurred())
-								Expect(isEqual).To(BeTrue(), fmt.Sprintf(
-									"expected %v to equal %v", currentRoster, expectedRoster,
-								))
+								validateDynamicRackIDInConfig(ctx, podNamespaceName.Name, aeroCluster, true)
 
 								By("Updating override-rack-id annotation")
 								pod := &v1.Pod{
@@ -176,22 +158,7 @@ var _ = Describe(
 								)
 								Expect(err).ToNot(HaveOccurred())
 
-								validateDynamicRackIDInConfig(ctx, podNamespaceName, true)
-
-								pods, err = getClusterPodList(k8sClient, ctx, aeroCluster)
-								Expect(err).ToNot(HaveOccurred())
-
-								firstPodRackAnnotation, ok = pods.Items[0].Annotations[asdbv1.OverrideRackIDAnnotation]
-								Expect(ok).To(BeTrue())
-								secondPodRackAnnotation, ok = pods.Items[1].Annotations[asdbv1.OverrideRackIDAnnotation]
-								Expect(ok).To(BeTrue())
-
-								expectedRoster = fmt.Sprintf("1A1@%s,1A0@%s", secondPodRackAnnotation, firstPodRackAnnotation)
-								isEqual, currentRoster, err = compareRoster(hostConns[0], expectedRoster, aeroCluster)
-								Expect(err).ToNot(HaveOccurred())
-								Expect(isEqual).To(BeTrue(), fmt.Sprintf(
-									"expected %v to equal %v", currentRoster, expectedRoster,
-								))
+								validateDynamicRackIDInConfig(ctx, podNamespaceName.Name, aeroCluster, true)
 							},
 						)
 					},
@@ -246,17 +213,7 @@ var _ = Describe(
 								// Note: The predicate should still trigger reconciliation,
 								// but the restart logic should not trigger based on OverrideRackID
 								// since the feature is disabled
-								validateDynamicRackIDInConfig(ctx, podNamespaceName, false)
-
-								hostConns, err := newAllHostConn(logger, aeroCluster, k8sClient)
-								Expect(err).ToNot(HaveOccurred())
-
-								expectedRoster := "1A1@1,1A0@1"
-								isEqual, currentRoster, err := compareRoster(hostConns[0], expectedRoster, aeroCluster)
-								Expect(err).ToNot(HaveOccurred())
-								Expect(isEqual).To(BeTrue(), fmt.Sprintf(
-									"expected %v to equal %v", currentRoster, expectedRoster,
-								))
+								validateDynamicRackIDInConfig(ctx, podNamespaceName.Name, aeroCluster, false)
 							},
 						)
 
@@ -282,23 +239,7 @@ var _ = Describe(
 								By("Verifying restart occurred")
 								validateServerRestart(ctx, aeroCluster, podPIDMap, asdbv1.OperationWarmRestart)
 
-								validateDynamicRackIDInConfig(ctx, podNamespaceName, true)
-
-								hostConns, err := newAllHostConn(logger, aeroCluster, k8sClient)
-								Expect(err).ToNot(HaveOccurred())
-
-								pods, err := getClusterPodList(k8sClient, ctx, aeroCluster)
-								Expect(err).ToNot(HaveOccurred())
-
-								firstPodRackAnnotation := pods.Items[0].Annotations[asdbv1.OverrideRackIDAnnotation]
-								secondPodRackAnnotation := pods.Items[1].Annotations[asdbv1.OverrideRackIDAnnotation]
-
-								expectedRoster := fmt.Sprintf("1A1@%s,1A0@%s", secondPodRackAnnotation, firstPodRackAnnotation)
-								isEqual, currentRoster, err := compareRoster(hostConns[0], expectedRoster, aeroCluster)
-								Expect(err).ToNot(HaveOccurred())
-								Expect(isEqual).To(BeTrue(), fmt.Sprintf(
-									"expected %v to equal %v", currentRoster, expectedRoster,
-								))
+								validateDynamicRackIDInConfig(ctx, podNamespaceName.Name, aeroCluster, true)
 
 								aeroCluster, err = getCluster(k8sClient, ctx, clusterNamespacedName)
 								Expect(err).ToNot(HaveOccurred())
@@ -311,14 +252,7 @@ var _ = Describe(
 								By("Verifying restart occurred")
 								validateServerRestart(ctx, aeroCluster, podPIDMap, asdbv1.OperationWarmRestart)
 
-								validateDynamicRackIDInConfig(ctx, podNamespaceName, false)
-
-								expectedRoster = "1A1@1,1A0@1"
-								isEqual, currentRoster, err = compareRoster(hostConns[0], expectedRoster, aeroCluster)
-								Expect(err).ToNot(HaveOccurred())
-								Expect(isEqual).To(BeTrue(), fmt.Sprintf(
-									"expected %v to equal %v", currentRoster, expectedRoster,
-								))
+								validateDynamicRackIDInConfig(ctx, podNamespaceName.Name, aeroCluster, false)
 							},
 						)
 					},
@@ -357,17 +291,21 @@ var _ = Describe(
 								Expect(err).Should(HaveOccurred())
 
 								By("Verifying restart occurred")
-								restartedPod := &v1.Pod{}
-								err = k8sClient.Get(ctx, types.NamespacedName{
-									Name:      aeroCluster.Name + "-1-1",
-									Namespace: aeroCluster.Namespace,
-								}, restartedPod)
-								Expect(err).ToNot(HaveOccurred())
+								Eventually(func(g Gomega) {
+									restartedPod := &v1.Pod{}
 
-								Expect(string(restartedPod.UID)).ToNot(Equal(podPIDMap[aeroCluster.Name+"-1-1"].podUID))
+									err = k8sClient.Get(ctx, types.NamespacedName{
+										Name:      aeroCluster.Name + "-1-1",
+										Namespace: aeroCluster.Namespace,
+									}, restartedPod)
+									g.Expect(err).ToNot(HaveOccurred())
+
+									g.Expect(string(restartedPod.UID)).
+										ToNot(Equal(podPIDMap[aeroCluster.Name+"-1-1"].podUID))
+								}).Should(Succeed())
 
 								By("Enabling EnableRackIDOverride")
-								aeroCluster.Spec.PodSpec.AerospikeInitContainerSpec.ImageNameAndTag = "aerospike-kubernetes-init:2.5.0-dev7"
+								aeroCluster.Spec.PodSpec.AerospikeInitContainerSpec.ImageNameAndTag = "aerospike-kubernetes-init:2.5.0-dev8"
 								aeroCluster.Spec.PodSpec.AerospikeInitContainerSpec.ImageRegistryNamespace = ptr.To("tanmayj10")
 								aeroCluster.Spec.PodSpec.InitContainers = []v1.Container{
 									randomAnnotatorInitContainer(),
@@ -384,23 +322,7 @@ var _ = Describe(
 									Namespace: aeroCluster.Namespace,
 								}
 
-								validateDynamicRackIDInConfig(ctx, podNamespaceName, true)
-
-								pods, err := getClusterPodList(k8sClient, ctx, aeroCluster)
-								Expect(err).ToNot(HaveOccurred())
-
-								hostConns, err := newAllHostConn(logger, aeroCluster, k8sClient)
-								Expect(err).ToNot(HaveOccurred())
-
-								firstPodRackAnnotation := pods.Items[0].Annotations[asdbv1.OverrideRackIDAnnotation]
-								secondPodRackAnnotation := pods.Items[1].Annotations[asdbv1.OverrideRackIDAnnotation]
-
-								expectedRoster := fmt.Sprintf("1A1@%s,1A0@%s", secondPodRackAnnotation, firstPodRackAnnotation)
-								isEqual, currentRoster, err := compareRoster(hostConns[0], expectedRoster, aeroCluster)
-								Expect(err).ToNot(HaveOccurred())
-								Expect(isEqual).To(BeTrue(), fmt.Sprintf(
-									"expected %v to equal %v", currentRoster, expectedRoster,
-								))
+								validateDynamicRackIDInConfig(ctx, podNamespaceName.Name, aeroCluster, true)
 							},
 						)
 					},
@@ -410,10 +332,21 @@ var _ = Describe(
 	},
 )
 
-func validateDynamicRackIDInConfig(ctx goctx.Context, podNamespaceName types.NamespacedName, isOverrideRackID bool) {
-	pod := &v1.Pod{}
-	err := k8sClient.Get(ctx, podNamespaceName, pod)
+func validateDynamicRackIDInConfig(ctx goctx.Context, podName string, aeroCluster *asdbv1.AerospikeCluster,
+	isOverrideRackID bool) {
+	pods, err := getClusterPodList(k8sClient, ctx, aeroCluster)
 	Expect(err).ToNot(HaveOccurred())
+
+	podRackIDMap := make(map[string]string)
+
+	pod := &v1.Pod{}
+
+	for i := range pods.Items {
+		podRackIDMap[pods.Items[i].Name] = pods.Items[i].Annotations[asdbv1.OverrideRackIDAnnotation]
+		if pods.Items[i].Name == podName {
+			pod = &pods.Items[i]
+		}
+	}
 
 	originalAnnotation := pod.Annotations[asdbv1.OverrideRackIDAnnotation]
 
@@ -433,9 +366,36 @@ func validateDynamicRackIDInConfig(ctx goctx.Context, podNamespaceName types.Nam
 		}
 	}
 
+	expectedRoster := ""
+
 	if isOverrideRackID {
 		Expect(originalAnnotation).To(Equal(overrideRackID))
+
+		for name := range aeroCluster.Status.Pods {
+			// Remove 0 from start of nodeID (we add this dummy rack)
+			expectedRoster = fmt.Sprintf("%s@%s,",
+				strings.ToUpper(strings.TrimLeft(aeroCluster.Status.Pods[name].Aerospike.NodeID,
+					"0")), podRackIDMap[name]) + expectedRoster
+		}
 	} else {
 		Expect(originalAnnotation).ToNot(Equal(overrideRackID))
+
+		for name := range aeroCluster.Status.Pods {
+			// Remove 0 from start of nodeID (we add this dummy rack)
+			expectedRoster = fmt.Sprintf("%s@1,",
+				strings.ToUpper(strings.TrimLeft(aeroCluster.Status.Pods[name].Aerospike.NodeID,
+					"0"))) + expectedRoster
+		}
 	}
+
+	hostConns, err := newAllHostConn(logger, aeroCluster, k8sClient)
+	Expect(err).ToNot(HaveOccurred())
+
+	expectedRoster = strings.TrimRight(expectedRoster, ",")
+
+	isEqual, currentRoster, err := compareRoster(hostConns[0], expectedRoster, aeroCluster)
+	Expect(err).ToNot(HaveOccurred())
+	Expect(isEqual).To(BeTrue(), fmt.Sprintf(
+		"expected %v to equal %v", currentRoster, expectedRoster,
+	))
 }

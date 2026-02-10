@@ -75,7 +75,7 @@ spec:
           value: tanmayj10
         - name: AEROSPIKE_KUBERNETES_INIT_NAME_TAG
           # this is the name and tag of aerospike-init image
-          value: aerospike-kubernetes-init:2.5.0-dev6
+          value: aerospike-kubernetes-init:2.5.0-dev8
       volumes: []
       serviceAccountName: controller-manager
 
