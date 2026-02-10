@@ -305,6 +305,7 @@ var _ = Describe(
 								}).Should(Succeed())
 
 								By("Enabling EnableRackIDOverride")
+								//nolint:goconst // this will be removed
 								aeroCluster.Spec.PodSpec.AerospikeInitContainerSpec.ImageNameAndTag = "aerospike-kubernetes-init:2.5.0-dev8"
 								aeroCluster.Spec.PodSpec.AerospikeInitContainerSpec.ImageRegistryNamespace = ptr.To("tanmayj10")
 								aeroCluster.Spec.PodSpec.InitContainers = []v1.Container{
