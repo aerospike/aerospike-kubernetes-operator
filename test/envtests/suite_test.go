@@ -126,6 +126,16 @@ var _ = BeforeSuite(
 		// Setup eviction webhook
 		evictionWebhook = evictionwebhook.SetupEvictionWebhookWithManager(mgr)
 
+		// // Register AerospikeCluster validating webhook so envtest will enforce CR validation
+		// err = (&asdbv1.AerospikeCluster{}).SetupWebhookWithManager(mgr)
+		// Expect(err).NotTo(HaveOccurred())
+
+		// Register AerospikeCluster validating webhook directly
+		err = ctrl.NewWebhookManagedBy(mgr).
+			For(&asdbv1.AerospikeCluster{}).
+			Complete()
+		Expect(err).NotTo(HaveOccurred())
+
 		ctx, c := context.WithCancel(context.Background())
 		cancel = c
 		go func() {
