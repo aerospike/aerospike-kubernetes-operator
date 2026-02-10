@@ -59,7 +59,7 @@ func ValidateAerospikeConfig(
 	}
 
 	// namespace conf
-	nsListInterface, ok := config["namespaces"]
+	nsListInterface, ok := config[asdbv1.ConfKeyNamespace]
 	if !ok {
 		return fmt.Errorf(
 			"aerospikeConfig.namespace not a present. aerospikeConfig %v",
@@ -263,7 +263,7 @@ func validateNamespaceConfig(
 			)
 		}
 
-		if _, ok := nsConf["name"]; !ok {
+		if _, ok := nsConf[asdbv1.ConfKeyName]; !ok {
 			return fmt.Errorf("namespace name not found in namespace config %v", nsConf)
 		}
 
@@ -477,7 +477,7 @@ func validateNamespaceReplicationFactor(
 
 // GetNamespaceReplicationFactor returns the replication factor for the namespace.
 func GetNamespaceReplicationFactor(nsConf map[string]interface{}) (int, error) {
-	rfInterface, ok := nsConf["replication-factor"]
+	rfInterface, ok := nsConf[asdbv1.ConfKeyReplicationFactor]
 	if !ok {
 		rfInterface = 2 // default replication-factor
 	}
@@ -497,8 +497,8 @@ func ValidateStorageEngineDeviceList(nsConfList []interface{}) (deviceList, file
 	// build a map device -> namespace
 	for _, nsConfInterface := range nsConfList {
 		nsConf := nsConfInterface.(map[string]interface{})
-		namespace := nsConf["name"].(string)
-		storage := nsConf["storage-engine"].(map[string]interface{})
+		namespace := nsConf[asdbv1.ConfKeyName].(string)
+		storage := nsConf[asdbv1.ConfKeyStorageEngine].(map[string]interface{})
 
 		if devices, ok := storage["devices"]; ok {
 			for _, d := range devices.([]interface{}) {
@@ -538,7 +538,7 @@ func ValidateStorageEngineDeviceList(nsConfList []interface{}) (deviceList, file
 
 // IsInMemoryNamespace returns true if this namespace config uses memory for storage.
 func IsInMemoryNamespace(namespaceConf map[string]interface{}) bool {
-	storage, ok := namespaceConf["storage-engine"]
+	storage, ok := namespaceConf[asdbv1.ConfKeyStorageEngine]
 	if !ok {
 		return false
 	}
@@ -551,7 +551,7 @@ func IsInMemoryNamespace(namespaceConf map[string]interface{}) bool {
 
 // IsDeviceOrPmemNamespace returns true if this namespace config uses device for storage.
 func IsDeviceOrPmemNamespace(namespaceConf map[string]interface{}) bool {
-	storage, ok := namespaceConf["storage-engine"]
+	storage, ok := namespaceConf[asdbv1.ConfKeyStorageEngine]
 	if !ok {
 		return false
 	}
@@ -751,8 +751,8 @@ func validateNsConfUpdate(oldConf, newConf map[string]interface{}) error {
 		return fmt.Errorf("namespace conf cannot be nil")
 	}
 
-	newNsConfList := newConf["namespaces"].([]interface{})
-	oldNsConfList := oldConf["namespaces"].([]interface{})
+	newNsConfList := newConf[asdbv1.ConfKeyNamespace].([]interface{})
+	oldNsConfList := oldConf[asdbv1.ConfKeyNamespace].([]interface{})
 
 	for _, singleConfInterface := range newNsConfList {
 		// Validate new namespaceconf
@@ -773,20 +773,10 @@ func validateNsConfUpdate(oldConf, newConf map[string]interface{}) error {
 				)
 			}
 
-			if singleConf["name"] == oldSingleConf["name"] {
-				// replication-factor update not allowed
-				if isValueUpdated(
-					oldSingleConf, singleConf, "replication-factor",
-				) {
-					return fmt.Errorf(
-						"replication-factor cannot be updated. old nsconf %v, new nsconf %v",
-						oldSingleConf, singleConf,
-					)
-				}
-
+			if singleConf[asdbv1.ConfKeyName] == oldSingleConf[asdbv1.ConfKeyName] {
 				// strong-consistency update not allowed
 				if isValueUpdated(
-					oldSingleConf, singleConf, "strong-consistency",
+					oldSingleConf, singleConf, asdbv1.ConfKeyStrongConsistency,
 				) {
 					return fmt.Errorf(
 						"strong-consistency cannot be updated. old nsconf %v, new nsconf %v",

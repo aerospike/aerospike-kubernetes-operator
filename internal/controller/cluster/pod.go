@@ -1198,11 +1198,12 @@ func (r *SingleClusterReconciler) handleNSOrDeviceRemoval(rackState *RackState, 
 		return nil
 	}
 
-	for _, statusNamespace := range rackStatus.AerospikeConfig.Value["namespaces"].([]interface{}) {
+	for _, statusNamespace := range rackStatus.AerospikeConfig.Value[asdbv1.ConfKeyNamespace].([]interface{}) {
 		namespaceFound := false
 
-		for _, specNamespace := range rackState.Rack.AerospikeConfig.Value["namespaces"].([]interface{}) {
-			if specNamespace.(map[string]interface{})["name"] != statusNamespace.(map[string]interface{})["name"] {
+		for _, specNamespace := range rackState.Rack.AerospikeConfig.Value[asdbv1.ConfKeyNamespace].([]interface{}) {
+			if specNamespace.(map[string]interface{})[asdbv1.ConfKeyName] !=
+				statusNamespace.(map[string]interface{})[asdbv1.ConfKeyName] {
 				continue
 			}
 
@@ -1230,7 +1231,7 @@ func (r *SingleClusterReconciler) handleNSOrDeviceRemoval(rackState *RackState, 
 				deviceName := getVolumeNameFromDevicePath(rackStatus.Storage.Volumes, removedDevice)
 				r.Log.Info(
 					"Device is removed from namespace", "device", deviceName, "namespace",
-					specNamespace.(map[string]interface{})["name"],
+					specNamespace.(map[string]interface{})[asdbv1.ConfKeyName],
 				)
 
 				removedDevices = append(removedDevices, deviceName)
@@ -1297,7 +1298,7 @@ func (r *SingleClusterReconciler) handleNSOrDeviceRemoval(rackState *RackState, 
 
 		if !namespaceFound {
 			r.Log.Info(
-				"Namespace is deleted", "namespace", statusNamespace.(map[string]interface{})["name"],
+				"Namespace is deleted", "namespace", statusNamespace.(map[string]interface{})[asdbv1.ConfKeyName],
 			)
 
 			statusStorage := statusNamespace.(map[string]interface{})[asdbv1.ConfKeyStorageEngine].(map[string]interface{})
@@ -1413,11 +1414,12 @@ func (r *SingleClusterReconciler) getNSAddedDevices(rackState *RackState) ([]str
 		return nil, nil
 	}
 
-	for _, specNamespace := range rackState.Rack.AerospikeConfig.Value["namespaces"].([]interface{}) {
+	for _, specNamespace := range rackState.Rack.AerospikeConfig.Value[asdbv1.ConfKeyNamespace].([]interface{}) {
 		namespaceFound := false
 
-		for _, statusNamespace := range rackStatus.AerospikeConfig.Value["namespaces"].([]interface{}) {
-			if specNamespace.(map[string]interface{})["name"] != statusNamespace.(map[string]interface{})["name"] {
+		for _, statusNamespace := range rackStatus.AerospikeConfig.Value[asdbv1.ConfKeyNamespace].([]interface{}) {
+			if specNamespace.(map[string]interface{})[asdbv1.ConfKeyName] !=
+				statusNamespace.(map[string]interface{})[asdbv1.ConfKeyName] {
 				continue
 			}
 

@@ -384,7 +384,7 @@ var _ = Describe("SCMode", func() {
 				aeroCluster.Spec.Storage.Volumes, getStorageVolumeForAerospike(sc1Name, sc1Path))
 
 			conf := getSCNamespaceConfig(sc1Name, sc1Path)
-			conf["replication-factor"] = 5
+			conf[asdbv1.ConfKeyReplicationFactor] = 5
 			racks[0].InputAerospikeConfig = &asdbv1.AerospikeConfigSpec{
 				Value: map[string]interface{}{
 					"namespaces": []interface{}{conf},
