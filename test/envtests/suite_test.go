@@ -21,6 +21,7 @@ import (
 	"testing"
 	"time"
 
+	webhookv1 "github.com/aerospike/aerospike-kubernetes-operator/v4/internal/webhook/v1"
 	. "github.com/onsi/ginkgo/v2"
 	. "github.com/onsi/gomega"
 	"github.com/onsi/gomega/gexec"
@@ -126,14 +127,9 @@ var _ = BeforeSuite(
 		// Setup eviction webhook
 		evictionWebhook = evictionwebhook.SetupEvictionWebhookWithManager(mgr)
 
-		// // Register AerospikeCluster validating webhook so envtest will enforce CR validation
-		// err = (&asdbv1.AerospikeCluster{}).SetupWebhookWithManager(mgr)
-		// Expect(err).NotTo(HaveOccurred())
-
 		// Register AerospikeCluster validating webhook directly
-		err = ctrl.NewWebhookManagedBy(mgr).
-			For(&asdbv1.AerospikeCluster{}).
-			Complete()
+		// it should register to mutating and validation webhook both.
+		err = webhookv1.SetupAerospikeClusterWebhookWithManager(mgr)
 		Expect(err).NotTo(HaveOccurred())
 
 		ctx, c := context.WithCancel(context.Background())
