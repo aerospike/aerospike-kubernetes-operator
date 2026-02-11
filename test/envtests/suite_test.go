@@ -76,7 +76,7 @@ var _ = BeforeSuite(
 		testEnv = &envtest.Environment{
 			UseExistingCluster: &t,
 			CRDDirectoryPaths: []string{
-				"../config/crd/bases",
+				"../../config/crd/bases",
 			},
 			WebhookInstallOptions: envtest.WebhookInstallOptions{
 				Paths: []string{"../../config/webhook"},
@@ -101,9 +101,14 @@ var _ = BeforeSuite(
 
 		// +kubebuilder:scaffold:scheme
 
-		k8sClient, err = client.New(
-			cfg, client.Options{Scheme: scheme},
-		)
+		By("Creating Kubernetes client (waiting for CRDs)")
+		Eventually(func() error {
+			k8sClient, err = client.New(
+				cfg, client.Options{Scheme: scheme},
+			)
+			return err
+		}, time.Second*10, time.Millisecond*250).Should(Succeed())
+		Expect(k8sClient).NotTo(BeNil())
 		Expect(err).NotTo(HaveOccurred())
 		Expect(k8sClient).NotTo(BeNil())
 
