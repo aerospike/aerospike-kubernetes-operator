@@ -64,17 +64,12 @@ func (r *AerospikeClusterReconciler) SetupWithManager(mgr ctrl.Manager) error {
 			_, hasEvictionBlocked := newAnnotations[asdbv1.EvictionBlockedAnnotation]
 			evictionBlockedAdded := !hadEvictionBlocked && hasEvictionBlocked
 
-			// Check if the override-rack-id annotation value changed
-			// When a pod is created or deleted, oldAnnotations is nil. As a result,
-			// oldOverrideRackID and newOverrideRackID will not match, which triggers
-			// reconciliation even when the aerospike.com/override-rack-id value has not
-			// actually changed. This can cause extra reconciles during normal cluster
-			// deployment and pod lifecycle events.
-			oldOverrideRackID := oldAnnotations[asdbv1.OverrideRackIDAnnotation]
-			newOverrideRackID := newAnnotations[asdbv1.OverrideRackIDAnnotation]
-			overrideRackIDChanged := oldOverrideRackID != newOverrideRackID
+			// Check if the override-rack-id annotation was added in this update
+			_, hadOverrideRackID := oldAnnotations[asdbv1.OverrideRackIDAnnotation]
+			_, hasOverrideRackID := newAnnotations[asdbv1.OverrideRackIDAnnotation]
+			overrideRackIDAdded := !hadOverrideRackID && hasOverrideRackID
 
-			return evictionBlockedAdded || overrideRackIDChanged
+			return evictionBlockedAdded || overrideRackIDAdded
 		},
 		DeleteFunc: func(e event.DeleteEvent) bool {
 			return false // Don't process delete events

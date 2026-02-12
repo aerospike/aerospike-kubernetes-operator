@@ -5,6 +5,7 @@ import (
 	goctx "context"
 	"fmt"
 	"regexp"
+	"sort"
 	"strings"
 	"time"
 
@@ -20,9 +21,9 @@ import (
 )
 
 var _ = Describe(
-	"DynamicRackID", func() {
+	"OverrideRackID", func() {
 		ctx := goctx.Background()
-		clusterName := fmt.Sprintf("dynamic-rack-id-%d", GinkgoParallelProcess())
+		clusterName := fmt.Sprintf("override-rack-id-%d", GinkgoParallelProcess())
 		clusterNamespacedName := test.GetNamespacedName(
 			clusterName, namespace,
 		)
@@ -136,7 +137,7 @@ var _ = Describe(
 									Namespace: aeroCluster.Namespace,
 								}
 
-								validateDynamicRackIDInConfig(ctx, podNamespaceName.Name, aeroCluster, true)
+								validateRackIDInConfig(ctx, podNamespaceName.Name, aeroCluster, true)
 
 								By("Updating override-rack-id annotation")
 								pod := &v1.Pod{
@@ -158,7 +159,7 @@ var _ = Describe(
 								)
 								Expect(err).ToNot(HaveOccurred())
 
-								validateDynamicRackIDInConfig(ctx, podNamespaceName.Name, aeroCluster, true)
+								validateRackIDInConfig(ctx, podNamespaceName.Name, aeroCluster, true)
 							},
 						)
 					},
@@ -213,7 +214,7 @@ var _ = Describe(
 								// Note: The predicate should still trigger reconciliation,
 								// but the restart logic should not trigger based on OverrideRackID
 								// since the feature is disabled
-								validateDynamicRackIDInConfig(ctx, podNamespaceName.Name, aeroCluster, false)
+								validateRackIDInConfig(ctx, podNamespaceName.Name, aeroCluster, false)
 							},
 						)
 
@@ -239,7 +240,7 @@ var _ = Describe(
 								By("Verifying restart occurred")
 								validateServerRestart(ctx, aeroCluster, podPIDMap, asdbv1.OperationWarmRestart)
 
-								validateDynamicRackIDInConfig(ctx, podNamespaceName.Name, aeroCluster, true)
+								validateRackIDInConfig(ctx, podNamespaceName.Name, aeroCluster, true)
 
 								aeroCluster, err = getCluster(k8sClient, ctx, clusterNamespacedName)
 								Expect(err).ToNot(HaveOccurred())
@@ -252,7 +253,7 @@ var _ = Describe(
 								By("Verifying restart occurred")
 								validateServerRestart(ctx, aeroCluster, podPIDMap, asdbv1.OperationWarmRestart)
 
-								validateDynamicRackIDInConfig(ctx, podNamespaceName.Name, aeroCluster, false)
+								validateRackIDInConfig(ctx, podNamespaceName.Name, aeroCluster, false)
 							},
 						)
 					},
@@ -323,7 +324,7 @@ var _ = Describe(
 									Namespace: aeroCluster.Namespace,
 								}
 
-								validateDynamicRackIDInConfig(ctx, podNamespaceName.Name, aeroCluster, true)
+								validateRackIDInConfig(ctx, podNamespaceName.Name, aeroCluster, true)
 							},
 						)
 					},
@@ -333,55 +334,67 @@ var _ = Describe(
 	},
 )
 
-func validateDynamicRackIDInConfig(ctx goctx.Context, podName string, aeroCluster *asdbv1.AerospikeCluster,
+func validateRackIDInConfig(ctx goctx.Context, podName string, aeroCluster *asdbv1.AerospikeCluster,
 	isOverrideRackID bool) {
 	pods, err := getClusterPodList(k8sClient, ctx, aeroCluster)
 	Expect(err).ToNot(HaveOccurred())
 
 	podRackIDMap := make(map[string]string)
 
-	pod := &v1.Pod{}
+	var targetPod *v1.Pod
 
 	for i := range pods.Items {
-		podRackIDMap[pods.Items[i].Name] = pods.Items[i].Annotations[asdbv1.OverrideRackIDAnnotation]
-		if pods.Items[i].Name == podName {
-			pod = &pods.Items[i]
+		pod := &pods.Items[i]
+
+		podRackIDMap[pod.Name] = pod.Annotations[asdbv1.OverrideRackIDAnnotation]
+		if pod.Name == podName {
+			targetPod = pod
 		}
 	}
 
-	originalAnnotation := pod.Annotations[asdbv1.OverrideRackIDAnnotation]
+	Expect(targetPod).ToNot(BeNil(), fmt.Sprintf("pod %s not found in cluster", podName))
 
-	aerospikeConf := pod.Annotations["aerospikeConf"]
-	re := regexp.MustCompile(`^\s*rack-id\s+(.+)$`)
+	originalAnnotation := targetPod.Annotations[asdbv1.OverrideRackIDAnnotation]
+	aerospikeConf := targetPod.Annotations["aerospikeConf"]
 
-	scanner := bufio.NewScanner(strings.NewReader(aerospikeConf))
+	// Parse rack-id from config
+	var configRackID string
 
-	var overrideRackID string
+	if aerospikeConf != "" {
+		rackIDRegex := regexp.MustCompile(`^\s*rack-id\s+(.+)$`)
 
-	for scanner.Scan() {
-		line := scanner.Text()
-
-		if m := re.FindStringSubmatch(line); len(m) == 2 {
-			overrideRackID = m[1]
-			break
+		scanner := bufio.NewScanner(strings.NewReader(aerospikeConf))
+		for scanner.Scan() {
+			line := strings.TrimSpace(scanner.Text())
+			if matches := rackIDRegex.FindStringSubmatch(line); len(matches) == 2 {
+				configRackID = strings.TrimSpace(matches[1])
+				break
+			}
 		}
 	}
+
+	podNames := make([]string, 0, len(aeroCluster.Status.Pods))
+	for podName := range aeroCluster.Status.Pods {
+		podNames = append(podNames, podName)
+	}
+
+	sort.Strings(podNames)
 
 	expectedRoster := ""
 
 	if isOverrideRackID {
-		Expect(originalAnnotation).To(Equal(overrideRackID))
+		Expect(originalAnnotation).To(Equal(configRackID))
 
-		for name := range aeroCluster.Status.Pods {
+		for _, name := range podNames {
 			// Remove 0 from start of nodeID (we add this dummy rack)
 			expectedRoster = fmt.Sprintf("%s@%s,",
 				strings.ToUpper(strings.TrimLeft(aeroCluster.Status.Pods[name].Aerospike.NodeID,
 					"0")), podRackIDMap[name]) + expectedRoster
 		}
 	} else {
-		Expect(originalAnnotation).ToNot(Equal(overrideRackID))
+		Expect(originalAnnotation).ToNot(Equal(configRackID))
 
-		for name := range aeroCluster.Status.Pods {
+		for _, name := range podNames {
 			// Remove 0 from start of nodeID (we add this dummy rack)
 			expectedRoster = fmt.Sprintf("%s@1,",
 				strings.ToUpper(strings.TrimLeft(aeroCluster.Status.Pods[name].Aerospike.NodeID,
@@ -389,10 +402,10 @@ func validateDynamicRackIDInConfig(ctx goctx.Context, podName string, aeroCluste
 		}
 	}
 
+	expectedRoster = strings.TrimRight(expectedRoster, ",")
+
 	hostConns, err := newAllHostConn(logger, aeroCluster, k8sClient)
 	Expect(err).ToNot(HaveOccurred())
-
-	expectedRoster = strings.TrimRight(expectedRoster, ",")
 
 	isEqual, currentRoster, err := compareRoster(hostConns[0], expectedRoster, aeroCluster)
 	Expect(err).ToNot(HaveOccurred())

@@ -193,9 +193,11 @@ type AerospikeClusterSpec struct { //nolint:govet // for readability
 	Operations []OperationSpec `json:"operations,omitempty"`
 
 	// EnableRackIDOverride enables dynamic allocation of rack IDs to pods after they get scheduled.
-	// When enabled, the operator will watch for changes to the aerospike.com/override-rack-id annotation on pods
-	// and reconcile when this annotation value changes. This allows rack IDs to be dynamically assigned to pods
-	// based on their scheduling location or other external factors.
+	// When enabled, the operator checks for the existence of the
+	// aerospike.com/override-rack-id annotation in the pod. When a pod has this annotation is
+	// rescheduled and the annotation is added or updated again, the reconciler updates
+	// the roster accordingly. Manual annotation changes on a running pod without
+	// a restart have no effect and do not trigger any reconciliation.
 	// AKO does not manage pod distribution across racks, which may result in skewed rack. Use with caution.
 	// This feature requires a single rack configuration (multiple racks are not allowed when enabled).
 	// +operator-sdk:csv:customresourcedefinitions:type=spec,displayName="Enable Rack ID Override"
@@ -372,7 +374,7 @@ type AerospikePodSpec struct { //nolint:govet // for readability
 	// +optional
 	InitContainers []corev1.Container `json:"initContainers,omitempty"`
 
-	// SchedulingPolicy  controls pods placement on Kubernetes nodes.
+	// SchedulingPolicy controls pods placement on Kubernetes nodes.
 	SchedulingPolicy `json:",inline"`
 
 	// If set true then multiple pods can be created per Kubernetes Node.
