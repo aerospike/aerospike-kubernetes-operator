@@ -508,15 +508,11 @@ func validateOperatorClientCert(clientCert *asdbv1.AerospikeOperatorClientCertSp
 // warnOperatorClientCertSecretNamespace returns admission warnings when the deprecated
 // secretNamespace field is used in operator client cert or CA cert source.
 func warnOperatorClientCertSecretNamespace(spec *asdbv1.AerospikeOperatorClientCertSpec) admission.Warnings {
-	if spec == nil {
+	if spec == nil || spec.SecretCertSource == nil {
 		return nil
 	}
 
 	var warnings admission.Warnings
-
-	if spec.SecretCertSource == nil {
-		return nil
-	}
 
 	//nolint:staticcheck // SA1019: intentionally read deprecated SecretNamespace to emit admission warning
 	if spec.SecretCertSource.SecretNamespace != "" {
