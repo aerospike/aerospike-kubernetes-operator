@@ -48,10 +48,10 @@ failedPodGracePeriodSeconds: "60"
 aerospikeKubernetesInitRegistry: "docker.io"
 
 # Namespace in registry used to pull aerospike-init image
-aerospikeKubernetesInitRegistryNamespace: "tanmayj10"
+aerospikeKubernetesInitRegistryNamespace: "aerospike"
 
 # Name and tag of aerospike-init image
-aerospikeKubernetesInitNameTag: "aerospike-kubernetes-init:2.5.0-dev8"
+aerospikeKubernetesInitNameTag: "aerospike-kubernetes-init:2.5.0-dev2"
 
 ## Resources - limits / requests
 resources:

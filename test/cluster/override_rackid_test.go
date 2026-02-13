@@ -276,7 +276,6 @@ var _ = Describe(
 								aeroCluster.Spec.RackConfig = rackConf
 
 								aeroCluster.Spec.PodSpec.AerospikeInitContainerSpec.ImageNameAndTag = "aerospike-kubernetes-init:2.4.0"
-								aeroCluster.Spec.PodSpec.AerospikeInitContainerSpec.ImageRegistryNamespace = ptr.To("aerospike")
 
 								Expect(DeployCluster(k8sClient, ctx, aeroCluster)).ToNot(HaveOccurred())
 
@@ -306,9 +305,8 @@ var _ = Describe(
 								}).Should(Succeed())
 
 								By("Enabling EnableRackIDOverride")
-								//nolint:goconst // this will be removed
-								aeroCluster.Spec.PodSpec.AerospikeInitContainerSpec.ImageNameAndTag = "aerospike-kubernetes-init:2.5.0-dev8"
-								aeroCluster.Spec.PodSpec.AerospikeInitContainerSpec.ImageRegistryNamespace = ptr.To("tanmayj10")
+
+								aeroCluster.Spec.PodSpec.AerospikeInitContainerSpec = nil
 								aeroCluster.Spec.PodSpec.InitContainers = []v1.Container{
 									randomAnnotatorInitContainer(),
 									{

@@ -1058,10 +1058,6 @@ func createDummyAerospikeClusterWithDynRackID(
 		},
 	}
 
-	// TODO: REMOVE IT BEFORE MERGE
-	aeroCluster.Spec.PodSpec.AerospikeInitContainerSpec.ImageNameAndTag = "aerospike-kubernetes-init:2.5.0-dev8"
-	aeroCluster.Spec.PodSpec.AerospikeInitContainerSpec.ImageRegistryNamespace = ptr.To("tanmayj10")
-
 	return aeroCluster
 }
 
