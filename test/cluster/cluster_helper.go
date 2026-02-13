@@ -35,15 +35,15 @@ const (
 	baseEnterpriseImage = "aerospike/aerospike-server-enterprise"
 	baseFederalImage    = "aerospike/aerospike-server-federal"
 	wrongImage          = "wrong-image"
-	nextServerVersion   = "8.1.0.0_1"
-	latestServerVersion = "8.1.0.0"
+	nextServerVersion   = "8.1.1.0_1"
+	latestServerVersion = "8.1.1.0"
 	invalidVersion      = "3.0.0.4"
 	pre810Version       = "8.0.0.0"
 
 	post6Version = "7.0.0.0"
 	version6     = "6.0.0.5"
 
-	latestSchemaVersion = "8.1.0"
+	latestSchemaVersion = "8.1.1"
 )
 
 var (

@@ -6,7 +6,7 @@ metadata:
 
 spec:
   size: 2
-  image: aerospike/aerospike-server-federal:8.1.0.0
+  image: aerospike/aerospike-server-federal:8.1.1.0
   storage:
     filesystemVolumePolicy:
       cascadeDelete: true
