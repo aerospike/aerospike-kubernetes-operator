@@ -299,6 +299,9 @@ type AerospikeOperatorCertSource struct {
 type CaCertsSource struct {
 	SecretName string `json:"secretName"`
 
+	// Deprecated: Cross-namespace secret reference is deprecated. Omit this field; secret must be in the same
+	// namespace as the AerospikeCluster. Specifying secretNamespace will produce an admission warning.
+	// This will be blocked in future versions.
 	// +optional
 	SecretNamespace string `json:"secretNamespace,omitempty"`
 }
@@ -309,6 +312,9 @@ type AerospikeSecretCertSource struct {
 
 	SecretName string `json:"secretName"`
 
+	// Deprecated: Cross-namespace secret reference is deprecated. Omit this field; secret must be in the same
+	// namespace as the AerospikeCluster. Specifying secretNamespace will produce an admission warning.
+	// This will be blocked in future versions.
 	// +optional
 	SecretNamespace string `json:"secretNamespace,omitempty"`
 
@@ -584,8 +590,8 @@ type ValidationPolicySpec struct {
 	// Defaults to false.
 	SkipWorkDirValidate bool `json:"skipWorkDirValidate"`
 
-	// ValidateXdrDigestLogFile validates that xdr digest log file is mounted on a persistent file storage.
-	// Defaults to false.
+	// Deprecated: SkipXdrDlogFileValidate is no longer in use. Setting this field will produce an admission
+	// warning. This field will be removed in future versions.
 	SkipXdrDlogFileValidate bool `json:"skipXdrDlogFileValidate"`
 }
 

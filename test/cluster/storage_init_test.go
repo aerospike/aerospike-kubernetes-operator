@@ -777,8 +777,7 @@ func getStorageInitAerospikeCluster(
 				},
 			},
 			ValidationPolicy: &asdbv1.ValidationPolicySpec{
-				SkipWorkDirValidate:     true,
-				SkipXdrDlogFileValidate: true,
+				SkipWorkDirValidate: true,
 			},
 			PodSpec: asdbv1.AerospikePodSpec{
 				MultiPodPerHost: ptr.To(true),

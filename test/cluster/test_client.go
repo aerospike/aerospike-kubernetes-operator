@@ -355,6 +355,7 @@ func appendCACertFromSecret(
 	found := &v1.Secret{}
 
 	if secretSource.CaCertsSource != nil {
+		//nolint:staticcheck // SA1019: intentionally use deprecated SecretNamespace to mirror controller behavior in tests
 		secretName := namespacedSecret(secretSource.CaCertsSource.SecretNamespace,
 			secretSource.CaCertsSource.SecretName, defaultNamespace)
 		if err := k8sClient.Get(context.TODO(), secretName, found); err != nil {
@@ -369,6 +370,7 @@ func appendCACertFromSecret(
 			serverPool.AppendCertsFromPEM(caData)
 		}
 	} else {
+		//nolint:staticcheck // SA1019: intentionally use deprecated SecretNamespace to mirror controller behavior in tests
 		secretName := namespacedSecret(secretSource.SecretNamespace, secretSource.SecretName, defaultNamespace)
 		if err := k8sClient.Get(context.TODO(), secretName, found); err != nil {
 			return serverPool
@@ -397,6 +399,7 @@ func loadCertAndKeyFromSecret(
 ) (*tls.Certificate, error) {
 	// get the tls info from secret
 	found := &v1.Secret{}
+	//nolint:staticcheck // SA1019: intentionally use deprecated SecretNamespace to mirror controller behavior in tests
 	secretName := namespacedSecret(secretSource.SecretNamespace, secretSource.SecretName, defaultNamespace)
 
 	if err := k8sClient.Get(context.TODO(), secretName, found); err != nil {

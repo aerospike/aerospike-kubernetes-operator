@@ -129,6 +129,7 @@ webhooks:
     resources:
     - aerospikerestores
   sideEffects: None
+{{- if .Values.safePodEviction.enable }}
 - admissionReviewVersions:
     - v1
   clientConfig:
@@ -146,7 +147,16 @@ webhooks:
         {{- range splitList "," .Values.watchNamespaces }}
           - {{ . | trim | quote }}
         {{- end }}
-    {{- end }}
+  {{- else if .Values.ignoreNamespaces }}
+  namespaceSelector:
+    matchExpressions:
+      - key: kubernetes.io/metadata.name
+        operator: NotIn
+        values:
+        {{- range splitList "," .Values.ignoreNamespaces }}
+          - {{ . | trim | quote }}
+        {{- end }}
+  {{- end }}
   name: vaerospikeeviction.kb.io
   rules:
     - apiGroups:
@@ -159,3 +169,4 @@ webhooks:
         - pods/eviction
   sideEffects: None
   timeoutSeconds: {{ .Values.safePodEviction.timeoutSeconds }}
+{{- end }}
