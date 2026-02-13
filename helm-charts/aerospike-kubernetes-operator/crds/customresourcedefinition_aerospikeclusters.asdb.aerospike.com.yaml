@@ -403,6 +403,10 @@ spec:
                           secretName:
                             type: string
                           secretNamespace:
+                            description: |-
+                              Deprecated: Cross-namespace secret reference is deprecated. Omit this field; secret must be in the same
+                              namespace as the AerospikeCluster. Specifying secretNamespace will produce an admission warning.
+                              This will be blocked in future versions.
                             type: string
                         required:
                         - secretName
@@ -414,6 +418,10 @@ spec:
                       secretName:
                         type: string
                       secretNamespace:
+                        description: |-
+                          Deprecated: Cross-namespace secret reference is deprecated. Omit this field; secret must be in the same
+                          namespace as the AerospikeCluster. Specifying secretNamespace will produce an admission warning.
+                          This will be blocked in future versions.
                         type: string
                     required:
                     - secretName
@@ -9162,8 +9170,8 @@ spec:
                     type: boolean
                   skipXdrDlogFileValidate:
                     description: |-
-                      ValidateXdrDigestLogFile validates that xdr digest log file is mounted on a persistent file storage.
-                      Defaults to false.
+                      Deprecated: SkipXdrDlogFileValidate is no longer in use. Setting this field will produce an admission
+                      warning. This field will be removed in future versions.
                     type: boolean
                 required:
                 - skipWorkDirValidate
@@ -9540,6 +9548,10 @@ spec:
                           secretName:
                             type: string
                           secretNamespace:
+                            description: |-
+                              Deprecated: Cross-namespace secret reference is deprecated. Omit this field; secret must be in the same
+                              namespace as the AerospikeCluster. Specifying secretNamespace will produce an admission warning.
+                              This will be blocked in future versions.
                             type: string
                         required:
                         - secretName
@@ -9551,6 +9563,10 @@ spec:
                       secretName:
                         type: string
                       secretNamespace:
+                        description: |-
+                          Deprecated: Cross-namespace secret reference is deprecated. Omit this field; secret must be in the same
+                          namespace as the AerospikeCluster. Specifying secretNamespace will produce an admission warning.
+                          This will be blocked in future versions.
                         type: string
                     required:
                     - secretName
@@ -18512,8 +18528,8 @@ spec:
                     type: boolean
                   skipXdrDlogFileValidate:
                     description: |-
-                      ValidateXdrDigestLogFile validates that xdr digest log file is mounted on a persistent file storage.
-                      Defaults to false.
+                      Deprecated: SkipXdrDlogFileValidate is no longer in use. Setting this field will produce an admission
+                      warning. This field will be removed in future versions.
                     type: boolean
                 required:
                 - skipWorkDirValidate

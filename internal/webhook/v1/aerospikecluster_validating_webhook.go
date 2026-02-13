@@ -339,6 +339,9 @@ func validate(aslog logr.Logger, cluster *asdbv1.AerospikeCluster) (admission.Wa
 		return warnings, err
 	}
 
+	warns = validateDeprecatedFields(cluster)
+	warnings = append(warnings, warns...)
+
 	if err := validateNetworkPolicy(cluster); err != nil {
 		return warnings, err
 	}
@@ -500,6 +503,56 @@ func validateOperatorClientCert(clientCert *asdbv1.AerospikeOperatorClientCertSp
 	}
 
 	return nil
+}
+
+// warnOperatorClientCertSecretNamespace returns admission warnings when the deprecated
+// secretNamespace field is used in operator client cert or CA cert source.
+func warnOperatorClientCertSecretNamespace(spec *asdbv1.AerospikeOperatorClientCertSpec) admission.Warnings {
+	if spec == nil || spec.SecretCertSource == nil {
+		return nil
+	}
+
+	var warnings admission.Warnings
+
+	//nolint:staticcheck // SA1019: intentionally read deprecated SecretNamespace to emit admission warning
+	if spec.SecretCertSource.SecretNamespace != "" {
+		warnings = append(warnings,
+			"operatorClientCert.secretCertSource.secretNamespace is deprecated: use secrets in the same"+
+				" namespace as the AerospikeCluster. Omit this field. This will be removed in future versions.")
+	}
+
+	//nolint:staticcheck // SA1019: intentionally read deprecated SecretNamespace to emit admission warning
+	if spec.SecretCertSource.CaCertsSource != nil && spec.SecretCertSource.CaCertsSource.SecretNamespace != "" {
+		warnings = append(warnings,
+			"operatorClientCert.secretCertSource.caCertsSource.secretNamespace is deprecated: use secrets in"+
+				" the same namespace as the AerospikeCluster. Omit this field. This will be blocked in future versions.")
+	}
+
+	return warnings
+}
+
+// warnValidationPolicySkipXdrDlogFileValidate returns an admission warning when the deprecated
+// skipXdrDlogFileValidate field is set. This field is no longer in use and will be removed in future versions.
+func warnValidationPolicySkipXdrDlogFileValidate(validationPolicy *asdbv1.ValidationPolicySpec) admission.Warnings {
+	//nolint:staticcheck // SA1019: intentionally read deprecated SkipXdrDlogFileValidate to emit admission warning
+	if validationPolicy == nil || !validationPolicy.SkipXdrDlogFileValidate {
+		return nil
+	}
+
+	return admission.Warnings{
+		"validationPolicy.skipXdrDlogFileValidate is deprecated: this field is no longer in use. " +
+			"This will be removed in future versions.",
+	}
+}
+
+func validateDeprecatedFields(cluster *asdbv1.AerospikeCluster) (warnings admission.Warnings) {
+	warns := warnOperatorClientCertSecretNamespace(cluster.Spec.OperatorClientCertSpec)
+	warnings = append(warnings, warns...)
+
+	warns = warnValidationPolicySkipXdrDlogFileValidate(cluster.Spec.ValidationPolicy)
+	warnings = append(warnings, warns...)
+
+	return warnings
 }
 
 func validateClientCertSpec(cluster *asdbv1.AerospikeCluster) error {
