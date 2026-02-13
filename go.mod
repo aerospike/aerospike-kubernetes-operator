@@ -4,14 +4,14 @@ go 1.24.10
 
 require (
 	github.com/aerospike/aerospike-backup-service/v3 v3.4.1-0.20251113113955-5523ec8870b1
-	github.com/aerospike/aerospike-client-go/v8 v8.5.1
+	github.com/aerospike/aerospike-client-go/v8 v8.6.0
 	github.com/aerospike/aerospike-management-lib v1.9.0
 	github.com/asaskevich/govalidator v0.0.0-20210307081110-f21760c49a8d
 	github.com/deckarep/golang-set/v2 v2.8.0
 	github.com/evanphx/json-patch v4.12.0+incompatible
 	github.com/go-logr/logr v1.4.3
-	github.com/onsi/ginkgo/v2 v2.27.3
-	github.com/onsi/gomega v1.38.3
+	github.com/onsi/ginkgo/v2 v2.27.5
+	github.com/onsi/gomega v1.39.0
 	github.com/prometheus/client_golang v1.22.0
 	github.com/sirupsen/logrus v1.9.3
 	github.com/stretchr/testify v1.11.1

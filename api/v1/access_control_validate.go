@@ -51,6 +51,9 @@ var PredefinedRoles = map[string]struct{}{
 	"truncate":       {},
 	"sindex-admin":   {},
 	"udf-admin":      {},
+	"masking-admin":  {},
+	"read-masked":    {},
+	"write-masked":   {},
 }
 
 // Expect at least one user with these required roles.
@@ -71,6 +74,9 @@ var Privileges = map[string][]PrivilegeScope{
 	"truncate":       {Global, NamespaceSet},
 	"sindex-admin":   {Global},
 	"udf-admin":      {Global},
+	"masking-admin":  {Global, NamespaceSet},
+	"read-masked":    {Global, NamespaceSet},
+	"write-masked":   {Global, NamespaceSet},
 }
 
 // IsAerospikeAccessControlValid validates the accessControl specification in the clusterSpec.
