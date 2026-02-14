@@ -60,6 +60,9 @@ spec:
   ## enableDynamicConfigUpdate enables dynamic config update flow of the operator.
   enableDynamicConfigUpdate: {{ .Values.enableDynamicConfigUpdate }}
 
+  ## enableRackIDOverride enables dynamic allocation of rack IDs to pods after they get scheduled.
+  enableRackIDOverride: {{ .Values.enableRackIDOverride }}
+
   # Aerospike network policy
   {{- with .Values.aerospikeNetworkPolicy }}
   aerospikeNetworkPolicy: {{- toYaml . | nindent 4 }}

@@ -191,6 +191,18 @@ type AerospikeClusterSpec struct { //nolint:govet // for readability
 	// +kubebuilder:validation:MaxItems:=1
 	// +optional
 	Operations []OperationSpec `json:"operations,omitempty"`
+
+	// EnableRackIDOverride enables dynamic allocation of rack IDs to pods after they get scheduled.
+	// When enabled, the operator checks for the existence of the
+	// aerospike.com/override-rack-id annotation in the pod. When a pod has this annotation is
+	// rescheduled and the annotation is added or updated again, the reconciler updates
+	// the roster accordingly. Manual annotation changes on a running pod without
+	// a restart have no effect and do not trigger any reconciliation.
+	// AKO does not manage pod distribution across racks, which may result in skewed rack. Use with caution.
+	// This feature requires a single rack configuration (multiple racks are not allowed when enabled).
+	// +operator-sdk:csv:customresourcedefinitions:type=spec,displayName="Enable Rack ID Override"
+	// +optional
+	EnableRackIDOverride *bool `json:"enableRackIDOverride,omitempty"`
 }
 
 type OperationKind string
@@ -361,10 +373,14 @@ type AerospikePodSpec struct { //nolint:govet // for readability
 	Sidecars []corev1.Container `json:"sidecars,omitempty"`
 
 	// InitContainers to add to the pods.
+	// To control the sequence of custom init containers relative to "aerospike-init" init container, include a placeholder
+	// container with name "aerospike-init" at the desired position. Only the name field is required for the placeholder;
+	// all other fields will be ignored and replaced with the actual "aerospike-init" init container configuration.
+	// If no placeholder is found, all custom init containers will be placed after "aerospike-init" (backward compatible).
 	// +optional
 	InitContainers []corev1.Container `json:"initContainers,omitempty"`
 
-	// SchedulingPolicy  controls pods placement on Kubernetes nodes.
+	// SchedulingPolicy controls pods placement on Kubernetes nodes.
 	SchedulingPolicy `json:",inline"`
 
 	// If set true then multiple pods can be created per Kubernetes Node.
@@ -937,6 +953,16 @@ type AerospikeClusterStatusSpec struct { //nolint:govet // for readability
 	// +optional
 	EnableDynamicConfigUpdate *bool `json:"enableDynamicConfigUpdate,omitempty"`
 
+	// EnableRackIDOverride enables dynamic allocation of rack IDs to pods after they get scheduled.
+	// When enabled, the operator will watch for changes to the aerospike.com/override-rack-id annotation on pods
+	// and reconcile when this annotation value changes. This allows rack IDs to be dynamically assigned to pods
+	// based on their scheduling location or other external factors.
+	// AKO does not manage node distribution across racks, which may result in uneven rack placement. Use with caution.
+	// This feature requires a single rack configuration (multiple racks are not allowed when enabled).
+	// +operator-sdk:csv:customresourcedefinitions:type=spec,displayName="Enable Rack ID Override"
+	// +optional
+	EnableRackIDOverride *bool `json:"enableRackIDOverride,omitempty"`
+
 	// IsReadinessProbeEnabled tells whether the readiness probe is present in all pods or not.
 	// Moreover, PodDisruptionBudget should be created for the Aerospike cluster only when this field is enabled.
 	// +optional
@@ -1263,6 +1289,12 @@ type AerospikePodStatus struct { //nolint:govet // for readability
 	// Empty "" status means successful update.
 	// +optional
 	DynamicConfigUpdateStatus DynamicConfigUpdateStatus `json:"dynamicConfigUpdateStatus,omitempty"`
+
+	// RackIDOverridden indicates whether this pod is picking rackID dynamically based on
+	// the override-rack-id annotation. When true, the pod's rackID is determined
+	// from the pod annotation rather than the static rack configuration.
+	// +optional
+	RackIDOverridden bool `json:"rackIDOverridden,omitempty"`
 }
 
 // +kubebuilder:object:root=true
@@ -1366,6 +1398,11 @@ func CopySpecToStatus(spec *AerospikeClusterSpec) (*AerospikeClusterStatusSpec, 
 	if spec.EnableDynamicConfigUpdate != nil {
 		enableDynamicConfigUpdate := *spec.EnableDynamicConfigUpdate
 		status.EnableDynamicConfigUpdate = &enableDynamicConfigUpdate
+	}
+
+	if spec.EnableRackIDOverride != nil {
+		enableRackIDOverride := *spec.EnableRackIDOverride
+		status.EnableRackIDOverride = &enableRackIDOverride
 	}
 
 	if spec.DisablePDB != nil {
@@ -1484,6 +1521,11 @@ func CopyStatusToSpec(status *AerospikeClusterStatusSpec) (*AerospikeClusterSpec
 	if status.EnableDynamicConfigUpdate != nil {
 		enableDynamicConfigUpdate := *status.EnableDynamicConfigUpdate
 		spec.EnableDynamicConfigUpdate = &enableDynamicConfigUpdate
+	}
+
+	if status.EnableRackIDOverride != nil {
+		enableRackIDOverride := *status.EnableRackIDOverride
+		spec.EnableRackIDOverride = &enableRackIDOverride
 	}
 
 	if status.DisablePDB != nil {
