@@ -40,13 +40,12 @@ type AerospikeClusterReconciler struct {
 
 // SetupWithManager sets up the controller with the Manager
 func (r *AerospikeClusterReconciler) SetupWithManager(mgr ctrl.Manager) error {
-	// Create predicate for pods with eviction-blocked annotation
+	// Create predicate for pods with eviction-blocked annotation or effective-rack-id annotation changes
 	podPredicate := predicate.Funcs{
 		CreateFunc: func(e event.CreateEvent) bool {
 			return false
 		},
 		UpdateFunc: func(e event.UpdateEvent) bool {
-			// Check if the eviction-blocked annotation was added in this update
 			oldPod, ok := e.ObjectOld.(*corev1.Pod)
 			if !ok {
 				return false
@@ -57,10 +56,20 @@ func (r *AerospikeClusterReconciler) SetupWithManager(mgr ctrl.Manager) error {
 				return false
 			}
 
-			_, hadAnnotation := oldPod.Annotations[asdbv1.EvictionBlockedAnnotation]
-			_, hasAnnotation := newPod.Annotations[asdbv1.EvictionBlockedAnnotation]
+			oldAnnotations := oldPod.Annotations
+			newAnnotations := newPod.Annotations
 
-			return !hadAnnotation && hasAnnotation
+			// Check if the eviction-blocked annotation was added in this update
+			_, hadEvictionBlocked := oldAnnotations[asdbv1.EvictionBlockedAnnotation]
+			_, hasEvictionBlocked := newAnnotations[asdbv1.EvictionBlockedAnnotation]
+			evictionBlockedAdded := !hadEvictionBlocked && hasEvictionBlocked
+
+			// Check if the override-rack-id annotation was added in this update
+			_, hadOverrideRackID := oldAnnotations[asdbv1.OverrideRackIDAnnotation]
+			_, hasOverrideRackID := newAnnotations[asdbv1.OverrideRackIDAnnotation]
+			overrideRackIDAdded := !hadOverrideRackID && hasOverrideRackID
+
+			return evictionBlockedAdded || overrideRackIDAdded
 		},
 		DeleteFunc: func(e event.DeleteEvent) bool {
 			return false // Don't process delete events

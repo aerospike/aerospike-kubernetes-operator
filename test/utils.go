@@ -143,3 +143,15 @@ func GetNodeList(ctx goctx.Context, k8sClient client.Client) (
 
 	return nodeList, nil
 }
+
+// GetContainerByName finds a container by name in a slice of containers.
+// Returns the container pointer if found, nil otherwise.
+func GetContainerByName(containers []corev1.Container, name string) *corev1.Container {
+	for idx := range containers {
+		if containers[idx].Name == name {
+			return &containers[idx]
+		}
+	}
+
+	return nil
+}

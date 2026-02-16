@@ -34,10 +34,13 @@ certs:
 ##  Operator configurations
 watchNamespaces: "default,aerospike"
 
+# Namespaces to ignore. Only used for eviction webhook
+ignoreNamespaces: "kube-system,kube-node-lease"
+
 # Enable the eviction webhook to safely block Aerospike pod evictions during node maintenance
 # Also enables Prometheus metrics: aerospike_ako_eviction_webhook_requests_total (labels: eviction_namespace, decision)
 safePodEviction:
-  enable: "false"
+  enable: false
   # Eviction webhook timeout in seconds
   timeoutSeconds: "20"
 
@@ -51,7 +54,7 @@ aerospikeKubernetesInitRegistry: "docker.io"
 aerospikeKubernetesInitRegistryNamespace: "aerospike"
 
 # Name and tag of aerospike-init image
-aerospikeKubernetesInitNameTag: "aerospike-kubernetes-init:2.5.0-dev1"
+aerospikeKubernetesInitNameTag: "aerospike-kubernetes-init:2.5.0-dev2"
 
 ## Resources - limits / requests
 resources:

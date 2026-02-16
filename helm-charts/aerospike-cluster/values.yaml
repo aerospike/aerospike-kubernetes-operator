@@ -117,6 +117,9 @@ disablePDB: false
 ## enableDynamicConfigUpdate enables dynamic config update flow of the operator.
 enableDynamicConfigUpdate: false
 
+## enableRackIDOverride enables dynamic allocation of rack IDs to pods after they get scheduled.
+enableRackIDOverride: false
+
 ## rosterNodeBlockList is a list of blocked nodeIDs from roster in a strong-consistency setup
 ## Replace the value with aerospike node id which needs to be blocked.
 rosterNodeBlockList: []
