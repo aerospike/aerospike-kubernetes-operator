@@ -329,6 +329,15 @@ func privilegeStringToAerospikePrivilege(privilegeStrings []string) (
 		case "udf-admin":
 			code = as.UDFAdmin
 
+		case "masking-admin":
+			code = as.MaskingAdmin
+
+		case "read-masked":
+			code = as.ReadMasked
+
+		case "write-masked":
+			code = as.WriteMasked
+
 		default:
 			return nil, fmt.Errorf("unknown privilege %s", privilegeCode)
 		}
@@ -381,6 +390,15 @@ func AerospikePrivilegeToPrivilegeString(aerospikePrivileges []as.Privilege) (
 
 		case as.UDFAdmin:
 			buffer.WriteString("udf-admin")
+
+		case as.MaskingAdmin:
+			buffer.WriteString("masking-admin")
+
+		case as.ReadMasked:
+			buffer.WriteString("read-masked")
+
+		case as.WriteMasked:
+			buffer.WriteString("write-masked")
 
 		default:
 			return nil, fmt.Errorf(
