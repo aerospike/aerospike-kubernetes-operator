@@ -93,7 +93,6 @@ storage: {}
 ## Validation policy
 validationPolicy: {}
 #   skipWorkDirValidate: true
-#   skipXdrDlogFileValidate: true
 
 ## seedsFinderServices defines service (e.g. loadbalancer) to connect to Aerospike
 seedsFinderServices: {}

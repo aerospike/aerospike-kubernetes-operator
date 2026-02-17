@@ -9187,7 +9187,7 @@ spec:
                   skipXdrDlogFileValidate:
                     description: |-
                       Deprecated: SkipXdrDlogFileValidate is no longer in use. Setting this field will produce an admission
-                      warning. This field will be removed in future versions.
+                      warning. This field will be blocked in future versions.
                     type: boolean
                 required:
                 - skipWorkDirValidate
@@ -18565,7 +18565,7 @@ spec:
                   skipXdrDlogFileValidate:
                     description: |-
                       Deprecated: SkipXdrDlogFileValidate is no longer in use. Setting this field will produce an admission
-                      warning. This field will be removed in future versions.
+                      warning. This field will be blocked in future versions.
                     type: boolean
                 required:
                 - skipWorkDirValidate
