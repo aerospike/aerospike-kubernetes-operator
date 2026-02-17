@@ -46,6 +46,8 @@ const (
 	quickRestart
 )
 
+const minInitVersionForOverrideRackID = "2.5.0"
+
 // mergeRestartType generates the updated restart type based on precedence.
 // podRestart > quickRestart > noRestartUpdateConf > noRestart
 func mergeRestartType(current, incoming RestartType) RestartType {
@@ -120,6 +122,10 @@ func (r *SingleClusterReconciler) getRollingRestartTypeMap(rackState *RackState,
 			}
 
 			if len(specToStatusDiffs) != 0 {
+				enableRackIDOverride := asdbv1.GetBool(r.aeroCluster.Spec.EnableRackIDOverride)
+
+				const rackIDSuffix = ".rack-id"
+
 				for key := range specToStatusDiffs {
 					// To update in-memory namespace data-size, we need to restart the pod.
 					// Just a warm restart is not enough.
@@ -128,6 +134,11 @@ func (r *SingleClusterReconciler) getRollingRestartTypeMap(rackState *RackState,
 						restartTypeMap[pods[idx].Name] = mergeRestartType(restartTypeMap[pods[idx].Name], podRestart)
 
 						break
+					}
+
+					// Skip rack-id change for dynamic rack-id enabled clusters.
+					if enableRackIDOverride && strings.HasSuffix(key, rackIDSuffix) {
+						delete(specToStatusDiffs, key)
 					}
 				}
 
@@ -161,11 +172,6 @@ func (r *SingleClusterReconciler) getRollingRestartTypeMap(rackState *RackState,
 		}
 
 		restartTypeMap[pods[idx].Name] = restartType
-
-		// Fallback to rolling restart in case of partial failure to recover with the desired Aerospike config
-		if podStatus.DynamicConfigUpdateStatus == asdbv1.PartiallyFailed {
-			restartTypeMap[pods[idx].Name] = mergeRestartType(restartTypeMap[pods[idx].Name], quickRestart)
-		}
 	}
 
 	return restartTypeMap, dynamicConfDiffPerPod, nil
@@ -255,6 +261,55 @@ func (r *SingleClusterReconciler) getRollingRestartTypePod(
 
 		r.Log.Info("Pod warm/cold restart requested. Need rolling restart",
 			"pod name", pod.Name, "operation", opType, "restartType", restartType)
+	}
+
+	// Check if EnableRackIDOverride in spec differs from RackIDOverridden in pod status
+	// The restart type depends on the init container version:
+	// - If the init container version is older than minInitVersionForOverrideRackID, a full pod
+	//   restart (podRestart) is required because older init containers don't support dynamic rack ID
+	//   changes.
+	// - If the init container version is at or above minInitVersionForOverrideRackID, a quick restart
+	//   (quickRestart) is sufficient.
+	specEnableRackIDOverride := asdbv1.GetBool(r.aeroCluster.Spec.EnableRackIDOverride)
+
+	podStatusRackIDOverridden := podStatus.RackIDOverridden
+	if specEnableRackIDOverride != podStatusRackIDOverridden {
+		version, err := asdbv1.GetImageVersion(podStatus.InitImage)
+		if err != nil {
+			return restartType, err
+		}
+
+		val, err := lib.CompareVersions(version, minInitVersionForOverrideRackID)
+		if err != nil {
+			return restartType, err
+		}
+
+		if val < 0 {
+			r.Log.Info(
+				"Init container version is older than minimum required for enableRackIDOverride support, full pod restart needed",
+				"initImageVersion", version,
+				"minRequiredVersion", minInitVersionForOverrideRackID)
+
+			restartType = mergeRestartType(restartType, podRestart)
+		} else {
+			restartType = mergeRestartType(restartType, quickRestart)
+		}
+
+		r.Log.Info(
+			"EnableRackIDOverride changed. Need rolling restart",
+			"enableRackIDOverride", specEnableRackIDOverride,
+			"rackIDOverridden", podStatusRackIDOverridden,
+		)
+	}
+
+	// Fallback to rolling restart in case of partial failure to recover with the desired Aerospike config
+	if podStatus.DynamicConfigUpdateStatus == asdbv1.PartiallyFailed {
+		restartType = mergeRestartType(restartType, quickRestart)
+
+		r.Log.Info(
+			"DynamicConfigUpdateStatus is PartiallyFailed. Need quick restart",
+			"pod", pod.Name,
+		)
 	}
 
 	return restartType, nil
@@ -1553,7 +1608,7 @@ func isAllDynamicConfig(log logger, specToStatusDiffs asconfig.DynamicConfigMap,
 	}
 
 	if !isDynamic {
-		log.Info("Config contains static field changes; dynamic update not possible.")
+		log.Info("Config contains static field changes; dynamic update not possible.", "specToStatusDiffs", specToStatusDiffs)
 		return false
 	}
 

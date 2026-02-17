@@ -44,31 +44,32 @@ helm install aerospike ./aerospike-cluster/ \
 
 ## Configurations
 
-| Name | Description                                                                                                                     | Default                                                   |
-| -- |---------------------------------------------------------------------------------------------------------------------------------|-----------------------------------------------------------|
-| `replicas` | Aerospike cluster size                                                                                                          | `3`                                                       |
-| `image.repository` | Aerospike server container image repository                                                                             | `aerospike/aerospike-server-enterprise`                   |
-| `image.tag` | Aerospike server container image tag                                                                                           | `8.1.0.0`                                                 |
-| `imagePullSecrets` | Secrets containing credentials to pull Aerospike container image from a private registry                                | `{}` (nil)                                                |
-| `customLabels` | Custom labels to add on the aerospikecluster resource                                                                           | `{}` (nil)                                                |
-| `aerospikeAccessControl` | Aerospike access control configuration. Define users and roles to be created on the cluster.                                    | `{}` (nil)                                                |
-| `aerospikeConfig` | Aerospike configuration                                                                                                         | `{}` (nil)                                                |
-| `aerospikeNetworkPolicy` | Network policy (client access configuration)                                                                                    | `{}` (nil)                                                |
-| `commonName` | Base string for naming pods, services, stateful sets, etc.                                                                      | Release name truncated to 63 characters (without hyphens) |
-| `podSpec` | Aerospike pod spec configuration                                                                                                | `{}` (nil)                                                |
-| `rackConfig` | Aerospike rack configuration                                                                                                    | `{}` (nil)                                                |
-| `storage` | Aerospike pod storage configuration                                                                                             | `{}` (nil)                                                |
-| `validationPolicy` | Validation policy                                                                                                               | `{}` (nil)                                                |
-| `operatorClientCert` | Client certificates to connect to Aerospike                                                                                     | `{}` (nil)                                                |
-| `seedsFinderServices` | Service (e.g. loadbalancer) for Aerospike cluster discovery                                                                     | `{}` (nil)                                                |
-| `maxUnavailable` | maxUnavailable defines percentage/number of pods that can be allowed to go down or unavailable before application disruption    | `1`                                                       |
-| `disablePDB` | Disable the PodDisruptionBudget creation for the Aerospike cluster                                                              | `false`                                                   |
-| `enableDynamicConfigUpdate` | enableDynamicConfigUpdate enables dynamic config update flow of the operator                                                    | `false`                                                   |
-| `rosterNodeBlockList` | rosterNodeBlockList is a list of blocked nodeIDs from roster in a strong-consistency setup                                      | `[]`                                                      |
-| `k8sNodeBlockList` | k8sNodeBlockList is a list of Kubernetes nodes which are not used for Aerospike pods                                            | `[]`                                                      |
-| `paused` | Pause reconciliation of the cluster                                                                                             | `false`                                                   |
-| `devMode` | Deploy Aerospike cluster in dev mode                                                                                            | `false`                                                   |
-| `operations` | Operations is a list of on-demand operations to be performed on the Aerospike cluster.                                            | `[]`                                                      |
+| Name | Description                                                                                                                  | Default                                                   |
+| -- |------------------------------------------------------------------------------------------------------------------------------|-----------------------------------------------------------|
+| `replicas` | Aerospike cluster size                                                                                                       | `3`                                                       |
+| `image.repository` | Aerospike server container image repository                                                                                  | `aerospike/aerospike-server-enterprise`                   |
+| `image.tag` | Aerospike server container image tag                                                                                         | `8.1.1.0`                                                 |
+| `imagePullSecrets` | Secrets containing credentials to pull Aerospike container image from a private registry                                     | `{}` (nil)                                                |
+| `customLabels` | Custom labels to add on the aerospikecluster resource                                                                        | `{}` (nil)                                                |
+| `aerospikeAccessControl` | Aerospike access control configuration. Define users and roles to be created on the cluster.                                 | `{}` (nil)                                                |
+| `aerospikeConfig` | Aerospike configuration                                                                                                      | `{}` (nil)                                                |
+| `aerospikeNetworkPolicy` | Network policy (client access configuration)                                                                                 | `{}` (nil)                                                |
+| `commonName` | Base string for naming pods, services, stateful sets, etc.                                                                   | Release name truncated to 63 characters (without hyphens) |
+| `podSpec` | Aerospike pod spec configuration                                                                                             | `{}` (nil)                                                |
+| `rackConfig` | Aerospike rack configuration                                                                                                 | `{}` (nil)                                                |
+| `storage` | Aerospike pod storage configuration                                                                                          | `{}` (nil)                                                |
+| `validationPolicy` | Validation policy                                                                                                            | `{}` (nil)                                                |
+| `operatorClientCert` | Client certificates to connect to Aerospike                                                                                  | `{}` (nil)                                                |
+| `seedsFinderServices` | Service (e.g. loadbalancer) for Aerospike cluster discovery                                                                  | `{}` (nil)                                                |
+| `maxUnavailable` | maxUnavailable defines percentage/number of pods that can be allowed to go down or unavailable before application disruption | `1`                                                       |
+| `disablePDB` | Disable the PodDisruptionBudget creation for the Aerospike cluster                                                           | `false`                                                   |
+| `enableDynamicConfigUpdate` | enableDynamicConfigUpdate enables dynamic config update flow of the operator                                                 | `false`                                                   |
+| `enableRackIDOverride` | enableRackIDOverride enables allocation of rack IDs to Aerospike pods after they are scheduled on Kubernetes nodes           | `false`                                                   |
+| `rosterNodeBlockList` | rosterNodeBlockList is a list of blocked nodeIDs from roster in a strong-consistency setup                                   | `[]`                                                      |
+| `k8sNodeBlockList` | k8sNodeBlockList is a list of Kubernetes nodes which are not used for Aerospike pods                                         | `[]`                                                      |
+| `paused` | Pause reconciliation of the cluster                                                                                          | `false`                                                   |
+| `devMode` | Deploy Aerospike cluster in dev mode                                                                                         | `false`                                                   |
+| `operations` | Operations is a list of on-demand operations to be performed on the Aerospike cluster.                                       | `[]`                                                      |
 
 ### Default values in "dev" mode (`devMode=true`):
 

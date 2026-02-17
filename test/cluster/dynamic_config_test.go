@@ -1075,7 +1075,7 @@ func validateXDRNSFieldsDynamically(ctx goctx.Context, flatServer, flatSpec *asc
 func validateXDRDCFieldsDynamically(ctx goctx.Context, flatServer, flatSpec *asconfig.Conf,
 	aeroCluster *asdbv1.AerospikeCluster) error {
 	newSpec := *flatSpec
-	ignoredConf := mapset.NewSet("connector")
+	ignoredConf := mapset.NewSet("connector", "recovery-threads")
 
 	for confKey, val := range *flatServer {
 		tokens := strings.Split(confKey, ".")

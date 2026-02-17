@@ -142,12 +142,11 @@ var _ = Describe("SCMode", func() {
 			hostConns, err := newAllHostConn(logger, aeroCluster, k8sClient)
 			Expect(err).ToNot(HaveOccurred())
 
-			rosterNodesMap, err := getRoster(hostConns[0], getClientPolicy(aeroCluster, k8sClient), aeroCluster.Namespace)
+			isEqual, currentRoster, err := compareRoster(hostConns[0], expectedRoster, aeroCluster)
 			Expect(err).ToNot(HaveOccurred())
-
-			// Roster is in uppercase, whereas nodeID is in lower case in server. Keep it in mind when comparing list
-			rosterStr := rosterNodesMap["roster"]
-			Expect(rosterStr).To(Equal(expectedRoster))
+			Expect(isEqual).To(BeTrue(), fmt.Sprintf(
+				"expected %v to equal %v", currentRoster, expectedRoster,
+			))
 
 			By("Unblock rack 1 from roster")
 			expectedRoster = "2A1@2,2A0@2,1A1@1,1A0@1"
@@ -155,11 +154,11 @@ var _ = Describe("SCMode", func() {
 
 			Expect(updateCluster(k8sClient, ctx, aeroCluster)).ToNot(HaveOccurred())
 
-			rosterNodesMap, err = getRoster(hostConns[0], getClientPolicy(aeroCluster, k8sClient), aeroCluster.Namespace)
+			isEqual, currentRoster, err = compareRoster(hostConns[0], expectedRoster, aeroCluster)
 			Expect(err).ToNot(HaveOccurred())
-
-			rosterStr = rosterNodesMap["roster"]
-			Expect(rosterStr).To(Equal(expectedRoster))
+			Expect(isEqual).To(BeTrue(), fmt.Sprintf(
+				"expected %v to equal %v", currentRoster, expectedRoster,
+			))
 
 			By("Block rack 1 from roster with failed pods")
 			aeroCluster, err = getCluster(k8sClient, ctx, clusterNamespacedName)
@@ -179,15 +178,13 @@ var _ = Describe("SCMode", func() {
 			Expect(err).Should(HaveOccurred())
 
 			Eventually(func() error {
-				rosterNodesMap, err = getRoster(hostConns[2], getClientPolicy(aeroCluster, k8sClient), aeroCluster.Namespace)
+				isEqual, currentRoster, err = compareRoster(hostConns[2], expectedRoster, aeroCluster)
 				if err != nil {
 					return err
 				}
 
-				// Roster is in uppercase, whereas nodeID is in lower case in server. Keep it in mind when comparing list
-				rosterStr = rosterNodesMap["roster"]
-				if rosterStr != expectedRoster {
-					return fmt.Errorf("roster not matching. expected %s, got %s", expectedRoster, rosterStr)
+				if !isEqual {
+					return fmt.Errorf("roster not matching. expected %s, got %s", expectedRoster, currentRoster)
 				}
 
 				return nil
@@ -671,4 +668,17 @@ func getSCAerospikeConfig() *asdbv1.AerospikeConfigSpec {
 			},
 		},
 	}
+}
+
+func compareRoster(hostConn *deployment.HostConn, expectedRoster string,
+	aeroCluster *asdbv1.AerospikeCluster) (isEqual bool, currentRoster string, err error) {
+	rosterNodesMap, err := getRoster(hostConn, getClientPolicy(aeroCluster, k8sClient), aeroCluster.Namespace)
+	if err != nil {
+		return false, "", err
+	}
+
+	// Roster is in uppercase, whereas nodeID is in lower case in server. Keep it in mind when comparing list
+	currentRoster = rosterNodesMap["roster"]
+
+	return currentRoster == expectedRoster, currentRoster, nil
 }

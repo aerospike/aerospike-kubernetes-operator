@@ -35,15 +35,15 @@ const (
 	baseEnterpriseImage = "aerospike/aerospike-server-enterprise"
 	baseFederalImage    = "aerospike/aerospike-server-federal"
 	wrongImage          = "wrong-image"
-	nextServerVersion   = "8.1.0.0_1"
-	latestServerVersion = "8.1.0.0"
+	nextServerVersion   = "8.1.1.0_1"
+	latestServerVersion = "8.1.1.0"
 	invalidVersion      = "3.0.0.4"
 	pre810Version       = "8.0.0.0"
 
 	post6Version = "7.0.0.0"
 	version6     = "6.0.0.5"
 
-	latestSchemaVersion = "8.1.0"
+	latestSchemaVersion = "8.1.1"
 )
 
 var (
@@ -1032,6 +1032,31 @@ func createDummyRackAwareWithStorageAerospikeCluster(
 	racks[0].InputStorage = &inputStorage
 	rackConf := asdbv1.RackConfig{Racks: racks}
 	aeroCluster.Spec.RackConfig = rackConf
+
+	return aeroCluster
+}
+
+func createDummyAerospikeClusterWithDynRackID(
+	clusterNamespacedName types.NamespacedName, size int32,
+) *asdbv1.AerospikeCluster {
+	// Will be used in Update also
+	aeroCluster := createDummyAerospikeCluster(clusterNamespacedName, size)
+	// This needs to be changed based on setup. update zone, region, nodeName according to setup
+	racks := []asdbv1.Rack{{ID: 1}}
+	rackConf := asdbv1.RackConfig{Racks: racks,
+		Namespaces: []string{
+			"test",
+		}}
+	aeroCluster.Spec.RackConfig = rackConf
+
+	aeroCluster.Spec.EnableRackIDOverride = ptr.To(true)
+
+	aeroCluster.Spec.PodSpec.InitContainers = []corev1.Container{
+		randomAnnotatorInitContainer(),
+		{
+			Name: asdbv1.AerospikeInitContainerName,
+		},
+	}
 
 	return aeroCluster
 }

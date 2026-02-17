@@ -88,7 +88,7 @@ const (
 	AerospikeInitContainerNameTagEnvVar            = "AEROSPIKE_KUBERNETES_INIT_NAME_TAG"
 	AerospikeInitContainerDefaultRegistry          = "docker.io"
 	AerospikeInitContainerDefaultRegistryNamespace = "aerospike"
-	AerospikeInitContainerDefaultNameAndTag        = "aerospike-kubernetes-init:2.5.0-dev1"
+	AerospikeInitContainerDefaultNameAndTag        = "aerospike-kubernetes-init:2.5.0-dev2"
 	AerospikeAppLabel                              = "app"
 	AerospikeAppLabelValue                         = "aerospike-cluster"
 	AerospikeCustomResourceLabel                   = "aerospike.com/cr"
@@ -96,6 +96,7 @@ const (
 	AerospikeRackRevisionLabel                     = "aerospike.com/rack-revision"
 	AerospikeAPIVersionLabel                       = "aerospike.com/api-version"
 	EvictionBlockedAnnotation                      = "aerospike.com/eviction-blocked"
+	OverrideRackIDAnnotation                       = "aerospike.com/override-rack-id"
 	AerospikeAPIVersion                            = "v1"
 )
 
