@@ -112,7 +112,6 @@ storage:
 
 validationPolicy:
   skipWorkDirValidate: true
-  skipXdrDlogFileValidate: true
 ```
 
 ### Configurations Explained

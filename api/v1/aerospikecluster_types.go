@@ -358,7 +358,6 @@ type AerospikePodSpec struct { //nolint:govet // for readability
 	// created by the operator.
 	// +optional
 	AerospikeContainerSpec AerospikeContainerSpec `json:"aerospikeContainer,omitempty"`
-
 	// AerospikeInitContainerSpec configures the aerospike-init container
 	// created by the operator.
 	// +optional
@@ -591,7 +590,7 @@ type ValidationPolicySpec struct {
 	SkipWorkDirValidate bool `json:"skipWorkDirValidate"`
 
 	// Deprecated: SkipXdrDlogFileValidate is no longer in use. Setting this field will produce an admission
-	// warning. This field will be removed in future versions.
+	// warning. This field will be blocked in future versions.
 	SkipXdrDlogFileValidate bool `json:"skipXdrDlogFileValidate"`
 }
 
@@ -1310,7 +1309,7 @@ type AerospikePodStatus struct { //nolint:govet // for readability
 
 // AerospikeCluster is the schema for the AerospikeCluster API
 // +operator-sdk:csv:customresourcedefinitions:displayName="Aerospike Cluster",resources={{Service, v1},{Pod,v1},{StatefulSet,v1}}
-// +kubebuilder:metadata:annotations="aerospike-kubernetes-operator/version=4.2.0"
+// +kubebuilder:metadata:annotations="aerospike-kubernetes-operator/version=4.3.0"
 //
 //nolint:lll // for readability
 type AerospikeCluster struct { //nolint:govet // for readability

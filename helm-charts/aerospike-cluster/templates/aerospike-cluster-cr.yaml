@@ -107,7 +107,6 @@ spec:
   {{- if and .Values.devMode (not .Values.validationPolicy) }}
   validationPolicy:
     skipWorkDirValidate: true
-    skipXdrDlogFileValidate: true
   {{- end }}
 
   # operatorClientCert defines certificates to connect to Aerospike

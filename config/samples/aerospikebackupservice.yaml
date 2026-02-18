@@ -28,7 +28,7 @@ spec:
     - secretName: aws-secret
       volumeMount:
         name: aws-secret
-        mountPath: /root/.aws/credentials
+        mountPath: /home/absuser/.aws/credentials
         subPath: credentials
 
   service:
