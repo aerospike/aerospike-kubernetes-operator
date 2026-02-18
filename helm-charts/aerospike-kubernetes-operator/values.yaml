@@ -4,7 +4,7 @@ replicas: 2
 ## Operator image
 operatorImage:
   repository: aerospike/aerospike-kubernetes-operator
-  tag: 4.2.0
+  tag: 4.3.0
   pullPolicy: IfNotPresent
 
 ## In case the above image is pulled from a registry that requires
@@ -34,10 +34,13 @@ certs:
 ##  Operator configurations
 watchNamespaces: "default,aerospike"
 
+# Namespaces to ignore. Only used for eviction webhook
+ignoreNamespaces: "kube-system,kube-node-lease"
+
 # Enable the eviction webhook to safely block Aerospike pod evictions during node maintenance
 # Also enables Prometheus metrics: aerospike_ako_eviction_webhook_requests_total (labels: eviction_namespace, decision)
 safePodEviction:
-  enable: "false"
+  enable: false
   # Eviction webhook timeout in seconds
   timeoutSeconds: "20"
 
@@ -51,7 +54,7 @@ aerospikeKubernetesInitRegistry: "docker.io"
 aerospikeKubernetesInitRegistryNamespace: "aerospike"
 
 # Name and tag of aerospike-init image
-aerospikeKubernetesInitNameTag: "aerospike-kubernetes-init:2.5.0-dev1"
+aerospikeKubernetesInitNameTag: "aerospike-kubernetes-init:2.5.0"
 
 ## Resources - limits / requests
 resources:

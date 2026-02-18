@@ -8,7 +8,7 @@ replicas: 3
 ## Aerospike server docker image
 image:
   repository: aerospike/aerospike-server-enterprise
-  tag: 8.1.0.0
+  tag: 8.1.1.0
 
 ## In case the above image is pulled from a registry that requires
 ## authentication, a secret containing credentials can be added
@@ -93,7 +93,6 @@ storage: {}
 ## Validation policy
 validationPolicy: {}
 #   skipWorkDirValidate: true
-#   skipXdrDlogFileValidate: true
 
 ## seedsFinderServices defines service (e.g. loadbalancer) to connect to Aerospike
 seedsFinderServices: {}
@@ -116,6 +115,9 @@ disablePDB: false
 
 ## enableDynamicConfigUpdate enables dynamic config update flow of the operator.
 enableDynamicConfigUpdate: false
+
+## enableRackIDOverride enables dynamic allocation of rack IDs to pods after they get scheduled.
+enableRackIDOverride: false
 
 ## rosterNodeBlockList is a list of blocked nodeIDs from roster in a strong-consistency setup
 ## Replace the value with aerospike node id which needs to be blocked.

@@ -109,7 +109,7 @@ func newBackupServiceWithEmptyConfig(
 					SecretName: test.AWSSecretName,
 					VolumeMount: corev1.VolumeMount{
 						Name:      test.AWSSecretName,
-						MountPath: "/root/.aws/credentials",
+						MountPath: "/home/absuser/.aws/credentials",
 						SubPath:   "credentials",
 					},
 				},

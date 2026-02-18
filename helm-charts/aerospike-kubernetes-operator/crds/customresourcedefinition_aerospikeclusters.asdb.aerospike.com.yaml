@@ -3,7 +3,7 @@ apiVersion: apiextensions.k8s.io/v1
 kind: CustomResourceDefinition
 metadata:
   annotations:
-    aerospike-kubernetes-operator/version: 4.2.0
+    aerospike-kubernetes-operator/version: 4.3.0
     controller-gen.kubebuilder.io/version: v0.18.0
   name: aerospikeclusters.asdb.aerospike.com
 spec:
@@ -306,6 +306,17 @@ spec:
                   If enabled, operator will try to update the Aerospike config dynamically.
                   In case of inconsistent state during dynamic config update, operator falls back to rolling restart.
                 type: boolean
+              enableRackIDOverride:
+                description: |-
+                  EnableRackIDOverride enables dynamic allocation of rack IDs to pods after they get scheduled.
+                  When enabled, the operator checks for the existence of the
+                  aerospike.com/override-rack-id annotation in the pod. When a pod has this annotation is
+                  rescheduled and the annotation is added or updated again, the reconciler updates
+                  the roster accordingly. Manual annotation changes on a running pod without
+                  a restart have no effect and do not trigger any reconciliation.
+                  AKO does not manage pod distribution across racks, which may result in skewed rack. Use with caution.
+                  This feature requires a single rack configuration (multiple racks are not allowed when enabled).
+                type: boolean
               headlessService:
                 description: |-
                   HeadlessService defines additional configuration parameters for the headless service created to discover
@@ -403,6 +414,10 @@ spec:
                           secretName:
                             type: string
                           secretNamespace:
+                            description: |-
+                              Deprecated: Cross-namespace secret reference is deprecated. Omit this field; secret must be in the same
+                              namespace as the AerospikeCluster. Specifying secretNamespace will produce an admission warning.
+                              This will be blocked in future versions.
                             type: string
                         required:
                         - secretName
@@ -414,6 +429,10 @@ spec:
                       secretName:
                         type: string
                       secretNamespace:
+                        description: |-
+                          Deprecated: Cross-namespace secret reference is deprecated. Omit this field; secret must be in the same
+                          namespace as the AerospikeCluster. Specifying secretNamespace will produce an admission warning.
+                          This will be blocked in future versions.
                         type: string
                     required:
                     - secretName
@@ -1989,7 +2008,12 @@ spec:
                       x-kubernetes-map-type: atomic
                     type: array
                   initContainers:
-                    description: InitContainers to add to the pods.
+                    description: |-
+                      InitContainers to add to the pods.
+                      To control the sequence of custom init containers relative to "aerospike-init" init container, include a placeholder
+                      container with name "aerospike-init" at the desired position. Only the name field is required for the placeholder;
+                      all other fields will be ignored and replaced with the actual "aerospike-init" init container configuration.
+                      If no placeholder is found, all custom init containers will be placed after "aerospike-init" (backward compatible).
                     items:
                       description: A single application container that you want to
                         run within a pod.
@@ -9162,8 +9186,8 @@ spec:
                     type: boolean
                   skipXdrDlogFileValidate:
                     description: |-
-                      ValidateXdrDigestLogFile validates that xdr digest log file is mounted on a persistent file storage.
-                      Defaults to false.
+                      Deprecated: SkipXdrDlogFileValidate is no longer in use. Setting this field will produce an admission
+                      warning. This field will be blocked in future versions.
                     type: boolean
                 required:
                 - skipWorkDirValidate
@@ -9427,6 +9451,15 @@ spec:
                   If enabled, operator will try to update the Aerospike config dynamically.
                   In case of inconsistent state during dynamic config update, operator falls back to rolling restart.
                 type: boolean
+              enableRackIDOverride:
+                description: |-
+                  EnableRackIDOverride enables dynamic allocation of rack IDs to pods after they get scheduled.
+                  When enabled, the operator will watch for changes to the aerospike.com/override-rack-id annotation on pods
+                  and reconcile when this annotation value changes. This allows rack IDs to be dynamically assigned to pods
+                  based on their scheduling location or other external factors.
+                  AKO does not manage node distribution across racks, which may result in uneven rack placement. Use with caution.
+                  This feature requires a single rack configuration (multiple racks are not allowed when enabled).
+                type: boolean
               headlessService:
                 description: |-
                   HeadlessService defines additional configuration parameters for the headless service created to discover
@@ -9540,6 +9573,10 @@ spec:
                           secretName:
                             type: string
                           secretNamespace:
+                            description: |-
+                              Deprecated: Cross-namespace secret reference is deprecated. Omit this field; secret must be in the same
+                              namespace as the AerospikeCluster. Specifying secretNamespace will produce an admission warning.
+                              This will be blocked in future versions.
                             type: string
                         required:
                         - secretName
@@ -9551,6 +9588,10 @@ spec:
                       secretName:
                         type: string
                       secretNamespace:
+                        description: |-
+                          Deprecated: Cross-namespace secret reference is deprecated. Omit this field; secret must be in the same
+                          namespace as the AerospikeCluster. Specifying secretNamespace will produce an admission warning.
+                          This will be blocked in future versions.
                         type: string
                     required:
                     - secretName
@@ -11130,7 +11171,12 @@ spec:
                       x-kubernetes-map-type: atomic
                     type: array
                   initContainers:
-                    description: InitContainers to add to the pods.
+                    description: |-
+                      InitContainers to add to the pods.
+                      To control the sequence of custom init containers relative to "aerospike-init" init container, include a placeholder
+                      container with name "aerospike-init" at the desired position. Only the name field is required for the placeholder;
+                      all other fields will be ignored and replaced with the actual "aerospike-init" init container configuration.
+                      If no placeholder is found, all custom init containers will be placed after "aerospike-init" (backward compatible).
                     items:
                       description: A single application container that you want to
                         run within a pod.
@@ -14432,6 +14478,12 @@ spec:
                       description: PodSpecHash is ripemd160 hash of PodSpec used by
                         this pod
                       type: string
+                    rackIDOverridden:
+                      description: |-
+                        RackIDOverridden indicates whether this pod is picking rackID dynamically based on
+                        the override-rack-id annotation. When true, the pod's rackID is determined
+                        from the pod annotation rather than the static rack configuration.
+                      type: boolean
                     serviceAdminPort:
                       description: |-
                         ServiceAdminPort is the admin port Aerospike clients outside K8s can connect to.
@@ -18512,8 +18564,8 @@ spec:
                     type: boolean
                   skipXdrDlogFileValidate:
                     description: |-
-                      ValidateXdrDigestLogFile validates that xdr digest log file is mounted on a persistent file storage.
-                      Defaults to false.
+                      Deprecated: SkipXdrDlogFileValidate is no longer in use. Setting this field will produce an admission
+                      warning. This field will be blocked in future versions.
                     type: boolean
                 required:
                 - skipWorkDirValidate

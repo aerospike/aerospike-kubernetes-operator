@@ -2613,8 +2613,7 @@ func getAerospikeClusterSpecWithAccessControl(
 				"%s:%s", baseEnterpriseImage, aerospikeConfSpec.getVersion(),
 			),
 			ValidationPolicy: &asdbv1.ValidationPolicySpec{
-				SkipWorkDirValidate:     true,
-				SkipXdrDlogFileValidate: true,
+				SkipWorkDirValidate: true,
 			},
 			AerospikeAccessControl: accessControl,
 			Storage: asdbv1.AerospikeStorageSpec{
