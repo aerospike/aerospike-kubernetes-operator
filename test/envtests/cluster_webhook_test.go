@@ -47,20 +47,14 @@ var _ = Describe("AerospikeCluster validation (envtests)", func() {
 
 		Expect(err).To(HaveOccurred())
 
-		// 1. Cast the error to a StatusError pointer
-		statusErr, ok := err.(*errors.StatusError)
-		Expect(ok).To(BeTrue(), "Error should be a Kubernetes StatusError")
-
-		// 2. Validate the specific fields from response
-		Expect(statusErr.ErrStatus.Status).To(Equal(metav1.StatusFailure))
-		Expect(statusErr.ErrStatus.Code).To(Equal(int32(403)))
-		Expect(statusErr.ErrStatus.Reason).To(Equal(metav1.StatusReasonForbidden))
-
-		// 3. Validate the specific message from response
-		Expect(statusErr.ErrStatus.Message).To(ContainSubstring("admission webhook "))
-		Expect(statusErr.ErrStatus.Message).To(ContainSubstring("\"vaerospikecluster.kb.io\""))
-		Expect(statusErr.ErrStatus.Message).To(ContainSubstring("denied the request: invalid cluster size 0"))
-
+		// Webhook response validation
+		NewStatusErrorMatcher(int32(403), metav1.StatusReasonForbidden).
+			WithMessageSubstrings(
+				"admission webhook ",
+				"\"vaerospikecluster.kb.io\"",
+				"denied the request: invalid cluster size 0",
+			).
+			Validate(err)
 	})
 
 	It("InvalidSize: should fail for negative size", func() {
@@ -73,20 +67,131 @@ var _ = Describe("AerospikeCluster validation (envtests)", func() {
 
 		Expect(err).To(HaveOccurred())
 
-		// Cast to the specific Kubernetes error type
-		statusErr, ok := err.(*errors.StatusError)
-		Expect(ok).To(BeTrue(), "Expected a Kubernetes StatusError")
+		// Webhook response validation
+		NewStatusErrorMatcher(int32(422), metav1.StatusReasonInvalid).
+			WithCauses(metav1.StatusCause{
+				Type:    metav1.CauseTypeFieldValueInvalid,
+				Message: "Invalid value: -1: should be a non-negative integer",
+				Field:   ".spec.size",
+			}).
+			Validate(err)
+	})
+	// Bug: For Empty image the error message is "CommunityEdition Cluster not supported".
+	// This error messsage is not appropriate for an empty image.
+	It("InvalidImage: should fail for empty image", func() {
+		aeroCluster := testCluster.CreateDummyAerospikeCluster(clusterNamespacedName, 1)
+		aeroCluster.Spec.Image = "" // Empty image
 
-		// Verify the response status
-		Expect(statusErr.ErrStatus.Status).To(Equal(metav1.StatusFailure))
-		Expect(statusErr.ErrStatus.Code).To(Equal(int32(422)))
-		Expect(statusErr.ErrStatus.Reason).To(Equal(metav1.StatusReasonInvalid))
+		err := testCluster.DeployCluster(k8sClient, ctx, aeroCluster)
+		Expect(err).To(HaveOccurred())
 
-		// Verify the specific validation detail (The 'Causes' slice)
-		Expect(statusErr.ErrStatus.Details.Causes).To(ContainElement(metav1.StatusCause{
-			Type:    metav1.CauseTypeFieldValueInvalid,
-			Message: "Invalid value: -1: should be a non-negative integer",
-			Field:   ".spec.size",
-		}))
+		// Webhook response validation
+		NewStatusErrorMatcher(int32(403), metav1.StatusReasonForbidden).
+			WithMessageSubstrings("admission webhook",
+				"\"vaerospikecluster.kb.io\"",
+				"denied the request: CommunityEdition Cluster not supported").
+			Validate(err)
+	})
+
+	It("InvalidImage: should fail for invalid image format", func() {
+		aeroCluster := testCluster.CreateDummyAerospikeCluster(clusterNamespacedName, 1)
+		aeroCluster.Spec.Image = "aerospike/nosuchimage:latest@invalid-digest"
+
+		err := testCluster.DeployCluster(k8sClient, ctx, aeroCluster)
+		Expect(err).To(HaveOccurred())
+
+		// Webhook response validation
+		NewStatusErrorMatcher(int32(403), metav1.StatusReasonForbidden).
+			WithMessageSubstrings("admission webhook",
+				"\"vaerospikecluster.kb.io\"",
+				"denied the request: CommunityEdition Cluster not supported").
+			Validate(err)
+	})
+
+	// Bug: Failure message string is redundant.
+	It("InvalidStorage: should fail when storage volumes are missing", func() {
+		aeroCluster := testCluster.CreateDummyAerospikeCluster(clusterNamespacedName, 1)
+		aeroCluster.Spec.Storage.Volumes = nil // Remove volumes
+
+		err := testCluster.DeployCluster(k8sClient, ctx, aeroCluster)
+		Expect(err).To(HaveOccurred())
+
+		// Webhook response validation
+		NewStatusErrorMatcher(int32(403), metav1.StatusReasonForbidden).
+			WithMessageSubstrings("admission webhook",
+				"\"vaerospikecluster.kb.io\"",
+				"denied the request: aerospikeConfig not valid: failed to validate config for the version 8.1.1.0:",
+				"failed to get aerospike config schema for version 8.1.1.0: unsupported version").
+			Validate(err)
+	})
+	// Bug: aerospikeConfig map should not be listed in Failure message.
+	// It is making failure message unnecessarily long.
+	//  Message: "admission webhook \"maerospikecluster.kb.io\" denied the request: aerospikeConfig.namespaces not present.
+	// aerospikeConfig map[network:map[fabric:map[port:3001] heartbeat:map[port:3002] service:map[port:3000]]
+	// security:map[] service:map[auto-pin:none
+	// feature-key-file:/etc/aerospike/secret/features.conf proto-fd-max:15000]]",
+	It("InvalidNamespace: should fail when namespace configuration is missing", func() {
+		aeroCluster := testCluster.CreateDummyAerospikeCluster(clusterNamespacedName, 1)
+		// Remove namespaces from AerospikeConfigSpec
+		delete(aeroCluster.Spec.AerospikeConfig.Value, "namespaces")
+
+		err := testCluster.DeployCluster(k8sClient, ctx, aeroCluster)
+		Expect(err).To(HaveOccurred())
+
+		// Webhook response validation
+		NewStatusErrorMatcher(int32(403), metav1.StatusReasonForbidden).
+			WithMessageSubstrings("admission webhook",
+				"\"maerospikecluster.kb.io\"",
+				"denied the request: aerospikeConfig.namespaces not present.").
+			Validate(err)
+	})
+
+	It("InvalidRackConfig: should fail for invalid rack configuration", func() {
+		aeroCluster := testCluster.CreateDummyAerospikeCluster(clusterNamespacedName, 2)
+		// Add a rack with an ID that is too large or invalid structure
+		aeroCluster.Spec.RackConfig = asdbv1.RackConfig{
+			Namespaces: []string{"test"},
+			Racks: []asdbv1.Rack{
+				{ID: 0}, // ID 0 is often reserved or invalid depending on version
+			},
+		}
+
+		err := testCluster.DeployCluster(k8sClient, ctx, aeroCluster)
+		Expect(err).To(HaveOccurred())
+
+		// Webhook response validation
+		NewStatusErrorMatcher(int32(403), metav1.StatusReasonForbidden).
+			WithMessageSubstrings("admission webhook",
+				"\"vaerospikecluster.kb.io\"",
+				"denied the request: aerospikeConfig not valid:",
+				"failed to validate config for the version 8.1.1.0:",
+				"failed to get aerospike config schema for version 8.1.1.0:",
+				"unsupported version").
+			Validate(err)
+	})
+
+	It("InvalidReplicationFactor: should fail when replication factor exceeds cluster size", func() {
+		aeroCluster := testCluster.CreateDummyAerospikeCluster(clusterNamespacedName, 1) // Size 1
+
+		// 1. Get the namespaces slice from the Value map
+		rawNamespaces := aeroCluster.Spec.AerospikeConfig.Value["namespaces"].([]interface{})
+
+		// 2. Modify the first namespace's replication factor
+		if len(rawNamespaces) > 0 {
+			nsMap := rawNamespaces[0].(map[string]interface{})
+			nsMap["replication-factor"] = 2
+		}
+
+		err := testCluster.DeployCluster(k8sClient, ctx, aeroCluster)
+		Expect(err).To(HaveOccurred())
+
+		// Webhook response validation
+		NewStatusErrorMatcher(int32(403), metav1.StatusReasonForbidden).
+			WithMessageSubstrings("admission webhook",
+				"\"vaerospikecluster.kb.io\"",
+				"denied the request: aerospikeConfig not valid:",
+				"failed to validate config for the version 8.1.1.0:",
+				"failed to get aerospike config schema for version 8.1.1.0: unsupported version").
+			Validate(err)
 	})
 })
