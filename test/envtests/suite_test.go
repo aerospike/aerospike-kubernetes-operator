@@ -37,6 +37,10 @@ import (
 	"sigs.k8s.io/controller-runtime/pkg/log/zap"
 	"sigs.k8s.io/controller-runtime/pkg/webhook"
 
+	webhookv1 "github.com/aerospike/aerospike-kubernetes-operator/v4/internal/webhook/v1"
+	"github.com/aerospike/aerospike-kubernetes-operator/v4/pkg/configschema"
+	"github.com/aerospike/aerospike-management-lib/asconfig"
+
 	// +kubebuilder:scaffold:imports
 
 	asdbv1 "github.com/aerospike/aerospike-kubernetes-operator/v4/api/v1"
@@ -69,21 +73,31 @@ var _ = BeforeSuite(
 	func() {
 		logf.SetLogger(zap.New(zap.WriteTo(GinkgoWriter), zap.UseDevMode(true)))
 
+		var (
+			err error
+		)
+
+		// Load the SchemaMap
+		schemaMap, err := configschema.NewSchemaMap()
+		Expect(err).NotTo(HaveOccurred(), "Failed to load SchemaMap for tests")
+
+		// Initialize the global asconfig state
+		// We use a discard logger or the GinkgoWriter to keep test output clean
+		testLog := zap.New(zap.WriteTo(GinkgoWriter), zap.UseDevMode(true))
+		asconfig.InitFromMap(testLog, schemaMap)
+
 		By("Bootstrapping test environment")
 
 		t := false
 		testEnv = &envtest.Environment{
 			UseExistingCluster: &t,
 			CRDDirectoryPaths: []string{
-				"../config/crd/bases",
+				"../../config/crd/bases",
 			},
 			WebhookInstallOptions: envtest.WebhookInstallOptions{
 				Paths: []string{"../../config/webhook"},
 			},
 		}
-		var (
-			err error
-		)
 
 		cfg, err = testEnv.Start()
 		Expect(err).NotTo(HaveOccurred())
@@ -100,9 +114,14 @@ var _ = BeforeSuite(
 
 		// +kubebuilder:scaffold:scheme
 
-		k8sClient, err = client.New(
-			cfg, client.Options{Scheme: scheme},
-		)
+		By("Creating Kubernetes client (waiting for CRDs)")
+		Eventually(func() error {
+			k8sClient, err = client.New(
+				cfg, client.Options{Scheme: scheme},
+			)
+			return err
+		}, time.Second*10, time.Millisecond*250).Should(Succeed())
+		Expect(k8sClient).NotTo(BeNil())
 		Expect(err).NotTo(HaveOccurred())
 		Expect(k8sClient).NotTo(BeNil())
 
@@ -125,6 +144,11 @@ var _ = BeforeSuite(
 
 		// Setup eviction webhook
 		evictionWebhook = evictionwebhook.SetupEvictionWebhookWithManager(mgr)
+
+		// Register AerospikeCluster validating webhook directly
+		// it should register to mutating and validation webhook both.
+		err = webhookv1.SetupAerospikeClusterWebhookWithManager(mgr)
+		Expect(err).NotTo(HaveOccurred())
 
 		ctx, c := context.WithCancel(context.Background())
 		cancel = c
