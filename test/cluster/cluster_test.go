@@ -1949,49 +1949,6 @@ func negativeDeployClusterValidationTest(
 				clusterName, namespace,
 			)
 
-			It(
-				"EmptyClusterName: should fail for EmptyClusterName", func() {
-					cName := test.GetNamespacedName(
-						"", clusterNamespacedName.Namespace,
-					)
-
-					aeroCluster := createDummyAerospikeCluster(cName, 1)
-					Expect(DeployCluster(k8sClient, ctx, aeroCluster)).Should(HaveOccurred())
-				},
-			)
-
-			It(
-				"EmptyNamespaceName: should fail for EmptyNamespaceName",
-				func() {
-					cName := test.GetNamespacedName("validclustername", "")
-
-					aeroCluster := createDummyAerospikeCluster(cName, 1)
-					Expect(DeployCluster(k8sClient, ctx, aeroCluster)).Should(HaveOccurred())
-				},
-			)
-
-			It(
-				"InvalidImage: should fail for InvalidImage", func() {
-					aeroCluster := createDummyAerospikeCluster(
-						clusterNamespacedName, 1,
-					)
-					aeroCluster.Spec.Image = "InvalidImage"
-					Expect(DeployCluster(k8sClient, ctx, aeroCluster)).Should(HaveOccurred())
-
-					aeroCluster.Spec.Image = invalidImage
-					Expect(DeployCluster(k8sClient, ctx, aeroCluster)).Should(HaveOccurred())
-				},
-			)
-
-			It(
-				"InvalidSize: should fail for zero size", func() {
-					aeroCluster := createDummyAerospikeCluster(
-						clusterNamespacedName, 0,
-					)
-					Expect(DeployCluster(k8sClient, ctx, aeroCluster)).Should(HaveOccurred())
-				},
-			)
-
 			Context(
 				"InvalidOperatorClientCertSpec: should fail for invalid OperatorClientCertSpec", func() {
 					It(
@@ -2052,86 +2009,11 @@ func negativeDeployClusterValidationTest(
 			Context(
 				"InvalidAerospikeConfig: should fail for empty/invalid aerospikeConfig",
 				func() {
-					It(
-						"should fail for empty/invalid aerospikeConfig",
-						func() {
-							aeroCluster := createDummyAerospikeCluster(
-								clusterNamespacedName, 1,
-							)
-							aeroCluster.Spec.AerospikeConfig = &asdbv1.AerospikeConfigSpec{}
-							Expect(DeployCluster(k8sClient, ctx, aeroCluster)).Should(HaveOccurred())
-
-							aeroCluster = createDummyAerospikeCluster(
-								clusterNamespacedName, 1,
-							)
-							aeroCluster.Spec.AerospikeConfig = &asdbv1.AerospikeConfigSpec{
-								Value: map[string]interface{}{
-									asdbv1.ConfKeyNamespace: "invalidConf",
-								},
-							}
-							Expect(DeployCluster(k8sClient, ctx, aeroCluster)).Should(HaveOccurred())
-						},
-					)
-
-					It(
-						"ServiceConf: should fail for setting advertise-ipv6",
-						func() {
-							aeroCluster := createDummyAerospikeCluster(
-								clusterNamespacedName, 1,
-							)
-							aeroCluster.Spec.AerospikeConfig.Value[asdbv1.ConfKeyService].(map[string]interface{})["advertise-ipv6"] = true
-							Expect(DeployCluster(k8sClient, ctx, aeroCluster)).Should(HaveOccurred())
-						},
-					)
-
 					Context(
 						"InvalidNamespace", func() {
-							It(
-								"NilAerospikeNamespace: should fail for nil aerospikeConfig.namespace",
-								func() {
-									aeroCluster := createDummyAerospikeCluster(
-										clusterNamespacedName, 1,
-									)
-									aeroCluster.Spec.AerospikeConfig.Value[asdbv1.ConfKeyNamespace] = nil
-									Expect(DeployCluster(k8sClient, ctx, aeroCluster)).Should(HaveOccurred())
-								},
-							)
-
 							// Should we test for overridden fields
 							Context(
 								"InvalidStorage", func() {
-									It(
-										"NilStorageEngine: should fail for nil storage-engine",
-										func() {
-											aeroCluster := createDummyAerospikeCluster(
-												clusterNamespacedName, 1,
-											)
-											namespaceConfig :=
-												aeroCluster.Spec.AerospikeConfig.Value[asdbv1.ConfKeyNamespace].([]interface{})[0].(map[string]interface{})
-											namespaceConfig["storage-engine"] = nil
-											aeroCluster.Spec.AerospikeConfig.Value[asdbv1.ConfKeyNamespace].([]interface{})[0] = namespaceConfig
-											Expect(DeployCluster(k8sClient, ctx, aeroCluster)).Should(HaveOccurred())
-										},
-									)
-
-									It(
-										"NilStorageEngineDevice: should fail for nil storage-engine.device",
-										func() {
-											aeroCluster := createDummyAerospikeCluster(
-												clusterNamespacedName, 1,
-											)
-											namespaceConfig :=
-												aeroCluster.Spec.AerospikeConfig.Value[asdbv1.ConfKeyNamespace].([]interface{})[0].(map[string]interface{})
-
-											if _, ok :=
-												namespaceConfig["storage-engine"].(map[string]interface{})["devices"]; ok {
-												namespaceConfig["storage-engine"].(map[string]interface{})["devices"] = nil
-												aeroCluster.Spec.AerospikeConfig.Value[asdbv1.ConfKeyNamespace].([]interface{})[0] = namespaceConfig
-												Expect(DeployCluster(k8sClient, ctx, aeroCluster)).Should(HaveOccurred())
-											}
-										},
-									)
-
 									It(
 										"InvalidStorageEngineDevice: should fail for invalid storage-engine.device,"+
 											" cannot have 3 devices in single device string",
@@ -2190,23 +2072,6 @@ func negativeDeployClusterValidationTest(
 													aeroCluster.Spec.AerospikeConfig.Value[asdbv1.ConfKeyNamespace].([]interface{})[0].(map[string]interface{})
 												namespaceConfig["storage-engine"].(map[string]interface{})["devices"] =
 													[]string{"/dev/xvdf1 /dev/xvdf2 /dev/xvdf3"}
-												aeroCluster.Spec.AerospikeConfig.Value[asdbv1.ConfKeyNamespace].([]interface{})[0] = namespaceConfig
-												Expect(DeployCluster(k8sClient, ctx, aeroCluster)).Should(HaveOccurred())
-											}
-										},
-									)
-
-									It(
-										"NilStorageEngineFile: should fail for nil storage-engine.file",
-										func() {
-											aeroCluster := createDummyAerospikeCluster(
-												clusterNamespacedName, 1,
-											)
-											namespaceConfig :=
-												aeroCluster.Spec.AerospikeConfig.Value[asdbv1.ConfKeyNamespace].([]interface{})[0].(map[string]interface{})
-
-											if _, ok := namespaceConfig["storage-engine"].(map[string]interface{})["files"]; ok {
-												namespaceConfig["storage-engine"].(map[string]interface{})["files"] = nil
 												aeroCluster.Spec.AerospikeConfig.Value[asdbv1.ConfKeyNamespace].([]interface{})[0] = namespaceConfig
 												Expect(DeployCluster(k8sClient, ctx, aeroCluster)).Should(HaveOccurred())
 											}
@@ -2276,27 +2141,6 @@ func negativeDeployClusterValidationTest(
 									// validateError(err, "should fail for setting rack-id")
 								},
 							)
-
-							It(
-								"ServiceConf: should fail for setting node-id/cluster-name",
-								func() {
-									// Service conf
-									// 	"node-id"
-									// 	"cluster-name"
-									aeroCluster := createDummyAerospikeCluster(
-										clusterNamespacedName, 1,
-									)
-									aeroCluster.Spec.AerospikeConfig.Value[asdbv1.ConfKeyService].(map[string]interface{})["node-id"] = "a1"
-									Expect(DeployCluster(k8sClient, ctx, aeroCluster)).Should(HaveOccurred())
-
-									aeroCluster = createDummyAerospikeCluster(
-										clusterNamespacedName, 1,
-									)
-									aeroCluster.Spec.AerospikeConfig.
-										Value[asdbv1.ConfKeyService].(map[string]interface{})[clusterNameConfig] = clusterNameConfig
-									Expect(DeployCluster(k8sClient, ctx, aeroCluster)).Should(HaveOccurred())
-								},
-							)
 						},
 					)
 				},
@@ -2316,50 +2160,6 @@ func negativeDeployClusterValidationTest(
 							Expect(DeployCluster(k8sClient, ctx, aeroCluster)).Should(HaveOccurred())
 						},
 					)
-				},
-			)
-
-			Context(
-				"InvalidDNSConfiguration", func() {
-					It(
-						"InvalidDnsPolicy: should fail when dnsPolicy is set to 'Default'",
-						func() {
-							aeroCluster := createDummyAerospikeCluster(clusterNamespacedName, 2)
-							defaultDNS := v1.DNSDefault
-							aeroCluster.Spec.PodSpec.InputDNSPolicy = &defaultDNS
-							Expect(DeployCluster(k8sClient, ctx, aeroCluster)).Should(HaveOccurred())
-						},
-					)
-
-					It(
-						"MissingDnsConfig: should fail when dnsPolicy is set to 'None' and no dnsConfig given",
-						func() {
-							aeroCluster := createDummyAerospikeCluster(clusterNamespacedName, 2)
-							noneDNS := v1.DNSNone
-							aeroCluster.Spec.PodSpec.InputDNSPolicy = &noneDNS
-							Expect(DeployCluster(k8sClient, ctx, aeroCluster)).Should(HaveOccurred())
-						},
-					)
-				},
-			)
-
-			It(
-				"InvalidLogging: should fail for using syslog param with file or console logging", func() {
-					aeroCluster := createDummyAerospikeCluster(
-						clusterNamespacedName, 1,
-					)
-					loggingConf := []interface{}{
-						map[string]interface{}{
-							"name":     "anyFileName",
-							"path":     "/dev/log",
-							"tag":      "asd",
-							"facility": "local0",
-						},
-					}
-
-					aeroCluster.Spec.AerospikeConfig.Value["logging"] = loggingConf
-					err := k8sClient.Create(ctx, aeroCluster)
-					Expect(err).Should(HaveOccurred())
 				},
 			)
 		},

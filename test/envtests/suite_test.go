@@ -38,6 +38,8 @@ import (
 	"sigs.k8s.io/controller-runtime/pkg/webhook"
 
 	webhookv1 "github.com/aerospike/aerospike-kubernetes-operator/v4/internal/webhook/v1"
+	"github.com/aerospike/aerospike-kubernetes-operator/v4/pkg/configschema"
+	"github.com/aerospike/aerospike-management-lib/asconfig"
 
 	// +kubebuilder:scaffold:imports
 
@@ -71,6 +73,19 @@ var _ = BeforeSuite(
 	func() {
 		logf.SetLogger(zap.New(zap.WriteTo(GinkgoWriter), zap.UseDevMode(true)))
 
+		var (
+			err error
+		)
+
+		// Load the SchemaMap
+		schemaMap, err := configschema.NewSchemaMap()
+		Expect(err).NotTo(HaveOccurred(), "Failed to load SchemaMap for tests")
+
+		// Initialize the global asconfig state
+		// We use a discard logger or the GinkgoWriter to keep test output clean
+		testLog := zap.New(zap.WriteTo(GinkgoWriter), zap.UseDevMode(true))
+		asconfig.InitFromMap(testLog, schemaMap)
+
 		By("Bootstrapping test environment")
 
 		t := false
@@ -83,9 +98,6 @@ var _ = BeforeSuite(
 				Paths: []string{"../../config/webhook"},
 			},
 		}
-		var (
-			err error
-		)
 
 		cfg, err = testEnv.Start()
 		Expect(err).NotTo(HaveOccurred())
