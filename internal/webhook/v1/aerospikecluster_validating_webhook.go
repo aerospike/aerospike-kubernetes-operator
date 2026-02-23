@@ -137,11 +137,6 @@ func (acv *AerospikeClusterCustomValidator) ValidateUpdate(_ context.Context, ol
 		return warnings, fmt.Errorf("failed to start upgrade: %v", err)
 	}
 
-	// Volume storage update is not allowed but cascadeDelete policy is allowed
-	if err := validateStorageSpecChange(&oldObject.Spec.Storage, &aerospikeCluster.Spec.Storage); err != nil {
-		return warnings, fmt.Errorf("storage config cannot be updated: %v", err)
-	}
-
 	// MultiPodPerHost cannot be updated
 	if asdbv1.GetBool(aerospikeCluster.Spec.PodSpec.MultiPodPerHost) !=
 		asdbv1.GetBool(oldObject.Spec.PodSpec.MultiPodPerHost) {
@@ -277,14 +272,6 @@ func validate(aslog logr.Logger, cluster *asdbv1.AerospikeCluster) (admission.Wa
 	}
 
 	err = validateOperation(cluster)
-	if err != nil {
-		return warnings, err
-	}
-
-	// Storage should be validated before validating aerospikeConfig and fileStorage
-	warns, err = validateStorage(&cluster.Spec.Storage, &cluster.Spec.PodSpec)
-	warnings = append(warnings, warns...)
-
 	if err != nil {
 		return warnings, err
 	}
