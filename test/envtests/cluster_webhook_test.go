@@ -7,15 +7,21 @@ import (
 	. "github.com/onsi/gomega"
 	v1 "k8s.io/api/core/v1"
 	"k8s.io/apimachinery/pkg/api/errors"
+	"k8s.io/apimachinery/pkg/api/resource"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 
 	asdbv1 "github.com/aerospike/aerospike-kubernetes-operator/v4/api/v1"
 	"github.com/aerospike/aerospike-kubernetes-operator/v4/test"
 	testCluster "github.com/aerospike/aerospike-kubernetes-operator/v4/test/cluster"
+	"github.com/aerospike/aerospike-kubernetes-operator/v4/test/testutil"
 )
 
 const (
 	clusterNameConfig = "cluster-name"
+)
+
+var (
+	storageClass = "ssd"
 )
 
 var _ = Describe("AerospikeCluster validation (envtests)", func() {
@@ -219,6 +225,120 @@ var _ = Describe("AerospikeCluster validation (envtests)", func() {
 				"files Invalid type. Expected: array, given: null namespaces.0.storage-engine.files}\n]").
 			Validate(err)
 	})
+
+	It("InvalidStorage: InvalidStorageEngineDevice - should fail for invalid storage-engine.device,"+
+		" cannot have 3 devices in single device string", func() {
+		aeroCluster := testCluster.CreateDummyAerospikeCluster(clusterNamespacedName, 2)
+		rawNs := aeroCluster.Spec.AerospikeConfig.Value[asdbv1.ConfKeyNamespace].([]interface{})
+		namespaceConfig := rawNs[0].(map[string]interface{})
+		if _, ok :=
+			namespaceConfig["storage-engine"].(map[string]interface{})["devices"]; ok {
+			aeroCluster.Spec.Storage.Volumes = []asdbv1.VolumeSpec{
+				{
+					Name: "nsvol1",
+					Source: asdbv1.VolumeSource{
+						PersistentVolume: &asdbv1.PersistentVolumeSpec{
+							Size:         resource.MustParse("1Gi"),
+							StorageClass: storageClass,
+							VolumeMode:   v1.PersistentVolumeBlock,
+						},
+					},
+					Aerospike: &asdbv1.AerospikeServerVolumeAttachment{
+						Path: "/dev/xvdf1",
+					},
+				},
+				{
+					Name: "nsvol2",
+					Source: asdbv1.VolumeSource{
+						PersistentVolume: &asdbv1.PersistentVolumeSpec{
+							Size:         resource.MustParse("1Gi"),
+							StorageClass: storageClass,
+							VolumeMode:   v1.PersistentVolumeBlock,
+						},
+					},
+					Aerospike: &asdbv1.AerospikeServerVolumeAttachment{
+						Path: "/dev/xvdf2",
+					},
+				},
+				{
+					Name: "nsvol3",
+					Source: asdbv1.VolumeSource{
+						PersistentVolume: &asdbv1.PersistentVolumeSpec{
+							Size:         resource.MustParse("1Gi"),
+							StorageClass: storageClass,
+							VolumeMode:   v1.PersistentVolumeBlock,
+						},
+					},
+					Aerospike: &asdbv1.AerospikeServerVolumeAttachment{
+						Path: "/dev/xvdf3",
+					},
+				},
+			}
+
+			namespaceConfig :=
+				aeroCluster.Spec.AerospikeConfig.Value[asdbv1.ConfKeyNamespace].([]interface{})[0].(map[string]interface{})
+			namespaceConfig["storage-engine"].(map[string]interface{})["devices"] =
+				[]string{"/dev/xvdf1 /dev/xvdf2 /dev/xvdf3"}
+			aeroCluster.Spec.AerospikeConfig.Value[asdbv1.ConfKeyNamespace].([]interface{})[0] = namespaceConfig
+			err := testCluster.DeployCluster(k8sClient, ctx, aeroCluster)
+			Expect(err).To(HaveOccurred())
+
+			// Webhook response validation
+			NewStatusErrorMatcher(int32(403), metav1.StatusReasonForbidden).
+				WithMessageSubstrings("admission webhook \"vaerospikecluster.kb.io\" denied the request:",
+					"invalid device name /dev/xvdf1 /dev/xvdf2 /dev/xvdf3.",
+					"Max 2 device can be mentioned in single line (Shadow device config)").
+				Validate(err)
+		}
+	})
+
+	It("InvalidStorage: ExtraStorageEngineDevice - should fail for invalid storage-engine.device,"+
+		" cannot use a device which doesn't exist in storage", func() {
+		aeroCluster := testCluster.CreateDummyAerospikeCluster(clusterNamespacedName, 2)
+		rawNs := aeroCluster.Spec.AerospikeConfig.Value[asdbv1.ConfKeyNamespace].([]interface{})
+		namespaceConfig := rawNs[0].(map[string]interface{})
+		if _, ok := namespaceConfig["storage-engine"].(map[string]interface{})["devices"]; ok {
+			devList := namespaceConfig["storage-engine"].(map[string]interface{})["devices"].([]interface{})
+			devList = append(
+				devList, "andRandomDevice",
+			)
+			namespaceConfig["storage-engine"].(map[string]interface{})["devices"] = devList
+			aeroCluster.Spec.AerospikeConfig.Value[asdbv1.ConfKeyNamespace].([]interface{})[0] = namespaceConfig
+			err := testCluster.DeployCluster(k8sClient, ctx, aeroCluster)
+			Expect(err).To(HaveOccurred())
+
+			// Webhook response validation
+			NewStatusErrorMatcher(int32(403), metav1.StatusReasonForbidden).
+				WithMessageSubstrings("admission webhook \"vaerospikecluster.kb.io\" denied the request:",
+					"namespace storage device related devicePath andRandomDevice not found in Storage config").
+				Validate(err)
+		}
+	})
+
+	It("InvalidStorage: DuplicateStorageEngineDevice - should fail for invalid storage-engine.device,"+
+		" cannot use a device which already exist in another namespace", func() {
+		aeroCluster := testCluster.CreateDummyAerospikeCluster(clusterNamespacedName, 2)
+		secondNs := map[string]interface{}{
+			"name":               "ns1",
+			"replication-factor": 2,
+			"storage-engine": map[string]interface{}{
+				"type":    "device",
+				"devices": []interface{}{"/test/dev/xvdf"},
+			},
+		}
+
+		nsList := aeroCluster.Spec.AerospikeConfig.Value[asdbv1.ConfKeyNamespace].([]interface{})
+		nsList = append(nsList, secondNs)
+		aeroCluster.Spec.AerospikeConfig.Value[asdbv1.ConfKeyNamespace] = nsList
+		err := testCluster.DeployCluster(k8sClient, ctx, aeroCluster)
+		Expect(err).To(HaveOccurred())
+
+		// Webhook response validation
+		NewStatusErrorMatcher(int32(403), metav1.StatusReasonForbidden).
+			WithMessageSubstrings("admission webhook \"vaerospikecluster.kb.io\" denied the request:",
+				"device /test/dev/xvdf is already being referenced in multiple namespaces (test, ns1)").
+			Validate(err)
+	})
 	// Bug: aerospikeConfig map should not be listed in Failure message.
 	// It is making failure message unnecessarily long.
 	//  Message: "admission webhook \"maerospikecluster.kb.io\" denied the request: aerospikeConfig.namespaces not present.
@@ -367,7 +487,7 @@ var _ = Describe("AerospikeCluster validation (envtests)", func() {
 			Validate(err)
 	})
 
-	It("ChangeDefaultConfig-ServiceConf: should fail for setting node-id/cluster-name", func() {
+	It("ChangeDefaultConfig: ServiceConf - should fail for setting node-id/cluster-name", func() {
 		// Service conf: "node-id"
 		aeroCluster := testCluster.CreateDummyAerospikeCluster(clusterNamespacedName, 1)
 		aeroCluster.Spec.AerospikeConfig.Value[asdbv1.ConfKeyService].(map[string]interface{})["node-id"] = "a1"
@@ -385,7 +505,7 @@ var _ = Describe("AerospikeCluster validation (envtests)", func() {
 			Validate(err)
 	})
 
-	It("ChangeDefaultConfig-ServiceConf: should fail for setting cluster-name", func() {
+	It("ChangeDefaultConfig: ServiceConf - should fail for setting cluster-name", func() {
 		aeroCluster := testCluster.CreateDummyAerospikeCluster(clusterNamespacedName, 1)
 		// 1. Extract the service configuration map
 		serviceConf := aeroCluster.Spec.AerospikeConfig.Value[asdbv1.ConfKeyService].(map[string]interface{})
@@ -406,7 +526,7 @@ var _ = Describe("AerospikeCluster validation (envtests)", func() {
 			Validate(err)
 	})
 
-	It("InvalidDNSConfiguration: InvalidDnsPolicy: should fail when dnsPolicy is set to 'Default'", func() {
+	It("InvalidDNSConfiguration: InvalidDnsPolicy - should fail when dnsPolicy is set to 'Default'", func() {
 		aeroCluster := testCluster.CreateDummyAerospikeCluster(clusterNamespacedName, 2)
 		defaultDNS := v1.DNSDefault
 		aeroCluster.Spec.PodSpec.InputDNSPolicy = &defaultDNS
@@ -438,6 +558,26 @@ var _ = Describe("AerospikeCluster validation (envtests)", func() {
 			Validate(err)
 	})
 
+	It("InvalidAerospikeConfigSecret: WhenFeatureKeyExist: should fail for no feature-key-file"+
+		"path in storage volume", func() {
+		aeroCluster := testCluster.CreateAerospikeClusterPost640(
+			clusterNamespacedName, 1, testutil.LatestEnterpriseImage,
+		)
+		aeroCluster.Spec.AerospikeConfig.Value[asdbv1.ConfKeyService] = map[string]interface{}{
+			"feature-key-file": "/randompath/features.conf",
+		}
+		// Deploy cluster
+		err := testCluster.DeployCluster(k8sClient, ctx, aeroCluster)
+		Expect(err).To(HaveOccurred())
+
+		// Webhook response validation
+		NewStatusErrorMatcher(int32(403), metav1.StatusReasonForbidden).
+			WithMessageSubstrings("admission webhook \"vaerospikecluster.kb.io\" denied the request:",
+				"feature-key-file paths or tls paths or default-password-file path are not mounted",
+				"- create an entry for '/randompath/features.conf' in 'storage.volumes'").
+			Validate(err)
+	})
+
 	It("InvalidLogging: should fail for using syslog param with file or console logging", func() {
 		aeroCluster := testCluster.CreateDummyAerospikeCluster(clusterNamespacedName, 2)
 		loggingConf := []interface{}{
@@ -459,6 +599,99 @@ var _ = Describe("AerospikeCluster validation (envtests)", func() {
 			WithMessageSubstrings("admission webhook \"vaerospikecluster.kb.io\" denied the request:",
 				"can use facility only with `syslog` in aerospikeConfig.logging",
 				"map[facility:local0 name:anyFileName path:/dev/log tag:asd]").
+			Validate(err)
+	})
+
+	It("InvalidOperatorClientCertSpec: MultipleCertSource: should fail"+
+		"if both SecretCertSource and CertPathInOperator is set", func() {
+		aeroCluster := testCluster.CreateAerospikeClusterPost640(
+			clusterNamespacedName, 1, testutil.LatestEnterpriseImage,
+		)
+		aeroCluster.Spec.OperatorClientCertSpec.CertPathInOperator = &asdbv1.AerospikeCertPathInOperatorSource{}
+
+		// Deploy cluster
+		err := testCluster.DeployCluster(k8sClient, ctx, aeroCluster)
+		Expect(err).To(HaveOccurred())
+
+		// Webhook response validation
+		NewStatusErrorMatcher(int32(403), metav1.StatusReasonForbidden).
+			WithMessageSubstrings("admission webhook \"vaerospikecluster.kb.io\" denied the request:",
+				"either `secretCertSource` or `certPathInOperator` must be set in `operatorClientCertSpec` but not both").
+			Validate(err)
+	})
+
+	It("MissingClientKeyFilename: should fail if ClientKeyFilename is missing", func() {
+		aeroCluster := testCluster.CreateAerospikeClusterPost640(
+			clusterNamespacedName, 1, testutil.LatestEnterpriseImage,
+		)
+		aeroCluster.Spec.OperatorClientCertSpec.SecretCertSource.ClientKeyFilename = ""
+
+		// Deploy cluster
+		err := testCluster.DeployCluster(k8sClient, ctx, aeroCluster)
+		Expect(err).To(HaveOccurred())
+
+		// Webhook response validation
+		NewStatusErrorMatcher(int32(403), metav1.StatusReasonForbidden).
+			WithMessageSubstrings("admission webhook \"vaerospikecluster.kb.io\" denied the request:",
+				"both `clientCertFilename` and `clientKeyFilename` should be either set or not set in `secretCertSource`").
+			Validate(err)
+	})
+
+	It("InvalidCaCerts: Should fail if both CaCertsFilename and CaCertsSource is set", func() {
+		aeroCluster := testCluster.CreateAerospikeClusterPost640(
+			clusterNamespacedName, 1, testutil.LatestEnterpriseImage,
+		)
+		aeroCluster.Spec.OperatorClientCertSpec.SecretCertSource.CaCertsSource = &asdbv1.CaCertsSource{}
+
+		// Deploy cluster
+		err := testCluster.DeployCluster(k8sClient, ctx, aeroCluster)
+		Expect(err).To(HaveOccurred())
+
+		// Webhook response validation
+		NewStatusErrorMatcher(int32(403), metav1.StatusReasonForbidden).
+			WithMessageSubstrings("admission webhook \"vaerospikecluster.kb.io\" denied the request:",
+				"both `caCertsFilename` or `caCertsSource` cannot be set in `secretCertSource`").
+			Validate(err)
+	})
+
+	It("MissingClientCertPath: should fail if clientCertPath is missing", func() {
+		aeroCluster := testCluster.CreateAerospikeClusterPost640(
+			clusterNamespacedName, 1, testutil.LatestEnterpriseImage,
+		)
+		aeroCluster.Spec.OperatorClientCertSpec.SecretCertSource = nil
+		aeroCluster.Spec.OperatorClientCertSpec.CertPathInOperator =
+			&asdbv1.AerospikeCertPathInOperatorSource{
+				CaCertsPath:    "cacert.pem",
+				ClientKeyPath:  "svc_key.pem",
+				ClientCertPath: "",
+			}
+
+		// Deploy cluster
+		err := testCluster.DeployCluster(k8sClient, ctx, aeroCluster)
+		Expect(err).To(HaveOccurred())
+
+		// Webhook response validation
+		NewStatusErrorMatcher(int32(403), metav1.StatusReasonForbidden).
+			WithMessageSubstrings("admission webhook \"vaerospikecluster.kb.io\" denied the request:",
+				"both `clientCertPath` and `clientKeyPath` should be either set or not set in `certPathInOperator`").
+			Validate(err)
+	})
+
+	It("InvalidOperatorClientCertSpec: MissingOperatorClientCert: should fail"+
+		"if operator client cert is not configured", func() {
+		aeroCluster := testCluster.CreateAerospikeClusterPost640(
+			clusterNamespacedName, 1, testutil.LatestEnterpriseImage,
+		)
+		aeroCluster.Spec.OperatorClientCertSpec = nil
+
+		// Deploy cluster
+		err := testCluster.DeployCluster(k8sClient, ctx, aeroCluster)
+		Expect(err).To(HaveOccurred())
+
+		// Webhook response validation
+		NewStatusErrorMatcher(int32(403), metav1.StatusReasonForbidden).
+			WithMessageSubstrings("admission webhook \"vaerospikecluster.kb.io\" denied the request:",
+				"operator client cert is not specified").
 			Validate(err)
 	})
 })

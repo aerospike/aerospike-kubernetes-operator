@@ -299,7 +299,7 @@ func networkDeployValidationTest(ctx goctx.Context) {
 			It(
 				"WhenTLSExist: should fail for no tls path in storage volume",
 				func() {
-					aeroCluster := createAerospikeClusterPost640(
+					aeroCluster := CreateAerospikeClusterPost640(
 						clusterNamespacedName, 1, latestImage,
 					)
 					aeroCluster.Spec.AerospikeConfig.Value[asdbv1.ConfKeyNetwork] = map[string]interface{}{
@@ -317,7 +317,7 @@ func networkDeployValidationTest(ctx goctx.Context) {
 			It(
 				"WhenTLSExist: should fail for both ca-file and ca-path in tls",
 				func() {
-					aeroCluster := createAerospikeClusterPost640(
+					aeroCluster := CreateAerospikeClusterPost640(
 						clusterNamespacedName, 1, latestImage,
 					)
 					aeroCluster.Spec.AerospikeConfig.Value[asdbv1.ConfKeyNetwork] = map[string]interface{}{
@@ -338,7 +338,7 @@ func networkDeployValidationTest(ctx goctx.Context) {
 			It(
 				"WhenTLSExist: should fail for ca-file path pointing to Secret Manager",
 				func() {
-					aeroCluster := createAerospikeClusterPost640(
+					aeroCluster := CreateAerospikeClusterPost640(
 						clusterNamespacedName, 1, latestImage,
 					)
 					aeroCluster.Spec.AerospikeConfig.Value[asdbv1.ConfKeyNetwork] = map[string]interface{}{
@@ -358,7 +358,7 @@ func networkDeployValidationTest(ctx goctx.Context) {
 			It(
 				"WhenTLSExist: should fail for ca-path pointing to Secret Manager",
 				func() {
-					aeroCluster := createAerospikeClusterPost640(
+					aeroCluster := CreateAerospikeClusterPost640(
 						clusterNamespacedName, 1, latestImage,
 					)
 					aeroCluster.Spec.AerospikeConfig.Value[asdbv1.ConfKeyNetwork] = map[string]interface{}{
@@ -650,7 +650,7 @@ func ValidateAerospikeBenchmarkConfigs(ctx goctx.Context) {
 					By("Deploying cluster which does not have the fix for AER-6767")
 
 					imageBeforeFix := fmt.Sprintf("%s:%s", baseEnterpriseImage, "7.1.0.2")
-					aeroCluster := createAerospikeClusterPost640(clusterNamespacedName, 2, imageBeforeFix)
+					aeroCluster := CreateAerospikeClusterPost640(clusterNamespacedName, 2, imageBeforeFix)
 					namespaceConfig :=
 						aeroCluster.Spec.AerospikeConfig.Value[asdbv1.ConfKeyNamespace].([]interface{})[0].(map[string]interface{})
 					namespaceConfig["enable-benchmarks-read"] = false
@@ -1927,241 +1927,8 @@ func UpdateClusterTest(ctx goctx.Context) {
 // Test cluster validation Common for deployment and update both
 func NegativeClusterValidationTest(ctx goctx.Context) {
 	Context(
-		"NegativeDeployClusterValidationTest", func() {
-			negativeDeployClusterValidationTest(ctx)
-		},
-	)
-
-	Context(
 		"NegativeUpdateClusterValidationTest", func() {
 			negativeUpdateClusterValidationTest(ctx)
-		},
-	)
-}
-
-func negativeDeployClusterValidationTest(
-	ctx goctx.Context,
-) {
-	Context(
-		"Validation", func() {
-			clusterName := fmt.Sprintf("invalid-cluster-%d", GinkgoParallelProcess())
-			clusterNamespacedName := test.GetNamespacedName(
-				clusterName, namespace,
-			)
-
-			Context(
-				"InvalidOperatorClientCertSpec: should fail for invalid OperatorClientCertSpec", func() {
-					It(
-						"MultipleCertSource: should fail if both SecretCertSource and CertPathInOperator is set",
-						func() {
-							aeroCluster := createAerospikeClusterPost640(
-								clusterNamespacedName, 1, latestImage,
-							)
-							aeroCluster.Spec.OperatorClientCertSpec.CertPathInOperator = &asdbv1.AerospikeCertPathInOperatorSource{}
-							Expect(DeployCluster(k8sClient, ctx, aeroCluster)).Should(HaveOccurred())
-						},
-					)
-
-					It(
-						"MissingClientKeyFilename: should fail if ClientKeyFilename is missing",
-						func() {
-							aeroCluster := createAerospikeClusterPost640(
-								clusterNamespacedName, 1, latestImage,
-							)
-							aeroCluster.Spec.OperatorClientCertSpec.SecretCertSource.ClientKeyFilename = ""
-
-							Expect(DeployCluster(k8sClient, ctx, aeroCluster)).Should(HaveOccurred())
-						},
-					)
-
-					It(
-						"Should fail if both CaCertsFilename and CaCertsSource is set",
-						func() {
-							aeroCluster := createAerospikeClusterPost640(
-								clusterNamespacedName, 1, latestImage,
-							)
-							aeroCluster.Spec.OperatorClientCertSpec.SecretCertSource.CaCertsSource = &asdbv1.CaCertsSource{}
-
-							Expect(DeployCluster(k8sClient, ctx, aeroCluster)).Should(HaveOccurred())
-						},
-					)
-
-					It(
-						"MissingClientCertPath: should fail if clientCertPath is missing",
-						func() {
-							aeroCluster := createAerospikeClusterPost640(
-								clusterNamespacedName, 1, latestImage,
-							)
-							aeroCluster.Spec.OperatorClientCertSpec.SecretCertSource = nil
-							aeroCluster.Spec.OperatorClientCertSpec.CertPathInOperator =
-								&asdbv1.AerospikeCertPathInOperatorSource{
-									CaCertsPath:    "cacert.pem",
-									ClientKeyPath:  "svc_key.pem",
-									ClientCertPath: "",
-								}
-
-							Expect(DeployCluster(k8sClient, ctx, aeroCluster)).Should(HaveOccurred())
-						},
-					)
-				},
-			)
-
-			Context(
-				"InvalidAerospikeConfig: should fail for empty/invalid aerospikeConfig",
-				func() {
-					Context(
-						"InvalidNamespace", func() {
-							// Should we test for overridden fields
-							Context(
-								"InvalidStorage", func() {
-									It(
-										"InvalidStorageEngineDevice: should fail for invalid storage-engine.device,"+
-											" cannot have 3 devices in single device string",
-										func() {
-											aeroCluster := createDummyAerospikeCluster(
-												clusterNamespacedName, 1,
-											)
-											namespaceConfig :=
-												aeroCluster.Spec.AerospikeConfig.Value[asdbv1.ConfKeyNamespace].([]interface{})[0].(map[string]interface{})
-
-											if _, ok :=
-												namespaceConfig["storage-engine"].(map[string]interface{})["devices"]; ok {
-												aeroCluster.Spec.Storage.Volumes = []asdbv1.VolumeSpec{
-													{
-														Name: "nsvol1",
-														Source: asdbv1.VolumeSource{
-															PersistentVolume: &asdbv1.PersistentVolumeSpec{
-																Size:         resource.MustParse("1Gi"),
-																StorageClass: storageClass,
-																VolumeMode:   v1.PersistentVolumeBlock,
-															},
-														},
-														Aerospike: &asdbv1.AerospikeServerVolumeAttachment{
-															Path: "/dev/xvdf1",
-														},
-													},
-													{
-														Name: "nsvol2",
-														Source: asdbv1.VolumeSource{
-															PersistentVolume: &asdbv1.PersistentVolumeSpec{
-																Size:         resource.MustParse("1Gi"),
-																StorageClass: storageClass,
-																VolumeMode:   v1.PersistentVolumeBlock,
-															},
-														},
-														Aerospike: &asdbv1.AerospikeServerVolumeAttachment{
-															Path: "/dev/xvdf2",
-														},
-													},
-													{
-														Name: "nsvol3",
-														Source: asdbv1.VolumeSource{
-															PersistentVolume: &asdbv1.PersistentVolumeSpec{
-																Size:         resource.MustParse("1Gi"),
-																StorageClass: storageClass,
-																VolumeMode:   v1.PersistentVolumeBlock,
-															},
-														},
-														Aerospike: &asdbv1.AerospikeServerVolumeAttachment{
-															Path: "/dev/xvdf3",
-														},
-													},
-												}
-
-												namespaceConfig :=
-													aeroCluster.Spec.AerospikeConfig.Value[asdbv1.ConfKeyNamespace].([]interface{})[0].(map[string]interface{})
-												namespaceConfig["storage-engine"].(map[string]interface{})["devices"] =
-													[]string{"/dev/xvdf1 /dev/xvdf2 /dev/xvdf3"}
-												aeroCluster.Spec.AerospikeConfig.Value[asdbv1.ConfKeyNamespace].([]interface{})[0] = namespaceConfig
-												Expect(DeployCluster(k8sClient, ctx, aeroCluster)).Should(HaveOccurred())
-											}
-										},
-									)
-
-									It(
-										"ExtraStorageEngineDevice: should fail for invalid storage-engine.device,"+
-											" cannot use a device which doesn't exist in storage",
-										func() {
-											aeroCluster := createDummyAerospikeCluster(
-												clusterNamespacedName, 1,
-											)
-											namespaceConfig :=
-												aeroCluster.Spec.AerospikeConfig.Value[asdbv1.ConfKeyNamespace].([]interface{})[0].(map[string]interface{})
-
-											if _, ok := namespaceConfig["storage-engine"].(map[string]interface{})["devices"]; ok {
-												devList := namespaceConfig["storage-engine"].(map[string]interface{})["devices"].([]interface{})
-												devList = append(
-													devList, "andRandomDevice",
-												)
-												namespaceConfig["storage-engine"].(map[string]interface{})["devices"] = devList
-												aeroCluster.Spec.AerospikeConfig.Value[asdbv1.ConfKeyNamespace].([]interface{})[0] = namespaceConfig
-												Expect(DeployCluster(k8sClient, ctx, aeroCluster)).Should(HaveOccurred())
-											}
-										},
-									)
-
-									It(
-										"DuplicateStorageEngineDevice: should fail for invalid storage-engine.device,"+
-											" cannot use a device which already exist in another namespace",
-										func() {
-											aeroCluster := createDummyAerospikeCluster(
-												clusterNamespacedName, 1,
-											)
-											secondNs := map[string]interface{}{
-												"name":               "ns1",
-												"replication-factor": 2,
-												"storage-engine": map[string]interface{}{
-													"type":    "device",
-													"devices": []interface{}{"/test/dev/xvdf"},
-												},
-											}
-
-											nsList := aeroCluster.Spec.AerospikeConfig.Value[asdbv1.ConfKeyNamespace].([]interface{})
-											nsList = append(nsList, secondNs)
-											aeroCluster.Spec.AerospikeConfig.Value[asdbv1.ConfKeyNamespace] = nsList
-											Expect(DeployCluster(k8sClient, ctx, aeroCluster)).Should(HaveOccurred())
-										},
-									)
-								},
-							)
-						},
-					)
-
-					Context(
-						"ChangeDefaultConfig", func() {
-							It(
-								"NsConf", func() {
-									// Ns conf
-									// Rack-id
-									// aeroCluster := createDummyAerospikeCluster(clusterNamespacedName, 1)
-									// aeroCluster.Spec.AerospikeConfig.Value[asdbv1.ConfKeyNamespace].
-									// ([]interface{})[0].(map[string]interface{})["rack-id"] = 1
-									// aeroCluster.Spec.RackConfig.Namespaces = []string{"test"}
-									// err := deployCluster(k8sClient, ctx, aeroCluster)
-									// validateError(err, "should fail for setting rack-id")
-								},
-							)
-						},
-					)
-				},
-			)
-
-			Context(
-				"InvalidAerospikeConfigSecret", func() {
-					It(
-						"WhenFeatureKeyExist: should fail for no feature-key-file path in storage volume",
-						func() {
-							aeroCluster := createAerospikeClusterPost640(
-								clusterNamespacedName, 1, latestImage,
-							)
-							aeroCluster.Spec.AerospikeConfig.Value[asdbv1.ConfKeyService] = map[string]interface{}{
-								"feature-key-file": "/randompath/features.conf",
-							}
-							Expect(DeployCluster(k8sClient, ctx, aeroCluster)).Should(HaveOccurred())
-						},
-					)
-				},
-			)
 		},
 	)
 }
@@ -2526,7 +2293,7 @@ func negativeUpdateClusterValidationTest(
 
 			BeforeEach(
 				func() {
-					aeroCluster := createAerospikeClusterPost640(
+					aeroCluster := CreateAerospikeClusterPost640(
 						clusterNamespacedName, 2, latestImage,
 					)
 

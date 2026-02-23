@@ -1,7 +1,7 @@
 package envtests
 
 import (
-	//nolint:staticcheck // ST1001: dot imports are standard practice for Ginkgo DSL
+	//nolint:staticcheck //ST1001: dot imports are standard practice for Ginkgo DSL
 	. "github.com/onsi/ginkgo/v2"
 	//nolint:staticcheck // ST1001: dot imports are standard practice for Gomega assertions
 	. "github.com/onsi/gomega"
