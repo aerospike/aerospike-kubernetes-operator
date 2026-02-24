@@ -9,6 +9,7 @@ const (
 	// BaseEnterpriseImage is the repo for Aerospike Enterprise server images.
 	BaseEnterpriseImage = "aerospike/aerospike-server-enterprise"
 	LatestServerVersion = "8.1.1.0"
+	StorageClass        = "ssd"
 )
 
 var (
