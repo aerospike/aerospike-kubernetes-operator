@@ -31,6 +31,7 @@ import (
 	"k8s.io/apimachinery/pkg/runtime"
 	"k8s.io/apimachinery/pkg/util/intstr"
 	"k8s.io/apimachinery/pkg/util/sets"
+	k8svalidation "k8s.io/apimachinery/pkg/util/validation"
 	logf "sigs.k8s.io/controller-runtime/pkg/log"
 	"sigs.k8s.io/controller-runtime/pkg/webhook"
 	"sigs.k8s.io/controller-runtime/pkg/webhook/admission"
@@ -193,13 +194,11 @@ func validate(aslog logr.Logger, cluster *asdbv1.AerospikeCluster) (admission.Wa
 	var warnings admission.Warnings
 
 	// Validate obj name
-	if cluster.Name == "" {
-		return warnings, fmt.Errorf("aerospikeCluster name cannot be empty")
-	}
-
-	if strings.Contains(cluster.Name, " ") {
-		// Few parsing logic depend on this
-		return warnings, fmt.Errorf("aerospikeCluster name cannot have spaces")
+	errStrings := k8svalidation.IsDNS1035Label(cluster.Name)
+	if len(errStrings) > 0 {
+		return warnings, fmt.Errorf(
+			"aerospikeCluster name '%s' is invalid: Errors: %s",
+			cluster.Name, strings.Join(errStrings, "; "))
 	}
 
 	// Validate obj namespace
@@ -917,6 +916,15 @@ func validateRackConfig(_ logr.Logger, cluster *asdbv1.AerospikeCluster) (admiss
 			return warnings, fmt.Errorf(
 				"invalid rackID. RackID range (%d, %d)", asdbv1.MinRackID, asdbv1.MaxRackID,
 			)
+		}
+
+		if rack.Revision != "" {
+			errStrings := k8svalidation.IsDNS1123Label(rack.Revision)
+			if len(errStrings) > 0 {
+				return warnings, fmt.Errorf(
+					"rack revision '%s' for rack ID %d is invalid: %s",
+					rack.Revision, rack.ID, strings.Join(errStrings, "; "))
+			}
 		}
 
 		if rack.InputAerospikeConfig != nil {
