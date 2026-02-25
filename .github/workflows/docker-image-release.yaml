@@ -48,7 +48,7 @@ jobs:
         run: make docker-buildx-openshift IMG=quay.io/${{ env.IMG_BASE }}:${{ env.TAG }} VERSION=${{ env.TAG }}
 
       - name: Run Snyk image security scan
-        uses: snyk/actions/docker@cdb760004ba9ea4d525f2e043745dfe85bb9077e
+        uses: snyk/actions/docker@9adf32b1121593767fc3c057af55b55db032dc04
         continue-on-error: true
         id: docker-image-scan
         env:
