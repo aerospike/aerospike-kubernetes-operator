@@ -68,6 +68,7 @@ var _ = Describe(
 
 				// Update maxUnavailable
 				By("Update maxUnavailable to 0")
+
 				aeroCluster.Spec.MaxUnavailable = &maxUnavailable
 
 				Expect(updateCluster(k8sClient, ctx, aeroCluster)).ToNot(HaveOccurred())
@@ -99,6 +100,7 @@ var _ = Describe(
 				validatePDB(ctx, aeroCluster, defaultMaxUnavailable.IntValue())
 
 				By("Update disablePDB to true")
+
 				aeroCluster.Spec.DisablePDB = ptr.To(true)
 				Expect(updateCluster(k8sClient, ctx, aeroCluster)).ToNot(HaveOccurred())
 
@@ -112,6 +114,7 @@ var _ = Describe(
 				pkgLog.Info("PDB deleted as expected")
 
 				By("Update disablePDB to false")
+
 				aeroCluster.Spec.DisablePDB = ptr.To(false)
 				err = updateCluster(k8sClient, ctx, aeroCluster)
 				Expect(err).ToNot(HaveOccurred())
@@ -124,6 +127,7 @@ var _ = Describe(
 				)
 
 				By("Create PDB")
+
 				err := createPDB(ctx, aeroCluster, defaultMaxUnavailable.IntValue())
 				Expect(err).ToNot(HaveOccurred())
 
@@ -133,6 +137,7 @@ var _ = Describe(
 				Expect(err).To(HaveOccurred())
 
 				By("Delete PDB")
+
 				err = deletePDB(ctx, aeroCluster)
 				Expect(err).ToNot(HaveOccurred())
 
@@ -184,7 +189,6 @@ var _ = Describe(
 				value := intstr.FromInt32(2)
 				aeroCluster.Spec.MaxUnavailable = &value
 				Expect(DeployCluster(k8sClient, ctx, aeroCluster)).To(HaveOccurred())
-
 			})
 		})
 	})

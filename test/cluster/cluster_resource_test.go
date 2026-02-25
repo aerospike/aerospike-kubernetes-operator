@@ -19,12 +19,10 @@ import (
 
 var _ = Describe(
 	"ClusterResource", func() {
-
 		ctx := goctx.TODO()
 
 		Context(
 			"When doing valid operations", func() {
-
 				clusterName := "cl-resource-lifecycle"
 				clusterNamespacedName := test.GetNamespacedName(
 					clusterName, namespace,
@@ -65,7 +63,6 @@ var _ = Describe(
 
 		Context(
 			"When doing invalid operations", func() {
-
 				// Test aerospike-server resource
 				invalidResourceTest(ctx, true)
 

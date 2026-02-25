@@ -21,12 +21,10 @@ import (
 
 var _ = Describe(
 	"LargeReconcile", func() {
-
 		ctx := goctx.Background()
 
 		Context(
 			"When doing valid operations", func() {
-
 				clusterName := "large-reconcile"
 				clusterNamespacedName := test.GetNamespacedName(
 					clusterName, namespace,
@@ -53,7 +51,6 @@ var _ = Describe(
 
 				It(
 					"Should try large reconcile operations", func() {
-
 						By("Deploy and load data")
 
 						Expect(DeployCluster(k8sClient, ctx, aeroCluster)).ToNot(HaveOccurred())
@@ -160,6 +157,7 @@ var _ = Describe(
 
 							err = UpdateClusterImage(aeroCluster, latestImage)
 							Expect(err).ToNot(HaveOccurred())
+
 							return k8sClient.Update(goctx.TODO(), aeroCluster)
 						}, time.Minute, time.Second).ShouldNot(HaveOccurred())
 

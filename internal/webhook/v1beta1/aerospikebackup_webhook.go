@@ -22,12 +22,10 @@ import (
 	"reflect"
 	"strings"
 
-	"k8s.io/apimachinery/pkg/runtime"
 	"k8s.io/apimachinery/pkg/types"
 	ctrl "sigs.k8s.io/controller-runtime"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 	logf "sigs.k8s.io/controller-runtime/pkg/log"
-	"sigs.k8s.io/controller-runtime/pkg/webhook"
 	"sigs.k8s.io/controller-runtime/pkg/webhook/admission"
 	"sigs.k8s.io/yaml"
 
@@ -39,7 +37,7 @@ import (
 
 // SetupAerospikeBackupWebhookWithManager registers the webhook for AerospikeBackup in the manager.
 func SetupAerospikeBackupWebhookWithManager(mgr ctrl.Manager) error {
-	return ctrl.NewWebhookManagedBy(mgr).For(&asdbv1beta1.AerospikeBackup{}).
+	return ctrl.NewWebhookManagedBy(mgr, &asdbv1beta1.AerospikeBackup{}).
 		WithDefaulter(&AerospikeBackupCustomDefaulter{}).
 		WithValidator(&AerospikeBackupCustomValidator{}).
 		Complete()
@@ -52,16 +50,10 @@ type AerospikeBackupCustomDefaulter struct {
 	// Default values for various AerospikeBackup fields
 }
 
-// Implemented webhook.CustomDefaulter interface for future reference
-var _ webhook.CustomDefaulter = &AerospikeBackupCustomDefaulter{}
+var _ admission.Defaulter[*asdbv1beta1.AerospikeBackup] = &AerospikeBackupCustomDefaulter{}
 
 // Default implements webhook.CustomDefaulter so a webhook will be registered for the type
-func (abd *AerospikeBackupCustomDefaulter) Default(_ context.Context, obj runtime.Object) error {
-	backup, ok := obj.(*asdbv1beta1.AerospikeBackup)
-	if !ok {
-		return fmt.Errorf("expected AerospikeBackup, got %T", obj)
-	}
-
+func (abd *AerospikeBackupCustomDefaulter) Default(_ context.Context, backup *asdbv1beta1.AerospikeBackup) error {
 	abLog := logf.Log.WithName(namespacedName(backup))
 
 	abLog.Info("Setting defaults for aerospikeBackup")
@@ -73,19 +65,14 @@ func (abd *AerospikeBackupCustomDefaulter) Default(_ context.Context, obj runtim
 type AerospikeBackupCustomValidator struct {
 }
 
+var _ admission.Validator[*asdbv1beta1.AerospikeBackup] = &AerospikeBackupCustomValidator{}
+
 //nolint:lll // for readability
 // +kubebuilder:webhook:path=/validate-asdb-aerospike-com-v1beta1-aerospikebackup,mutating=false,failurePolicy=fail,sideEffects=None,groups=asdb.aerospike.com,resources=aerospikebackups,verbs=create;update,versions=v1beta1,name=vaerospikebackup.kb.io,admissionReviewVersions=v1
 
-var _ webhook.CustomValidator = &AerospikeBackupCustomValidator{}
-
 // ValidateCreate implements webhook.CustomValidator so a webhook will be registered for the type
-func (abv *AerospikeBackupCustomValidator) ValidateCreate(_ context.Context, obj runtime.Object,
+func (abv *AerospikeBackupCustomValidator) ValidateCreate(_ context.Context, backup *asdbv1beta1.AerospikeBackup,
 ) (admission.Warnings, error) {
-	backup, ok := obj.(*asdbv1beta1.AerospikeBackup)
-	if !ok {
-		return nil, fmt.Errorf("expected AerospikeBackup, got %T", obj)
-	}
-
 	abLog := logf.Log.WithName(namespacedName(backup))
 
 	abLog.Info("Validate create")
@@ -102,18 +89,11 @@ func (abv *AerospikeBackupCustomValidator) ValidateCreate(_ context.Context, obj
 }
 
 // ValidateUpdate implements webhook.CustomValidator so a webhook will be registered for the type
-func (abv *AerospikeBackupCustomValidator) ValidateUpdate(_ context.Context, oldObj, newObj runtime.Object,
-) (admission.Warnings, error) {
-	backup, ok := newObj.(*asdbv1beta1.AerospikeBackup)
-	if !ok {
-		return nil, fmt.Errorf("expected AerospikeBackup, got %T", newObj)
-	}
-
+func (abv *AerospikeBackupCustomValidator) ValidateUpdate(_ context.Context,
+	oldObject, backup *asdbv1beta1.AerospikeBackup) (admission.Warnings, error) {
 	abLog := logf.Log.WithName(namespacedName(backup))
 
 	abLog.Info("Validate update")
-
-	oldObject := oldObj.(*asdbv1beta1.AerospikeBackup)
 
 	if !reflect.DeepEqual(backup.Spec.BackupService, oldObject.Spec.BackupService) {
 		return nil, fmt.Errorf("backup service cannot be updated")
@@ -151,13 +131,8 @@ func validateBackup(backup *asdbv1beta1.AerospikeBackup) error {
 }
 
 // ValidateDelete implements webhook.CustomValidator so a webhook will be registered for the type
-func (abv *AerospikeBackupCustomValidator) ValidateDelete(_ context.Context, obj runtime.Object,
+func (abv *AerospikeBackupCustomValidator) ValidateDelete(_ context.Context, backup *asdbv1beta1.AerospikeBackup,
 ) (admission.Warnings, error) {
-	backup, ok := obj.(*asdbv1beta1.AerospikeBackup)
-	if !ok {
-		return nil, fmt.Errorf("expected AerospikeBackup, got %T", obj)
-	}
-
 	abLog := logf.Log.WithName(namespacedName(backup))
 
 	abLog.Info("Validate delete")

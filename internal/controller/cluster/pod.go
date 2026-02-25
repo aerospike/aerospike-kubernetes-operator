@@ -1421,7 +1421,7 @@ func (r *SingleClusterReconciler) handleNSOrDeviceRemovalPerPod(
 		dirtyVolumes.Insert(removedDevices...)
 		dirtyVolumes.Insert(podStatus.DirtyVolumes...)
 
-		var patches []jsonpatch.PatchOperation
+		patches := make([]jsonpatch.PatchOperation, 0, 1)
 
 		patch1 := jsonpatch.PatchOperation{
 			Operation: "replace",

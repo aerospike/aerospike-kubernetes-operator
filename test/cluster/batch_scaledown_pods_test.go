@@ -54,10 +54,12 @@ var _ = Describe("BatchScaleDown", func() {
 
 		It("Should scale-down one pod at a time", func() {
 			By("Using default ScaleDownBatchSize PCT/ScaleDownBatchSize Count")
+
 			err := batchScaleDownTest(k8sClient, ctx, clusterNamespacedName, nil, 2)
 			Expect(err).ToNot(HaveOccurred())
 
 			By("Using ScaleDownBatchSize PCT which is not enough eg. 1%")
+
 			err = batchScaleDownTest(k8sClient, ctx, clusterNamespacedName, percent("1%"), 2)
 			Expect(err).ToNot(HaveOccurred())
 		})
@@ -98,7 +100,6 @@ var _ = Describe("BatchScaleDown", func() {
 	// TODO: Do we need to add all the invalid operation test-cases here?
 	// Skipped for now as they are exactly same as RollingUpdateBatchSize invalid operation test-cases
 	Context("When doing invalid operations", func() {
-
 		BeforeEach(
 			func() {
 				aeroCluster := createDummyAerospikeCluster(clusterNamespacedName, 8)

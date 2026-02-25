@@ -32,6 +32,7 @@ var _ = Describe("Pod eviction webhook", func() {
 
 	AfterEach(func() {
 		By("cleaning up test pod")
+
 		_ = k8sClient.Delete(ctx, pod)
 
 		Eventually(func() bool {
@@ -55,12 +56,14 @@ var _ = Describe("Pod eviction webhook", func() {
 			}, 5*time.Second, 500*time.Millisecond).Should(Succeed())
 
 			By("creating eviction object")
+
 			eviction := &policyv1.Eviction{
 				ObjectMeta:    metav1.ObjectMeta{Name: podName, Namespace: testNs},
 				DeleteOptions: &metav1.DeleteOptions{},
 			}
 
 			By("attempting eviction")
+
 			err := clientSet.CoreV1().Pods(testNs).EvictV1(ctx, eviction)
 			Expect(err).NotTo(HaveOccurred())
 
@@ -70,7 +73,6 @@ var _ = Describe("Pod eviction webhook", func() {
 				return apierrors.IsNotFound(err)
 			}, 5*time.Second, 500*time.Millisecond).Should(BeTrue())
 		})
-
 	})
 
 	Context("When webhook is enabled", func() {
@@ -89,12 +91,14 @@ var _ = Describe("Pod eviction webhook", func() {
 				}, 5*time.Second, 500*time.Millisecond).Should(Succeed())
 
 				By("creating eviction object")
+
 				eviction := &policyv1.Eviction{
 					ObjectMeta:    metav1.ObjectMeta{Name: podName, Namespace: testNs},
 					DeleteOptions: &metav1.DeleteOptions{},
 				}
 
 				By("attempting eviction")
+
 				err := clientSet.CoreV1().Pods(testNs).EvictV1(ctx, eviction)
 				Expect(err).To(HaveOccurred())
 				Expect(err.Error()).To(ContainSubstring("blocked by admission webhook"))
@@ -121,6 +125,7 @@ var _ = Describe("Pod eviction webhook", func() {
 				}, 5*time.Second, 500*time.Millisecond).Should(Succeed())
 
 				By("attempting eviction")
+
 				eviction := &policyv1.Eviction{
 					ObjectMeta:    metav1.ObjectMeta{Name: podName, Namespace: testNs},
 					DeleteOptions: &metav1.DeleteOptions{},
@@ -141,6 +146,7 @@ var _ = Describe("Pod eviction webhook", func() {
 				nonExistentPodName := "non-existent-pod"
 
 				By("attempting to evict non-existent pod")
+
 				eviction := &policyv1.Eviction{
 					ObjectMeta:    metav1.ObjectMeta{Name: nonExistentPodName, Namespace: testNs},
 					DeleteOptions: &metav1.DeleteOptions{},
