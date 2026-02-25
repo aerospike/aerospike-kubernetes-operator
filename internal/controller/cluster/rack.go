@@ -2101,7 +2101,6 @@ func (r *SingleClusterReconciler) reconcileRevisionChangedRacks(
 		batchSize = 1
 	}
 
-	//nolint:gosec // can't exceed int32 range
 	batchSizeInt32 := int32(batchSize)
 
 	totalCurrentPods := oldReplicas + newReplicas

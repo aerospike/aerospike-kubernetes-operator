@@ -121,7 +121,6 @@ func (r *SingleClusterReconciler) getClientPolicy() *as.ClientPolicy {
 		r.Log.V(1).Info("Set tls config in aerospike client policy")
 		clientCertSpec := r.aeroCluster.Spec.OperatorClientCertSpec
 
-		//nolint:gosec // This is a default TLS MinVersion
 		tlsConf := tls.Config{
 			RootCAs: r.getClusterServerCAPool(
 				clientCertSpec, r.aeroCluster.Namespace,

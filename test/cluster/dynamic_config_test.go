@@ -74,6 +74,7 @@ var _ = Describe(
 						)
 						aeroCluster.Spec.AerospikeConfig.Value["namespaces"] = append(
 							aeroCluster.Spec.AerospikeConfig.Value["namespaces"].([]interface{}), getNonSCInMemoryNamespaceConfig("mem"))
+						//nolint:gosec // G101 test config path, not real credentials
 						aeroCluster.Spec.AerospikeConfig.Value[asdbv1.ConfKeyXdr] = map[string]interface{}{
 							"dcs": []map[string]interface{}{
 								{
@@ -116,6 +117,7 @@ var _ = Describe(
 						aeroCluster.Spec.AerospikeConfig.Value[asdbv1.ConfKeyService].(map[string]interface{})["proto-fd-max"] = 18000
 						aeroCluster.Spec.AerospikeConfig.Value["security"].(map[string]interface{})["log"] = log
 
+						//nolint:gosec // G101 test config path, not real credentials
 						dc := map[string]interface{}{
 							"name":      "dc2",
 							"auth-mode": "internal",
@@ -328,6 +330,7 @@ var _ = Describe(
 						aeroCluster := createDummyAerospikeCluster(
 							clusterNamespacedName, 2,
 						)
+						//nolint:gosec // G101 test config path, not real credentials
 						aeroCluster.Spec.AerospikeConfig.Value[asdbv1.ConfKeyXdr] = map[string]interface{}{
 							"dcs": []map[string]interface{}{
 								{
@@ -402,6 +405,7 @@ var _ = Describe(
 						// Which leads to pod failures.
 						aeroCluster.Spec.AerospikeConfig.Value[asdbv1.ConfKeyService].(map[string]interface{})["proto-fd-max"] = 9999999
 
+						//nolint:gosec // G101 test config path, not real credentials
 						dc := map[string]interface{}{
 							"name":      "dc2",
 							"auth-mode": "internal",
@@ -469,6 +473,7 @@ var _ = Describe(
 								},
 							},
 						)
+						//nolint:gosec // G101 test config path, not real credentials
 						aeroCluster.Spec.AerospikeConfig.Value[asdbv1.ConfKeyXdr] = map[string]interface{}{
 							"dcs": []map[string]interface{}{
 								{

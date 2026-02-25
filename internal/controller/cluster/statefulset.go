@@ -1330,7 +1330,8 @@ func (r *SingleClusterReconciler) initializeSTSStorage(
 	rackState *RackState,
 ) {
 	// Initialize sts storage
-	specVolumes := make([]corev1.Volume, 0, len(st.Spec.Template.Spec.InitContainers))
+	//nolint:prealloc // no fixed size
+	var specVolumes []corev1.Volume
 
 	for idx := range st.Spec.Template.Spec.InitContainers {
 		externalMounts, volumesForMount := r.getExternalStorageMounts(

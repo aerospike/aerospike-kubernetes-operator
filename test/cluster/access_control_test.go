@@ -2487,6 +2487,7 @@ var _ = Describe(
 				racks := getDummyRackConf(1, 2)
 				aeroCluster.Spec.RackConfig.Racks = racks
 				aeroCluster.Spec.RackConfig.Namespaces = []string{"test"}
+				//nolint:gosec // G101 test path literal, not real credentials
 				aeroCluster.Spec.AerospikeConfig.Value["security"] = map[string]interface{}{
 					"default-password-file": "/etc/aerospike/defaultpass/password.conf",
 				}
@@ -2514,6 +2515,7 @@ var _ = Describe(
 				// Setting incorrect secret name so that access control reconciler could not set the password for admin.
 				aeroCluster.Spec.AerospikeAccessControl.Users[0].SecretName = "incorrectSecretName"
 				// This file is already added in the storage volume backed by the secret.
+				//nolint:gosec // G101 test path literal, not real credentials
 				aeroCluster.Spec.AerospikeConfig.Value["security"] = map[string]interface{}{
 					"default-password-file": "/etc/aerospike/secret/password.conf",
 				}
