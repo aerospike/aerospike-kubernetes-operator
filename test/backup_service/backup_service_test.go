@@ -37,6 +37,7 @@ var _ = Describe(
 				It("Should fail when wrong format backup service config is given", func() {
 					badConfig, gErr := getWrongBackupServiceConfBytes()
 					Expect(gErr).ToNot(HaveOccurred())
+
 					backupService = newBackupServiceWithConfig(backupServiceNamespacedName, badConfig)
 
 					err = DeployBackupService(k8sClient, backupService)
@@ -85,6 +86,7 @@ var _ = Describe(
 					Expect(err).ToNot(HaveOccurred())
 
 					By("Downgrading image version to 2.0")
+
 					backupService, err = getBackupServiceObj(k8sClient, backupServiceNamespacedName)
 					Expect(err).ToNot(HaveOccurred())
 
@@ -98,6 +100,7 @@ var _ = Describe(
 				It("Should fail when duplicate volume names are given in secrets", func() {
 					backupService, err = NewBackupService(backupServiceNamespacedName)
 					Expect(err).ToNot(HaveOccurred())
+
 					secretCopy := backupService.Spec.SecretMounts[0]
 					backupService.Spec.SecretMounts = append(backupService.Spec.SecretMounts, secretCopy)
 
@@ -161,6 +164,7 @@ var _ = Describe(
 				It("Should fail when adding reserved label", func() {
 					backupService, err = NewBackupService(backupServiceNamespacedName)
 					Expect(err).ToNot(HaveOccurred())
+
 					backupService.Spec.PodSpec.ObjectMeta.Labels = map[string]string{
 						asdbv1.AerospikeAppLabel: "test",
 					}
@@ -235,8 +239,9 @@ var _ = Describe(
 
 			It("Should do hot-reload when dynamic fields are changed in backup service config", func() {
 				backupService, err = NewBackupService(backupServiceNamespacedName)
-				backupService.Spec.Service = &asdbv1beta1.Service{Type: corev1.ServiceTypeLoadBalancer}
 				Expect(err).ToNot(HaveOccurred())
+
+				backupService.Spec.Service = &asdbv1beta1.Service{Type: corev1.ServiceTypeLoadBalancer}
 				err = DeployBackupService(k8sClient, backupService)
 				Expect(err).ToNot(HaveOccurred())
 
@@ -337,6 +342,7 @@ var _ = Describe(
 
 				backupService, err = NewBackupService(backupServiceNamespacedName)
 				Expect(err).ToNot(HaveOccurred())
+
 				backupService.Spec.PodSpec.ObjectMeta.Labels = labels
 				backupService.Spec.PodSpec.ObjectMeta.Annotations = annotations
 				err = DeployBackupService(k8sClient, backupService)
@@ -345,11 +351,13 @@ var _ = Describe(
 				validatePodObjectMeta(annotations, labels, backupServiceNamespacedName)
 
 				By("Updating custom annotations and labels")
+
 				updatedLabels := map[string]string{"label-test-2": "test-2", "label-test-3": "test-3"}
 				updatedAnnotations := map[string]string{"annotation-test-2": "test-2", "annotation-test-3": "test-3"}
 
 				backupService, err = getBackupServiceObj(k8sClient, backupServiceNamespacedName)
 				Expect(err).ToNot(HaveOccurred())
+
 				backupService.Spec.PodSpec.ObjectMeta.Labels = updatedLabels
 				backupService.Spec.PodSpec.ObjectMeta.Annotations = updatedAnnotations
 				err = updateBackupService(k8sClient, backupService)
@@ -363,6 +371,7 @@ var _ = Describe(
 				Expect(err).ToNot(HaveOccurred())
 
 				By("Validating Affinity")
+
 				affinity := &corev1.Affinity{}
 				st := []corev1.PreferredSchedulingTerm{
 					{
@@ -388,6 +397,7 @@ var _ = Describe(
 
 				backupService, err = getBackupServiceObj(k8sClient, backupServiceNamespacedName)
 				Expect(err).ToNot(HaveOccurred())
+
 				podList, gErr := getBackupServicePodList(k8sClient, backupService)
 				Expect(gErr).ToNot(HaveOccurred())
 				Expect(podList.Items).To(HaveLen(1))
@@ -447,6 +457,7 @@ var _ = Describe(
 				validateSA(asdbv1beta1.AerospikeBackupServiceKey)
 
 				By("Update Service Account")
+
 				backupService, err = getBackupServiceObj(k8sClient, backupServiceNamespacedName)
 				Expect(err).ToNot(HaveOccurred())
 
@@ -457,6 +468,7 @@ var _ = Describe(
 				validateSA("default")
 
 				By("Revert back to previous Service Account")
+
 				backupService, err = getBackupServiceObj(k8sClient, backupServiceNamespacedName)
 				Expect(err).ToNot(HaveOccurred())
 
@@ -506,6 +518,7 @@ var _ = Describe(
 				Expect(err).To(HaveOccurred())
 
 				By("Adding node labels to make infra available")
+
 				err = test.SetNodeLabels(testCtx, k8sClient,
 					map[string]string{
 						nodeLabelKey: nodeLabelValue,
@@ -529,6 +542,7 @@ var _ = Describe(
 				Expect(err).ToNot(HaveOccurred())
 
 				By("Update Aerospike backup service port and node affinity")
+
 				backupService.Spec.Config.Raw = []byte(`{"service":{"http":{"port":8080}}}`)
 
 				affinity := &corev1.Affinity{}
@@ -556,6 +570,7 @@ var _ = Describe(
 				Expect(err).To(HaveOccurred())
 
 				By("Adding node labels to make infra available")
+
 				err := test.SetNodeLabels(testCtx, k8sClient,
 					map[string]string{
 						nodeLabelKey: nodeLabelValue,

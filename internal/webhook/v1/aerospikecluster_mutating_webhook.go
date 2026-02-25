@@ -24,10 +24,9 @@ import (
 
 	"github.com/go-logr/logr"
 	corev1 "k8s.io/api/core/v1"
-	"k8s.io/apimachinery/pkg/runtime"
 	"k8s.io/apimachinery/pkg/util/intstr"
 	logf "sigs.k8s.io/controller-runtime/pkg/log"
-	"sigs.k8s.io/controller-runtime/pkg/webhook"
+	"sigs.k8s.io/controller-runtime/pkg/webhook/admission"
 
 	asdbv1 "github.com/aerospike/aerospike-kubernetes-operator/v4/api/v1"
 	"github.com/aerospike/aerospike-kubernetes-operator/v4/pkg/merge"
@@ -42,18 +41,15 @@ type AerospikeClusterCustomDefaulter struct {
 }
 
 // Implemented webhook.CustomDefaulter interface for future reference
-var _ webhook.CustomDefaulter = &AerospikeClusterCustomDefaulter{}
+var _ admission.Defaulter[*asdbv1.AerospikeCluster] = &AerospikeClusterCustomDefaulter{}
 
 //nolint:lll // for readability
 // +kubebuilder:webhook:path=/mutate-asdb-aerospike-com-v1-aerospikecluster,mutating=true,failurePolicy=fail,sideEffects=None,groups=asdb.aerospike.com,resources=aerospikeclusters,verbs=create;update,versions=v1,name=maerospikecluster.kb.io,admissionReviewVersions={v1}
 
 // Default implements webhook.CustomDefaulter so a webhook will be registered for the type
-func (acd *AerospikeClusterCustomDefaulter) Default(_ context.Context, obj runtime.Object) error {
-	aerospikeCluster, ok := obj.(*asdbv1.AerospikeCluster)
-	if !ok {
-		return fmt.Errorf("expected AerospikeCluster, got %T", obj)
-	}
-
+func (acd *AerospikeClusterCustomDefaulter) Default(_ context.Context,
+	aerospikeCluster *asdbv1.AerospikeCluster,
+) error {
 	asLog := logf.Log.WithName(asdbv1.ClusterNamespacedName(aerospikeCluster))
 
 	asLog.Info(
@@ -642,6 +638,7 @@ func addOperatorClientNameIfNeeded(
 						return true
 					}
 				}
+
 				return false
 			}() {
 				value = append(value, clientCertSpec.TLSClientName)

@@ -22,9 +22,9 @@ var (
 var _ = Describe(
 	"StorageWipe", func() {
 		ctx := goctx.Background()
+
 		Context(
 			"When doing valid operations", func() {
-
 				containerName := "tomcat"
 				podSpec := asdbv1.AerospikePodSpec{
 					MultiPodPerHost: ptr.To(true),
@@ -62,7 +62,6 @@ var _ = Describe(
 
 				It(
 					"Should validate all storage-wipe policies", func() {
-
 						storageConfig := getAerospikeWipeStorageConfig(
 							containerName, false, cloudProvider,
 						)
@@ -99,10 +98,12 @@ var _ = Describe(
 						Expect(err).ToNot(HaveOccurred())
 
 						By("Writing some data to the all volumes")
+
 						err = writeDataToVolumes(aeroCluster)
 						Expect(err).ToNot(HaveOccurred())
 
 						By("Writing some data to the cluster")
+
 						err = WriteDataToCluster(
 							aeroCluster, k8sClient, namespaces,
 						)
@@ -114,6 +115,7 @@ var _ = Describe(
 								post6Image, version6,
 							),
 						)
+
 						err = UpdateClusterImage(aeroCluster, version6Image)
 						Expect(err).ToNot(HaveOccurred())
 						err = aerospikeClusterCreateUpdate(
@@ -127,6 +129,7 @@ var _ = Describe(
 						Expect(err).ToNot(HaveOccurred())
 
 						By("Checking - unrelated volume attachments should not be wiped")
+
 						err = checkData(
 							aeroCluster, true, true, map[string]struct{}{
 								"test-wipe-device-dd-1":                             {},
@@ -140,6 +143,7 @@ var _ = Describe(
 						Expect(err).ToNot(HaveOccurred())
 
 						By("Checking - cluster data should not be wiped")
+
 						records, err := CheckDataInCluster(
 							aeroCluster, k8sClient, namespaces,
 						)

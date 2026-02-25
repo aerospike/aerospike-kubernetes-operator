@@ -14,7 +14,6 @@ import (
 
 var _ = Describe(
 	"Backup Service Test", func() {
-
 		var (
 			backup     *asdbv1beta1.AerospikeBackup
 			err        error
@@ -36,6 +35,7 @@ var _ = Describe(
 
 					badConfig, gErr := getWrongBackupConfBytes(namePrefix(backupNsNm))
 					Expect(gErr).ToNot(HaveOccurred())
+
 					backup.Spec.Config.Raw = badConfig
 
 					err = CreateBackup(k8sClient, backup)
@@ -363,7 +363,6 @@ var _ = Describe(
 
 				err = validateTriggeredBackup(k8sClient, backup)
 				Expect(err).ToNot(HaveOccurred())
-
 			})
 
 			It("Should trigger backup when correct backup config with TLS and local storage are given", func() {
@@ -374,7 +373,6 @@ var _ = Describe(
 
 				err = validateTriggeredBackup(k8sClient, backup)
 				Expect(err).ToNot(HaveOccurred())
-
 			})
 
 			It("Should trigger backup when correct backup config with s3 storage is given", func() {
@@ -408,6 +406,7 @@ var _ = Describe(
 				Expect(err).ToNot(HaveOccurred())
 
 				By("Get Backup service configmap to update new dangling backup routine")
+
 				var cm corev1.ConfigMap
 
 				err = k8sClient.Get(testCtx,
@@ -439,6 +438,7 @@ var _ = Describe(
 				Expect(err).ToNot(HaveOccurred())
 
 				By("Update backup CR to add on-demand backup")
+
 				backup, err = getBackupObj(k8sClient, backup.Name, backup.Namespace)
 				Expect(err).ToNot(HaveOccurred())
 
@@ -453,6 +453,7 @@ var _ = Describe(
 				Expect(err).ToNot(HaveOccurred())
 
 				By("Validate the routine is removed from the Backup service configMap")
+
 				err = k8sClient.Get(testCtx,
 					types.NamespacedName{Name: backupServiceName, Namespace: backupServiceNamespace},
 					&cm)
@@ -520,6 +521,7 @@ var _ = Describe(
 				Expect(err).ToNot(HaveOccurred())
 
 				By("Removing 1 backup-routine from backup CR")
+
 				backupConfig = getBackupConfigInMap(namePrefix(backupNsNm))
 
 				configBytes, err = json.Marshal(backupConfig)
@@ -533,7 +535,6 @@ var _ = Describe(
 				err = validateTriggeredBackup(k8sClient, backup)
 				Expect(err).ToNot(HaveOccurred())
 			})
-
 		})
 	},
 )

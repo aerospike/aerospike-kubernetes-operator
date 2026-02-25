@@ -45,6 +45,7 @@ var _ = Describe(
 		It(
 			"Validate LDAP user transactions", func() {
 				By("DeployCluster with LDAP auth")
+
 				aeroCluster := getAerospikeClusterSpecWithLDAP(clusterNamespacedName)
 				Expect(DeployCluster(k8sClient, ctx, aeroCluster)).ToNot(HaveOccurred())
 

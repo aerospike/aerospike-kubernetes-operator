@@ -29,7 +29,6 @@ const (
 
 var _ = Describe(
 	"AerospikeCluster", func() {
-
 		ctx := goctx.TODO()
 
 		// Cluster lifecycle related
