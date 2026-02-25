@@ -653,6 +653,7 @@ func (r *SingleClusterReconciler) updateSTS(
 
 		// Save the updated stateful set.
 		found.Spec = statefulSet.Spec
+
 		return r.Update(context.TODO(), found, common.UpdateOption)
 	}); err != nil {
 		return fmt.Errorf(
@@ -1329,6 +1330,7 @@ func (r *SingleClusterReconciler) initializeSTSStorage(
 	rackState *RackState,
 ) {
 	// Initialize sts storage
+	//nolint:prealloc // no fixed size
 	var specVolumes []corev1.Volume
 
 	for idx := range st.Spec.Template.Spec.InitContainers {

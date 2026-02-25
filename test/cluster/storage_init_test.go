@@ -37,7 +37,6 @@ var _ = Describe(
 
 		Context(
 			"When doing valid operations", func() {
-
 				trueVar := true
 				cleanupThreads := 3
 				updatedCleanupThreads := 5
@@ -80,7 +79,6 @@ var _ = Describe(
 
 				It(
 					"Should work for large device with long init and multithreading", func() {
-
 						ddInitMethod := asdbv1.AerospikeVolumeMethodDD
 
 						racks := []asdbv1.Rack{
@@ -175,7 +173,6 @@ var _ = Describe(
 
 				It(
 					"Should validate all storage-init policies", func() {
-
 						racks := []asdbv1.Rack{
 							{
 								ID: 1,
@@ -205,6 +202,7 @@ var _ = Describe(
 						Expect(err).ToNot(HaveOccurred())
 
 						By("Writing some data to all volumes")
+
 						err = writeDataToVolumes(aeroCluster)
 						Expect(err).ToNot(HaveOccurred())
 
@@ -214,6 +212,7 @@ var _ = Describe(
 						Expect(err).ToNot(HaveOccurred())
 
 						By("Forcing a rolling restart, volumes should still have data")
+
 						err = UpdateClusterImage(aeroCluster, nextImage)
 						Expect(err).ToNot(HaveOccurred())
 						err = aerospikeClusterCreateUpdate(
@@ -230,6 +229,7 @@ var _ = Describe(
 						Expect(DeleteCluster(k8sClient, ctx, aeroCluster)).ToNot(HaveOccurred())
 
 						By("Recreating. Older volumes will still be around and reused")
+
 						aeroCluster = getStorageInitAerospikeCluster(
 							clusterNamespacedName, storageConfig, racks,
 							nextImage,
@@ -241,12 +241,14 @@ var _ = Describe(
 						Expect(err).ToNot(HaveOccurred())
 
 						By("Checking volumes that need initialization, they should not have data")
+
 						err = checkData(
 							aeroCluster, false, true, map[string]struct{}{},
 						)
 						Expect(err).ToNot(HaveOccurred())
 
 						By("Updating the volumes to cascade delete so that volumes are cleaned up")
+
 						aeroCluster.Spec.Storage.BlockVolumePolicy.InputCascadeDelete = &trueVar
 						aeroCluster.Spec.Storage.FileSystemVolumePolicy.InputCascadeDelete = &trueVar
 						err = aerospikeClusterCreateUpdate(
@@ -267,7 +269,6 @@ var _ = Describe(
 
 				It(
 					"Should work for large device with long init", func() {
-
 						racks := []asdbv1.Rack{
 							{
 								ID: 1,
@@ -294,7 +295,6 @@ var _ = Describe(
 
 		Context(
 			"When doing invalid operations", func() {
-
 				threeVar := 3
 				clusterName := fmt.Sprintf("storage-init-%d", GinkgoParallelProcess())
 				clusterNamespacedName := test.GetNamespacedName(
@@ -303,7 +303,6 @@ var _ = Describe(
 
 				It(
 					"Should fail multithreading in init container if resource limit is not set", func() {
-
 						racks := []asdbv1.Rack{
 							{
 								ID: 1,
@@ -329,7 +328,6 @@ var _ = Describe(
 
 		Context(
 			"When doing PVC change", func() {
-
 				clusterName := fmt.Sprintf("storage-init-%d", GinkgoParallelProcess())
 				clusterNamespacedName := test.GetNamespacedName(
 					clusterName, namespace,
@@ -338,7 +336,6 @@ var _ = Describe(
 
 				BeforeEach(
 					func() {
-
 						racks := []asdbv1.Rack{
 							{ID: 1},
 							{ID: 2},
@@ -374,7 +371,6 @@ var _ = Describe(
 
 				It(
 					"Should change the pvcUID in initialisedVolumes", func() {
-
 						aeroCluster, err := getCluster(k8sClient, ctx, clusterNamespacedName)
 						Expect(err).ToNot(HaveOccurred())
 
@@ -424,7 +420,6 @@ var _ = Describe(
 
 				It(
 					"Should remove old formatted initialisedVolumes names", func() {
-
 						aeroCluster, err := getCluster(k8sClient, ctx, clusterNamespacedName)
 						Expect(err).ToNot(HaveOccurred())
 
@@ -444,7 +439,7 @@ var _ = Describe(
 							Value:     append(oldInitVol, initVolName),
 						}
 
-						var patches []jsonpatch.PatchOperation
+						patches := make([]jsonpatch.PatchOperation, 0, 1)
 						patches = append(patches, patch1)
 
 						jsonPatchJSON, err := json.Marshal(patches)

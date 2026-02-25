@@ -137,7 +137,7 @@ func setStorageDefaults(storage *asdbv1.AerospikeStorageSpec) {
 
 func validateHostPathVolumeReadOnly(volume *asdbv1.VolumeSpec) error {
 	if volume.Source.HostPath != nil {
-		var attachments []asdbv1.VolumeAttachment
+		attachments := make([]asdbv1.VolumeAttachment, 0, len(volume.Sidecars)+len(volume.InitContainers))
 
 		attachments = append(attachments, volume.Sidecars...)
 		attachments = append(attachments, volume.InitContainers...)

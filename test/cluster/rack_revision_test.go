@@ -62,6 +62,7 @@ var _ = Describe(
 						It(
 							"Should handle rack revision batching correctly", func() {
 								By("Creating cluster with custom batch size")
+
 								aeroCluster := createDummyClusterWithRackRevision(clusterNamespacedName, versionV1, 6)
 								aeroCluster.Spec.RackConfig.RollingUpdateBatchSize = &intstr.IntOrString{IntVal: 2}
 								aeroCluster.Spec.RackConfig.Namespaces = []string{"test"}
@@ -95,6 +96,7 @@ var _ = Describe(
 						It(
 							"Should handle external StatefulSet deletion gracefully", func() {
 								By("Creating cluster and triggering migration")
+
 								aeroCluster := createDummyClusterWithRackRevision(clusterNamespacedName, versionV1, 6)
 								aeroCluster.Spec.AerospikeConfig.Value[asdbv1.ConfKeyNamespace] = []interface{}{
 									getNonSCNamespaceConfig("test", "/test/dev/xvdf"),
@@ -109,6 +111,7 @@ var _ = Describe(
 
 								// Manually delete old StatefulSet
 								By("Manually deleting old StatefulSet during migration")
+
 								err := deleteStatefulSet(k8sClient, ctx, clusterNamespacedName, versionV1, 1)
 								Expect(err).ToNot(HaveOccurred())
 
@@ -128,10 +131,12 @@ var _ = Describe(
 						It(
 							"Should handle cluster size reduction during migration", func() {
 								By("Creating cluster and starting migration")
+
 								aeroCluster := createDummyClusterWithRackRevision(clusterNamespacedName, versionV1, 6)
 								Expect(DeployCluster(k8sClient, ctx, aeroCluster)).ToNot(HaveOccurred())
 
 								By("Changing rack revision to trigger migration")
+
 								updatedCluster := changeRackRevision(k8sClient, ctx, clusterNamespacedName)
 
 								Eventually(func() bool {
@@ -156,6 +161,7 @@ var _ = Describe(
 						It(
 							"Should handle failed pods during rack revision migration", func() {
 								By("Creating cluster and triggering migration")
+
 								aeroCluster := createDummyClusterWithRackRevision(clusterNamespacedName, versionV1, 6)
 								Expect(DeployCluster(k8sClient, ctx, aeroCluster)).ToNot(HaveOccurred())
 
@@ -213,6 +219,7 @@ var _ = Describe(
 				It(
 					"Should reject more than 2 concurrent rack revisions", func() {
 						By("Attempting to create more than 2 concurrent revisions for a rack")
+
 						aeroCluster, err := getCluster(k8sClient, ctx, clusterNamespacedName)
 						Expect(err).ToNot(HaveOccurred())
 
@@ -229,6 +236,7 @@ var _ = Describe(
 				It(
 					"Should reject storage update validation bypass via revision bump and rollback", func() {
 						By("Starting a revision change with storage update")
+
 						aeroCluster, err := getCluster(k8sClient, ctx, clusterNamespacedName)
 						Expect(err).ToNot(HaveOccurred())
 
@@ -264,6 +272,7 @@ var _ = Describe(
 				It(
 					"Should reject in-place storage updates with same revision", func() {
 						By("Attempting in-place storage update without revision change")
+
 						aeroCluster, err := getCluster(k8sClient, ctx, clusterNamespacedName)
 						Expect(err).ToNot(HaveOccurred())
 
@@ -291,7 +300,6 @@ var _ = Describe(
 				)
 			},
 		)
-
 	},
 )
 

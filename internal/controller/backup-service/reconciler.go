@@ -743,6 +743,7 @@ func (r *SingleBackupServiceReconciler) waitForDeploymentToBeReady() error {
 			if deployment.Generation > deployment.Status.ObservedGeneration {
 				r.Log.Info("Waiting for deployment to be ready",
 					"deployment", getBackupServiceName(r.aeroBackupService))
+
 				return false, nil
 			}
 
@@ -754,6 +755,7 @@ func (r *SingleBackupServiceReconciler) waitForDeploymentToBeReady() error {
 			if len(podList.Items) == 0 {
 				r.Log.Info("No pod found for deployment",
 					"deployment", getBackupServiceName(r.aeroBackupService))
+
 				return false, nil
 			}
 
@@ -820,6 +822,7 @@ func (r *SingleBackupServiceReconciler) CopySpecToStatus() *asdbv1beta1.Aerospik
 	status.Config = r.aeroBackupService.Spec.Config
 	statusServicePodSpec := lib.DeepCopy(r.aeroBackupService.Spec.PodSpec).(asdbv1beta1.ServicePodSpec)
 	status.PodSpec = statusServicePodSpec
+	//nolint:staticcheck // SA1019 - backward compat for deprecated Resources field
 	status.Resources = r.aeroBackupService.Spec.Resources
 	status.SecretMounts = r.aeroBackupService.Spec.SecretMounts
 	status.Service = r.aeroBackupService.Spec.Service

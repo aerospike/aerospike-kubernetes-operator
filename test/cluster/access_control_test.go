@@ -225,6 +225,7 @@ var _ = Describe(
 						if valid || err == nil {
 							Fail("InValid aerospike spec validated")
 						}
+
 						Expect(valid).To(
 							BeFalse(), "InValid aerospike spec validated",
 						)
@@ -283,6 +284,7 @@ var _ = Describe(
 						if valid || err == nil {
 							Fail("InValid aerospike spec validated")
 						}
+
 						Expect(valid).To(
 							BeFalse(), "InValid aerospike spec validated",
 						)
@@ -338,6 +340,7 @@ var _ = Describe(
 						if valid || err == nil {
 							Fail("InValid aerospike spec validated")
 						}
+
 						Expect(valid).To(
 							BeFalse(), "InValid aerospike spec validated",
 						)
@@ -405,6 +408,7 @@ var _ = Describe(
 							if valid || err == nil {
 								Fail("InValid aerospike spec validated")
 							}
+
 							Expect(valid).To(
 								BeFalse(), "InValid aerospike spec validated",
 							)
@@ -476,6 +480,7 @@ var _ = Describe(
 							if valid || err == nil {
 								Fail("InValid aerospike spec validated")
 							}
+
 							Expect(valid).To(
 								BeFalse(), "InValid aerospike spec validated",
 							)
@@ -549,6 +554,7 @@ var _ = Describe(
 							if valid || err == nil {
 								Fail("InValid aerospike spec validated")
 							}
+
 							Expect(valid).To(
 								BeFalse(), "InValid aerospike spec validated",
 							)
@@ -620,6 +626,7 @@ var _ = Describe(
 						if valid || err == nil {
 							Fail("InValid aerospike spec validated")
 						}
+
 						Expect(valid).To(
 							BeFalse(), "InValid aerospike spec validated",
 						)
@@ -683,6 +690,7 @@ var _ = Describe(
 						if valid || err == nil {
 							Fail("InValid aerospike spec validated")
 						}
+
 						Expect(valid).To(
 							BeFalse(), "InValid aerospike spec validated",
 						)
@@ -749,6 +757,7 @@ var _ = Describe(
 						if valid || err == nil {
 							Fail("InValid aerospike spec validated")
 						}
+
 						Expect(valid).To(
 							BeFalse(), "InValid aerospike spec validated",
 						)
@@ -812,6 +821,7 @@ var _ = Describe(
 						if valid || err == nil {
 							Fail("InValid aerospike spec validated")
 						}
+
 						Expect(valid).To(
 							BeFalse(), "InValid aerospike spec validated",
 						)
@@ -885,6 +895,7 @@ var _ = Describe(
 						if valid || err == nil {
 							Fail("InValid aerospike spec validated")
 						}
+
 						Expect(valid).To(
 							BeFalse(), "InValid aerospike spec validated",
 						)
@@ -951,6 +962,7 @@ var _ = Describe(
 							if valid || err == nil {
 								Fail("InValid aerospike spec validated")
 							}
+
 							Expect(valid).To(
 								BeFalse(), "InValid aerospike spec validated",
 							)
@@ -1011,6 +1023,7 @@ var _ = Describe(
 						if valid || err == nil {
 							Fail("InValid aerospike spec validated")
 						}
+
 						Expect(valid).To(
 							BeFalse(), "InValid aerospike spec validated",
 						)
@@ -1067,6 +1080,7 @@ var _ = Describe(
 						if valid || err == nil {
 							Fail("InValid aerospike spec validated")
 						}
+
 						Expect(valid).To(
 							BeFalse(), "InValid aerospike spec validated",
 						)
@@ -1124,6 +1138,7 @@ var _ = Describe(
 						if valid || err == nil {
 							Fail("InValid aerospike spec validated")
 						}
+
 						Expect(valid).To(
 							BeFalse(), "InValid aerospike spec validated",
 						)
@@ -1185,6 +1200,7 @@ var _ = Describe(
 						if valid || err == nil {
 							Fail("InValid aerospike spec validated")
 						}
+
 						Expect(valid).To(
 							BeFalse(), "InValid aerospike spec validated",
 						)
@@ -1204,7 +1220,6 @@ var _ = Describe(
 
 				Context(
 					"When cluster is not deployed", func() {
-
 						clusterName := "ac-invalid"
 						clusterNamespacedName := test.GetNamespacedName(
 							clusterName, namespace,
@@ -1265,6 +1280,7 @@ var _ = Describe(
 										},
 									},
 								}
+
 								aerospikeConfigSpec, err := NewAerospikeConfSpec(latestImage)
 								if err != nil {
 									Fail(
@@ -1281,6 +1297,7 @@ var _ = Describe(
 									clusterNamespacedName, &accessControl,
 									aerospikeConfigSpec,
 								)
+
 								err = testAccessControlReconcile(
 									aeroCluster, ctx,
 								)
@@ -1392,10 +1409,12 @@ var _ = Describe(
 								if valid || err == nil {
 									Fail("InValid aerospike spec validated")
 								}
+
 								Expect(valid).To(
 									BeFalse(),
 									"InValid aerospike spec validated",
 								)
+
 								if !strings.Contains(
 									strings.ToLower(err.Error()),
 									"invalid aerospike.security conf. enable-quotas: not present",
@@ -1564,6 +1583,7 @@ var _ = Describe(
 									clusterNamespacedName, accessControl,
 									aerospikeConfigSpec,
 								)
+
 								err = testAccessControlReconcile(
 									aeroCluster, ctx,
 								)
@@ -1627,6 +1647,7 @@ var _ = Describe(
 									clusterNamespacedName, accessControl,
 									aerospikeConfigSpec,
 								)
+
 								err = testAccessControlReconcile(
 									aeroCluster, ctx,
 								)
@@ -1730,7 +1751,6 @@ var _ = Describe(
 									g.Expect(err).To(HaveOccurred())
 									g.Expect(err.Error()).To(ContainSubstring("SECURITY_NOT_ENABLED"))
 								}, 5*time.Minute, 20*time.Second).Should(Succeed())
-
 							},
 						)
 
@@ -1823,7 +1843,6 @@ var _ = Describe(
 
 						It(
 							"AccessControlLifeCycle", func() {
-
 								By("AccessControlCreate")
 
 								accessControl := asdbv1.AerospikeAccessControlSpec{
@@ -1874,6 +1893,7 @@ var _ = Describe(
 										},
 									},
 								}
+
 								aerospikeConfigSpec, err := NewAerospikeConfSpec(latestImage)
 								if err != nil {
 									Fail(
@@ -2019,6 +2039,7 @@ var _ = Describe(
 									clusterNamespacedName, &accessControl,
 									aerospikeConfigSpec,
 								)
+
 								err = testAccessControlReconcile(
 									aeroCluster, ctx,
 								)
@@ -2255,6 +2276,7 @@ var _ = Describe(
 							Expect(DeployCluster(k8sClient, ctx, aeroCluster)).ToNot(HaveOccurred())
 
 							By("Enable TLS first")
+
 							aeroCluster.Spec.AerospikeConfig.Value[asdbv1.ConfKeyNetwork] = getNetworkTLSConfig()
 							aeroCluster.Spec.OperatorClientCertSpec = getAdminOperatorCert()
 
@@ -2271,7 +2293,6 @@ var _ = Describe(
 							Expect(err.Error()).To(ContainSubstring(
 								"cannot enable PKIOnly authMode while TLS rollout is in progress"))
 						})
-
 					})
 
 					Context("when doing valid operations", func() {
@@ -2381,6 +2402,7 @@ var _ = Describe(
 							}, 1*time.Minute, 5*time.Second).Should(HaveOccurred())
 
 							By("PKI auth should succeed for PKIOnly auth mode user")
+
 							aeroCluster, err = getCluster(k8sClient, ctx, clusterNamespacedName)
 							Expect(err).ToNot(HaveOccurred())
 							// PKI auth should succeed.
@@ -2428,6 +2450,7 @@ var _ = Describe(
 
 		Context("Using default-password-file", func() {
 			clusterName := fmt.Sprintf("default-password-file-%d", GinkgoParallelProcess())
+
 			var clusterNamespacedName = test.GetNamespacedName(
 				clusterName, namespace,
 			)
@@ -2464,6 +2487,7 @@ var _ = Describe(
 				racks := getDummyRackConf(1, 2)
 				aeroCluster.Spec.RackConfig.Racks = racks
 				aeroCluster.Spec.RackConfig.Namespaces = []string{"test"}
+				//nolint:gosec // G101 test path literal, not real credentials
 				aeroCluster.Spec.AerospikeConfig.Value["security"] = map[string]interface{}{
 					"default-password-file": "/etc/aerospike/defaultpass/password.conf",
 				}
@@ -2491,6 +2515,7 @@ var _ = Describe(
 				// Setting incorrect secret name so that access control reconciler could not set the password for admin.
 				aeroCluster.Spec.AerospikeAccessControl.Users[0].SecretName = "incorrectSecretName"
 				// This file is already added in the storage volume backed by the secret.
+				//nolint:gosec // G101 test path literal, not real credentials
 				aeroCluster.Spec.AerospikeConfig.Value["security"] = map[string]interface{}{
 					"default-password-file": "/etc/aerospike/secret/password.conf",
 				}
@@ -2538,6 +2563,7 @@ var _ = Describe(
 				Expect(err).ToNot(HaveOccurred())
 
 				By("Try scaleup")
+
 				err = scaleUpClusterTest(
 					k8sClient, ctx, clusterNamespacedName, 1,
 				)
@@ -2858,7 +2884,7 @@ func validateUsers(
 
 		expectedRoleNames := expectedUserSpec.Roles
 
-		var currentRoleNames []string
+		currentRoleNames := make([]string, 0, len(asUser.Roles))
 
 		currentRoleNames = append(currentRoleNames, asUser.Roles...)
 

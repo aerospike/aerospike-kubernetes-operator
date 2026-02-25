@@ -489,7 +489,7 @@ spec:
                               Claims lists the names of resources, defined in spec.resourceClaims,
                               that are used by this container.
 
-                              This is an alpha field and requires enabling the
+                              This field depends on the
                               DynamicResourceAllocation feature gate.
 
                               This field is immutable. It can only be set for containers.
@@ -763,7 +763,7 @@ spec:
                               Claims lists the names of resources, defined in spec.resourceClaims,
                               that are used by this container.
 
-                              This is an alpha field and requires enabling the
+                              This field depends on the
                               DynamicResourceAllocation feature gate.
 
                               This field is immutable. It can only be set for containers.
@@ -1581,8 +1581,8 @@ spec:
                               most preferred is the one with the greatest sum of weights, i.e.
                               for each node that meets all of the scheduling requirements (resource
                               request, requiredDuringScheduling anti-affinity expressions, etc.),
-                              compute a sum by iterating through the elements of this field and adding
-                              "weight" to the sum if the node has pods which matches the corresponding podAffinityTerm; the
+                              compute a sum by iterating through the elements of this field and subtracting
+                              "weight" from the sum if the node has pods which matches the corresponding podAffinityTerm; the
                               node(s) with the highest sum are the most preferred.
                             items:
                               description: The weights of all of the matched WeightedPodAffinityTerm
@@ -2055,8 +2055,9 @@ spec:
                               present in a Container.
                             properties:
                               name:
-                                description: Name of the environment variable. Must
-                                  be a C_IDENTIFIER.
+                                description: |-
+                                  Name of the environment variable.
+                                  May consist of any printable ASCII characters except '='.
                                 type: string
                               value:
                                 description: |-
@@ -2112,6 +2113,43 @@ spec:
                                         type: string
                                     required:
                                     - fieldPath
+                                    type: object
+                                    x-kubernetes-map-type: atomic
+                                  fileKeyRef:
+                                    description: |-
+                                      FileKeyRef selects a key of the env file.
+                                      Requires the EnvFiles feature gate to be enabled.
+                                    properties:
+                                      key:
+                                        description: |-
+                                          The key within the env file. An invalid key will prevent the pod from starting.
+                                          The keys defined within a source may consist of any printable ASCII characters except '='.
+                                          During Alpha stage of the EnvFiles feature gate, the key size is limited to 128 characters.
+                                        type: string
+                                      optional:
+                                        default: false
+                                        description: |-
+                                          Specify whether the file or its key must be defined. If the file or key
+                                          does not exist, then the env var is not published.
+                                          If optional is set to true and the specified key does not exist,
+                                          the environment variable will not be set in the Pod's containers.
+
+                                          If optional is set to false and the specified key does not exist,
+                                          an error will be returned during Pod creation.
+                                        type: boolean
+                                      path:
+                                        description: |-
+                                          The path within the volume from which to select the file.
+                                          Must be relative and may not contain the '..' path or start with '..'.
+                                        type: string
+                                      volumeName:
+                                        description: The name of the volume mount
+                                          containing the env file.
+                                        type: string
+                                    required:
+                                    - key
+                                    - path
+                                    - volumeName
                                     type: object
                                     x-kubernetes-map-type: atomic
                                   resourceFieldRef:
@@ -2174,8 +2212,8 @@ spec:
                         envFrom:
                           description: |-
                             List of sources to populate environment variables in the container.
-                            The keys defined within a source must be a C_IDENTIFIER. All invalid keys
-                            will be reported as an event when the container is starting. When a key exists in multiple
+                            The keys defined within a source may consist of any printable ASCII characters except '='.
+                            When a key exists in multiple
                             sources, the value associated with the last source will take precedence.
                             Values defined by an Env with a duplicate key will take precedence.
                             Cannot be updated.
@@ -2202,8 +2240,9 @@ spec:
                                 type: object
                                 x-kubernetes-map-type: atomic
                               prefix:
-                                description: Optional text to prepend to the name
-                                  of each environment variable. Must be a C_IDENTIFIER.
+                                description: |-
+                                  Optional text to prepend to the name of each environment variable.
+                                  May consist of any printable ASCII characters except '='.
                                 type: string
                               secretRef:
                                 description: The Secret to select from
@@ -2848,7 +2887,9 @@ spec:
                               type: integer
                           type: object
                         resizePolicy:
-                          description: Resources resize policy for the container.
+                          description: |-
+                            Resources resize policy for the container.
+                            This field cannot be set on ephemeral containers.
                           items:
                             description: ContainerResizePolicy represents resource
                               resize policy for the container.
@@ -2880,7 +2921,7 @@ spec:
                                 Claims lists the names of resources, defined in spec.resourceClaims,
                                 that are used by this container.
 
-                                This is an alpha field and requires enabling the
+                                This field depends on the
                                 DynamicResourceAllocation feature gate.
 
                                 This field is immutable. It can only be set for containers.
@@ -2935,10 +2976,10 @@ spec:
                         restartPolicy:
                           description: |-
                             RestartPolicy defines the restart behavior of individual containers in a pod.
-                            This field may only be set for init containers, and the only allowed value is "Always".
-                            For non-init containers or when this field is not specified,
+                            This overrides the pod-level restart policy. When this field is not specified,
                             the restart behavior is defined by the Pod's restart policy and the container type.
-                            Setting the RestartPolicy as "Always" for the init container will have the following effect:
+                            Additionally, setting the RestartPolicy as "Always" for the init container will
+                            have the following effect:
                             this init container will be continually restarted on
                             exit until all regular containers have terminated. Once all regular
                             containers have completed, all init containers with restartPolicy "Always"
@@ -2950,6 +2991,59 @@ spec:
                             init container is started, or after any startupProbe has successfully
                             completed.
                           type: string
+                        restartPolicyRules:
+                          description: |-
+                            Represents a list of rules to be checked to determine if the
+                            container should be restarted on exit. The rules are evaluated in
+                            order. Once a rule matches a container exit condition, the remaining
+                            rules are ignored. If no rule matches the container exit condition,
+                            the Container-level restart policy determines the whether the container
+                            is restarted or not. Constraints on the rules:
+                            - At most 20 rules are allowed.
+                            - Rules can have the same action.
+                            - Identical rules are not forbidden in validations.
+                            When rules are specified, container MUST set RestartPolicy explicitly
+                            even it if matches the Pod's RestartPolicy.
+                          items:
+                            description: ContainerRestartRule describes how a container
+                              exit is handled.
+                            properties:
+                              action:
+                                description: |-
+                                  Specifies the action taken on a container exit if the requirements
+                                  are satisfied. The only possible value is "Restart" to restart the
+                                  container.
+                                type: string
+                              exitCodes:
+                                description: Represents the exit codes to check on
+                                  container exits.
+                                properties:
+                                  operator:
+                                    description: |-
+                                      Represents the relationship between the container exit code(s) and the
+                                      specified values. Possible values are:
+                                      - In: the requirement is satisfied if the container exit code is in the
+                                        set of specified values.
+                                      - NotIn: the requirement is satisfied if the container exit code is
+                                        not in the set of specified values.
+                                    type: string
+                                  values:
+                                    description: |-
+                                      Specifies the set of values to check for container exit codes.
+                                      At most 255 elements are allowed.
+                                    items:
+                                      format: int32
+                                      type: integer
+                                    type: array
+                                    x-kubernetes-list-type: set
+                                required:
+                                - operator
+                                type: object
+                            required:
+                            - action
+                            type: object
+                          type: array
+                          x-kubernetes-list-type: atomic
                         securityContext:
                           description: |-
                             SecurityContext defines the security options the container should be run with.
@@ -3763,8 +3857,9 @@ spec:
                               present in a Container.
                             properties:
                               name:
-                                description: Name of the environment variable. Must
-                                  be a C_IDENTIFIER.
+                                description: |-
+                                  Name of the environment variable.
+                                  May consist of any printable ASCII characters except '='.
                                 type: string
                               value:
                                 description: |-
@@ -3820,6 +3915,43 @@ spec:
                                         type: string
                                     required:
                                     - fieldPath
+                                    type: object
+                                    x-kubernetes-map-type: atomic
+                                  fileKeyRef:
+                                    description: |-
+                                      FileKeyRef selects a key of the env file.
+                                      Requires the EnvFiles feature gate to be enabled.
+                                    properties:
+                                      key:
+                                        description: |-
+                                          The key within the env file. An invalid key will prevent the pod from starting.
+                                          The keys defined within a source may consist of any printable ASCII characters except '='.
+                                          During Alpha stage of the EnvFiles feature gate, the key size is limited to 128 characters.
+                                        type: string
+                                      optional:
+                                        default: false
+                                        description: |-
+                                          Specify whether the file or its key must be defined. If the file or key
+                                          does not exist, then the env var is not published.
+                                          If optional is set to true and the specified key does not exist,
+                                          the environment variable will not be set in the Pod's containers.
+
+                                          If optional is set to false and the specified key does not exist,
+                                          an error will be returned during Pod creation.
+                                        type: boolean
+                                      path:
+                                        description: |-
+                                          The path within the volume from which to select the file.
+                                          Must be relative and may not contain the '..' path or start with '..'.
+                                        type: string
+                                      volumeName:
+                                        description: The name of the volume mount
+                                          containing the env file.
+                                        type: string
+                                    required:
+                                    - key
+                                    - path
+                                    - volumeName
                                     type: object
                                     x-kubernetes-map-type: atomic
                                   resourceFieldRef:
@@ -3882,8 +4014,8 @@ spec:
                         envFrom:
                           description: |-
                             List of sources to populate environment variables in the container.
-                            The keys defined within a source must be a C_IDENTIFIER. All invalid keys
-                            will be reported as an event when the container is starting. When a key exists in multiple
+                            The keys defined within a source may consist of any printable ASCII characters except '='.
+                            When a key exists in multiple
                             sources, the value associated with the last source will take precedence.
                             Values defined by an Env with a duplicate key will take precedence.
                             Cannot be updated.
@@ -3910,8 +4042,9 @@ spec:
                                 type: object
                                 x-kubernetes-map-type: atomic
                               prefix:
-                                description: Optional text to prepend to the name
-                                  of each environment variable. Must be a C_IDENTIFIER.
+                                description: |-
+                                  Optional text to prepend to the name of each environment variable.
+                                  May consist of any printable ASCII characters except '='.
                                 type: string
                               secretRef:
                                 description: The Secret to select from
@@ -4556,7 +4689,9 @@ spec:
                               type: integer
                           type: object
                         resizePolicy:
-                          description: Resources resize policy for the container.
+                          description: |-
+                            Resources resize policy for the container.
+                            This field cannot be set on ephemeral containers.
                           items:
                             description: ContainerResizePolicy represents resource
                               resize policy for the container.
@@ -4588,7 +4723,7 @@ spec:
                                 Claims lists the names of resources, defined in spec.resourceClaims,
                                 that are used by this container.
 
-                                This is an alpha field and requires enabling the
+                                This field depends on the
                                 DynamicResourceAllocation feature gate.
 
                                 This field is immutable. It can only be set for containers.
@@ -4643,10 +4778,10 @@ spec:
                         restartPolicy:
                           description: |-
                             RestartPolicy defines the restart behavior of individual containers in a pod.
-                            This field may only be set for init containers, and the only allowed value is "Always".
-                            For non-init containers or when this field is not specified,
+                            This overrides the pod-level restart policy. When this field is not specified,
                             the restart behavior is defined by the Pod's restart policy and the container type.
-                            Setting the RestartPolicy as "Always" for the init container will have the following effect:
+                            Additionally, setting the RestartPolicy as "Always" for the init container will
+                            have the following effect:
                             this init container will be continually restarted on
                             exit until all regular containers have terminated. Once all regular
                             containers have completed, all init containers with restartPolicy "Always"
@@ -4658,6 +4793,59 @@ spec:
                             init container is started, or after any startupProbe has successfully
                             completed.
                           type: string
+                        restartPolicyRules:
+                          description: |-
+                            Represents a list of rules to be checked to determine if the
+                            container should be restarted on exit. The rules are evaluated in
+                            order. Once a rule matches a container exit condition, the remaining
+                            rules are ignored. If no rule matches the container exit condition,
+                            the Container-level restart policy determines the whether the container
+                            is restarted or not. Constraints on the rules:
+                            - At most 20 rules are allowed.
+                            - Rules can have the same action.
+                            - Identical rules are not forbidden in validations.
+                            When rules are specified, container MUST set RestartPolicy explicitly
+                            even it if matches the Pod's RestartPolicy.
+                          items:
+                            description: ContainerRestartRule describes how a container
+                              exit is handled.
+                            properties:
+                              action:
+                                description: |-
+                                  Specifies the action taken on a container exit if the requirements
+                                  are satisfied. The only possible value is "Restart" to restart the
+                                  container.
+                                type: string
+                              exitCodes:
+                                description: Represents the exit codes to check on
+                                  container exits.
+                                properties:
+                                  operator:
+                                    description: |-
+                                      Represents the relationship between the container exit code(s) and the
+                                      specified values. Possible values are:
+                                      - In: the requirement is satisfied if the container exit code is in the
+                                        set of specified values.
+                                      - NotIn: the requirement is satisfied if the container exit code is
+                                        not in the set of specified values.
+                                    type: string
+                                  values:
+                                    description: |-
+                                      Specifies the set of values to check for container exit codes.
+                                      At most 255 elements are allowed.
+                                    items:
+                                      format: int32
+                                      type: integer
+                                    type: array
+                                    x-kubernetes-list-type: set
+                                required:
+                                - operator
+                                type: object
+                            required:
+                            - action
+                            type: object
+                          type: array
+                          x-kubernetes-list-type: atomic
                         securityContext:
                           description: |-
                             SecurityContext defines the security options the container should be run with.
@@ -5178,9 +5366,10 @@ spec:
                         operator:
                           description: |-
                             Operator represents a key's relationship to the value.
-                            Valid operators are Exists and Equal. Defaults to Equal.
+                            Valid operators are Exists, Equal, Lt, and Gt. Defaults to Equal.
                             Exists is equivalent to wildcard for value, so that a pod can
                             tolerate all taints of a particular category.
+                            Lt and Gt perform numeric comparisons (requires feature gate TaintTolerationComparisonOperators).
                           type: string
                         tolerationSeconds:
                           description: |-
@@ -5825,8 +6014,8 @@ spec:
                                         most preferred is the one with the greatest sum of weights, i.e.
                                         for each node that meets all of the scheduling requirements (resource
                                         request, requiredDuringScheduling anti-affinity expressions, etc.),
-                                        compute a sum by iterating through the elements of this field and adding
-                                        "weight" to the sum if the node has pods which matches the corresponding podAffinityTerm; the
+                                        compute a sum by iterating through the elements of this field and subtracting
+                                        "weight" from the sum if the node has pods which matches the corresponding podAffinityTerm; the
                                         node(s) with the highest sum are the most preferred.
                                       items:
                                         description: The weights of all of the matched
@@ -6203,9 +6392,10 @@ spec:
                                   operator:
                                     description: |-
                                       Operator represents a key's relationship to the value.
-                                      Valid operators are Exists and Equal. Defaults to Equal.
+                                      Valid operators are Exists, Equal, Lt, and Gt. Defaults to Equal.
                                       Exists is equivalent to wildcard for value, so that a pod can
                                       tolerate all taints of a particular category.
+                                      Lt and Gt perform numeric comparisons (requires feature gate TaintTolerationComparisonOperators).
                                     type: string
                                   tolerationSeconds:
                                     description: |-
@@ -7442,8 +7632,8 @@ spec:
                                         most preferred is the one with the greatest sum of weights, i.e.
                                         for each node that meets all of the scheduling requirements (resource
                                         request, requiredDuringScheduling anti-affinity expressions, etc.),
-                                        compute a sum by iterating through the elements of this field and adding
-                                        "weight" to the sum if the node has pods which matches the corresponding podAffinityTerm; the
+                                        compute a sum by iterating through the elements of this field and subtracting
+                                        "weight" from the sum if the node has pods which matches the corresponding podAffinityTerm; the
                                         node(s) with the highest sum are the most preferred.
                                       items:
                                         description: The weights of all of the matched
@@ -7820,9 +8010,10 @@ spec:
                                   operator:
                                     description: |-
                                       Operator represents a key's relationship to the value.
-                                      Valid operators are Exists and Equal. Defaults to Equal.
+                                      Valid operators are Exists, Equal, Lt, and Gt. Defaults to Equal.
                                       Exists is equivalent to wildcard for value, so that a pod can
                                       tolerate all taints of a particular category.
+                                      Lt and Gt perform numeric comparisons (requires feature gate TaintTolerationComparisonOperators).
                                     type: string
                                   tolerationSeconds:
                                     description: |-
@@ -9516,6 +9707,7 @@ spec:
                   The container port will be exposed to the external network at <hostIP>:<hostPort>,
                   where the hostIP is the IP address of the Kubernetes Node where the container is running and
                   the hostPort is the port requested by the user.
+
                   Deprecated: MultiPodPerHost is now part of podSpec
                 type: boolean
               operations:
@@ -9652,7 +9844,7 @@ spec:
                               Claims lists the names of resources, defined in spec.resourceClaims,
                               that are used by this container.
 
-                              This is an alpha field and requires enabling the
+                              This field depends on the
                               DynamicResourceAllocation feature gate.
 
                               This field is immutable. It can only be set for containers.
@@ -9926,7 +10118,7 @@ spec:
                               Claims lists the names of resources, defined in spec.resourceClaims,
                               that are used by this container.
 
-                              This is an alpha field and requires enabling the
+                              This field depends on the
                               DynamicResourceAllocation feature gate.
 
                               This field is immutable. It can only be set for containers.
@@ -10744,8 +10936,8 @@ spec:
                               most preferred is the one with the greatest sum of weights, i.e.
                               for each node that meets all of the scheduling requirements (resource
                               request, requiredDuringScheduling anti-affinity expressions, etc.),
-                              compute a sum by iterating through the elements of this field and adding
-                              "weight" to the sum if the node has pods which matches the corresponding podAffinityTerm; the
+                              compute a sum by iterating through the elements of this field and subtracting
+                              "weight" from the sum if the node has pods which matches the corresponding podAffinityTerm; the
                               node(s) with the highest sum are the most preferred.
                             items:
                               description: The weights of all of the matched WeightedPodAffinityTerm
@@ -11218,8 +11410,9 @@ spec:
                               present in a Container.
                             properties:
                               name:
-                                description: Name of the environment variable. Must
-                                  be a C_IDENTIFIER.
+                                description: |-
+                                  Name of the environment variable.
+                                  May consist of any printable ASCII characters except '='.
                                 type: string
                               value:
                                 description: |-
@@ -11275,6 +11468,43 @@ spec:
                                         type: string
                                     required:
                                     - fieldPath
+                                    type: object
+                                    x-kubernetes-map-type: atomic
+                                  fileKeyRef:
+                                    description: |-
+                                      FileKeyRef selects a key of the env file.
+                                      Requires the EnvFiles feature gate to be enabled.
+                                    properties:
+                                      key:
+                                        description: |-
+                                          The key within the env file. An invalid key will prevent the pod from starting.
+                                          The keys defined within a source may consist of any printable ASCII characters except '='.
+                                          During Alpha stage of the EnvFiles feature gate, the key size is limited to 128 characters.
+                                        type: string
+                                      optional:
+                                        default: false
+                                        description: |-
+                                          Specify whether the file or its key must be defined. If the file or key
+                                          does not exist, then the env var is not published.
+                                          If optional is set to true and the specified key does not exist,
+                                          the environment variable will not be set in the Pod's containers.
+
+                                          If optional is set to false and the specified key does not exist,
+                                          an error will be returned during Pod creation.
+                                        type: boolean
+                                      path:
+                                        description: |-
+                                          The path within the volume from which to select the file.
+                                          Must be relative and may not contain the '..' path or start with '..'.
+                                        type: string
+                                      volumeName:
+                                        description: The name of the volume mount
+                                          containing the env file.
+                                        type: string
+                                    required:
+                                    - key
+                                    - path
+                                    - volumeName
                                     type: object
                                     x-kubernetes-map-type: atomic
                                   resourceFieldRef:
@@ -11337,8 +11567,8 @@ spec:
                         envFrom:
                           description: |-
                             List of sources to populate environment variables in the container.
-                            The keys defined within a source must be a C_IDENTIFIER. All invalid keys
-                            will be reported as an event when the container is starting. When a key exists in multiple
+                            The keys defined within a source may consist of any printable ASCII characters except '='.
+                            When a key exists in multiple
                             sources, the value associated with the last source will take precedence.
                             Values defined by an Env with a duplicate key will take precedence.
                             Cannot be updated.
@@ -11365,8 +11595,9 @@ spec:
                                 type: object
                                 x-kubernetes-map-type: atomic
                               prefix:
-                                description: Optional text to prepend to the name
-                                  of each environment variable. Must be a C_IDENTIFIER.
+                                description: |-
+                                  Optional text to prepend to the name of each environment variable.
+                                  May consist of any printable ASCII characters except '='.
                                 type: string
                               secretRef:
                                 description: The Secret to select from
@@ -12011,7 +12242,9 @@ spec:
                               type: integer
                           type: object
                         resizePolicy:
-                          description: Resources resize policy for the container.
+                          description: |-
+                            Resources resize policy for the container.
+                            This field cannot be set on ephemeral containers.
                           items:
                             description: ContainerResizePolicy represents resource
                               resize policy for the container.
@@ -12043,7 +12276,7 @@ spec:
                                 Claims lists the names of resources, defined in spec.resourceClaims,
                                 that are used by this container.
 
-                                This is an alpha field and requires enabling the
+                                This field depends on the
                                 DynamicResourceAllocation feature gate.
 
                                 This field is immutable. It can only be set for containers.
@@ -12098,10 +12331,10 @@ spec:
                         restartPolicy:
                           description: |-
                             RestartPolicy defines the restart behavior of individual containers in a pod.
-                            This field may only be set for init containers, and the only allowed value is "Always".
-                            For non-init containers or when this field is not specified,
+                            This overrides the pod-level restart policy. When this field is not specified,
                             the restart behavior is defined by the Pod's restart policy and the container type.
-                            Setting the RestartPolicy as "Always" for the init container will have the following effect:
+                            Additionally, setting the RestartPolicy as "Always" for the init container will
+                            have the following effect:
                             this init container will be continually restarted on
                             exit until all regular containers have terminated. Once all regular
                             containers have completed, all init containers with restartPolicy "Always"
@@ -12113,6 +12346,59 @@ spec:
                             init container is started, or after any startupProbe has successfully
                             completed.
                           type: string
+                        restartPolicyRules:
+                          description: |-
+                            Represents a list of rules to be checked to determine if the
+                            container should be restarted on exit. The rules are evaluated in
+                            order. Once a rule matches a container exit condition, the remaining
+                            rules are ignored. If no rule matches the container exit condition,
+                            the Container-level restart policy determines the whether the container
+                            is restarted or not. Constraints on the rules:
+                            - At most 20 rules are allowed.
+                            - Rules can have the same action.
+                            - Identical rules are not forbidden in validations.
+                            When rules are specified, container MUST set RestartPolicy explicitly
+                            even it if matches the Pod's RestartPolicy.
+                          items:
+                            description: ContainerRestartRule describes how a container
+                              exit is handled.
+                            properties:
+                              action:
+                                description: |-
+                                  Specifies the action taken on a container exit if the requirements
+                                  are satisfied. The only possible value is "Restart" to restart the
+                                  container.
+                                type: string
+                              exitCodes:
+                                description: Represents the exit codes to check on
+                                  container exits.
+                                properties:
+                                  operator:
+                                    description: |-
+                                      Represents the relationship between the container exit code(s) and the
+                                      specified values. Possible values are:
+                                      - In: the requirement is satisfied if the container exit code is in the
+                                        set of specified values.
+                                      - NotIn: the requirement is satisfied if the container exit code is
+                                        not in the set of specified values.
+                                    type: string
+                                  values:
+                                    description: |-
+                                      Specifies the set of values to check for container exit codes.
+                                      At most 255 elements are allowed.
+                                    items:
+                                      format: int32
+                                      type: integer
+                                    type: array
+                                    x-kubernetes-list-type: set
+                                required:
+                                - operator
+                                type: object
+                            required:
+                            - action
+                            type: object
+                          type: array
+                          x-kubernetes-list-type: atomic
                         securityContext:
                           description: |-
                             SecurityContext defines the security options the container should be run with.
@@ -12926,8 +13212,9 @@ spec:
                               present in a Container.
                             properties:
                               name:
-                                description: Name of the environment variable. Must
-                                  be a C_IDENTIFIER.
+                                description: |-
+                                  Name of the environment variable.
+                                  May consist of any printable ASCII characters except '='.
                                 type: string
                               value:
                                 description: |-
@@ -12983,6 +13270,43 @@ spec:
                                         type: string
                                     required:
                                     - fieldPath
+                                    type: object
+                                    x-kubernetes-map-type: atomic
+                                  fileKeyRef:
+                                    description: |-
+                                      FileKeyRef selects a key of the env file.
+                                      Requires the EnvFiles feature gate to be enabled.
+                                    properties:
+                                      key:
+                                        description: |-
+                                          The key within the env file. An invalid key will prevent the pod from starting.
+                                          The keys defined within a source may consist of any printable ASCII characters except '='.
+                                          During Alpha stage of the EnvFiles feature gate, the key size is limited to 128 characters.
+                                        type: string
+                                      optional:
+                                        default: false
+                                        description: |-
+                                          Specify whether the file or its key must be defined. If the file or key
+                                          does not exist, then the env var is not published.
+                                          If optional is set to true and the specified key does not exist,
+                                          the environment variable will not be set in the Pod's containers.
+
+                                          If optional is set to false and the specified key does not exist,
+                                          an error will be returned during Pod creation.
+                                        type: boolean
+                                      path:
+                                        description: |-
+                                          The path within the volume from which to select the file.
+                                          Must be relative and may not contain the '..' path or start with '..'.
+                                        type: string
+                                      volumeName:
+                                        description: The name of the volume mount
+                                          containing the env file.
+                                        type: string
+                                    required:
+                                    - key
+                                    - path
+                                    - volumeName
                                     type: object
                                     x-kubernetes-map-type: atomic
                                   resourceFieldRef:
@@ -13045,8 +13369,8 @@ spec:
                         envFrom:
                           description: |-
                             List of sources to populate environment variables in the container.
-                            The keys defined within a source must be a C_IDENTIFIER. All invalid keys
-                            will be reported as an event when the container is starting. When a key exists in multiple
+                            The keys defined within a source may consist of any printable ASCII characters except '='.
+                            When a key exists in multiple
                             sources, the value associated with the last source will take precedence.
                             Values defined by an Env with a duplicate key will take precedence.
                             Cannot be updated.
@@ -13073,8 +13397,9 @@ spec:
                                 type: object
                                 x-kubernetes-map-type: atomic
                               prefix:
-                                description: Optional text to prepend to the name
-                                  of each environment variable. Must be a C_IDENTIFIER.
+                                description: |-
+                                  Optional text to prepend to the name of each environment variable.
+                                  May consist of any printable ASCII characters except '='.
                                 type: string
                               secretRef:
                                 description: The Secret to select from
@@ -13719,7 +14044,9 @@ spec:
                               type: integer
                           type: object
                         resizePolicy:
-                          description: Resources resize policy for the container.
+                          description: |-
+                            Resources resize policy for the container.
+                            This field cannot be set on ephemeral containers.
                           items:
                             description: ContainerResizePolicy represents resource
                               resize policy for the container.
@@ -13751,7 +14078,7 @@ spec:
                                 Claims lists the names of resources, defined in spec.resourceClaims,
                                 that are used by this container.
 
-                                This is an alpha field and requires enabling the
+                                This field depends on the
                                 DynamicResourceAllocation feature gate.
 
                                 This field is immutable. It can only be set for containers.
@@ -13806,10 +14133,10 @@ spec:
                         restartPolicy:
                           description: |-
                             RestartPolicy defines the restart behavior of individual containers in a pod.
-                            This field may only be set for init containers, and the only allowed value is "Always".
-                            For non-init containers or when this field is not specified,
+                            This overrides the pod-level restart policy. When this field is not specified,
                             the restart behavior is defined by the Pod's restart policy and the container type.
-                            Setting the RestartPolicy as "Always" for the init container will have the following effect:
+                            Additionally, setting the RestartPolicy as "Always" for the init container will
+                            have the following effect:
                             this init container will be continually restarted on
                             exit until all regular containers have terminated. Once all regular
                             containers have completed, all init containers with restartPolicy "Always"
@@ -13821,6 +14148,59 @@ spec:
                             init container is started, or after any startupProbe has successfully
                             completed.
                           type: string
+                        restartPolicyRules:
+                          description: |-
+                            Represents a list of rules to be checked to determine if the
+                            container should be restarted on exit. The rules are evaluated in
+                            order. Once a rule matches a container exit condition, the remaining
+                            rules are ignored. If no rule matches the container exit condition,
+                            the Container-level restart policy determines the whether the container
+                            is restarted or not. Constraints on the rules:
+                            - At most 20 rules are allowed.
+                            - Rules can have the same action.
+                            - Identical rules are not forbidden in validations.
+                            When rules are specified, container MUST set RestartPolicy explicitly
+                            even it if matches the Pod's RestartPolicy.
+                          items:
+                            description: ContainerRestartRule describes how a container
+                              exit is handled.
+                            properties:
+                              action:
+                                description: |-
+                                  Specifies the action taken on a container exit if the requirements
+                                  are satisfied. The only possible value is "Restart" to restart the
+                                  container.
+                                type: string
+                              exitCodes:
+                                description: Represents the exit codes to check on
+                                  container exits.
+                                properties:
+                                  operator:
+                                    description: |-
+                                      Represents the relationship between the container exit code(s) and the
+                                      specified values. Possible values are:
+                                      - In: the requirement is satisfied if the container exit code is in the
+                                        set of specified values.
+                                      - NotIn: the requirement is satisfied if the container exit code is
+                                        not in the set of specified values.
+                                    type: string
+                                  values:
+                                    description: |-
+                                      Specifies the set of values to check for container exit codes.
+                                      At most 255 elements are allowed.
+                                    items:
+                                      format: int32
+                                      type: integer
+                                    type: array
+                                    x-kubernetes-list-type: set
+                                required:
+                                - operator
+                                type: object
+                            required:
+                            - action
+                            type: object
+                          type: array
+                          x-kubernetes-list-type: atomic
                         securityContext:
                           description: |-
                             SecurityContext defines the security options the container should be run with.
@@ -14341,9 +14721,10 @@ spec:
                         operator:
                           description: |-
                             Operator represents a key's relationship to the value.
-                            Valid operators are Exists and Equal. Defaults to Equal.
+                            Valid operators are Exists, Equal, Lt, and Gt. Defaults to Equal.
                             Exists is equivalent to wildcard for value, so that a pod can
                             tolerate all taints of a particular category.
+                            Lt and Gt perform numeric comparisons (requires feature gate TaintTolerationComparisonOperators).
                           type: string
                         tolerationSeconds:
                           description: |-
@@ -15137,8 +15518,8 @@ spec:
                                         most preferred is the one with the greatest sum of weights, i.e.
                                         for each node that meets all of the scheduling requirements (resource
                                         request, requiredDuringScheduling anti-affinity expressions, etc.),
-                                        compute a sum by iterating through the elements of this field and adding
-                                        "weight" to the sum if the node has pods which matches the corresponding podAffinityTerm; the
+                                        compute a sum by iterating through the elements of this field and subtracting
+                                        "weight" from the sum if the node has pods which matches the corresponding podAffinityTerm; the
                                         node(s) with the highest sum are the most preferred.
                                       items:
                                         description: The weights of all of the matched
@@ -15515,9 +15896,10 @@ spec:
                                   operator:
                                     description: |-
                                       Operator represents a key's relationship to the value.
-                                      Valid operators are Exists and Equal. Defaults to Equal.
+                                      Valid operators are Exists, Equal, Lt, and Gt. Defaults to Equal.
                                       Exists is equivalent to wildcard for value, so that a pod can
                                       tolerate all taints of a particular category.
+                                      Lt and Gt perform numeric comparisons (requires feature gate TaintTolerationComparisonOperators).
                                     type: string
                                   tolerationSeconds:
                                     description: |-
@@ -16754,8 +17136,8 @@ spec:
                                         most preferred is the one with the greatest sum of weights, i.e.
                                         for each node that meets all of the scheduling requirements (resource
                                         request, requiredDuringScheduling anti-affinity expressions, etc.),
-                                        compute a sum by iterating through the elements of this field and adding
-                                        "weight" to the sum if the node has pods which matches the corresponding podAffinityTerm; the
+                                        compute a sum by iterating through the elements of this field and subtracting
+                                        "weight" from the sum if the node has pods which matches the corresponding podAffinityTerm; the
                                         node(s) with the highest sum are the most preferred.
                                       items:
                                         description: The weights of all of the matched
@@ -17132,9 +17514,10 @@ spec:
                                   operator:
                                     description: |-
                                       Operator represents a key's relationship to the value.
-                                      Valid operators are Exists and Equal. Defaults to Equal.
+                                      Valid operators are Exists, Equal, Lt, and Gt. Defaults to Equal.
                                       Exists is equivalent to wildcard for value, so that a pod can
                                       tolerate all taints of a particular category.
+                                      Lt and Gt perform numeric comparisons (requires feature gate TaintTolerationComparisonOperators).
                                     type: string
                                   tolerationSeconds:
                                     description: |-
@@ -17818,6 +18201,7 @@ spec:
                   Define resources requests and limits for Aerospike Server Container.
                   Please contact aerospike for proper sizing exercise
                   Only Memory and Cpu resources can be given
+
                   Deprecated: Resources field is now part of containerSpec
                 properties:
                   claims:
@@ -17825,7 +18209,7 @@ spec:
                       Claims lists the names of resources, defined in spec.resourceClaims,
                       that are used by this container.
 
-                      This is an alpha field and requires enabling the
+                      This field depends on the
                       DynamicResourceAllocation feature gate.
 
                       This field is immutable. It can only be set for containers.

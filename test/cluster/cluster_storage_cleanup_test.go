@@ -75,7 +75,6 @@ var _ = Describe(
 						// Check for pvc, both list should be same
 						err = matchPVCList(oldPVCList, newPVCList)
 						Expect(err).ToNot(HaveOccurred())
-
 					},
 				)
 
@@ -151,7 +150,6 @@ var _ = Describe(
 						// This should not be removed
 
 						volName := aeroCluster.Spec.Storage.Volumes[0].Name
-						Expect(err).ToNot(HaveOccurred())
 
 						pvcNamePrefix := volName + "-" + stsName
 
@@ -169,6 +167,7 @@ var _ = Describe(
 
 						// Check for pvc
 						var found bool
+
 						for pvcIndex := range newPVCList {
 							if strings.HasPrefix(newPVCList[pvcIndex].Name, pvcNamePrefix) {
 								found = true
@@ -188,13 +187,13 @@ var _ = Describe(
 								Expect(err).ToNot(HaveOccurred())
 							}
 						}
+
 						if !found {
 							err := fmt.Errorf(
 								"PVC with prefix %s should not be removed for cluster sts %s",
 								pvcNamePrefix, stsName,
 							)
 							Expect(err).ToNot(HaveOccurred())
-
 						}
 					},
 				)
@@ -323,12 +322,14 @@ var _ = Describe(
 						// If PVC is created and no error in deployment, it means aerospikeConfig
 						// has successfully used rack storage
 						var found bool
+
 						for _, pvc := range newPVCList {
 							if strings.HasPrefix(pvc.Name, pvcNamePrefix) {
 								found = true
 								break
 							}
 						}
+
 						if !found {
 							err := fmt.Errorf(
 								"PVC with prefix %s not found in cluster pvcList %v",
@@ -502,13 +503,11 @@ var _ = Describe(
 								Expect(err).Should(HaveOccurred())
 							},
 						)
-
 					},
 				)
 
 				Context(
 					"Update", func() {
-
 						It(
 							"NilToValue: should fail for updating Storage. Cannot be updated",
 							func() {
@@ -528,21 +527,20 @@ var _ = Describe(
 								Expect(err).ToNot(HaveOccurred())
 
 								// Rack is completely replaced
-								volumes := []asdbv1.VolumeSpec{
-									{
-										Name: "workdirnew",
-										Source: asdbv1.VolumeSource{
-											PersistentVolume: &asdbv1.PersistentVolumeSpec{
-												Size:         resource.MustParse("1Gi"),
-												StorageClass: storageClass,
-												VolumeMode:   corev1.PersistentVolumeFilesystem,
-											},
-										},
-										Aerospike: &asdbv1.AerospikeServerVolumeAttachment{
-											Path: "/opt/aerospike/new",
+								volumes := make([]asdbv1.VolumeSpec, 0, 1+len(aeroCluster.Spec.Storage.Volumes))
+								volumes = append(volumes, asdbv1.VolumeSpec{
+									Name: "workdirnew",
+									Source: asdbv1.VolumeSource{
+										PersistentVolume: &asdbv1.PersistentVolumeSpec{
+											Size:         resource.MustParse("1Gi"),
+											StorageClass: storageClass,
+											VolumeMode:   corev1.PersistentVolumeFilesystem,
 										},
 									},
-								}
+									Aerospike: &asdbv1.AerospikeServerVolumeAttachment{
+										Path: "/opt/aerospike/new",
+									},
+								})
 								volumes = append(
 									volumes,
 									aeroCluster.Spec.Storage.Volumes...,
@@ -565,21 +563,20 @@ var _ = Describe(
 								)
 								racks := getDummyRackConf(1)
 								// Rack is completely replaced
-								volumes := []asdbv1.VolumeSpec{
-									{
-										Name: "workdirnew",
-										Source: asdbv1.VolumeSource{
-											PersistentVolume: &asdbv1.PersistentVolumeSpec{
-												Size:         resource.MustParse("1Gi"),
-												StorageClass: storageClass,
-												VolumeMode:   corev1.PersistentVolumeFilesystem,
-											},
-										},
-										Aerospike: &asdbv1.AerospikeServerVolumeAttachment{
-											Path: "/opt/aerospike/new",
+								volumes := make([]asdbv1.VolumeSpec, 0, 1+len(aeroCluster.Spec.Storage.Volumes))
+								volumes = append(volumes, asdbv1.VolumeSpec{
+									Name: "workdirnew",
+									Source: asdbv1.VolumeSource{
+										PersistentVolume: &asdbv1.PersistentVolumeSpec{
+											Size:         resource.MustParse("1Gi"),
+											StorageClass: storageClass,
+											VolumeMode:   corev1.PersistentVolumeFilesystem,
 										},
 									},
-								}
+									Aerospike: &asdbv1.AerospikeServerVolumeAttachment{
+										Path: "/opt/aerospike/new",
+									},
+								})
 								volumes = append(
 									volumes,
 									aeroCluster.Spec.Storage.Volumes...,
@@ -614,21 +611,20 @@ var _ = Describe(
 								)
 								racks := getDummyRackConf(1)
 								// Rack is completely replaced
-								volumes := []asdbv1.VolumeSpec{
-									{
-										Name: "workdirnew",
-										Source: asdbv1.VolumeSource{
-											PersistentVolume: &asdbv1.PersistentVolumeSpec{
-												Size:         resource.MustParse("1Gi"),
-												StorageClass: storageClass,
-												VolumeMode:   corev1.PersistentVolumeFilesystem,
-											},
-										},
-										Aerospike: &asdbv1.AerospikeServerVolumeAttachment{
-											Path: "/opt/aerospike/new",
+								volumes := make([]asdbv1.VolumeSpec, 0, 1+len(aeroCluster.Spec.Storage.Volumes))
+								volumes = append(volumes, asdbv1.VolumeSpec{
+									Name: "workdirnew",
+									Source: asdbv1.VolumeSource{
+										PersistentVolume: &asdbv1.PersistentVolumeSpec{
+											Size:         resource.MustParse("1Gi"),
+											StorageClass: storageClass,
+											VolumeMode:   corev1.PersistentVolumeFilesystem,
 										},
 									},
-								}
+									Aerospike: &asdbv1.AerospikeServerVolumeAttachment{
+										Path: "/opt/aerospike/new",
+									},
+								})
 								volumes = append(
 									volumes,
 									aeroCluster.Spec.Storage.Volumes...,
@@ -646,21 +642,20 @@ var _ = Describe(
 								Expect(err).ToNot(HaveOccurred())
 
 								// Rack is completely replaced
-								volumes = []asdbv1.VolumeSpec{
-									{
-										Name: "workdirnew2",
-										Source: asdbv1.VolumeSource{
-											PersistentVolume: &asdbv1.PersistentVolumeSpec{
-												Size:         resource.MustParse("1Gi"),
-												StorageClass: storageClass,
-												VolumeMode:   corev1.PersistentVolumeFilesystem,
-											},
-										},
-										Aerospike: &asdbv1.AerospikeServerVolumeAttachment{
-											Path: "/opt/aerospike/new2",
+								volumes = make([]asdbv1.VolumeSpec, 0, 1+len(aeroCluster.Spec.Storage.Volumes))
+								volumes = append(volumes, asdbv1.VolumeSpec{
+									Name: "workdirnew2",
+									Source: asdbv1.VolumeSource{
+										PersistentVolume: &asdbv1.PersistentVolumeSpec{
+											Size:         resource.MustParse("1Gi"),
+											StorageClass: storageClass,
+											VolumeMode:   corev1.PersistentVolumeFilesystem,
 										},
 									},
-								}
+									Aerospike: &asdbv1.AerospikeServerVolumeAttachment{
+										Path: "/opt/aerospike/new2",
+									},
+								})
 								volumes = append(
 									volumes,
 									aeroCluster.Spec.Storage.Volumes...,
@@ -678,7 +673,6 @@ var _ = Describe(
 				)
 			},
 		)
-
 	},
 )
 

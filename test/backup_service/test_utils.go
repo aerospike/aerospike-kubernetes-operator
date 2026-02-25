@@ -387,6 +387,7 @@ func GetAPIBackupSvcConfig(k8sClient client.Client, backupServiceName, backupSer
 			}
 
 			backupSvcConfig = config
+
 			return true, nil
 		}); err != nil {
 		return nil, err

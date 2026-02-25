@@ -15,7 +15,6 @@ import (
 
 var _ = Describe(
 	"Restore Test", func() {
-
 		var (
 			restore     *asdbv1beta1.AerospikeRestore
 			err         error

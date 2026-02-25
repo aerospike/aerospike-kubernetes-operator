@@ -22,7 +22,6 @@ import (
 
 var _ = Describe(
 	"PodEviction", func() {
-
 		ctx := goctx.Background()
 		clusterName := fmt.Sprintf("pod-eviction-%d", GinkgoParallelProcess())
 		clusterNamespacedName := test.GetNamespacedName(
@@ -76,6 +75,7 @@ var _ = Describe(
 							secondOriginalPodUID := string(secondPod.UID)
 
 							By("Triggering pod eviction")
+
 							err = evictPod(ctx, firstPod)
 							Expect(err).To(HaveOccurred())
 							Expect(err.Error()).To(ContainSubstring(
@@ -87,6 +87,7 @@ var _ = Describe(
 								"Eviction of Aerospike pod %s/%s is blocked by admission webhook", secondPod.Namespace, secondPod.Name))
 
 							By("Verifying pod gets annotation for restart tracking")
+
 							podList, err = getClusterPodList(k8sClient, ctx, aeroCluster)
 							Expect(err).ToNot(HaveOccurred())
 
@@ -97,6 +98,7 @@ var _ = Describe(
 							}
 
 							By("Waiting for pod to restart and become ready")
+
 							err = waitForPodRestart(ctx, firstPod.Name, firstPod.Namespace, firstOriginalPodUID)
 							Expect(err).ToNot(HaveOccurred())
 
@@ -104,6 +106,7 @@ var _ = Describe(
 							Expect(err).ToNot(HaveOccurred())
 
 							By("Verifying cluster is healthy after restart")
+
 							err = waitForAerospikeCluster(
 								k8sClient, ctx, aeroCluster, int(aeroCluster.Spec.Size),
 								retryInterval, getTimeout(aeroCluster.Spec.Size),
@@ -120,6 +123,7 @@ var _ = Describe(
 					It(
 						"Should successfully evict nginx pod without admission webhook blocking", func() {
 							By("Creating nginx sts")
+
 							nginxNamespacedName := test.GetNamespacedName(
 								strings.ToLower("nginx"), namespace,
 							)
@@ -136,16 +140,20 @@ var _ = Describe(
 							Expect(started).To(BeTrue(), "Nginx pod did not start in time")
 
 							By("Getting nginx pod")
+
 							pod := &corev1.Pod{}
 							err := k8sClient.Get(ctx, test.GetNamespacedName(podName, namespace), pod)
 							Expect(err).ToNot(HaveOccurred(), "failed to get nginx pod")
+
 							originalPodUID := string(pod.UID)
 
 							By("Evicting nginx pod (should succeed)")
+
 							err = evictPod(ctx, pod)
 							Expect(err).ToNot(HaveOccurred())
 
 							By("Waiting for nginx pod to restart")
+
 							err = waitForPodRestart(ctx, pod.Name, pod.Namespace, originalPodUID)
 							Expect(err).ToNot(HaveOccurred())
 						},

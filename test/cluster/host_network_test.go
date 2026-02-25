@@ -20,6 +20,7 @@ import (
 var _ = Describe(
 	"HostNetwork", func() {
 		ctx := goctx.TODO()
+
 		Context(
 			"HostNetwork", func() {
 				clusterName := fmt.Sprintf("host-network-cluster-%d", GinkgoParallelProcess())
@@ -60,6 +61,7 @@ var _ = Describe(
 						)
 
 						By("Deploying cluster, Should not advertise node address when off")
+
 						aeroCluster.Spec.PodSpec.MultiPodPerHost = ptr.To(false)
 						aeroCluster.Spec.PodSpec.HostNetwork = false
 						randomizeServicePorts(aeroCluster, true, GinkgoParallelProcess())
