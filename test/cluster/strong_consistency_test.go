@@ -56,6 +56,7 @@ var _ = Describe("SCMode", func() {
 
 		It("Should test combination of sc and non-sc namespace cluster lifecycle in a rack enabled cluster", func() {
 			By("Deploy")
+
 			aeroCluster := createDummyAerospikeCluster(clusterNamespacedName, 2)
 			aeroCluster.Spec.AerospikeConfig = getSCAndNonSCAerospikeConfig()
 			scNamespace := scNamespace
@@ -78,6 +79,7 @@ var _ = Describe("SCMode", func() {
 
 		It("Should test sc cluster lifecycle in a no rack cluster", func() {
 			By("Deploy")
+
 			aeroCluster := createDummyAerospikeCluster(clusterNamespacedName, 2)
 			aeroCluster.Spec.AerospikeConfig = getSCAndNonSCAerospikeConfig()
 			scNamespace := scNamespace
@@ -91,6 +93,7 @@ var _ = Describe("SCMode", func() {
 
 		It("Should test single sc namespace cluster", func() {
 			By("Deploy")
+
 			aeroCluster := createDummyAerospikeCluster(clusterNamespacedName, 2)
 			aeroCluster.Spec.AerospikeConfig = getSCAerospikeConfig()
 			scNamespace := scNamespace
@@ -113,6 +116,7 @@ var _ = Describe("SCMode", func() {
 
 		It("Should test blocking rack from roster", func() {
 			By("Deploy")
+
 			aeroCluster := createDummyAerospikeCluster(clusterNamespacedName, 4)
 			aeroCluster.Spec.AerospikeConfig = getSCAerospikeConfig()
 			scNamespace := scNamespace
@@ -131,6 +135,7 @@ var _ = Describe("SCMode", func() {
 			validateRoster(k8sClient, ctx, clusterNamespacedName, scNamespace)
 
 			By("Block rack 1 from roster")
+
 			expectedRoster := "2A1@2,2A0@2"
 			aeroCluster.Spec.RackConfig.Racks[0].ForceBlockFromRoster = ptr.To(true)
 
@@ -149,6 +154,7 @@ var _ = Describe("SCMode", func() {
 			))
 
 			By("Unblock rack 1 from roster")
+
 			expectedRoster = "2A1@2,2A0@2,1A1@1,1A0@1"
 			aeroCluster.Spec.RackConfig.Racks[0].ForceBlockFromRoster = ptr.To(false)
 
@@ -161,6 +167,7 @@ var _ = Describe("SCMode", func() {
 			))
 
 			By("Block rack 1 from roster with failed pods")
+
 			aeroCluster, err = getCluster(k8sClient, ctx, clusterNamespacedName)
 			Expect(err).ToNot(HaveOccurred())
 
@@ -193,6 +200,7 @@ var _ = Describe("SCMode", func() {
 
 		It("Should allow adding and removing SC namespace", func() {
 			By("Deploy")
+
 			aeroCluster := createDummyAerospikeCluster(clusterNamespacedName, 2)
 			aeroCluster.Spec.AerospikeConfig = getSCAerospikeConfig()
 
@@ -261,6 +269,7 @@ var _ = Describe("SCMode", func() {
 			validateRoster(k8sClient, ctx, clusterNamespacedName, scNamespace)
 
 			By("RollingRestart")
+
 			err := rollingRestartClusterTest(logger, k8sClient, ctx, clusterNamespacedName)
 			Expect(err).ToNot(HaveOccurred())
 
@@ -332,6 +341,7 @@ var _ = Describe("SCMode", func() {
 			if scFlag != nil {
 				scFlagBool = scFlag.(bool)
 			}
+
 			namespaceConfig["strong-consistency"] = !scFlagBool
 			aeroCluster.Spec.AerospikeConfig.Value["namespaces"].([]interface{})[0] = namespaceConfig
 
@@ -441,6 +451,7 @@ var _ = Describe("SCMode", func() {
 
 		It("Should not allow ForceBlockFromRoster enable in more than 1 rack at once", func() {
 			By("Deploy")
+
 			aeroCluster := createDummyAerospikeCluster(clusterNamespacedName, 4)
 			aeroCluster.Spec.AerospikeConfig = getSCAerospikeConfig()
 			scNamespace := scNamespace
@@ -468,6 +479,7 @@ var _ = Describe("SCMode", func() {
 
 		It("Should not allow rack aware features with ForceBlockFromRoster", func() {
 			By("Deploy")
+
 			aeroCluster := createDummyAerospikeCluster(clusterNamespacedName, 4)
 			aeroCluster.Spec.AerospikeConfig = getSCAerospikeConfig()
 			scNamespace := scNamespace

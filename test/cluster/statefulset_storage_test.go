@@ -97,6 +97,7 @@ var _ = Describe(
 						for podIndex := range rackPodList.Items {
 							err = k8sClient.Delete(ctx, &rackPodList.Items[podIndex])
 							Expect(err).ToNot(HaveOccurred())
+
 							started := waitForPod(utils.GetNamespacedName(&rackPodList.Items[podIndex]))
 							Expect(started).To(
 								BeTrue(), "pod was not able to come online in time",
@@ -181,6 +182,7 @@ var _ = Describe(
 						for podIndex := range rackPodList.Items {
 							err = k8sClient.Delete(ctx, &rackPodList.Items[podIndex])
 							Expect(err).ToNot(HaveOccurred())
+
 							started := waitForPod(utils.GetNamespacedName(&rackPodList.Items[podIndex]))
 							Expect(started).To(
 								BeTrue(), "pod was not able to come online in time",
@@ -323,6 +325,7 @@ var _ = Describe(
 						for podIndex := range rackPodList.Items {
 							err = k8sClient.Delete(ctx, &rackPodList.Items[podIndex])
 							Expect(err).ToNot(HaveOccurred())
+
 							started := waitForPod(utils.GetNamespacedName(&rackPodList.Items[podIndex]))
 							Expect(started).To(
 								BeTrue(), "pod was not able to come online in time",
@@ -380,7 +383,6 @@ var _ = Describe(
 						Expect(isPresent).To(
 							BeTrue(), "Unable to find volume",
 						)
-
 					},
 				)
 			},

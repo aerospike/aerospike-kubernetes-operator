@@ -53,8 +53,10 @@ var _ = SynchronizedBeforeSuite(
 		Expect(err).ToNot(HaveOccurred())
 
 		var buf bytes.Buffer
+
 		enc := gob.NewEncoder(&buf)
 		Expect(enc.Encode(cfg)).To(Succeed())
+
 		return buf.Bytes()
 	},
 
@@ -71,6 +73,7 @@ var _ = SynchronizedBeforeSuite(
 		logf.SetLogger(zap.New(zap.WriteTo(GinkgoWriter), zap.UseDevMode(true)))
 
 		By("Initialising kubernetes clients")
+
 		k8sClient, _, err = test.InitialiseClients(scheme, &config)
 		Expect(err).NotTo(HaveOccurred())
 	},
@@ -82,6 +85,7 @@ var _ = SynchronizedAfterSuite(func() {
 	// runs *only* on process #1
 	By("tearing down the test environment")
 	gexec.KillAndWait(5 * time.Second)
+
 	err := testEnv.Stop()
 	Expect(err).ToNot(HaveOccurred())
 })

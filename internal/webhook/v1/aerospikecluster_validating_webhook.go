@@ -28,11 +28,9 @@ import (
 
 	"github.com/go-logr/logr"
 	v1 "k8s.io/api/core/v1"
-	"k8s.io/apimachinery/pkg/runtime"
 	"k8s.io/apimachinery/pkg/util/intstr"
 	"k8s.io/apimachinery/pkg/util/sets"
 	logf "sigs.k8s.io/controller-runtime/pkg/log"
-	"sigs.k8s.io/controller-runtime/pkg/webhook"
 	"sigs.k8s.io/controller-runtime/pkg/webhook/admission"
 
 	asdbv1 "github.com/aerospike/aerospike-kubernetes-operator/v4/api/v1"
@@ -49,16 +47,11 @@ type AerospikeClusterCustomValidator struct {
 //nolint:lll // for readability
 // +kubebuilder:webhook:path=/validate-asdb-aerospike-com-v1-aerospikecluster,mutating=false,failurePolicy=fail,sideEffects=None,groups=asdb.aerospike.com,resources=aerospikeclusters,verbs=create;update,versions=v1,name=vaerospikecluster.kb.io,admissionReviewVersions={v1}
 
-var _ webhook.CustomValidator = &AerospikeClusterCustomValidator{}
+var _ admission.Validator[*asdbv1.AerospikeCluster] = &AerospikeClusterCustomValidator{}
 
 // ValidateCreate implements webhook.CustomValidator so a webhook will be registered for the type
-func (acv *AerospikeClusterCustomValidator) ValidateCreate(_ context.Context, obj runtime.Object,
+func (acv *AerospikeClusterCustomValidator) ValidateCreate(_ context.Context, aerospikeCluster *asdbv1.AerospikeCluster,
 ) (admission.Warnings, error) {
-	aerospikeCluster, ok := obj.(*asdbv1.AerospikeCluster)
-	if !ok {
-		return nil, fmt.Errorf("expected AerospikeCluster, got %T", obj)
-	}
-
 	aslog := logf.Log.WithName(asdbv1.ClusterNamespacedName(aerospikeCluster))
 
 	aslog.Info("Validate create")
@@ -76,13 +69,8 @@ func (acv *AerospikeClusterCustomValidator) ValidateCreate(_ context.Context, ob
 }
 
 // ValidateDelete implements webhook.CustomValidator so a webhook will be registered for the type
-func (acv *AerospikeClusterCustomValidator) ValidateDelete(_ context.Context, obj runtime.Object,
+func (acv *AerospikeClusterCustomValidator) ValidateDelete(_ context.Context, aerospikeCluster *asdbv1.AerospikeCluster,
 ) (admission.Warnings, error) {
-	aerospikeCluster, ok := obj.(*asdbv1.AerospikeCluster)
-	if !ok {
-		return nil, fmt.Errorf("expected AerospikeCluster, got %T", obj)
-	}
-
 	aslog := logf.Log.WithName(asdbv1.ClusterNamespacedName(aerospikeCluster))
 
 	aslog.Info("Validate delete")
@@ -91,18 +79,11 @@ func (acv *AerospikeClusterCustomValidator) ValidateDelete(_ context.Context, ob
 }
 
 // ValidateUpdate implements webhook.CustomValidator so a webhook will be registered for the type
-func (acv *AerospikeClusterCustomValidator) ValidateUpdate(_ context.Context, oldObj, newObj runtime.Object,
+func (acv *AerospikeClusterCustomValidator) ValidateUpdate(_ context.Context, oldObject, aerospikeCluster *asdbv1.AerospikeCluster,
 ) (admission.Warnings, error) {
-	aerospikeCluster, ok := newObj.(*asdbv1.AerospikeCluster)
-	if !ok {
-		return nil, fmt.Errorf("expected AerospikeCluster, got %T", newObj)
-	}
-
 	aslog := logf.Log.WithName(asdbv1.ClusterNamespacedName(aerospikeCluster))
 
 	aslog.Info("Validate update")
-
-	oldObject := oldObj.(*asdbv1.AerospikeCluster)
 
 	var warnings admission.Warnings
 
@@ -1579,7 +1560,7 @@ func validatePodSpec(cluster *asdbv1.AerospikeCluster) error {
 		return err
 	}
 
-	var allContainers []v1.Container
+	allContainers := make([]v1.Container, 0, len(cluster.Spec.PodSpec.Sidecars)+len(cluster.Spec.PodSpec.InitContainers))
 
 	allContainers = append(allContainers, cluster.Spec.PodSpec.Sidecars...)
 	allContainers = append(allContainers, cluster.Spec.PodSpec.InitContainers...)

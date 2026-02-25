@@ -15,7 +15,6 @@ import (
 
 var _ = Describe(
 	"SecurityContext", func() {
-
 		ctx := goctx.TODO()
 
 		// Context("Check for podSpec securityContext", func() {

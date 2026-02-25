@@ -375,7 +375,7 @@ func (r *SingleClusterReconciler) setDynamicConfig(
 				errorStatus = asdbv1.PartiallyFailed
 			}
 
-			var patches []jsonpatch.PatchOperation
+			patches := make([]jsonpatch.PatchOperation, 0, 1)
 
 			patch := jsonpatch.PatchOperation{
 				Operation: "replace",

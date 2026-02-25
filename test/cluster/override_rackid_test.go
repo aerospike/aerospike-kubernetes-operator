@@ -46,6 +46,7 @@ var _ = Describe(
 				It(
 					"Deploy: Should reject EnableRackIDOverride when multiple racks are configured", func() {
 						By("Creating cluster with multiple racks")
+
 						aeroCluster := createDummyAerospikeCluster(
 							clusterNamespacedName, 2,
 						)
@@ -64,6 +65,7 @@ var _ = Describe(
 				It(
 					"Update: Should reject EnableRackIDOverride when multiple racks are configured", func() {
 						By("Creating cluster with multiple racks")
+
 						aeroCluster := createDummyAerospikeCluster(
 							clusterNamespacedName, 2,
 						)
@@ -79,6 +81,7 @@ var _ = Describe(
 						Expect(err).ToNot(HaveOccurred())
 
 						By("Enabling EnableRackIDOverride")
+
 						aeroCluster.Spec.EnableRackIDOverride = ptr.To(true)
 						err = updateCluster(k8sClient, ctx, aeroCluster)
 						Expect(err).To(HaveOccurred())
@@ -89,6 +92,7 @@ var _ = Describe(
 				It(
 					"Update: Should fail if EnableRackIDOverride is set but annotation is missing", func() {
 						By("Creating cluster with multiple racks")
+
 						aeroCluster := createDummyAerospikeCluster(
 							clusterNamespacedName, 2,
 						)
@@ -103,6 +107,7 @@ var _ = Describe(
 						Expect(err).ToNot(HaveOccurred())
 
 						By("Enabling EnableRackIDOverride")
+
 						aeroCluster.Spec.EnableRackIDOverride = ptr.To(true)
 						err = updateClusterWithTO(k8sClient, ctx, aeroCluster, 1*time.Minute)
 						Expect(err).To(HaveOccurred())
@@ -113,13 +118,12 @@ var _ = Describe(
 
 		Context(
 			"When doing valid operations around EnableRackIDOverride feature", func() {
-
 				Context(
 					"When EnableRackIDOverride is enabled", func() {
-
 						BeforeEach(
 							func() {
 								By("Creating cluster with EnableRackIDOverride enabled")
+
 								aeroCluster := createDummyAerospikeClusterWithDynRackID(
 									clusterNamespacedName, 2,
 								)
@@ -140,6 +144,7 @@ var _ = Describe(
 								validateRackIDInConfig(ctx, podNamespaceName.Name, aeroCluster, true)
 
 								By("Updating override-rack-id annotation")
+
 								pod := &v1.Pod{
 									ObjectMeta: metav1.ObjectMeta{
 										Name:      podNamespaceName.Name,
@@ -167,10 +172,10 @@ var _ = Describe(
 
 				Context(
 					"When EnableRackIDOverride is disabled", func() {
-
 						BeforeEach(
 							func() {
 								By("Creating cluster without EnableRackIDOverride")
+
 								aeroCluster := createDummyAerospikeClusterWithDynRackID(
 									clusterNamespacedName, 2,
 								)
@@ -183,6 +188,7 @@ var _ = Describe(
 						It(
 							"Should not trigger restart when annotation changes if feature is disabled", func() {
 								By("Getting pods")
+
 								aeroCluster, err := GetCluster(k8sClient, ctx, clusterNamespacedName)
 								Expect(err).ToNot(HaveOccurred())
 
@@ -192,6 +198,7 @@ var _ = Describe(
 								}
 
 								By("Updating override-rack-id annotation")
+
 								pod := &v1.Pod{
 									ObjectMeta: metav1.ObjectMeta{
 										Name:      podNamespaceName.Name,
@@ -221,6 +228,7 @@ var _ = Describe(
 						It(
 							"Should allow enabling/disabling EnableRackIDOverride after cluster is running", func() {
 								By("Getting cluster")
+
 								aeroCluster, err := getCluster(k8sClient, ctx, clusterNamespacedName)
 								Expect(err).ToNot(HaveOccurred())
 
@@ -233,6 +241,7 @@ var _ = Describe(
 								Expect(err).ToNot(HaveOccurred())
 
 								By("Enabling EnableRackIDOverride")
+
 								aeroCluster.Spec.EnableRackIDOverride = ptr.To(true)
 								err = updateCluster(k8sClient, ctx, aeroCluster)
 								Expect(err).ToNot(HaveOccurred())
@@ -246,6 +255,7 @@ var _ = Describe(
 								Expect(err).ToNot(HaveOccurred())
 
 								By("Disabling EnableRackIDOverride")
+
 								aeroCluster.Spec.EnableRackIDOverride = ptr.To(false)
 								err = updateCluster(k8sClient, ctx, aeroCluster)
 								Expect(err).ToNot(HaveOccurred())
@@ -264,6 +274,7 @@ var _ = Describe(
 						It(
 							"Should do pod restart if enabling EnableRackIDOverride with old init container", func() {
 								By("Getting cluster")
+
 								aeroCluster := createDummyAerospikeCluster(
 									clusterNamespacedName, 2,
 								)

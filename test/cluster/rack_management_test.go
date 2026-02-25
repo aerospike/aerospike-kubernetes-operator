@@ -52,6 +52,7 @@ var _ = Describe(
 
 						// Op1: AddRackInCluster
 						By("Adding 1st rack in the cluster")
+
 						err := addRack(
 							k8sClient, ctx, clusterNamespacedName,
 							&asdbv1.Rack{ID: 1},
@@ -64,6 +65,7 @@ var _ = Describe(
 						Expect(err).ToNot(HaveOccurred())
 
 						By("Adding rack in existing racks list")
+
 						err = addRack(
 							k8sClient, ctx, clusterNamespacedName,
 							&asdbv1.Rack{ID: 2},
@@ -134,6 +136,7 @@ var _ = Describe(
 						Expect(err).ToNot(HaveOccurred())
 
 						By("Replacing existing rack with new rack")
+
 						aeroCluster.Spec.RackConfig.Racks[0].ID = 3
 						err = updateCluster(k8sClient, ctx, aeroCluster)
 						Expect(err).ToNot(HaveOccurred())
@@ -205,7 +208,6 @@ var _ = Describe(
 				Context(
 					"When using valid rack aerospike config", func() {
 						// WARNING: Tests assume that only "service" is updated in aerospikeConfig, Validation is hardcoded
-
 						It(
 							"Should validate whole flow of rack.AerospikeConfig use",
 							func() {
@@ -236,6 +238,7 @@ var _ = Describe(
 
 								// Make a copy to validate later
 								var racksCopy []asdbv1.Rack
+
 								err := Copy(&racksCopy, &racks)
 								Expect(err).ToNot(HaveOccurred())
 
@@ -246,6 +249,7 @@ var _ = Describe(
 									k8sClient, ctx, clusterNamespacedName,
 								)
 								Expect(err).ToNot(HaveOccurred())
+
 								for rackIndex := range racks {
 									err = validateAerospikeConfigServiceUpdate(
 										logger, k8sClient, ctx, clusterNamespacedName, &racks[rackIndex],
@@ -285,6 +289,7 @@ var _ = Describe(
 									k8sClient, ctx, clusterNamespacedName,
 								)
 								Expect(err).ToNot(HaveOccurred())
+
 								for rackIndex := range racks {
 									err = validateAerospikeConfigServiceUpdate(
 										logger, k8sClient, ctx, clusterNamespacedName, &racks[rackIndex],
@@ -324,6 +329,7 @@ var _ = Describe(
 										},
 									},
 								}
+
 								racks[1].InputAerospikeConfig = &asdbv1.AerospikeConfigSpec{
 									Value: map[string]interface{}{
 										"service": map[string]interface{}{
@@ -425,11 +431,9 @@ var _ = Describe(
 
 						Context(
 							"When using invalid rack storage config", func() {
-
 								It(
 									"Should fail for empty common storage if per rack storage is not provided",
 									func() {
-
 										aeroCluster := createDummyRackAwareWithStorageAerospikeCluster(
 											clusterNamespacedName, 2,
 										)
@@ -437,7 +441,6 @@ var _ = Describe(
 										aeroCluster.Spec.RackConfig.Racks[0].InputStorage = nil
 
 										Expect(DeployCluster(k8sClient, ctx, aeroCluster)).Should(HaveOccurred())
-
 									},
 								)
 							},
@@ -446,7 +449,6 @@ var _ = Describe(
 						Context(
 							"When using invalid rack aerospikeConfig to deploy cluster",
 							func() {
-
 								It(
 									"should fail for invalid aerospikeConfig",
 									func() {
@@ -499,6 +501,7 @@ var _ = Describe(
 															clusterNamespacedName,
 															2,
 														)
+
 														namespaceConfig :=
 															aeroCluster.Spec.AerospikeConfig.Value["namespaces"].([]interface{})[0].(map[string]interface{})
 														if _, ok :=
@@ -575,6 +578,7 @@ var _ = Describe(
 															clusterNamespacedName,
 															2,
 														)
+
 														namespaceConfig :=
 															aeroCluster.Spec.AerospikeConfig.Value["namespaces"].([]interface{})[0].(map[string]interface{})
 														if _, ok :=
@@ -601,14 +605,12 @@ var _ = Describe(
 										)
 									},
 								)
-
 							},
 						)
 					},
 				)
 				Context(
 					"when update cluster with invalid rack", func() {
-
 						BeforeEach(
 							func() {
 								aeroCluster := createDummyAerospikeCluster(
@@ -740,6 +742,7 @@ var _ = Describe(
 
 			It("Should recover after scaling down failed rack", func() {
 				By("Scaling up the cluster size beyond the available k8s nodes, pods will go in failed state")
+
 				aeroCluster, err := getCluster(k8sClient, ctx, clusterNamespacedName)
 				Expect(err).ToNot(HaveOccurred())
 

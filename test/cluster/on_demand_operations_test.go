@@ -16,7 +16,6 @@ import (
 
 var _ = Describe(
 	"OnDemandOperations", func() {
-
 		ctx := goctx.Background()
 		clusterName := fmt.Sprintf("operations-%d", GinkgoParallelProcess())
 		clusterNamespacedName := test.GetNamespacedName(
@@ -50,7 +49,6 @@ var _ = Describe(
 
 		Context(
 			"When doing valid operations", func() {
-
 				It(
 					"Should execute quickRestart operations on all pods", func() {
 						aeroCluster, err := getCluster(

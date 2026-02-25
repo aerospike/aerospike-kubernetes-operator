@@ -45,6 +45,7 @@ var _ = Describe(
 
 						zone1 := zones[0]
 						zone2 := zones[0]
+
 						if len(zones) > 1 {
 							zone2 = zones[1]
 						}
@@ -88,7 +89,6 @@ var _ = Describe(
 
 				It(
 					"Should validate rack enabled cluster flow", func() {
-
 						// Op2: scale up
 						By("Scaling up the cluster")
 
@@ -141,7 +141,6 @@ var _ = Describe(
 							k8sClient, ctx, clusterNamespacedName,
 						)
 						Expect(err).ToNot(HaveOccurred())
-
 					},
 				)
 
@@ -211,7 +210,6 @@ var _ = Describe(
 						// Test nodeSelector
 					},
 				)
-
 			},
 		)
 	},

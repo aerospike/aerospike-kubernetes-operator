@@ -95,14 +95,17 @@ var _ = SynchronizedBeforeSuite(
 		Expect(err).ToNot(HaveOccurred())
 
 		var buf bytes.Buffer
+
 		enc := gob.NewEncoder(&buf)
 		Expect(enc.Encode(cfg)).To(Succeed())
+
 		return buf.Bytes()
 	},
 
 	func(data []byte) {
 		// this runs once per process, we grab the existing rest.Config here
 		dec := gob.NewDecoder(bytes.NewReader(data))
+
 		var (
 			config rest.Config
 			err    error
@@ -140,6 +143,7 @@ var _ = SynchronizedAfterSuite(func() {
 
 	By("tearing down the test environment")
 	gexec.KillAndWait(5 * time.Second)
+
 	err := testEnv.Stop()
 	Expect(err).ToNot(HaveOccurred())
 })
