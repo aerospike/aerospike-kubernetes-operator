@@ -79,7 +79,8 @@ func (acv *AerospikeClusterCustomValidator) ValidateDelete(_ context.Context, ae
 }
 
 // ValidateUpdate implements webhook.CustomValidator so a webhook will be registered for the type
-func (acv *AerospikeClusterCustomValidator) ValidateUpdate(_ context.Context, oldObject, aerospikeCluster *asdbv1.AerospikeCluster,
+func (acv *AerospikeClusterCustomValidator) ValidateUpdate(_ context.Context,
+	oldObject, aerospikeCluster *asdbv1.AerospikeCluster,
 ) (admission.Warnings, error) {
 	aslog := logf.Log.WithName(asdbv1.ClusterNamespacedName(aerospikeCluster))
 

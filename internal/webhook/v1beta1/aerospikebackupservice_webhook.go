@@ -55,7 +55,9 @@ var _ admission.Defaulter[*asdbv1beta1.AerospikeBackupService] = &AerospikeBacku
 // +kubebuilder:webhook:path=/mutate-asdb-aerospike-com-v1beta1-aerospikebackupservice,mutating=true,failurePolicy=fail,sideEffects=None,groups=asdb.aerospike.com,resources=aerospikebackupservices,verbs=create;update,versions=v1beta1,name=maerospikebackupservice.kb.io,admissionReviewVersions=v1
 
 // Default implements webhook.CustomDefaulter so a webhook will be registered for the type
-func (absd *AerospikeBackupServiceCustomDefaulter) Default(_ context.Context, backupSvc *asdbv1beta1.AerospikeBackupService) error {
+func (absd *AerospikeBackupServiceCustomDefaulter) Default(_ context.Context,
+	backupSvc *asdbv1beta1.AerospikeBackupService,
+) error {
 	absLog := logf.Log.WithName(namespacedName(backupSvc))
 
 	absLog.Info("Setting defaults for aerospikeBackupService")
@@ -78,7 +80,8 @@ var _ admission.Validator[*asdbv1beta1.AerospikeBackupService] = &AerospikeBacku
 // +kubebuilder:webhook:path=/validate-asdb-aerospike-com-v1beta1-aerospikebackupservice,mutating=false,failurePolicy=fail,sideEffects=None,groups=asdb.aerospike.com,resources=aerospikebackupservices,verbs=create;update,versions=v1beta1,name=vaerospikebackupservice.kb.io,admissionReviewVersions=v1
 
 // ValidateCreate implements webhook.CustomValidator so a webhook will be registered for the type
-func (absv *AerospikeBackupServiceCustomValidator) ValidateCreate(_ context.Context, backupSvc *asdbv1beta1.AerospikeBackupService,
+func (absv *AerospikeBackupServiceCustomValidator) ValidateCreate(_ context.Context,
+	backupSvc *asdbv1beta1.AerospikeBackupService,
 ) (admission.Warnings, error) {
 	absLog := logf.Log.WithName(namespacedName(backupSvc))
 
@@ -98,7 +101,8 @@ func (absv *AerospikeBackupServiceCustomValidator) ValidateUpdate(_ context.Cont
 }
 
 // ValidateDelete implements webhook.CustomValidator so a webhook will be registered for the type
-func (absv *AerospikeBackupServiceCustomValidator) ValidateDelete(_ context.Context, backupSvc *asdbv1beta1.AerospikeBackupService,
+func (absv *AerospikeBackupServiceCustomValidator) ValidateDelete(_ context.Context,
+	backupSvc *asdbv1beta1.AerospikeBackupService,
 ) (admission.Warnings, error) {
 	absLog := logf.Log.WithName(namespacedName(backupSvc))
 

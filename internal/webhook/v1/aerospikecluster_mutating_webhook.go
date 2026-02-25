@@ -47,7 +47,9 @@ var _ admission.Defaulter[*asdbv1.AerospikeCluster] = &AerospikeClusterCustomDef
 // +kubebuilder:webhook:path=/mutate-asdb-aerospike-com-v1-aerospikecluster,mutating=true,failurePolicy=fail,sideEffects=None,groups=asdb.aerospike.com,resources=aerospikeclusters,verbs=create;update,versions=v1,name=maerospikecluster.kb.io,admissionReviewVersions={v1}
 
 // Default implements webhook.CustomDefaulter so a webhook will be registered for the type
-func (acd *AerospikeClusterCustomDefaulter) Default(_ context.Context, aerospikeCluster *asdbv1.AerospikeCluster) error {
+func (acd *AerospikeClusterCustomDefaulter) Default(_ context.Context,
+	aerospikeCluster *asdbv1.AerospikeCluster,
+) error {
 	asLog := logf.Log.WithName(asdbv1.ClusterNamespacedName(aerospikeCluster))
 
 	asLog.Info(
