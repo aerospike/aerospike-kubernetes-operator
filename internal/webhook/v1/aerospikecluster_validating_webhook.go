@@ -299,14 +299,6 @@ func validate(aslog logr.Logger, cluster *asdbv1.AerospikeCluster) (admission.Wa
 		return warnings, err
 	}
 
-	// Validate rackConfig
-	warns, err = validateRackConfig(aslog, cluster)
-
-	warnings = append(warnings, warns...)
-	if err != nil {
-		return warnings, err
-	}
-
 	for idx := range cluster.Spec.RackConfig.Racks {
 		rack := &cluster.Spec.RackConfig.Racks[idx]
 		// Storage should be validated before validating aerospikeConfig and fileStorage
@@ -318,47 +310,44 @@ func validate(aslog logr.Logger, cluster *asdbv1.AerospikeCluster) (admission.Wa
 		}
 
 		// Validate common aerospike config schema and fields
-		err = validateAerospikeConfig(aslog, version,
+		if err := validateAerospikeConfig(aslog, version,
 			&rack.AerospikeConfig, &rack.Storage, int(cluster.Spec.Size),
 			cluster.Spec.OperatorClientCertSpec,
-		)
-		if err != nil {
+		); err != nil {
 			return warnings, err
 		}
 
-		err = validateRequiredFileStorageForMetadata(
+		if err := validateRequiredFileStorageForMetadata(
 			rack.AerospikeConfig, &rack.Storage, cluster.Spec.ValidationPolicy,
-		)
-		if err != nil {
+		); err != nil {
 			return warnings, err
 		}
 
-		err = validateRequiredFileStorageForAerospikeConfig(
+		if err := validateRequiredFileStorageForAerospikeConfig(
 			rack.AerospikeConfig, &rack.Storage,
-		)
-		if err != nil {
+		); err != nil {
 			return warnings, err
 		}
 	}
 
 	// Validate resource and limit
-	err = validatePodSpecResourceAndLimits(aslog, cluster)
-	if err != nil {
+	if err := validatePodSpecResourceAndLimits(aslog, cluster); err != nil {
 		return warnings, err
 	}
 
 	// Validate access control
-	err = validateAccessControl(aslog, cluster)
-	if err != nil {
+	if err := validateAccessControl(aslog, cluster); err != nil {
+		return warnings, err
+	}
+
+	// Validate rackConfig
+	if err := validateRackConfig(aslog, cluster); err != nil {
 		return warnings, err
 	}
 
 	if err := validateClientCertSpec(cluster); err != nil {
 		return warnings, err
 	}
-
-	warns = validateDeprecatedFields(cluster)
-	warnings = append(warnings, warns...)
 
 	if err := validateNetworkPolicy(cluster); err != nil {
 		return warnings, err
@@ -521,56 +510,6 @@ func validateOperatorClientCert(clientCert *asdbv1.AerospikeOperatorClientCertSp
 	}
 
 	return nil
-}
-
-// warnOperatorClientCertSecretNamespace returns admission warnings when the deprecated
-// secretNamespace field is used in operator client cert or CA cert source.
-func warnOperatorClientCertSecretNamespace(spec *asdbv1.AerospikeOperatorClientCertSpec) admission.Warnings {
-	if spec == nil || spec.SecretCertSource == nil {
-		return nil
-	}
-
-	var warnings admission.Warnings
-
-	//nolint:staticcheck // SA1019: intentionally read deprecated SecretNamespace to emit admission warning
-	if spec.SecretCertSource.SecretNamespace != "" {
-		warnings = append(warnings,
-			"operatorClientCert.secretCertSource.secretNamespace is deprecated: use secrets in the same"+
-				" namespace as the AerospikeCluster. Omit this field. This will be removed in future versions.")
-	}
-
-	//nolint:staticcheck // SA1019: intentionally read deprecated SecretNamespace to emit admission warning
-	if spec.SecretCertSource.CaCertsSource != nil && spec.SecretCertSource.CaCertsSource.SecretNamespace != "" {
-		warnings = append(warnings,
-			"operatorClientCert.secretCertSource.caCertsSource.secretNamespace is deprecated: use secrets in"+
-				" the same namespace as the AerospikeCluster. Omit this field. This will be blocked in future versions.")
-	}
-
-	return warnings
-}
-
-// warnValidationPolicySkipXdrDlogFileValidate returns an admission warning when the deprecated
-// skipXdrDlogFileValidate field is set. This field is no longer in use and will be removed in future versions.
-func warnValidationPolicySkipXdrDlogFileValidate(validationPolicy *asdbv1.ValidationPolicySpec) admission.Warnings {
-	//nolint:staticcheck // SA1019: intentionally read deprecated SkipXdrDlogFileValidate to emit admission warning
-	if validationPolicy == nil || !validationPolicy.SkipXdrDlogFileValidate {
-		return nil
-	}
-
-	return admission.Warnings{
-		"validationPolicy.skipXdrDlogFileValidate is deprecated: this field is no longer in use. " +
-			"This will be removed in future versions.",
-	}
-}
-
-func validateDeprecatedFields(cluster *asdbv1.AerospikeCluster) (warnings admission.Warnings) {
-	warns := warnOperatorClientCertSecretNamespace(cluster.Spec.OperatorClientCertSpec)
-	warnings = append(warnings, warns...)
-
-	warns = warnValidationPolicySkipXdrDlogFileValidate(cluster.Spec.ValidationPolicy)
-	warnings = append(warnings, warns...)
-
-	return warnings
 }
 
 func validateClientCertSpec(cluster *asdbv1.AerospikeCluster) error {
@@ -883,33 +822,12 @@ func validateResourceAndLimits(
 	return nil
 }
 
-func validateRackConfig(_ logr.Logger, cluster *asdbv1.AerospikeCluster) (admission.Warnings, error) {
-	var warnings admission.Warnings
-
-	// If EnableRackIDOverride is enabled, only single rack is allowed
-	if asdbv1.GetBool(cluster.Spec.EnableRackIDOverride) {
-		rackCount := len(cluster.Spec.RackConfig.Racks)
-		if rackCount > 1 {
-			return warnings, fmt.Errorf(
-				"enableRackIDOverride requires a single rack configuration, but %d racks are specified",
-				rackCount,
-			)
-		}
-
-		// Warn if namespaces is empty when EnableRackIDOverride is set
-		if len(cluster.Spec.RackConfig.Namespaces) == 0 {
-			warnings = append(warnings,
-				"enableRackIDOverride is set but rackConfig.namespaces is empty. "+
-					"Consider specifying namespaces for namespace rack-aware setup.",
-			)
-		}
-	}
-
+func validateRackConfig(_ logr.Logger, cluster *asdbv1.AerospikeCluster) error {
 	// Validate namespace names
 	// TODO: Add more validation for namespace name
 	for _, nsName := range cluster.Spec.RackConfig.Namespaces {
 		if strings.Contains(nsName, " ") {
-			return warnings, fmt.Errorf(
+			return fmt.Errorf(
 				"namespace name `%s` cannot have spaces, Namespaces %v", nsName,
 				cluster.Spec.RackConfig.Namespaces,
 			)
@@ -925,7 +843,7 @@ func validateRackConfig(_ logr.Logger, cluster *asdbv1.AerospikeCluster) (admiss
 		rack := &cluster.Spec.RackConfig.Racks[idx]
 		// Check for duplicate
 		if _, ok := rackMap[rack.ID]; ok {
-			return warnings, fmt.Errorf(
+			return fmt.Errorf(
 				"duplicate rackID %d not allowed, racks %v", rack.ID,
 				cluster.Spec.RackConfig.Racks,
 			)
@@ -937,7 +855,7 @@ func validateRackConfig(_ logr.Logger, cluster *asdbv1.AerospikeCluster) (admiss
 		// Check for defaultRackID is in mutate (user can not use defaultRackID).
 		// Allow DefaultRackID
 		if rack.ID > asdbv1.MaxRackID {
-			return warnings, fmt.Errorf(
+			return fmt.Errorf(
 				"invalid rackID. RackID range (%d, %d)", asdbv1.MinRackID, asdbv1.MaxRackID,
 			)
 		}
@@ -953,7 +871,7 @@ func validateRackConfig(_ logr.Logger, cluster *asdbv1.AerospikeCluster) (admiss
 				//    - a single target port is used in headless service and LB.
 				//    - we need to refactor how connection is created to AS to take into account rack's network config.
 				// So, just reject rack specific network connections for now.
-				return warnings, fmt.Errorf(
+				return fmt.Errorf(
 					"you can't specify network or security configuration for rack %d ("+
 						"network and security should be the same for all racks)",
 					rack.ID,
@@ -963,7 +881,7 @@ func validateRackConfig(_ logr.Logger, cluster *asdbv1.AerospikeCluster) (admiss
 
 		migrateFillDelay, err := asdbv1.GetMigrateFillDelay(&rack.AerospikeConfig)
 		if err != nil {
-			return warnings, err
+			return err
 		}
 
 		migrateFillDelaySet.Insert(migrateFillDelay)
@@ -974,29 +892,29 @@ func validateRackConfig(_ logr.Logger, cluster *asdbv1.AerospikeCluster) (admiss
 	}
 
 	if err := validateRackBlockedFromRoster(racksBlockedFromRoster, cluster); err != nil {
-		return warnings, err
+		return err
 	}
 
 	// If len of migrateFillDelaySet is more than 1, it means that different migrate-fill-delay is set across racks
 	if migrateFillDelaySet.Len() > 1 {
-		return warnings, fmt.Errorf("migrate-fill-delay value should be same across all racks")
+		return fmt.Errorf("migrate-fill-delay value should be same across all racks")
 	}
 
 	// Validate batch upgrade/restart param
 	if err := validateBatchSize(cluster.Spec.RackConfig.RollingUpdateBatchSize, true, cluster); err != nil {
-		return warnings, err
+		return err
 	}
 
 	// Validate batch scaleDown param
 	if err := validateBatchSize(cluster.Spec.RackConfig.ScaleDownBatchSize, false, cluster); err != nil {
-		return warnings, err
+		return err
 	}
 
 	// Validate MaxIgnorablePods param
 	if cluster.Spec.RackConfig.MaxIgnorablePods != nil {
 		if err := validateIntOrStringField(cluster.Spec.RackConfig.MaxIgnorablePods,
 			"spec.rackConfig.maxIgnorablePods"); err != nil {
-			return warnings, err
+			return err
 		}
 	}
 
@@ -1005,7 +923,7 @@ func validateRackConfig(_ logr.Logger, cluster *asdbv1.AerospikeCluster) (admiss
 	}
 
 	// TODO: should not use batch if racks are less than replication-factor
-	return warnings, nil
+	return nil
 }
 
 func validateRackBlockedFromRoster(racksBlockedFromRoster int, cluster *asdbv1.AerospikeCluster) error {
@@ -1613,7 +1531,7 @@ func validatePodSpecContainer(containers []v1.Container) error {
 	for idx := range containers {
 		container := &containers[idx]
 		// Check for reserved container name
-		if container.Name == asdbv1.AerospikeServerContainerName {
+		if container.Name == asdbv1.AerospikeServerContainerName || container.Name == asdbv1.AerospikeInitContainerName {
 			return fmt.Errorf(
 				"cannot use reserved container name: %v", container.Name,
 			)
