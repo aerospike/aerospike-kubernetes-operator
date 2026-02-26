@@ -24,6 +24,7 @@ package envtests
 
 import (
 	"context"
+	"strings"
 	"time"
 
 	//nolint:staticcheck //ST1001: dot imports are standard practice for Ginkgo DSL
@@ -32,6 +33,8 @@ import (
 	. "github.com/onsi/gomega"
 	"github.com/onsi/gomega/gexec"
 	admissionv1 "k8s.io/api/admission/v1"
+	apierrors "k8s.io/apimachinery/pkg/api/errors"
+	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	k8Runtime "k8s.io/apimachinery/pkg/runtime"
 	"k8s.io/client-go/kubernetes"
 	clientgoscheme "k8s.io/client-go/kubernetes/scheme"
@@ -171,3 +174,52 @@ var (
 	cancel          context.CancelFunc
 	evictionWebhook *evictionwebhook.EvictionWebhook
 )
+
+// StatusErrorMatcher validates a Kubernetes API StatusError (e.g. from admission webhooks).
+type StatusErrorMatcher struct {
+	reason            metav1.StatusReason
+	messageSubstrings []string
+	causes            []metav1.StatusCause
+	code              int32
+}
+
+// NewStatusErrorMatcher returns a matcher expecting the given status code and reason.
+func NewStatusErrorMatcher(code int32, reason metav1.StatusReason) *StatusErrorMatcher {
+	return &StatusErrorMatcher{code: code, reason: reason}
+}
+
+// WithMessageSubstrings adds required substrings that must appear in the status message.
+func (m *StatusErrorMatcher) WithMessageSubstrings(ss ...string) *StatusErrorMatcher {
+	m.messageSubstrings = append(m.messageSubstrings, ss...)
+	return m
+}
+
+// WithCauses adds expected status causes to match.
+func (m *StatusErrorMatcher) WithCauses(causes ...metav1.StatusCause) *StatusErrorMatcher {
+	m.causes = append(m.causes, causes...)
+	return m
+}
+
+// Validate asserts that err is a StatusError matching code, reason, message substrings, and causes.
+func (m *StatusErrorMatcher) Validate(err error) {
+	statusErr, ok := err.(*apierrors.StatusError)
+	Expect(ok).To(BeTrue(), "expected a *errors.StatusError, got %T", err)
+	Expect(statusErr.ErrStatus.Code).To(Equal(m.code))
+	Expect(statusErr.ErrStatus.Reason).To(Equal(m.reason))
+
+	msg := statusErr.ErrStatus.Message
+	for _, sub := range m.messageSubstrings {
+		Expect(strings.Contains(msg, sub)).To(BeTrue(), "message %q should contain %q", msg, sub)
+	}
+
+	if len(m.causes) > 0 {
+		Expect(statusErr.ErrStatus.Details).NotTo(BeNil())
+		Expect(statusErr.ErrStatus.Details.Causes).To(HaveLen(len(m.causes)))
+
+		for i, c := range m.causes {
+			Expect(statusErr.ErrStatus.Details.Causes[i].Type).To(Equal(c.Type))
+			Expect(statusErr.ErrStatus.Details.Causes[i].Message).To(Equal(c.Message))
+			Expect(statusErr.ErrStatus.Details.Causes[i].Field).To(Equal(c.Field))
+		}
+	}
+}
