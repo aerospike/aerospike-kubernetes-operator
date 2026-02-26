@@ -194,7 +194,8 @@ func (acv *AerospikeClusterCustomValidator) ValidateUpdate(_ context.Context, ol
 	}
 
 	// Validate replication-factor update restrictions
-	if err := validateReplicationFactorUpdate(oldObject, aerospikeCluster); err != nil {
+	// Check both: spec-to-spec changes and status-to-spec changes
+	if err := validateReplicationFactorUpdateRestrictions(oldObject, aerospikeCluster); err != nil {
 		return warnings, err
 	}
 
@@ -2108,20 +2109,48 @@ func validateTLSAndPKIOnlyUpdate(oldSpec, newSpec *asdbv1.AerospikeClusterSpec,
 	return nil
 }
 
-// validateReplicationFactorUpdate validates that if replication-factor is modified for any namespace,
+// validateReplicationFactorUpdateRestrictions validates that if replication-factor is modified for any namespace,
 // then:
 // 1. Only one namespace's replication-factor can be changed at a time
 // 2. No other fields in the entire aerospikecluster spec can be modified
-func validateReplicationFactorUpdate(oldObj, newObj *asdbv1.AerospikeCluster) error {
+// It performs two checks:
+// - oldSpec vs newSpec: ensures user isn't making invalid changes in a single update
+// - status vs newSpec: ensures the desired state change is valid (prevents drift from status)
+func validateReplicationFactorUpdateRestrictions(oldObj, newObj *asdbv1.AerospikeCluster) error {
+	// First check: Validate changes from old spec to new spec
+	if err := validateReplicationFactorUpdateComparison(&oldObj.Spec, newObj); err != nil {
+		return err
+	}
+
+	// Second check: Validate changes from status to new spec (if status exists)
+	// This ensures the desired state is valid even if there's drift between status and spec
+	if newObj.Status.AerospikeConfig != nil {
+		statusToSpec, err := asdbv1.CopyStatusToSpec(&newObj.Status.AerospikeClusterStatusSpec)
+		if err != nil {
+			return fmt.Errorf("failed to copy status to spec for comparison: %v", err)
+		}
+
+		if err := validateReplicationFactorUpdateComparison(statusToSpec, newObj); err != nil {
+			return err
+		}
+	}
+
+	return nil
+}
+
+// validateReplicationFactorUpdateComparison validates replication-factor update restrictions
+// by comparing two specs (either oldSpec vs newSpec, or statusSpec vs newSpec)
+func validateReplicationFactorUpdateComparison(oldSpec *asdbv1.AerospikeClusterSpec,
+	newObj *asdbv1.AerospikeCluster) error {
 	// Create JSON patch to see all changes
-	oldJSON, err := json.Marshal(oldObj.Spec)
+	oldJSON, err := json.Marshal(oldSpec)
 	if err != nil {
-		return fmt.Errorf("failed to marshal old object for patch comparison: %v", err)
+		return fmt.Errorf("failed to marshal old spec: %v", err)
 	}
 
 	newJSON, err := json.Marshal(newObj.Spec)
 	if err != nil {
-		return fmt.Errorf("failed to marshal new object for patch comparison: %v", err)
+		return fmt.Errorf("failed to marshal new spec: %v", err)
 	}
 
 	patch, err := jsonpatch.CreatePatch(oldJSON, newJSON)
@@ -2161,18 +2190,18 @@ func validateReplicationFactorUpdate(oldObj, newObj *asdbv1.AerospikeCluster) er
 		}
 	}
 
-	if otherSpecChanged && len(replicationFactorPatches) > 0 {
+	// If no replication-factor changes, no need to validate further
+	if len(replicationFactorPatches) == 0 {
+		return nil
+	}
+
+	if otherSpecChanged {
 		// There are other spec changes along with replication-factor changes
 		return fmt.Errorf(
 			"when updating replication-factor for namespace, no other fields in the " +
 				"aerospikecluster spec are allowed to be modified. Only replication-factor for a single " +
 				"namespace can be changed at a time",
 		)
-	}
-
-	// If no replication-factor changes, no need to validate further
-	if len(replicationFactorPatches) == 0 {
-		return nil
 	}
 
 	if !ptr.Deref(newObj.Spec.EnableDynamicConfigUpdate, false) {
