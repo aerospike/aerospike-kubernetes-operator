@@ -25,11 +25,9 @@ import (
 	. "github.com/onsi/gomega"
 	"github.com/onsi/gomega/gexec"
 	admissionv1 "k8s.io/api/admission/v1"
-	k8Runtime "k8s.io/apimachinery/pkg/runtime"
 	"k8s.io/client-go/kubernetes"
 	clientgoscheme "k8s.io/client-go/kubernetes/scheme"
 	_ "k8s.io/client-go/plugin/pkg/client/auth"
-	"k8s.io/client-go/rest"
 	ctrl "sigs.k8s.io/controller-runtime"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 	"sigs.k8s.io/controller-runtime/pkg/envtest"
@@ -45,20 +43,6 @@ import (
 
 // These tests use Ginkgo (BDD-style Go testing framework). Refer to
 // http://onsi.github.io/ginkgo/ to learn more about Ginkgo.
-
-var testEnv *envtest.Environment
-
-var k8sClient client.Client
-
-var clientSet *kubernetes.Clientset
-
-var cfg *rest.Config
-
-var scheme = k8Runtime.NewScheme()
-
-var cancel context.CancelFunc
-
-var evictionWebhook *evictionwebhook.EvictionWebhook
 
 func TestAPIs(t *testing.T) {
 	RegisterFailHandler(Fail)

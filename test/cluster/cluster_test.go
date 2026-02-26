@@ -299,7 +299,7 @@ func networkDeployValidationTest(ctx goctx.Context) {
 			It(
 				"WhenTLSExist: should fail for no tls path in storage volume",
 				func() {
-					aeroCluster := createAerospikeClusterPost640(
+					aeroCluster := CreateAerospikeClusterPost640(
 						clusterNamespacedName, 1, latestImage,
 					)
 					aeroCluster.Spec.AerospikeConfig.Value[asdbv1.ConfKeyNetwork] = map[string]interface{}{
@@ -317,7 +317,7 @@ func networkDeployValidationTest(ctx goctx.Context) {
 			It(
 				"WhenTLSExist: should fail for both ca-file and ca-path in tls",
 				func() {
-					aeroCluster := createAerospikeClusterPost640(
+					aeroCluster := CreateAerospikeClusterPost640(
 						clusterNamespacedName, 1, latestImage,
 					)
 					aeroCluster.Spec.AerospikeConfig.Value[asdbv1.ConfKeyNetwork] = map[string]interface{}{
@@ -338,7 +338,7 @@ func networkDeployValidationTest(ctx goctx.Context) {
 			It(
 				"WhenTLSExist: should fail for ca-file path pointing to Secret Manager",
 				func() {
-					aeroCluster := createAerospikeClusterPost640(
+					aeroCluster := CreateAerospikeClusterPost640(
 						clusterNamespacedName, 1, latestImage,
 					)
 					aeroCluster.Spec.AerospikeConfig.Value[asdbv1.ConfKeyNetwork] = map[string]interface{}{
@@ -358,7 +358,7 @@ func networkDeployValidationTest(ctx goctx.Context) {
 			It(
 				"WhenTLSExist: should fail for ca-path pointing to Secret Manager",
 				func() {
-					aeroCluster := createAerospikeClusterPost640(
+					aeroCluster := CreateAerospikeClusterPost640(
 						clusterNamespacedName, 1, latestImage,
 					)
 					aeroCluster.Spec.AerospikeConfig.Value[asdbv1.ConfKeyNetwork] = map[string]interface{}{
@@ -650,7 +650,7 @@ func ValidateAerospikeBenchmarkConfigs(ctx goctx.Context) {
 					By("Deploying cluster which does not have the fix for AER-6767")
 
 					imageBeforeFix := fmt.Sprintf("%s:%s", baseEnterpriseImage, "7.1.0.2")
-					aeroCluster := createAerospikeClusterPost640(clusterNamespacedName, 2, imageBeforeFix)
+					aeroCluster := CreateAerospikeClusterPost640(clusterNamespacedName, 2, imageBeforeFix)
 					namespaceConfig :=
 						aeroCluster.Spec.AerospikeConfig.Value[asdbv1.ConfKeyNamespace].([]interface{})[0].(map[string]interface{})
 					namespaceConfig["enable-benchmarks-read"] = false
@@ -1997,7 +1997,7 @@ func negativeDeployClusterValidationTest(
 					It(
 						"MultipleCertSource: should fail if both SecretCertSource and CertPathInOperator is set",
 						func() {
-							aeroCluster := createAerospikeClusterPost640(
+							aeroCluster := CreateAerospikeClusterPost640(
 								clusterNamespacedName, 1, latestImage,
 							)
 							aeroCluster.Spec.OperatorClientCertSpec.CertPathInOperator = &asdbv1.AerospikeCertPathInOperatorSource{}
@@ -2008,7 +2008,7 @@ func negativeDeployClusterValidationTest(
 					It(
 						"MissingClientKeyFilename: should fail if ClientKeyFilename is missing",
 						func() {
-							aeroCluster := createAerospikeClusterPost640(
+							aeroCluster := CreateAerospikeClusterPost640(
 								clusterNamespacedName, 1, latestImage,
 							)
 							aeroCluster.Spec.OperatorClientCertSpec.SecretCertSource.ClientKeyFilename = ""
@@ -2020,7 +2020,7 @@ func negativeDeployClusterValidationTest(
 					It(
 						"Should fail if both CaCertsFilename and CaCertsSource is set",
 						func() {
-							aeroCluster := createAerospikeClusterPost640(
+							aeroCluster := CreateAerospikeClusterPost640(
 								clusterNamespacedName, 1, latestImage,
 							)
 							aeroCluster.Spec.OperatorClientCertSpec.SecretCertSource.CaCertsSource = &asdbv1.CaCertsSource{}
@@ -2032,7 +2032,7 @@ func negativeDeployClusterValidationTest(
 					It(
 						"MissingClientCertPath: should fail if clientCertPath is missing",
 						func() {
-							aeroCluster := createAerospikeClusterPost640(
+							aeroCluster := CreateAerospikeClusterPost640(
 								clusterNamespacedName, 1, latestImage,
 							)
 							aeroCluster.Spec.OperatorClientCertSpec.SecretCertSource = nil
@@ -2307,7 +2307,7 @@ func negativeDeployClusterValidationTest(
 					It(
 						"WhenFeatureKeyExist: should fail for no feature-key-file path in storage volume",
 						func() {
-							aeroCluster := createAerospikeClusterPost640(
+							aeroCluster := CreateAerospikeClusterPost640(
 								clusterNamespacedName, 1, latestImage,
 							)
 							aeroCluster.Spec.AerospikeConfig.Value[asdbv1.ConfKeyService] = map[string]interface{}{
@@ -2726,7 +2726,7 @@ func negativeUpdateClusterValidationTest(
 
 			BeforeEach(
 				func() {
-					aeroCluster := createAerospikeClusterPost640(
+					aeroCluster := CreateAerospikeClusterPost640(
 						clusterNamespacedName, 2, latestImage,
 					)
 
