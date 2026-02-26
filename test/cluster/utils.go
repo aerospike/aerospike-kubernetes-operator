@@ -410,7 +410,7 @@ func getAeroClusterConfig(
 
 	switch {
 	case cmpVal2 >= 0:
-		return createAerospikeClusterPost640(
+		return CreateAerospikeClusterPost640(
 			namespace, 2, image,
 		), nil
 
