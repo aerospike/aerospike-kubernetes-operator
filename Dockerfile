@@ -1,5 +1,5 @@
 # Build the manager binary
-FROM --platform=$BUILDPLATFORM golang:1.24 AS builder
+FROM --platform=$BUILDPLATFORM golang:1.24@sha256:d2d2bc1c84f7e60d7d2438a3836ae7d0c847f4888464e7ec9ba3a1339a1ee804 AS builder
 
 # OS and Arch args
 ARG TARGETOS
@@ -24,10 +24,10 @@ COPY errors/ errors/
 RUN CGO_ENABLED=0 GOOS=${TARGETOS:-linux} GOARCH=${TARGETARCH} GO111MODULE=on go build -a -o manager cmd/main.go
 
 # Base image
-FROM registry.access.redhat.com/ubi10/ubi-minimal:latest
+FROM registry.access.redhat.com/ubi10/ubi-minimal:latest@sha256:a74a7a92d3069bfac09c6882087771fc7db59fa9d8e16f14f4e012fe7288554c
 
 # Version of Operator (build arg)
-ARG VERSION="4.2.0"
+ARG VERSION="4.3.0"
 
 # User to run container as
 ARG USER="root"

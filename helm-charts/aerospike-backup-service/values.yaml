@@ -40,7 +40,7 @@ secrets: []
 #  - secretName: aws-secret
 #    volumeMount:
 #      name: aws-secret
-#      mountPath: /root/.aws/credentials
+#      mountPath: /home/absuser/.aws/credentials
 #      subPath: credentials
 
 # Deprecated: Resources field is now part of spec.podSpec.serviceContainer

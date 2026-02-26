@@ -3,7 +3,7 @@ apiVersion: apiextensions.k8s.io/v1
 kind: CustomResourceDefinition
 metadata:
   annotations:
-    aerospike-kubernetes-operator/version: 4.2.0
+    aerospike-kubernetes-operator/version: 4.3.0
     controller-gen.kubebuilder.io/version: v0.18.0
   name: aerospikerestores.asdb.aerospike.com
 spec:
