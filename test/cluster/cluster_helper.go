@@ -1006,7 +1006,9 @@ func createAerospikeClusterPost570(
 	return aeroCluster
 }
 
-func createAerospikeClusterPost640(
+// CreateAerospikeClusterPost640 creates an AerospikeCluster spec for server versions post-6.4.0.
+// Exported for use from other test packages (e.g. envtests). Use testutil.DefaultEnterpriseImage for the image arg.
+func CreateAerospikeClusterPost640(
 	clusterNamespacedName types.NamespacedName, size int32, image string,
 ) *asdbv1.AerospikeCluster {
 	// create Aerospike custom resource

@@ -14,27 +14,27 @@ See the License for the specific language governing permissions and
 limitations under the License.
 */
 
-package envtests
+package cluster
 
 import (
 	"testing"
 
 	. "github.com/onsi/ginkgo/v2"
 	. "github.com/onsi/gomega"
+
+	envtests "github.com/aerospike/aerospike-kubernetes-operator/v4/test/envtests"
 )
 
-// These tests use Ginkgo (BDD-style Go testing framework). Refer to
-// http://onsi.github.io/ginkgo/ to learn more about Ginkgo.
-
-func TestAPIs(t *testing.T) {
+func TestClusterWebhooks(t *testing.T) {
 	RegisterFailHandler(Fail)
-	RunSpecs(t, "Env tests Suite")
+	RunSpecs(t, "Cluster Webhook Envtests Suite")
 }
 
 var _ = BeforeSuite(func() {
-	SetupTestEnv("../../")
+	// basePath from test/envtests/cluster to repo root
+	envtests.SetupTestEnv("../../../")
 })
 
 var _ = AfterSuite(func() {
-	TeardownTestEnv()
+	envtests.TeardownTestEnv()
 })
