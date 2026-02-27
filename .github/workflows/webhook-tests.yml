@@ -14,7 +14,7 @@ on:
       - 'internal/webhook/**'
       - 'api/v1/**'
       - 'test/envtests/**'
-      - 'test/cluster/**'
+      - 'test/envtests/cluster/**'
       - '.github/workflows/webhook-tests.yml'
 
 jobs:
