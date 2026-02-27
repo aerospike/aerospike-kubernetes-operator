@@ -361,7 +361,7 @@ func setDefaultNsConf(asLog logr.Logger, configSpec asdbv1.AerospikeConfigSpec,
 	rackEnabledNsList []string, rackID *int) error {
 	config := configSpec.Value
 	// namespace conf
-	nsConf, ok := config["namespaces"]
+	nsConf, ok := config[asdbv1.ConfKeyNamespace]
 	if !ok {
 		return fmt.Errorf(
 			"aerospikeConfig.namespaces not present. aerospikeConfig %v",
@@ -392,7 +392,7 @@ func setDefaultNsConf(asLog logr.Logger, configSpec asdbv1.AerospikeConfigSpec,
 			)
 		}
 
-		if nsName, ok := nsMap["name"]; ok {
+		if nsName, ok := nsMap[asdbv1.ConfKeyName]; ok {
 			if name, ok := nsName.(string); ok {
 				if isNameExist(rackEnabledNsList, name) {
 					// Add rack-id only for rackEnabled namespaces

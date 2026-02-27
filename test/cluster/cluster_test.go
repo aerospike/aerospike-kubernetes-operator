@@ -1877,7 +1877,7 @@ func UpdateClusterTest(ctx goctx.Context) {
 
 									namespaceConfig :=
 										aeroCluster.Spec.AerospikeConfig.Value[asdbv1.ConfKeyNamespace].([]interface{})[0].(map[string]interface{})
-									namespaceConfig["replication-factor"] = 5
+									namespaceConfig[asdbv1.ConfKeyReplicationFactor] = 5
 									aeroCluster.Spec.AerospikeConfig.Value[asdbv1.ConfKeyNamespace].([]interface{})[0] = namespaceConfig
 
 									err = k8sClient.Update(
@@ -1906,7 +1906,7 @@ func UpdateClusterTest(ctx goctx.Context) {
 
 									nsList := aeroCluster.Spec.AerospikeConfig.Value[asdbv1.ConfKeyNamespace].([]interface{})
 									namespaceConfig := nsList[len(nsList)-1].(map[string]interface{})
-									namespaceConfig["replication-factor"] = 3
+									namespaceConfig[asdbv1.ConfKeyReplicationFactor] = 3
 									aeroCluster.Spec.AerospikeConfig.
 										Value[asdbv1.ConfKeyNamespace].([]interface{})[len(nsList)-1] = namespaceConfig
 
