@@ -12,18 +12,23 @@ import (
 const (
 	// BaseEnterpriseImage is the repo for Aerospike Enterprise server images.
 	BaseEnterpriseImage = "aerospike/aerospike-server-enterprise"
+	BaseFederalImage    = "aerospike/aerospike-server-federal"
 	LatestServerVersion = "8.1.1.0"
+	Pre810ServerVersion = "8.0.0.0"
 	StorageClass        = "ssd"
 )
 
 var (
 	LatestEnterpriseImage = fmt.Sprintf("%s:%s", BaseEnterpriseImage, LatestServerVersion)
+	Pre810EnterpriseImage = fmt.Sprintf("%s:%s", BaseEnterpriseImage, Pre810ServerVersion)
+	Pre810FederalImage    = fmt.Sprintf("%s:%s", BaseFederalImage, Pre810ServerVersion)
+	LatestFederalImage    = fmt.Sprintf("%s:%s", BaseFederalImage, LatestServerVersion)
 )
 
-// DefaultEnterpriseImage returns the full image string for the default (or given)
+// GetEnterpriseImage returns the full image string for the default (or given)
 // Aerospike Enterprise server version. Use this from envtests or any other packages
 // when you need a valid image.
-func DefaultEnterpriseImage(version string) string {
+func GetEnterpriseImage(version string) string {
 	if version == "" {
 		version = LatestServerVersion
 	}

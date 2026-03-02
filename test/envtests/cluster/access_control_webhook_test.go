@@ -31,10 +31,6 @@ import (
 	"github.com/aerospike/aerospike-kubernetes-operator/v4/test/testutil"
 )
 
-const (
-	federalImage = "aerospike/aerospike-server-federal:8.1.1.0"
-)
-
 // Minimal TLS network config and operator cert for webhook tests (cluster package helpers are unexported).
 func networkTLSConfigForTest() map[string]interface{} {
 	return map[string]interface{}{
@@ -111,9 +107,11 @@ var _ = Describe("AerospikeCluster access control validation (envtests)", func()
 				Validate(err)
 		})
 
+		// Bug: Test should fail only if PKIOnly authMode is used with
+		// Enterprise image below 8.1.0.0 but not if is 8.1.0.0
 		It("DeployValidation:Should fail when PKIOnly authMode is used with Enterprise image below 8.1.0.0", func() {
 			aeroCluster := testCluster.CreatePKIAuthEnabledCluster(clusterNamespacedName, 2)
-			aeroCluster.Spec.Image = testutil.DefaultEnterpriseImage("8.0.0.0")
+			aeroCluster.Spec.Image = testutil.GetEnterpriseImage("8.0.0.0")
 
 			err := testCluster.DeployCluster(envtests.K8sClient, ctx, aeroCluster)
 			Expect(err).To(HaveOccurred())
@@ -124,18 +122,44 @@ var _ = Describe("AerospikeCluster access control validation (envtests)", func()
 					"denied the request:",
 					"PKIOnly authMode requires Enterprise Edition version 8.1.0.0 or later").
 				Validate(err)
+
+			aeroCluster.Spec.Image = testutil.GetEnterpriseImage(testutil.Pre810EnterpriseImage)
+
+			errPre810 := testCluster.DeployCluster(envtests.K8sClient, ctx, aeroCluster)
+			Expect(errPre810).To(HaveOccurred())
+
+			envtests.NewStatusErrorMatcher(int32(403), metav1.StatusReasonForbidden).
+				WithMessageSubstrings("admission webhook",
+					"\"vaerospikecluster.kb.io\"",
+					"denied the request:",
+					"PKIOnly authMode requires Enterprise Edition version 8.1.0.0 or later").
+				Validate(err)
 		})
 
-		It("DeployValidation:Should fail when Federal Edition has mixed auth modes (not all PKI)", func() {
-			aeroCluster := testCluster.CreatePKIAuthEnabledCluster(clusterNamespacedName, 2)
-			aeroCluster.Spec.Image = federalImage
-			aeroCluster.Spec.AerospikeAccessControl.Users = append(aeroCluster.Spec.AerospikeAccessControl.Users,
-				asdbv1.AerospikeUserSpec{
-					Name:       "user01",
-					AuthMode:   asdbv1.AerospikeAuthModeInternal,
-					SecretName: test.AuthSecretName,
-					Roles:      []string{"sys-admin", "user-admin"},
-				})
+		It("DeployValidation:Should fail if FE and auth mode of all users is not set to PKIOnly", func() {
+			accessControl := &asdbv1.AerospikeAccessControlSpec{
+				Users: []asdbv1.AerospikeUserSpec{
+					{
+						Name:     "admin",
+						AuthMode: asdbv1.AerospikeAuthModePKIOnly,
+						Roles:    []string{"sys-admin", "user-admin"},
+					},
+					{
+						Name:       "user01",
+						AuthMode:   asdbv1.AerospikeAuthModeInternal,
+						SecretName: test.AuthSecretName,
+						Roles: []string{
+							"sys-admin",
+							"user-admin",
+						},
+					},
+				},
+			}
+
+			aeroCluster := testCluster.GetPKIAuthAerospikeClusterWithAccessControl(
+				clusterNamespacedName, 2, accessControl,
+			)
+			aeroCluster.Spec.Image = testutil.LatestFederalImage
 
 			err := testCluster.DeployCluster(envtests.K8sClient, ctx, aeroCluster)
 			Expect(err).To(HaveOccurred())

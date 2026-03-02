@@ -704,7 +704,7 @@ var _ = Describe("AerospikeCluster validation (envtests)", func() {
 		})
 
 		It("InvalidImageVersion: should fail for image version below base (6.0.0.0)", func() {
-			oldImage := testutil.DefaultEnterpriseImage("5.0.0.0")
+			oldImage := testutil.GetEnterpriseImage("5.0.0.0")
 			aeroCluster := testCluster.CreateAerospikeClusterPost640(clusterNamespacedName, 1, oldImage)
 
 			err := testCluster.DeployCluster(envtests.K8sClient, ctx, aeroCluster)

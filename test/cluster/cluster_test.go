@@ -19,6 +19,7 @@ import (
 	asdbv1 "github.com/aerospike/aerospike-kubernetes-operator/v4/api/v1"
 	"github.com/aerospike/aerospike-kubernetes-operator/v4/pkg/utils"
 	"github.com/aerospike/aerospike-kubernetes-operator/v4/test"
+	"github.com/aerospike/aerospike-kubernetes-operator/v4/test/testutil"
 	lib "github.com/aerospike/aerospike-management-lib"
 )
 
@@ -2541,7 +2542,7 @@ func negativeUpdateClusterValidationTest(
 			Expect(err).ToNot(HaveOccurred())
 			By("Updating cluster image from enterprise to federal")
 
-			aeroCluster.Spec.Image = latestFederalImage
+			aeroCluster.Spec.Image = testutil.LatestFederalImage
 			err = updateCluster(k8sClient, ctx, aeroCluster)
 			Expect(err).To(HaveOccurred())
 			Expect(err.Error()).To(ContainSubstring("enterprise to federal edition upgrade is not supported"))
@@ -2549,7 +2550,7 @@ func negativeUpdateClusterValidationTest(
 
 		It("Should fail if server image updated from federal to enterprise", func() {
 			aeroCluster := CreatePKIAuthEnabledCluster(clusterNamespacedName, 2)
-			aeroCluster.Spec.Image = latestFederalImage
+			aeroCluster.Spec.Image = testutil.LatestFederalImage
 			err := DeployCluster(k8sClient, ctx, aeroCluster)
 			Expect(err).ToNot(HaveOccurred())
 
