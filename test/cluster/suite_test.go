@@ -40,6 +40,7 @@ import (
 
 	asdbv1 "github.com/aerospike/aerospike-kubernetes-operator/v4/api/v1"
 	"github.com/aerospike/aerospike-kubernetes-operator/v4/test"
+	"github.com/aerospike/aerospike-kubernetes-operator/v4/test/testutil"
 )
 
 // These tests use Ginkgo (BDD-style Go testing framework). Refer to
@@ -119,7 +120,7 @@ var _ = SynchronizedBeforeSuite(
 		k8sClient, k8sClientSet, err = test.InitialiseClients(scheme, cfg)
 		Expect(err).NotTo(HaveOccurred())
 
-		projectRoot, err = getGitRepoRootPath()
+		projectRoot, err = testutil.GetGitRepoRootPath()
 		Expect(err).NotTo(HaveOccurred())
 
 		cloudProvider, err = getCloudProvider(goctx.TODO(), k8sClient)

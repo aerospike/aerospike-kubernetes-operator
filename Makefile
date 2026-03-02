@@ -172,12 +172,7 @@ restore-test: manifests generate fmt vet setup-envtest ## Run tests.
 
 .PHONY: env-test
 env-test:  fmt vet setup-envtest ## Run tests.
-	export KUBEBUILDER_ASSETS="$(shell $(ENVTEST) use $(ENVTEST_K8S_VERSION) --bin-dir $(LOCALBIN) -p path)"; cd $(shell pwd)/test/envtests; mkdir -p ../test-results; go run github.com/onsi/ginkgo/v2/ginkgo -coverprofile envcover.out -v -show-node-events -timeout=1h0m0s  --junit-report=../test-results/junit-envtests.xml -- ${ARGS}
-
-.PHONY: env-test-cluster
-envtest-cluster: fmt vet setup-envtest ## Run test/envtests/cluster (cluster webhook envtests).
-	export KUBEBUILDER_ASSETS="$(shell $(ENVTEST) use $(ENVTEST_K8S_VERSION) --bin-dir $(LOCALBIN) -p path)"; cd $(shell pwd)/test/envtests/cluster; mkdir -p ../test-results; go run github.com/onsi/ginkgo/v2/ginkgo -coverprofile clustercover.out -v -show-node-events -timeout=1h0m0s --junit-report=../test-results/junit-envtests-cluster.xml -- ${ARGS}
-
+	export KUBEBUILDER_ASSETS="$(shell $(ENVTEST) use $(ENVTEST_K8S_VERSION) --bin-dir $(LOCALBIN) -p path)"; cd $(shell pwd)/test/envtests && mkdir -p ../test-results && go run github.com/onsi/ginkgo/v2/ginkgo -r --focus "$(FOCUS)" -coverprofile envcover.out -v -show-node-events -timeout=1h0m0s --junit-report=../test-results/junit-envtests.xml -- . ${ARGS}
 ##@ Build
 
 .PHONY: build

@@ -24,6 +24,7 @@ package envtests
 
 import (
 	"context"
+	"path/filepath"
 	"time"
 
 	//nolint:staticcheck //ST1001: dot imports are standard practice for Ginkgo DSL
@@ -43,32 +44,39 @@ import (
 	"sigs.k8s.io/controller-runtime/pkg/log/zap"
 	"sigs.k8s.io/controller-runtime/pkg/webhook"
 
-	webhookv1 "github.com/aerospike/aerospike-kubernetes-operator/v4/internal/webhook/v1"
-	"github.com/aerospike/aerospike-kubernetes-operator/v4/pkg/configschema"
-	"github.com/aerospike/aerospike-management-lib/asconfig"
-
 	asdbv1 "github.com/aerospike/aerospike-kubernetes-operator/v4/api/v1"
 	evictionwebhook "github.com/aerospike/aerospike-kubernetes-operator/v4/internal/webhook/eviction"
+	webhookv1 "github.com/aerospike/aerospike-kubernetes-operator/v4/internal/webhook/v1"
+	"github.com/aerospike/aerospike-kubernetes-operator/v4/pkg/configschema"
+	"github.com/aerospike/aerospike-kubernetes-operator/v4/test/testutil"
+	"github.com/aerospike/aerospike-management-lib/asconfig"
 )
 
 // K8sClient is the Kubernetes client for envtests. Exported for use by subpackages (e.g. envtests/cluster).
-var K8sClient client.Client
+// var K8sClient client.Client
+
+// Package-level vars used by envtests and set by SetupTestEnv.
+var (
+	testEnv         *envtest.Environment
+	K8sClient       client.Client
+	ClientSet       *kubernetes.Clientset
+	cfg             *rest.Config
+	scheme          = k8Runtime.NewScheme()
+	cancel          context.CancelFunc
+	EvictionWebhook *evictionwebhook.EvictionWebhook
+)
 
 // SetupTestEnv starts the envtest environment and webhook server. Idempotent.
-// basePath is the path from the test package directory to the repo root
+// projectRoot is the path from the test package directory to the repo root
 // (e.g. "../../" for envtests, "../../../" for envtests/cluster).
 func SetupTestEnv(basePath string) {
-	if K8sClient != nil {
-		return
-	}
-
-	if basePath == "" {
-		basePath = "../../"
-	}
-
+	// Set up logger
 	logf.SetLogger(zap.New(zap.WriteTo(GinkgoWriter), zap.UseDevMode(true)))
 
 	var err error
+	// Get project root path
+	projectRoot, err := testutil.GetGitRepoRootPath()
+	Expect(err).NotTo(HaveOccurred(), "must run from git repo root")
 
 	schemaMap, err := configschema.NewSchemaMap()
 	Expect(err).NotTo(HaveOccurred(), "Failed to load SchemaMap for tests")
@@ -81,11 +89,12 @@ func SetupTestEnv(basePath string) {
 	t := false
 	testEnv = &envtest.Environment{
 		UseExistingCluster: &t,
+
 		CRDDirectoryPaths: []string{
-			basePath + "config/crd/bases",
+			filepath.Join(projectRoot, "config", "crd", "bases"),
 		},
 		WebhookInstallOptions: envtest.WebhookInstallOptions{
-			Paths: []string{basePath + "config/webhook"},
+			Paths: []string{filepath.Join(projectRoot, "config", "webhook")},
 		},
 	}
 
@@ -108,11 +117,10 @@ func SetupTestEnv(basePath string) {
 		return err
 	}, time.Second*10, time.Millisecond*250).Should(Succeed())
 	Expect(K8sClient).NotTo(BeNil())
-	k8sClient = K8sClient
 
-	clientSet, err = kubernetes.NewForConfig(cfg)
+	ClientSet, err = kubernetes.NewForConfig(cfg)
 	Expect(err).NotTo(HaveOccurred())
-	Expect(clientSet).NotTo(BeNil())
+	Expect(ClientSet).NotTo(BeNil())
 
 	mgr, err := ctrl.NewManager(cfg, ctrl.Options{
 		Scheme: scheme,
@@ -126,7 +134,7 @@ func SetupTestEnv(basePath string) {
 	})
 	Expect(err).NotTo(HaveOccurred())
 
-	evictionWebhook = evictionwebhook.SetupEvictionWebhookWithManager(mgr)
+	EvictionWebhook = evictionwebhook.SetupEvictionWebhookWithManager(mgr)
 	err = webhookv1.SetupAerospikeClusterWebhookWithManager(mgr)
 	Expect(err).NotTo(HaveOccurred())
 
@@ -158,16 +166,4 @@ func TeardownTestEnv() {
 
 	testEnv = nil
 	K8sClient = nil
-	k8sClient = nil
 }
-
-// Package-level vars used by envtests and set by SetupTestEnv.
-var (
-	testEnv         *envtest.Environment
-	k8sClient       client.Client
-	clientSet       *kubernetes.Clientset
-	cfg             *rest.Config
-	scheme          = k8Runtime.NewScheme()
-	cancel          context.CancelFunc
-	evictionWebhook *evictionwebhook.EvictionWebhook
-)

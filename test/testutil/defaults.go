@@ -3,7 +3,11 @@
 // cluster-specific helpers in test/cluster.
 package testutil
 
-import "fmt"
+import (
+	"fmt"
+	"os/exec"
+	"strings"
+)
 
 const (
 	// BaseEnterpriseImage is the repo for Aerospike Enterprise server images.
@@ -25,4 +29,13 @@ func DefaultEnterpriseImage(version string) string {
 	}
 
 	return BaseEnterpriseImage + ":" + version
+}
+
+func GetGitRepoRootPath() (string, error) {
+	path, err := exec.Command("git", "rev-parse", "--show-toplevel").Output()
+	if err != nil {
+		return "", err
+	}
+
+	return strings.TrimSpace(string(path)), nil
 }

@@ -26,7 +26,7 @@ const (
 
 var _ = Describe("AerospikeCluster validation (envtests)", func() {
 	const (
-		clusterName = "invalid-size-cluster"
+		clusterName = "invalid-cluster"
 		testNs      = "default" // use same test namespace as suite_test.go
 	)
 
@@ -35,18 +35,16 @@ var _ = Describe("AerospikeCluster validation (envtests)", func() {
 	// Create namespaced name for cluster
 	clusterNamespacedName := test.GetNamespacedName(clusterName, testNs)
 
-	Context("DeployValidation", func() {
-		AfterEach(func() {
-			aeroCluster := &asdbv1.AerospikeCluster{
-				ObjectMeta: metav1.ObjectMeta{
-					Name:      clusterNamespacedName.Name,
-					Namespace: clusterNamespacedName.Namespace,
-				},
-			}
-			// Delete the cluster after each test
-			err := envtests.K8sClient.Delete(ctx, aeroCluster)
-			Expect(err).To(Or(Succeed(), MatchError(errors.IsNotFound, "should be NotFound or Succeed")))
-		})
+	AfterEach(func() {
+		aeroCluster := &asdbv1.AerospikeCluster{
+			ObjectMeta: metav1.ObjectMeta{
+				Name:      clusterNamespacedName.Name,
+				Namespace: clusterNamespacedName.Namespace,
+			},
+		}
+		// Delete the cluster after each test
+		err := envtests.K8sClient.Delete(ctx, aeroCluster)
+		Expect(err).To(Or(Succeed(), MatchError(errors.IsNotFound, "should be NotFound or Succeed")))
 	})
 
 	Context("negativeDeployClusterValidationTest", func() {
@@ -466,7 +464,7 @@ var _ = Describe("AerospikeCluster validation (envtests)", func() {
 				WithMessageSubstrings("admission webhook \"maerospikecluster.kb.io\"",
 					"denied the request: failed to set default aerospikeConfig.service config:",
 					"config cluster-name can not have non-default value (string cluster-name).",
-					"It will be set internally (string invalid-size-cluster)").
+					"It will be set internally (string invalid-cluster)").
 				Validate(err)
 		})
 
@@ -656,6 +654,19 @@ var _ = Describe("AerospikeCluster validation (envtests)", func() {
 					Field:   "metadata.name",
 				}).
 				Validate(err)
+		})
+
+		It("InvalidClusterName: should fail for EmptyNamespaceName", func() {
+			cName := test.GetNamespacedName(clusterNamespacedName.Name, "")
+			aeroCluster := testCluster.CreateDummyAerospikeCluster(cName, 1)
+			err := testCluster.DeployCluster(envtests.K8sClient, ctx, aeroCluster)
+			Expect(err).To(HaveOccurred())
+
+			// err is not a Kubernetes StatusError,
+			// so we need to check the error message
+			Expect(err.Error()).To(Or(
+				ContainSubstring("an empty namespace may not be set during creation"),
+			))
 		})
 
 		It("InvalidClusterName: should fail when cluster name contains spaces", func() {

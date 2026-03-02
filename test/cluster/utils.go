@@ -7,7 +7,6 @@ import (
 	"flag"
 	"fmt"
 	"io"
-	"os/exec"
 	"reflect"
 	"strings"
 	"time"
@@ -894,15 +893,6 @@ func getRegion(ctx goctx.Context, k8sClient client.Client) (string, error) {
 	}
 
 	return nodes.Items[0].Labels[regionKey], nil
-}
-
-func getGitRepoRootPath() (string, error) {
-	path, err := exec.Command("git", "rev-parse", "--show-toplevel").Output()
-	if err != nil {
-		return "", err
-	}
-
-	return strings.TrimSpace(string(path)), nil
 }
 
 func randomizeServicePorts(
