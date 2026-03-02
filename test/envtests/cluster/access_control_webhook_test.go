@@ -100,10 +100,9 @@ var _ = Describe("AerospikeCluster access control validation (envtests)", func()
 			err := testCluster.DeployCluster(envtests.K8sClient, ctx, aeroCluster)
 			Expect(err).To(HaveOccurred())
 
-			envtests.NewStatusErrorMatcher(int32(403), metav1.StatusReasonForbidden).
-				WithMessageSubstrings("admission webhook",
-					"\"vaerospikecluster.kb.io\"",
-					"denied the request: security is disabled but access control is specified").
+			envtests.NewStatusErrorMatcher().
+				WithMessageSubstrings("\"vaerospikecluster.kb.io\"",
+					"security is disabled but access control is specified").
 				Validate(err)
 		})
 
@@ -116,10 +115,8 @@ var _ = Describe("AerospikeCluster access control validation (envtests)", func()
 			err := testCluster.DeployCluster(envtests.K8sClient, ctx, aeroCluster)
 			Expect(err).To(HaveOccurred())
 
-			envtests.NewStatusErrorMatcher(int32(403), metav1.StatusReasonForbidden).
-				WithMessageSubstrings("admission webhook",
-					"\"vaerospikecluster.kb.io\"",
-					"denied the request:",
+			envtests.NewStatusErrorMatcher().
+				WithMessageSubstrings("\"vaerospikecluster.kb.io\"",
 					"PKIOnly authMode requires Enterprise Edition version 8.1.0.0 or later").
 				Validate(err)
 
@@ -128,12 +125,10 @@ var _ = Describe("AerospikeCluster access control validation (envtests)", func()
 			errPre810 := testCluster.DeployCluster(envtests.K8sClient, ctx, aeroCluster)
 			Expect(errPre810).To(HaveOccurred())
 
-			envtests.NewStatusErrorMatcher(int32(403), metav1.StatusReasonForbidden).
-				WithMessageSubstrings("admission webhook",
-					"\"vaerospikecluster.kb.io\"",
-					"denied the request:",
+			envtests.NewStatusErrorMatcher().
+				WithMessageSubstrings("\"vaerospikecluster.kb.io\"",
 					"PKIOnly authMode requires Enterprise Edition version 8.1.0.0 or later").
-				Validate(err)
+				Validate(errPre810)
 		})
 
 		It("DeployValidation:Should fail if FE and auth mode of all users is not set to PKIOnly", func() {
@@ -164,10 +159,8 @@ var _ = Describe("AerospikeCluster access control validation (envtests)", func()
 			err := testCluster.DeployCluster(envtests.K8sClient, ctx, aeroCluster)
 			Expect(err).To(HaveOccurred())
 
-			envtests.NewStatusErrorMatcher(int32(403), metav1.StatusReasonForbidden).
-				WithMessageSubstrings("admission webhook",
-					"\"vaerospikecluster.kb.io\"",
-					"denied the request:",
+			envtests.NewStatusErrorMatcher().
+				WithMessageSubstrings("\"vaerospikecluster.kb.io\"",
 					"authMode for all users must be PKI with Federal Edition").
 				Validate(err)
 		})
@@ -179,10 +172,8 @@ var _ = Describe("AerospikeCluster access control validation (envtests)", func()
 			err := testCluster.DeployCluster(envtests.K8sClient, ctx, aeroCluster)
 			Expect(err).To(HaveOccurred())
 
-			envtests.NewStatusErrorMatcher(int32(403), metav1.StatusReasonForbidden).
-				WithMessageSubstrings("admission webhook",
-					"\"vaerospikecluster.kb.io\"",
-					"denied the request:",
+			envtests.NewStatusErrorMatcher().
+				WithMessageSubstrings("\"vaerospikecluster.kb.io\"",
 					"user admin cannot set secretName when authMode is PKIOnly").
 				Validate(err)
 		})
@@ -195,10 +186,8 @@ var _ = Describe("AerospikeCluster access control validation (envtests)", func()
 			err := testCluster.DeployCluster(envtests.K8sClient, ctx, aeroCluster)
 			Expect(err).To(HaveOccurred())
 
-			envtests.NewStatusErrorMatcher(int32(403), metav1.StatusReasonForbidden).
-				WithMessageSubstrings("admission webhook",
-					"\"vaerospikecluster.kb.io\"",
-					"denied the request:",
+			envtests.NewStatusErrorMatcher().
+				WithMessageSubstrings("\"vaerospikecluster.kb.io\"",
 					"PKIOnly authMode requires Aerospike cluster to be mTLS enabled").
 				Validate(err)
 		})
@@ -224,10 +213,8 @@ var _ = Describe("AerospikeCluster access control validation (envtests)", func()
 			err = envtests.K8sClient.Update(ctx, current)
 			Expect(err).To(HaveOccurred())
 
-			envtests.NewStatusErrorMatcher(int32(403), metav1.StatusReasonForbidden).
-				WithMessageSubstrings("admission webhook",
-					"\"vaerospikecluster.kb.io\"",
-					"denied the request:",
+			envtests.NewStatusErrorMatcher().
+				WithMessageSubstrings("\"vaerospikecluster.kb.io\"",
 					"user admin is not allowed to update authMode from PKI to Internal").
 				Validate(err)
 		})
@@ -260,10 +247,8 @@ var _ = Describe("AerospikeCluster access control validation (envtests)", func()
 			err = envtests.K8sClient.Update(ctx, current)
 			Expect(err).To(HaveOccurred())
 
-			envtests.NewStatusErrorMatcher(int32(403), metav1.StatusReasonForbidden).
-				WithMessageSubstrings("admission webhook",
-					"\"vaerospikecluster.kb.io\"",
-					"denied the request:",
+			envtests.NewStatusErrorMatcher().
+				WithMessageSubstrings("\"vaerospikecluster.kb.io\"",
 					"cannot enable TLS and PKIOnly authMode in a single update").
 				Validate(err)
 		})

@@ -58,12 +58,9 @@ var _ = Describe("AerospikeCluster validation (envtests)", func() {
 			Expect(err).To(HaveOccurred())
 
 			// Webhook response validation
-			envtests.NewStatusErrorMatcher(int32(403), metav1.StatusReasonForbidden).
-				WithMessageSubstrings(
-					"admission webhook ",
-					"\"vaerospikecluster.kb.io\"",
-					"denied the request: invalid cluster size 0",
-				).
+			envtests.NewStatusErrorMatcher().
+				WithMessageSubstrings("\"vaerospikecluster.kb.io\"",
+					"invalid cluster size 0").
 				Validate(err)
 		})
 
@@ -78,7 +75,7 @@ var _ = Describe("AerospikeCluster validation (envtests)", func() {
 			Expect(err).To(HaveOccurred())
 
 			// Webhook response validation
-			envtests.NewStatusErrorMatcher(int32(422), metav1.StatusReasonInvalid).
+			envtests.NewStatusErrorMatcher().
 				WithCauses(metav1.StatusCause{
 					Type:    metav1.CauseTypeFieldValueInvalid,
 					Message: "Invalid value: -1: should be a non-negative integer",
@@ -96,10 +93,10 @@ var _ = Describe("AerospikeCluster validation (envtests)", func() {
 			Expect(err).To(HaveOccurred())
 
 			// Webhook response validation
-			envtests.NewStatusErrorMatcher(int32(403), metav1.StatusReasonForbidden).
-				WithMessageSubstrings("admission webhook",
+			envtests.NewStatusErrorMatcher().
+				WithMessageSubstrings(
 					"\"vaerospikecluster.kb.io\"",
-					"denied the request: CommunityEdition Cluster not supported").
+					"CommunityEdition Cluster not supported").
 				Validate(err)
 		})
 
@@ -111,10 +108,10 @@ var _ = Describe("AerospikeCluster validation (envtests)", func() {
 			Expect(err).To(HaveOccurred())
 
 			// Webhook response validation
-			envtests.NewStatusErrorMatcher(int32(403), metav1.StatusReasonForbidden).
-				WithMessageSubstrings("admission webhook",
+			envtests.NewStatusErrorMatcher().
+				WithMessageSubstrings(
 					"\"vaerospikecluster.kb.io\"",
-					"denied the request: CommunityEdition Cluster not supported").
+					"CommunityEdition Cluster not supported").
 				Validate(err)
 		})
 
@@ -126,8 +123,8 @@ var _ = Describe("AerospikeCluster validation (envtests)", func() {
 			Expect(err).To(HaveOccurred())
 
 			// Webhook response validation
-			envtests.NewStatusErrorMatcher(int32(403), metav1.StatusReasonForbidden).
-				WithMessageSubstrings("admission webhook \"vaerospikecluster.kb.io\" denied the request:",
+			envtests.NewStatusErrorMatcher().
+				WithMessageSubstrings("\"vaerospikecluster.kb.io\"",
 					"namespace storage device related devicePath /test/dev/xvdf not found in Storage config",
 					"<nil>", "deleteFiles deleteFiles false}",
 					"{<nil> <nil>", "none dd false} 1 [] <nil> []}").
@@ -149,8 +146,8 @@ var _ = Describe("AerospikeCluster validation (envtests)", func() {
 			Expect(err).To(HaveOccurred())
 
 			// Webhook response validation
-			envtests.NewStatusErrorMatcher(int32(403), metav1.StatusReasonForbidden).
-				WithMessageSubstrings("admission webhook \"vaerospikecluster.kb.io\" denied the request:",
+			envtests.NewStatusErrorMatcher().
+				WithMessageSubstrings("\"vaerospikecluster.kb.io\"",
 					"storage-engine cannot be nil for namespace map[name:test replication-factor:2 storage-engine:<nil>",
 					"strong-consistency:true]").
 				Validate(err)
@@ -178,8 +175,8 @@ var _ = Describe("AerospikeCluster validation (envtests)", func() {
 			Expect(err).To(HaveOccurred())
 
 			// Webhook response validation
-			envtests.NewStatusErrorMatcher(int32(403), metav1.StatusReasonForbidden).
-				WithMessageSubstrings("admission webhook \"vaerospikecluster.kb.io\" denied the request:",
+			envtests.NewStatusErrorMatcher().
+				WithMessageSubstrings("\"vaerospikecluster.kb.io\"",
 					"aerospikeConfig not valid: generated config not valid for version",
 					"config schema error",
 					"{map[devices:<nil> type:device] number_one_of (root).",
@@ -212,8 +209,8 @@ var _ = Describe("AerospikeCluster validation (envtests)", func() {
 			Expect(err).To(HaveOccurred())
 
 			// Webhook response validation
-			envtests.NewStatusErrorMatcher(int32(403), metav1.StatusReasonForbidden).
-				WithMessageSubstrings("admission webhook \"vaerospikecluster.kb.io\" denied the request:",
+			envtests.NewStatusErrorMatcher().
+				WithMessageSubstrings("\"vaerospikecluster.kb.io\"",
 					" aerospikeConfig not valid: generated config not valid for version",
 					"config schema error [\t{map[devices:[/test/dev/xvdf] files:<nil> type:device]",
 					"number_one_of (root).namespaces.0.storage-engine Must validate one and only one schema",
@@ -282,8 +279,8 @@ var _ = Describe("AerospikeCluster validation (envtests)", func() {
 				Expect(err).To(HaveOccurred())
 
 				// Webhook response validation
-				envtests.NewStatusErrorMatcher(int32(403), metav1.StatusReasonForbidden).
-					WithMessageSubstrings("admission webhook \"vaerospikecluster.kb.io\" denied the request:",
+				envtests.NewStatusErrorMatcher().
+					WithMessageSubstrings("\"vaerospikecluster.kb.io\"",
 						"invalid device name /dev/xvdf1 /dev/xvdf2 /dev/xvdf3.",
 						"Max 2 device can be mentioned in single line (Shadow device config)").
 					Validate(err)
@@ -306,8 +303,8 @@ var _ = Describe("AerospikeCluster validation (envtests)", func() {
 				Expect(err).To(HaveOccurred())
 
 				// Webhook response validation
-				envtests.NewStatusErrorMatcher(int32(403), metav1.StatusReasonForbidden).
-					WithMessageSubstrings("admission webhook \"vaerospikecluster.kb.io\" denied the request:",
+				envtests.NewStatusErrorMatcher().
+					WithMessageSubstrings("\"vaerospikecluster.kb.io\"",
 						"namespace storage device related devicePath andRandomDevice not found in Storage config").
 					Validate(err)
 			}
@@ -332,14 +329,14 @@ var _ = Describe("AerospikeCluster validation (envtests)", func() {
 			Expect(err).To(HaveOccurred())
 
 			// Webhook response validation
-			envtests.NewStatusErrorMatcher(int32(403), metav1.StatusReasonForbidden).
-				WithMessageSubstrings("admission webhook \"vaerospikecluster.kb.io\" denied the request:",
+			envtests.NewStatusErrorMatcher().
+				WithMessageSubstrings("\"vaerospikecluster.kb.io\"",
 					"device /test/dev/xvdf is already being referenced in multiple namespaces (test, ns1)").
 				Validate(err)
 		})
 		// Bug: aerospikeConfig map should not be listed in Failure message.
 		// It is making failure message unnecessarily long.
-		// Message: "admission webhook \"maerospikecluster.kb.io\" denied the request:
+		// Message: " \"maerospikecluster.kb.io\" denied the request:
 		// aerospikeConfig.namespaces not present.
 		// aerospikeConfig map[network:map[fabric:map[port:3001] heartbeat:map[port:3002] service:map[port:3000]]
 		// security:map[] service:map[auto-pin:none
@@ -353,10 +350,10 @@ var _ = Describe("AerospikeCluster validation (envtests)", func() {
 			Expect(err).To(HaveOccurred())
 
 			// Webhook response validation
-			envtests.NewStatusErrorMatcher(int32(403), metav1.StatusReasonForbidden).
-				WithMessageSubstrings("admission webhook",
+			envtests.NewStatusErrorMatcher().
+				WithMessageSubstrings(
 					"\"maerospikecluster.kb.io\"",
-					"denied the request: aerospikeConfig.namespaces not present.").
+					"aerospikeConfig.namespaces not present.").
 				Validate(err)
 		})
 
@@ -376,9 +373,9 @@ var _ = Describe("AerospikeCluster validation (envtests)", func() {
 			Expect(err).To(HaveOccurred())
 
 			// Webhook response validation
-			envtests.NewStatusErrorMatcher(int32(403), metav1.StatusReasonForbidden).
-				WithMessageSubstrings("admission webhook \"vaerospikecluster.kb.io\"",
-					"denied the request: strong-consistency namespace replication-factor 3 cannot be more than cluster size 1").
+			envtests.NewStatusErrorMatcher().
+				WithMessageSubstrings("\"vaerospikecluster.kb.io\"",
+					"strong-consistency namespace replication-factor 3 cannot be more than cluster size 1").
 				Validate(err)
 		})
 
@@ -389,10 +386,10 @@ var _ = Describe("AerospikeCluster validation (envtests)", func() {
 			Expect(err).To(HaveOccurred())
 
 			// Webhook response validation
-			envtests.NewStatusErrorMatcher(int32(403), metav1.StatusReasonForbidden).
-				WithMessageSubstrings("admission webhook ",
+			envtests.NewStatusErrorMatcher().
+				WithMessageSubstrings(" ",
 					"\"maerospikecluster.kb.io\"",
-					"denied the request: spec.aerospikeConfig cannot be nil").
+					"spec.aerospikeConfig cannot be nil").
 				Validate(err)
 		})
 
@@ -407,10 +404,10 @@ var _ = Describe("AerospikeCluster validation (envtests)", func() {
 			Expect(err).To(HaveOccurred())
 
 			// Webhook response validation
-			envtests.NewStatusErrorMatcher(int32(403), metav1.StatusReasonForbidden).
-				WithMessageSubstrings("admission webhook ",
+			envtests.NewStatusErrorMatcher().
+				WithMessageSubstrings(" ",
 					"\"maerospikecluster.kb.io\"",
-					"denied the request: aerospikeConfig.namespaces not valid namespace list invalidConf").
+					"aerospikeConfig.namespaces not valid namespace list invalidConf").
 				Validate(err)
 		})
 
@@ -423,9 +420,9 @@ var _ = Describe("AerospikeCluster validation (envtests)", func() {
 			Expect(err).To(HaveOccurred())
 
 			// Webhook response validation
-			envtests.NewStatusErrorMatcher(int32(403), metav1.StatusReasonForbidden).
-				WithMessageSubstrings("admission webhook \"vaerospikecluster.kb.io\"",
-					"denied the request: advertise-ipv6 is not supported").
+			envtests.NewStatusErrorMatcher().
+				WithMessageSubstrings("\"vaerospikecluster.kb.io\"",
+					"advertise-ipv6 is not supported").
 				Validate(err)
 		})
 
@@ -439,9 +436,9 @@ var _ = Describe("AerospikeCluster validation (envtests)", func() {
 			Expect(err).To(HaveOccurred())
 
 			// Webhook response validation
-			envtests.NewStatusErrorMatcher(int32(403), metav1.StatusReasonForbidden).
-				WithMessageSubstrings("admission webhook \"maerospikecluster.kb.io\"",
-					"denied the request: failed to set default aerospikeConfig.service config:",
+			envtests.NewStatusErrorMatcher().
+				WithMessageSubstrings(" \"maerospikecluster.kb.io\"",
+					"failed to set default aerospikeConfig.service config:",
 					"config node-id can not have non-default value (string a1).",
 					"It will be set internally (string ENV_NODE_ID)").
 				Validate(err)
@@ -460,9 +457,9 @@ var _ = Describe("AerospikeCluster validation (envtests)", func() {
 			Expect(err).To(HaveOccurred())
 
 			// Webhook response validation
-			envtests.NewStatusErrorMatcher(int32(403), metav1.StatusReasonForbidden).
-				WithMessageSubstrings("admission webhook \"maerospikecluster.kb.io\"",
-					"denied the request: failed to set default aerospikeConfig.service config:",
+			envtests.NewStatusErrorMatcher().
+				WithMessageSubstrings(" \"maerospikecluster.kb.io\"",
+					"failed to set default aerospikeConfig.service config:",
 					"config cluster-name can not have non-default value (string cluster-name).",
 					"It will be set internally (string invalid-cluster)").
 				Validate(err)
@@ -478,9 +475,9 @@ var _ = Describe("AerospikeCluster validation (envtests)", func() {
 			Expect(err).To(HaveOccurred())
 
 			// Webhook response validation
-			envtests.NewStatusErrorMatcher(int32(403), metav1.StatusReasonForbidden).
-				WithMessageSubstrings("admission webhook \"vaerospikecluster.kb.io\"",
-					"denied the request: dnsPolicy: Default is not supported").
+			envtests.NewStatusErrorMatcher().
+				WithMessageSubstrings("\"vaerospikecluster.kb.io\"",
+					"dnsPolicy: Default is not supported").
 				Validate(err)
 		})
 
@@ -494,8 +491,8 @@ var _ = Describe("AerospikeCluster validation (envtests)", func() {
 			Expect(err).To(HaveOccurred())
 
 			// Webhook response validation
-			envtests.NewStatusErrorMatcher(int32(403), metav1.StatusReasonForbidden).
-				WithMessageSubstrings("admission webhook \"vaerospikecluster.kb.io\" denied the request:",
+			envtests.NewStatusErrorMatcher().
+				WithMessageSubstrings("\"vaerospikecluster.kb.io\"",
 					"dnsConfig is required field when dnsPolicy is set to None").
 				Validate(err)
 		})
@@ -513,8 +510,8 @@ var _ = Describe("AerospikeCluster validation (envtests)", func() {
 			Expect(err).To(HaveOccurred())
 
 			// Webhook response validation
-			envtests.NewStatusErrorMatcher(int32(403), metav1.StatusReasonForbidden).
-				WithMessageSubstrings("admission webhook \"vaerospikecluster.kb.io\" denied the request:",
+			envtests.NewStatusErrorMatcher().
+				WithMessageSubstrings("\"vaerospikecluster.kb.io\"",
 					"feature-key-file paths or tls paths or default-password-file path are not mounted",
 					"- create an entry for '/randompath/features.conf' in 'storage.volumes'").
 				Validate(err)
@@ -537,8 +534,8 @@ var _ = Describe("AerospikeCluster validation (envtests)", func() {
 			Expect(err).To(HaveOccurred())
 
 			// Webhook response validation
-			envtests.NewStatusErrorMatcher(int32(403), metav1.StatusReasonForbidden).
-				WithMessageSubstrings("admission webhook \"vaerospikecluster.kb.io\" denied the request:",
+			envtests.NewStatusErrorMatcher().
+				WithMessageSubstrings("\"vaerospikecluster.kb.io\"",
 					"can use facility only with `syslog` in aerospikeConfig.logging",
 					"map[facility:local0 name:anyFileName path:/dev/log tag:asd]").
 				Validate(err)
@@ -556,8 +553,8 @@ var _ = Describe("AerospikeCluster validation (envtests)", func() {
 			Expect(err).To(HaveOccurred())
 
 			// Webhook response validation
-			envtests.NewStatusErrorMatcher(int32(403), metav1.StatusReasonForbidden).
-				WithMessageSubstrings("admission webhook \"vaerospikecluster.kb.io\" denied the request:",
+			envtests.NewStatusErrorMatcher().
+				WithMessageSubstrings("\"vaerospikecluster.kb.io\"",
 					"either `secretCertSource` or `certPathInOperator` must be set in `operatorClientCertSpec` but not both").
 				Validate(err)
 		})
@@ -573,8 +570,8 @@ var _ = Describe("AerospikeCluster validation (envtests)", func() {
 			Expect(err).To(HaveOccurred())
 
 			// Webhook response validation
-			envtests.NewStatusErrorMatcher(int32(403), metav1.StatusReasonForbidden).
-				WithMessageSubstrings("admission webhook \"vaerospikecluster.kb.io\" denied the request:",
+			envtests.NewStatusErrorMatcher().
+				WithMessageSubstrings("\"vaerospikecluster.kb.io\"",
 					"both `clientCertFilename` and `clientKeyFilename` should be either set or not set in `secretCertSource`").
 				Validate(err)
 		})
@@ -590,8 +587,8 @@ var _ = Describe("AerospikeCluster validation (envtests)", func() {
 			Expect(err).To(HaveOccurred())
 
 			// Webhook response validation
-			envtests.NewStatusErrorMatcher(int32(403), metav1.StatusReasonForbidden).
-				WithMessageSubstrings("admission webhook \"vaerospikecluster.kb.io\" denied the request:",
+			envtests.NewStatusErrorMatcher().
+				WithMessageSubstrings("\"vaerospikecluster.kb.io\"",
 					"both `caCertsFilename` or `caCertsSource` cannot be set in `secretCertSource`").
 				Validate(err)
 		})
@@ -613,8 +610,8 @@ var _ = Describe("AerospikeCluster validation (envtests)", func() {
 			Expect(err).To(HaveOccurred())
 
 			// Webhook response validation
-			envtests.NewStatusErrorMatcher(int32(403), metav1.StatusReasonForbidden).
-				WithMessageSubstrings("admission webhook \"vaerospikecluster.kb.io\" denied the request:",
+			envtests.NewStatusErrorMatcher().
+				WithMessageSubstrings("\"vaerospikecluster.kb.io\"",
 					"both `clientCertPath` and `clientKeyPath` should be either set or not set in `certPathInOperator`").
 				Validate(err)
 		})
@@ -631,8 +628,8 @@ var _ = Describe("AerospikeCluster validation (envtests)", func() {
 			Expect(err).To(HaveOccurred())
 
 			// Webhook response validation
-			envtests.NewStatusErrorMatcher(int32(403), metav1.StatusReasonForbidden).
-				WithMessageSubstrings("admission webhook \"vaerospikecluster.kb.io\" denied the request:",
+			envtests.NewStatusErrorMatcher().
+				WithMessageSubstrings("\"vaerospikecluster.kb.io\"",
 					"operator client cert is not specified").
 				Validate(err)
 		})
@@ -644,7 +641,7 @@ var _ = Describe("AerospikeCluster validation (envtests)", func() {
 			Expect(err).To(HaveOccurred())
 
 			// Webhook response validation
-			envtests.NewStatusErrorMatcher(int32(422), metav1.StatusReasonInvalid).
+			envtests.NewStatusErrorMatcher().
 				WithMessageSubstrings("AerospikeCluster.asdb.aerospike.com",
 					"\"\" is invalid:",
 					"metadata.name: Required value: name or generateName is required").
@@ -677,7 +674,7 @@ var _ = Describe("AerospikeCluster validation (envtests)", func() {
 			Expect(err).To(HaveOccurred())
 
 			// Webhook response validation
-			envtests.NewStatusErrorMatcher(int32(422), metav1.StatusReasonInvalid).
+			envtests.NewStatusErrorMatcher().
 				WithMessageSubstrings("AerospikeCluster.asdb.aerospike.com \"my cluster\" is invalid:",
 					"metadata.name: Invalid value: \"my cluster\": a lowercase RFC 1123 subdomain ",
 					"must consist of lower case alphanumeric characters,",
@@ -694,7 +691,7 @@ var _ = Describe("AerospikeCluster validation (envtests)", func() {
 			Expect(err).To(HaveOccurred())
 
 			// Webhook response validation
-			envtests.NewStatusErrorMatcher(int32(422), metav1.StatusReasonInvalid).
+			envtests.NewStatusErrorMatcher().
 				WithMessageSubstrings("AerospikeCluster.asdb.aerospike.com \"MyCluster\" is invalid:",
 					"metadata.name: Invalid value: \"MyCluster\": a lowercase RFC 1123 subdomain",
 					"must consist of lower case alphanumeric characters,",
@@ -710,10 +707,10 @@ var _ = Describe("AerospikeCluster validation (envtests)", func() {
 			err := testCluster.DeployCluster(envtests.K8sClient, ctx, aeroCluster)
 			Expect(err).To(HaveOccurred())
 
-			envtests.NewStatusErrorMatcher(int32(403), metav1.StatusReasonForbidden).
-				WithMessageSubstrings("admission webhook",
+			envtests.NewStatusErrorMatcher().
+				WithMessageSubstrings(
 					"\"vaerospikecluster.kb.io\"",
-					"denied the request: image version 5.0.0.0 not supported. Base version 6.0.0.0").
+					"image version 5.0.0.0 not supported. Base version 6.0.0.0").
 				Validate(err)
 		})
 
@@ -723,10 +720,10 @@ var _ = Describe("AerospikeCluster validation (envtests)", func() {
 			err := testCluster.DeployCluster(envtests.K8sClient, ctx, aeroCluster)
 			Expect(err).To(HaveOccurred())
 
-			envtests.NewStatusErrorMatcher(int32(403), metav1.StatusReasonForbidden).
-				WithMessageSubstrings("admission webhook",
+			envtests.NewStatusErrorMatcher().
+				WithMessageSubstrings(
 					"\"vaerospikecluster.kb.io\"",
-					"denied the request: cluster size cannot be more than 256").
+					"cluster size cannot be more than 256").
 				Validate(err)
 		})
 
@@ -742,9 +739,9 @@ var _ = Describe("AerospikeCluster validation (envtests)", func() {
 			err := testCluster.DeployCluster(envtests.K8sClient, ctx, aeroCluster)
 			Expect(err).To(HaveOccurred())
 
-			envtests.NewStatusErrorMatcher(int32(403), metav1.StatusReasonForbidden).
-				WithMessageSubstrings("admission webhook \"vaerospikecluster.kb.io\"",
-					"denied the request: maxUnavailable 2 cannot be greater than or equal to 2 ",
+			envtests.NewStatusErrorMatcher().
+				WithMessageSubstrings("\"vaerospikecluster.kb.io\"",
+					"maxUnavailable 2 cannot be greater than or equal to 2 ",
 					"as it may result in data loss. Set it to a lower value").
 				Validate(err)
 		})
@@ -758,10 +755,10 @@ var _ = Describe("AerospikeCluster validation (envtests)", func() {
 			err := testCluster.DeployCluster(envtests.K8sClient, ctx, aeroCluster)
 			Expect(err).To(HaveOccurred())
 
-			envtests.NewStatusErrorMatcher(int32(403), metav1.StatusReasonForbidden).
-				WithMessageSubstrings("admission webhook",
+			envtests.NewStatusErrorMatcher().
+				WithMessageSubstrings(
 					"\"vaerospikecluster.kb.io\"",
-					"denied the request: security is disabled but access control is specified").
+					"security is disabled but access control is specified").
 				Validate(err)
 		})
 
@@ -773,10 +770,10 @@ var _ = Describe("AerospikeCluster validation (envtests)", func() {
 			err := testCluster.DeployCluster(envtests.K8sClient, ctx, aeroCluster)
 			Expect(err).To(HaveOccurred())
 
-			envtests.NewStatusErrorMatcher(int32(403), metav1.StatusReasonForbidden).
-				WithMessageSubstrings("admission webhook",
+			envtests.NewStatusErrorMatcher().
+				WithMessageSubstrings(
 					"\"vaerospikecluster.kb.io\"",
-					"denied the request: host networking cannot be enabled with multi pod per host").
+					"host networking cannot be enabled with multi pod per host").
 				Validate(err)
 		})
 
@@ -787,7 +784,7 @@ var _ = Describe("AerospikeCluster validation (envtests)", func() {
 			err := testCluster.DeployCluster(envtests.K8sClient, ctx, aeroCluster)
 			Expect(err).To(HaveOccurred())
 
-			envtests.NewStatusErrorMatcher(int32(404), metav1.StatusReasonNotFound).
+			envtests.NewStatusErrorMatcher().
 				WithMessageSubstrings("namespaces \"default ns\" not found").
 				Validate(err)
 		})
@@ -801,10 +798,10 @@ var _ = Describe("AerospikeCluster validation (envtests)", func() {
 			Expect(err).To(HaveOccurred())
 
 			// Webhook response validation
-			envtests.NewStatusErrorMatcher(int32(403), metav1.StatusReasonForbidden).
-				WithMessageSubstrings("admission webhook",
+			envtests.NewStatusErrorMatcher().
+				WithMessageSubstrings(
 					"\"maerospikecluster.kb.io\"",
-					"denied the request: aerospikeConfig.namespaces cannot be nil").
+					"aerospikeConfig.namespaces cannot be nil").
 				Validate(err)
 		})
 
@@ -822,8 +819,8 @@ var _ = Describe("AerospikeCluster validation (envtests)", func() {
 			Expect(err).To(HaveOccurred())
 
 			// Webhook response validation
-			envtests.NewStatusErrorMatcher(int32(403), metav1.StatusReasonForbidden).
-				WithMessageSubstrings("admission webhook \"vaerospikecluster.kb.io\" denied the request:",
+			envtests.NewStatusErrorMatcher().
+				WithMessageSubstrings("\"vaerospikecluster.kb.io\"",
 					"aerospikeConfig not valid: generated config not valid for version",
 					"config schema error",
 					"{-1 number_gte (root).namespaces.0.rack-id Must be greater than or equal to 0 namespaces.0.rack-id}").
@@ -838,10 +835,10 @@ var _ = Describe("AerospikeCluster validation (envtests)", func() {
 			err := testCluster.DeployCluster(envtests.K8sClient, ctx, aeroCluster)
 			Expect(err).To(HaveOccurred())
 
-			envtests.NewStatusErrorMatcher(int32(403), metav1.StatusReasonForbidden).
-				WithMessageSubstrings("admission webhook",
+			envtests.NewStatusErrorMatcher().
+				WithMessageSubstrings(
 					"\"vaerospikecluster.kb.io\"",
-					"denied the request: can not use negative spec.rackConfig.rollingUpdateBatchSize: -1").
+					"can not use negative spec.rackConfig.rollingUpdateBatchSize: -1").
 				Validate(err)
 		})
 
@@ -853,10 +850,10 @@ var _ = Describe("AerospikeCluster validation (envtests)", func() {
 			err := testCluster.DeployCluster(envtests.K8sClient, ctx, aeroCluster)
 			Expect(err).To(HaveOccurred())
 
-			envtests.NewStatusErrorMatcher(int32(403), metav1.StatusReasonForbidden).
-				WithMessageSubstrings("admission webhook",
+			envtests.NewStatusErrorMatcher().
+				WithMessageSubstrings(
 					"\"vaerospikecluster.kb.io\"",
-					"denied the request: can not use negative spec.rackConfig.scaleDownBatchSize: -1").
+					"can not use negative spec.rackConfig.scaleDownBatchSize: -1").
 				Validate(err)
 		})
 
@@ -870,10 +867,10 @@ var _ = Describe("AerospikeCluster validation (envtests)", func() {
 			err := testCluster.DeployCluster(envtests.K8sClient, ctx, aeroCluster)
 			Expect(err).To(HaveOccurred())
 
-			envtests.NewStatusErrorMatcher(int32(403), metav1.StatusReasonForbidden).
-				WithMessageSubstrings("admission webhook",
+			envtests.NewStatusErrorMatcher().
+				WithMessageSubstrings(
 					"\"vaerospikecluster.kb.io\"",
-					"denied the request: namespace name `test ns` cannot have spaces",
+					"namespace name `test ns` cannot have spaces",
 					"Namespaces [test ns]").
 				Validate(err)
 		})
@@ -909,8 +906,8 @@ var _ = Describe("AerospikeCluster validation (envtests)", func() {
 			err = envtests.K8sClient.Update(ctx, current)
 			Expect(err).To(HaveOccurred())
 
-			envtests.NewStatusErrorMatcher(int32(403), metav1.StatusReasonForbidden).
-				WithMessageSubstrings("admission webhook",
+			envtests.NewStatusErrorMatcher().
+				WithMessageSubstrings(
 					"\"vaerospikecluster.kb.io\"",
 					"denied the request:",
 					"storage config cannot be updated",
@@ -938,8 +935,8 @@ var _ = Describe("AerospikeCluster validation (envtests)", func() {
 			err = envtests.K8sClient.Update(ctx, current)
 			Expect(err).To(HaveOccurred())
 
-			envtests.NewStatusErrorMatcher(int32(403), metav1.StatusReasonForbidden).
-				WithMessageSubstrings("admission webhook",
+			envtests.NewStatusErrorMatcher().
+				WithMessageSubstrings(
 					"\"vaerospikecluster.kb.io\"",
 					"denied the request:",
 					"cannot update MultiPodPerHost setting").

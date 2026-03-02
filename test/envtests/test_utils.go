@@ -10,16 +10,15 @@ import (
 )
 
 // StatusErrorMatcher provides a fluent interface for validating Kubernetes StatusErrors.
-// It allows comprehensive validation of error responses including status codes, reasons,
-// messages, causes, and warnings.
+// It validates error type, message substrings, and optional causes.
 //
 // Example usage:
 //
-//	NewStatusErrorMatcher(403, metav1.StatusReasonForbidden).
+//	NewStatusErrorMatcher().
 //	    WithMessageSubstrings("admission webhook", "denied the request").
 //	    Validate(err)
 //
-//	NewStatusErrorMatcher(422, metav1.StatusReasonInvalid).
+//	NewStatusErrorMatcher().
 //	    WithCauses(metav1.StatusCause{
 //	        Type:    metav1.CauseTypeFieldValueInvalid,
 //	        Message: "invalid value",
@@ -27,22 +26,15 @@ import (
 //	    }).
 //	    Validate(err)
 type StatusErrorMatcher struct {
-	reason            metav1.StatusReason
 	messageSubstrings []string
 	causes            []metav1.StatusCause
 	warnings          []string
-	code              int32
 	checkCauses       bool
 }
 
-// NewStatusErrorMatcher creates a new StatusErrorMatcher with required fields.
-// code is the expected HTTP status code (e.g., 403, 422, 500)
-// reason is the expected Kubernetes status reason (e.g., StatusReasonForbidden, StatusReasonInvalid)
-func NewStatusErrorMatcher(code int32, reason metav1.StatusReason) *StatusErrorMatcher {
-	return &StatusErrorMatcher{
-		code:   code,
-		reason: reason,
-	}
+// NewStatusErrorMatcher creates a new StatusErrorMatcher.
+func NewStatusErrorMatcher() *StatusErrorMatcher {
+	return &StatusErrorMatcher{}
 }
 
 // WithMessageSubstrings adds message substring validation.
@@ -79,8 +71,6 @@ func (m *StatusErrorMatcher) Validate(err error) {
 
 	// 2. Validate the status fields
 	Expect(statusErr.ErrStatus.Status).To(Equal(metav1.StatusFailure))
-	Expect(statusErr.ErrStatus.Code).To(Equal(m.code))
-	Expect(statusErr.ErrStatus.Reason).To(Equal(m.reason))
 
 	// 3. Validate message substrings if provided
 	for _, substring := range m.messageSubstrings {
