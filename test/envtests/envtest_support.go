@@ -27,9 +27,7 @@ import (
 	"path/filepath"
 	"time"
 
-	//nolint:staticcheck //ST1001: dot imports are standard practice for Ginkgo DSL
 	. "github.com/onsi/ginkgo/v2"
-	//nolint:staticcheck // ST1001: dot imports are standard practice for Gomega assertions
 	. "github.com/onsi/gomega"
 	"github.com/onsi/gomega/gexec"
 	admissionv1 "k8s.io/api/admission/v1"
