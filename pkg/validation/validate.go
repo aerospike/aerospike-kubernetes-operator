@@ -774,6 +774,16 @@ func validateNsConfUpdate(oldConf, newConf map[string]interface{}) error {
 			}
 
 			if singleConf[asdbv1.ConfKeyName] == oldSingleConf[asdbv1.ConfKeyName] {
+				// replication-factor update not allowed for SC namespaces
+				if isValueUpdated(
+					oldSingleConf, singleConf, "replication-factor",
+				) && asdbv1.IsNSSCEnabled(singleConf) {
+					return fmt.Errorf(
+						"replication-factor cannot be updated for SC namespaces. old nsconf %v, new nsconf %v",
+						oldSingleConf, singleConf,
+					)
+				}
+
 				// strong-consistency update not allowed
 				if isValueUpdated(
 					oldSingleConf, singleConf, asdbv1.ConfKeyStrongConsistency,

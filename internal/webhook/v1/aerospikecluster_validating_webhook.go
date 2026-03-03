@@ -2158,10 +2158,7 @@ func validateReplicationFactorUpdateComparison(oldSpec *asdbv1.AerospikeClusterS
 		return fmt.Errorf("failed to create JSON patch: %v", err)
 	}
 
-	// Filter only spec changes (ignore status and metadata changes)
-	var (
-		otherSpecChanged bool
-	)
+	var otherSpecChanged bool
 
 	replicationFactorPatches := sets.NewString()
 
@@ -2170,13 +2167,10 @@ func validateReplicationFactorUpdateComparison(oldSpec *asdbv1.AerospikeClusterS
 		if strings.HasSuffix(op.Path, "/"+asdbv1.ConfKeyReplicationFactor) {
 			if strings.Contains(op.Path, "/effectiveAerospikeConfig/") {
 				// Extract namespace info from path
-				// Path format: /rackConfig/racks/1/effectiveAerospikeConfig/namespaces/1/replication-factor
-				nsName, scEnabled := extractNamespaceInfoFromPath(op.Path, newObj)
-				if scEnabled {
-					return fmt.Errorf(
-						"cannot update replication-factor for namespace %s with Strong Consistency enabled",
-						nsName,
-					)
+				// Path format: /rackConfig/racks/0/effectiveAerospikeConfig/namespaces/0/replication-factor
+				nsName, err := extractNamespaceNameFromPath(op.Path, newObj)
+				if err != nil {
+					return fmt.Errorf("failed to extract namespace name from path: %v", err)
 				}
 
 				if nsName != "" {
@@ -2223,38 +2217,21 @@ func validateReplicationFactorUpdateComparison(oldSpec *asdbv1.AerospikeClusterS
 }
 
 // extractNamespaceInfoFromPath extracts the namespace name and SC info from a JSON patch path
-func extractNamespaceInfoFromPath(path string, newObj *asdbv1.AerospikeCluster) (string, bool) {
+func extractNamespaceNameFromPath(path string, newObj *asdbv1.AerospikeCluster) (string, error) {
 	// Path format examples:
-	// /spec/rackConfig/racks/0/aerospikeConfig/namespaces/1/replication-factor
+	// /rackConfig/racks/0/effectiveAerospikeConfig/namespaces/0/replication-factor
 	parts := strings.Split(path, "/")
 
-	var (
-		nsIndex   = -1
-		rackIndex = -1
-		nsName    string
-		scEnabled bool
-	)
+	var nsName string
 
-	// Find the namespace index in the path
-	for i, part := range parts {
-		if part == asdbv1.ConfKeyNamespace && i+1 < len(parts) {
-			if i-2 >= 0 {
-				if idx, err := strconv.Atoi(parts[i-2]); err == nil {
-					rackIndex = idx
-				}
-			}
-
-			// Extract namespace index
-			if idx, err := strconv.Atoi(parts[i+1]); err == nil {
-				nsIndex = idx
-			}
-
-			break
-		}
+	rackIndex, err := strconv.Atoi(parts[3])
+	if err != nil {
+		return nsName, err
 	}
 
-	if nsIndex < 0 || rackIndex < 0 {
-		return nsName, scEnabled
+	nsIndex, err := strconv.Atoi(parts[6])
+	if err != nil {
+		return nsName, err
 	}
 
 	// Get namespace name from rack config
@@ -2266,16 +2243,12 @@ func extractNamespaceInfoFromPath(path string, newObj *asdbv1.AerospikeCluster) 
 					if name, ok := ns[asdbv1.ConfKeyName].(string); ok {
 						nsName = name
 					}
-
-					if sc, ok := ns[asdbv1.ConfKeyStrongConsistency].(bool); ok {
-						scEnabled = sc
-					}
 				}
 			}
 		}
 	}
 
-	return nsName, scEnabled
+	return nsName, nil
 }
 
 // validateReplicationFactorConsistencyAcrossRacks validates that the same namespace
@@ -2329,7 +2302,7 @@ func validateReplicationFactorConsistencyAcrossRacks(racks []asdbv1.Rack) error 
 					if existingRF != currentRF {
 						return fmt.Errorf(
 							"namespace '%s' has different replication-factor values across racks. "+
-								"Replication-factor must be the same for the same namespace across all racks. "+
+								"Replication-factor must be same for a namespace across all racks. "+
 								"Found: %d and %d",
 							nsName, existingRF, currentRF,
 						)
