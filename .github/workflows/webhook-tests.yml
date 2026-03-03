@@ -9,9 +9,11 @@ on:
   pull_request:
     branches:
       - master
-    paths:  # Only run on PRs when eviction webhook code or tests change
-      - 'internal/webhook/eviction/**'
-      - 'test/envtests/eviction_webhook_test.go'
+    paths:  # Only run on PRs when eviction webhook or cluster-related code or tests change
+      - 'internal/webhook/**'
+      - 'api/v1/**'
+      - 'test/envtests/**'
+      - 'test/cluster/**'
       - '.github/workflows/webhook-tests.yml'
 
 jobs:
@@ -39,3 +41,7 @@ jobs:
       # Run your env-test target
       - name: Run EnvTest Suite
         run: make env-test
+
+      # Run cluster webhook envtests
+      - name: Run EnvTest Cluster (cluster webhook envtests)
+        run: make env-test-cluster

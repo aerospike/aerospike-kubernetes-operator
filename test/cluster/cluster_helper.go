@@ -1006,7 +1006,7 @@ func createAerospikeClusterPost570(
 	return aeroCluster
 }
 
-func createAerospikeClusterPost640(
+func CreateAerospikeClusterPost640(
 	clusterNamespacedName types.NamespacedName, size int32, image string,
 ) *asdbv1.AerospikeCluster {
 	// create Aerospike custom resource
