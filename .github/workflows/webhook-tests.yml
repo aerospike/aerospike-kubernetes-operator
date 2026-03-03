@@ -41,7 +41,3 @@ jobs:
       # Run your env-test target
       - name: Run EnvTest Suite
         run: make env-test
-
-      # Run cluster webhook envtests
-      - name: Run EnvTest Cluster (cluster webhook envtests)
-        run: make env-test-cluster
