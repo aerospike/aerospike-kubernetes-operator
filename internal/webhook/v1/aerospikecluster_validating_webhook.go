@@ -2216,22 +2216,32 @@ func validateReplicationFactorUpdateComparison(oldSpec *asdbv1.AerospikeClusterS
 	return nil
 }
 
-// extractNamespaceInfoFromPath extracts the namespace name and SC info from a JSON patch path
+// extractNamespaceNameFromPath extracts the namespace name and SC info from a JSON patch path
 func extractNamespaceNameFromPath(path string, newObj *asdbv1.AerospikeCluster) (string, error) {
-	// Path format examples:
-	// /rackConfig/racks/0/effectiveAerospikeConfig/namespaces/0/replication-factor
 	parts := strings.Split(path, "/")
 
 	var nsName string
 
-	rackIndex, err := strconv.Atoi(parts[3])
-	if err != nil {
-		return nsName, err
+	// Validate path has enough parts
+	// Expected format: /rackConfig/racks/{rackIndex}/effectiveAerospikeConfig/namespaces/{nsIndex}/replication-factor
+	const (
+		minPartsRequired = 8 // accounts for empty first element
+		rackIndexPos     = 3
+		nsIndexPos       = 6
+	)
+
+	if len(parts) < minPartsRequired {
+		return "", fmt.Errorf("invalid path format: expected at least %d parts, got %d", minPartsRequired-1, len(parts)-1)
 	}
 
-	nsIndex, err := strconv.Atoi(parts[6])
+	rackIndex, err := strconv.Atoi(parts[rackIndexPos])
 	if err != nil {
-		return nsName, err
+		return "", fmt.Errorf("invalid rack index at position %d: %w", rackIndexPos, err)
+	}
+
+	nsIndex, err := strconv.Atoi(parts[nsIndexPos])
+	if err != nil {
+		return "", fmt.Errorf("invalid namespace index at position %d: %w", nsIndexPos, err)
 	}
 
 	// Get namespace name from rack config
