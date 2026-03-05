@@ -5,7 +5,7 @@ go 1.25.7
 require (
 	github.com/aerospike/aerospike-backup-service/v3 v3.4.1-0.20251113113955-5523ec8870b1
 	github.com/aerospike/aerospike-client-go/v8 v8.6.0
-	github.com/aerospike/aerospike-management-lib v1.10.0
+	github.com/aerospike/aerospike-management-lib v1.10.1-0.20260305173323-609c6d8ea2d8
 	github.com/asaskevich/govalidator v0.0.0-20210307081110-f21760c49a8d
 	github.com/deckarep/golang-set/v2 v2.8.0
 	github.com/evanphx/json-patch v4.12.0+incompatible
@@ -17,7 +17,7 @@ require (
 	github.com/stretchr/testify v1.11.1
 	golang.org/x/crypto v0.48.0
 	k8s.io/api v0.35.1
-	k8s.io/apimachinery v0.35.1
+	k8s.io/apimachinery v0.35.2
 	k8s.io/client-go v0.35.1
 	k8s.io/kubectl v0.35.1
 	k8s.io/utils v0.0.0-20251002143259-bc988d571ff4
@@ -93,7 +93,7 @@ require (
 	go.opentelemetry.io/otel/sdk v1.36.0 // indirect
 	go.opentelemetry.io/otel/trace v1.37.0 // indirect
 	go.opentelemetry.io/proto/otlp v1.5.0 // indirect
-	go.uber.org/mock v0.3.0 // indirect
+	go.uber.org/mock v0.6.0 // indirect
 	go.uber.org/multierr v1.11.0 // indirect
 	go.uber.org/zap v1.27.0 // indirect
 	go.yaml.in/yaml/v2 v2.4.3 // indirect
