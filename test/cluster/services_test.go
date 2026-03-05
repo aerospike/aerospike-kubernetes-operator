@@ -41,6 +41,7 @@ var _ = Describe(
 	"ClusterService", func() {
 		ctx := goctx.TODO()
 		aeroCluster := &asdbv1.AerospikeCluster{}
+
 		AfterEach(
 			func() {
 				Expect(DeleteCluster(k8sClient, ctx, aeroCluster)).ToNot(HaveOccurred())
@@ -50,6 +51,7 @@ var _ = Describe(
 		It(
 			"Validate create LB", func() {
 				By("DeployCluster with LB")
+
 				clusterNamespacedName := test.GetNamespacedName(
 					"load-balancer-create", namespace,
 				)
@@ -67,6 +69,7 @@ var _ = Describe(
 		It(
 			"Validate update LB", func() {
 				By("DeployCluster")
+
 				clusterNamespacedName := test.GetNamespacedName(
 					"load-balancer-invalid", namespace,
 				)
@@ -86,6 +89,7 @@ var _ = Describe(
 		It(
 			"Validate create LB in an existing cluster", func() {
 				By("DeployCluster without LB")
+
 				clusterNamespacedName := test.GetNamespacedName(
 					"load-balancer-update", namespace,
 				)
@@ -94,6 +98,7 @@ var _ = Describe(
 				)
 				aeroCluster.Spec.SeedsFinderServices.LoadBalancer = nil
 				Expect(DeployCluster(k8sClient, ctx, aeroCluster)).ToNot(HaveOccurred())
+
 				service := &corev1.Service{}
 				err := k8sClient.Get(
 					goctx.TODO(), loadBalancerName(aeroCluster), service,
@@ -114,6 +119,7 @@ var _ = Describe(
 		It(
 			"Validate delete LB", func() {
 				By("DeployCluster with LB")
+
 				clusterNamespacedName := test.GetNamespacedName(
 					"load-balancer-delete", namespace,
 				)
@@ -127,6 +133,7 @@ var _ = Describe(
 				validateLoadBalancerExists(aeroCluster)
 
 				By("Delete LB from the CR")
+
 				aeroCluster.Spec.SeedsFinderServices.LoadBalancer = nil
 				err := updateCluster(k8sClient, ctx, aeroCluster)
 				Expect(err).ToNot(HaveOccurred())
@@ -139,6 +146,7 @@ var _ = Describe(
 		It(
 			"Validate LB service skip deletion when created from outside", func() {
 				By("DeployCluster without LB")
+
 				clusterNamespacedName := test.GetNamespacedName(
 					"load-balancer-skip", namespace,
 				)
@@ -150,6 +158,7 @@ var _ = Describe(
 				Expect(DeployCluster(k8sClient, ctx, aeroCluster)).ToNot(HaveOccurred())
 
 				By("Manually create external LB service (without owner reference)")
+
 				externalLBService := getLBServiceObj(aeroCluster.Name, aeroCluster.Namespace)
 
 				// Create service without owner reference (simulating external creation)
@@ -157,7 +166,6 @@ var _ = Describe(
 
 				defer func() {
 					Expect(k8sClient.Delete(ctx, externalLBService)).ToNot(HaveOccurred())
-
 				}()
 
 				validateLoadBalancerExists(aeroCluster)
@@ -185,6 +193,7 @@ var _ = Describe(
 				By("DeployCluster without LB")
 
 				By("Manually create external LB service (without owner reference)")
+
 				externalLBService := getLBServiceObj(aeroCluster.Name, aeroCluster.Namespace)
 
 				// Create service without owner reference (simulating external creation)
@@ -192,7 +201,6 @@ var _ = Describe(
 
 				defer func() {
 					_ = k8sClient.Delete(ctx, externalLBService)
-
 				}()
 
 				aeroCluster.Spec.SeedsFinderServices.LoadBalancer = createLoadBalancer()
@@ -206,6 +214,7 @@ var _ = Describe(
 				validateLoadBalancerSvcDeleted(aeroCluster)
 
 				By("Wait for cluster to be created. It should pass as LB service is deleted")
+
 				err = waitForAerospikeCluster(
 					k8sClient, ctx, aeroCluster, int(aeroCluster.Spec.Size), retryInterval,
 					getTimeout(aeroCluster.Spec.Size), []asdbv1.AerospikeClusterPhase{asdbv1.AerospikeClusterCompleted},
@@ -219,12 +228,14 @@ var _ = Describe(
 		It(
 			"Validate create headless service with default metadata", func() {
 				By("Deploying cluster with headless service")
+
 				clusterNamespacedName := test.GetNamespacedName("headless-service-create", namespace)
 				aeroCluster = createDummyAerospikeCluster(clusterNamespacedName, 2)
 
 				Expect(DeployCluster(k8sClient, ctx, aeroCluster)).ToNot(HaveOccurred())
 
 				By("Validating headless service exists with correct metadata")
+
 				svc := &corev1.Service{}
 				err := k8sClient.Get(ctx, types.NamespacedName{
 					Name:      clusterNamespacedName.Name,
@@ -238,6 +249,7 @@ var _ = Describe(
 		It(
 			"Validate create and update headless service with correct metadata", func() {
 				By("Deploying cluster with headless service")
+
 				clusterNamespacedName := test.GetNamespacedName("headless-service-update", namespace)
 				aeroCluster = createDummyAerospikeCluster(clusterNamespacedName, 2)
 
@@ -251,6 +263,7 @@ var _ = Describe(
 				Expect(DeployCluster(k8sClient, ctx, aeroCluster)).ToNot(HaveOccurred())
 
 				By("Validating headless service exists with correct metadata")
+
 				svc := &corev1.Service{}
 				err := k8sClient.Get(ctx, types.NamespacedName{
 					Name:      clusterNamespacedName.Name,
@@ -263,6 +276,7 @@ var _ = Describe(
 				Expect(svc.GetLabels()[asdbv1.AerospikeAppLabel]).To(Equal(asdbv1.AerospikeAppLabelValue))
 
 				By("Updating headless service metadata")
+
 				aeroCluster.Spec.HeadlessService.Metadata.Annotations["new-annotation"] = "new-annotation-value"
 				aeroCluster.Spec.HeadlessService.Metadata.Labels["new-label"] = "new-label-value"
 				delete(aeroCluster.Spec.HeadlessService.Metadata.Annotations, "test-annotation")
@@ -271,6 +285,7 @@ var _ = Describe(
 				Expect(updateCluster(k8sClient, ctx, aeroCluster)).ToNot(HaveOccurred())
 
 				By("Validating headless service metadata was updated")
+
 				err = k8sClient.Get(ctx, types.NamespacedName{
 					Name:      clusterNamespacedName.Name,
 					Namespace: clusterNamespacedName.Namespace,
@@ -287,6 +302,7 @@ var _ = Describe(
 		It(
 			"Validate create and update pod service with correct metadata", func() {
 				By("Deploying cluster with pod service")
+
 				clusterNamespacedName := test.GetNamespacedName("pod-service-test", namespace)
 				aeroCluster = createDummyAerospikeCluster(clusterNamespacedName, 2)
 
@@ -300,6 +316,7 @@ var _ = Describe(
 				Expect(DeployCluster(k8sClient, ctx, aeroCluster)).ToNot(HaveOccurred())
 
 				By("Validating pod service exists with correct metadata")
+
 				for i := 0; i < 2; i++ {
 					svc := &corev1.Service{}
 					err := k8sClient.Get(ctx, types.NamespacedName{
@@ -312,6 +329,7 @@ var _ = Describe(
 				}
 
 				By("Updating pod service metadata")
+
 				aeroCluster.Spec.PodService.Metadata.Annotations["new-annotation"] = "new-annotation-value"
 				aeroCluster.Spec.PodService.Metadata.Labels["new-label"] = "new-label-value"
 				delete(aeroCluster.Spec.PodService.Metadata.Annotations, "test-annotation")
@@ -320,6 +338,7 @@ var _ = Describe(
 				Expect(updateCluster(k8sClient, ctx, aeroCluster)).ToNot(HaveOccurred())
 
 				By("Validating pod service metadata was updated")
+
 				for i := 0; i < 2; i++ {
 					svc := &corev1.Service{}
 					err := k8sClient.Get(ctx, types.NamespacedName{

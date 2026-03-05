@@ -81,9 +81,8 @@ var _ = BeforeSuite(
 				Paths: []string{"../../config/webhook"},
 			},
 		}
-		var (
-			err error
-		)
+
+		var err error
 
 		cfg, err = testEnv.Start()
 		Expect(err).NotTo(HaveOccurred())
@@ -128,8 +127,10 @@ var _ = BeforeSuite(
 
 		ctx, c := context.WithCancel(context.Background())
 		cancel = c
+
 		go func() {
 			defer GinkgoRecover()
+
 			Expect(mgr.Start(ctx)).To(Succeed())
 		}()
 
@@ -143,6 +144,7 @@ var _ = AfterSuite(
 		By("tearing down the test environment")
 		cancel()
 		gexec.KillAndWait(5 * time.Second)
+
 		err := testEnv.Stop()
 		Expect(err).ToNot(HaveOccurred())
 	},

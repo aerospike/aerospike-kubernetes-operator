@@ -25,7 +25,6 @@ import (
 	"k8s.io/apimachinery/pkg/runtime"
 	ctrl "sigs.k8s.io/controller-runtime"
 	logf "sigs.k8s.io/controller-runtime/pkg/log"
-	"sigs.k8s.io/controller-runtime/pkg/webhook"
 	"sigs.k8s.io/controller-runtime/pkg/webhook/admission"
 	"sigs.k8s.io/yaml"
 
@@ -37,7 +36,7 @@ import (
 
 // SetupAerospikeBackupServiceWebhookWithManager registers the webhook for AerospikeBackupService in the manager.
 func SetupAerospikeBackupServiceWebhookWithManager(mgr ctrl.Manager) error {
-	return ctrl.NewWebhookManagedBy(mgr).For(&asdbv1beta1.AerospikeBackupService{}).
+	return ctrl.NewWebhookManagedBy(mgr, &asdbv1beta1.AerospikeBackupService{}).
 		WithDefaulter(&AerospikeBackupServiceCustomDefaulter{}).
 		WithValidator(&AerospikeBackupServiceCustomValidator{}).
 		Complete()
@@ -50,22 +49,20 @@ type AerospikeBackupServiceCustomDefaulter struct {
 	// Default values for various AerospikeBackupService fields
 }
 
+var _ admission.Defaulter[*asdbv1beta1.AerospikeBackupService] = &AerospikeBackupServiceCustomDefaulter{}
+
 //nolint:lll // for readability
 // +kubebuilder:webhook:path=/mutate-asdb-aerospike-com-v1beta1-aerospikebackupservice,mutating=true,failurePolicy=fail,sideEffects=None,groups=asdb.aerospike.com,resources=aerospikebackupservices,verbs=create;update,versions=v1beta1,name=maerospikebackupservice.kb.io,admissionReviewVersions=v1
 
-var _ webhook.CustomDefaulter = &AerospikeBackupCustomDefaulter{}
-
 // Default implements webhook.CustomDefaulter so a webhook will be registered for the type
-func (absd *AerospikeBackupServiceCustomDefaulter) Default(_ context.Context, obj runtime.Object) error {
-	backupSvc, ok := obj.(*asdbv1beta1.AerospikeBackupService)
-	if !ok {
-		return fmt.Errorf("expected AerospikeBackupService, got %T", obj)
-	}
-
+func (absd *AerospikeBackupServiceCustomDefaulter) Default(_ context.Context,
+	backupSvc *asdbv1beta1.AerospikeBackupService,
+) error {
 	absLog := logf.Log.WithName(namespacedName(backupSvc))
 
 	absLog.Info("Setting defaults for aerospikeBackupService")
 
+	//nolint:staticcheck // SA1019 - backward compat for deprecated Resources field
 	if backupSvc.Spec.Resources != nil && backupSvc.Spec.PodSpec.ServiceContainerSpec.Resources == nil {
 		backupSvc.Spec.PodSpec.ServiceContainerSpec.Resources = backupSvc.Spec.Resources
 	}
@@ -77,19 +74,15 @@ func (absd *AerospikeBackupServiceCustomDefaulter) Default(_ context.Context, ob
 type AerospikeBackupServiceCustomValidator struct {
 }
 
+var _ admission.Validator[*asdbv1beta1.AerospikeBackupService] = &AerospikeBackupServiceCustomValidator{}
+
 //nolint:lll // for readability
 // +kubebuilder:webhook:path=/validate-asdb-aerospike-com-v1beta1-aerospikebackupservice,mutating=false,failurePolicy=fail,sideEffects=None,groups=asdb.aerospike.com,resources=aerospikebackupservices,verbs=create;update,versions=v1beta1,name=vaerospikebackupservice.kb.io,admissionReviewVersions=v1
 
-var _ webhook.CustomValidator = &AerospikeBackupServiceCustomValidator{}
-
 // ValidateCreate implements webhook.CustomValidator so a webhook will be registered for the type
-func (absv *AerospikeBackupServiceCustomValidator) ValidateCreate(_ context.Context, obj runtime.Object,
+func (absv *AerospikeBackupServiceCustomValidator) ValidateCreate(_ context.Context,
+	backupSvc *asdbv1beta1.AerospikeBackupService,
 ) (admission.Warnings, error) {
-	backupSvc, ok := obj.(*asdbv1beta1.AerospikeBackupService)
-	if !ok {
-		return nil, fmt.Errorf("expected AerospikeBackupService, got %T", obj)
-	}
-
 	absLog := logf.Log.WithName(namespacedName(backupSvc))
 
 	absLog.Info("Validate create")
@@ -98,13 +91,8 @@ func (absv *AerospikeBackupServiceCustomValidator) ValidateCreate(_ context.Cont
 }
 
 // ValidateUpdate implements webhook.CustomValidator so a webhook will be registered for the type
-func (absv *AerospikeBackupServiceCustomValidator) ValidateUpdate(_ context.Context, oldObj, newObj runtime.Object,
-) (admission.Warnings, error) {
-	backupSvc, ok := newObj.(*asdbv1beta1.AerospikeBackupService)
-	if !ok {
-		return nil, fmt.Errorf("expected AerospikeBackupService, got %T", newObj)
-	}
-
+func (absv *AerospikeBackupServiceCustomValidator) ValidateUpdate(_ context.Context,
+	_, backupSvc *asdbv1beta1.AerospikeBackupService) (admission.Warnings, error) {
 	absLog := logf.Log.WithName(namespacedName(backupSvc))
 
 	absLog.Info("Validate update")
@@ -113,13 +101,9 @@ func (absv *AerospikeBackupServiceCustomValidator) ValidateUpdate(_ context.Cont
 }
 
 // ValidateDelete implements webhook.CustomValidator so a webhook will be registered for the type
-func (absv *AerospikeBackupServiceCustomValidator) ValidateDelete(_ context.Context, obj runtime.Object,
+func (absv *AerospikeBackupServiceCustomValidator) ValidateDelete(_ context.Context,
+	backupSvc *asdbv1beta1.AerospikeBackupService,
 ) (admission.Warnings, error) {
-	backupSvc, ok := obj.(*asdbv1beta1.AerospikeBackupService)
-	if !ok {
-		return nil, fmt.Errorf("expected AerospikeBackupService, got %T", obj)
-	}
-
 	absLog := logf.Log.WithName(namespacedName(backupSvc))
 
 	absLog.Info("Validate delete")
@@ -196,6 +180,7 @@ func validateServicePodSpec(backupSvc *asdbv1beta1.AerospikeBackupService) (admi
 func validateResources(backupSvc *asdbv1beta1.AerospikeBackupService) (admission.Warnings, error) {
 	var warn admission.Warnings
 
+	//nolint:staticcheck // SA1019 - backward compat for deprecated Resources field
 	if backupSvc.Spec.Resources != nil && backupSvc.Spec.PodSpec.ServiceContainerSpec.Resources != nil {
 		if !reflect.DeepEqual(backupSvc.Spec.Resources, backupSvc.Spec.PodSpec.ServiceContainerSpec.Resources) {
 			return nil, fmt.Errorf("resources mismatch, different resources requirements found in " +

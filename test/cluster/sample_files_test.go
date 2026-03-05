@@ -39,7 +39,6 @@ var _ = Describe("Sample files validation", func() {
 	)
 
 	Context("XDR sample files validation", func() {
-
 		It("XDR sample files validation", func() {
 			var destCluster *asdbv1.AerospikeCluster
 
@@ -47,6 +46,7 @@ var _ = Describe("Sample files validation", func() {
 			destClusterFile := filepath.Join(projectRoot, fileDir, "xdr_dst_cluster_cr.yaml")
 
 			By("Creating XDR destination cluster")
+
 			destCluster, err = deployClusterUsingFile(ctx, destClusterFile)
 			Expect(err).NotTo(HaveOccurred())
 
@@ -55,10 +55,12 @@ var _ = Describe("Sample files validation", func() {
 			}()
 
 			By("Creating XDR source cluster")
+
 			aeroCluster, err = deployClusterUsingFile(ctx, sourceClusterFile)
 			Expect(err).NotTo(HaveOccurred())
 
 			By("Writing some data in source cluster")
+
 			aeroCluster, err = getCluster(k8sClient, ctx, types.NamespacedName{
 				Name:      aeroCluster.Name,
 				Namespace: aeroCluster.Namespace,
@@ -71,6 +73,7 @@ var _ = Describe("Sample files validation", func() {
 			Expect(err).NotTo(HaveOccurred())
 
 			By("Verifying data in destination cluster")
+
 			destCluster, err = getCluster(k8sClient, ctx, types.NamespacedName{
 				Name:      destCluster.Name,
 				Namespace: destCluster.Namespace,

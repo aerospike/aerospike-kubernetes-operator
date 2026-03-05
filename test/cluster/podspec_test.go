@@ -27,7 +27,6 @@ var (
 
 var _ = Describe(
 	"PodSpec", func() {
-
 		ctx := goctx.TODO()
 		clusterName := fmt.Sprintf("podspec-%d", GinkgoParallelProcess())
 		clusterNamespacedName := test.GetNamespacedName(clusterName, namespace)
@@ -69,7 +68,6 @@ var _ = Describe(
 
 		Context(
 			"When doing valid operation", func() {
-
 				BeforeEach(
 					func() {
 						zones, err := getZones(ctx, k8sClient)
@@ -110,8 +108,10 @@ var _ = Describe(
 				It(
 					"Should validate annotations and labels addition", func() {
 						By("Validating Annotations")
+
 						actual, err := getPodSpecAnnotations(k8sClient, ctx, clusterNamespacedName)
 						Expect(err).ToNot(HaveOccurred())
+
 						valid := ValidateAttributes(
 							actual,
 							map[string]string{"annotation-test-1": "test-1"},
@@ -120,8 +120,10 @@ var _ = Describe(
 							BeTrue(), "Unable to find annotations",
 						)
 						By("Validating Labels")
+
 						actual, err = getPodSpecLabels(k8sClient, ctx, clusterNamespacedName)
 						Expect(err).ToNot(HaveOccurred())
+
 						valid = ValidateAttributes(
 							actual,
 							map[string]string{"label-test-1": "test-1"},
@@ -141,6 +143,7 @@ var _ = Describe(
 
 						zones, err := getZones(ctx, k8sClient)
 						Expect(err).ToNot(HaveOccurred())
+
 						zone := zones[0]
 						if len(zones) > 1 {
 							for i := 0; i < len(zones); i++ {
@@ -150,6 +153,7 @@ var _ = Describe(
 								}
 							}
 						}
+
 						aeroCluster.Spec.PodSpec.AerospikeObjectMeta.Annotations["annotation-test-2"] = "test-2"
 						aeroCluster.Spec.PodSpec.AerospikeObjectMeta.Labels["label-test-2"] = "test-2"
 						err = addRack(
@@ -157,8 +161,10 @@ var _ = Describe(
 						)
 						Expect(err).ToNot(HaveOccurred())
 						By("Validating Added Annotations")
+
 						actual, err := getPodSpecAnnotations(k8sClient, ctx, clusterNamespacedName)
 						Expect(err).ToNot(HaveOccurred())
+
 						valid := ValidateAttributes(
 							actual,
 							map[string]string{"annotation-test-1": "test-1", "annotation-test-2": "test-2"},
@@ -167,8 +173,10 @@ var _ = Describe(
 							BeTrue(), "Unable to find annotations",
 						)
 						By("Validating Added Labels")
+
 						actual, err = getPodSpecLabels(k8sClient, ctx, clusterNamespacedName)
 						Expect(err).ToNot(HaveOccurred())
+
 						valid = ValidateAttributes(
 							actual,
 							map[string]string{"label-test-1": "test-1", "label-test-2": "test-2"},
@@ -181,7 +189,6 @@ var _ = Describe(
 
 				It(
 					"Should validate the sidecar workflow", func() {
-
 						By("Adding the container1")
 
 						aeroCluster, err := getCluster(
@@ -227,7 +234,6 @@ var _ = Describe(
 					"When doing custom initcontainer operation", func() {
 						It(
 							"Should validate the initcontainer workflow", func() {
-
 								By("Adding the container1")
 
 								aeroCluster, err := getCluster(
@@ -282,6 +288,7 @@ var _ = Describe(
 						It(
 							"Should place aerospike-init at placeholder position", func() {
 								By("Adding custom init containers with placeholder in the middle")
+
 								aeroCluster, err := getCluster(
 									k8sClient, ctx, clusterNamespacedName,
 								)
@@ -302,6 +309,7 @@ var _ = Describe(
 								Expect(err).ToNot(HaveOccurred())
 
 								By("Validating init container order in StatefulSet")
+
 								stsList, err := getSTSList(aeroCluster, k8sClient)
 								Expect(err).ToNot(HaveOccurred())
 								Expect(stsList.Items).ToNot(BeEmpty())
@@ -322,6 +330,7 @@ var _ = Describe(
 								}
 
 								By("Reordering init containers")
+
 								aeroCluster, err = getCluster(
 									k8sClient, ctx, clusterNamespacedName,
 								)
@@ -338,6 +347,7 @@ var _ = Describe(
 								Expect(err).ToNot(HaveOccurred())
 
 								By("Validating updated init container order in StatefulSet")
+
 								stsList, err = getSTSList(aeroCluster, k8sClient)
 								Expect(err).ToNot(HaveOccurred())
 								Expect(stsList.Items).ToNot(BeEmpty())
@@ -360,6 +370,7 @@ var _ = Describe(
 						It(
 							"Should maintain aerospike-init configuration when using placeholder", func() {
 								By("Adding placeholder and verifying aerospike-init configuration is preserved")
+
 								aeroCluster, err := getCluster(
 									k8sClient, ctx, clusterNamespacedName,
 								)
@@ -394,6 +405,7 @@ var _ = Describe(
 								Expect(err).ToNot(HaveOccurred())
 
 								By("Validating aerospike-init configuration is preserved")
+
 								stsList, err := getSTSList(aeroCluster, k8sClient)
 								Expect(err).ToNot(HaveOccurred())
 								Expect(stsList.Items).ToNot(BeEmpty())
@@ -421,6 +433,7 @@ var _ = Describe(
 						It(
 							"Should handle adding init containers dynamically", func() {
 								By("Starting with no custom init containers")
+
 								aeroCluster, err := getCluster(
 									k8sClient, ctx, clusterNamespacedName,
 								)
@@ -429,6 +442,7 @@ var _ = Describe(
 								// Verify initial state: only aerospike-init
 								stsList, err := getSTSList(aeroCluster, k8sClient)
 								Expect(err).ToNot(HaveOccurred())
+
 								for _, sts := range stsList.Items {
 									initContainers := sts.Spec.Template.Spec.InitContainers
 									Expect(initContainers).To(HaveLen(1))
@@ -447,6 +461,7 @@ var _ = Describe(
 								// Verify: aerospike-init, custom-init-1
 								stsList, err = getSTSList(aeroCluster, k8sClient)
 								Expect(err).ToNot(HaveOccurred())
+
 								for _, sts := range stsList.Items {
 									initContainers := sts.Spec.Template.Spec.InitContainers
 									Expect(initContainers).To(HaveLen(2))
@@ -455,6 +470,7 @@ var _ = Describe(
 								}
 
 								By("Adding second custom init container")
+
 								aeroCluster, err = getCluster(
 									k8sClient, ctx, clusterNamespacedName,
 								)
@@ -471,6 +487,7 @@ var _ = Describe(
 								// Verify: aerospike-init, custom-init-1, custom-init-2
 								stsList, err = getSTSList(aeroCluster, k8sClient)
 								Expect(err).ToNot(HaveOccurred())
+
 								for _, sts := range stsList.Items {
 									initContainers := sts.Spec.Template.Spec.InitContainers
 									Expect(initContainers).To(HaveLen(3))
@@ -541,8 +558,8 @@ var _ = Describe(
 
 				It(
 					"Should be able to update container image and other fields together", func() {
-
 						By("Adding the container")
+
 						aeroCluster, err := getCluster(
 							k8sClient, ctx, clusterNamespacedName,
 						)
@@ -593,6 +610,7 @@ var _ = Describe(
 						Expect(stsList.Items).ToNot(BeEmpty())
 
 						var meFound bool
+
 						for _, sts := range stsList.Items {
 							actualNodeAffinity := sts.Spec.Template.Spec.Affinity.NodeAffinity
 							for _, ns := range actualNodeAffinity.RequiredDuringSchedulingIgnoredDuringExecution.NodeSelectorTerms {
@@ -634,6 +652,7 @@ var _ = Describe(
 						imagePullSecret := getEnvVar(imagePullSecretNameEnvVar)
 
 						By("Updating imagePullSecret")
+
 						aeroCluster, err := getCluster(k8sClient, ctx, clusterNamespacedName)
 						Expect(err).ToNot(HaveOccurred())
 
@@ -681,6 +700,7 @@ var _ = Describe(
 						incorrectCustomRegistryNamespace := "incorrectnamespace"
 
 						By("Using incorrect registry namespace in CR")
+
 						aeroCluster, err := getCluster(k8sClient, ctx, clusterNamespacedName)
 						Expect(err).ToNot(HaveOccurred())
 

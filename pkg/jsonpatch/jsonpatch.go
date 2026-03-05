@@ -25,8 +25,8 @@ func (j *PatchOperation) MarshalJSON() ([]byte, error) {
 	var b bytes.Buffer
 
 	b.WriteString("{")
-	b.WriteString(fmt.Sprintf(`"op":%q`, j.Operation))
-	b.WriteString(fmt.Sprintf(`,"path":%q`, j.Path))
+	fmt.Fprintf(&b, `"op":%q`, j.Operation)
+	fmt.Fprintf(&b, `,"path":%q`, j.Path)
 
 	// Consider omitting Value for non-nullable operations.
 	if j.Value != nil || j.Operation == "replace" || j.Operation == "add" {
