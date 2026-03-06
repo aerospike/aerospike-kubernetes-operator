@@ -79,6 +79,10 @@ var _ = Describe("Pod eviction webhook", func() {
 			envtests.EvictionWebhook.Enable = true
 		})
 
+		AfterEach(func() {
+			envtests.EvictionWebhook.Enable = false
+		})
+
 		Context("Aerospike pods", func() {
 			It("should block eviction of Aerospike pod", func() {
 				By("creating a pod")

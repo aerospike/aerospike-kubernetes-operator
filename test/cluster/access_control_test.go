@@ -1893,6 +1893,47 @@ var _ = Describe(
 								)
 								Expect(err).ToNot(HaveOccurred())
 
+								By("AccessControlUpdate")
+								// Apply updates to drop users, drop roles, update privileges for roles and update roles for users.
+								accessControl = asdbv1.AerospikeAccessControlSpec{
+									Roles: []asdbv1.AerospikeRoleSpec{
+										{
+											Name: "profiler",
+											Privileges: []string{
+												"read-write-udf.test.users",
+												"write",
+											},
+											Whitelist: []string{
+												"8.8.0.0/16",
+											},
+										},
+									},
+									Users: []asdbv1.AerospikeUserSpec{
+										{
+											Name:       "admin",
+											AuthMode:   asdbv1.AerospikeAuthModeInternal,
+											SecretName: test.AuthSecretNameForUpdate,
+											Roles: []string{
+												"sys-admin",
+												"user-admin",
+											},
+										},
+
+										{
+											Name:       "profileUser",
+											AuthMode:   asdbv1.AerospikeAuthModeInternal,
+											SecretName: test.AuthSecretNameForUpdate,
+											Roles: []string{
+												"data-admin",
+												"read-write-udf",
+												"write",
+											},
+										},
+									},
+								}
+
+								aeroCluster.Spec.AerospikeAccessControl = &accessControl
+
 								By("EnableQuota")
 
 								accessControl = asdbv1.AerospikeAccessControlSpec{
