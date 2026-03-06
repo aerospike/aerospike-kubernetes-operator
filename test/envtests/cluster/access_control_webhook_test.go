@@ -112,20 +112,8 @@ var _ = Describe("AerospikeCluster access control validation (envtests)", func()
 
 		Context("spec.aerospikeAccessControl (users)", func() {
 			Context("negative", func() {
-				// Bug: Test should fail only if PKIOnly authMode is used with
-				// Enterprise image below 8.1.0.0 but not if is 8.1.0.0
 				It("fails when PKIOnly authMode is used with Enterprise image below 8.1.0.0", func() {
 					aeroCluster := testCluster.CreatePKIAuthEnabledCluster(clusterNamespacedName, 2)
-					aeroCluster.Spec.Image = testutil.GetEnterpriseImage("8.0.0.0")
-
-					err := testCluster.DeployCluster(envtests.K8sClient, ctx, aeroCluster)
-					Expect(err).To(HaveOccurred())
-
-					envtests.NewStatusErrorMatcher().
-						WithMessageSubstrings("\"vaerospikecluster.kb.io\"",
-							"PKIOnly authMode requires Enterprise Edition version 8.1.0.0 or later").
-						Validate(err)
-
 					aeroCluster.Spec.Image = testutil.GetEnterpriseImage(testutil.Pre810EnterpriseImage)
 
 					errPre810 := testCluster.DeployCluster(envtests.K8sClient, ctx, aeroCluster)
@@ -202,16 +190,21 @@ var _ = Describe("AerospikeCluster access control validation (envtests)", func()
 	})
 
 	Context("Update validation", func() {
+		AfterEach(func() {
+			aeroCluster := &asdbv1.AerospikeCluster{
+				ObjectMeta: metav1.ObjectMeta{
+					Name:      clusterNamespacedName.Name,
+					Namespace: clusterNamespacedName.Namespace,
+				},
+			}
+			_ = envtests.K8sClient.Delete(ctx, aeroCluster)
+		})
 		Context("spec.aerospikeAccessControl (users)", func() {
 			Context("negative", func() {
 				It("fails when user authMode is changed from PKI to Internal", func() {
 					aeroCluster := testCluster.CreatePKIAuthEnabledCluster(clusterNamespacedName, 2)
 					err := envtests.K8sClient.Create(ctx, aeroCluster)
 					Expect(err).ToNot(HaveOccurred())
-
-					DeferCleanup(func() {
-						_ = envtests.K8sClient.Delete(ctx, aeroCluster)
-					})
 
 					current := &asdbv1.AerospikeCluster{}
 					err = envtests.K8sClient.Get(ctx, types.NamespacedName{
@@ -237,10 +230,6 @@ var _ = Describe("AerospikeCluster access control validation (envtests)", func()
 					aeroCluster := testCluster.CreateDummyAerospikeCluster(clusterNamespacedName, 2)
 					err := envtests.K8sClient.Create(ctx, aeroCluster)
 					Expect(err).ToNot(HaveOccurred())
-
-					DeferCleanup(func() {
-						_ = envtests.K8sClient.Delete(ctx, aeroCluster)
-					})
 
 					current := &asdbv1.AerospikeCluster{}
 					err = envtests.K8sClient.Get(ctx, types.NamespacedName{
