@@ -32,7 +32,7 @@ func TestAPIs(t *testing.T) {
 }
 
 var _ = BeforeSuite(func() {
-	SetupTestEnv("../../")
+	SetupTestEnv()
 })
 
 var _ = AfterSuite(func() {

@@ -1,3 +1,5 @@
+package eviction
+
 /*
 Copyright 2024.
 
@@ -13,9 +15,6 @@ WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 See the License for the specific language governing permissions and
 limitations under the License.
 */
-
-package cluster
-
 import (
 	"testing"
 
@@ -27,7 +26,7 @@ import (
 
 func TestAPIs(t *testing.T) {
 	RegisterFailHandler(Fail)
-	RunSpecs(t, "Cluster Webhook Envtests Suite")
+	RunSpecs(t, "Eviction Webhook Envtests Suite")
 }
 
 var _ = BeforeSuite(func() {

@@ -65,9 +65,7 @@ var (
 )
 
 // SetupTestEnv starts the envtest environment and webhook server. Idempotent.
-// projectRoot is the path from the test package directory to the repo root
-// (e.g. "../../" for envtests, "../../../" for envtests/cluster).
-func SetupTestEnv(basePath string) {
+func SetupTestEnv() {
 	// Set up logger
 	logf.SetLogger(zap.New(zap.WriteTo(GinkgoWriter), zap.UseDevMode(true)))
 

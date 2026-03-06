@@ -1,4 +1,4 @@
-package aerospikeCluster_pod_eviction
+package eviction
 
 import (
 	"context"
@@ -44,10 +44,6 @@ var _ = Describe("Pod eviction webhook", func() {
 	Context("When webhook is disabled", func() {
 		BeforeEach(func() {
 			envtests.EvictionWebhook.Enable = false
-		})
-
-		AfterEach(func() {
-			envtests.EvictionWebhook.Enable = true
 		})
 
 		It("should allow eviction of a pod", func() {

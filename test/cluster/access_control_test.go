@@ -27,10 +27,6 @@ import (
 	"github.com/aerospike/aerospike-kubernetes-operator/v4/test/testutil"
 )
 
-// const (
-// 	testClusterSize = 4
-// )
-
 var aerospikeConfigWithSecurity = &asdbv1.AerospikeConfigSpec{
 	Value: map[string]interface{}{
 		"security": map[string]interface{}{},
