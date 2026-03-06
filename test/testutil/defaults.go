@@ -16,6 +16,7 @@ const (
 	LatestServerVersion = "8.1.1.0"
 	Pre810ServerVersion = "8.0.0.0"
 	StorageClass        = "ssd"
+	ClusterNameConfig   = "cluster-name"
 )
 
 var (

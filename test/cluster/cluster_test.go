@@ -24,8 +24,7 @@ import (
 )
 
 const (
-	clusterNameConfig = "cluster-name"
-	adminPort         = 3003
+	adminPort = 3003
 )
 
 var _ = Describe(
@@ -2251,7 +2250,7 @@ func negativeUpdateClusterValidationTest(
 									Expect(err).ToNot(HaveOccurred())
 
 									aeroCluster.Spec.AerospikeConfig.
-										Value[asdbv1.ConfKeyService].(map[string]interface{})[clusterNameConfig] = clusterNameConfig
+										Value[asdbv1.ConfKeyService].(map[string]interface{})[testutil.ClusterNameConfig] = testutil.ClusterNameConfig
 									err = k8sClient.Update(ctx, aeroCluster)
 									Expect(err).Should(HaveOccurred())
 								},

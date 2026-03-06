@@ -9,7 +9,6 @@ import (
 	"k8s.io/apimachinery/pkg/api/errors"
 	"k8s.io/apimachinery/pkg/api/resource"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
-	"k8s.io/apimachinery/pkg/types"
 	"k8s.io/apimachinery/pkg/util/intstr"
 	"k8s.io/utils/ptr"
 
@@ -20,11 +19,7 @@ import (
 	"github.com/aerospike/aerospike-kubernetes-operator/v4/test/testutil"
 )
 
-const (
-	clusterNameConfig = "cluster-name"
-)
-
-var _ = Describe("AerospikeCluster validation (envtests)", func() {
+var _ = Describe("AerospikeCluster validation", func() {
 	const (
 		clusterName = "invalid-cluster"
 		testNs      = "default" // use same test namespace as suite_test.go
@@ -417,7 +412,7 @@ var _ = Describe("AerospikeCluster validation (envtests)", func() {
 						Validate(err)
 				})
 
-				It("rejects when replication factor exceeds cluster size", func() {
+				It("rejects when replication factor exceeds cluster size for SC", func() {
 					aeroCluster := testCluster.CreateDummyAerospikeCluster(clusterNamespacedName, 1) // Size 1
 
 					// 1. Get the namespaces slice from the Value map
@@ -548,7 +543,7 @@ var _ = Describe("AerospikeCluster validation (envtests)", func() {
 					serviceConf := aeroCluster.Spec.AerospikeConfig.Value[asdbv1.ConfKeyService].(map[string]interface{})
 
 					// 2. Assign the value to the specific key
-					serviceConf[clusterNameConfig] = clusterNameConfig
+					serviceConf[testutil.ClusterNameConfig] = testutil.ClusterNameConfig
 
 					// Deploy cluster
 					err := testCluster.DeployCluster(envtests.K8sClient, ctx, aeroCluster)
@@ -828,7 +823,7 @@ var _ = Describe("AerospikeCluster validation (envtests)", func() {
 			Context("negative", func() {
 				// Bug: Improve response message string to indicate acceptable value is 1 and not 2.
 				// Current string "maxUnavailable 2 cannot be greater than or equal to 2" is not a clear message
-				It("rejects maxUnavailable >= replica count", func() {
+				It("rejects maxUnavailable >= RF across all namespaces", func() {
 					aeroCluster := testCluster.CreateDummyAerospikeCluster(clusterNamespacedName, 2)
 					maxUnav := intstr.FromInt32(2)
 					aeroCluster.Spec.MaxUnavailable = &maxUnav
@@ -955,6 +950,16 @@ var _ = Describe("AerospikeCluster validation (envtests)", func() {
 		const updateValidationClusterName = "update-validation-cluster"
 		updateValidationClusterNamespacedName := test.GetNamespacedName(updateValidationClusterName, testNs)
 
+		AfterEach(func() {
+			aeroCluster := &asdbv1.AerospikeCluster{
+				ObjectMeta: metav1.ObjectMeta{
+					Name:      updateValidationClusterNamespacedName.Name,
+					Namespace: updateValidationClusterNamespacedName.Namespace,
+				},
+			}
+			_ = envtests.K8sClient.Delete(ctx, aeroCluster)
+		})
+
 		Context("spec.storage", func() {
 			Context("negative", func() {
 				It("rejects when storage config is updated", func() {
@@ -962,14 +967,7 @@ var _ = Describe("AerospikeCluster validation (envtests)", func() {
 					err := envtests.K8sClient.Create(ctx, aeroCluster)
 					Expect(err).ToNot(HaveOccurred())
 
-					DeferCleanup(func() {
-						_ = envtests.K8sClient.Delete(ctx, aeroCluster)
-					})
-
-					current := &asdbv1.AerospikeCluster{}
-					err = envtests.K8sClient.Get(ctx, types.NamespacedName{
-						Name:      updateValidationClusterNamespacedName.Name,
-						Namespace: updateValidationClusterNamespacedName.Namespace}, current)
+					current, err := testCluster.GetCluster(envtests.K8sClient, ctx, updateValidationClusterNamespacedName)
 					Expect(err).ToNot(HaveOccurred())
 
 					// Change storage (e.g. StorageClass) to trigger "storage config cannot be updated"
@@ -1003,14 +1001,7 @@ var _ = Describe("AerospikeCluster validation (envtests)", func() {
 					err := envtests.K8sClient.Create(ctx, aeroCluster)
 					Expect(err).ToNot(HaveOccurred())
 
-					DeferCleanup(func() {
-						_ = envtests.K8sClient.Delete(ctx, aeroCluster)
-					})
-
-					current := &asdbv1.AerospikeCluster{}
-					err = envtests.K8sClient.Get(ctx, types.NamespacedName{
-						Name:      updateValidationClusterNamespacedName.Name,
-						Namespace: updateValidationClusterNamespacedName.Namespace}, current)
+					current, err := testCluster.GetCluster(envtests.K8sClient, ctx, updateValidationClusterNamespacedName)
 					Expect(err).ToNot(HaveOccurred())
 
 					// Toggle MultiPodPerHost to trigger "cannot update MultiPodPerHost setting"
