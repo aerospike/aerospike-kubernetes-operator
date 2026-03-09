@@ -1869,6 +1869,11 @@ var _ = Describe(
 
 								aeroCluster.Spec.AerospikeAccessControl = &accessControl
 
+								err = testAccessControlReconcile(
+									aeroCluster, ctx,
+								)
+								Expect(err).ToNot(HaveOccurred())
+
 								By("EnableQuota")
 
 								accessControl = asdbv1.AerospikeAccessControlSpec{
