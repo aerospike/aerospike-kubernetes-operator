@@ -1078,6 +1078,68 @@ func getNsConfForNamespaces(rackConfig asdbv1.RackConfig) map[string]nsConf {
 	return nsConfs
 }
 
+// getAllNamespaceNamesAndRFMap collects all namespace names and their replication-factors
+// from all racks in a spec. It returns both a set of unique namespace names and a map
+// of namespace name -> replication-factor.
+func getAllNamespaceNamesAndRFMap(spec *asdbv1.AerospikeClusterSpec) (allNsNames sets.Set[string],
+	nsRFMap map[string]int) {
+	allNsNames = sets.Set[string]{}
+	nsRFMap = make(map[string]int)
+
+	// Helper to process a config and update both sets and map
+	processConfig := func(aerospikeConfig *asdbv1.AerospikeConfigSpec) {
+		nsList, ok := aerospikeConfig.Value[asdbv1.ConfKeyNamespace].([]interface{})
+		if !ok {
+			return
+		}
+
+		for _, nsInterface := range nsList {
+			ns, ok := nsInterface.(map[string]interface{})
+			if !ok {
+				continue
+			}
+
+			name, ok := ns[asdbv1.ConfKeyName].(string)
+			if !ok {
+				continue
+			}
+
+			allNsNames.Insert(name)
+
+			// Only set RF if not already set (first occurrence wins, should be consistent across racks)
+			if _, exists := nsRFMap[name]; !exists {
+				rf, err := validation.GetNamespaceReplicationFactor(ns)
+				if err != nil {
+					// Default to 2 if we can't parse it
+					nsRFMap[name] = 2
+				} else {
+					nsRFMap[name] = rf
+				}
+			}
+		}
+	}
+
+	// Get namespaces from base aerospike config
+	if spec.AerospikeConfig != nil {
+		processConfig(spec.AerospikeConfig)
+	}
+
+	// Get namespaces from all racks
+	for idx := range spec.RackConfig.Racks {
+		rack := &spec.RackConfig.Racks[idx]
+		processConfig(&rack.AerospikeConfig)
+	}
+
+	// Set default RF (2) for any namespace that doesn't have one explicitly set
+	for nsName := range allNsNames {
+		if _, exists := nsRFMap[nsName]; !exists {
+			nsRFMap[nsName] = 2
+		}
+	}
+
+	return allNsNames, nsRFMap
+}
+
 // ******************************************************************************
 // Helper
 // ******************************************************************************
@@ -2118,7 +2180,7 @@ func validateTLSAndPKIOnlyUpdate(oldSpec, newSpec *asdbv1.AerospikeClusterSpec,
 // - status vs newSpec: ensures the desired state change is valid (prevents drift from status)
 func validateReplicationFactorUpdateRestrictions(oldObj, newObj *asdbv1.AerospikeCluster) error {
 	// First check: Validate changes from old spec to new spec
-	if err := validateReplicationFactorUpdateComparison(&oldObj.Spec, newObj); err != nil {
+	if err := validateReplicationFactorUpdateComparison(&oldObj.Spec, newObj, true); err != nil {
 		return err
 	}
 
@@ -2130,7 +2192,7 @@ func validateReplicationFactorUpdateRestrictions(oldObj, newObj *asdbv1.Aerospik
 			return fmt.Errorf("failed to copy status to spec for comparison: %v", err)
 		}
 
-		if err := validateReplicationFactorUpdateComparison(statusToSpec, newObj); err != nil {
+		if err := validateReplicationFactorUpdateComparison(statusToSpec, newObj, false); err != nil {
 			return err
 		}
 	}
@@ -2141,7 +2203,7 @@ func validateReplicationFactorUpdateRestrictions(oldObj, newObj *asdbv1.Aerospik
 // validateReplicationFactorUpdateComparison validates replication-factor update restrictions
 // by comparing two specs (either oldSpec vs newSpec, or statusSpec vs newSpec)
 func validateReplicationFactorUpdateComparison(oldSpec *asdbv1.AerospikeClusterSpec,
-	newObj *asdbv1.AerospikeCluster) error {
+	newObj *asdbv1.AerospikeCluster, compareSpecs bool) error {
 	// Create JSON patch to see all changes
 	oldJSON, err := json.Marshal(oldSpec)
 	if err != nil {
@@ -2184,32 +2246,80 @@ func validateReplicationFactorUpdateComparison(oldSpec *asdbv1.AerospikeClusterS
 		}
 	}
 
-	// If no replication-factor changes, no need to validate further
+	// Early exit if no replication-factor patches found
 	if len(replicationFactorPatches) == 0 {
 		return nil
 	}
 
-	if otherSpecChanged {
-		// There are other spec changes along with replication-factor changes
+	// Check if any namespace was added or removed by comparing namespace sets
+	// This is more reliable than checking patch operations because namespace additions/removals
+	// cause index shifts that result in replace operations, not just add/remove operations
+	oldNsNames, oldNsRFMap := getAllNamespaceNamesAndRFMap(oldSpec)
+	newNsNames, newNsRFMap := getAllNamespaceNamesAndRFMap(&newObj.Spec)
+
+	// Check if namespaces were added or removed
+	addedNamespaces := newNsNames.Difference(oldNsNames)
+	removedNamespaces := oldNsNames.Difference(newNsNames)
+	namespaceAddedOrRemoved := len(addedNamespaces) > 0 || len(removedNamespaces) > 0
+
+	// Filter replication-factor patches to only include actual changes
+	// If namespaces were added/removed, only consider RF changes for existing namespaces
+	// and verify the RF value actually changed (not just index shift)
+	existingNsNames := oldNsNames.Intersection(newNsNames)
+	actualRFChanges := sets.NewString()
+
+	if namespaceAddedOrRemoved {
+		// Only consider RF changes for namespaces that exist in both old and new specs
+		for nsName := range replicationFactorPatches {
+			if existingNsNames.Has(nsName) {
+				// Check if the RF value actually changed (not just index shift)
+				if oldNsRFMap[nsName] != newNsRFMap[nsName] {
+					actualRFChanges.Insert(nsName)
+				}
+			}
+		}
+	} else {
+		// No namespace additions/removals, so all RF patches are actual changes
+		actualRFChanges = replicationFactorPatches
+	}
+
+	// If no actual replication-factor changes (after filtering), no need to validate further
+	if len(actualRFChanges) == 0 {
+		return nil
+	}
+
+	// Rule: Only one namespace's replication-factor can be changed at a time
+	if len(actualRFChanges) > 1 {
 		return fmt.Errorf(
-			"when updating replication-factor for namespace, no other fields in the " +
-				"aerospikecluster spec are allowed to be modified. Only replication-factor for a single " +
-				"namespace can be changed at a time",
+			"cannot update replication-factor for multiple namespaces at the same time. "+
+				"Changed namespaces: %v. Only one namespace replication-factor can be updated at a time",
+			actualRFChanges.List(),
 		)
+	}
+
+	if compareSpecs {
+		statusToSpec, err := asdbv1.CopyStatusToSpec(&newObj.Status.AerospikeClusterStatusSpec)
+		if err != nil {
+			return fmt.Errorf("failed to copy status to spec for comparison: %v", err)
+		}
+
+		statusNsNames, _ := getAllNamespaceNamesAndRFMap(statusToSpec)
+		if !statusNsNames.HasAll(actualRFChanges.List()...) {
+			otherSpecChanged = true
+		}
+	}
+
+	if otherSpecChanged || namespaceAddedOrRemoved {
+		// There are other spec changes along with replication-factor changes
+		errorMsg := "when updating replication-factor for namespace %v, no other fields in the " +
+			"aerospikecluster spec are allowed to be modified"
+
+		return fmt.Errorf(errorMsg, actualRFChanges.List())
 	}
 
 	if !ptr.Deref(newObj.Spec.EnableDynamicConfigUpdate, false) {
 		return fmt.Errorf(
 			"replication-factor update requires 'spec.enableDynamicConfigUpdate' to be set to true",
-		)
-	}
-
-	// Rule: Only one namespace's replication-factor can be changed at a time
-	if len(replicationFactorPatches) > 1 {
-		return fmt.Errorf(
-			"cannot update replication-factor for multiple namespaces at the same time. "+
-				"Changed namespaces: %v. Only one namespace replication-factor can be updated at a time",
-			replicationFactorPatches.List(),
 		)
 	}
 
