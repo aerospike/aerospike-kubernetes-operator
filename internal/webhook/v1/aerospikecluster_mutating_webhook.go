@@ -40,13 +40,12 @@ type AerospikeClusterCustomDefaulter struct {
 	// Default values for various AerospikeCluster fields
 }
 
-// Implemented webhook.CustomDefaulter interface for future reference
 var _ admission.Defaulter[*asdbv1.AerospikeCluster] = &AerospikeClusterCustomDefaulter{}
 
 //nolint:lll // for readability
 // +kubebuilder:webhook:path=/mutate-asdb-aerospike-com-v1-aerospikecluster,mutating=true,failurePolicy=fail,sideEffects=None,groups=asdb.aerospike.com,resources=aerospikeclusters,verbs=create;update,versions=v1,name=maerospikecluster.kb.io,admissionReviewVersions={v1}
 
-// Default implements webhook.CustomDefaulter so a webhook will be registered for the type
+// Default implements admission.Defaulter so a webhook will be registered for the type
 func (acd *AerospikeClusterCustomDefaulter) Default(_ context.Context,
 	aerospikeCluster *asdbv1.AerospikeCluster,
 ) error {

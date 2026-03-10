@@ -54,7 +54,7 @@ var _ admission.Defaulter[*asdbv1beta1.AerospikeBackupService] = &AerospikeBacku
 //nolint:lll // for readability
 // +kubebuilder:webhook:path=/mutate-asdb-aerospike-com-v1beta1-aerospikebackupservice,mutating=true,failurePolicy=fail,sideEffects=None,groups=asdb.aerospike.com,resources=aerospikebackupservices,verbs=create;update,versions=v1beta1,name=maerospikebackupservice.kb.io,admissionReviewVersions=v1
 
-// Default implements webhook.CustomDefaulter so a webhook will be registered for the type
+// Default implements admission.Defaulter so a webhook will be registered for the type
 func (absd *AerospikeBackupServiceCustomDefaulter) Default(_ context.Context,
 	backupSvc *asdbv1beta1.AerospikeBackupService,
 ) error {
@@ -79,7 +79,7 @@ var _ admission.Validator[*asdbv1beta1.AerospikeBackupService] = &AerospikeBacku
 //nolint:lll // for readability
 // +kubebuilder:webhook:path=/validate-asdb-aerospike-com-v1beta1-aerospikebackupservice,mutating=false,failurePolicy=fail,sideEffects=None,groups=asdb.aerospike.com,resources=aerospikebackupservices,verbs=create;update,versions=v1beta1,name=vaerospikebackupservice.kb.io,admissionReviewVersions=v1
 
-// ValidateCreate implements webhook.CustomValidator so a webhook will be registered for the type
+// ValidateCreate implements admission.Validator so a webhook will be registered for the type
 func (absv *AerospikeBackupServiceCustomValidator) ValidateCreate(_ context.Context,
 	backupSvc *asdbv1beta1.AerospikeBackupService,
 ) (admission.Warnings, error) {
@@ -90,7 +90,7 @@ func (absv *AerospikeBackupServiceCustomValidator) ValidateCreate(_ context.Cont
 	return validateBackupService(backupSvc)
 }
 
-// ValidateUpdate implements webhook.CustomValidator so a webhook will be registered for the type
+// ValidateUpdate implements admission.Validator so a webhook will be registered for the type
 func (absv *AerospikeBackupServiceCustomValidator) ValidateUpdate(_ context.Context,
 	_, backupSvc *asdbv1beta1.AerospikeBackupService) (admission.Warnings, error) {
 	absLog := logf.Log.WithName(namespacedName(backupSvc))
@@ -100,7 +100,7 @@ func (absv *AerospikeBackupServiceCustomValidator) ValidateUpdate(_ context.Cont
 	return validateBackupService(backupSvc)
 }
 
-// ValidateDelete implements webhook.CustomValidator so a webhook will be registered for the type
+// ValidateDelete implements admission.Validator so a webhook will be registered for the type
 func (absv *AerospikeBackupServiceCustomValidator) ValidateDelete(_ context.Context,
 	backupSvc *asdbv1beta1.AerospikeBackupService,
 ) (admission.Warnings, error) {

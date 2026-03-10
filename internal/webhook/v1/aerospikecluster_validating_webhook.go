@@ -49,7 +49,7 @@ type AerospikeClusterCustomValidator struct {
 
 var _ admission.Validator[*asdbv1.AerospikeCluster] = &AerospikeClusterCustomValidator{}
 
-// ValidateCreate implements webhook.CustomValidator so a webhook will be registered for the type
+// ValidateCreate implements admission.Validator so a webhook will be registered for the type
 func (acv *AerospikeClusterCustomValidator) ValidateCreate(_ context.Context, aerospikeCluster *asdbv1.AerospikeCluster,
 ) (admission.Warnings, error) {
 	aslog := logf.Log.WithName(asdbv1.ClusterNamespacedName(aerospikeCluster))
@@ -68,7 +68,7 @@ func (acv *AerospikeClusterCustomValidator) ValidateCreate(_ context.Context, ae
 	return warns, nil
 }
 
-// ValidateDelete implements webhook.CustomValidator so a webhook will be registered for the type
+// ValidateDelete implements admission.Validator so a webhook will be registered for the type
 func (acv *AerospikeClusterCustomValidator) ValidateDelete(_ context.Context, aerospikeCluster *asdbv1.AerospikeCluster,
 ) (admission.Warnings, error) {
 	aslog := logf.Log.WithName(asdbv1.ClusterNamespacedName(aerospikeCluster))
@@ -78,7 +78,7 @@ func (acv *AerospikeClusterCustomValidator) ValidateDelete(_ context.Context, ae
 	return nil, nil
 }
 
-// ValidateUpdate implements webhook.CustomValidator so a webhook will be registered for the type
+// ValidateUpdate implements admission.Validator so a webhook will be registered for the type
 func (acv *AerospikeClusterCustomValidator) ValidateUpdate(_ context.Context,
 	oldObject,
 	aerospikeCluster *asdbv1.AerospikeCluster,

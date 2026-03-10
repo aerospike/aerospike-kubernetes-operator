@@ -52,7 +52,7 @@ type AerospikeBackupCustomDefaulter struct {
 
 var _ admission.Defaulter[*asdbv1beta1.AerospikeBackup] = &AerospikeBackupCustomDefaulter{}
 
-// Default implements webhook.CustomDefaulter so a webhook will be registered for the type
+// Default implements admission.Defaulter so a webhook will be registered for the type
 func (abd *AerospikeBackupCustomDefaulter) Default(_ context.Context, backup *asdbv1beta1.AerospikeBackup) error {
 	abLog := logf.Log.WithName(namespacedName(backup))
 
@@ -70,7 +70,7 @@ var _ admission.Validator[*asdbv1beta1.AerospikeBackup] = &AerospikeBackupCustom
 //nolint:lll // for readability
 // +kubebuilder:webhook:path=/validate-asdb-aerospike-com-v1beta1-aerospikebackup,mutating=false,failurePolicy=fail,sideEffects=None,groups=asdb.aerospike.com,resources=aerospikebackups,verbs=create;update,versions=v1beta1,name=vaerospikebackup.kb.io,admissionReviewVersions=v1
 
-// ValidateCreate implements webhook.CustomValidator so a webhook will be registered for the type
+// ValidateCreate implements admission.Validator so a webhook will be registered for the type
 func (abv *AerospikeBackupCustomValidator) ValidateCreate(_ context.Context, backup *asdbv1beta1.AerospikeBackup,
 ) (admission.Warnings, error) {
 	abLog := logf.Log.WithName(namespacedName(backup))
@@ -88,7 +88,7 @@ func (abv *AerospikeBackupCustomValidator) ValidateCreate(_ context.Context, bac
 	return nil, nil
 }
 
-// ValidateUpdate implements webhook.CustomValidator so a webhook will be registered for the type
+// ValidateUpdate implements admission.Validator so a webhook will be registered for the type
 func (abv *AerospikeBackupCustomValidator) ValidateUpdate(_ context.Context,
 	oldObject, backup *asdbv1beta1.AerospikeBackup) (admission.Warnings, error) {
 	abLog := logf.Log.WithName(namespacedName(backup))
@@ -130,7 +130,7 @@ func validateBackup(backup *asdbv1beta1.AerospikeBackup) error {
 	return validateBackupConfig(k8sClient, backup)
 }
 
-// ValidateDelete implements webhook.CustomValidator so a webhook will be registered for the type
+// ValidateDelete implements admission.Validator so a webhook will be registered for the type
 func (abv *AerospikeBackupCustomValidator) ValidateDelete(_ context.Context, backup *asdbv1beta1.AerospikeBackup,
 ) (admission.Warnings, error) {
 	abLog := logf.Log.WithName(namespacedName(backup))
