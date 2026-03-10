@@ -73,6 +73,11 @@ linters:
       - third_party$
       - builtin$
       - examples$
+    rules: # Allow dot imports (ST1001) in test code for Ginkgo/Gomega
+      - linters:
+          - staticcheck
+        path: "test/"
+        text: "dot imports"
 formatters:
   enable:
     - gofmt

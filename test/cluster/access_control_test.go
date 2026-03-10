@@ -24,10 +24,7 @@ import (
 	asdbv1 "github.com/aerospike/aerospike-kubernetes-operator/v4/api/v1"
 	aerospikecluster "github.com/aerospike/aerospike-kubernetes-operator/v4/internal/controller/cluster"
 	"github.com/aerospike/aerospike-kubernetes-operator/v4/test"
-)
-
-const (
-	testClusterSize = 4
+	"github.com/aerospike/aerospike-kubernetes-operator/v4/test/testutil"
 )
 
 var aerospikeConfigWithSecurity = &asdbv1.AerospikeConfigSpec{
@@ -1275,7 +1272,7 @@ var _ = Describe(
 									)
 								}
 
-								aerospikeConfigSpec.configureSecurity(true)
+								aerospikeConfigSpec.ConfigureSecurity(true)
 
 								aeroCluster := getAerospikeClusterSpecWithAccessControl(
 									clusterNamespacedName, &accessControl,
@@ -1409,71 +1406,6 @@ var _ = Describe(
 								}
 							},
 						)
-
-						It(
-							"SecurityDisable: should reject access control if security is disabled",
-							func() {
-								var accessControl *asdbv1.AerospikeAccessControlSpec
-
-								aerospikeConfigSpec, err := NewAerospikeConfSpec(latestImage)
-								if err != nil {
-									Fail(
-										fmt.Sprintf(
-											"Invalid Aerospike Config Spec: %v",
-											err,
-										),
-									)
-								}
-
-								aerospikeConfigSpec.configureSecurity(false)
-
-								accessControl = &asdbv1.AerospikeAccessControlSpec{
-									Roles: []asdbv1.AerospikeRoleSpec{
-										{
-											Name: "profiler",
-											Privileges: []string{
-												"read-write-udf.test.users",
-												"write",
-											},
-											Whitelist: []string{
-												"8.8.0.0/16",
-											},
-										},
-									},
-									Users: []asdbv1.AerospikeUserSpec{
-										{
-											Name:       "admin",
-											SecretName: test.AuthSecretNameForUpdate,
-											Roles: []string{
-												"sys-admin",
-												"user-admin",
-											},
-										},
-
-										{
-											Name:       "profileUser",
-											SecretName: test.AuthSecretNameForUpdate,
-											Roles: []string{
-												"profiler",
-											},
-										},
-									},
-								}
-
-								aeroCluster := getAerospikeClusterSpecWithAccessControl(
-									clusterNamespacedName, accessControl,
-									aerospikeConfigSpec,
-								)
-								err = deployClusterWithTO(
-									k8sClient, ctx, aeroCluster,
-									retryInterval, shortRetry,
-								)
-								Expect(err).To(HaveOccurred())
-								Expect(err.Error()).To(ContainSubstring(
-									"security is disabled but access control is specified",
-								))
-							},
-						)
 					},
 				)
 				Context(
@@ -1512,7 +1444,7 @@ var _ = Describe(
 									)
 								}
 
-								aerospikeConfigSpec.configureSecurity(false)
+								aerospikeConfigSpec.ConfigureSecurity(false)
 
 								aeroCluster := getAerospikeClusterSpecWithAccessControl(
 									clusterNamespacedName, accessControl,
@@ -1558,7 +1490,7 @@ var _ = Describe(
 									},
 								}
 
-								aerospikeConfigSpec.configureSecurity(true)
+								aerospikeConfigSpec.ConfigureSecurity(true)
 
 								aeroCluster = getAerospikeClusterSpecWithAccessControl(
 									clusterNamespacedName, accessControl,
@@ -1621,7 +1553,7 @@ var _ = Describe(
 									)
 								}
 
-								aerospikeConfigSpec.configureSecurity(true)
+								aerospikeConfigSpec.ConfigureSecurity(true)
 
 								aeroCluster := getAerospikeClusterSpecWithAccessControl(
 									clusterNamespacedName, accessControl,
@@ -1634,7 +1566,7 @@ var _ = Describe(
 									Fail("Security should be enabled")
 								}
 
-								aerospikeConfigSpec.configureSecurity(false)
+								aerospikeConfigSpec.ConfigureSecurity(false)
 
 								aeroCluster = getAerospikeClusterSpecWithAccessControl(
 									clusterNamespacedName, accessControl,
@@ -1663,7 +1595,7 @@ var _ = Describe(
 									)
 								}
 
-								aerospikeConfigSpec.configureSecurity(false)
+								aerospikeConfigSpec.ConfigureSecurity(false)
 
 								aeroCluster := getAerospikeClusterSpecWithAccessControl(
 									clusterNamespacedName, accessControl,
@@ -1707,7 +1639,7 @@ var _ = Describe(
 									},
 								}
 
-								aerospikeConfigSpec.configureSecurity(true)
+								aerospikeConfigSpec.ConfigureSecurity(true)
 
 								aeroCluster = getAerospikeClusterSpecWithAccessControl(
 									clusterNamespacedName, accessControl,
@@ -1717,7 +1649,7 @@ var _ = Describe(
 								err = updateClusterWithNoWait(k8sClient, ctx, aeroCluster)
 								Expect(err).ToNot(HaveOccurred())
 
-								aerospikeConfigSpec.configureSecurity(false)
+								aerospikeConfigSpec.ConfigureSecurity(false)
 
 								// Save cluster variable as well for cleanup.
 								aeroCluster = getAerospikeClusterSpecWithAccessControl(
@@ -1749,7 +1681,7 @@ var _ = Describe(
 									)
 								}
 
-								aerospikeConfigSpec.configureSecurity(true)
+								aerospikeConfigSpec.ConfigureSecurity(true)
 
 								accessControl = &asdbv1.AerospikeAccessControlSpec{
 									Roles: []asdbv1.AerospikeRoleSpec{
@@ -1793,7 +1725,7 @@ var _ = Describe(
 								)
 								Expect(err).ToNot(HaveOccurred())
 
-								aerospikeConfigSpec.configureSecurity(false)
+								aerospikeConfigSpec.ConfigureSecurity(false)
 
 								aeroCluster = getAerospikeClusterSpecWithAccessControl(
 									clusterNamespacedName, accessControl,
@@ -1884,12 +1816,13 @@ var _ = Describe(
 									)
 								}
 
-								aerospikeConfigSpec.configureSecurity(true)
+								aerospikeConfigSpec.ConfigureSecurity(true)
 
 								aeroCluster := getAerospikeClusterSpecWithAccessControl(
 									clusterNamespacedName, &accessControl,
 									aerospikeConfigSpec,
 								)
+
 								err = testAccessControlReconcile(
 									aeroCluster, ctx,
 								)
@@ -1998,7 +1931,7 @@ var _ = Describe(
 									},
 								}
 
-								aerospikeConfigSpec.configureSecurity(true)
+								aerospikeConfigSpec.ConfigureSecurity(true)
 								aerospikeConfigSpec.setEnableQuotas(true)
 
 								aeroCluster = getAerospikeClusterSpecWithAccessControl(
@@ -2012,7 +1945,7 @@ var _ = Describe(
 
 								By("QuotaParamsSpecifiedButFlagIsOff")
 
-								aerospikeConfigSpec.configureSecurity(true)
+								aerospikeConfigSpec.ConfigureSecurity(true)
 								aerospikeConfigSpec.setEnableQuotas(false)
 
 								aeroCluster = getAerospikeClusterSpecWithAccessControl(
@@ -2080,7 +2013,7 @@ var _ = Describe(
 									},
 								}
 
-								aerospikeConfigSpec.configureSecurity(true)
+								aerospikeConfigSpec.ConfigureSecurity(true)
 								aerospikeConfigSpec.setEnableQuotas(false)
 
 								aeroCluster = getAerospikeClusterSpecWithAccessControl(
@@ -2116,139 +2049,6 @@ var _ = Describe(
 						},
 					)
 					Context("when doing invalid operations", func() {
-						It("Should fail if PKIOnly auth mode is set for Aerospike EE below 8.1.0.0", func() {
-							accessControl := &asdbv1.AerospikeAccessControlSpec{
-								Users: []asdbv1.AerospikeUserSpec{
-									{
-										Name:     "admin",
-										AuthMode: asdbv1.AerospikeAuthModePKIOnly,
-										Roles:    []string{"sys-admin", "user-admin"},
-									},
-								},
-							}
-
-							aeroCluster := getPKIAuthAerospikeClusterWithAccessControl(
-								clusterNamespacedName, accessControl,
-							)
-							aeroCluster.Spec.Image = pre810EnterpriseImage
-							err := DeployCluster(k8sClient, ctx, aeroCluster)
-							Expect(err).To(HaveOccurred())
-							Expect(err.Error()).To(ContainSubstring("PKIOnly authMode requires Enterprise Edition version 8.1.0.0 or later"))
-						})
-
-						It("Should fail if FE and auth mode of all users is not set to PKIOnly", func() {
-							accessControl := &asdbv1.AerospikeAccessControlSpec{
-								Users: []asdbv1.AerospikeUserSpec{
-									{
-										Name:     "admin",
-										AuthMode: asdbv1.AerospikeAuthModePKIOnly,
-										Roles:    []string{"sys-admin", "user-admin"},
-									},
-									{
-										Name:       "user01",
-										AuthMode:   asdbv1.AerospikeAuthModeInternal,
-										SecretName: test.AuthSecretName,
-										Roles: []string{
-											"sys-admin",
-											"user-admin",
-										},
-									},
-								},
-							}
-
-							aeroCluster := getPKIAuthAerospikeClusterWithAccessControl(
-								clusterNamespacedName, accessControl,
-							)
-							aeroCluster.Spec.Image = latestFederalImage
-							err := DeployCluster(k8sClient, ctx, aeroCluster)
-							Expect(err).To(HaveOccurred())
-							Expect(err.Error()).To(ContainSubstring("authMode for all users must be PKI with Federal Edition"))
-						})
-
-						It("Should fail if any user's auth mode is changed from PKIOnly to Internal", func() {
-							accessControl := &asdbv1.AerospikeAccessControlSpec{
-								Users: []asdbv1.AerospikeUserSpec{
-									{
-										Name:     "admin",
-										AuthMode: asdbv1.AerospikeAuthModePKIOnly,
-										Roles: []string{
-											"sys-admin",
-											"user-admin",
-										},
-									},
-								},
-							}
-
-							aeroCluster := getPKIAuthAerospikeClusterWithAccessControl(
-								clusterNamespacedName, accessControl,
-							)
-							err := DeployCluster(k8sClient, ctx, aeroCluster)
-							Expect(err).ToNot(HaveOccurred())
-
-							aeroCluster.Spec.AerospikeAccessControl.Users[0].AuthMode = asdbv1.AerospikeAuthModeInternal
-							aeroCluster.Spec.AerospikeAccessControl.Users[0].SecretName = test.AuthSecretName
-
-							err = updateCluster(k8sClient, ctx, aeroCluster)
-							Expect(err).To(HaveOccurred())
-							Expect(err.Error()).To(ContainSubstring("user admin is not allowed to update authMode from PKI to Internal"))
-						})
-
-						It("Should fail when password secret is set with PKIOnly authMode", func() {
-							accessControl := &asdbv1.AerospikeAccessControlSpec{
-								Users: []asdbv1.AerospikeUserSpec{
-									{
-										Name:       "admin",
-										AuthMode:   asdbv1.AerospikeAuthModePKIOnly,
-										SecretName: test.AuthSecretName,
-										Roles: []string{
-											"sys-admin",
-											"user-admin",
-										},
-									},
-								},
-							}
-
-							aeroCluster := getPKIAuthAerospikeClusterWithAccessControl(
-								clusterNamespacedName, accessControl,
-							)
-							err := DeployCluster(k8sClient, ctx, aeroCluster)
-							Expect(err).To(HaveOccurred())
-							Expect(err.Error()).To(ContainSubstring("user admin cannot set secretName when authMode is PKIOnly"))
-						})
-
-						It("Should fail PKIOnly authMode with non TLS cluster", func() {
-							aeroCluster := createDummyAerospikeCluster(clusterNamespacedName, 2)
-							aeroCluster.Spec.AerospikeAccessControl.Users[0].AuthMode = asdbv1.AerospikeAuthModePKIOnly
-							aeroCluster.Spec.AerospikeAccessControl.Users[0].SecretName = ""
-
-							err := DeployCluster(k8sClient, ctx, aeroCluster)
-							Expect(err).To(HaveOccurred())
-							Expect(err.Error()).To(ContainSubstring("PKIOnly authMode requires Aerospike cluster to be mTLS enabled"))
-						})
-
-						It("Should block upgrading to TLS and PKIOnly in a single update", func() {
-							aeroCluster := createDummyAerospikeCluster(clusterNamespacedName, 2)
-							Expect(DeployCluster(k8sClient, ctx, aeroCluster)).ToNot(HaveOccurred())
-
-							// Enable TLS + PKIOnly in a single update
-							aeroCluster.Spec.AerospikeConfig.Value[asdbv1.ConfKeyNetwork] = getNetworkTLSConfig()
-							aeroCluster.Spec.OperatorClientCertSpec = getAdminOperatorCert()
-							aeroCluster.Spec.AerospikeAccessControl = &asdbv1.AerospikeAccessControlSpec{
-								Users: []asdbv1.AerospikeUserSpec{
-									{
-										Name:     "admin",
-										AuthMode: asdbv1.AerospikeAuthModePKIOnly,
-										Roles:    []string{"sys-admin", "user-admin"},
-									},
-								},
-							}
-
-							err := updateClusterWithNoWait(k8sClient, ctx, aeroCluster)
-							Expect(err).To(HaveOccurred())
-							Expect(err.Error()).To(ContainSubstring(
-								"cannot enable TLS and PKIOnly authMode in a single update"))
-						})
-
 						It("Should block PKIOnly authMode while TLS rollout is in progress", func() {
 							// Create a non-TLS cluster
 							aeroCluster := createDummyAerospikeCluster(clusterNamespacedName, 2)
@@ -2292,8 +2092,8 @@ var _ = Describe(
 								},
 							}
 
-							aeroCluster := getPKIAuthAerospikeClusterWithAccessControl(
-								clusterNamespacedName, accessControl,
+							aeroCluster := GetPKIAuthAerospikeClusterWithAccessControl(
+								clusterNamespacedName, testClusterSize, accessControl,
 							)
 
 							err := testAccessControlReconcile(aeroCluster, ctx)
@@ -2319,8 +2119,8 @@ var _ = Describe(
 								},
 							}
 
-							aeroCluster := getPKIAuthAerospikeClusterWithAccessControl(
-								clusterNamespacedName, accessControl,
+							aeroCluster := GetPKIAuthAerospikeClusterWithAccessControl(
+								clusterNamespacedName, testClusterSize, accessControl,
 							)
 
 							Expect(testAccessControlReconcile(aeroCluster, ctx)).To(Succeed())
@@ -2346,8 +2146,8 @@ var _ = Describe(
 								},
 							}
 
-							aeroCluster := getPKIAuthAerospikeClusterWithAccessControl(
-								clusterNamespacedName, accessControl,
+							aeroCluster := GetPKIAuthAerospikeClusterWithAccessControl(
+								clusterNamespacedName, testClusterSize, accessControl,
 							)
 							Expect(testAccessControlReconcile(aeroCluster, ctx)).To(Succeed())
 
@@ -2407,10 +2207,10 @@ var _ = Describe(
 								},
 							}
 
-							aeroCluster := getPKIAuthAerospikeClusterWithAccessControl(
-								clusterNamespacedName, accessControl,
+							aeroCluster := GetPKIAuthAerospikeClusterWithAccessControl(
+								clusterNamespacedName, testClusterSize, accessControl,
 							)
-							aeroCluster.Spec.Image = latestFederalImage
+							aeroCluster.Spec.Image = testutil.LatestFederalImage
 							Expect(testAccessControlReconcile(aeroCluster, ctx)).To(Succeed())
 						})
 
@@ -2419,7 +2219,7 @@ var _ = Describe(
 						})
 
 						It("Should allow FE security enable/disable with mTLS cluster", func() {
-							securityLifecycleWithPKITest(k8sClient, ctx, clusterNamespacedName, latestFederalImage)
+							securityLifecycleWithPKITest(k8sClient, ctx, clusterNamespacedName, testutil.LatestFederalImage)
 						})
 					})
 				})
@@ -2629,16 +2429,6 @@ func getAerospikeClusterSpecWithAccessControl(
 			},
 		},
 	}
-}
-
-func getPKIAuthAerospikeClusterWithAccessControl(
-	clusterNamespacedName types.NamespacedName,
-	accessControl *asdbv1.AerospikeAccessControlSpec,
-) *asdbv1.AerospikeCluster {
-	aeroCluster := CreatePKIAuthEnabledCluster(clusterNamespacedName, testClusterSize)
-	aeroCluster.Spec.AerospikeAccessControl = accessControl
-
-	return aeroCluster
 }
 
 // validateAccessControl validates that the new access control have been applied correctly.

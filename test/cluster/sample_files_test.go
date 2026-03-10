@@ -15,6 +15,7 @@ import (
 	"k8s.io/apimachinery/pkg/util/yaml"
 
 	asdbv1 "github.com/aerospike/aerospike-kubernetes-operator/v4/api/v1"
+	"github.com/aerospike/aerospike-kubernetes-operator/v4/test/testutil"
 )
 
 const fileDir = "config/samples"
@@ -121,7 +122,7 @@ func getSamplesFiles() ([]string, error) {
 	// getGitRepoRootPath is called here explicitly to get ProjectRoot at this point
 	// This may be empty if getSamplesFiles is called during var initialization phase
 	if projectRoot == "" {
-		projectRoot, err = getGitRepoRootPath()
+		projectRoot, err = testutil.GetGitRepoRootPath()
 		if err != nil {
 			return nil, err
 		}

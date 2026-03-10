@@ -33,17 +33,14 @@ import (
 
 const (
 	baseEnterpriseImage = "aerospike/aerospike-server-enterprise"
-	baseFederalImage    = "aerospike/aerospike-server-federal"
 	wrongImage          = "wrong-image"
 	nextServerVersion   = "8.1.1.0_1"
 	latestServerVersion = "8.1.1.0"
 	invalidVersion      = "3.0.0.4"
-	pre810Version       = "8.0.0.0"
-
-	post6Version = "7.0.0.0"
-	version6     = "6.0.0.5"
-
+	post6Version        = "7.0.0.0"
+	version6            = "6.0.0.5"
 	latestSchemaVersion = "8.1.1"
+	testClusterSize     = 4
 )
 
 var (
@@ -69,18 +66,17 @@ const (
 var aerospikeVolumeInitMethodDeleteFiles = asdbv1.AerospikeVolumeMethodDeleteFiles
 
 var (
-	retryInterval         = time.Second * 30
-	shortRetryInterval    = time.Second * 1
-	versionV1             = "v1"
-	versionV2             = "v2"
-	cascadeDeleteFalse    = false
-	cascadeDeleteTrue     = true
-	logger                = logr.Discard()
-	nextImage             = fmt.Sprintf("%s:%s", baseEnterpriseImage, nextServerVersion)
-	latestImage           = fmt.Sprintf("%s:%s", baseEnterpriseImage, latestServerVersion)
-	invalidImage          = fmt.Sprintf("%s:%s", baseEnterpriseImage, invalidVersion)
-	pre810EnterpriseImage = fmt.Sprintf("%s:%s", baseEnterpriseImage, pre810Version)
-	latestFederalImage    = fmt.Sprintf("%s:%s", baseFederalImage, latestServerVersion)
+	retryInterval      = time.Second * 30
+	shortRetryInterval = time.Second * 1
+	versionV1          = "v1"
+	versionV2          = "v2"
+	cascadeDeleteFalse = false
+	cascadeDeleteTrue  = true
+	logger             = logr.Discard()
+	nextImage          = fmt.Sprintf("%s:%s", baseEnterpriseImage, nextServerVersion)
+	latestImage        = fmt.Sprintf("%s:%s", baseEnterpriseImage, latestServerVersion)
+	invalidImage       = fmt.Sprintf("%s:%s", baseEnterpriseImage, invalidVersion)
+
 	// Storage wipe test
 	post6Image    = fmt.Sprintf("%s:%s", baseEnterpriseImage, post6Version)
 	version6Image = fmt.Sprintf("%s:%s", baseEnterpriseImage, version6)
@@ -1006,7 +1002,8 @@ func createAerospikeClusterPost570(
 	return aeroCluster
 }
 
-func createAerospikeClusterPost640(
+// CreateAerospikeClusterPost640 creates an AerospikeCluster spec for server versions post-6.4.0.
+func CreateAerospikeClusterPost640(
 	clusterNamespacedName types.NamespacedName, size int32, image string,
 ) *asdbv1.AerospikeCluster {
 	// create Aerospike custom resource
@@ -1403,6 +1400,19 @@ func CreatePKIAuthEnabledCluster(
 	aeroCluster.Spec.OperatorClientCertSpec = getAdminOperatorCert()
 	aeroCluster.Spec.AerospikeAccessControl.Users[0].AuthMode = asdbv1.AerospikeAuthModePKIOnly
 	aeroCluster.Spec.AerospikeAccessControl.Users[0].SecretName = ""
+
+	return aeroCluster
+}
+
+// GetPKIAuthAerospikeClusterWithAccessControl returns a PKI-auth-enabled cluster
+// with the given access control spec. Used by test/cluster tests and test/envtest webhook tests.
+func GetPKIAuthAerospikeClusterWithAccessControl(
+	clusterNamespacedName types.NamespacedName,
+	size int32,
+	accessControl *asdbv1.AerospikeAccessControlSpec,
+) *asdbv1.AerospikeCluster {
+	aeroCluster := CreatePKIAuthEnabledCluster(clusterNamespacedName, size)
+	aeroCluster.Spec.AerospikeAccessControl = accessControl
 
 	return aeroCluster
 }

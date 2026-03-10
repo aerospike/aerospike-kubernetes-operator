@@ -43,7 +43,7 @@ var _ = Describe(
 
 				It(
 					"Should not work with MultiPodPerHost enabled", func() {
-						aeroCluster := createAerospikeClusterPost640(
+						aeroCluster := CreateAerospikeClusterPost640(
 							clusterNamespacedName, 2, latestImage,
 						)
 						aeroCluster.Spec.PodSpec.HostNetwork = true
@@ -55,7 +55,7 @@ var _ = Describe(
 
 				It(
 					"Should verify hostNetwork flag updates", func() {
-						aeroCluster := createAerospikeClusterPost640(
+						aeroCluster := CreateAerospikeClusterPost640(
 							clusterNamespacedName, 2, latestImage,
 						)
 
