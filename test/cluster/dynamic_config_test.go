@@ -74,8 +74,9 @@ var _ = Describe(
 						aeroCluster := createDummyAerospikeCluster(
 							clusterNamespacedName, 2,
 						)
-						aeroCluster.Spec.AerospikeConfig.Value["namespaces"] = append(
-							aeroCluster.Spec.AerospikeConfig.Value["namespaces"].([]interface{}), getNonSCInMemoryNamespaceConfig("mem"))
+						aeroCluster.Spec.AerospikeConfig.Value[asdbv1.ConfKeyNamespace] = append(
+							aeroCluster.Spec.AerospikeConfig.Value[asdbv1.ConfKeyNamespace].([]interface{}),
+							getNonSCInMemoryNamespaceConfig("mem"))
 						aeroCluster.Spec.AerospikeConfig.Value[asdbv1.ConfKeyXdr] = map[string]interface{}{
 							"dcs": []map[string]interface{}{
 								{
@@ -261,8 +262,8 @@ var _ = Describe(
 						podPIDMap, err = getPodIDs(ctx, aeroCluster)
 						Expect(err).ToNot(HaveOccurred())
 
-						nsList := aeroCluster.Spec.AerospikeConfig.Value["namespaces"].([]interface{})
-						nsList[1].(map[string]interface{})["storage-engine"].(map[string]interface{})["data-size"] = 2073741824
+						nsList := aeroCluster.Spec.AerospikeConfig.Value[asdbv1.ConfKeyNamespace].([]interface{})
+						nsList[1].(map[string]interface{})[asdbv1.ConfKeyStorageEngine].(map[string]interface{})["data-size"] = 2073741824
 
 						err = updateCluster(k8sClient, ctx, aeroCluster)
 						Expect(err).ToNot(HaveOccurred())
@@ -494,7 +495,7 @@ var _ = Describe(
 							},
 						}
 
-						aeroCluster.Spec.AerospikeConfig.Value["namespaces"] = []interface{}{
+						aeroCluster.Spec.AerospikeConfig.Value[asdbv1.ConfKeyNamespace] = []interface{}{
 							getSCNamespaceConfigWithSet("test", "/test/dev/xvdf"),
 							getNonSCNamespaceConfig("bar", "/test/dev/xvdf1"),
 						}
@@ -651,9 +652,9 @@ var _ = Describe(
 							"test",
 							"test1",
 						}
-						nsList := aeroCluster.Spec.AerospikeConfig.Value["namespaces"].([]interface{})
+						nsList := aeroCluster.Spec.AerospikeConfig.Value[asdbv1.ConfKeyNamespace].([]interface{})
 						nsList = append(nsList, getSCNamespaceConfig("test1", "/test/dev/xvdf1"))
-						aeroCluster.Spec.AerospikeConfig.Value["namespaces"] = nsList
+						aeroCluster.Spec.AerospikeConfig.Value[asdbv1.ConfKeyNamespace] = nsList
 						Expect(DeployCluster(k8sClient, ctx, aeroCluster)).ToNot(HaveOccurred())
 					},
 				)
@@ -671,7 +672,7 @@ var _ = Describe(
 						podPIDMap, err := getPodIDs(ctx, aeroCluster)
 						Expect(err).ToNot(HaveOccurred())
 
-						nsList := aeroCluster.Spec.AerospikeConfig.Value["namespaces"].([]interface{})
+						nsList := aeroCluster.Spec.AerospikeConfig.Value[asdbv1.ConfKeyNamespace].([]interface{})
 						nsList[0].(map[string]interface{})["active-rack"] = 1
 						nsList[1].(map[string]interface{})["active-rack"] = 2
 
@@ -701,6 +702,44 @@ var _ = Describe(
 							if strings.Contains(conf, "effective_active_rack") {
 								keyValue := strings.Split(conf, "=")
 								Expect(keyValue[1]).To(Equal("2"))
+							}
+						}
+
+						By("Verify no warm/cold restarts in Pods")
+						validateServerRestart(ctx, aeroCluster, podPIDMap, noRestart)
+					},
+				)
+
+				It(
+					"Should update replication-factor dynamically", func() {
+
+						By("Modify dynamic config by adding fields")
+
+						aeroCluster, err := getCluster(
+							k8sClient, ctx, clusterNamespacedName,
+						)
+						Expect(err).ToNot(HaveOccurred())
+
+						podPIDMap, err := getPodIDs(ctx, aeroCluster)
+						Expect(err).ToNot(HaveOccurred())
+
+						nsList := aeroCluster.Spec.AerospikeConfig.Value[asdbv1.ConfKeyNamespace].([]interface{})
+						nsList[0].(map[string]interface{})[asdbv1.ConfKeyReplicationFactor] = 1
+
+						err = updateCluster(k8sClient, ctx, aeroCluster)
+						Expect(err).ToNot(HaveOccurred())
+
+						By("Fetch and verify dynamic configs")
+
+						info, err := requestInfoFromNode(logger, k8sClient, ctx, clusterNamespacedName,
+							"namespace/test", aeroCluster.Name+"-1-0")
+						Expect(err).ToNot(HaveOccurred())
+
+						confs := strings.Split(info["namespace/test"], ";")
+						for _, conf := range confs {
+							if strings.Contains(conf, "effective_replication_factor") {
+								keyValue := strings.Split(conf, "=")
+								Expect(keyValue[1]).To(Equal("1"))
 							}
 						}
 
@@ -890,7 +929,7 @@ func validateNamespaceContextDynamically(
 	scSpecificConf := mapset.NewSet("strong-consistency-allow-expunge", "mrt-duration", "disable-mrt-writes")
 
 	for confKey, val := range *flatServer {
-		if asconfig.ContextKey(confKey) != "namespaces" {
+		if asconfig.ContextKey(confKey) != asdbv1.ConfKeyNamespace {
 			continue
 		}
 
@@ -899,7 +938,7 @@ func validateNamespaceContextDynamically(
 			// Check if strong consistency is enabled for this namespace.
 			// If yes, then only update strong consistency specific configs.
 			if scSpecificConf.Contains(asconfig.BaseKey(confKey)) {
-				strongConsistency := strings.Join([]string{tokens[0], tokens[1], "strong-consistency"}, ".")
+				strongConsistency := strings.Join([]string{tokens[0], tokens[1], asdbv1.ConfKeyStrongConsistency}, ".")
 				if (*flatServer)[strongConsistency] == false {
 					continue
 				}
@@ -926,7 +965,7 @@ func validateNamespaceContextDynamically(
 	newConf := asconfig.New(logger, &newSpec)
 	newMap := *newConf.ToMap()
 
-	aeroCluster.Spec.AerospikeConfig.Value["namespaces"] = lib.DeepCopy(newMap["namespaces"])
+	aeroCluster.Spec.AerospikeConfig.Value[asdbv1.ConfKeyNamespace] = lib.DeepCopy(newMap[asdbv1.ConfKeyNamespace])
 
 	return updateCluster(k8sClient, ctx, aeroCluster)
 }
@@ -977,7 +1016,7 @@ func validateXDRContextDynamically(clusterNamespacedName types.NamespacedName,
 
 		tokens := strings.Split(confKey, ".")
 		if dynamic.Contains(asconfig.GetFlatKey(tokens)) {
-			if len(tokens) < 3 || tokens[len(tokens)-3] == "namespaces" {
+			if len(tokens) < 3 || tokens[len(tokens)-3] == asdbv1.ConfKeyNamespace {
 				xdrNSFields[confKey] = val
 			} else {
 				dcFields[confKey] = val
@@ -1057,7 +1096,7 @@ func validateXDRDCFieldsDynamically(ctx goctx.Context, flatServer, flatSpec *asc
 
 	aeroCluster.Spec.AerospikeConfig.Value[asdbv1.ConfKeyXdr] = lib.DeepCopy(newMap[asdbv1.ConfKeyXdr])
 	dcs := aeroCluster.Spec.AerospikeConfig.Value[asdbv1.ConfKeyXdr].(lib.Stats)["dcs"].([]lib.Stats)
-	delete(dcs[0], "namespaces")
+	delete(dcs[0], asdbv1.ConfKeyNamespace)
 	delete(dcs[0], "node-address-ports")
 	aeroCluster.Spec.AerospikeConfig.Value[asdbv1.ConfKeyXdr].(lib.Stats)["dcs"] = dcs
 

@@ -46,8 +46,11 @@ const (
 
 const (
 	// Namespace keys.
-	ConfKeyNamespace     = "namespaces"
-	ConfKeyStorageEngine = "storage-engine"
+	ConfKeyNamespace         = "namespaces"
+	ConfKeyStorageEngine     = "storage-engine"
+	ConfKeyReplicationFactor = "replication-factor"
+	ConfKeyStrongConsistency = "strong-consistency"
+	ConfKeyName              = "name"
 
 	// Network section keys.
 	ConfKeyNetwork          = "network"
@@ -330,7 +333,7 @@ func IsAerospikeNamespacePresent(
 				return false
 			}
 
-			if namespaceConf["name"] == namespaceName {
+			if namespaceConf[ConfKeyName] == namespaceName {
 				return true
 			}
 		}
@@ -482,7 +485,7 @@ func IsClusterSCEnabled(aeroCluster *AerospikeCluster) bool {
 	// Look inside only 1st rack. SC namespaces should be same across all the racks
 	rack := aeroCluster.Spec.RackConfig.Racks[0]
 
-	nsList := rack.AerospikeConfig.Value["namespaces"].([]interface{})
+	nsList := rack.AerospikeConfig.Value[ConfKeyNamespace].([]interface{})
 	for _, nsConfInterface := range nsList {
 		isEnabled := IsNSSCEnabled(nsConfInterface.(map[string]interface{}))
 		if isEnabled {
@@ -494,7 +497,7 @@ func IsClusterSCEnabled(aeroCluster *AerospikeCluster) bool {
 }
 
 func IsNSSCEnabled(nsConf map[string]interface{}) bool {
-	scEnabled, ok := nsConf["strong-consistency"]
+	scEnabled, ok := nsConf[ConfKeyStrongConsistency]
 	if !ok {
 		return false
 	}
