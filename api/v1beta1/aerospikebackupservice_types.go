@@ -64,6 +64,7 @@ type AerospikeBackupServiceSpec struct {
 
 	// Resources defines the requests and limits for the backup service container.
 	// Resources.Limits should be more than Resources.Requests.
+	//
 	// Deprecated: Resources field is now part of spec.podSpec.serviceContainer
 	// +operator-sdk:csv:customresourcedefinitions:type=spec,displayName="Resources"
 	// +optional
@@ -101,6 +102,7 @@ type AerospikeBackupServiceStatus struct {
 
 	// Resources define the requests and limits for the backup service container.
 	// Resources.Limits should be more than Resources.Requests.
+	//
 	// Deprecated: Resources field is now part of status.podSpec.serviceContainer
 	// +optional
 	Resources *corev1.ResourceRequirements `json:"resources,omitempty"`

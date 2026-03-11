@@ -67,6 +67,7 @@ var _ = BeforeSuite(
 		testEnv = &envtest.Environment{
 			UseExistingCluster: &t,
 		}
+
 		var err error
 
 		cfg, err = testEnv.Start()
@@ -95,6 +96,7 @@ var _ = AfterSuite(
 	func() {
 		By("tearing down the test environment")
 		gexec.KillAndWait(5 * time.Second)
+
 		err := testEnv.Stop()
 		Expect(err).ToNot(HaveOccurred())
 	},

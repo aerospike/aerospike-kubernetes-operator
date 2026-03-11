@@ -27,6 +27,7 @@ var _ = Describe(
 	"TlsAuthenticateClient", func() {
 		ctx := goctx.TODO()
 		clusterName := fmt.Sprintf(tlsClusterName+"-%d", GinkgoParallelProcess())
+
 		AfterEach(func() {
 			aeroCluster := &asdbv1.AerospikeCluster{
 				ObjectMeta: metav1.ObjectMeta{

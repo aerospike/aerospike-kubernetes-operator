@@ -44,7 +44,6 @@ var (
 
 var _ = Describe(
 	"DynamicConfig", func() {
-
 		ctx := goctx.Background()
 		clusterName := fmt.Sprintf(clName+"-%d", GinkgoParallelProcess())
 		clusterNamespacedName := test.GetNamespacedName(
@@ -67,7 +66,6 @@ var _ = Describe(
 
 		Context(
 			"When doing valid operations", func() {
-
 				BeforeEach(
 					func() {
 						// Create a 2 node cluster
@@ -76,6 +74,7 @@ var _ = Describe(
 						)
 						aeroCluster.Spec.AerospikeConfig.Value["namespaces"] = append(
 							aeroCluster.Spec.AerospikeConfig.Value["namespaces"].([]interface{}), getNonSCInMemoryNamespaceConfig("mem"))
+						//nolint:gosec // G101 test config path, not real credentials
 						aeroCluster.Spec.AerospikeConfig.Value[asdbv1.ConfKeyXdr] = map[string]interface{}{
 							"dcs": []map[string]interface{}{
 								{
@@ -101,7 +100,6 @@ var _ = Describe(
 
 				It(
 					"Should update config dynamically", func() {
-
 						By("Modify dynamic config by adding fields")
 
 						aeroCluster, err := getCluster(
@@ -119,6 +117,7 @@ var _ = Describe(
 						aeroCluster.Spec.AerospikeConfig.Value[asdbv1.ConfKeyService].(map[string]interface{})["proto-fd-max"] = 18000
 						aeroCluster.Spec.AerospikeConfig.Value["security"].(map[string]interface{})["log"] = log
 
+						//nolint:gosec // G101 test config path, not real credentials
 						dc := map[string]interface{}{
 							"name":      "dc2",
 							"auth-mode": "internal",
@@ -193,6 +192,7 @@ var _ = Describe(
 						conf, err = getAerospikeConfigFromNode(logger, k8sClient, ctx, clusterNamespacedName,
 							asdbv1.ConfKeyService, aeroCluster.Name+"-0-0")
 						Expect(err).ToNot(HaveOccurred())
+
 						cv, ok = conf["proto-fd-max"]
 						Expect(ok).To(BeTrue())
 
@@ -221,7 +221,6 @@ var _ = Describe(
 
 				It(
 					"Should update config statically", func() {
-
 						By("Modify static config to do warm restart")
 
 						aeroCluster, err := getCluster(
@@ -288,7 +287,6 @@ var _ = Describe(
 
 				It(
 					"Should update config statically by disabling dynamic update feature", func() {
-
 						By("Modify dynamic config statically")
 
 						aeroCluster, err := getCluster(
@@ -326,13 +324,13 @@ var _ = Describe(
 
 		Context(
 			"When doing invalid operations", func() {
-
 				BeforeEach(
 					func() {
 						// Create a 2 node cluster
 						aeroCluster := createDummyAerospikeCluster(
 							clusterNamespacedName, 2,
 						)
+						//nolint:gosec // G101 test config path, not real credentials
 						aeroCluster.Spec.AerospikeConfig.Value[asdbv1.ConfKeyXdr] = map[string]interface{}{
 							"dcs": []map[string]interface{}{
 								{
@@ -407,6 +405,7 @@ var _ = Describe(
 						// Which leads to pod failures.
 						aeroCluster.Spec.AerospikeConfig.Value[asdbv1.ConfKeyService].(map[string]interface{})["proto-fd-max"] = 9999999
 
+						//nolint:gosec // G101 test config path, not real credentials
 						dc := map[string]interface{}{
 							"name":      "dc2",
 							"auth-mode": "internal",
@@ -438,6 +437,7 @@ var _ = Describe(
 
 						// As pods were failed, expectation is that pods will be cold restarted.
 						By("Verify partial cold restart in Pods")
+
 						operationTypeMap := map[string]asdbv1.OperationKind{
 							aeroCluster.Name + "-0-0": noRestart,
 							aeroCluster.Name + "-0-1": asdbv1.OperationPodRestart,
@@ -445,7 +445,6 @@ var _ = Describe(
 
 						err = validateOperationTypes(ctx, aeroCluster, podPIDMap, operationTypeMap)
 						Expect(err).ToNot(HaveOccurred())
-
 					},
 				)
 			},
@@ -453,7 +452,6 @@ var _ = Describe(
 
 		Context(
 			"When doing complete dynamic config change", func() {
-
 				BeforeEach(
 					func() {
 						// Create a 2 node cluster
@@ -475,6 +473,7 @@ var _ = Describe(
 								},
 							},
 						)
+						//nolint:gosec // G101 test config path, not real credentials
 						aeroCluster.Spec.AerospikeConfig.Value[asdbv1.ConfKeyXdr] = map[string]interface{}{
 							"dcs": []map[string]interface{}{
 								{
@@ -524,8 +523,8 @@ var _ = Describe(
 
 				It(
 					"Should update config dynamically", func() {
-
 						By("Modify all dynamic config fields")
+
 						aeroCluster, err := getCluster(
 							k8sClient, ctx, clusterNamespacedName,
 						)
@@ -549,6 +548,7 @@ var _ = Describe(
 						Expect(err).ToNot(HaveOccurred())
 
 						By("Verify Service Context configs dynamically")
+
 						err = validateServiceContextDynamically(ctx, flatServer, flatSpec, aeroCluster, dynamic)
 						Expect(err).ToNot(HaveOccurred())
 
@@ -561,6 +561,7 @@ var _ = Describe(
 						validateServerRestart(ctx, aeroCluster, podPIDMap, noRestart)
 
 						By("Verify Network Context configs dynamically")
+
 						err = validateNetworkContextDynamically(ctx, flatServer, flatSpec, aeroCluster, dynamic)
 						Expect(err).ToNot(HaveOccurred())
 
@@ -573,6 +574,7 @@ var _ = Describe(
 						validateServerRestart(ctx, aeroCluster, podPIDMap, noRestart)
 
 						By("Verify Namespace Context configs dynamically")
+
 						err = validateNamespaceContextDynamically(ctx, flatServer, flatSpec, aeroCluster, dynamic)
 						Expect(err).ToNot(HaveOccurred())
 
@@ -585,6 +587,7 @@ var _ = Describe(
 						validateServerRestart(ctx, aeroCluster, podPIDMap, noRestart)
 
 						By("Verify Security Context configs dynamically")
+
 						err = validateSecurityContextDynamically(ctx, flatServer, flatSpec, aeroCluster, dynamic)
 						Expect(err).ToNot(HaveOccurred())
 
@@ -597,6 +600,7 @@ var _ = Describe(
 						validateServerRestart(ctx, aeroCluster, podPIDMap, noRestart)
 
 						By("Verify XDR Context configs dynamically")
+
 						err = validateXDRContextDynamically(clusterNamespacedName,
 							ctx, flatServer, flatSpec, aeroCluster, dynamic)
 						Expect(err).ToNot(HaveOccurred())
@@ -615,7 +619,6 @@ var _ = Describe(
 
 		Context(
 			"When changing fields those need recluster", func() {
-
 				BeforeEach(
 					func() {
 						// Create a 4 node cluster
@@ -660,7 +663,6 @@ var _ = Describe(
 
 				It(
 					"Should update active-rack dynamically", func() {
-
 						By("Modify dynamic config by adding fields")
 
 						aeroCluster, err := getCluster(

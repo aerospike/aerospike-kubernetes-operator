@@ -92,6 +92,7 @@ var _ = Describe("BatchRestart", func() {
 			// During deployment
 			// During update. User should not be allowed to remove rack if above condition is met.
 			By("Using RollingUpdateBatchSize PCT")
+
 			aeroCluster, err := getCluster(k8sClient, ctx, clusterNamespacedName)
 			Expect(err).ToNot(HaveOccurred())
 
@@ -101,6 +102,7 @@ var _ = Describe("BatchRestart", func() {
 			Expect(err).To(HaveOccurred())
 
 			By("Using RollingUpdateBatchSize Count")
+
 			aeroCluster, err = getCluster(k8sClient, ctx, clusterNamespacedName)
 			Expect(err).ToNot(HaveOccurred())
 
@@ -111,6 +113,7 @@ var _ = Describe("BatchRestart", func() {
 		})
 		It("Should fail if there are any non rack-enabled namespaces", func() {
 			By("Using RollingUpdateBatchSize PCT")
+
 			aeroCluster, err := getCluster(k8sClient, ctx, clusterNamespacedName)
 			Expect(err).ToNot(HaveOccurred())
 
@@ -120,6 +123,7 @@ var _ = Describe("BatchRestart", func() {
 			Expect(err).To(HaveOccurred())
 
 			By("Using RollingUpdateBatchSize Count")
+
 			aeroCluster, err = getCluster(k8sClient, ctx, clusterNamespacedName)
 			Expect(err).ToNot(HaveOccurred())
 
@@ -131,6 +135,7 @@ var _ = Describe("BatchRestart", func() {
 
 		It("Should fail update when spec is valid and status is invalid for RollingUpdateBatchSize", func() {
 			By("Remove 2nd rack")
+
 			aeroCluster, err := getCluster(k8sClient, ctx, clusterNamespacedName)
 			Expect(err).ToNot(HaveOccurred())
 
@@ -139,15 +144,16 @@ var _ = Describe("BatchRestart", func() {
 			Expect(err).ToNot(HaveOccurred())
 
 			By("Add 2nd rack with RollingUpdateBatchSize")
+
 			aeroCluster, err = getCluster(k8sClient, ctx, clusterNamespacedName)
 			Expect(err).ToNot(HaveOccurred())
+
 			aeroCluster.Spec.RackConfig.Racks = getDummyRackConf(1, 2)
 			aeroCluster.Spec.RackConfig.RollingUpdateBatchSize = percent("100%")
 
 			err = k8sClient.Update(ctx, aeroCluster)
 			Expect(err).To(HaveOccurred())
 		})
-
 	})
 
 	Context("When doing namespace related operations", func() {
@@ -171,6 +177,7 @@ var _ = Describe("BatchRestart", func() {
 		)
 		It("Should fail if replication-factor is 1", func() {
 			By("Using RollingUpdateBatchSize PCT")
+
 			aeroCluster := createDummyAerospikeClusterWithRF(clusterNamespacedName, 2, 1)
 			racks := getDummyRackConf(1, 2)
 			aeroCluster.Spec.RackConfig.Racks = racks
@@ -179,6 +186,7 @@ var _ = Describe("BatchRestart", func() {
 			Expect(DeployCluster(k8sClient, ctx, aeroCluster)).To(HaveOccurred())
 
 			By("Using RollingUpdateBatchSize Count")
+
 			aeroCluster = createDummyAerospikeClusterWithRF(clusterNamespacedName, 2, 1)
 			racks = getDummyRackConf(1, 2)
 			aeroCluster.Spec.RackConfig.Racks = racks
