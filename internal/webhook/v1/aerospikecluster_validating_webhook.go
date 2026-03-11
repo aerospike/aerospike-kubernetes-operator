@@ -2259,10 +2259,8 @@ func validateReplicationFactorUpdateComparison(
 	var otherSpecChanged bool
 
 	for _, op := range patch {
-		if strings.HasSuffix(op.Path, "/"+asdbv1.ConfKeyReplicationFactor) {
-			// RF changes are detected by direct value comparison below; they are never
-			// counted as "other spec changed" regardless of where in the path they appear.
-		} else if !strings.HasSuffix(op.Path, "/enableDynamicConfigUpdate") {
+		if !strings.HasSuffix(op.Path, "/"+asdbv1.ConfKeyReplicationFactor) &&
+			!strings.HasSuffix(op.Path, "/enableDynamicConfigUpdate") {
 			otherSpecChanged = true
 		}
 	}
@@ -2281,12 +2279,6 @@ func validateReplicationFactorUpdateComparison(
 		return nil
 	}
 
-	// If a deployed-status set was provided, verify that every RF-changed namespace already
-	// exists there. An RF change on a namespace that hasn't been deployed yet is not allowed.
-	if statusNsNames != nil && !statusNsNames.HasAll(actualRFChanges.UnsortedList()...) {
-		otherSpecChanged = true
-	}
-
 	// Strip the "@rackID" suffix to get the plain namespace names used in error messages
 	// and for the "one namespace at a time" rule.
 	rfChangedNamespaces := nsNamesFromRFChanges(actualRFChanges)
@@ -2296,6 +2288,15 @@ func validateReplicationFactorUpdateComparison(
 		return fmt.Errorf(
 			"cannot update replication-factor for multiple namespaces at the same time; "+
 				"changed namespaces: %v",
+			rfChangedNamespaces.UnsortedList(),
+		)
+	}
+
+	// If a deployed-status set was provided, verify that every RF-changed namespace already
+	// exists there. An RF change on a namespace that hasn't been deployed yet is not allowed.
+	if statusNsNames != nil && !statusNsNames.HasAll(actualRFChanges.UnsortedList()...) {
+		return fmt.Errorf(
+			"cannot update replication-factor for namespace %v: namespace addition rollout is still in progress",
 			rfChangedNamespaces.UnsortedList(),
 		)
 	}
@@ -2321,65 +2322,47 @@ func validateReplicationFactorUpdateComparison(
 }
 
 // validateReplicationFactorConsistencyAcrossRacks validates that the same namespace
-// has the same replication-factor value across all racks
+// has the same replication-factor value across all racks.
 func validateReplicationFactorConsistencyAcrossRacks(racks []asdbv1.Rack) error {
-	// Map to store replication-factor for each namespace across racks
-	// Key: namespace name, Value: replication-factor as int (normalized)
-	namespaceReplicationFactors := make(map[string]int)
+	// nsRFMap tracks the first replication-factor seen for each namespace.
+	// Key: namespace name, Value: replication-factor (normalized int)
+	nsRFMap := make(map[string]int)
 
-	// Helper function to get normalized replication-factor
-	getReplicationFactor := func(ns map[string]interface{}) int {
-		rf, exists := ns[asdbv1.ConfKeyReplicationFactor]
-		if !exists {
-			// Default replication-factor is 2 if not specified
-			return 2
-		}
-
-		// Normalize to int for comparison
-		rfInt, err := validation.GetIntType(rf)
-		if err != nil {
-			// If we can't parse it, return 0 to trigger an error
-			return 0
-		}
-
-		return rfInt
-	}
-
-	// Check all racks
 	for rackIdx := range racks {
 		rack := racks[rackIdx]
-		if nsList, ok := rack.AerospikeConfig.Value[asdbv1.ConfKeyNamespace].([]interface{}); ok {
-			for _, nsInterface := range nsList {
-				var ns map[string]interface{}
-				if ns, ok = nsInterface.(map[string]interface{}); !ok {
-					continue
-				}
 
-				nsName, ok := ns[asdbv1.ConfKeyName].(string)
-				if !ok {
-					continue
-				}
+		nsList, ok := rack.AerospikeConfig.Value[asdbv1.ConfKeyNamespace].([]interface{})
+		if !ok {
+			continue
+		}
 
-				currentRF := getReplicationFactor(ns)
-				if currentRF == 0 {
-					return fmt.Errorf("invalid replication-factor value for namespace '%s' in rack %d", nsName, rack.ID)
-				}
+		for _, nsInterface := range nsList {
+			ns, ok := nsInterface.(map[string]interface{})
+			if !ok {
+				continue
+			}
 
-				// Check if this namespace already has a replication-factor set
-				if existingRF, exists := namespaceReplicationFactors[nsName]; exists {
-					// Compare replication-factor values
-					if existingRF != currentRF {
-						return fmt.Errorf(
-							"namespace '%s' has different replication-factor values across racks. "+
-								"Replication-factor must be same for a namespace across all racks. "+
-								"Found: %d and %d",
-							nsName, existingRF, currentRF,
-						)
-					}
-				} else {
-					// First time seeing this namespace, store its replication-factor
-					namespaceReplicationFactors[nsName] = currentRF
+			nsName, ok := ns[asdbv1.ConfKeyName].(string)
+			if !ok {
+				continue
+			}
+
+			currentRF, err := validation.GetNamespaceReplicationFactor(ns)
+			if err != nil {
+				return fmt.Errorf("invalid replication-factor for namespace %q in rack %d: %w",
+					nsName, rack.ID, err)
+			}
+
+			if existingRF, seen := nsRFMap[nsName]; seen {
+				if existingRF != currentRF {
+					return fmt.Errorf(
+						"namespace %q has different replication-factor values across racks "+
+							"(found %d and %d); replication-factor must be the same in every rack",
+						nsName, existingRF, currentRF,
+					)
 				}
+			} else {
+				nsRFMap[nsName] = currentRF
 			}
 		}
 	}
