@@ -1121,8 +1121,6 @@ var _ = Describe("AerospikeCluster validation", func() {
 
 		Context("spec.image", func() {
 			Context("negative", func() {
-				const invalidImageVersion = "3.0.0.4"
-
 				It("rejects InvalidImage and image lower than base", func() {
 					aeroCluster := testCluster.CreateDummyAerospikeCluster(updateValidationClusterNamespacedName, 3)
 					err := envtests.K8sClient.Create(ctx, aeroCluster)
@@ -1133,12 +1131,22 @@ var _ = Describe("AerospikeCluster validation", func() {
 					current.Spec.Image = "InvalidImage"
 					err = envtests.K8sClient.Update(ctx, current)
 					Expect(err).To(HaveOccurred())
+					envtests.NewStatusErrorMatcher().
+						WithMessageSubstrings(
+							"\"vaerospikecluster.kb.io\"",
+							"CommunityEdition Cluster not supported").
+						Validate(err)
 
 					current, err = testCluster.GetCluster(envtests.K8sClient, ctx, updateValidationClusterNamespacedName)
 					Expect(err).ToNot(HaveOccurred())
-					current.Spec.Image = testutil.BaseEnterpriseImage + ":" + invalidImageVersion
+					current.Spec.Image = testutil.InvalidImage
 					err = envtests.K8sClient.Update(ctx, current)
 					Expect(err).To(HaveOccurred())
+					envtests.NewStatusErrorMatcher().
+						WithMessageSubstrings(
+							"\"vaerospikecluster.kb.io\"",
+							"image version 3.0.0.4 not supported. Base version 6.0.0.0").
+						Validate(err)
 				})
 			})
 		})
@@ -1155,6 +1163,11 @@ var _ = Describe("AerospikeCluster validation", func() {
 					current.Spec.Size = 0
 					err = envtests.K8sClient.Update(ctx, current)
 					Expect(err).To(HaveOccurred())
+					envtests.NewStatusErrorMatcher().
+						WithMessageSubstrings(
+							"\"vaerospikecluster.kb.io\"",
+							"invalid cluster size 0").
+						Validate(err)
 				})
 			})
 		})
