@@ -930,8 +930,6 @@ var _ = Describe("AerospikeCluster validation", func() {
 
 		Context("spec.image", func() {
 			Context("negative", func() {
-				const invalidImageVersion = "3.0.0.4"
-
 				It("rejects InvalidImage and image lower than base", func() {
 					aeroCluster := testCluster.CreateDummyAerospikeCluster(updateValidationClusterNamespacedName, 3)
 					err := envtests.K8sClient.Create(ctx, aeroCluster)
@@ -942,12 +940,22 @@ var _ = Describe("AerospikeCluster validation", func() {
 					current.Spec.Image = "InvalidImage"
 					err = envtests.K8sClient.Update(ctx, current)
 					Expect(err).To(HaveOccurred())
+					envtests.NewStatusErrorMatcher().
+						WithMessageSubstrings(
+							"\"vaerospikecluster.kb.io\"",
+							"CommunityEdition Cluster not supported").
+						Validate(err)
 
 					current, err = testCluster.GetCluster(envtests.K8sClient, ctx, updateValidationClusterNamespacedName)
 					Expect(err).ToNot(HaveOccurred())
-					current.Spec.Image = testutil.BaseEnterpriseImage + ":" + invalidImageVersion
+					current.Spec.Image = testutil.InvalidImage
 					err = envtests.K8sClient.Update(ctx, current)
 					Expect(err).To(HaveOccurred())
+					envtests.NewStatusErrorMatcher().
+						WithMessageSubstrings(
+							"\"vaerospikecluster.kb.io\"",
+							"image version 3.0.0.4 not supported. Base version 6.0.0.0").
+						Validate(err)
 				})
 			})
 		})
@@ -964,6 +972,11 @@ var _ = Describe("AerospikeCluster validation", func() {
 					current.Spec.Size = 0
 					err = envtests.K8sClient.Update(ctx, current)
 					Expect(err).To(HaveOccurred())
+					envtests.NewStatusErrorMatcher().
+						WithMessageSubstrings(
+							"\"vaerospikecluster.kb.io\"",
+							"invalid cluster size 0").
+						Validate(err)
 				})
 			})
 		})
@@ -991,7 +1004,6 @@ var _ = Describe("AerospikeCluster validation", func() {
 					envtests.NewStatusErrorMatcher().
 						WithMessageSubstrings(
 							"\"vaerospikecluster.kb.io\"",
-
 							"storage config cannot be updated",
 							"cannot change volumes").
 						Validate(err)
@@ -1015,7 +1027,6 @@ var _ = Describe("AerospikeCluster validation", func() {
 					envtests.NewStatusErrorMatcher().
 						WithMessageSubstrings(
 							"\"vaerospikecluster.kb.io\"",
-
 							"cannot update MultiPodPerHost setting").
 						Validate(err)
 				})
@@ -1052,7 +1063,6 @@ var _ = Describe("AerospikeCluster validation", func() {
 					envtests.NewStatusErrorMatcher().
 						WithMessageSubstrings(
 							"\"vaerospikecluster.kb.io\"",
-
 							"dnsConfig is required field when dnsPolicy is set to None").
 						Validate(err)
 				})
@@ -1195,7 +1205,6 @@ var _ = Describe("AerospikeCluster validation", func() {
 						envtests.NewStatusErrorMatcher().
 							WithMessageSubstrings(
 								"\"vaerospikecluster.kb.io\"",
-								"aerospikeConfig not valid: generated config not valid for version 8.1.1.0:",
 								"invalid_type (root).namespaces.0.storage-engine.files Invalid type.",
 								"Expected: array, given: null namespaces.0.storage-engine.files").
 							Validate(err)
@@ -1287,7 +1296,8 @@ var _ = Describe("AerospikeCluster validation", func() {
 
 					current, err := testCluster.GetCluster(envtests.K8sClient, ctx, updateValidationClusterNamespacedName)
 					Expect(err).ToNot(HaveOccurred())
-					current.Spec.AerospikeConfig.Value[asdbv1.ConfKeyService].(map[string]interface{})[testutil.ClusterNameConfig] = testutil.ClusterNameConfig
+					serviceConf := current.Spec.AerospikeConfig.Value[asdbv1.ConfKeyService].(map[string]interface{})
+					serviceConf[testutil.ClusterNameConfig] = "cluster-name"
 					err = envtests.K8sClient.Update(ctx, current)
 					Expect(err).To(HaveOccurred())
 					envtests.NewStatusErrorMatcher().
@@ -1300,7 +1310,8 @@ var _ = Describe("AerospikeCluster validation", func() {
 				})
 
 				It("rejects feature-key-file path not in storage volumes", func() {
-					aeroCluster := testCluster.CreateAerospikeClusterPost640(updateValidationClusterNamespacedName, 2, testutil.LatestEnterpriseImage)
+					aeroCluster := testCluster.CreateAerospikeClusterPost640(
+						updateValidationClusterNamespacedName, 2, testutil.LatestEnterpriseImage)
 					err := envtests.K8sClient.Create(ctx, aeroCluster)
 					Expect(err).ToNot(HaveOccurred())
 
@@ -1314,7 +1325,6 @@ var _ = Describe("AerospikeCluster validation", func() {
 					envtests.NewStatusErrorMatcher().
 						WithMessageSubstrings(
 							"\"vaerospikecluster.kb.io\"",
-
 							"feature-key-file paths or tls paths or default-password-file path are not mounted",
 							"- create an entry for '/randompath/features.conf' in 'storage.volumes'").
 						Validate(err)

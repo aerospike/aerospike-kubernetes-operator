@@ -36,7 +36,6 @@ const (
 	wrongImage          = "wrong-image"
 	nextServerVersion   = "8.1.1.0_1"
 	latestServerVersion = "8.1.1.0"
-	invalidVersion      = "3.0.0.4"
 	post6Version        = "7.0.0.0"
 	version6            = "6.0.0.5"
 	latestSchemaVersion = "8.1.1"
@@ -75,7 +74,6 @@ var (
 	logger             = logr.Discard()
 	nextImage          = fmt.Sprintf("%s:%s", baseEnterpriseImage, nextServerVersion)
 	latestImage        = fmt.Sprintf("%s:%s", baseEnterpriseImage, latestServerVersion)
-	invalidImage       = fmt.Sprintf("%s:%s", baseEnterpriseImage, invalidVersion)
 
 	// Storage wipe test
 	post6Image    = fmt.Sprintf("%s:%s", baseEnterpriseImage, post6Version)
