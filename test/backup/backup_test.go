@@ -10,6 +10,7 @@ import (
 	"sigs.k8s.io/yaml"
 
 	asdbv1beta1 "github.com/aerospike/aerospike-kubernetes-operator/v4/api/v1beta1"
+	"github.com/aerospike/aerospike-kubernetes-operator/v4/test/cluster"
 )
 
 var _ = Describe(
@@ -101,6 +102,30 @@ var _ = Describe(
 					Expect(err).To(HaveOccurred())
 					Expect(err.Error()).To(
 						ContainSubstring("onDemand backups config cannot be specified while creating backup"))
+				})
+
+				// TODO: move this test-case to envtest
+				It("Should fail when invalid backup type is given in on-demand backup", func() {
+					backup, err = NewBackup(backupNsNm)
+					Expect(err).ToNot(HaveOccurred())
+
+					err = CreateBackup(k8sClient, backup)
+					Expect(err).ToNot(HaveOccurred())
+
+					backup, err = getBackupObj(k8sClient, backup.Name, backup.Namespace)
+					Expect(err).ToNot(HaveOccurred())
+
+					backup.Spec.OnDemandBackups = []asdbv1beta1.OnDemandBackupSpec{
+						{
+							ID:          "on-demand-invalid-type",
+							RoutineName: namePrefix(backupNsNm) + "-" + "test-routine",
+							Type:        "InvalidType",
+						},
+					}
+
+					err = updateBackup(k8sClient, backup)
+					Expect(err).To(HaveOccurred())
+					Expect(err.Error()).To(ContainSubstring("Unsupported value"))
 				})
 
 				It("Should fail when non-existing routine is given in on-demand backup", func() {
@@ -470,7 +495,8 @@ var _ = Describe(
 				Expect(ok).To(BeFalse())
 			})
 
-			It("Should trigger on-demand backup when given", func() {
+			// TODO: move this test-case to envtest
+			It("Should default on-demand backup type to Full when not set", func() {
 				backup, err = NewBackup(backupNsNm)
 				Expect(err).ToNot(HaveOccurred())
 				err = CreateBackup(k8sClient, backup)
@@ -481,7 +507,7 @@ var _ = Describe(
 
 				backup.Spec.OnDemandBackups = []asdbv1beta1.OnDemandBackupSpec{
 					{
-						ID:          "on-demand",
+						ID:          "on-demand-default-type",
 						RoutineName: namePrefix(backupNsNm) + "-" + "test-routine",
 					},
 				}
@@ -489,7 +515,89 @@ var _ = Describe(
 				err = updateBackup(k8sClient, backup)
 				Expect(err).ToNot(HaveOccurred())
 
+				Expect(backup.Spec.OnDemandBackups[0].Type).To(Equal(asdbv1beta1.FullBackup))
+			})
+
+			It("Should trigger on-demand full backup when type is set to Full", func() {
+				backup, err = NewOnDemandBackup(backupNsNm)
+				Expect(err).ToNot(HaveOccurred())
+				err = CreateBackup(k8sClient, backup)
+				Expect(err).ToNot(HaveOccurred())
+
+				backup, err = getBackupObj(k8sClient, backup.Name, backup.Namespace)
+				Expect(err).ToNot(HaveOccurred())
+
+				routineName := namePrefix(backupNsNm) + "-" + "test-routine"
+
+				serviceClient, sErr := getBackupServiceClient(k8sClient, backup)
+				Expect(sErr).ToNot(HaveOccurred())
+
+				previousCount, cErr := getBackupCountForRoutine(serviceClient, routineName, asdbv1beta1.FullBackup)
+				Expect(cErr).ToNot(HaveOccurred())
+
+				backup.Spec.OnDemandBackups = []asdbv1beta1.OnDemandBackupSpec{
+					{
+						ID:          "on-demand-full",
+						RoutineName: routineName,
+						Type:        asdbv1beta1.FullBackup,
+					},
+				}
+
+				err = updateBackup(k8sClient, backup)
+				Expect(err).ToNot(HaveOccurred())
+
 				err = validateTriggeredBackup(k8sClient, backup)
+				Expect(err).ToNot(HaveOccurred())
+
+				err = validateOnDemandBackupExecuted(serviceClient, routineName, asdbv1beta1.FullBackup, previousCount)
+				Expect(err).ToNot(HaveOccurred())
+			})
+
+			It("Should trigger on-demand incremental backup when type is set to Incremental", func() {
+				backup, err = NewOnDemandBackup(backupNsNm)
+				Expect(err).ToNot(HaveOccurred())
+				err = CreateBackup(k8sClient, backup)
+				Expect(err).ToNot(HaveOccurred())
+
+				backup, err = getBackupObj(k8sClient, backup.Name, backup.Namespace)
+				Expect(err).ToNot(HaveOccurred())
+
+				routineName := namePrefix(backupNsNm) + "-" + "test-routine"
+
+				By("Write data so the incremental backup captures a non-zero diff")
+
+				aeroCluster, gErr := cluster.GetCluster(k8sClient, testCtx, aerospikeNsNm)
+				Expect(gErr).ToNot(HaveOccurred())
+
+				err = cluster.WriteDataToCluster(aeroCluster, k8sClient, []string{"test"})
+				Expect(err).ToNot(HaveOccurred())
+
+				By("Trigger on-demand incremental backup and validate it captured the diff")
+
+				serviceClient, sErr := getBackupServiceClient(k8sClient, backup)
+				Expect(sErr).ToNot(HaveOccurred())
+
+				incrPreviousCount, cErr := getBackupCountForRoutine(serviceClient, routineName, asdbv1beta1.IncrementalBackup)
+				Expect(cErr).ToNot(HaveOccurred())
+
+				backup, err = getBackupObj(k8sClient, backup.Name, backup.Namespace)
+				Expect(err).ToNot(HaveOccurred())
+
+				backup.Spec.OnDemandBackups = []asdbv1beta1.OnDemandBackupSpec{
+					{
+						ID:          "on-demand-incremental",
+						RoutineName: routineName,
+						Type:        asdbv1beta1.IncrementalBackup,
+					},
+				}
+
+				err = updateBackup(k8sClient, backup)
+				Expect(err).ToNot(HaveOccurred())
+
+				err = validateTriggeredBackup(k8sClient, backup)
+				Expect(err).ToNot(HaveOccurred())
+
+				err = validateOnDemandBackupExecuted(serviceClient, routineName, asdbv1beta1.IncrementalBackup, incrPreviousCount)
 				Expect(err).ToNot(HaveOccurred())
 			})
 

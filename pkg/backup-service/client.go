@@ -17,7 +17,9 @@ import (
 	"sigs.k8s.io/controller-runtime/pkg/client"
 	"sigs.k8s.io/yaml"
 
+	asdbv1 "github.com/aerospike/aerospike-kubernetes-operator/v4/api/v1"
 	"github.com/aerospike/aerospike-kubernetes-operator/v4/api/v1beta1"
+	lib "github.com/aerospike/aerospike-management-lib"
 )
 
 const restAPIVersion = "v1"
@@ -30,6 +32,10 @@ type Client struct {
 
 	// ContextPath customizes path for the API endpoints.
 	ContextPath string `json:"context-path,omitempty"`
+
+	// Version is the ABS version.
+	// Used for API version-aware dispatch.
+	Version string `json:"version,omitempty"`
 
 	// The port to listen on.
 	Port int32 `json:"port,omitempty"`
@@ -47,10 +53,17 @@ func GetBackupServiceClient(k8sClient client.Client, svc *v1beta1.BackupService)
 		return nil, err
 	}
 
-	return NewClient(
+	version, err := asdbv1.GetImageVersion(backupSvc.Spec.Image)
+	if err != nil {
+		// Non-fatal: proceed without version; dispatch will use legacy API.
+		version = ""
+	}
+
+	return NewClientWithVersion(
 		fmt.Sprintf("%s.%s.svc", backupSvc.Name, backupSvc.Namespace),
 		backupSvc.Status.Port,
 		backupSvc.Status.ContextPath,
+		version,
 	), nil
 }
 
@@ -59,6 +72,15 @@ func NewClient(address string, port int32, contextPath string) *Client {
 		Address:     address,
 		Port:        port,
 		ContextPath: contextPath,
+	}
+}
+
+func NewClientWithVersion(address string, port int32, contextPath, version string) *Client {
+	return &Client{
+		Address:     address,
+		Port:        port,
+		ContextPath: contextPath,
+		Version:     version,
 	}
 }
 
@@ -605,6 +627,36 @@ func (c *Client) GetFullBackupsForRoutine(routineName string) ([]interface{}, er
 	return backups, nil
 }
 
+func (c *Client) GetIncrementalBackupsForRoutine(routineName string) ([]interface{}, error) {
+	url := c.API(fmt.Sprintf("/backups/incremental/%s", routineName))
+
+	resp, err := http.Get(url)
+	if err != nil {
+		return nil, err
+	}
+
+	defer resp.Body.Close()
+
+	if resp.StatusCode != http.StatusOK {
+		return nil, fmt.Errorf("failed to get incremental backups")
+	}
+
+	var backups []interface{}
+
+	body, err := io.ReadAll(resp.Body)
+	if err != nil {
+		return nil, err
+	}
+
+	if err := json.Unmarshal(body, &backups); err != nil {
+		return nil, err
+	}
+
+	return backups, nil
+}
+
+// Deprecated: ScheduleBackup API is deprecated in ABS >= 3.5.0
+// For ABS >= 3.5.0: uses TriggerOnDemandBackup func
 func (c *Client) ScheduleBackup(routineName string, delay metav1.Duration) error {
 	url, err := url2.Parse(c.API(fmt.Sprintf("/backups/schedule/%s", routineName)))
 	if err != nil {
@@ -629,6 +681,96 @@ func (c *Client) ScheduleBackup(routineName string, delay metav1.Duration) error
 	}
 
 	return nil
+}
+
+// TriggerFullBackup triggers a full on-demand backup for the given routine.
+// Requires ABS >= 3.5.0.
+func (c *Client) TriggerFullBackup(routineName string, delay metav1.Duration) error {
+	return c.triggerOnDemandBackup("full", routineName, delay)
+}
+
+// TriggerIncrementalBackup triggers an incremental on-demand backup for the given routine.
+// Requires ABS >= 3.5.0.
+func (c *Client) TriggerIncrementalBackup(routineName string, delay metav1.Duration) error {
+	return c.triggerOnDemandBackup("incremental", routineName, delay)
+}
+
+func (c *Client) triggerOnDemandBackup(backupType, routineName string, delay metav1.Duration) error {
+	parsedURL, err := url2.Parse(c.API(fmt.Sprintf("/backups/%s/%s", backupType, routineName)))
+	if err != nil {
+		return err
+	}
+
+	if delay.Milliseconds() > 0 {
+		query := parsedURL.Query()
+		query.Add("delay", fmt.Sprintf("%d", delay.Milliseconds()))
+		parsedURL.RawQuery = query.Encode()
+	}
+
+	resp, err := http.Post(parsedURL.String(), contentTypeJSON, nil)
+	if err != nil {
+		return err
+	}
+
+	defer resp.Body.Close()
+
+	if resp.StatusCode != http.StatusAccepted {
+		body, readErr := io.ReadAll(resp.Body)
+		if readErr != nil {
+			return fmt.Errorf("failed to trigger %s backup", backupType)
+		}
+
+		return fmt.Errorf("failed to trigger %s backup, error: %s", backupType, string(body))
+	}
+
+	return nil
+}
+
+// TriggerOnDemandBackup dispatches an on-demand backup request using the appropriate API
+// based on the ABS version stored in the client.
+// For ABS >= 3.5.0: uses POST /v1/backups/full/{name} or POST /v1/backups/incremental/{name}.
+// For ABS < 3.5.0: falls back to the deprecated POST /v1/backups/schedule/{name} (full only).
+func (c *Client) TriggerOnDemandBackup(routineName string, backupType v1beta1.BackupType, delay metav1.Duration) error {
+	useNewAPI, err := c.supportsNewOnDemandAPI()
+	if err != nil {
+		return fmt.Errorf("failed to determine ABS version for on-demand backup dispatch: %w", err)
+	}
+
+	if useNewAPI {
+		switch backupType {
+		case v1beta1.IncrementalBackup:
+			return c.TriggerIncrementalBackup(routineName, delay)
+		case v1beta1.FullBackup:
+			return c.TriggerFullBackup(routineName, delay)
+		default:
+			return fmt.Errorf("unknown backup type")
+		}
+	}
+
+	// Legacy path: ABS < 3.5.0 only supports full backups via /backups/schedule/{name}.
+	if backupType == v1beta1.IncrementalBackup {
+		return fmt.Errorf(
+			"%s on-demand backups require ABS >= %s; current version: %s",
+			v1beta1.IncrementalBackup, v1beta1.BackupSvcNewOnDemandAPIVersion, c.Version,
+		)
+	}
+
+	return c.ScheduleBackup(routineName, delay)
+}
+
+// supportsNewOnDemandAPI returns true when the ABS version is >= 3.5.0.
+// If the version is empty or cannot be parsed, it returns false (safe fallback to legacy API).
+func (c *Client) supportsNewOnDemandAPI() (bool, error) {
+	if c.Version == "" {
+		return false, nil
+	}
+
+	cmp, err := lib.CompareVersions(c.Version, v1beta1.BackupSvcNewOnDemandAPIVersion)
+	if err != nil {
+		return false, err
+	}
+
+	return cmp >= 0, nil
 }
 
 func (c *Client) TriggerRestoreWithType(log logr.Logger, restoreType string,

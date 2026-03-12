@@ -10,7 +10,9 @@ updates:
     schedule:
       interval: daily
 
-  - package-ecosystem: gomod
-    directory: /
-    schedule:
-      interval: daily
+# Go mod dependencies are dependent on each other. Can't update one by one
+# Will be handled manually in one go
+#  - package-ecosystem: gomod
+#    directory: /
+#    schedule:
+#      interval: daily

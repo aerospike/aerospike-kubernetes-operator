@@ -9382,7 +9382,6 @@ spec:
                     type: boolean
                 required:
                 - skipWorkDirValidate
-                - skipXdrDlogFileValidate
                 type: object
             required:
             - aerospikeConfig
@@ -18953,7 +18952,6 @@ spec:
                     type: boolean
                 required:
                 - skipWorkDirValidate
-                - skipXdrDlogFileValidate
                 type: object
             type: object
         type: object
