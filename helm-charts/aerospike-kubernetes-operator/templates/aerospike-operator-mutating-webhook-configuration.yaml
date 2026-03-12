@@ -45,6 +45,36 @@ webhooks:
     service:
       name: aerospike-operator-webhook-service
       namespace: {{ .Release.Namespace }}
+      path: /mutate-asdb-aerospike-com-v1beta1-aerospikebackup
+  failurePolicy: Fail
+  {{- if .Values.watchNamespaces }}
+  namespaceSelector:
+    matchExpressions:
+      - key: kubernetes.io/metadata.name
+        operator: In
+        values:
+        {{- range splitList "," .Values.watchNamespaces }}
+          - {{ . | trim | quote }}
+        {{- end }}
+    {{- end }}
+  name: maerospikebackup.kb.io
+  rules:
+  - apiGroups:
+    - asdb.aerospike.com
+    apiVersions:
+    - v1beta1
+    operations:
+    - CREATE
+    - UPDATE
+    resources:
+    - aerospikebackups
+  sideEffects: None
+- admissionReviewVersions:
+  - v1
+  clientConfig:
+    service:
+      name: aerospike-operator-webhook-service
+      namespace: {{ .Release.Namespace }}
       path: /mutate-asdb-aerospike-com-v1beta1-aerospikebackupservice
   failurePolicy: Fail
   {{- if .Values.watchNamespaces }}

@@ -591,7 +591,7 @@ type ValidationPolicySpec struct {
 
 	// Deprecated: SkipXdrDlogFileValidate is no longer in use. Setting this field will produce an admission
 	// warning. This field will be blocked in future versions.
-	SkipXdrDlogFileValidate bool `json:"skipXdrDlogFileValidate"`
+	SkipXdrDlogFileValidate bool `json:"skipXdrDlogFileValidate,omitempty"`
 }
 
 // AerospikeRoleSpec specifies an Aerospike database role and its associated privileges.
