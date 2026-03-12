@@ -24,7 +24,7 @@ import (
 
 // SetupAerospikeClusterWebhookWithManager registers the webhook for AerospikeCluster in the manager.
 func SetupAerospikeClusterWebhookWithManager(mgr ctrl.Manager) error {
-	return ctrl.NewWebhookManagedBy(mgr).For(&asdbv1.AerospikeCluster{}).
+	return ctrl.NewWebhookManagedBy(mgr, &asdbv1.AerospikeCluster{}).
 		WithDefaulter(&AerospikeClusterCustomDefaulter{}).
 		WithValidator(&AerospikeClusterCustomValidator{}).
 		Complete()

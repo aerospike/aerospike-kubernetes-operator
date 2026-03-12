@@ -19,7 +19,6 @@ const testFile = tempTestDir + "/test"
 
 var _ = Describe(
 	"WarmRestart", func() {
-
 		ctx := goCtx.TODO()
 
 		Context(
