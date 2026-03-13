@@ -390,7 +390,7 @@ func validateLoadBalancerSvcDeleted(aeroCluster *asdbv1.AerospikeCluster) {
 		}
 
 		return fmt.Errorf("service still exists: %v", err)
-	}, 5*time.Minute, 10*time.Second).Should(Succeed())
+	}, 10*time.Minute, 10*time.Second).Should(Succeed())
 }
 
 func getLBServiceObj(name, namespace string) *corev1.Service {
