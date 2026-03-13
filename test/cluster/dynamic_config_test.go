@@ -79,6 +79,7 @@ var _ = Describe(
 							getNonSCInMemoryNamespaceConfig("mem"))
 						aeroCluster.Spec.AerospikeConfig.Value[asdbv1.ConfKeyXdr] = map[string]interface{}{
 							"dcs": []map[string]interface{}{
+								// #nosec G101 test config path, not real credentials
 								{
 									"name":      "dc1",
 									"auth-mode": "internal",
@@ -712,7 +713,6 @@ var _ = Describe(
 
 				It(
 					"Should update replication-factor dynamically", func() {
-
 						By("Modify dynamic config by adding fields")
 
 						aeroCluster, err := getCluster(
