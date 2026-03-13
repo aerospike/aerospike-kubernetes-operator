@@ -58,6 +58,12 @@ func GetNamespacedNameForSTSOrConfigMap(
 	}
 }
 
+// GetSTSPodName returns the name of a pod managed by the StatefulSet.
+// Pod names follow the pattern <sts-name>-<ordinal>
+func GetSTSPodName(stsName string, ordinal int32) string {
+	return stsName + "-" + strconv.Itoa(int(ordinal))
+}
+
 // IsImageEqual returns true if image name image1 is equal to image name image2.
 func IsImageEqual(image1, image2 string) bool {
 	desiredImageWithVersion := strings.TrimPrefix(image1, DockerHubImagePrefix)
