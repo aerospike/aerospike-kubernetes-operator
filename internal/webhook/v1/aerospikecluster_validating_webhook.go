@@ -2260,7 +2260,8 @@ func validateReplicationFactorUpdateComparison(
 
 	for _, op := range patch {
 		if !strings.HasSuffix(op.Path, "/"+asdbv1.ConfKeyReplicationFactor) &&
-			!strings.HasSuffix(op.Path, "/enableDynamicConfigUpdate") {
+			op.Path != "/enableDynamicConfigUpdate" &&
+			op.Path != "/paused" {
 			otherSpecChanged = true
 		}
 	}
