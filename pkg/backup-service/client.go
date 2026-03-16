@@ -68,11 +68,7 @@ func GetBackupServiceClient(k8sClient client.Client, svc *v1beta1.BackupService)
 }
 
 func NewClient(address string, port int32, contextPath string) *Client {
-	return &Client{
-		Address:     address,
-		Port:        port,
-		ContextPath: contextPath,
-	}
+	return NewClientWithVersion(address, port, contextPath, "")
 }
 
 func NewClientWithVersion(address string, port int32, contextPath, version string) *Client {
@@ -610,7 +606,7 @@ func (c *Client) GetFullBackupsForRoutine(routineName string) ([]interface{}, er
 	defer resp.Body.Close()
 
 	if resp.StatusCode != http.StatusOK {
-		return nil, fmt.Errorf("failed to get backups")
+		return nil, fmt.Errorf("failed to get full backups")
 	}
 
 	var backups []interface{}
@@ -743,7 +739,7 @@ func (c *Client) TriggerOnDemandBackup(routineName string, backupType v1beta1.Ba
 		case v1beta1.FullBackup:
 			return c.TriggerFullBackup(routineName, delay)
 		default:
-			return fmt.Errorf("unknown backup type")
+			return fmt.Errorf("unknown backup type %s", backupType)
 		}
 	}
 

@@ -502,7 +502,7 @@ func (r *SingleBackupReconciler) reconcileOnDemandBackup() error {
 	// Trigger on-demand backup if given
 	if len(r.aeroBackup.Spec.OnDemandBackups) > 0 {
 		if err := r.triggerOnDemandBackup(); err != nil {
-			r.Log.Error(err, "Failed to schedule backup")
+			r.Log.Error(err, "Failed to trigger backup")
 			return err
 		}
 	}

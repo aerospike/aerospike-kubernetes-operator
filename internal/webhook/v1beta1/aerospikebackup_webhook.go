@@ -245,9 +245,14 @@ func getValidatedAerospikeClusters(backupConfig map[string]interface{},
 }
 
 func validateOnDemandBackupsUpdate(oldObj, newObj *asdbv1beta1.AerospikeBackup, version string) error {
+	// Block adding or updating an on-demand backup simultaneously with a config change,
+	// as the intended state would be ambiguous. Removing on-demand backup alongside a
+	// config change is explicitly allowed.
 	// Normalise the Type field in the status to handles AKO upgrade scenarios where Type is not present in the CR
-	if !reflect.DeepEqual(newObj.Spec.OnDemandBackups, normaliseOnDemandTypes(newObj.Status.OnDemandBackups)) &&
-		!reflect.DeepEqual(newObj.Spec.Config.Raw, newObj.Status.Config.Raw) {
+	onDemandAddedOrUpdated := len(newObj.Spec.OnDemandBackups) > 0 &&
+		!reflect.DeepEqual(newObj.Spec.OnDemandBackups, normaliseOnDemandTypes(newObj.Status.OnDemandBackups))
+
+	if onDemandAddedOrUpdated && !reflect.DeepEqual(newObj.Spec.Config.Raw, newObj.Status.Config.Raw) {
 		return fmt.Errorf("can not add/update onDemand backup along with backup config change")
 	}
 
@@ -272,11 +277,17 @@ func validateOnDemandBackupsUpdate(oldObj, newObj *asdbv1beta1.AerospikeBackup, 
 // validateOnDemandBackupType checks that IncrementalBackup is not requested against
 // an ABS version that does not support it (< 3.5.0), failing fast at admission time.
 func validateOnDemandBackupType(version string, backup *asdbv1beta1.AerospikeBackup) error {
-	for _, onDemand := range backup.Spec.OnDemandBackups {
-		if onDemand.Type != asdbv1beta1.IncrementalBackup {
-			continue
-		}
+	var hasIncrementalBackup bool
 
+	for _, onDemand := range backup.Spec.OnDemandBackups {
+		if onDemand.Type == asdbv1beta1.IncrementalBackup {
+			hasIncrementalBackup = true
+
+			break
+		}
+	}
+
+	if hasIncrementalBackup {
 		cmp, err := lib.CompareVersions(version, asdbv1beta1.BackupSvcNewOnDemandAPIVersion)
 		if err != nil {
 			return fmt.Errorf("failed to check ABS version for incremental backup support: %w", err)
