@@ -591,7 +591,7 @@ type ValidationPolicySpec struct {
 
 	// Deprecated: SkipXdrDlogFileValidate is no longer in use. Setting this field will produce an admission
 	// warning. This field will be blocked in future versions.
-	SkipXdrDlogFileValidate bool `json:"skipXdrDlogFileValidate"`
+	SkipXdrDlogFileValidate bool `json:"skipXdrDlogFileValidate,omitempty"`
 }
 
 // AerospikeRoleSpec specifies an Aerospike database role and its associated privileges.
@@ -1311,7 +1311,7 @@ type AerospikePodStatus struct { //nolint:govet // for readability
 
 // AerospikeCluster is the schema for the AerospikeCluster API
 // +operator-sdk:csv:customresourcedefinitions:displayName="Aerospike Cluster",resources={{Service, v1},{Pod,v1},{StatefulSet,v1}}
-// +kubebuilder:metadata:annotations="aerospike-kubernetes-operator/version=4.3.0"
+// +kubebuilder:metadata:annotations="aerospike-kubernetes-operator/version=4.4.0-dev1"
 //
 //nolint:lll // for readability
 type AerospikeCluster struct { //nolint:govet // for readability
