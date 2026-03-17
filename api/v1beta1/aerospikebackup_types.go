@@ -23,6 +23,13 @@ import (
 	"k8s.io/apimachinery/pkg/runtime"
 )
 
+type BackupType string
+
+const (
+	FullBackup        BackupType = "Full"
+	IncrementalBackup BackupType = "Incremental"
+)
+
 // AerospikeBackupSpec defines the desired state of AerospikeBackup for a given AerospikeCluster
 // +k8s:openapi-gen=true
 type AerospikeBackupSpec struct {
@@ -60,6 +67,12 @@ type OnDemandBackupSpec struct {
 	// +kubebuilder:validation:MinLength=1
 	ID string `json:"id"`
 
+	// Type is the type of on-demand backup to trigger: Full or Incremental.
+	// Incremental backups require ABS >= 3.5.0. Defaults to "Full".
+	// +kubebuilder:validation:Enum=Full;Incremental
+	// +optional
+	Type BackupType `json:"type,omitempty"`
+
 	// RoutineName is the routine name used to trigger on-demand backup.
 	RoutineName string `json:"routineName"`
 
@@ -86,7 +99,7 @@ type AerospikeBackupStatus struct {
 
 // +kubebuilder:object:root=true
 // +kubebuilder:subresource:status
-// +kubebuilder:metadata:annotations="aerospike-kubernetes-operator/version=4.3.0"
+// +kubebuilder:metadata:annotations="aerospike-kubernetes-operator/version=4.4.0-dev1"
 // +kubebuilder:printcolumn:name="Backup Service Name",type=string,JSONPath=`.spec.backupService.name`
 // +kubebuilder:printcolumn:name="Backup Service Namespace",type=string,JSONPath=`.spec.backupService.namespace`
 // +kubebuilder:printcolumn:name="Age",type="date",JSONPath=".metadata.creationTimestamp"

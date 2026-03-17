@@ -4,7 +4,7 @@ replicas: 2
 ## Operator image
 operatorImage:
   repository: aerospike/aerospike-kubernetes-operator
-  tag: 4.3.0
+  tag: 4.4.0-dev1
   pullPolicy: IfNotPresent
 
 ## In case the above image is pulled from a registry that requires

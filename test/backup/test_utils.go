@@ -55,6 +55,33 @@ func NewBackup(backupNsNm types.NamespacedName) (*asdbv1beta1.AerospikeBackup, e
 	return backup, nil
 }
 
+// NewOnDemandBackup returns a backup CR @hourly and @daily crons
+// Routine crons are set to higher value so that scheduled backups never fire during the test window.
+// This prevents false positives in count-based on-demand backup validation (validateOnDemandBackupExecuted).
+func NewOnDemandBackup(backupNsNm types.NamespacedName) (*asdbv1beta1.AerospikeBackup, error) {
+	config := getBackupConfigInMap(namePrefix(backupNsNm))
+
+	routines := config[asdbv1beta1.BackupRoutinesKey].(map[string]interface{})
+	for name, r := range routines {
+		routine := r.(map[string]interface{})
+		routine["interval-cron"] = "@daily"
+		routine["incr-interval-cron"] = "@hourly"
+		routines[name] = routine
+	}
+
+	config[asdbv1beta1.BackupRoutinesKey] = routines
+
+	configBytes, err := getBackupConfBytes(config)
+	if err != nil {
+		return nil, err
+	}
+
+	backup := newBackupWithEmptyConfig(backupNsNm)
+	backup.Spec.Config = runtime.RawExtension{Raw: configBytes}
+
+	return backup, nil
+}
+
 func NewBackupWithTLS(backupNsNm types.NamespacedName) (*asdbv1beta1.AerospikeBackup, error) {
 	configBytes, err := getBackupConfBytes(getBackupConfigWithTLSInMap(namePrefix(backupNsNm)))
 	if err != nil {
@@ -318,10 +345,12 @@ func namePrefix(nsNm types.NamespacedName) string {
 	return nsNm.Namespace + "-" + nsNm.Name
 }
 
-func GetBackupDataPaths(k8sClient client.Client, backup *asdbv1beta1.AerospikeBackup) ([]string, error) {
+// getBackupServiceClient resolves the ABS LoadBalancer IP and returns a client pointing to it.
+func getBackupServiceClient(
+	k8sClient client.Client, backup *asdbv1beta1.AerospikeBackup,
+) (*backup_service.Client, error) {
 	var backupK8sService corev1.Service
 
-	// Wait for Service LB IP to be populated
 	if err := wait.PollUntilContextTimeout(testCtx, interval, timeout, true,
 		func(ctx context.Context) (bool, error) {
 			if err := k8sClient.Get(ctx,
@@ -334,12 +363,116 @@ func GetBackupDataPaths(k8sClient client.Client, backup *asdbv1beta1.AerospikeBa
 				return false, err
 			}
 
-			if backupK8sService.Status.LoadBalancer.Ingress == nil {
+			return backupK8sService.Status.LoadBalancer.Ingress != nil, nil
+		}); err != nil {
+		return nil, fmt.Errorf("timed out waiting for backup service LoadBalancer IP: %w", err)
+	}
+
+	return &backup_service.Client{
+		Address: backupK8sService.Status.LoadBalancer.Ingress[0].IP,
+		Port:    8081,
+	}, nil
+}
+
+// getBackupCountForRoutine returns the number of backups currently stored for the given routine and type.
+func getBackupCountForRoutine(
+	serviceClient *backup_service.Client,
+	routineName string,
+	backupType asdbv1beta1.BackupType,
+) (int, error) {
+	var (
+		backups []interface{}
+		err     error
+	)
+
+	switch backupType {
+	case asdbv1beta1.IncrementalBackup:
+		backups, err = serviceClient.GetIncrementalBackupsForRoutine(routineName)
+	case asdbv1beta1.FullBackup:
+		backups, err = serviceClient.GetFullBackupsForRoutine(routineName)
+	default:
+		return 0, fmt.Errorf("unknown backup type: %s", backupType)
+	}
+
+	if err != nil {
+		return 0, err
+	}
+
+	return len(backups), nil
+}
+
+// validateOnDemandBackupExecuted polls until a new backup entry appears for the routine (compared to
+// previousCount) and verifies that the new backup has non-zero byte-count and record-count.
+func validateOnDemandBackupExecuted(
+	serviceClient *backup_service.Client,
+	routineName string,
+	backupType asdbv1beta1.BackupType,
+	previousCount int,
+) error {
+	var newBackup dto.BackupDetails
+
+	if err := wait.PollUntilContextTimeout(testCtx, interval, timeout, true,
+		func(_ context.Context) (bool, error) {
+			var (
+				backups []interface{}
+				err     error
+			)
+
+			switch backupType {
+			case asdbv1beta1.IncrementalBackup:
+				backups, err = serviceClient.GetIncrementalBackupsForRoutine(routineName)
+			case asdbv1beta1.FullBackup:
+				backups, err = serviceClient.GetFullBackupsForRoutine(routineName)
+			default:
+				return false, fmt.Errorf("unknown backup type")
+			}
+
+			if err != nil {
+				pkgLog.Info("Waiting for backup entries", "routine", routineName, "type", backupType, "error", err)
 				return false, nil
+			}
+
+			if len(backups) <= previousCount {
+				pkgLog.Info("No new backup entry yet", "routine", routineName,
+					"current", len(backups), "previous", previousCount)
+
+				return false, nil
+			}
+
+			// Unmarshal the newest entry (last in list) into BackupDetails for assertion.
+			raw, mErr := json.Marshal(backups[len(backups)-1])
+			if mErr != nil {
+				return false, mErr
+			}
+
+			if uErr := json.Unmarshal(raw, &newBackup); uErr != nil {
+				return false, uErr
 			}
 
 			return true, nil
 		}); err != nil {
+		return fmt.Errorf("timed out waiting for new %s backup entry for routine %s: %w",
+			backupType, routineName, err)
+	}
+
+	if newBackup.ByteCount == 0 {
+		return fmt.Errorf("new %s backup for routine %s has zero byte-count", backupType, routineName)
+	}
+
+	if newBackup.RecordCount == 0 {
+		return fmt.Errorf("new %s backup for routine %s has zero record-count", backupType, routineName)
+	}
+
+	pkgLog.Info("On-demand backup executed successfully",
+		"routine", routineName, "type", backupType,
+		"byteCount", newBackup.ByteCount, "recordCount", newBackup.RecordCount)
+
+	return nil
+}
+
+func GetBackupDataPaths(k8sClient client.Client, backup *asdbv1beta1.AerospikeBackup) ([]string, error) {
+	serviceClient, err := getBackupServiceClient(k8sClient, backup)
+	if err != nil {
 		return nil, err
 	}
 
@@ -350,11 +483,6 @@ func GetBackupDataPaths(k8sClient client.Client, backup *asdbv1beta1.AerospikeBa
 
 	if err := yaml.Unmarshal(backup.Spec.Config.Raw, &config); err != nil {
 		return backupDataPaths, err
-	}
-
-	serviceClient := backup_service.Client{
-		Address: backupK8sService.Status.LoadBalancer.Ingress[0].IP,
-		Port:    8081,
 	}
 
 	if err := wait.PollUntilContextTimeout(testCtx, interval, timeout, true,

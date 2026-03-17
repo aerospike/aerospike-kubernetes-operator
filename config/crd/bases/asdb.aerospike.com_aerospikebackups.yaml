@@ -3,7 +3,7 @@ apiVersion: apiextensions.k8s.io/v1
 kind: CustomResourceDefinition
 metadata:
   annotations:
-    aerospike-kubernetes-operator/version: 4.3.0
+    aerospike-kubernetes-operator/version: 4.4.0-dev1
     controller-gen.kubebuilder.io/version: v0.18.0
   name: aerospikebackups.asdb.aerospike.com
 spec:
@@ -88,6 +88,14 @@ spec:
                       description: RoutineName is the routine name used to trigger
                         on-demand backup.
                       type: string
+                    type:
+                      description: |-
+                        Type is the type of on-demand backup to trigger: Full or Incremental.
+                        Incremental backups require ABS >= 3.5.0. Defaults to "Full".
+                      enum:
+                      - Full
+                      - Incremental
+                      type: string
                   required:
                   - id
                   - routineName
@@ -136,6 +144,14 @@ spec:
                     routineName:
                       description: RoutineName is the routine name used to trigger
                         on-demand backup.
+                      type: string
+                    type:
+                      description: |-
+                        Type is the type of on-demand backup to trigger: Full or Incremental.
+                        Incremental backups require ABS >= 3.5.0. Defaults to "Full".
+                      enum:
+                      - Full
+                      - Incremental
                       type: string
                   required:
                   - id

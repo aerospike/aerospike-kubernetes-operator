@@ -37,7 +37,7 @@ type SingleBackupReconciler struct {
 func (r *SingleBackupReconciler) Reconcile() (result ctrl.Result, recErr error) {
 	// Skip reconcile if the backup service version is less than 3.0.0.
 	// This is a safe check to avoid any issue after AKO upgrade due to older backup service versions
-	if err := asdbv1beta1.ValidateBackupSvcSupportedVersion(r.Client,
+	if _, err := asdbv1beta1.ValidateBackupSvcSupportedVersion(r.Client,
 		r.aeroBackup.Spec.BackupService.Name,
 		r.aeroBackup.Spec.BackupService.Namespace); err != nil {
 		r.Log.Info(fmt.Sprintf("Skipping reconcile as backup service version is less than %s",
@@ -332,19 +332,19 @@ func (r *SingleBackupReconciler) removeBackupInfoFromConfigMap() error {
 	return nil
 }
 
-func (r *SingleBackupReconciler) scheduleOnDemandBackup() error {
+func (r *SingleBackupReconciler) triggerOnDemandBackup() error {
 	r.Log.Info("Reconciling on-demand backup")
 
 	// There can be only one on-demand backup allowed right now.
 	if len(r.aeroBackup.Status.OnDemandBackups) > 0 &&
 		r.aeroBackup.Spec.OnDemandBackups[0].ID == r.aeroBackup.Status.OnDemandBackups[0].ID {
-		r.Log.Info("On-demand backup already scheduled for the same ID",
+		r.Log.Info("On-demand backup already triggered for the same ID",
 			"ID", r.aeroBackup.Status.OnDemandBackups[0].ID)
 
 		return nil
 	}
 
-	r.Log.Info("Scheduling on-demand backup",
+	r.Log.Info("Triggering on-demand backup",
 		"ID", r.aeroBackup.Spec.OnDemandBackups[0].ID, "routine", r.aeroBackup.Spec.OnDemandBackups[0].RoutineName)
 
 	backupServiceClient, err := backup_service.GetBackupServiceClient(r.Client, &r.aeroBackup.Spec.BackupService)
@@ -352,16 +352,19 @@ func (r *SingleBackupReconciler) scheduleOnDemandBackup() error {
 		return err
 	}
 
-	if err = backupServiceClient.ScheduleBackup(r.aeroBackup.Spec.OnDemandBackups[0].RoutineName,
-		r.aeroBackup.Spec.OnDemandBackups[0].Delay); err != nil {
-		r.Log.Error(err, "Failed to schedule on-demand backup")
+	if err = backupServiceClient.TriggerOnDemandBackup(
+		r.aeroBackup.Spec.OnDemandBackups[0].RoutineName,
+		r.aeroBackup.Spec.OnDemandBackups[0].Type,
+		r.aeroBackup.Spec.OnDemandBackups[0].Delay,
+	); err != nil {
+		r.Log.Error(err, "Failed to trigger on-demand backup")
 		return err
 	}
 
-	r.Log.Info("Scheduled on-demand backup", "ID", r.aeroBackup.Spec.OnDemandBackups[0].ID,
+	r.Log.Info("Triggered on-demand backup", "ID", r.aeroBackup.Spec.OnDemandBackups[0].ID,
 		"routine", r.aeroBackup.Spec.OnDemandBackups[0].RoutineName)
-	r.Recorder.Eventf(r.aeroBackup, corev1.EventTypeNormal, "OnDemandBackupScheduled",
-		"Scheduled on-demand backup %s/%s", r.aeroBackup.Namespace, r.aeroBackup.Name)
+	r.Recorder.Eventf(r.aeroBackup, corev1.EventTypeNormal, "OnDemandBackupTriggered",
+		"Triggered on-demand backup %s/%s", r.aeroBackup.Namespace, r.aeroBackup.Name)
 
 	r.Log.Info("Reconciled on-demand backup")
 
@@ -496,10 +499,10 @@ func (r *SingleBackupReconciler) checkForDeletedRoutines(
 	return false
 }
 func (r *SingleBackupReconciler) reconcileOnDemandBackup() error {
-	// Schedule on-demand backup if given
+	// Trigger on-demand backup if given
 	if len(r.aeroBackup.Spec.OnDemandBackups) > 0 {
-		if err := r.scheduleOnDemandBackup(); err != nil {
-			r.Log.Error(err, "Failed to schedule backup")
+		if err := r.triggerOnDemandBackup(); err != nil {
+			r.Log.Error(err, "Failed to trigger backup")
 			return err
 		}
 	}
