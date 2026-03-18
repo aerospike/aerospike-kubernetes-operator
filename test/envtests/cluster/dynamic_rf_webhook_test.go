@@ -43,20 +43,21 @@ var _ = Describe("AerospikeCluster dynamic replication-factor validation (envtes
 	clusterNamespacedName := test.GetNamespacedName(clusterName, testNs)
 
 	// apNamespaceConfig returns an AP namespace config for envtest.
-	apNamespaceConfig := func(name string, rf int) map[string]interface{} {
+	apNamespaceConfig := func(name string, rf int, device string) map[string]interface{} {
 		return map[string]interface{}{
 			"name":               name,
 			"replication-factor": rf,
 			asdbv1.ConfKeyStorageEngine: map[string]interface{}{
-				"type":    "device",
-				"devices": []interface{}{"/test/dev/xvdf"},
+				"type": "device",
+				// "devices": []interface{}{"/test/dev/xvdf"},
+				"devices": []interface{}{device},
 			},
 		}
 	}
 
 	// scNamespaceConfig returns an SC namespace config for envtest.
 	scNamespaceConfig := func(name string, rf int) map[string]interface{} {
-		cfg := apNamespaceConfig(name, rf)
+		cfg := apNamespaceConfig(name, rf, "/test/dev/xvdf")
 		cfg["strong-consistency"] = true
 
 		return cfg
@@ -64,16 +65,16 @@ var _ = Describe("AerospikeCluster dynamic replication-factor validation (envtes
 
 	// apNamespaceWithDevice is like apNamespaceConfig(RF=2) but uses a distinct device path per namespace
 	// (required when multiple AP namespaces coexist).
-	apNamespaceWithDevice := func(name string, device string) map[string]interface{} {
-		return map[string]interface{}{
-			"name":               name,
-			"replication-factor": 2,
-			asdbv1.ConfKeyStorageEngine: map[string]interface{}{
-				"type":    "device",
-				"devices": []interface{}{device},
-			},
-		}
-	}
+	// apNamespaceWithDevice := func(name string, device string) map[string]interface{} {
+	// 	return map[string]interface{}{
+	// 		"name":               name,
+	// 		"replication-factor": 2,
+	// 		asdbv1.ConfKeyStorageEngine: map[string]interface{}{
+	// 			"type":    "device",
+	// 			"devices": []interface{}{device},
+	// 		},
+	// 	}
+	// }
 
 	AfterEach(func() {
 		aeroCluster := &asdbv1.AerospikeCluster{
@@ -91,7 +92,7 @@ var _ = Describe("AerospikeCluster dynamic replication-factor validation (envtes
 		aeroCluster := testCluster.CreateDummyAerospikeCluster(clusterNamespacedName, size)
 		aeroCluster.Spec.EnableDynamicConfigUpdate = ptr.To(true)
 		aeroCluster.Spec.AerospikeConfig.Value[asdbv1.ConfKeyNamespace] = []interface{}{
-			apNamespaceConfig("test", initialRF),
+			apNamespaceConfig("test", initialRF, "/test/dev/xvdf"),
 		}
 
 		err := envtests.K8sClient.Create(ctx, aeroCluster)
@@ -161,7 +162,7 @@ var _ = Describe("AerospikeCluster dynamic replication-factor validation (envtes
 				It("allows AP namespace with RF greater than cluster size on deploy", func() {
 					// AP mode: replication-factor may exceed cluster size (unlike SC); see validateNamespaceReplicationFactor.
 					aeroCluster := testCluster.CreateDummyAerospikeCluster(clusterNamespacedName, 3)
-					ns := apNamespaceWithDevice("test", "/test/dev/xvdf")
+					ns := apNamespaceConfig("test", 4, "/test/dev/xvdf")
 					ns["replication-factor"] = 4
 					aeroCluster.Spec.AerospikeConfig.Value[asdbv1.ConfKeyNamespace] = []interface{}{ns}
 
@@ -186,7 +187,7 @@ var _ = Describe("AerospikeCluster dynamic replication-factor validation (envtes
 								InputAerospikeConfig: &asdbv1.AerospikeConfigSpec{
 									Value: map[string]interface{}{
 										asdbv1.ConfKeyNamespace: []interface{}{
-											apNamespaceConfig("test", 2),
+											apNamespaceConfig("test", 2, "/test/dev/xvdf"),
 										},
 									},
 								},
@@ -196,7 +197,7 @@ var _ = Describe("AerospikeCluster dynamic replication-factor validation (envtes
 								InputAerospikeConfig: &asdbv1.AerospikeConfigSpec{
 									Value: map[string]interface{}{
 										asdbv1.ConfKeyNamespace: []interface{}{
-											apNamespaceConfig("test", 3),
+											apNamespaceConfig("test", 3, "/test/dev/xvdf"),
 										},
 									},
 								},
@@ -204,7 +205,7 @@ var _ = Describe("AerospikeCluster dynamic replication-factor validation (envtes
 						},
 					}
 					aeroCluster.Spec.AerospikeConfig.Value[asdbv1.ConfKeyNamespace] = []interface{}{
-						apNamespaceConfig("test", 2),
+						apNamespaceConfig("test", 2, "/test/dev/xvdf"),
 					}
 
 					err := envtests.K8sClient.Create(ctx, aeroCluster)
@@ -232,7 +233,7 @@ var _ = Describe("AerospikeCluster dynamic replication-factor validation (envtes
 								AerospikeConfig: asdbv1.AerospikeConfigSpec{
 									Value: map[string]interface{}{
 										asdbv1.ConfKeyNamespace: []interface{}{
-											apNamespaceConfig("test", maxSchemaRF),
+											apNamespaceConfig("test", maxSchemaRF, "/test/dev/xvdf"),
 										},
 									},
 								},
@@ -242,7 +243,7 @@ var _ = Describe("AerospikeCluster dynamic replication-factor validation (envtes
 								AerospikeConfig: asdbv1.AerospikeConfigSpec{
 									Value: map[string]interface{}{
 										asdbv1.ConfKeyNamespace: []interface{}{
-											apNamespaceConfig("test", maxSchemaRF),
+											apNamespaceConfig("test", maxSchemaRF, "/test/dev/xvdf"),
 										},
 									},
 								},
@@ -250,7 +251,7 @@ var _ = Describe("AerospikeCluster dynamic replication-factor validation (envtes
 						},
 					}
 					aeroCluster.Spec.AerospikeConfig.Value[asdbv1.ConfKeyNamespace] = []interface{}{
-						apNamespaceConfig("test", maxSchemaRF),
+						apNamespaceConfig("test", maxSchemaRF, "/test/dev/xvdf"),
 					}
 
 					err := envtests.K8sClient.Create(ctx, aeroCluster)
@@ -278,7 +279,7 @@ var _ = Describe("AerospikeCluster dynamic replication-factor validation (envtes
 					aeroCluster := testCluster.CreateDummyAerospikeCluster(clusterNamespacedName, 3)
 					aeroCluster.Spec.EnableDynamicConfigUpdate = ptr.To(true)
 					aeroCluster.Spec.AerospikeConfig.Value[asdbv1.ConfKeyNamespace] = []interface{}{
-						apNamespaceConfig("test", 2),
+						apNamespaceConfig("test", 2, "/test/dev/xvdf"),
 					}
 
 					err := envtests.K8sClient.Create(ctx, aeroCluster)
@@ -310,7 +311,7 @@ var _ = Describe("AerospikeCluster dynamic replication-factor validation (envtes
 					aeroCluster := testCluster.CreateDummyAerospikeCluster(clusterNamespacedName, 3)
 					aeroCluster.Spec.EnableDynamicConfigUpdate = ptr.To(false)
 					aeroCluster.Spec.AerospikeConfig.Value[asdbv1.ConfKeyNamespace] = []interface{}{
-						apNamespaceConfig("test", 2),
+						apNamespaceConfig("test", 2, "/test/dev/xvdf"),
 					}
 
 					err := envtests.K8sClient.Create(ctx, aeroCluster)
@@ -342,7 +343,7 @@ var _ = Describe("AerospikeCluster dynamic replication-factor validation (envtes
 					aeroCluster := testCluster.CreateDummyAerospikeCluster(clusterNamespacedName, 2)
 					aeroCluster.Spec.EnableDynamicConfigUpdate = ptr.To(true)
 					aeroCluster.Spec.AerospikeConfig.Value[asdbv1.ConfKeyNamespace] = []interface{}{
-						apNamespaceConfig("test", 0),
+						apNamespaceConfig("test", 0, "/test/dev/xvdf"),
 					}
 
 					err := envtests.K8sClient.Create(ctx, aeroCluster)
@@ -376,7 +377,7 @@ var _ = Describe("AerospikeCluster dynamic replication-factor validation (envtes
 					aeroCluster := testCluster.CreateDummyAerospikeCluster(clusterNamespacedName, 3)
 					aeroCluster.Spec.EnableDynamicConfigUpdate = ptr.To(true)
 					aeroCluster.Spec.AerospikeConfig.Value[asdbv1.ConfKeyNamespace] = []interface{}{
-						apNamespaceConfig("test", 2),
+						apNamespaceConfig("test", 2, "/test/dev/xvdf"),
 					}
 
 					err := envtests.K8sClient.Create(ctx, aeroCluster)
@@ -445,7 +446,7 @@ var _ = Describe("AerospikeCluster dynamic replication-factor validation (envtes
 								InputAerospikeConfig: &asdbv1.AerospikeConfigSpec{
 									Value: map[string]interface{}{
 										asdbv1.ConfKeyNamespace: []interface{}{
-											apNamespaceConfig("test", 2),
+											apNamespaceConfig("test", 2, "/test/dev/xvdf"),
 										},
 									},
 								},
@@ -455,7 +456,7 @@ var _ = Describe("AerospikeCluster dynamic replication-factor validation (envtes
 								InputAerospikeConfig: &asdbv1.AerospikeConfigSpec{
 									Value: map[string]interface{}{
 										asdbv1.ConfKeyNamespace: []interface{}{
-											apNamespaceConfig("test", 2),
+											apNamespaceConfig("test", 2, "/test/dev/xvdf"),
 										},
 									},
 								},
@@ -463,7 +464,7 @@ var _ = Describe("AerospikeCluster dynamic replication-factor validation (envtes
 						},
 					}
 					aeroCluster.Spec.AerospikeConfig.Value[asdbv1.ConfKeyNamespace] = []interface{}{
-						apNamespaceConfig("test", 2),
+						apNamespaceConfig("test", 2, "/test/dev/xvdf"),
 					}
 
 					err := envtests.K8sClient.Create(ctx, aeroCluster)
@@ -500,7 +501,7 @@ var _ = Describe("AerospikeCluster dynamic replication-factor validation (envtes
 					aeroCluster := testCluster.CreateDummyAerospikeCluster(clusterNamespacedName, 4)
 					aeroCluster.Spec.EnableDynamicConfigUpdate = ptr.To(true)
 					aeroCluster.Spec.AerospikeConfig.Value[asdbv1.ConfKeyNamespace] = []interface{}{
-						apNamespaceWithDevice("test", "/test/dev/xvdf"),
+						apNamespaceConfig("test", 2, "/test/dev/xvdf"),
 					}
 					aeroCluster.Spec.RackConfig = asdbv1.RackConfig{
 						Namespaces: []string{"test", "test2", "test3"},
@@ -510,7 +511,7 @@ var _ = Describe("AerospikeCluster dynamic replication-factor validation (envtes
 								InputAerospikeConfig: &asdbv1.AerospikeConfigSpec{
 									Value: map[string]interface{}{
 										asdbv1.ConfKeyNamespace: []interface{}{
-											apNamespaceWithDevice("test2", "/test/dev/xvdg"),
+											apNamespaceConfig("test2", 2, "/test/dev/xvdg"),
 										},
 									},
 								},
@@ -520,7 +521,7 @@ var _ = Describe("AerospikeCluster dynamic replication-factor validation (envtes
 								InputAerospikeConfig: &asdbv1.AerospikeConfigSpec{
 									Value: map[string]interface{}{
 										asdbv1.ConfKeyNamespace: []interface{}{
-											apNamespaceWithDevice("test3", "/test/dev/xvdh"),
+											apNamespaceConfig("test3", 2, "/test/dev/xvdh"),
 										},
 									},
 								},
@@ -601,8 +602,8 @@ var _ = Describe("AerospikeCluster dynamic replication-factor validation (envtes
 					aeroCluster := testCluster.CreateDummyAerospikeCluster(clusterNamespacedName, 4)
 					aeroCluster.Spec.EnableDynamicConfigUpdate = ptr.To(true)
 					aeroCluster.Spec.AerospikeConfig.Value[asdbv1.ConfKeyNamespace] = []interface{}{
-						apNamespaceWithDevice("test", "/test/dev/xvdf"),
-						apNamespaceWithDevice("test2", "/test/dev/xvdg"),
+						apNamespaceConfig("test", 2, "/test/dev/xvdf"),
+						apNamespaceConfig("test2", 2, "/test/dev/xvdg"),
 					}
 					aeroCluster.Spec.RackConfig = asdbv1.RackConfig{
 						Namespaces: []string{"test", "test2"},
@@ -612,7 +613,7 @@ var _ = Describe("AerospikeCluster dynamic replication-factor validation (envtes
 								InputAerospikeConfig: &asdbv1.AerospikeConfigSpec{
 									Value: map[string]interface{}{
 										asdbv1.ConfKeyNamespace: []interface{}{
-											apNamespaceWithDevice("test", "/test/dev/xvdf"),
+											apNamespaceConfig("test", 2, "/test/dev/xvdf"),
 										},
 									},
 								},
@@ -622,7 +623,7 @@ var _ = Describe("AerospikeCluster dynamic replication-factor validation (envtes
 								InputAerospikeConfig: &asdbv1.AerospikeConfigSpec{
 									Value: map[string]interface{}{
 										asdbv1.ConfKeyNamespace: []interface{}{
-											apNamespaceWithDevice("test2", "/test/dev/xvdg"),
+											apNamespaceConfig("test2", 2, "/test/dev/xvdg"),
 										},
 									},
 								},
@@ -683,7 +684,7 @@ var _ = Describe("AerospikeCluster dynamic replication-factor validation (envtes
 						Racks:      []asdbv1.Rack{{ID: 1}, {ID: 2}},
 					}
 					aeroCluster.Spec.AerospikeConfig.Value[asdbv1.ConfKeyNamespace] = []interface{}{
-						apNamespaceConfig("test", 2),
+						apNamespaceConfig("test", 2, "/test/dev/xvdf"),
 					}
 
 					err := envtests.K8sClient.Create(ctx, aeroCluster)
@@ -719,7 +720,7 @@ var _ = Describe("AerospikeCluster dynamic replication-factor validation (envtes
 						Racks:      []asdbv1.Rack{{ID: 1}, {ID: 2}},
 					}
 					aeroCluster.Spec.AerospikeConfig.Value[asdbv1.ConfKeyNamespace] = []interface{}{
-						apNamespaceConfig("test", 2),
+						apNamespaceConfig("test", 2, "/test/dev/xvdf"),
 					}
 
 					err := envtests.K8sClient.Create(ctx, aeroCluster)
