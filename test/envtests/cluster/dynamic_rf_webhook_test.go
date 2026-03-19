@@ -68,15 +68,16 @@ var _ = Describe("AerospikeCluster dynamic replication-factor validation (envtes
 		return cfg
 	}
 
-	AfterEach(func() {
-		aeroCluster := &asdbv1.AerospikeCluster{
-			ObjectMeta: metav1.ObjectMeta{
-				Name:      clusterNamespacedName.Name,
-				Namespace: clusterNamespacedName.Namespace,
+	inMemoryNS := func(name string, rf int) map[string]interface{} {
+		return map[string]interface{}{
+			"name":               name,
+			"replication-factor": rf,
+			asdbv1.ConfKeyStorageEngine: map[string]interface{}{
+				"type":      "memory",
+				"data-size": 1073741824,
 			},
 		}
-		_ = envtests.K8sClient.Delete(ctx, aeroCluster)
-	})
+	}
 
 	// updateAPNamespaceRF creates a cluster with one AP namespace (initialRF),
 	// updates its replication-factor to newRF, and expects the update to succeed.
@@ -126,6 +127,16 @@ var _ = Describe("AerospikeCluster dynamic replication-factor validation (envtes
 
 		return envtests.K8sClient.Update(ctx, current)
 	}
+
+	AfterEach(func() {
+		aeroCluster := &asdbv1.AerospikeCluster{
+			ObjectMeta: metav1.ObjectMeta{
+				Name:      clusterNamespacedName.Name,
+				Namespace: clusterNamespacedName.Namespace,
+			},
+		}
+		_ = envtests.K8sClient.Delete(ctx, aeroCluster)
+	})
 
 	Context("Deploy validation", func() {
 		Context("spec.aerospikeConfig (replication-factor)", func() {
@@ -408,6 +419,34 @@ var _ = Describe("AerospikeCluster dynamic replication-factor validation (envtes
 				It("allows RF set to maximum allowed (RF = cluster size)", func() {
 					const clusterSize = 3
 					updateAPNamespaceRF(clusterSize, 2, clusterSize)
+				})
+
+				It("allow RF remove from spec.aerospikeConfig for AP namespace", func() {
+					// Create: one AP namespace with RF=2.
+					// Update: remove replication-factor from that namespace block. Must succeed.
+					aeroCluster := testCluster.CreateDummyAerospikeCluster(clusterNamespacedName, 2)
+					aeroCluster.Spec.EnableDynamicConfigUpdate = ptr.To(true)
+					aeroCluster.Spec.AerospikeConfig.Value[asdbv1.ConfKeyNamespace] = []interface{}{
+						apNamespaceConfig(namespaceName, 2, defaultDevicePath),
+					}
+
+					err := envtests.K8sClient.Create(ctx, aeroCluster)
+					Expect(err).ToNot(HaveOccurred())
+
+					current, err := testCluster.GetCluster(envtests.K8sClient, ctx, clusterNamespacedName)
+					Expect(err).ToNot(HaveOccurred())
+
+					apNamespaceNoRF := map[string]interface{}{
+						"name": namespaceName,
+						asdbv1.ConfKeyStorageEngine: map[string]interface{}{
+							"type":    "device",
+							"devices": []interface{}{defaultDevicePath},
+						},
+					}
+					current.Spec.AerospikeConfig.Value[asdbv1.ConfKeyNamespace] = []interface{}{apNamespaceNoRF}
+
+					err = envtests.K8sClient.Update(ctx, current)
+					Expect(err).ToNot(HaveOccurred())
 				})
 			})
 		})
@@ -756,21 +795,10 @@ var _ = Describe("AerospikeCluster dynamic replication-factor validation (envtes
 					// Rack 1 namespace test, RF=2.
 					// Update: add namespace "test2" to rackConfig.namespaces with RF=3.
 					// must succeed because namespace "test2" is not in spec.rackConfig.namespaces
-					memNS := func(name string, rf int) map[string]interface{} {
-						return map[string]interface{}{
-							"name":               name,
-							"replication-factor": rf,
-							asdbv1.ConfKeyStorageEngine: map[string]interface{}{
-								"type":      "memory",
-								"data-size": 1073741824,
-							},
-						}
-					}
-
 					aeroCluster := testCluster.CreateDummyAerospikeCluster(clusterNamespacedName, 1)
 					aeroCluster.Spec.EnableDynamicConfigUpdate = ptr.To(true)
 					aeroCluster.Spec.AerospikeConfig.Value[asdbv1.ConfKeyNamespace] = []interface{}{
-						memNS(namespaceName, 2),
+						inMemoryNS(namespaceName, 2),
 					}
 					aeroCluster.Spec.RackConfig = asdbv1.RackConfig{
 						Namespaces: []string{namespaceName},
@@ -779,7 +807,7 @@ var _ = Describe("AerospikeCluster dynamic replication-factor validation (envtes
 								ID: 1,
 								InputAerospikeConfig: &asdbv1.AerospikeConfigSpec{
 									Value: map[string]interface{}{
-										asdbv1.ConfKeyNamespace: []interface{}{memNS(namespaceName, 2)},
+										asdbv1.ConfKeyNamespace: []interface{}{inMemoryNS(namespaceName, 2)},
 									},
 								},
 							},
@@ -795,7 +823,7 @@ var _ = Describe("AerospikeCluster dynamic replication-factor validation (envtes
 					// Add Namespace "test2" in spec.rackConfig.namespaces with RF = 3
 					current.Spec.RackConfig.Racks[0].InputAerospikeConfig = &asdbv1.AerospikeConfigSpec{
 						Value: map[string]interface{}{
-							asdbv1.ConfKeyNamespace: []interface{}{memNS(namespaceName2, 3)},
+							asdbv1.ConfKeyNamespace: []interface{}{inMemoryNS(namespaceName2, 3)},
 						},
 					}
 
@@ -803,19 +831,9 @@ var _ = Describe("AerospikeCluster dynamic replication-factor validation (envtes
 					Expect(err).NotTo(HaveOccurred())
 				})
 
-				It("allow removing replication-factor from namespace in rack aerospikeConfig", func() {
+				It("allow removing replication-factor from namespace in rackConfig.aerospikeConfig", func() {
 					// Create: global + rack have test and test2, both RF=2; rackConfig.namespaces lists both.
 					// Update: rack patch for "test" omits replication-factor (inherits via merge with global).
-					memNS := func(name string) map[string]interface{} {
-						return map[string]interface{}{
-							"name":               name,
-							"replication-factor": 2,
-							asdbv1.ConfKeyStorageEngine: map[string]interface{}{
-								"type":      "memory",
-								"data-size": 1073741824,
-							},
-						}
-					}
 					removeRF := map[string]interface{}{
 						"name": namespaceName2,
 						asdbv1.ConfKeyStorageEngine: map[string]interface{}{
@@ -827,7 +845,7 @@ var _ = Describe("AerospikeCluster dynamic replication-factor validation (envtes
 					aeroCluster := testCluster.CreateDummyAerospikeCluster(clusterNamespacedName, 1)
 					aeroCluster.Spec.EnableDynamicConfigUpdate = ptr.To(true)
 					aeroCluster.Spec.AerospikeConfig.Value[asdbv1.ConfKeyNamespace] = []interface{}{
-						memNS(namespaceName), memNS(namespaceName2),
+						inMemoryNS(namespaceName, 2), inMemoryNS(namespaceName2, 2),
 					}
 					aeroCluster.Spec.RackConfig = asdbv1.RackConfig{
 						Namespaces: []string{namespaceName, namespaceName2},
@@ -837,7 +855,7 @@ var _ = Describe("AerospikeCluster dynamic replication-factor validation (envtes
 								InputAerospikeConfig: &asdbv1.AerospikeConfigSpec{
 									Value: map[string]interface{}{
 										asdbv1.ConfKeyNamespace: []interface{}{
-											memNS(namespaceName), memNS(namespaceName2),
+											inMemoryNS(namespaceName, 2), inMemoryNS(namespaceName2, 2),
 										},
 									},
 								},
@@ -854,7 +872,7 @@ var _ = Describe("AerospikeCluster dynamic replication-factor validation (envtes
 					current.Spec.RackConfig.Racks[0].InputAerospikeConfig = &asdbv1.AerospikeConfigSpec{
 						Value: map[string]interface{}{
 							asdbv1.ConfKeyNamespace: []interface{}{
-								memNS(namespaceName),
+								inMemoryNS(namespaceName, 2),
 								removeRF,
 							},
 						},
