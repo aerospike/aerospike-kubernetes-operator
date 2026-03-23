@@ -22,13 +22,12 @@ import (
 var _ = Describe("AerospikeCluster validation", func() {
 	const (
 		clusterName = "invalid-cluster"
-		testNs      = "default" // use same test namespace as suite_test.go
 	)
 
 	ctx := context.TODO()
 
 	// Create namespaced name for cluster
-	clusterNamespacedName := test.GetNamespacedName(clusterName, testNs)
+	clusterNamespacedName := test.GetNamespacedName(clusterName, testutil.DefaultNamespace)
 
 	AfterEach(func() {
 		aeroCluster := &asdbv1.AerospikeCluster{
@@ -948,7 +947,8 @@ var _ = Describe("AerospikeCluster validation", func() {
 
 	Context("Update validation", func() {
 		const updateValidationClusterName = "update-validation-cluster"
-		updateValidationClusterNamespacedName := test.GetNamespacedName(updateValidationClusterName, testNs)
+		updateValidationClusterNamespacedName := test.GetNamespacedName(
+			updateValidationClusterName, testutil.DefaultNamespace)
 
 		AfterEach(func() {
 			aeroCluster := &asdbv1.AerospikeCluster{
