@@ -89,7 +89,11 @@ var _ = Describe("AerospikeCluster access control validation (envtests)", func()
 					Namespace: clusterNamespacedName.Namespace,
 				},
 			}
-			_ = envtests.K8sClient.Delete(ctx, aeroCluster)
+			Expect(testCluster.DeleteCluster(envtests.K8sClient, ctx, aeroCluster)).ToNot(HaveOccurred())
+			Expect(testCluster.CleanupPVC(
+				envtests.K8sClient,
+				clusterNamespacedName.Namespace,
+				clusterNamespacedName.Name)).ToNot(HaveOccurred())
 		})
 
 		Context("spec.aerospikeAccessControl (validation)", func() {
@@ -196,7 +200,11 @@ var _ = Describe("AerospikeCluster access control validation (envtests)", func()
 					Namespace: clusterNamespacedName.Namespace,
 				},
 			}
-			_ = envtests.K8sClient.Delete(ctx, aeroCluster)
+			Expect(testCluster.DeleteCluster(envtests.K8sClient, ctx, aeroCluster)).ToNot(HaveOccurred())
+			Expect(testCluster.CleanupPVC(
+				envtests.K8sClient,
+				clusterNamespacedName.Namespace,
+				clusterNamespacedName.Name)).ToNot(HaveOccurred())
 		})
 		Context("spec.aerospikeAccessControl (users)", func() {
 			Context("negative", func() {

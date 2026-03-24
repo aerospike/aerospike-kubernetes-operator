@@ -6,7 +6,6 @@ import (
 	. "github.com/onsi/ginkgo/v2"
 	. "github.com/onsi/gomega"
 	v1 "k8s.io/api/core/v1"
-	"k8s.io/apimachinery/pkg/api/errors"
 	"k8s.io/apimachinery/pkg/api/resource"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/util/intstr"
@@ -37,8 +36,11 @@ var _ = Describe("AerospikeCluster validation", func() {
 			},
 		}
 		// Delete the cluster after each test
-		err := envtests.K8sClient.Delete(ctx, aeroCluster)
-		Expect(err).To(Or(Succeed(), MatchError(errors.IsNotFound, "should be NotFound or Succeed")))
+		Expect(testCluster.DeleteCluster(envtests.K8sClient, ctx, aeroCluster)).ToNot(HaveOccurred())
+		Expect(testCluster.CleanupPVC(
+			envtests.K8sClient,
+			clusterNamespacedName.Namespace,
+			clusterNamespacedName.Name)).ToNot(HaveOccurred())
 	})
 
 	Context("Deploy validation", func() {
@@ -957,7 +959,11 @@ var _ = Describe("AerospikeCluster validation", func() {
 					Namespace: updateValidationClusterNamespacedName.Namespace,
 				},
 			}
-			_ = envtests.K8sClient.Delete(ctx, aeroCluster)
+			Expect(testCluster.DeleteCluster(envtests.K8sClient, ctx, aeroCluster)).ToNot(HaveOccurred())
+			Expect(testCluster.CleanupPVC(
+				envtests.K8sClient,
+				updateValidationClusterNamespacedName.Namespace,
+				updateValidationClusterNamespacedName.Name)).ToNot(HaveOccurred())
 		})
 
 		Context("spec.storage", func() {

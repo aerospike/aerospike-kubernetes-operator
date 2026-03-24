@@ -47,8 +47,8 @@ var _ = Describe("AerospikeCluster dynamic replication-factor validation", func(
 	// apNamespaceConfig returns an AP namespace config for envtest.
 	apNamespaceConfig := func(name string, rf int, device string) map[string]interface{} {
 		return map[string]interface{}{
-			"name":               name,
-			"replication-factor": rf,
+			asdbv1.ConfKeyName:              name,
+			asdbv1.ConfKeyReplicationFactor: rf,
 			asdbv1.ConfKeyStorageEngine: map[string]interface{}{
 				"type":    "device",
 				"devices": []interface{}{device},
@@ -59,15 +59,15 @@ var _ = Describe("AerospikeCluster dynamic replication-factor validation", func(
 	// scNamespaceConfig returns an SC namespace config for envtest.
 	scNamespaceConfig := func(name string, rf int) map[string]interface{} {
 		cfg := apNamespaceConfig(name, rf, testutil.DefaultDevicePath)
-		cfg["strong-consistency"] = true
+		cfg[asdbv1.ConfKeyStrongConsistency] = true
 
 		return cfg
 	}
 
 	inMemoryNS := func(name string, rf int) map[string]interface{} {
 		return map[string]interface{}{
-			"name":               name,
-			"replication-factor": rf,
+			asdbv1.ConfKeyName:              name,
+			asdbv1.ConfKeyReplicationFactor: rf,
 			asdbv1.ConfKeyStorageEngine: map[string]interface{}{
 				"type":      "memory",
 				"data-size": 1073741824,
@@ -76,13 +76,14 @@ var _ = Describe("AerospikeCluster dynamic replication-factor validation", func(
 	}
 
 	// updateNamespaceRF creates a cluster with one namespace (AP or SC), updates its RF to newRF,
-	// and returns the update error. namespaceType is "AP" or "SC".
-	updateNamespaceRF := func(namespaceType string, size int32, initialRF, newRF int) error {
+	// and returns the Update error. If rackCount is 0, the RF change is applied to spec.aerospikeConfig
+	// only. If rackCount > 0, RackConfig is populated with that many racks (each with InputAerospikeConfig
+	// for the namespace), and the RF change is applied only to each rack's InputAerospikeConfig.
+	updateNamespaceRF := func(isSCNamespace bool, size int32, initialRF, newRF int, rackCount int) error {
 		var nsConfig map[string]interface{}
-		switch namespaceType {
-		case "SC":
+		if isSCNamespace {
 			nsConfig = scNamespaceConfig(namespaceName, initialRF)
-		default:
+		} else {
 			nsConfig = apNamespaceConfig(namespaceName, initialRF, testutil.DefaultDevicePath)
 		}
 
@@ -90,15 +91,53 @@ var _ = Describe("AerospikeCluster dynamic replication-factor validation", func(
 		aeroCluster.Spec.EnableDynamicConfigUpdate = ptr.To(true)
 		aeroCluster.Spec.AerospikeConfig.Value[asdbv1.ConfKeyNamespace] = []interface{}{nsConfig}
 
+		if rackCount > 0 {
+			racks := make([]asdbv1.Rack, rackCount)
+			for i := 0; i < rackCount; i++ {
+				var rackNS map[string]interface{}
+				if isSCNamespace {
+					rackNS = scNamespaceConfig(namespaceName, initialRF)
+				} else {
+					rackNS = apNamespaceConfig(namespaceName, initialRF, testutil.DefaultDevicePath)
+				}
+				racks[i] = asdbv1.Rack{
+					ID: i + 1,
+					InputAerospikeConfig: &asdbv1.AerospikeConfigSpec{
+						Value: map[string]interface{}{
+							asdbv1.ConfKeyNamespace: []interface{}{rackNS},
+						},
+					},
+				}
+			}
+			aeroCluster.Spec.RackConfig = asdbv1.RackConfig{
+				Namespaces: []string{namespaceName},
+				Racks:      racks,
+			}
+		}
+
 		err := envtests.K8sClient.Create(ctx, aeroCluster)
 		Expect(err).ToNot(HaveOccurred())
 
 		current, err := testCluster.GetCluster(envtests.K8sClient, ctx, clusterNamespacedName)
 		Expect(err).ToNot(HaveOccurred())
 
+		if rackCount > 0 {
+			for i := range current.Spec.RackConfig.Racks {
+				rack := &current.Spec.RackConfig.Racks[i]
+				Expect(rack.InputAerospikeConfig).ToNot(BeNil())
+				nsList := rack.InputAerospikeConfig.Value[asdbv1.ConfKeyNamespace].([]interface{})
+				nsConf := nsList[0].(map[string]interface{})
+				nsConf[asdbv1.ConfKeyReplicationFactor] = newRF
+				nsList[0] = nsConf
+				rack.InputAerospikeConfig.Value[asdbv1.ConfKeyNamespace] = nsList
+			}
+
+			return envtests.K8sClient.Update(ctx, current)
+		}
+
 		nsList := current.Spec.AerospikeConfig.Value[asdbv1.ConfKeyNamespace].([]interface{})
 		nsConf := nsList[0].(map[string]interface{})
-		nsConf["replication-factor"] = newRF
+		nsConf[asdbv1.ConfKeyReplicationFactor] = newRF
 		nsList[0] = nsConf
 		current.Spec.AerospikeConfig.Value[asdbv1.ConfKeyNamespace] = nsList
 
@@ -112,7 +151,11 @@ var _ = Describe("AerospikeCluster dynamic replication-factor validation", func(
 				Namespace: clusterNamespacedName.Namespace,
 			},
 		}
-		_ = envtests.K8sClient.Delete(ctx, aeroCluster)
+		Expect(testCluster.DeleteCluster(envtests.K8sClient, ctx, aeroCluster)).ToNot(HaveOccurred())
+		Expect(testCluster.CleanupPVC(
+			envtests.K8sClient,
+			clusterNamespacedName.Namespace,
+			clusterNamespacedName.Name)).ToNot(HaveOccurred())
 	})
 
 	Context("Deploy validation", func() {
@@ -243,7 +286,7 @@ var _ = Describe("AerospikeCluster dynamic replication-factor validation", func(
 		Context("spec.aerospikeConfig (replication-factor)", func() {
 			Context("negative", func() {
 				It("rejects RF change attempted for SC namespace", func() {
-					err := updateNamespaceRF("SC", 3, 2, 3)
+					err := updateNamespaceRF(true, 3, 2, 3, 0)
 					Expect(err).To(HaveOccurred())
 					envtests.NewStatusErrorMatcher().
 						WithMessageSubstrings(
@@ -268,7 +311,7 @@ var _ = Describe("AerospikeCluster dynamic replication-factor validation", func(
 
 					nsList := current.Spec.AerospikeConfig.Value[asdbv1.ConfKeyNamespace].([]interface{})
 					nsConf := nsList[0].(map[string]interface{})
-					nsConf["replication-factor"] = 3
+					nsConf[asdbv1.ConfKeyReplicationFactor] = 3
 					nsList[0] = nsConf
 					current.Spec.AerospikeConfig.Value[asdbv1.ConfKeyNamespace] = nsList
 					current.Spec.Size = 4
@@ -300,7 +343,7 @@ var _ = Describe("AerospikeCluster dynamic replication-factor validation", func(
 
 					nsList := current.Spec.AerospikeConfig.Value[asdbv1.ConfKeyNamespace].([]interface{})
 					nsConf := nsList[0].(map[string]interface{})
-					nsConf["replication-factor"] = 3
+					nsConf[asdbv1.ConfKeyReplicationFactor] = 3
 					nsList[0] = nsConf
 					current.Spec.AerospikeConfig.Value[asdbv1.ConfKeyNamespace] = nsList
 
@@ -319,7 +362,7 @@ var _ = Describe("AerospikeCluster dynamic replication-factor validation", func(
 				It("rejects RF update in spec.aerospikeConfig.namespaces (above schema max 256)", func() {
 					// Pre-conditions: AP namespace; RF=2; enableDynamicConfigUpdate=true;
 					// update to RF=257 (above schema max 256)
-					err := updateNamespaceRF("AP", 3, 2, rfAboveSchemaMax)
+					err := updateNamespaceRF(false, 3, 2, rfAboveSchemaMax, 0)
 					Expect(err).To(HaveOccurred())
 
 					envtests.NewStatusErrorMatcher().
@@ -351,8 +394,8 @@ var _ = Describe("AerospikeCluster dynamic replication-factor validation", func(
 					// Update RF for test2 and test3 in one update
 					for i := range nsList {
 						nsConf := nsList[i].(map[string]interface{})
-						if nsConf["name"] == namespaceName2 || nsConf["name"] == namespaceName3 {
-							nsConf["replication-factor"] = 3
+						if nsConf[asdbv1.ConfKeyName] == namespaceName2 || nsConf["name"] == namespaceName3 {
+							nsConf[asdbv1.ConfKeyReplicationFactor] = 3
 							nsList[i] = nsConf
 						}
 					}
@@ -373,29 +416,29 @@ var _ = Describe("AerospikeCluster dynamic replication-factor validation", func(
 			Context("positive", func() {
 				It("allows RF increase", func() {
 					// Pre-conditions: size ≥ 3; AP namespace; RF=2; enableDynamicConfigUpdate=true
-					Expect(updateNamespaceRF("AP", 3, 2, 3)).To(Succeed())
+					Expect(updateNamespaceRF(false, 3, 2, 3, 0)).To(Succeed())
 				})
 
 				It("allows RF decrease", func() {
 					// Pre-conditions: AP namespace; RF initially 3; enableDynamicConfigUpdate=true
-					Expect(updateNamespaceRF("AP", 3, 3, 2)).To(Succeed())
+					Expect(updateNamespaceRF(false, 3, 3, 2, 0)).To(Succeed())
 				})
 
 				It("allows no-op RF update (same RF value)", func() {
 					// Pre-conditions: AP namespace; RF=3; enableDynamicConfigUpdate=true; update to same RF
-					Expect(updateNamespaceRF("AP", 3, 3, 3)).To(Succeed())
+					Expect(updateNamespaceRF(false, 3, 3, 3, 0)).To(Succeed())
 				})
 				It("allows RF increase greater than cluster size", func() {
 					// Pre-conditions: size ≥ 3; AP namespace; RF=2; enableDynamicConfigUpdate=true
-					Expect(updateNamespaceRF("AP", 3, 2, 4)).To(Succeed())
+					Expect(updateNamespaceRF(false, 3, 2, 4, 0)).To(Succeed())
 				})
 
 				It("allows RF set to minimum value (RF=1)", func() {
-					Expect(updateNamespaceRF("AP", 2, 2, 1)).To(Succeed())
+					Expect(updateNamespaceRF(false, 2, 2, 1, 0)).To(Succeed())
 				})
 
 				It("allows RF set to maximum allowed (RF = cluster size)", func() {
-					Expect(updateNamespaceRF("AP", 3, 2, 3)).To(Succeed())
+					Expect(updateNamespaceRF(false, 3, 2, 3, 0)).To(Succeed())
 				})
 
 				It("allow RF remove from spec.aerospikeConfig", func() {
@@ -475,7 +518,7 @@ var _ = Describe("AerospikeCluster dynamic replication-factor validation", func(
 					nsList, ok := rack.InputAerospikeConfig.Value[asdbv1.ConfKeyNamespace].([]interface{})
 					Expect(ok).To(BeTrue())
 					nsConf := nsList[0].(map[string]interface{})
-					nsConf["replication-factor"] = 3
+					nsConf[asdbv1.ConfKeyReplicationFactor] = 3
 					nsList[0] = nsConf
 					rack.InputAerospikeConfig.Value[asdbv1.ConfKeyNamespace] = nsList
 
@@ -491,16 +534,82 @@ var _ = Describe("AerospikeCluster dynamic replication-factor validation", func(
 						Validate(err)
 				})
 
-				It("rejects RF update in rackConfig for value above schema max 256)", func() {
+				It("rejects RF update in rackConfig for value above schema max 256", func() {
 					// Pre-conditions: AP namespace; RF=2; enableDynamicConfigUpdate=true;
 					// update to RF=257 (above schema max 256)
-					err := updateNamespaceRF("AP", 3, 2, rfAboveSchemaMax)
+					err := updateNamespaceRF(false, 3, 2, rfAboveSchemaMax, 1)
 					Expect(err).To(HaveOccurred())
 
 					envtests.NewStatusErrorMatcher().
 						WithMessageSubstrings(
 							"vaerospikecluster.kb.io",
 							"replication-factor Must be less than or equal to 256 ",
+						).
+						Validate(err)
+				})
+				It("rejects RF update when namespace addition rollout is still in progress", func() {
+					// Spec: desired config includes test + test2. Status: deployed rack config only lists "test"
+					// (simulates test2 not yet rolled out). RF change on test2 must be rejected.
+					aeroCluster := testCluster.CreateDummyAerospikeCluster(clusterNamespacedName, 2)
+					aeroCluster.Spec.EnableDynamicConfigUpdate = ptr.To(true)
+					aeroCluster.Spec.AerospikeConfig.Value[asdbv1.ConfKeyNamespace] = []interface{}{
+						inMemoryNS(namespaceName, 2),
+						inMemoryNS(namespaceName2, 2),
+					}
+					aeroCluster.Spec.RackConfig = asdbv1.RackConfig{
+						Namespaces: []string{namespaceName, namespaceName2},
+						Racks:      []asdbv1.Rack{{ID: 1}},
+					}
+
+					err := envtests.K8sClient.Create(ctx, aeroCluster)
+					Expect(err).ToNot(HaveOccurred())
+
+					current := &asdbv1.AerospikeCluster{}
+					err = envtests.K8sClient.Get(ctx, clusterNamespacedName, current)
+					Expect(err).ToNot(HaveOccurred())
+
+					// Status must be non-nil on AerospikeConfig or the webhook skips the rollout check.
+					current.Status.AerospikeConfig = current.Spec.AerospikeConfig.DeepCopy()
+					// Deployed / effective rack config: only "test" is present — "test2" not in status yet.
+					current.Status.RackConfig = asdbv1.RackConfig{
+						Racks: []asdbv1.Rack{
+							{
+								ID: 1,
+								AerospikeConfig: asdbv1.AerospikeConfigSpec{
+									Value: map[string]interface{}{
+										asdbv1.ConfKeyNamespace: []interface{}{
+											inMemoryNS(namespaceName, 2),
+										},
+									},
+								},
+							},
+						},
+					}
+
+					err = envtests.K8sClient.Status().Update(ctx, current)
+					Expect(err).ToNot(HaveOccurred())
+
+					err = envtests.K8sClient.Get(ctx, clusterNamespacedName, current)
+					Expect(err).ToNot(HaveOccurred())
+
+					// Single-field RF change for test2 only (spec still lists both namespaces).
+					nsList := current.Spec.AerospikeConfig.Value[asdbv1.ConfKeyNamespace].([]interface{})
+					for i := range nsList {
+						nsConf := nsList[i].(map[string]interface{})
+						if nsConf[asdbv1.ConfKeyName] == namespaceName2 {
+							nsConf[asdbv1.ConfKeyReplicationFactor] = 3
+							nsList[i] = nsConf
+						}
+					}
+					current.Spec.AerospikeConfig.Value[asdbv1.ConfKeyNamespace] = nsList
+
+					err = envtests.K8sClient.Update(ctx, current)
+					Expect(err).To(HaveOccurred())
+
+					envtests.NewStatusErrorMatcher().
+						WithMessageSubstrings(
+							"vaerospikecluster.kb.io",
+							"namespace addition rollout is still in progress",
 						).
 						Validate(err)
 				})
@@ -526,7 +635,7 @@ var _ = Describe("AerospikeCluster dynamic replication-factor validation", func(
 
 					nsList := current.Spec.AerospikeConfig.Value[asdbv1.ConfKeyNamespace].([]interface{})
 					nsConf := nsList[0].(map[string]interface{})
-					nsConf["replication-factor"] = 3
+					nsConf[asdbv1.ConfKeyReplicationFactor] = 3
 					nsList[0] = nsConf
 					current.Spec.AerospikeConfig.Value[asdbv1.ConfKeyNamespace] = nsList
 
@@ -558,7 +667,7 @@ var _ = Describe("AerospikeCluster dynamic replication-factor validation", func(
 
 					nsList := current.Spec.AerospikeConfig.Value[asdbv1.ConfKeyNamespace].([]interface{})
 					nsConf := nsList[0].(map[string]interface{})
-					nsConf["replication-factor"] = 4
+					nsConf[asdbv1.ConfKeyReplicationFactor] = 4
 					nsList[0] = nsConf
 					current.Spec.AerospikeConfig.Value[asdbv1.ConfKeyNamespace] = nsList
 
@@ -567,10 +676,11 @@ var _ = Describe("AerospikeCluster dynamic replication-factor validation", func(
 				})
 
 				It("allows adding RF to existing namespace in RackConfig.namespaces", func() {
-					// Preconditions: RackConfig.namespaces has "test". Rack has no InputAerospikeConfig (uses global).
-					// Global has test with RF=2.
-					// Update: Add InputAerospikeConfig to rack with test at RF=3.
-					// Must succeed: rack acquires RF override for namespace already in rackConfig.namespaces.
+					// Create: Global in-memory namespace "test" with RF=2. RackConfig.namespaces includes "test".
+					// Rack 1 has no InputAerospikeConfig (rack-level config comes only from global merge).
+					// Update: Add InputAerospikeConfig on rack 1 with explicit namespace "test" and RF=2
+					// (rack-level override for a namespace already listed in RackConfig.namespaces).
+					// Expect: webhook validation succeeds (single-namespace RF change).
 					aeroCluster := testCluster.CreateDummyAerospikeCluster(clusterNamespacedName, 2)
 					aeroCluster.Spec.EnableDynamicConfigUpdate = ptr.To(true)
 					aeroCluster.Spec.AerospikeConfig.Value[asdbv1.ConfKeyNamespace] = []interface{}{
@@ -590,7 +700,7 @@ var _ = Describe("AerospikeCluster dynamic replication-factor validation", func(
 					// Add RF to existing "test" namespace in rack (rack had no override before)
 					current.Spec.RackConfig.Racks[0].InputAerospikeConfig = &asdbv1.AerospikeConfigSpec{
 						Value: map[string]interface{}{
-							asdbv1.ConfKeyNamespace: []interface{}{inMemoryNS(namespaceName, 2)},
+							asdbv1.ConfKeyNamespace: []interface{}{inMemoryNS(namespaceName, 2)}, // RF=2
 						},
 					}
 
@@ -622,7 +732,7 @@ var _ = Describe("AerospikeCluster dynamic replication-factor validation", func(
 
 						nsList := current.Spec.AerospikeConfig.Value[asdbv1.ConfKeyNamespace].([]interface{})
 						nsConf := nsList[0].(map[string]interface{})
-						nsConf["replication-factor"] = newRF
+						nsConf[asdbv1.ConfKeyReplicationFactor] = newRF
 						nsList[0] = nsConf
 						current.Spec.AerospikeConfig.Value[asdbv1.ConfKeyNamespace] = nsList
 
