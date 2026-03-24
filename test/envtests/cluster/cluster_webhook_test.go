@@ -37,10 +37,6 @@ var _ = Describe("AerospikeCluster validation", func() {
 		}
 		// Delete the cluster after each test
 		Expect(testCluster.DeleteCluster(envtests.K8sClient, ctx, aeroCluster)).ToNot(HaveOccurred())
-		Expect(testCluster.CleanupPVC(
-			envtests.K8sClient,
-			clusterNamespacedName.Namespace,
-			clusterNamespacedName.Name)).ToNot(HaveOccurred())
 	})
 
 	Context("Deploy validation", func() {
@@ -960,10 +956,6 @@ var _ = Describe("AerospikeCluster validation", func() {
 				},
 			}
 			Expect(testCluster.DeleteCluster(envtests.K8sClient, ctx, aeroCluster)).ToNot(HaveOccurred())
-			Expect(testCluster.CleanupPVC(
-				envtests.K8sClient,
-				updateValidationClusterNamespacedName.Namespace,
-				updateValidationClusterNamespacedName.Name)).ToNot(HaveOccurred())
 		})
 
 		Context("spec.storage", func() {

@@ -152,10 +152,6 @@ var _ = Describe("AerospikeCluster dynamic replication-factor validation", func(
 			},
 		}
 		Expect(testCluster.DeleteCluster(envtests.K8sClient, ctx, aeroCluster)).ToNot(HaveOccurred())
-		Expect(testCluster.CleanupPVC(
-			envtests.K8sClient,
-			clusterNamespacedName.Namespace,
-			clusterNamespacedName.Name)).ToNot(HaveOccurred())
 	})
 
 	Context("Deploy validation", func() {
