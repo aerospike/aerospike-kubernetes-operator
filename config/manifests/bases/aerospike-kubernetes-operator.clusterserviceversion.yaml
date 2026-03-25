@@ -61,6 +61,7 @@ spec:
       - description: |-
           Resources defines the requests and limits for the backup service container.
           Resources.Limits should be more than Resources.Requests.
+
           Deprecated: Resources field is now part of spec.podSpec.serviceContainer
         displayName: Resources
         path: resources
