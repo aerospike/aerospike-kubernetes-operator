@@ -53,6 +53,7 @@ var _ = Describe(
 						Expect(err).ToNot(HaveOccurred())
 
 						By("Updating pod metadata to trigger rolling restart")
+
 						aeroCluster.Spec.PodSpec.AerospikeObjectMeta = asdbv1.AerospikeObjectMeta{
 							Labels: map[string]string{
 								"test-label": "test-value",
@@ -84,6 +85,7 @@ var _ = Describe(
 					Expect(err).ToNot(HaveOccurred())
 
 					By("Updating pod metadata to trigger rolling restart")
+
 					aeroCluster.Spec.PodSpec.AerospikeObjectMeta = asdbv1.AerospikeObjectMeta{
 						Labels: map[string]string{
 							"test-label": "test-value",
@@ -111,6 +113,7 @@ var _ = Describe(
 						Expect(err).ToNot(HaveOccurred())
 
 						By("Enable DeleteLocalStorageOnRestart and set localStorageClasses")
+
 						aeroCluster.Spec.Storage.DeleteLocalStorageOnRestart = ptr.To(true)
 						aeroCluster.Spec.Storage.LocalStorageClasses = []string{storageClass}
 						Expect(updateCluster(k8sClient, ctx, aeroCluster)).ToNot(HaveOccurred())

@@ -67,7 +67,7 @@ func (r *SingleBackupServiceReconciler) Reconcile() (result ctrl.Result, recErr 
 
 	// Skip reconcile if the backup service version is less than 3.0.0.
 	// This is to avoid rolling restart of the backup service pods after AKO upgrade
-	if err := asdbv1beta1.ValidateBackupSvcVersion(r.aeroBackupService.Spec.Image); err != nil {
+	if _, err := asdbv1beta1.ValidateBackupSvcVersion(r.aeroBackupService.Spec.Image); err != nil {
 		r.Log.Info(fmt.Sprintf("Skipping reconcile as backup service version is less than %s",
 			asdbv1beta1.BackupSvcMinSupportedVersion))
 
@@ -743,6 +743,7 @@ func (r *SingleBackupServiceReconciler) waitForDeploymentToBeReady() error {
 			if deployment.Generation > deployment.Status.ObservedGeneration {
 				r.Log.Info("Waiting for deployment to be ready",
 					"deployment", getBackupServiceName(r.aeroBackupService))
+
 				return false, nil
 			}
 
@@ -754,6 +755,7 @@ func (r *SingleBackupServiceReconciler) waitForDeploymentToBeReady() error {
 			if len(podList.Items) == 0 {
 				r.Log.Info("No pod found for deployment",
 					"deployment", getBackupServiceName(r.aeroBackupService))
+
 				return false, nil
 			}
 
@@ -820,6 +822,7 @@ func (r *SingleBackupServiceReconciler) CopySpecToStatus() *asdbv1beta1.Aerospik
 	status.Config = r.aeroBackupService.Spec.Config
 	statusServicePodSpec := lib.DeepCopy(r.aeroBackupService.Spec.PodSpec).(asdbv1beta1.ServicePodSpec)
 	status.PodSpec = statusServicePodSpec
+	//nolint:staticcheck // SA1019 - backward compat for deprecated Resources field
 	status.Resources = r.aeroBackupService.Spec.Resources
 	status.SecretMounts = r.aeroBackupService.Spec.SecretMounts
 	status.Service = r.aeroBackupService.Spec.Service

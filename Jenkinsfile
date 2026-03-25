@@ -1,7 +1,7 @@
 pipeline {
     agent any
     tools {
-        go 'go-1.24'
+        go 'go-1.25'
     }
 
     environment {
@@ -23,7 +23,7 @@ pipeline {
 
         AEROSPIKE_CUSTOM_INIT_REGISTRY="568976754000.dkr.ecr.ap-south-1.amazonaws.com"
         AEROSPIKE_CUSTOM_INIT_REGISTRY_NAMESPACE="aerospike"
-        AEROSPIKE_CUSTOM_INIT_NAME_TAG="aerospike-kubernetes-init:2.5.0"
+        AEROSPIKE_CUSTOM_INIT_NAME_TAG="aerospike-kubernetes-init:2.5.1-dev1"
     }
 
     stages {
@@ -238,7 +238,7 @@ boolean isNightly() {
 }
 
 String getVersion() {
-    def prefix = "4.3.0"
+    def prefix = "4.4.0-dev1"
     def candidateName = ""
     if(isNightly()) {
         def timestamp = new Date().format("yyyy-MM-dd")

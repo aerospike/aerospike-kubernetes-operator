@@ -64,6 +64,7 @@ type AerospikeBackupServiceSpec struct {
 
 	// Resources defines the requests and limits for the backup service container.
 	// Resources.Limits should be more than Resources.Requests.
+	//
 	// Deprecated: Resources field is now part of spec.podSpec.serviceContainer
 	// +operator-sdk:csv:customresourcedefinitions:type=spec,displayName="Resources"
 	// +optional
@@ -101,6 +102,7 @@ type AerospikeBackupServiceStatus struct {
 
 	// Resources define the requests and limits for the backup service container.
 	// Resources.Limits should be more than Resources.Requests.
+	//
 	// Deprecated: Resources field is now part of status.podSpec.serviceContainer
 	// +optional
 	Resources *corev1.ResourceRequirements `json:"resources,omitempty"`
@@ -161,7 +163,7 @@ type ServiceContainerSpec struct {
 
 // +kubebuilder:object:root=true
 // +kubebuilder:subresource:status
-// +kubebuilder:metadata:annotations="aerospike-kubernetes-operator/version=4.3.0"
+// +kubebuilder:metadata:annotations="aerospike-kubernetes-operator/version=4.4.0-dev1"
 // +kubebuilder:printcolumn:name="Image",type=string,JSONPath=`.spec.image`
 // +kubebuilder:printcolumn:name="Service Type",type=string,JSONPath=`.spec.service.type`
 // +kubebuilder:printcolumn:name="Phase",type=string,JSONPath=`.status.phase`

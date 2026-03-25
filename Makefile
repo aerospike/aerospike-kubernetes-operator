@@ -11,7 +11,7 @@ OPENSHIFT_VERSION="v4.10"
 # - use the VERSION as arg of the bundle target (e.g make bundle VERSION=0.0.2)
 # - use environment variables to overwrite this value (e.g export VERSION=0.0.2)
 # TODO: Version must be pulled from git tags
-VERSION ?= 4.3.0
+VERSION ?= 4.4.0-dev1
 
 # Platforms supported
 PLATFORMS ?= linux/amd64,linux/arm64
@@ -270,7 +270,7 @@ CONTROLLER_TOOLS_VERSION ?= v0.18.0
 ENVTEST_VERSION := $(shell go list -m -f "{{ .Version }}" sigs.k8s.io/controller-runtime | awk -F'[v.]' '{printf "release-%d.%d", $$2, $$3}')
 #ENVTEST_K8S_VERSION is the version of Kubernetes to use for setting up ENVTEST binaries (i.e. 1.31)
 ENVTEST_K8S_VERSION := $(shell go list -m -f "{{ .Version }}" k8s.io/api | awk -F'[v.]' '{printf "1.%d", $$3}')
-GOLANGCI_LINT_VERSION ?= v2.6.1
+GOLANGCI_LINT_VERSION ?= v2.10.1
 # Set the Operator SDK version to use. By default, what is installed on the system is used.
 # This is useful for CI or a project to utilize a specific version of the operator-sdk toolkit.
 OPERATOR_SDK_VERSION ?= v1.41.1
@@ -346,7 +346,7 @@ submodules: ## Pull and update git submodules recursively
 
 # Generate bundle manifests and metadata, then validate generated files.
 # For OpenShift bundles run
-# CHANNELS=stable DEFAULT_CHANNEL=stable OPENSHIFT_VERSION=v4.10 IMG=docker.io/aerospike/aerospike-kubernetes-operator-nightly:4.3.0 make bundle
+# CHANNELS=stable DEFAULT_CHANNEL=stable OPENSHIFT_VERSION=v4.10 IMG=docker.io/aerospike/aerospike-kubernetes-operator-nightly:4.4.0-dev1 make bundle
 .PHONY: bundle
 bundle: manifests kustomize operator-sdk
 	rm -rf $(ROOT_DIR)/bundle.Dockerfile $(BUNDLE_DIR)

@@ -22,12 +22,10 @@ import (
 	"reflect"
 	"strings"
 
-	"k8s.io/apimachinery/pkg/runtime"
 	"k8s.io/apimachinery/pkg/types"
 	ctrl "sigs.k8s.io/controller-runtime"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 	logf "sigs.k8s.io/controller-runtime/pkg/log"
-	"sigs.k8s.io/controller-runtime/pkg/webhook"
 	"sigs.k8s.io/controller-runtime/pkg/webhook/admission"
 	"sigs.k8s.io/yaml"
 
@@ -35,11 +33,12 @@ import (
 	"github.com/aerospike/aerospike-backup-service/v3/pkg/validation"
 	asdbv1beta1 "github.com/aerospike/aerospike-kubernetes-operator/v4/api/v1beta1"
 	"github.com/aerospike/aerospike-kubernetes-operator/v4/pkg/utils"
+	lib "github.com/aerospike/aerospike-management-lib"
 )
 
 // SetupAerospikeBackupWebhookWithManager registers the webhook for AerospikeBackup in the manager.
 func SetupAerospikeBackupWebhookWithManager(mgr ctrl.Manager) error {
-	return ctrl.NewWebhookManagedBy(mgr).For(&asdbv1beta1.AerospikeBackup{}).
+	return ctrl.NewWebhookManagedBy(mgr, &asdbv1beta1.AerospikeBackup{}).
 		WithDefaulter(&AerospikeBackupCustomDefaulter{}).
 		WithValidator(&AerospikeBackupCustomValidator{}).
 		Complete()
@@ -52,19 +51,22 @@ type AerospikeBackupCustomDefaulter struct {
 	// Default values for various AerospikeBackup fields
 }
 
-// Implemented webhook.CustomDefaulter interface for future reference
-var _ webhook.CustomDefaulter = &AerospikeBackupCustomDefaulter{}
+var _ admission.Defaulter[*asdbv1beta1.AerospikeBackup] = &AerospikeBackupCustomDefaulter{}
 
-// Default implements webhook.CustomDefaulter so a webhook will be registered for the type
-func (abd *AerospikeBackupCustomDefaulter) Default(_ context.Context, obj runtime.Object) error {
-	backup, ok := obj.(*asdbv1beta1.AerospikeBackup)
-	if !ok {
-		return fmt.Errorf("expected AerospikeBackup, got %T", obj)
-	}
+//nolint:lll // for readability
+// +kubebuilder:webhook:path=/mutate-asdb-aerospike-com-v1beta1-aerospikebackup,mutating=true,failurePolicy=fail,sideEffects=None,groups=asdb.aerospike.com,resources=aerospikebackups,verbs=create;update,versions=v1beta1,name=maerospikebackup.kb.io,admissionReviewVersions=v1
 
+// Default implements admission.Defaulter so a webhook will be registered for the type
+func (abd *AerospikeBackupCustomDefaulter) Default(_ context.Context, backup *asdbv1beta1.AerospikeBackup) error {
 	abLog := logf.Log.WithName(namespacedName(backup))
 
 	abLog.Info("Setting defaults for aerospikeBackup")
+
+	for i := range backup.Spec.OnDemandBackups {
+		if backup.Spec.OnDemandBackups[i].Type == "" {
+			backup.Spec.OnDemandBackups[i].Type = asdbv1beta1.FullBackup
+		}
+	}
 
 	return nil
 }
@@ -73,24 +75,19 @@ func (abd *AerospikeBackupCustomDefaulter) Default(_ context.Context, obj runtim
 type AerospikeBackupCustomValidator struct {
 }
 
+var _ admission.Validator[*asdbv1beta1.AerospikeBackup] = &AerospikeBackupCustomValidator{}
+
 //nolint:lll // for readability
 // +kubebuilder:webhook:path=/validate-asdb-aerospike-com-v1beta1-aerospikebackup,mutating=false,failurePolicy=fail,sideEffects=None,groups=asdb.aerospike.com,resources=aerospikebackups,verbs=create;update,versions=v1beta1,name=vaerospikebackup.kb.io,admissionReviewVersions=v1
 
-var _ webhook.CustomValidator = &AerospikeBackupCustomValidator{}
-
-// ValidateCreate implements webhook.CustomValidator so a webhook will be registered for the type
-func (abv *AerospikeBackupCustomValidator) ValidateCreate(_ context.Context, obj runtime.Object,
+// ValidateCreate implements admission.Validator so a webhook will be registered for the type
+func (abv *AerospikeBackupCustomValidator) ValidateCreate(_ context.Context, backup *asdbv1beta1.AerospikeBackup,
 ) (admission.Warnings, error) {
-	backup, ok := obj.(*asdbv1beta1.AerospikeBackup)
-	if !ok {
-		return nil, fmt.Errorf("expected AerospikeBackup, got %T", obj)
-	}
-
 	abLog := logf.Log.WithName(namespacedName(backup))
 
 	abLog.Info("Validate create")
 
-	if err := validateBackup(backup); err != nil {
+	if _, err := validateBackup(backup); err != nil {
 		return nil, err
 	}
 
@@ -101,25 +98,19 @@ func (abv *AerospikeBackupCustomValidator) ValidateCreate(_ context.Context, obj
 	return nil, nil
 }
 
-// ValidateUpdate implements webhook.CustomValidator so a webhook will be registered for the type
-func (abv *AerospikeBackupCustomValidator) ValidateUpdate(_ context.Context, oldObj, newObj runtime.Object,
-) (admission.Warnings, error) {
-	backup, ok := newObj.(*asdbv1beta1.AerospikeBackup)
-	if !ok {
-		return nil, fmt.Errorf("expected AerospikeBackup, got %T", newObj)
-	}
-
+// ValidateUpdate implements admission.Validator so a webhook will be registered for the type
+func (abv *AerospikeBackupCustomValidator) ValidateUpdate(_ context.Context,
+	oldObject, backup *asdbv1beta1.AerospikeBackup) (admission.Warnings, error) {
 	abLog := logf.Log.WithName(namespacedName(backup))
 
 	abLog.Info("Validate update")
-
-	oldObject := oldObj.(*asdbv1beta1.AerospikeBackup)
 
 	if !reflect.DeepEqual(backup.Spec.BackupService, oldObject.Spec.BackupService) {
 		return nil, fmt.Errorf("backup service cannot be updated")
 	}
 
-	if err := validateBackup(backup); err != nil {
+	version, err := validateBackup(backup)
+	if err != nil {
 		return nil, err
 	}
 
@@ -127,37 +118,33 @@ func (abv *AerospikeBackupCustomValidator) ValidateUpdate(_ context.Context, old
 		return nil, err
 	}
 
-	if err := validateOnDemandBackupsUpdate(oldObject, backup); err != nil {
+	if err := validateOnDemandBackupsUpdate(oldObject, backup, version); err != nil {
 		return nil, err
 	}
 
 	return nil, nil
 }
 
-func validateBackup(backup *asdbv1beta1.AerospikeBackup) error {
+func validateBackup(backup *asdbv1beta1.AerospikeBackup) (string, error) {
 	k8sClient, gErr := getK8sClient()
 	if gErr != nil {
-		return gErr
+		return "", gErr
 	}
 
-	if err := asdbv1beta1.ValidateBackupSvcSupportedVersion(k8sClient,
+	version, err := asdbv1beta1.ValidateBackupSvcSupportedVersion(k8sClient,
 		backup.Spec.BackupService.Name,
 		backup.Spec.BackupService.Namespace,
-	); err != nil {
-		return err
+	)
+	if err != nil {
+		return "", err
 	}
 
-	return validateBackupConfig(k8sClient, backup)
+	return version, validateBackupConfig(k8sClient, backup)
 }
 
-// ValidateDelete implements webhook.CustomValidator so a webhook will be registered for the type
-func (abv *AerospikeBackupCustomValidator) ValidateDelete(_ context.Context, obj runtime.Object,
+// ValidateDelete implements admission.Validator so a webhook will be registered for the type
+func (abv *AerospikeBackupCustomValidator) ValidateDelete(_ context.Context, backup *asdbv1beta1.AerospikeBackup,
 ) (admission.Warnings, error) {
-	backup, ok := obj.(*asdbv1beta1.AerospikeBackup)
-	if !ok {
-		return nil, fmt.Errorf("expected AerospikeBackup, got %T", obj)
-	}
-
 	abLog := logf.Log.WithName(namespacedName(backup))
 
 	abLog.Info("Validate delete")
@@ -257,17 +244,21 @@ func getValidatedAerospikeClusters(backupConfig map[string]interface{},
 	return aeroClusters, nil
 }
 
-func validateOnDemandBackupsUpdate(oldObj, newObj *asdbv1beta1.AerospikeBackup) error {
-	// Check if backup config is updated along with onDemand backup add/update
-	if !reflect.DeepEqual(newObj.Spec.OnDemandBackups, newObj.Status.OnDemandBackups) &&
-		!reflect.DeepEqual(newObj.Spec.Config.Raw, newObj.Status.Config.Raw) {
+func validateOnDemandBackupsUpdate(oldObj, newObj *asdbv1beta1.AerospikeBackup, version string) error {
+	// Block adding or updating an on-demand backup simultaneously with a config change,
+	// as the intended state would be ambiguous. Removing on-demand backup alongside a
+	// config change is explicitly allowed.
+	// Normalise the Type field in the status to handles AKO upgrade scenarios where Type is not present in the CR
+	onDemandAddedOrUpdated := len(newObj.Spec.OnDemandBackups) > 0 &&
+		!reflect.DeepEqual(newObj.Spec.OnDemandBackups, normaliseOnDemandTypes(newObj.Status.OnDemandBackups))
+
+	if onDemandAddedOrUpdated && !reflect.DeepEqual(newObj.Spec.Config.Raw, newObj.Status.Config.Raw) {
 		return fmt.Errorf("can not add/update onDemand backup along with backup config change")
 	}
 
 	if len(newObj.Spec.OnDemandBackups) > 0 && len(oldObj.Spec.OnDemandBackups) > 0 {
-		// Check if onDemand backup spec is updated
 		if newObj.Spec.OnDemandBackups[0].ID == oldObj.Spec.OnDemandBackups[0].ID &&
-			!reflect.DeepEqual(newObj.Spec.OnDemandBackups[0], oldObj.Spec.OnDemandBackups[0]) {
+			!reflect.DeepEqual(newObj.Spec.OnDemandBackups[0], normaliseOnDemandTypes(oldObj.Spec.OnDemandBackups)[0]) {
 			return fmt.Errorf("existing onDemand backup cannot be updated. " +
 				"However, It can be removed and a new onDemand backup can be added")
 		}
@@ -280,7 +271,56 @@ func validateOnDemandBackupsUpdate(oldObj, newObj *asdbv1beta1.AerospikeBackup) 
 		}
 	}
 
+	return validateOnDemandBackupType(version, newObj)
+}
+
+// validateOnDemandBackupType checks that IncrementalBackup is not requested against
+// an ABS version that does not support it (< 3.5.0), failing fast at admission time.
+func validateOnDemandBackupType(version string, backup *asdbv1beta1.AerospikeBackup) error {
+	var hasIncrementalBackup bool
+
+	for _, onDemand := range backup.Spec.OnDemandBackups {
+		if onDemand.Type == asdbv1beta1.IncrementalBackup {
+			hasIncrementalBackup = true
+
+			break
+		}
+	}
+
+	if hasIncrementalBackup {
+		cmp, err := lib.CompareVersions(version, asdbv1beta1.BackupSvcNewOnDemandAPIVersion)
+		if err != nil {
+			return fmt.Errorf("failed to check ABS version for incremental backup support: %w", err)
+		}
+
+		if cmp < 0 {
+			return fmt.Errorf(
+				"%s on-demand backups require ABS >= %s; current version: %s",
+				asdbv1beta1.IncrementalBackup, asdbv1beta1.BackupSvcNewOnDemandAPIVersion, version,
+			)
+		}
+	}
+
 	return nil
+}
+
+// normaliseOnDemandTypes sets the on-demand backup to Full when type is not set.
+func normaliseOnDemandTypes(specs []asdbv1beta1.OnDemandBackupSpec) []asdbv1beta1.OnDemandBackupSpec {
+	if len(specs) == 0 {
+		return nil
+	}
+
+	out := make([]asdbv1beta1.OnDemandBackupSpec, len(specs))
+
+	for i, s := range specs {
+		if s.Type == "" {
+			s.Type = asdbv1beta1.FullBackup
+		}
+
+		out[i] = s
+	}
+
+	return out
 }
 
 func validateAerospikeClusterUpdate(oldObj, newObj *asdbv1beta1.AerospikeBackup) error {

@@ -591,7 +591,7 @@ type ValidationPolicySpec struct {
 
 	// Deprecated: SkipXdrDlogFileValidate is no longer in use. Setting this field will produce an admission
 	// warning. This field will be blocked in future versions.
-	SkipXdrDlogFileValidate bool `json:"skipXdrDlogFileValidate"`
+	SkipXdrDlogFileValidate bool `json:"skipXdrDlogFileValidate,omitempty"`
 }
 
 // AerospikeRoleSpec specifies an Aerospike database role and its associated privileges.
@@ -926,6 +926,7 @@ type AerospikeClusterStatusSpec struct { //nolint:govet // for readability
 	// The container port will be exposed to the external network at <hostIP>:<hostPort>,
 	// where the hostIP is the IP address of the Kubernetes Node where the container is running and
 	// the hostPort is the port requested by the user.
+	//
 	// Deprecated: MultiPodPerHost is now part of podSpec
 	// +optional
 	MultiPodPerHost *bool `json:"multiPodPerHost,omitempty"`
@@ -970,6 +971,7 @@ type AerospikeClusterStatusSpec struct { //nolint:govet // for readability
 	// Define resources requests and limits for Aerospike Server Container.
 	// Please contact aerospike for proper sizing exercise
 	// Only Memory and Cpu resources can be given
+	//
 	// Deprecated: Resources field is now part of containerSpec
 	// +optional
 	Resources *corev1.ResourceRequirements `json:"resources,omitempty"`
@@ -1309,7 +1311,7 @@ type AerospikePodStatus struct { //nolint:govet // for readability
 
 // AerospikeCluster is the schema for the AerospikeCluster API
 // +operator-sdk:csv:customresourcedefinitions:displayName="Aerospike Cluster",resources={{Service, v1},{Pod,v1},{StatefulSet,v1}}
-// +kubebuilder:metadata:annotations="aerospike-kubernetes-operator/version=4.3.0"
+// +kubebuilder:metadata:annotations="aerospike-kubernetes-operator/version=4.4.0-dev1"
 //
 //nolint:lll // for readability
 type AerospikeCluster struct { //nolint:govet // for readability

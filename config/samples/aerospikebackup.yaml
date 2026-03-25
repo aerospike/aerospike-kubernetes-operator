@@ -9,6 +9,7 @@ spec:
     namespace: aerospike
 #  onDemandBackups:
 #    - id: first-ad-hoc-backup
+#      type: Full
 #      routineName: aerospike-aerospikebackup-test-routine
   config:
     aerospike-cluster:

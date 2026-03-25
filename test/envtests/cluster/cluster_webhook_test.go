@@ -170,6 +170,7 @@ var _ = Describe("AerospikeCluster validation", func() {
 				It("rejects when device is not in storage config", func() {
 					aeroCluster := testCluster.CreateDummyAerospikeCluster(clusterNamespacedName, 2)
 					rawNs := aeroCluster.Spec.AerospikeConfig.Value[asdbv1.ConfKeyNamespace].([]interface{})
+
 					namespaceConfig := rawNs[0].(map[string]interface{})
 					if _, ok := namespaceConfig["storage-engine"].(map[string]interface{})["devices"]; ok {
 						devList := namespaceConfig["storage-engine"].(map[string]interface{})["devices"].([]interface{})
@@ -199,6 +200,7 @@ var _ = Describe("AerospikeCluster validation", func() {
 				It("rejects nil storage-engine", func() {
 					aeroCluster := testCluster.CreateDummyAerospikeCluster(clusterNamespacedName, 2)
 					rawNs := aeroCluster.Spec.AerospikeConfig.Value[asdbv1.ConfKeyNamespace]
+
 					namespaces, ok := rawNs.([]interface{})
 					if !ok || len(namespaces) == 0 {
 						Fail("Namespace configuration is missing or not a slice")
@@ -221,6 +223,7 @@ var _ = Describe("AerospikeCluster validation", func() {
 				It("rejects nil storage-engine.device", func() {
 					aeroCluster := testCluster.CreateDummyAerospikeCluster(clusterNamespacedName, 1)
 					rawNs := aeroCluster.Spec.AerospikeConfig.Value[asdbv1.ConfKeyNamespace]
+
 					namespaces, ok := rawNs.([]interface{})
 					if !ok || len(namespaces) == 0 {
 						Fail("Namespace configuration is missing or not a slice")
@@ -234,6 +237,7 @@ var _ = Describe("AerospikeCluster validation", func() {
 						// Re-assign back up the chain to ensure the pointer/reference is updated
 						namespaceConfig["storage-engine"] = storageEngine
 					}
+
 					aeroCluster.Spec.AerospikeConfig.Value[asdbv1.ConfKeyNamespace].([]interface{})[0] = namespaceConfig
 
 					err := testCluster.DeployCluster(envtests.K8sClient, ctx, aeroCluster)
@@ -289,6 +293,7 @@ var _ = Describe("AerospikeCluster validation", func() {
 				It("rejects 3 devices in single device string (shadow device config)", func() {
 					aeroCluster := testCluster.CreateDummyAerospikeCluster(clusterNamespacedName, 2)
 					rawNs := aeroCluster.Spec.AerospikeConfig.Value[asdbv1.ConfKeyNamespace].([]interface{})
+
 					namespaceConfig := rawNs[0].(map[string]interface{})
 					if _, ok :=
 						namespaceConfig["storage-engine"].(map[string]interface{})["devices"]; ok {
@@ -945,6 +950,7 @@ var _ = Describe("AerospikeCluster validation", func() {
 
 	Context("Update validation", func() {
 		const updateValidationClusterName = "update-validation-cluster"
+
 		updateValidationClusterNamespacedName := test.GetNamespacedName(
 			updateValidationClusterName, testutil.DefaultNamespace)
 
@@ -975,6 +981,7 @@ var _ = Describe("AerospikeCluster validation", func() {
 							break
 						}
 					}
+
 					err = envtests.K8sClient.Update(ctx, current)
 					Expect(err).To(HaveOccurred())
 

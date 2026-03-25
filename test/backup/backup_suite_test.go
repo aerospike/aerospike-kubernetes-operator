@@ -40,6 +40,7 @@ var _ = BeforeSuite(
 		logf.SetLogger(zap.New(zap.WriteTo(GinkgoWriter), zap.UseDevMode(true)))
 
 		By("Bootstrapping test environment")
+
 		var (
 			err error
 			cfg *rest.Config
@@ -60,6 +61,7 @@ var _ = BeforeSuite(
 		Expect(err).ToNot(HaveOccurred())
 
 		By("Deploy Backup Service")
+
 		backupServiceNamespacedName := test.GetNamespacedName("backup-service", namespace)
 		backupService, err := backupservice.NewBackupServiceWithTLSSecretMounts(backupServiceNamespacedName)
 		Expect(err).ToNot(HaveOccurred())
@@ -75,6 +77,7 @@ var _ = BeforeSuite(
 		Expect(err).ToNot(HaveOccurred())
 
 		By("Deploy Aerospike Cluster")
+
 		cascadeDeleteTrue := true
 		aeroCluster := cluster.CreateBasicTLSCluster(aerospikeNsNm, 2)
 		aeroCluster.Spec.Storage.BlockVolumePolicy.InputCascadeDelete = &cascadeDeleteTrue
@@ -82,11 +85,18 @@ var _ = BeforeSuite(
 
 		err = cluster.DeployCluster(k8sClient, testCtx, aeroCluster)
 		Expect(err).ToNot(HaveOccurred())
+
+		aeroCluster, err = cluster.GetCluster(k8sClient, testCtx, aerospikeNsNm)
+		Expect(err).ToNot(HaveOccurred())
+
+		err = cluster.WriteDataToCluster(aeroCluster, k8sClient, []string{"test"})
+		Expect(err).ToNot(HaveOccurred())
 	})
 
 var _ = AfterSuite(
 	func() {
 		By("Delete Aerospike Cluster")
+
 		aeroCluster := asdbv1.AerospikeCluster{
 			ObjectMeta: metav1.ObjectMeta{
 				Name:      aerospikeNsNm.Name,
@@ -98,6 +108,7 @@ var _ = AfterSuite(
 		Expect(cluster.CleanupPVC(k8sClient, aeroCluster.Namespace, aeroCluster.Name)).ToNot(HaveOccurred())
 
 		By("Delete Backup Service")
+
 		backupService := asdbv1beta1.AerospikeBackupService{
 			ObjectMeta: metav1.ObjectMeta{
 				Name:      backupServiceName,
@@ -110,6 +121,7 @@ var _ = AfterSuite(
 
 		By("tearing down the test environment")
 		gexec.KillAndWait(5 * time.Second)
+
 		err = testEnv.Stop()
 		Expect(err).ToNot(HaveOccurred())
 	},

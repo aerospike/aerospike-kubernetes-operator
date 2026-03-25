@@ -42,6 +42,7 @@ import (
 var _ = Describe(
 	"StorageVolumes", func() {
 		ctx := goctx.Background()
+
 		var (
 			clusterNamespacedName types.NamespacedName
 			clusterName           string
@@ -156,12 +157,14 @@ var _ = Describe(
 								annotations := map[string]string{
 									"pvc": "annotations",
 								}
+
 								for i, volume := range aeroCluster.Spec.Storage.Volumes {
 									if volume.Source.PersistentVolume != nil {
 										aeroCluster.Spec.Storage.Volumes[i].Source.PersistentVolume.Labels = labels
 										aeroCluster.Spec.Storage.Volumes[i].Source.PersistentVolume.Annotations = annotations
 									}
 								}
+
 								Expect(DeployCluster(k8sClient, ctx, aeroCluster)).ShouldNot(HaveOccurred())
 
 								pvcs, err := getAeroClusterPVCList(
@@ -181,6 +184,7 @@ var _ = Describe(
 									Expect(ok).To(BeTrue())
 									Expect(lab).To(Equal("labels"))
 								}
+
 								Expect(err).ShouldNot(HaveOccurred())
 							},
 						)
@@ -188,7 +192,6 @@ var _ = Describe(
 				)
 				Context(
 					"When using volume attachment", func() {
-
 						It(
 							"Should not use invalid container name", func() {
 								aeroCluster := createDummyAerospikeCluster(
@@ -324,6 +327,7 @@ var _ = Describe(
 								Expect(DeployCluster(k8sClient, ctx, aeroCluster)).ShouldNot(HaveOccurred())
 
 								By("Getting the deployed pod")
+
 								pod := getPodForMountOptionsTest(aeroCluster)
 
 								validateWorkDirSubPathMounts(pod, workDirectory, asdbv1.DefaultWorkDirectory)
@@ -341,6 +345,7 @@ var _ = Describe(
 									Expect(DeployCluster(k8sClient, ctx, aeroCluster)).ShouldNot(HaveOccurred())
 
 									By("Getting the deployed pod")
+
 									pod := getPodForMountOptionsTest(aeroCluster)
 
 									validateWorkDirSubPathMounts(pod, workDirectory, asdbv1.DefaultWorkDirectory)
@@ -355,6 +360,7 @@ var _ = Describe(
 
 									Expect(DeployCluster(k8sClient, ctx, aeroCluster)).ShouldNot(HaveOccurred())
 									By("Getting the deployed pod")
+
 									pod := getPodForMountOptionsTest(aeroCluster)
 
 									validateWorkDirSubPathMounts(pod, workDirectory, "/opt/aerospike/data")
@@ -416,14 +422,17 @@ var _ = Describe(
 
 					It("Should validate all mount options in all containers for hostPath volume", func() {
 						By("Creating hostPath volume with mount options")
+
 						hostPathVolume := createHostPathVolumeWithMountOptions(mountOptionsForContainers)
 						aeroCluster.Spec.Storage.Volumes = append(aeroCluster.Spec.Storage.Volumes, hostPathVolume)
 
 						By("Deploying the cluster")
+
 						err := DeployCluster(k8sClient, ctx, aeroCluster)
 						Expect(err).ToNot(HaveOccurred())
 
 						By("Getting the deployed pod")
+
 						pod := getPodForMountOptionsTest(aeroCluster)
 
 						By("Validating Aerospike server container mount options")
@@ -443,6 +452,7 @@ var _ = Describe(
 							"hostpath-mount-options-test", &mountOptionsForContainers[2])
 
 						By("Verifying that changing ReadOnly to false is rejected for hostPath volumes")
+
 						volumeIndex := len(aeroCluster.Spec.Storage.Volumes) - 1
 
 						// Try to set read-write for sidecar (should fail)
@@ -463,14 +473,17 @@ var _ = Describe(
 
 					It("Should not reflect mount options in aerospike containers for non-hostPath volumes", func() {
 						By("Creating emptyDir volume with mount options")
+
 						emptyDirVolume := createEmptyDirVolumeWithMountOptions(mountOptionsForContainers)
 						aeroCluster.Spec.Storage.Volumes = append(aeroCluster.Spec.Storage.Volumes, emptyDirVolume)
 
 						By("Deploying the cluster")
+
 						err := DeployCluster(k8sClient, ctx, aeroCluster)
 						Expect(err).ToNot(HaveOccurred())
 
 						By("Getting the deployed pod")
+
 						pod := getPodForMountOptionsTest(aeroCluster)
 
 						By("Validating that Aerospike server container ignores mount options for emptyDir")
@@ -482,6 +495,7 @@ var _ = Describe(
 							"emptydir-mount-options-test", &asdbv1.MountOptions{})
 
 						By("Updating mount options for non-hostPath volume in sidecrs (should succeed)")
+
 						volumeIndex := len(aeroCluster.Spec.Storage.Volumes) - 1
 
 						aeroCluster.Spec.Storage.Volumes[volumeIndex].Sidecars[0].ReadOnly = ptr.To(false)
@@ -492,6 +506,7 @@ var _ = Describe(
 						Expect(err).ToNot(HaveOccurred())
 
 						By("Verifying mount options after update")
+
 						err = k8sClient.Get(goctx.TODO(), test.GetNamespacedName(aeroCluster.Name+"-0-1", aeroCluster.Namespace), pod)
 						Expect(err).ToNot(HaveOccurred())
 

@@ -42,6 +42,7 @@ var _ = BeforeSuite(
 		logf.SetLogger(zap.New(zap.WriteTo(GinkgoWriter), zap.UseDevMode(true)))
 
 		By("Bootstrapping test environment")
+
 		var (
 			err error
 			cfg *rest.Config
@@ -62,6 +63,7 @@ var _ = BeforeSuite(
 		Expect(err).ToNot(HaveOccurred())
 
 		By("Deploy Backup Service")
+
 		backupService, err := backupservice.NewBackupServiceWithTLSSecretMounts(
 			test.GetNamespacedName("backup-service", namespace))
 		Expect(err).ToNot(HaveOccurred())
@@ -125,6 +127,7 @@ var _ = BeforeSuite(
 var _ = AfterSuite(
 	func() {
 		By("Delete Aerospike Cluster")
+
 		aeroClusters := []asdbv1.AerospikeCluster{
 			{
 				ObjectMeta: metav1.ObjectMeta{
@@ -147,6 +150,7 @@ var _ = AfterSuite(
 		}
 
 		By("Delete Backup")
+
 		backupObj := asdbv1beta1.AerospikeBackup{
 			ObjectMeta: metav1.ObjectMeta{
 				Name:      backupNsNm.Name,
@@ -158,6 +162,7 @@ var _ = AfterSuite(
 		Expect(err).ToNot(HaveOccurred())
 
 		By("Delete Backup Service")
+
 		backupService := asdbv1beta1.AerospikeBackupService{
 			ObjectMeta: metav1.ObjectMeta{
 				Name:      backupServiceName,
@@ -170,6 +175,7 @@ var _ = AfterSuite(
 
 		By("tearing down the test environment")
 		gexec.KillAndWait(5 * time.Second)
+
 		err = testEnv.Stop()
 		Expect(err).ToNot(HaveOccurred())
 	},

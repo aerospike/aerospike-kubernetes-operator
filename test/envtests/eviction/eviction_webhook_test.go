@@ -33,12 +33,14 @@ var _ = Describe("Pod eviction webhook", func() {
 
 	AfterEach(func() {
 		By("cleaning up test pod")
+
 		_ = envtests.K8sClient.Delete(ctx, pod)
 
 		Eventually(func() bool {
 			err := envtests.K8sClient.Get(ctx, client.ObjectKey{
 				Name:      podName,
 				Namespace: testutil.DefaultNamespace}, &corev1.Pod{})
+
 			return apierrors.IsNotFound(err)
 		}, 10*time.Second, 500*time.Millisecond).Should(BeTrue())
 	})
@@ -58,12 +60,14 @@ var _ = Describe("Pod eviction webhook", func() {
 			}, 5*time.Second, 500*time.Millisecond).Should(Succeed())
 
 			By("creating eviction object")
+
 			eviction := &policyv1.Eviction{
 				ObjectMeta:    metav1.ObjectMeta{Name: podName, Namespace: testutil.DefaultNamespace},
 				DeleteOptions: &metav1.DeleteOptions{},
 			}
 
 			By("attempting eviction")
+
 			err := envtests.ClientSet.CoreV1().Pods(testutil.DefaultNamespace).EvictV1(ctx, eviction)
 			Expect(err).NotTo(HaveOccurred())
 
@@ -71,10 +75,10 @@ var _ = Describe("Pod eviction webhook", func() {
 			Eventually(func() bool {
 				err := envtests.K8sClient.Get(ctx,
 					client.ObjectKey{Name: podName, Namespace: testutil.DefaultNamespace}, &corev1.Pod{})
+
 				return apierrors.IsNotFound(err)
 			}, 5*time.Second, 500*time.Millisecond).Should(BeTrue())
 		})
-
 	})
 
 	Context("When webhook is enabled", func() {
@@ -97,12 +101,14 @@ var _ = Describe("Pod eviction webhook", func() {
 				}, 5*time.Second, 500*time.Millisecond).Should(Succeed())
 
 				By("creating eviction object")
+
 				eviction := &policyv1.Eviction{
 					ObjectMeta:    metav1.ObjectMeta{Name: podName, Namespace: testutil.DefaultNamespace},
 					DeleteOptions: &metav1.DeleteOptions{},
 				}
 
 				By("attempting eviction")
+
 				err := envtests.ClientSet.CoreV1().Pods(testutil.DefaultNamespace).EvictV1(ctx, eviction)
 				Expect(err).To(HaveOccurred())
 				Expect(err.Error()).To(ContainSubstring("blocked by admission webhook"))
@@ -129,6 +135,7 @@ var _ = Describe("Pod eviction webhook", func() {
 				}, 5*time.Second, 500*time.Millisecond).Should(Succeed())
 
 				By("attempting eviction")
+
 				eviction := &policyv1.Eviction{
 					ObjectMeta:    metav1.ObjectMeta{Name: podName, Namespace: testutil.DefaultNamespace},
 					DeleteOptions: &metav1.DeleteOptions{},
@@ -140,6 +147,7 @@ var _ = Describe("Pod eviction webhook", func() {
 				Eventually(func() bool {
 					err := envtests.K8sClient.Get(ctx,
 						client.ObjectKey{Name: podName, Namespace: testutil.DefaultNamespace}, &corev1.Pod{})
+
 					return apierrors.IsNotFound(err)
 				}, 5*time.Second, 500*time.Millisecond).Should(BeTrue())
 			})
@@ -150,6 +158,7 @@ var _ = Describe("Pod eviction webhook", func() {
 				nonExistentPodName := "non-existent-pod"
 
 				By("attempting to evict non-existent pod")
+
 				eviction := &policyv1.Eviction{
 					ObjectMeta:    metav1.ObjectMeta{Name: nonExistentPodName, Namespace: testutil.DefaultNamespace},
 					DeleteOptions: &metav1.DeleteOptions{},
