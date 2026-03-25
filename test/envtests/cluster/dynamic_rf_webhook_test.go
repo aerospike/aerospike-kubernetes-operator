@@ -100,6 +100,7 @@ var _ = Describe("AerospikeCluster dynamic replication-factor validation", func(
 				} else {
 					rackNS = apNamespaceConfig(namespaceName, initialRF, testutil.DefaultDevicePath)
 				}
+
 				racks[i] = asdbv1.Rack{
 					ID: i + 1,
 					InputAerospikeConfig: &asdbv1.AerospikeConfigSpec{
@@ -109,6 +110,7 @@ var _ = Describe("AerospikeCluster dynamic replication-factor validation", func(
 					},
 				}
 			}
+
 			aeroCluster.Spec.RackConfig = asdbv1.RackConfig{
 				Namespaces: []string{namespaceName},
 				Racks:      racks,
@@ -395,6 +397,7 @@ var _ = Describe("AerospikeCluster dynamic replication-factor validation", func(
 							nsList[i] = nsConf
 						}
 					}
+
 					current.Spec.AerospikeConfig.Value[asdbv1.ConfKeyNamespace] = nsList
 
 					err = envtests.K8sClient.Update(ctx, current)
@@ -544,6 +547,7 @@ var _ = Describe("AerospikeCluster dynamic replication-factor validation", func(
 					Expect(rack.InputAerospikeConfig).ToNot(BeNil())
 					nsList, ok := rack.InputAerospikeConfig.Value[asdbv1.ConfKeyNamespace].([]interface{})
 					Expect(ok).To(BeTrue())
+
 					nsConf := nsList[0].(map[string]interface{})
 					nsConf[asdbv1.ConfKeyReplicationFactor] = 3
 					nsList[0] = nsConf
@@ -628,6 +632,7 @@ var _ = Describe("AerospikeCluster dynamic replication-factor validation", func(
 							nsList[i] = nsConf
 						}
 					}
+
 					current.Spec.AerospikeConfig.Value[asdbv1.ConfKeyNamespace] = nsList
 
 					err = envtests.K8sClient.Update(ctx, current)
@@ -647,10 +652,12 @@ var _ = Describe("AerospikeCluster dynamic replication-factor validation", func(
 					func(size int32, rackCount int, newRF int) {
 						aeroCluster := testCluster.CreateDummyAerospikeCluster(clusterNamespacedName, size)
 						aeroCluster.Spec.EnableDynamicConfigUpdate = ptr.To(true)
+
 						racks := make([]asdbv1.Rack, rackCount)
 						for i := 0; i < rackCount; i++ {
 							racks[i] = asdbv1.Rack{ID: i + 1}
 						}
+
 						aeroCluster.Spec.RackConfig = asdbv1.RackConfig{
 							Namespaces: []string{namespaceName},
 							Racks:      racks,
