@@ -16,7 +16,7 @@ require (
 	github.com/sirupsen/logrus v1.9.4
 	github.com/stretchr/testify v1.11.1
 	golang.org/x/crypto v0.48.0
-	k8s.io/api v0.35.1
+	k8s.io/api v0.35.2
 	k8s.io/apimachinery v0.35.2
 	k8s.io/client-go v0.35.1
 	k8s.io/kubectl v0.35.1
