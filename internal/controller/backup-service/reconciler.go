@@ -67,7 +67,7 @@ func (r *SingleBackupServiceReconciler) Reconcile() (result ctrl.Result, recErr 
 
 	// Skip reconcile if the backup service version is less than 3.0.0.
 	// This is to avoid rolling restart of the backup service pods after AKO upgrade
-	if err := asdbv1beta1.ValidateBackupSvcVersion(r.aeroBackupService.Spec.Image); err != nil {
+	if _, err := asdbv1beta1.ValidateBackupSvcVersion(r.aeroBackupService.Spec.Image); err != nil {
 		r.Log.Info(fmt.Sprintf("Skipping reconcile as backup service version is less than %s",
 			asdbv1beta1.BackupSvcMinSupportedVersion))
 

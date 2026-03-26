@@ -17,6 +17,8 @@ const (
 	Pre810ServerVersion = "8.0.0.0"
 	StorageClass        = "ssd"
 	ClusterNameConfig   = "cluster-name"
+	DefaultNamespace    = "default"
+	DefaultDevicePath   = "/test/dev/xvdf"
 )
 
 var (

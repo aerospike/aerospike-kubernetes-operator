@@ -89,7 +89,7 @@ func (arv *AerospikeRestoreCustomValidator) ValidateCreate(_ context.Context, re
 		return nil, gErr
 	}
 
-	if err := asdbv1beta1.ValidateBackupSvcSupportedVersion(k8sClient,
+	if _, err := asdbv1beta1.ValidateBackupSvcSupportedVersion(k8sClient,
 		restore.Spec.BackupService.Name,
 		restore.Spec.BackupService.Namespace,
 	); err != nil {

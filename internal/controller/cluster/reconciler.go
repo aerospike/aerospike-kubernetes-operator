@@ -962,8 +962,8 @@ func (r *SingleClusterReconciler) removedNamespaces(nodesNamespaces map[string][
 
 	racks := r.aeroCluster.Spec.RackConfig.Racks
 	for idx := range racks {
-		for _, namespace := range racks[idx].AerospikeConfig.Value["namespaces"].([]interface{}) {
-			specNamespaces.Insert(namespace.(map[string]interface{})["name"].(string))
+		for _, namespace := range racks[idx].AerospikeConfig.Value[asdbv1.ConfKeyNamespace].([]interface{}) {
+			specNamespaces.Insert(namespace.(map[string]interface{})[asdbv1.ConfKeyName].(string))
 		}
 	}
 
@@ -1120,23 +1120,29 @@ func (r *SingleClusterReconciler) IsReclusterNeeded() bool {
 }
 
 func (r *SingleClusterReconciler) IsReclusterNeededForRack(specRack, statusRack *asdbv1.Rack) bool {
-	specNamespaces, ok := specRack.AerospikeConfig.Value["namespaces"].([]interface{})
+	specNamespaces, ok := specRack.AerospikeConfig.Value[asdbv1.ConfKeyNamespace].([]interface{})
 	if !ok {
 		return false
 	}
 
-	statusNamespaces, ok := statusRack.AerospikeConfig.Value["namespaces"].([]interface{})
+	statusNamespaces, ok := statusRack.AerospikeConfig.Value[asdbv1.ConfKeyNamespace].([]interface{})
 	if !ok {
 		return false
 	}
 
 	for _, specNamespace := range specNamespaces {
 		for _, statusNamespace := range statusNamespaces {
-			if specNamespace.(map[string]interface{})["name"] != statusNamespace.(map[string]interface{})["name"] {
+			if specNamespace.(map[string]interface{})[asdbv1.ConfKeyName] !=
+				statusNamespace.(map[string]interface{})[asdbv1.ConfKeyName] {
 				continue
 			}
 
 			if specNamespace.(map[string]interface{})["active-rack"] != statusNamespace.(map[string]interface{})["active-rack"] {
+				return true
+			}
+
+			if specNamespace.(map[string]interface{})[asdbv1.ConfKeyReplicationFactor] !=
+				statusNamespace.(map[string]interface{})[asdbv1.ConfKeyReplicationFactor] {
 				return true
 			}
 		}

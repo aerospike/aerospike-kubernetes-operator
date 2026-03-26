@@ -113,7 +113,7 @@ func (absv *AerospikeBackupServiceCustomValidator) ValidateDelete(_ context.Cont
 }
 
 func validateBackupService(backupSvc *asdbv1beta1.AerospikeBackupService) (admission.Warnings, error) {
-	if err := asdbv1beta1.ValidateBackupSvcVersion(backupSvc.Spec.Image); err != nil {
+	if _, err := asdbv1beta1.ValidateBackupSvcVersion(backupSvc.Spec.Image); err != nil {
 		return nil, err
 	}
 

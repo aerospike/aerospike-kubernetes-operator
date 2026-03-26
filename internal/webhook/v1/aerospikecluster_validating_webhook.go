@@ -19,21 +19,25 @@ package v1
 import (
 	"context"
 	"crypto/x509"
+	"encoding/json"
 	"encoding/pem"
 	"fmt"
 	"os"
 	"path/filepath"
 	"reflect"
+	"strconv"
 	"strings"
 
 	"github.com/go-logr/logr"
 	v1 "k8s.io/api/core/v1"
 	"k8s.io/apimachinery/pkg/util/intstr"
 	"k8s.io/apimachinery/pkg/util/sets"
+	"k8s.io/utils/ptr"
 	logf "sigs.k8s.io/controller-runtime/pkg/log"
 	"sigs.k8s.io/controller-runtime/pkg/webhook/admission"
 
 	asdbv1 "github.com/aerospike/aerospike-kubernetes-operator/v4/api/v1"
+	"github.com/aerospike/aerospike-kubernetes-operator/v4/pkg/jsonpatch"
 	"github.com/aerospike/aerospike-kubernetes-operator/v4/pkg/utils"
 	"github.com/aerospike/aerospike-kubernetes-operator/v4/pkg/validation"
 	lib "github.com/aerospike/aerospike-management-lib"
@@ -169,6 +173,12 @@ func (acv *AerospikeClusterCustomValidator) ValidateUpdate(_ context.Context,
 
 	// Validate concurrent rack revisions limit
 	if err := validateConcurrentRackRevisions(oldObject, aerospikeCluster); err != nil {
+		return warnings, err
+	}
+
+	// Validate replication-factor update restrictions
+	// Check both: spec-to-spec changes and status-to-spec changes
+	if err := validateReplicationFactorUpdateRestrictions(oldObject, aerospikeCluster); err != nil {
 		return warnings, err
 	}
 
@@ -429,16 +439,16 @@ func validateSCNamespaces(cluster *asdbv1.AerospikeCluster) error {
 		rack := &cluster.Spec.RackConfig.Racks[idx]
 		tmpSCNamespaceSet := sets.NewString()
 
-		nsList := rack.AerospikeConfig.Value["namespaces"].([]interface{})
+		nsList := rack.AerospikeConfig.Value[asdbv1.ConfKeyNamespace].([]interface{})
 		for _, nsConfInterface := range nsList {
 			nsConf := nsConfInterface.(map[string]interface{})
 
 			isEnabled := asdbv1.IsNSSCEnabled(nsConf)
 			if isEnabled {
-				tmpSCNamespaceSet.Insert(nsConf["name"].(string))
+				tmpSCNamespaceSet.Insert(nsConf[asdbv1.ConfKeyName].(string))
 
 				if validation.IsInMemoryNamespace(nsConf) {
-					return fmt.Errorf("in-memory SC namespace is not supported, namespace %v", nsConf["name"])
+					return fmt.Errorf("in-memory SC namespace is not supported, namespace %v", nsConf[asdbv1.ConfKeyName])
 				}
 			}
 		}
@@ -974,6 +984,11 @@ func validateRackConfig(_ logr.Logger, cluster *asdbv1.AerospikeCluster) (admiss
 			return warnings, err
 		}
 	}
+
+	if err := validateReplicationFactorConsistencyAcrossRacks(cluster.Spec.RackConfig.Racks); err != nil {
+		return warnings, err
+	}
+
 	// TODO: should not use batch if racks are less than replication-factor
 	return warnings, nil
 }
@@ -1021,10 +1036,10 @@ func getNsConfForNamespaces(rackConfig asdbv1.RackConfig) map[string]nsConf {
 
 	for idx := range rackConfig.Racks {
 		rack := &rackConfig.Racks[idx]
-		nsList := rack.AerospikeConfig.Value["namespaces"].([]interface{})
+		nsList := rack.AerospikeConfig.Value[asdbv1.ConfKeyNamespace].([]interface{})
 
 		for _, nsInterface := range nsList {
-			nsName := nsInterface.(map[string]interface{})["name"].(string)
+			nsName := nsInterface.(map[string]interface{})[asdbv1.ConfKeyName].(string)
 
 			var noOfRacksForNamespaces int
 			if _, ok := nsConfs[nsName]; !ok {
@@ -1046,6 +1061,49 @@ func getNsConfForNamespaces(rackConfig asdbv1.RackConfig) map[string]nsConf {
 	}
 
 	return nsConfs
+}
+
+// getAllNamespaceNamesAndRFMap collects all unique namespace identifiers ("name@rackID") and
+// their replication factors from every rack in the spec.
+// Keys use the "name@rackID" format so that the same namespace name in different racks is
+// tracked independently (enabling per-rack addition/removal detection).
+func getAllNamespaceNamesAndRFMap(spec *asdbv1.AerospikeClusterSpec) (allNsNames sets.Set[string],
+	nsRFMap map[string]int) {
+	allNsNames = make(sets.Set[string])
+	nsRFMap = make(map[string]int)
+
+	for idx := range spec.RackConfig.Racks {
+		rack := &spec.RackConfig.Racks[idx]
+
+		nsList, ok := rack.AerospikeConfig.Value[asdbv1.ConfKeyNamespace].([]interface{})
+		if !ok {
+			continue
+		}
+
+		for _, nsInterface := range nsList {
+			ns, ok := nsInterface.(map[string]interface{})
+			if !ok {
+				continue
+			}
+
+			name, ok := ns[asdbv1.ConfKeyName].(string)
+			if !ok {
+				continue
+			}
+
+			key := name + "@" + strconv.Itoa(rack.ID)
+			allNsNames.Insert(key)
+
+			rf, err := validation.GetNamespaceReplicationFactor(ns)
+			if err != nil {
+				rf = 2 // use Aerospike default when not explicitly set
+			}
+
+			nsRFMap[key] = rf
+		}
+	}
+
+	return allNsNames, nsRFMap
 }
 
 // ******************************************************************************
@@ -1178,7 +1236,7 @@ func readNamesFromLocalCertificate(clientCertSpec *asdbv1.AerospikeOperatorClien
 func validateNamespaceConfig(
 	config map[string]interface{}, storage *asdbv1.AerospikeStorageSpec,
 ) error {
-	nsConfInterfaceList := config["namespaces"].([]interface{})
+	nsConfInterfaceList := config[asdbv1.ConfKeyNamespace].([]interface{})
 
 	// Get list of all devices used in namespace. match it with namespace device list
 	blockStorageDeviceList, fileStorageList, err := getAerospikeStorageList(storage, true)
@@ -1311,11 +1369,11 @@ func validateNsConfUpdateFromStatus(newConfSpec, currentStatus *asdbv1.Aerospike
 
 	if currentStatus != nil && len(currentStatus.Value) != 0 {
 		statusConf := currentStatus.Value
-		statusNsConfList = statusConf["namespaces"].([]interface{})
+		statusNsConfList = statusConf[asdbv1.ConfKeyNamespace].([]interface{})
 	}
 
 	newConf := newConfSpec.Value
-	newNsConfList := newConf["namespaces"].([]interface{})
+	newNsConfList := newConf[asdbv1.ConfKeyNamespace].([]interface{})
 
 	return validateStorageEngineDeviceListUpdate(newNsConfList, statusNsConfList)
 }
@@ -1328,7 +1386,7 @@ func validateStorageEngineDeviceListUpdate(nsConfList, statusNsConfList []interf
 
 	for _, statusNsConfInterface := range statusNsConfList {
 		nsConf := statusNsConfInterface.(map[string]interface{})
-		namespace := nsConf["name"].(string)
+		namespace := nsConf[asdbv1.ConfKeyName].(string)
 		storage := nsConf[asdbv1.ConfKeyStorageEngine].(map[string]interface{})
 
 		if devices, ok := storage["devices"]; ok {
@@ -1847,10 +1905,10 @@ func validateMaxUnavailable(cluster *asdbv1.AerospikeCluster) (admission.Warning
 
 	for idx := range cluster.Spec.RackConfig.Racks {
 		rack := &cluster.Spec.RackConfig.Racks[idx]
-		nsList := rack.AerospikeConfig.Value["namespaces"].([]interface{})
+		nsList := rack.AerospikeConfig.Value[asdbv1.ConfKeyNamespace].([]interface{})
 
 		for _, nsInterface := range nsList {
-			rfInterface, exists := nsInterface.(map[string]interface{})["replication-factor"]
+			rfInterface, exists := nsInterface.(map[string]interface{})[asdbv1.ConfKeyReplicationFactor]
 			if !exists {
 				// Default RF is 2 if not given
 				safeMaxUnavailable = 2
@@ -2077,6 +2135,225 @@ func validateTLSAndPKIOnlyUpdate(oldSpec, newSpec *asdbv1.AerospikeClusterSpec,
 		if newTLSName != "" && statusTLSName == "" {
 			return fmt.Errorf("cannot enable PKIOnly authMode while TLS rollout is in progress; " +
 				"wait for TLS to be fully deployed first")
+		}
+	}
+
+	return nil
+}
+
+// nsNamesFromRFChanges extracts the set of unique namespace names from a set of "name@rackID" keys.
+// It is used to convert the internal per-rack tracking format back to plain namespace names for
+// error messages and the "one namespace at a time" rule.
+func nsNamesFromRFChanges(rfChanges sets.Set[string]) sets.Set[string] {
+	nsNames := make(sets.Set[string])
+
+	for nsRackID := range rfChanges {
+		if parts := strings.SplitN(nsRackID, "@", 2); len(parts) == 2 {
+			nsNames.Insert(parts[0])
+		}
+	}
+
+	return nsNames
+}
+
+// filterActualRFChanges returns the subset of existingNsNames (namespaces present in both old and
+// new specs) whose replication-factor value genuinely changed. Comparing values directly avoids
+// the noise introduced by JSON patch index shifts when namespaces are added or removed.
+func filterActualRFChanges(
+	existingNsNames sets.Set[string],
+	oldNsRFMap, newNsRFMap map[string]int,
+) sets.Set[string] {
+	actualChanges := make(sets.Set[string])
+
+	for nsRackID := range existingNsNames {
+		if oldNsRFMap[nsRackID] != newNsRFMap[nsRackID] {
+			actualChanges.Insert(nsRackID)
+		}
+	}
+
+	return actualChanges
+}
+
+// validateReplicationFactorUpdateRestrictions validates that if replication-factor is modified for
+// any namespace then:
+//  1. Only one namespace's replication-factor can be changed at a time.
+//  2. No other fields in the entire aerospikecluster spec can be modified alongside the RF change.
+//
+// Two comparisons are performed:
+//   - oldSpec → newSpec: rejects invalid changes in a single update.
+//   - statusSpec → newSpec: rejects updates that would create invalid drift from the deployed state.
+func validateReplicationFactorUpdateRestrictions(oldObj, newObj *asdbv1.AerospikeCluster) error {
+	// Build the deployed-status namespace set once so it can be reused across both checks.
+	// It is used in the first comparison to detect RF changes on namespaces that have been
+	// added to the spec but not yet rolled out.
+	var (
+		statusToSpec  *asdbv1.AerospikeClusterSpec
+		statusNsNames sets.Set[string]
+	)
+
+	if newObj.Status.AerospikeConfig != nil {
+		var err error
+
+		statusToSpec, err = asdbv1.CopyStatusToSpec(&newObj.Status.AerospikeClusterStatusSpec)
+		if err != nil {
+			return fmt.Errorf("failed to copy status to spec for comparison: %v", err)
+		}
+
+		statusNsNames, _ = getAllNamespaceNamesAndRFMap(statusToSpec)
+	}
+
+	// First check: validate changes from the persisted spec to the new spec.
+	// statusNsNames is passed so we can flag RF changes on not-yet-deployed namespaces.
+	if err := validateReplicationFactorUpdateComparison(&oldObj.Spec, newObj, statusNsNames); err != nil {
+		return err
+	}
+
+	// Second check: validate that the new spec is also valid relative to deployed status.
+	// This catches drift scenarios where status diverged from the previous spec.
+	if statusToSpec != nil {
+		if err := validateReplicationFactorUpdateComparison(statusToSpec, newObj, nil); err != nil {
+			return err
+		}
+	}
+
+	return nil
+}
+
+// validateReplicationFactorUpdateComparison checks replication-factor update restrictions by
+// comparing oldSpec against newObj.Spec.
+//
+// statusNsNames, when non-nil, is the set of "name@rackID" keys present in the currently
+// deployed status. It is used to detect RF changes on namespaces that exist in the spec but
+// have not yet been fully deployed, which must also be blocked.
+func validateReplicationFactorUpdateComparison(
+	oldSpec *asdbv1.AerospikeClusterSpec,
+	newObj *asdbv1.AerospikeCluster,
+	statusNsNames sets.Set[string],
+) error {
+	oldJSON, err := json.Marshal(oldSpec)
+	if err != nil {
+		return fmt.Errorf("failed to marshal old spec: %v", err)
+	}
+
+	newJSON, err := json.Marshal(newObj.Spec)
+	if err != nil {
+		return fmt.Errorf("failed to marshal new spec: %v", err)
+	}
+
+	patch, err := jsonpatch.CreatePatch(oldJSON, newJSON)
+	if err != nil {
+		return fmt.Errorf("failed to create JSON patch: %v", err)
+	}
+
+	var otherSpecChanged bool
+
+	for _, op := range patch {
+		if !strings.HasSuffix(op.Path, "/"+asdbv1.ConfKeyReplicationFactor) &&
+			op.Path != "/enableDynamicConfigUpdate" &&
+			op.Path != "/paused" {
+			otherSpecChanged = true
+		}
+	}
+
+	// Determine which namespaces exist in both specs and compare their RF values directly.
+	oldNsNames, oldNsRFMap := getAllNamespaceNamesAndRFMap(oldSpec)
+	newNsNames, newNsRFMap := getAllNamespaceNamesAndRFMap(&newObj.Spec)
+
+	namespaceAddedOrRemoved := !oldNsNames.Equal(newNsNames)
+
+	existingNsNames := oldNsNames.Intersection(newNsNames)
+	actualRFChanges := filterActualRFChanges(existingNsNames, oldNsRFMap, newNsRFMap)
+
+	// No genuine RF value changes – nothing further to validate.
+	if actualRFChanges.Len() == 0 {
+		return nil
+	}
+
+	// Strip the "@rackID" suffix to get the plain namespace names used in error messages
+	// and for the "one namespace at a time" rule.
+	rfChangedNamespaces := nsNamesFromRFChanges(actualRFChanges)
+
+	// Rule: only one namespace's replication-factor may be changed per update.
+	if len(rfChangedNamespaces) > 1 {
+		return fmt.Errorf(
+			"cannot update replication-factor for multiple namespaces at the same time; "+
+				"changed namespaces: %v",
+			rfChangedNamespaces.UnsortedList(),
+		)
+	}
+
+	// If a deployed-status set was provided, verify that every RF-changed namespace already
+	// exists there. An RF change on a namespace that hasn't been deployed yet is not allowed.
+	if statusNsNames != nil && !statusNsNames.HasAll(actualRFChanges.UnsortedList()...) {
+		return fmt.Errorf(
+			"cannot update replication-factor for namespace %v: namespace addition rollout is still in progress",
+			rfChangedNamespaces.UnsortedList(),
+		)
+	}
+
+	// Rule: no other spec fields may be modified alongside a replication-factor change.
+	if otherSpecChanged || namespaceAddedOrRemoved {
+		return fmt.Errorf(
+			"when updating replication-factor for namespace %v, no other fields in the "+
+				"aerospikecluster spec are allowed to be modified",
+			rfChangedNamespaces.UnsortedList(),
+		)
+	}
+
+	if !ptr.Deref(newObj.Spec.EnableDynamicConfigUpdate, false) {
+		return fmt.Errorf(
+			"replication-factor update for namespace %v requires "+
+				"'spec.enableDynamicConfigUpdate' to be set to true",
+			rfChangedNamespaces.UnsortedList(),
+		)
+	}
+
+	return nil
+}
+
+// validateReplicationFactorConsistencyAcrossRacks validates that the same namespace
+// has the same replication-factor value across all racks.
+func validateReplicationFactorConsistencyAcrossRacks(racks []asdbv1.Rack) error {
+	// nsRFMap tracks the first replication-factor seen for each namespace.
+	// Key: namespace name, Value: replication-factor (normalized int)
+	nsRFMap := make(map[string]int)
+
+	for rackIdx := range racks {
+		rack := racks[rackIdx]
+
+		nsList, ok := rack.AerospikeConfig.Value[asdbv1.ConfKeyNamespace].([]interface{})
+		if !ok {
+			continue
+		}
+
+		for _, nsInterface := range nsList {
+			ns, ok := nsInterface.(map[string]interface{})
+			if !ok {
+				continue
+			}
+
+			nsName, ok := ns[asdbv1.ConfKeyName].(string)
+			if !ok {
+				continue
+			}
+
+			currentRF, err := validation.GetNamespaceReplicationFactor(ns)
+			if err != nil {
+				return fmt.Errorf("invalid replication-factor for namespace %q in rack %d: %w",
+					nsName, rack.ID, err)
+			}
+
+			if existingRF, seen := nsRFMap[nsName]; seen {
+				if existingRF != currentRF {
+					return fmt.Errorf(
+						"namespace %q has different replication-factor values across racks "+
+							"(found %d and %d); replication-factor must be the same in every rack",
+						nsName, existingRF, currentRF,
+					)
+				}
+			} else {
+				nsRFMap[nsName] = currentRF
+			}
 		}
 	}
 

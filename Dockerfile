@@ -24,7 +24,7 @@ COPY errors/ errors/
 RUN CGO_ENABLED=0 GOOS=${TARGETOS:-linux} GOARCH=${TARGETARCH} GO111MODULE=on go build -a -o manager cmd/main.go
 
 # Base image
-FROM registry.access.redhat.com/ubi10/ubi-minimal:latest@sha256:29599cb2a44f3275232bc5fc48d26e069e8ba72b710229bed6652633725aa31a
+FROM registry.access.redhat.com/ubi10/ubi-minimal:latest@sha256:c858c2eb5bd336d8c400f6ee976a9d731beccf3351fa7a6f485dced24ae4af17
 
 # Version of Operator (build arg)
 ARG VERSION="4.4.0-dev1"

@@ -222,8 +222,8 @@ func getTimeStampRestoreConfigBytes(restoreConfig map[string]interface{}) (confi
 	timeInt, err := strconv.Atoi(timeStamp)
 	Expect(err).ToNot(HaveOccurred())
 
-	// increase time by 1 millisecond to consider the latest backup under time bound
-	restoreConfig[asdbv1beta1.TimeKey] = int64(timeInt) + 1
+	// increase time by 5 seconds to consider the latest backup under time bound
+	restoreConfig[asdbv1beta1.TimeKey] = int64(timeInt) + 5000
 	restoreConfig[asdbv1beta1.RoutineKey] = parts[len(parts)-5]
 
 	return getRestoreConfBytes(restoreConfig)

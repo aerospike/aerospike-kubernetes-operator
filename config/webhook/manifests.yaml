@@ -30,6 +30,26 @@ webhooks:
     service:
       name: webhook-service
       namespace: system
+      path: /mutate-asdb-aerospike-com-v1beta1-aerospikebackup
+  failurePolicy: Fail
+  name: maerospikebackup.kb.io
+  rules:
+  - apiGroups:
+    - asdb.aerospike.com
+    apiVersions:
+    - v1beta1
+    operations:
+    - CREATE
+    - UPDATE
+    resources:
+    - aerospikebackups
+  sideEffects: None
+- admissionReviewVersions:
+  - v1
+  clientConfig:
+    service:
+      name: webhook-service
+      namespace: system
       path: /mutate-asdb-aerospike-com-v1beta1-aerospikebackupservice
   failurePolicy: Fail
   name: maerospikebackupservice.kb.io
