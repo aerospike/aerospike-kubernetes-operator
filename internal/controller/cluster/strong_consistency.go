@@ -60,11 +60,11 @@ func (r *SingleClusterReconciler) addedSCNamespaces(nodesNamespaces map[string][
 
 	// Look inside only 1st rack. SC namespaces should be same across all the racks
 	rack := r.aeroCluster.Spec.RackConfig.Racks[0]
-	nsList := rack.AerospikeConfig.Value["namespaces"].([]interface{})
+	nsList := rack.AerospikeConfig.Value[asdbv1.ConfKeyNamespace].([]interface{})
 
 	for _, nsConfInterface := range nsList {
 		if asdbv1.IsNSSCEnabled(nsConfInterface.(map[string]interface{})) {
-			specSCNamespaces.Add(nsConfInterface.(map[string]interface{})["name"].(string))
+			specSCNamespaces.Add(nsConfInterface.(map[string]interface{})[asdbv1.ConfKeyName].(string))
 		}
 	}
 
