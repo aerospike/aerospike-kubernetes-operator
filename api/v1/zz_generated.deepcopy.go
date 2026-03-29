@@ -237,6 +237,13 @@ func (in *AerospikeClusterSpec) DeepCopy() *AerospikeClusterSpec {
 func (in *AerospikeClusterStatus) DeepCopyInto(out *AerospikeClusterStatus) {
 	*out = *in
 	in.AerospikeClusterStatusSpec.DeepCopyInto(&out.AerospikeClusterStatusSpec)
+	if in.Conditions != nil {
+		in, out := &in.Conditions, &out.Conditions
+		*out = make([]metav1.Condition, len(*in))
+		for i := range *in {
+			(*in)[i].DeepCopyInto(&(*out)[i])
+		}
+	}
 	if in.Pods != nil {
 		in, out := &in.Pods, &out.Pods
 		*out = make(map[string]AerospikePodStatus, len(*in))

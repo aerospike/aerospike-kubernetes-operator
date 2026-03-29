@@ -49,6 +49,56 @@ const (
 	AerospikeClusterError AerospikeClusterPhase = "Error"
 )
 
+// AerospikeClusterConditionType is the type for AerospikeCluster status conditions.
+type AerospikeClusterConditionType string
+
+const (
+	// AerospikeClusterConditionReady indicates the cluster has fully reached its desired spec and is healthy.
+	AerospikeClusterConditionReady AerospikeClusterConditionType = "Ready"
+
+	// AerospikeClusterConditionProgressing indicates the operator is actively making changes to the cluster.
+	// The Reason field carries the specific operation name (e.g. ScalingUp, Upgrading).
+	AerospikeClusterConditionProgressing AerospikeClusterConditionType = "Progressing"
+
+	// AerospikeClusterConditionDegraded indicates there are failed or unhealthy pods being tolerated by the operator.
+	AerospikeClusterConditionDegraded AerospikeClusterConditionType = "Degraded"
+
+	// AerospikeClusterConditionAccessControlSynced indicates Aerospike users and roles are in sync with the spec.
+	AerospikeClusterConditionAccessControlSynced AerospikeClusterConditionType = "AccessControlSynced"
+
+	// AerospikeClusterConditionPaused indicates reconciliation is deliberately paused via spec.paused=true.
+	AerospikeClusterConditionPaused AerospikeClusterConditionType = "Paused"
+)
+
+// Reason constants for AerospikeCluster status conditions.
+const (
+	// Ready / general reasons
+	AerospikeClusterReasonReconcileComplete = "ReconcileComplete"
+	AerospikeClusterReasonReconcileFailed   = "ReconcileFailed"
+	AerospikeClusterReasonAwaitingReconcile = "AwaitingReconcile"
+	AerospikeClusterReasonInitializing      = "Initializing"
+
+	// Progressing reasons — one per rack operation
+	AerospikeClusterReasonReconciling    = "Reconciling"
+	AerospikeClusterReasonScalingUp      = "ScalingUp"
+	AerospikeClusterReasonScalingDown    = "ScalingDown"
+	AerospikeClusterReasonUpgrading      = "Upgrading"
+	AerospikeClusterReasonRollingRestart = "RollingRestart"
+	AerospikeClusterReasonUpdatingConfig = "UpdatingConfig"
+	AerospikeClusterReasonAddingRack     = "AddingRack"
+	AerospikeClusterReasonRemovingRacks  = "RemovingRacks"
+	AerospikeClusterReasonPausedByUser   = "PausedByUser"
+	AerospikeClusterReasonResumed        = "Resumed"
+
+	// Degraded reasons
+	AerospikeClusterReasonPodsIgnored    = "PodsIgnored"
+	AerospikeClusterReasonAllPodsHealthy = "AllPodsHealthy"
+
+	// AccessControlSynced reasons
+	AerospikeClusterReasonACLSynced       = "ACLSynced"
+	AerospikeClusterReasonACLUpdateFailed = "ACLUpdateFailed"
+)
+
 // +kubebuilder:validation:Enum=Failed;PartiallyFailed;""
 type DynamicConfigUpdateStatus string
 
@@ -1037,8 +1087,13 @@ type AerospikeClusterStatus struct { //nolint:govet // for readability
 	// The current state of Aerospike cluster.
 	AerospikeClusterStatusSpec `json:",inline"`
 
-	// Details about the current condition of the AerospikeCluster resource.
-	// Conditions []apiextensions.CustomResourceDefinitionCondition `json:"conditions"`
+	// Conditions is a list of conditions representing the current state of the AerospikeCluster.
+	// +optional
+	// +listType=map
+	// +listMapKey=type
+	// +patchStrategy=merge
+	// +patchMergeKey=type
+	Conditions []metav1.Condition `json:"conditions,omitempty" patchStrategy:"merge" patchMergeKey:"type"`
 
 	// Pods has Aerospike specific status of the pods.
 	// This is map instead of the conventional map as list convention to allow each pod to patch update its own
@@ -1306,7 +1361,10 @@ type AerospikePodStatus struct { //nolint:govet // for readability
 // +kubebuilder:printcolumn:name="MultiPodPerHost",type=boolean,JSONPath=`.spec.podSpec.multiPodPerHost`
 // +kubebuilder:printcolumn:name="HostNetwork",type=boolean,JSONPath=`.spec.podSpec.hostNetwork`
 // +kubebuilder:printcolumn:name="Age",type="date",JSONPath=".metadata.creationTimestamp"
+// +kubebuilder:printcolumn:name="OPERATION",type="string",JSONPath=".status.conditions[?(@.type=='Progressing')].reason"
 // +kubebuilder:printcolumn:name="Phase",type="string",JSONPath=".status.phase"
+// +kubebuilder:printcolumn:name="Ready",type="string",JSONPath=".status.conditions[?(@.type=='Ready')].status"
+// +kubebuilder:printcolumn:name="Degraded",type=string,JSONPath=`.status.conditions[?(@.type=="Degraded")].status`,priority=1
 // +kubebuilder:subresource:scale:specpath=.spec.size,statuspath=.status.size,selectorpath=.status.selector
 
 // AerospikeCluster is the schema for the AerospikeCluster API
