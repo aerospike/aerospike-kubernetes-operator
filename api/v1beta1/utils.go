@@ -13,35 +13,40 @@ import (
 
 const BackupSvcMinSupportedVersion = "3.0.0"
 
-func ValidateBackupSvcVersion(image string) error {
+// BackupSvcNewOnDemandAPIVersion is the minimum ABS version that supports the new on-demand backup
+// endpoints POST /v1/backups/full/{name} and POST /v1/backups/incremental/{name}.
+// Versions below this fall back to the deprecated POST /v1/backups/schedule/{name}.
+const BackupSvcNewOnDemandAPIVersion = "3.5.0"
+
+func ValidateBackupSvcVersion(image string) (string, error) {
 	version, err := asdbv1.GetImageVersion(image)
 	if err != nil {
-		return err
+		return version, err
 	}
 
 	val, err := lib.CompareVersions(version, BackupSvcMinSupportedVersion)
 	if err != nil {
-		return fmt.Errorf("failed to check backup service image version: %v", err)
+		return version, fmt.Errorf("failed to check backup service image version: %v", err)
 	}
 
 	if val < 0 {
-		return fmt.Errorf("backup service version %s is not supported. Minimum supported version is %s",
+		return version, fmt.Errorf("backup service version %s is not supported. Minimum supported version is %s",
 			version, BackupSvcMinSupportedVersion)
 	}
 
-	return nil
+	return version, nil
 }
 
 // ValidateBackupSvcSupportedVersion validates the supported backup service version.
 // It returns an error if the backup service version is less than 3.0.0.
-func ValidateBackupSvcSupportedVersion(k8sClient client.Client, name, namespace string) error {
+func ValidateBackupSvcSupportedVersion(k8sClient client.Client, name, namespace string) (string, error) {
 	var backupSvc AerospikeBackupService
 
 	if err := k8sClient.Get(context.TODO(),
 		types.NamespacedName{Name: name, Namespace: namespace},
 		&backupSvc,
 	); err != nil {
-		return err
+		return "", err
 	}
 
 	return ValidateBackupSvcVersion(backupSvc.Spec.Image)

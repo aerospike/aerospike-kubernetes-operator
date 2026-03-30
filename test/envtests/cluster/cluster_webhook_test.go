@@ -7,7 +7,6 @@ import (
 	. "github.com/onsi/ginkgo/v2"
 	. "github.com/onsi/gomega"
 	v1 "k8s.io/api/core/v1"
-	"k8s.io/apimachinery/pkg/api/errors"
 	"k8s.io/apimachinery/pkg/api/resource"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/util/intstr"
@@ -23,13 +22,12 @@ import (
 var _ = Describe("AerospikeCluster validation", func() {
 	const (
 		clusterName = "invalid-cluster"
-		testNs      = "default" // use same test namespace as suite_test.go
 	)
 
 	ctx := context.TODO()
 
 	// Create namespaced name for cluster
-	clusterNamespacedName := test.GetNamespacedName(clusterName, testNs)
+	clusterNamespacedName := test.GetNamespacedName(clusterName, testutil.DefaultNamespace)
 
 	AfterEach(func() {
 		aeroCluster := &asdbv1.AerospikeCluster{
@@ -39,8 +37,7 @@ var _ = Describe("AerospikeCluster validation", func() {
 			},
 		}
 		// Delete the cluster after each test
-		err := envtests.K8sClient.Delete(ctx, aeroCluster)
-		Expect(err).To(Or(Succeed(), MatchError(errors.IsNotFound, "should be NotFound or Succeed")))
+		Expect(testCluster.DeleteCluster(envtests.K8sClient, ctx, aeroCluster)).ToNot(HaveOccurred())
 	})
 
 	Context("Deploy validation", func() {
@@ -1313,7 +1310,8 @@ var _ = Describe("AerospikeCluster validation", func() {
 	Context("Update validation", func() {
 		const updateValidationClusterName = "update-validation-cluster"
 
-		updateValidationClusterNamespacedName := test.GetNamespacedName(updateValidationClusterName, testNs)
+		updateValidationClusterNamespacedName := test.GetNamespacedName(
+			updateValidationClusterName, testutil.DefaultNamespace)
 
 		AfterEach(func() {
 			aeroCluster := &asdbv1.AerospikeCluster{
@@ -1322,7 +1320,7 @@ var _ = Describe("AerospikeCluster validation", func() {
 					Namespace: updateValidationClusterNamespacedName.Namespace,
 				},
 			}
-			_ = envtests.K8sClient.Delete(ctx, aeroCluster)
+			Expect(testCluster.DeleteCluster(envtests.K8sClient, ctx, aeroCluster)).ToNot(HaveOccurred())
 		})
 
 		Context("spec.storage", func() {

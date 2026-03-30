@@ -85,6 +85,12 @@ var _ = BeforeSuite(
 
 		err = cluster.DeployCluster(k8sClient, testCtx, aeroCluster)
 		Expect(err).ToNot(HaveOccurred())
+
+		aeroCluster, err = cluster.GetCluster(k8sClient, testCtx, aerospikeNsNm)
+		Expect(err).ToNot(HaveOccurred())
+
+		err = cluster.WriteDataToCluster(aeroCluster, k8sClient, []string{"test"})
+		Expect(err).ToNot(HaveOccurred())
 	})
 
 var _ = AfterSuite(

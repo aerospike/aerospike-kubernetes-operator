@@ -24,10 +24,10 @@ COPY errors/ errors/
 RUN CGO_ENABLED=0 GOOS=${TARGETOS:-linux} GOARCH=${TARGETARCH} GO111MODULE=on go build -a -o manager cmd/main.go
 
 # Base image
-FROM registry.access.redhat.com/ubi10/ubi-minimal:latest@sha256:29599cb2a44f3275232bc5fc48d26e069e8ba72b710229bed6652633725aa31a
+FROM registry.access.redhat.com/ubi10/ubi-minimal:latest@sha256:7bd3d2e7f5c507aebd1575d0f2fab9fe3e882e25fee54fa07f7970aa8bbc5fab
 
 # Version of Operator (build arg)
-ARG VERSION="4.3.0"
+ARG VERSION="4.4.0-dev1"
 
 # User to run container as
 ARG USER="root"

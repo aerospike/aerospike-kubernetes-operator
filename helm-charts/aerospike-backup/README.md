@@ -45,6 +45,7 @@ helm install aerospike-backup aerospike/aerospike-backup \
 | `backupService.namespace`        | Aerospike backup service namespace                   |            |
 | `backupConfig`                   | Aerospike backup configuration                       | `{}` (nil) |
 | `onDemandBackups[*].id`          | Unique identifier for the on-demand backup           |            |
+| `onDemandBackups[*].type`        | Type of on-demand backup. Can be Full or Incremental | Full       |
 | `onDemandBackups[*].routineName` | Routine name used to trigger on-demand backup        |            |
 | `onDemandBackups[*].delay`       | Delay interval before starting the on-demand backup  |            |
 

@@ -39,6 +39,7 @@ backupConfig: {}
 ## OnDemandBackups is the configuration for on-demand backups.
 onDemandBackups: []
 #  - id: on-demand-backup-1
+#    type: Full
 #    routineName: aerospike-aerospikebackup-test-routine
 #    delay: 10ms
 

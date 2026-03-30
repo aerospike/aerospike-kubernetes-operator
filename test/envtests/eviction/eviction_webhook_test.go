@@ -14,6 +14,7 @@ import (
 
 	asdbv1 "github.com/aerospike/aerospike-kubernetes-operator/v4/api/v1"
 	"github.com/aerospike/aerospike-kubernetes-operator/v4/test/envtests"
+	"github.com/aerospike/aerospike-kubernetes-operator/v4/test/testutil"
 )
 
 var _ = Describe("Pod eviction webhook", func() {
@@ -24,11 +25,10 @@ var _ = Describe("Pod eviction webhook", func() {
 
 	const (
 		podName = "test-evict-pod"
-		testNs  = "default"
 	)
 
 	BeforeEach(func() {
-		pod = getDummyPodWithAerospikeLabels(podName, testNs)
+		pod = getDummyPodWithAerospikeLabels(podName, testutil.DefaultNamespace)
 	})
 
 	AfterEach(func() {
@@ -37,7 +37,10 @@ var _ = Describe("Pod eviction webhook", func() {
 		_ = envtests.K8sClient.Delete(ctx, pod)
 
 		Eventually(func() bool {
-			err := envtests.K8sClient.Get(ctx, client.ObjectKey{Name: podName, Namespace: testNs}, &corev1.Pod{})
+			err := envtests.K8sClient.Get(ctx, client.ObjectKey{
+				Name:      podName,
+				Namespace: testutil.DefaultNamespace}, &corev1.Pod{})
+
 			return apierrors.IsNotFound(err)
 		}, 10*time.Second, 500*time.Millisecond).Should(BeTrue())
 	})
@@ -53,24 +56,26 @@ var _ = Describe("Pod eviction webhook", func() {
 
 			// Wait until pod is visible
 			Eventually(func() error {
-				return envtests.K8sClient.Get(ctx, client.ObjectKey{Name: podName, Namespace: testNs}, pod)
+				return envtests.K8sClient.Get(ctx, client.ObjectKey{Name: podName, Namespace: testutil.DefaultNamespace}, pod)
 			}, 5*time.Second, 500*time.Millisecond).Should(Succeed())
 
 			By("creating eviction object")
 
 			eviction := &policyv1.Eviction{
-				ObjectMeta:    metav1.ObjectMeta{Name: podName, Namespace: testNs},
+				ObjectMeta:    metav1.ObjectMeta{Name: podName, Namespace: testutil.DefaultNamespace},
 				DeleteOptions: &metav1.DeleteOptions{},
 			}
 
 			By("attempting eviction")
 
-			err := envtests.ClientSet.CoreV1().Pods(testNs).EvictV1(ctx, eviction)
+			err := envtests.ClientSet.CoreV1().Pods(testutil.DefaultNamespace).EvictV1(ctx, eviction)
 			Expect(err).NotTo(HaveOccurred())
 
 			// Optionally verify Pod deletion
 			Eventually(func() bool {
-				err := envtests.K8sClient.Get(ctx, client.ObjectKey{Name: podName, Namespace: testNs}, &corev1.Pod{})
+				err := envtests.K8sClient.Get(ctx,
+					client.ObjectKey{Name: podName, Namespace: testutil.DefaultNamespace}, &corev1.Pod{})
+
 				return apierrors.IsNotFound(err)
 			}, 5*time.Second, 500*time.Millisecond).Should(BeTrue())
 		})
@@ -92,25 +97,25 @@ var _ = Describe("Pod eviction webhook", func() {
 
 				// Wait until pod is visible
 				Eventually(func() error {
-					return envtests.K8sClient.Get(ctx, client.ObjectKey{Name: podName, Namespace: testNs}, pod)
+					return envtests.K8sClient.Get(ctx, client.ObjectKey{Name: podName, Namespace: testutil.DefaultNamespace}, pod)
 				}, 5*time.Second, 500*time.Millisecond).Should(Succeed())
 
 				By("creating eviction object")
 
 				eviction := &policyv1.Eviction{
-					ObjectMeta:    metav1.ObjectMeta{Name: podName, Namespace: testNs},
+					ObjectMeta:    metav1.ObjectMeta{Name: podName, Namespace: testutil.DefaultNamespace},
 					DeleteOptions: &metav1.DeleteOptions{},
 				}
 
 				By("attempting eviction")
 
-				err := envtests.ClientSet.CoreV1().Pods(testNs).EvictV1(ctx, eviction)
+				err := envtests.ClientSet.CoreV1().Pods(testutil.DefaultNamespace).EvictV1(ctx, eviction)
 				Expect(err).To(HaveOccurred())
 				Expect(err.Error()).To(ContainSubstring("blocked by admission webhook"))
 
 				By("verifying if eviction-blocked annotation is set")
 				Eventually(func() bool {
-					_ = envtests.K8sClient.Get(ctx, client.ObjectKey{Name: podName, Namespace: testNs}, pod)
+					_ = envtests.K8sClient.Get(ctx, client.ObjectKey{Name: podName, Namespace: testutil.DefaultNamespace}, pod)
 					return pod.Annotations != nil && pod.Annotations[asdbv1.EvictionBlockedAnnotation] != ""
 				}, 5*time.Second, 500*time.Millisecond).Should(BeTrue())
 			})
@@ -126,21 +131,23 @@ var _ = Describe("Pod eviction webhook", func() {
 				Expect(envtests.K8sClient.Create(ctx, pod)).To(Succeed())
 
 				Eventually(func() error {
-					return envtests.K8sClient.Get(ctx, client.ObjectKey{Name: podName, Namespace: testNs}, pod)
+					return envtests.K8sClient.Get(ctx, client.ObjectKey{Name: podName, Namespace: testutil.DefaultNamespace}, pod)
 				}, 5*time.Second, 500*time.Millisecond).Should(Succeed())
 
 				By("attempting eviction")
 
 				eviction := &policyv1.Eviction{
-					ObjectMeta:    metav1.ObjectMeta{Name: podName, Namespace: testNs},
+					ObjectMeta:    metav1.ObjectMeta{Name: podName, Namespace: testutil.DefaultNamespace},
 					DeleteOptions: &metav1.DeleteOptions{},
 				}
 
-				err := envtests.ClientSet.CoreV1().Pods(testNs).EvictV1(ctx, eviction)
+				err := envtests.ClientSet.CoreV1().Pods(testutil.DefaultNamespace).EvictV1(ctx, eviction)
 				Expect(err).NotTo(HaveOccurred())
 
 				Eventually(func() bool {
-					err := envtests.K8sClient.Get(ctx, client.ObjectKey{Name: podName, Namespace: testNs}, &corev1.Pod{})
+					err := envtests.K8sClient.Get(ctx,
+						client.ObjectKey{Name: podName, Namespace: testutil.DefaultNamespace}, &corev1.Pod{})
+
 					return apierrors.IsNotFound(err)
 				}, 5*time.Second, 500*time.Millisecond).Should(BeTrue())
 			})
@@ -153,11 +160,11 @@ var _ = Describe("Pod eviction webhook", func() {
 				By("attempting to evict non-existent pod")
 
 				eviction := &policyv1.Eviction{
-					ObjectMeta:    metav1.ObjectMeta{Name: nonExistentPodName, Namespace: testNs},
+					ObjectMeta:    metav1.ObjectMeta{Name: nonExistentPodName, Namespace: testutil.DefaultNamespace},
 					DeleteOptions: &metav1.DeleteOptions{},
 				}
 
-				err := envtests.ClientSet.CoreV1().Pods(testNs).EvictV1(ctx, eviction)
+				err := envtests.ClientSet.CoreV1().Pods(testutil.DefaultNamespace).EvictV1(ctx, eviction)
 				// Should not be blocked by webhook (let API server handle NotFound)
 				Expect(err).To(HaveOccurred())
 				Expect(err.Error()).To(ContainSubstring("not found"))
