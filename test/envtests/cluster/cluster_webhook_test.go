@@ -2,6 +2,7 @@ package cluster
 
 import (
 	"context"
+	"strings"
 
 	. "github.com/onsi/ginkgo/v2"
 	. "github.com/onsi/gomega"
@@ -804,6 +805,48 @@ var _ = Describe("AerospikeCluster validation", func() {
 						Validate(err)
 				})
 
+				// cluster.Name is used as the headless-service name (and LB service base).
+				// Kubernetes validates service names as DNS-1035 labels, which requires
+				// the first character to be a lowercase letter — digits are not allowed.
+				// cluster.Name is immutable in Kubernetes, so this is checked at CREATE only.
+				It("rejects cluster name starting with a digit (invalid DNS-1035 service name)", func() {
+					cName := test.GetNamespacedName("1mycluster", clusterNamespacedName.Namespace)
+					aeroCluster := testCluster.CreateDummyAerospikeCluster(cName, 2)
+
+					err := testCluster.DeployCluster(envtests.K8sClient, ctx, aeroCluster)
+					Expect(err).To(HaveOccurred())
+
+					envtests.NewStatusErrorMatcher().
+						WithMessageSubstrings(
+							"\"vaerospikecluster.kb.io\"",
+							"cluster name \"1mycluster\" is not a valid Kubernetes service name (DNS-1035)",
+							"start with an alphabetic character").
+						Validate(err)
+				})
+
+				// The maximum-scale pod name overhead is 16 chars ("-1000000-aaa-255"),
+				// so cluster.Name must be ≤ 47 chars. This subsumes both service name
+				// checks (headless = cluster.Name, LB = cluster.Name+"-lb"), since
+				// their overheads (0 and 3 chars) are smaller than 16.
+				// Any cluster name > 47 chars is caught by the pod name check.
+				It("rejects cluster name longer than 47 chars (projected pod name would exceed 63)", func() {
+					// 48 chars: 48 + 16 = 64 → invalid DNS label.
+					longName := strings.Repeat("a", 48)
+					cName := test.GetNamespacedName(longName, clusterNamespacedName.Namespace)
+					aeroCluster := testCluster.CreateDummyAerospikeCluster(cName, 2)
+
+					err := testCluster.DeployCluster(envtests.K8sClient, ctx, aeroCluster)
+					Expect(err).To(HaveOccurred())
+
+					envtests.NewStatusErrorMatcher().
+						WithMessageSubstrings(
+							"\"vaerospikecluster.kb.io\"",
+							"computed at max rack ID",
+							"exceeds the maximum DNS label length",
+							"of 63 characters").
+						Validate(err)
+				})
+
 				It("rejects when cluster namespace is not found", func() {
 					cName := test.GetNamespacedName(clusterNamespacedName.Name, "default ns")
 					aeroCluster := testCluster.CreateDummyAerospikeCluster(cName, 1)
@@ -817,7 +860,16 @@ var _ = Describe("AerospikeCluster validation", func() {
 				})
 			})
 			Context("positive", func() {
-				// Add positive metadata tests here
+				It("accepts cluster name starting with a lowercase letter", func() {
+					cName := test.GetNamespacedName("valid-cluster", clusterNamespacedName.Namespace)
+					aeroCluster := testCluster.CreateDummyAerospikeCluster(cName, 2)
+
+					err := envtests.K8sClient.Create(ctx, aeroCluster)
+
+					defer func() { _ = envtests.K8sClient.Delete(ctx, aeroCluster) }()
+
+					Expect(err).ToNot(HaveOccurred())
+				})
 			})
 		})
 
@@ -941,9 +993,316 @@ var _ = Describe("AerospikeCluster validation", func() {
 							"Namespaces [test ns]").
 						Validate(err)
 				})
+
+				// Rack revision validation:
+				//   • characters (CREATE + UPDATE): lowercase alphanumeric and '-', must
+				//     start/end with alphanumeric (IsDNS1123Label — catches uppercase,
+				//     dots, underscores, trailing hyphens).
+				//   • length (CREATE only): no explicit character cap. At CREATE the
+				//     webhook validates the projected pod name using a placeholder of
+				//     max(len(revision), minRevisionReservation=3) chars with MaxRackID
+				//     and max ordinal (255). On UPDATE, the actual pod name is validated
+				//     with real rack ID, real revision, and real max ordinal (Size-1).
+				Context("rack.revision", func() {
+					It("rejects revision that makes projected pod name too long at CREATE", func() {
+						// cluster name = 3 chars, revision = 48 chars:
+						// projected pod = 3 + "-1000000-" + 48 + "-255" = 3+9+48+4 = 64 > 63
+						shortName := "abc"
+						cName := test.GetNamespacedName(shortName, clusterNamespacedName.Namespace)
+						aeroCluster := testCluster.CreateDummyAerospikeCluster(cName, 2)
+						aeroCluster.Spec.RackConfig = asdbv1.RackConfig{
+							Namespaces: []string{"test"},
+							Racks:      []asdbv1.Rack{{ID: 1, Revision: strings.Repeat("a", 48)}},
+						}
+
+						err := testCluster.DeployCluster(envtests.K8sClient, ctx, aeroCluster)
+						Expect(err).To(HaveOccurred())
+
+						envtests.NewStatusErrorMatcher().
+							WithMessageSubstrings(
+								"\"vaerospikecluster.kb.io\"",
+								"computed at max rack ID",
+								"exceeds the maximum DNS label length",
+								"of 63 characters").
+							Validate(err)
+					})
+
+					It("rejects revision with uppercase letters", func() {
+						aeroCluster := testCluster.CreateDummyAerospikeCluster(clusterNamespacedName, 2)
+						aeroCluster.Spec.RackConfig = asdbv1.RackConfig{
+							Namespaces: []string{"test"},
+							Racks:      []asdbv1.Rack{{ID: 1, Revision: "V1"}},
+						}
+
+						err := testCluster.DeployCluster(envtests.K8sClient, ctx, aeroCluster)
+						Expect(err).To(HaveOccurred())
+
+						envtests.NewStatusErrorMatcher().
+							WithMessageSubstrings(
+								"\"vaerospikecluster.kb.io\"",
+								"rack revision \"V1\" for rack ID 1 is invalid",
+								"must consist of lower case alphanumeric characters or '-'").
+							Validate(err)
+					})
+
+					It("rejects revision ending with a hyphen", func() {
+						aeroCluster := testCluster.CreateDummyAerospikeCluster(clusterNamespacedName, 2)
+						aeroCluster.Spec.RackConfig = asdbv1.RackConfig{
+							Namespaces: []string{"test"},
+							Racks:      []asdbv1.Rack{{ID: 1, Revision: "v-"}},
+						}
+
+						err := testCluster.DeployCluster(envtests.K8sClient, ctx, aeroCluster)
+						Expect(err).To(HaveOccurred())
+
+						envtests.NewStatusErrorMatcher().
+							WithMessageSubstrings(
+								"\"vaerospikecluster.kb.io\"",
+								"rack revision \"v-\" for rack ID 1 is invalid",
+								"must start and end with an alphanumeric character").
+							Validate(err)
+					})
+
+					// Dot in revision is a silent failure: k8s accepts the STS/pod as a
+					// DNS subdomain, but the dot breaks the pod's DNS label in the FQDN.
+					It("rejects revision with a dot (silent DNS breakage without webhook check)", func() {
+						aeroCluster := testCluster.CreateDummyAerospikeCluster(clusterNamespacedName, 2)
+						aeroCluster.Spec.RackConfig = asdbv1.RackConfig{
+							Namespaces: []string{"test"},
+							Racks:      []asdbv1.Rack{{ID: 1, Revision: "v.1"}},
+						}
+
+						err := testCluster.DeployCluster(envtests.K8sClient, ctx, aeroCluster)
+						Expect(err).To(HaveOccurred())
+
+						envtests.NewStatusErrorMatcher().
+							WithMessageSubstrings(
+								"\"vaerospikecluster.kb.io\"",
+								"rack revision \"v.1\" for rack ID 1 is invalid",
+								"must not contain dots").
+							Validate(err)
+					})
+
+					It("rejects revision with an underscore", func() {
+						aeroCluster := testCluster.CreateDummyAerospikeCluster(clusterNamespacedName, 2)
+						aeroCluster.Spec.RackConfig = asdbv1.RackConfig{
+							Namespaces: []string{"test"},
+							Racks:      []asdbv1.Rack{{ID: 1, Revision: "v_1"}},
+						}
+
+						err := testCluster.DeployCluster(envtests.K8sClient, ctx, aeroCluster)
+						Expect(err).To(HaveOccurred())
+
+						envtests.NewStatusErrorMatcher().
+							WithMessageSubstrings(
+								"\"vaerospikecluster.kb.io\"",
+								"rack revision \"v_1\" for rack ID 1 is invalid",
+								"must consist of lower case alphanumeric characters or '-'").
+							Validate(err)
+					})
+
+					// The baseline projected pod name uses the 3-char placeholder revision
+					// (minRevisionReservation), MaxRackID (1000000), and max ordinal (255):
+					//
+					//   projected pod = cluster.Name + "-1000000-aaa-255"
+					//                                   (8)    (4) (4) = 16 chars overhead
+					//
+					// So cluster.Name must be ≤ 63 − 16 = 47 chars.
+					// "invalid-cluster" = 15 chars → well within the limit.
+					// We need a cluster name > 47 chars to trigger this error.
+					// (This test overlaps with the cluster-name test above; it is kept
+					// here to confirm the error also fires when racks are configured.)
+					It("rejects cluster name too long for projected pod name (with rack config)", func() {
+						// 48-char cluster name: 48 + 16 = 64 → pod name too long.
+						longName := strings.Repeat("a", 48)
+						cName := test.GetNamespacedName(longName, clusterNamespacedName.Namespace)
+						aeroCluster := testCluster.CreateDummyAerospikeCluster(cName, 2)
+						aeroCluster.Spec.RackConfig = asdbv1.RackConfig{
+							Namespaces: []string{"test"},
+							Racks:      []asdbv1.Rack{{ID: 1, Revision: "v1"}},
+						}
+
+						err := testCluster.DeployCluster(envtests.K8sClient, ctx, aeroCluster)
+						Expect(err).To(HaveOccurred())
+
+						envtests.NewStatusErrorMatcher().
+							WithMessageSubstrings(
+								"\"vaerospikecluster.kb.io\"",
+								"computed at max rack ID",
+								"exceeds the maximum DNS label length",
+								"of 63 characters").
+							Validate(err)
+					})
+
+					It("rejects invalid revision on second rack when first rack is valid", func() {
+						aeroCluster := testCluster.CreateDummyAerospikeCluster(clusterNamespacedName, 2)
+						aeroCluster.Spec.RackConfig = asdbv1.RackConfig{
+							Namespaces: []string{"test"},
+							Racks: []asdbv1.Rack{
+								{ID: 1, Revision: "v1"},
+								{ID: 2, Revision: "BAD"}, // uppercase
+							},
+						}
+
+						err := testCluster.DeployCluster(envtests.K8sClient, ctx, aeroCluster)
+						Expect(err).To(HaveOccurred())
+
+						envtests.NewStatusErrorMatcher().
+							WithMessageSubstrings(
+								"\"vaerospikecluster.kb.io\"",
+								"rack revision \"BAD\" for rack ID 2 is invalid").
+							Validate(err)
+					})
+
+					// maxPlaceholderLen = max(minRevisionReservation=3, longest revision).
+					// When multiple racks have different revision lengths the longest one
+					// drives the check. If that makes the projected pod name > 63 chars,
+					// the whole CREATE is rejected even if the other racks are fine.
+					It("rejects CREATE when the rack with the longest revision drives projected pod name too long", func() {
+						// cluster name "xyz" (3), 2 racks: "v1" (2 chars) and 48-char revision.
+						// maxPlaceholderLen = max(3, 2, 48) = 48
+						// projected pod = 3 + "-1000000-" + 48 + "-255" = 3+9+48+4 = 64 > 63.
+						cName := test.GetNamespacedName("xyz", clusterNamespacedName.Namespace)
+						aeroCluster := testCluster.CreateDummyAerospikeCluster(cName, 2)
+						aeroCluster.Spec.RackConfig = asdbv1.RackConfig{
+							Namespaces: []string{"test"},
+							Racks: []asdbv1.Rack{
+								{ID: 1, Revision: "v1"},
+								{ID: 2, Revision: strings.Repeat("a", 48)},
+							},
+						}
+
+						err := testCluster.DeployCluster(envtests.K8sClient, ctx, aeroCluster)
+						Expect(err).To(HaveOccurred())
+
+						envtests.NewStatusErrorMatcher().
+							WithMessageSubstrings(
+								"\"vaerospikecluster.kb.io\"",
+								"computed at max rack ID",
+								"exceeds the maximum DNS label length",
+								"of 63 characters").
+							Validate(err)
+					})
+				})
 			})
 			Context("positive", func() {
-				// Add positive rackConfig tests here
+				Context("rack.revision", func() {
+					It("accepts empty revision", func() {
+						aeroCluster := testCluster.CreateDummyAerospikeCluster(clusterNamespacedName, 2)
+						aeroCluster.Spec.RackConfig = asdbv1.RackConfig{
+							Namespaces: []string{"test"},
+							Racks:      []asdbv1.Rack{{ID: 1, Revision: ""}},
+						}
+
+						err := envtests.K8sClient.Create(ctx, aeroCluster)
+						Expect(err).ToNot(HaveOccurred())
+					})
+
+					It("accepts a 1-char lowercase revision", func() {
+						aeroCluster := testCluster.CreateDummyAerospikeCluster(clusterNamespacedName, 2)
+						aeroCluster.Spec.RackConfig = asdbv1.RackConfig{
+							Namespaces: []string{"test"},
+							Racks:      []asdbv1.Rack{{ID: 1, Revision: "v"}},
+						}
+
+						err := envtests.K8sClient.Create(ctx, aeroCluster)
+						Expect(err).ToNot(HaveOccurred())
+					})
+
+					It("accepts a 2-char revision with a hyphen (e.g. v1)", func() {
+						aeroCluster := testCluster.CreateDummyAerospikeCluster(clusterNamespacedName, 2)
+						aeroCluster.Spec.RackConfig = asdbv1.RackConfig{
+							Namespaces: []string{"test"},
+							Racks:      []asdbv1.Rack{{ID: 1, Revision: "v1"}},
+						}
+
+						err := envtests.K8sClient.Create(ctx, aeroCluster)
+						Expect(err).ToNot(HaveOccurred())
+					})
+
+					It("accepts a 3-char revision", func() {
+						aeroCluster := testCluster.CreateDummyAerospikeCluster(clusterNamespacedName, 2)
+						aeroCluster.Spec.RackConfig = asdbv1.RackConfig{
+							Namespaces: []string{"test"},
+							Racks:      []asdbv1.Rack{{ID: 1, Revision: "v1b"}},
+						}
+
+						err := envtests.K8sClient.Create(ctx, aeroCluster)
+						Expect(err).ToNot(HaveOccurred())
+					})
+
+					// Revisions longer than 3 chars are accepted as long as the resulting
+					// projected pod name (with MaxRackID and max ordinal) stays ≤ 63 chars.
+					// cluster name "abc" (3), revision "rev-alpha" (9):
+					//   projected pod = 3 + "-1000000-" + 9 + "-255" = 3+9+9+4 = 25 ≤ 63 ✓
+					It("accepts a revision longer than 3 chars when pod name stays within limit", func() {
+						shortName := "abc"
+						cName := test.GetNamespacedName(shortName, clusterNamespacedName.Namespace)
+						aeroCluster := testCluster.CreateDummyAerospikeCluster(cName, 2)
+						aeroCluster.Spec.RackConfig = asdbv1.RackConfig{
+							Namespaces: []string{"test"},
+							Racks:      []asdbv1.Rack{{ID: 1, Revision: "rev-alpha"}}, // 9 chars
+						}
+
+						err := envtests.K8sClient.Create(ctx, aeroCluster)
+
+						defer func() { _ = envtests.K8sClient.Delete(ctx, aeroCluster) }()
+
+						Expect(err).ToNot(HaveOccurred())
+					})
+
+					// cluster name "xyz" (3), revision = 47 chars:
+					// projected pod = 3 + "-1000000-" + 47 + "-255" = 3+9+47+4 = 63 → exactly at limit.
+					It("accepts a revision exactly at the projected pod name boundary (pod name = 63 chars)", func() {
+						cName := test.GetNamespacedName("xyz", clusterNamespacedName.Namespace)
+						aeroCluster := testCluster.CreateDummyAerospikeCluster(cName, 2)
+						aeroCluster.Spec.RackConfig = asdbv1.RackConfig{
+							Namespaces: []string{"test"},
+							Racks:      []asdbv1.Rack{{ID: 1, Revision: strings.Repeat("a", 47)}},
+						}
+
+						err := envtests.K8sClient.Create(ctx, aeroCluster)
+
+						defer func() { _ = envtests.K8sClient.Delete(ctx, aeroCluster) }()
+
+						Expect(err).ToNot(HaveOccurred())
+					})
+
+					// Two racks with different revision lengths. The longer one (47 chars)
+					// becomes maxPlaceholderLen. projected pod = 3+9+47+4 = 63 → passes.
+					It("accepts multiple racks where the longest revision fits within the pod name limit", func() {
+						cName := test.GetNamespacedName("def", clusterNamespacedName.Namespace)
+						aeroCluster := testCluster.CreateDummyAerospikeCluster(cName, 2)
+						aeroCluster.Spec.RackConfig = asdbv1.RackConfig{
+							Namespaces: []string{"test"},
+							Racks: []asdbv1.Rack{
+								{ID: 1, Revision: "v1"},
+								{ID: 2, Revision: strings.Repeat("a", 47)},
+							},
+						}
+
+						err := envtests.K8sClient.Create(ctx, aeroCluster)
+
+						defer func() { _ = envtests.K8sClient.Delete(ctx, aeroCluster) }()
+
+						Expect(err).ToNot(HaveOccurred())
+					})
+
+					// overhead = "-1000000-aaa-255" = 16 chars; cluster.Name ≤ 47 chars is safe.
+					// cluster name exactly at the 47-char limit:
+					// 47 + "-1000000-aaa-255" (16) = 63 → exactly at DNS label max.
+					It("accepts cluster name of exactly 47 chars (projected pod name = 63 chars)", func() {
+						exactName := strings.Repeat("a", 47)
+						cName := test.GetNamespacedName(exactName, clusterNamespacedName.Namespace)
+						aeroCluster := testCluster.CreateDummyAerospikeCluster(cName, 2)
+
+						err := envtests.K8sClient.Create(ctx, aeroCluster)
+
+						defer func() { _ = envtests.K8sClient.Delete(ctx, aeroCluster) }()
+
+						Expect(err).ToNot(HaveOccurred())
+					})
+				})
 			})
 		})
 	})
@@ -1024,6 +1383,188 @@ var _ = Describe("AerospikeCluster validation", func() {
 			})
 			Context("positive", func() {
 				// Add positive update podSpec tests here
+			})
+		})
+
+		// Conservative projected-name length bounds are checked on CREATE only.
+		// On UPDATE, the actual pod name (real rack ID, real revision, real
+		// per-rack max ordinal via DistributeItems) is validated as a DNS label
+		// to catch any silent overflow introduced by a revision change.
+		// Revision character validity IS re-checked on UPDATE because an
+		// invalid character (dot, uppercase, underscore) would silently corrupt
+		// the StatefulSet name at runtime regardless of when it was introduced.
+		Context("naming length bounds (CREATE-only projected check; UPDATE uses actual pod name)", func() {
+			Context("negative", func() {
+				It("allows UPDATE without re-checking CREATE-only length bounds", func() {
+					// Create a valid cluster then update an unrelated field (size).
+					// The webhook must not surface any CREATE-only naming error on UPDATE.
+					aeroCluster := testCluster.CreateDummyAerospikeCluster(updateValidationClusterNamespacedName, 2)
+					err := envtests.K8sClient.Create(ctx, aeroCluster)
+					Expect(err).ToNot(HaveOccurred())
+
+					current, err := testCluster.GetCluster(envtests.K8sClient, ctx, updateValidationClusterNamespacedName)
+					Expect(err).ToNot(HaveOccurred())
+
+					// Change size — an otherwise valid update.
+					current.Spec.Size = 2
+					err = envtests.K8sClient.Update(ctx, current)
+					// The webhook must not surface any CREATE-only naming error on UPDATE.
+					if err != nil {
+						Expect(err).NotTo(MatchError(ContainSubstring("computed at max rack ID")),
+							"CREATE-only pod name length check must not be re-run on UPDATE")
+					}
+				})
+
+				It("rejects UPDATE when the new revision makes the actual pod name too long", func() {
+					// cluster name = 20 chars, 1 rack (ID=1), initial revision = "v1" (2 chars).
+					// At CREATE: baseline projected pod = 20+9+3+4 = 36 ≤ 63 → passes.
+					// On UPDATE: revision grows to 42 chars.
+					// DistributeItems(1, 1) = [1] → max ordinal for this rack = 0.
+					// Actual STS  = "a"*20 + "-1-" + "b"*42 = 20+3+42 = 65 chars
+					// Actual pod  = STS + "-0"              = 65+2   = 67 chars > 63 → rejected.
+					clusterName20 := strings.Repeat("a", 20)
+					cName20 := test.GetNamespacedName(clusterName20, updateValidationClusterNamespacedName.Namespace)
+
+					aeroCluster := testCluster.CreateDummyAerospikeCluster(cName20, 2)
+					aeroCluster.Spec.RackConfig = asdbv1.RackConfig{
+						Namespaces: []string{"test"},
+						Racks:      []asdbv1.Rack{{ID: 1, Revision: "v1"}},
+					}
+					err := envtests.K8sClient.Create(ctx, aeroCluster)
+					Expect(err).ToNot(HaveOccurred())
+
+					current, err := testCluster.GetCluster(envtests.K8sClient, ctx, cName20)
+					Expect(err).ToNot(HaveOccurred())
+
+					// Grow the revision to 42 chars — actual pod name will be 67 chars.
+					current.Spec.RackConfig.Racks[0].Revision = strings.Repeat("b", 42)
+					err = envtests.K8sClient.Update(ctx, current)
+					Expect(err).To(HaveOccurred(), "UPDATE with oversized revision should be rejected")
+
+					envtests.NewStatusErrorMatcher().
+						WithMessageSubstrings(
+							"\"vaerospikecluster.kb.io\"",
+							"exceeds the maximum DNS label length",
+							"of 63 characters").
+						Validate(err)
+
+					_ = envtests.K8sClient.Delete(ctx, aeroCluster)
+				})
+
+				// validateRackConfig (character validity) still runs on UPDATE.
+				// An invalid character introduced via revision update must be caught
+				// even though length bounds are only checked at CREATE.
+				It("rejects UPDATE when revision is changed to have invalid characters", func() {
+					aeroCluster := testCluster.CreateDummyAerospikeCluster(updateValidationClusterNamespacedName, 2)
+					aeroCluster.Spec.RackConfig = asdbv1.RackConfig{
+						Namespaces: []string{"test"},
+						Racks:      []asdbv1.Rack{{ID: 1, Revision: "v1"}},
+					}
+					err := envtests.K8sClient.Create(ctx, aeroCluster)
+					Expect(err).ToNot(HaveOccurred())
+
+					current, err := testCluster.GetCluster(envtests.K8sClient, ctx, updateValidationClusterNamespacedName)
+					Expect(err).ToNot(HaveOccurred())
+
+					// Change revision to uppercase — caught by validateRackConfig on UPDATE.
+					current.Spec.RackConfig.Racks[0].Revision = "V2"
+					err = envtests.K8sClient.Update(ctx, current)
+					Expect(err).To(HaveOccurred())
+
+					envtests.NewStatusErrorMatcher().
+						WithMessageSubstrings(
+							"\"vaerospikecluster.kb.io\"",
+							"rack revision \"V2\" for rack ID 1 is invalid",
+							"must consist of lower case alphanumeric characters or '-'").
+						Validate(err)
+				})
+
+				// validateActualPodNames finds the longest pod name across all racks.
+				// Even if only one rack's pod name overflows, the whole UPDATE is rejected.
+				It("rejects UPDATE when only one rack's pod name exceeds the DNS label limit (multi-rack)", func() {
+					// cluster name = 20 chars, 2 racks (ID=1, ID=2), Size=2.
+					// DistributeItems(2, 2) = [1, 1] → max ordinal per rack = 0.
+					// UPDATE: rack 1 revision → 42 chars.
+					//   pod for rack 1 = 20+"-1-"+"b"*42+"-0" = 20+3+42+2 = 67 > 63 → fails.
+					//   pod for rack 2 = 20+"-2-v1-0"         = 27 chars           → fine.
+					// Longest pod name (rack 1) fails → UPDATE rejected.
+					clusterName20 := strings.Repeat("b", 20)
+					cName20 := test.GetNamespacedName(clusterName20, updateValidationClusterNamespacedName.Namespace)
+
+					aeroCluster := testCluster.CreateDummyAerospikeCluster(cName20, 2)
+					aeroCluster.Spec.RackConfig = asdbv1.RackConfig{
+						Namespaces: []string{"test"},
+						Racks: []asdbv1.Rack{
+							{ID: 1, Revision: "v1"},
+							{ID: 2, Revision: "v1"},
+						},
+					}
+					err := envtests.K8sClient.Create(ctx, aeroCluster)
+					Expect(err).ToNot(HaveOccurred())
+
+					current, err := testCluster.GetCluster(envtests.K8sClient, ctx, cName20)
+					Expect(err).ToNot(HaveOccurred())
+
+					current.Spec.RackConfig.Racks[0].Revision = strings.Repeat("c", 42)
+					err = envtests.K8sClient.Update(ctx, current)
+					Expect(err).To(HaveOccurred(), "UPDATE with oversized revision on one rack should be rejected")
+
+					envtests.NewStatusErrorMatcher().
+						WithMessageSubstrings(
+							"\"vaerospikecluster.kb.io\"",
+							"exceeds the maximum DNS label length",
+							"of 63 characters").
+						Validate(err)
+
+					_ = envtests.K8sClient.Delete(ctx, aeroCluster)
+				})
+			})
+
+			Context("positive", func() {
+				// validateActualPodNames returns nil immediately when no user-defined
+				// racks are present (the controller manages a default rack internally).
+				It("allows UPDATE when cluster has no user-defined racks", func() {
+					aeroCluster := testCluster.CreateDummyAerospikeCluster(updateValidationClusterNamespacedName, 2)
+					// No explicit RackConfig — controller will create a default rack.
+					err := envtests.K8sClient.Create(ctx, aeroCluster)
+					Expect(err).ToNot(HaveOccurred())
+
+					current, err := testCluster.GetCluster(envtests.K8sClient, ctx, updateValidationClusterNamespacedName)
+					Expect(err).ToNot(HaveOccurred())
+
+					current.Spec.Size = 2
+					err = envtests.K8sClient.Update(ctx, current)
+					Expect(err).ToNot(HaveOccurred(),
+						"UPDATE with no user-defined racks must not fail on actual pod name check")
+				})
+
+				// Growing a revision is fine as long as the actual pod name stays
+				// within 63 chars. validateActualPodNames uses real rack ID and real
+				// per-rack ordinal (DistributeItems), not the conservative projected value.
+				It("allows UPDATE when revision grows but actual pod name stays within limit", func() {
+					// cluster name "abc" (3), rack ID=1, Size=1, initial revision "v1".
+					// UPDATE to "rev-alpha" (9 chars):
+					//   DistributeItems(1, 1) = [1] → ordinal = 0.
+					//   Actual pod = "abc-1-rev-alpha-0" = 17 chars ≤ 63 → passes.
+					cName := test.GetNamespacedName("abc", updateValidationClusterNamespacedName.Namespace)
+					aeroCluster := testCluster.CreateDummyAerospikeCluster(cName, 2)
+					aeroCluster.Spec.RackConfig = asdbv1.RackConfig{
+						Namespaces: []string{"test"},
+						Racks:      []asdbv1.Rack{{ID: 1, Revision: "v1"}},
+					}
+					err := envtests.K8sClient.Create(ctx, aeroCluster)
+					Expect(err).ToNot(HaveOccurred())
+
+					current, err := testCluster.GetCluster(envtests.K8sClient, ctx, cName)
+					Expect(err).ToNot(HaveOccurred())
+
+					current.Spec.RackConfig.Racks[0].Revision = "rev-alpha"
+					err = envtests.K8sClient.Update(ctx, current)
+					Expect(err).ToNot(HaveOccurred(),
+						"revision growth within the DNS label limit must be accepted")
+
+					_ = envtests.K8sClient.Delete(ctx, aeroCluster)
+				})
 			})
 		})
 	})
