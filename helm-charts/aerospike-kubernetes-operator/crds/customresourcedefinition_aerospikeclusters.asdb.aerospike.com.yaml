@@ -69,6 +69,7 @@ spec:
                     properties:
                       timeout:
                         description: Timeout for admin client policy in milliseconds.
+                        minimum: 0
                         type: integer
                     required:
                     - timeout
@@ -82,6 +83,9 @@ spec:
                       properties:
                         name:
                           description: Name of this role.
+                          maxLength: 63
+                          minLength: 1
+                          pattern: ^[^;:]*[^\s;:][^;:]*$
                           type: string
                         privileges:
                           description: Privileges granted to this role.
@@ -130,6 +134,9 @@ spec:
                           type: string
                         name:
                           description: Name is the user's username.
+                          maxLength: 63
+                          minLength: 1
+                          pattern: ^[^;:]*[^\s;:][^;:]*$
                           type: string
                         roles:
                           description: Roles is the list of roles granted to the user.
@@ -164,6 +171,7 @@ spec:
                   access the Aerospike cluster.
                 properties:
                   access:
+                    default: hostInternal
                     description: |-
                       AccessType is the type of network address to use for Aerospike access address.
                       Defaults to hostInternal.
@@ -175,6 +183,7 @@ spec:
                     - customInterface
                     type: string
                   alternateAccess:
+                    default: hostExternal
                     description: |-
                       AlternateAccessType is the type of network address to use for Aerospike alternate access address.
                       Defaults to hostExternal.
@@ -267,6 +276,7 @@ spec:
                     - customInterface
                     type: string
                   tlsAccess:
+                    default: hostInternal
                     description: |-
                       TLSAccessType is the type of network address to use for Aerospike TLS access address.
                       Defaults to hostInternal.
@@ -278,6 +288,7 @@ spec:
                     - customInterface
                     type: string
                   tlsAlternateAccess:
+                    default: hostExternal
                     description: |-
                       TLSAlternateAccessType is the type of network address to use for Aerospike TLS alternate access address.
                       Defaults to hostExternal.
@@ -340,6 +351,7 @@ spec:
                 type: object
               image:
                 description: Aerospike server image
+                minLength: 1
                 type: string
               k8sNodeBlockList:
                 description: |-
@@ -1976,6 +1988,10 @@ spec:
                     description: |-
                       DnsPolicy same as https://kubernetes.io/docs/concepts/services-networking/dns-pod-service/#pod-s-dns-policy.
                       If hostNetwork is true and policy is not specified, it defaults to ClusterFirstWithHostNet
+                    enum:
+                    - ClusterFirstWithHostNet
+                    - ClusterFirst
+                    - None
                     type: string
                   effectiveDNSPolicy:
                     description: Effective value of the DNSPolicy
@@ -5411,6 +5427,7 @@ spec:
                     description: List of Aerospike namespaces for which rack feature
                       will be enabled
                     items:
+                      pattern: ^\S+$
                       type: string
                     type: array
                   racks:
@@ -6472,8 +6489,10 @@ spec:
                                   type: string
                               type: object
                             cleanupThreads:
+                              default: 1
                               description: CleanupThreads contains the maximum number
                                 of cleanup threads(dd or blkdiscard) per init container.
+                              minimum: 0
                               type: integer
                             deleteLocalStorageOnRestart:
                               description: |-
@@ -7042,6 +7061,8 @@ spec:
                           type: boolean
                         id:
                           description: Identifier for the rack
+                          maximum: 1000000
+                          minimum: 0
                           type: integer
                         nodeName:
                           description: K8s Node name for setting rack affinity. Rack
@@ -8107,8 +8128,10 @@ spec:
                                   type: string
                               type: object
                             cleanupThreads:
+                              default: 1
                               description: CleanupThreads contains the maximum number
                                 of cleanup threads(dd or blkdiscard) per init container.
+                              minimum: 0
                               type: integer
                             deleteLocalStorageOnRestart:
                               description: |-
@@ -8749,6 +8772,8 @@ spec:
               size:
                 description: Aerospike cluster size
                 format: int32
+                maximum: 256
+                minimum: 1
                 type: integer
               storage:
                 description: Storage specify persistent storage to use for the Aerospike
@@ -8809,8 +8834,10 @@ spec:
                         type: string
                     type: object
                   cleanupThreads:
+                    default: 1
                     description: CleanupThreads contains the maximum number of cleanup
                       threads(dd or blkdiscard) per init container.
+                    minimum: 0
                     type: integer
                   deleteLocalStorageOnRestart:
                     description: |-
@@ -9367,6 +9394,8 @@ spec:
                     x-kubernetes-list-type: map
                 type: object
               validationPolicy:
+                default:
+                  skipWorkDirValidate: false
                 description: ValidationPolicy controls validation of the Aerospike
                   cluster resource.
                 properties:
@@ -9403,6 +9432,7 @@ spec:
                     properties:
                       timeout:
                         description: Timeout for admin client policy in milliseconds.
+                        minimum: 0
                         type: integer
                     required:
                     - timeout
@@ -9416,6 +9446,9 @@ spec:
                       properties:
                         name:
                           description: Name of this role.
+                          maxLength: 63
+                          minLength: 1
+                          pattern: ^[^;:]*[^\s;:][^;:]*$
                           type: string
                         privileges:
                           description: Privileges granted to this role.
@@ -9464,6 +9497,9 @@ spec:
                           type: string
                         name:
                           description: Name is the user's username.
+                          maxLength: 63
+                          minLength: 1
+                          pattern: ^[^;:]*[^\s;:][^;:]*$
                           type: string
                         roles:
                           description: Roles is the list of roles granted to the user.
@@ -9499,6 +9535,7 @@ spec:
                   access the Aerospike cluster.
                 properties:
                   access:
+                    default: hostInternal
                     description: |-
                       AccessType is the type of network address to use for Aerospike access address.
                       Defaults to hostInternal.
@@ -9510,6 +9547,7 @@ spec:
                     - customInterface
                     type: string
                   alternateAccess:
+                    default: hostExternal
                     description: |-
                       AlternateAccessType is the type of network address to use for Aerospike alternate access address.
                       Defaults to hostExternal.
@@ -9602,6 +9640,7 @@ spec:
                     - customInterface
                     type: string
                   tlsAccess:
+                    default: hostInternal
                     description: |-
                       TLSAccessType is the type of network address to use for Aerospike TLS access address.
                       Defaults to hostInternal.
@@ -9613,6 +9652,7 @@ spec:
                     - customInterface
                     type: string
                   tlsAlternateAccess:
+                    default: hostExternal
                     description: |-
                       TLSAlternateAccessType is the type of network address to use for Aerospike TLS alternate access address.
                       Defaults to hostExternal.
@@ -11330,6 +11370,10 @@ spec:
                     description: |-
                       DnsPolicy same as https://kubernetes.io/docs/concepts/services-networking/dns-pod-service/#pod-s-dns-policy.
                       If hostNetwork is true and policy is not specified, it defaults to ClusterFirstWithHostNet
+                    enum:
+                    - ClusterFirstWithHostNet
+                    - ClusterFirst
+                    - None
                     type: string
                   effectiveDNSPolicy:
                     description: Effective value of the DNSPolicy
@@ -14914,6 +14958,7 @@ spec:
                     description: List of Aerospike namespaces for which rack feature
                       will be enabled
                     items:
+                      pattern: ^\S+$
                       type: string
                     type: array
                   racks:
@@ -15975,8 +16020,10 @@ spec:
                                   type: string
                               type: object
                             cleanupThreads:
+                              default: 1
                               description: CleanupThreads contains the maximum number
                                 of cleanup threads(dd or blkdiscard) per init container.
+                              minimum: 0
                               type: integer
                             deleteLocalStorageOnRestart:
                               description: |-
@@ -16545,6 +16592,8 @@ spec:
                           type: boolean
                         id:
                           description: Identifier for the rack
+                          maximum: 1000000
+                          minimum: 0
                           type: integer
                         nodeName:
                           description: K8s Node name for setting rack affinity. Rack
@@ -17610,8 +17659,10 @@ spec:
                                   type: string
                               type: object
                             cleanupThreads:
+                              default: 1
                               description: CleanupThreads contains the maximum number
                                 of cleanup threads(dd or blkdiscard) per init container.
+                              minimum: 0
                               type: integer
                             deleteLocalStorageOnRestart:
                               description: |-
@@ -18379,8 +18430,10 @@ spec:
                         type: string
                     type: object
                   cleanupThreads:
+                    default: 1
                     description: CleanupThreads contains the maximum number of cleanup
                       threads(dd or blkdiscard) per init container.
+                    minimum: 0
                     type: integer
                   deleteLocalStorageOnRestart:
                     description: |-

@@ -51,10 +51,11 @@ var _ = Describe("AerospikeCluster validation", func() {
 
 					Expect(err).To(HaveOccurred())
 
-					// Webhook response validation
+					// CRD schema validation (minimum: 1) rejects size=0 before the webhook.
 					envtests.NewStatusErrorMatcher().
-						WithMessageSubstrings("\"vaerospikecluster.kb.io\"",
-							"invalid cluster size 0").
+						WithMessageSubstrings(
+							"spec.size",
+							"greater than or equal to 1").
 						Validate(err)
 				})
 
@@ -68,13 +69,11 @@ var _ = Describe("AerospikeCluster validation", func() {
 
 					Expect(err).To(HaveOccurred())
 
-					// Webhook response validation
+					// CRD schema validation (minimum: 1) rejects size=-1.
 					envtests.NewStatusErrorMatcher().
-						WithCauses(metav1.StatusCause{
-							Type:    metav1.CauseTypeFieldValueInvalid,
-							Message: "Invalid value: -1: should be a non-negative integer",
-							Field:   ".spec.size",
-						}).
+						WithMessageSubstrings(
+							"spec.size",
+							"greater than or equal to 1").
 						Validate(err)
 				})
 
@@ -84,10 +83,11 @@ var _ = Describe("AerospikeCluster validation", func() {
 					err := testCluster.DeployCluster(envtests.K8sClient, ctx, aeroCluster)
 					Expect(err).To(HaveOccurred())
 
+					// CRD schema validation (maximum: 256) rejects size=257.
 					envtests.NewStatusErrorMatcher().
 						WithMessageSubstrings(
-							"\"vaerospikecluster.kb.io\"",
-							"cluster size cannot be more than 256").
+							"spec.size",
+							"less than or equal to 256").
 						Validate(err)
 				})
 			})
@@ -98,8 +98,6 @@ var _ = Describe("AerospikeCluster validation", func() {
 
 		Context("spec.image", func() {
 			Context("negative", func() {
-				// Bug: For Empty image the error message is "CommunityEdition Cluster not supported".
-				// This error messsage is not appropriate for an empty image.
 				It("rejects empty image", func() {
 					aeroCluster := testCluster.CreateDummyAerospikeCluster(clusterNamespacedName, 1)
 					aeroCluster.Spec.Image = "" // Empty image
@@ -107,26 +105,26 @@ var _ = Describe("AerospikeCluster validation", func() {
 					err := testCluster.DeployCluster(envtests.K8sClient, ctx, aeroCluster)
 					Expect(err).To(HaveOccurred())
 
-					// Webhook response validation
+					// CRD schema validation (minLength: 1) rejects empty image before the webhook.
 					envtests.NewStatusErrorMatcher().
 						WithMessageSubstrings(
-							"\"vaerospikecluster.kb.io\"",
-							"CommunityEdition Cluster not supported").
+							"spec.image",
+							"at least 1 char").
 						Validate(err)
 				})
 
-				It("rejects invalid image format", func() {
+				It("rejects non-enterprise image", func() {
 					aeroCluster := testCluster.CreateDummyAerospikeCluster(clusterNamespacedName, 1)
-					aeroCluster.Spec.Image = "aerospike/nosuchimage:latest@invalid-digest"
+					aeroCluster.Spec.Image = "aerospike/aerospike-server:7.0.0.0"
 
 					err := testCluster.DeployCluster(envtests.K8sClient, ctx, aeroCluster)
 					Expect(err).To(HaveOccurred())
 
-					// Webhook response validation
+					// Validating webhook rejects non-enterprise/non-federal images.
 					envtests.NewStatusErrorMatcher().
 						WithMessageSubstrings(
 							"\"vaerospikecluster.kb.io\"",
-							"CommunityEdition Cluster not supported").
+							"is not supported: only enterprise and federal images are allowed").
 						Validate(err)
 				})
 
@@ -595,10 +593,12 @@ var _ = Describe("AerospikeCluster validation", func() {
 					err := testCluster.DeployCluster(envtests.K8sClient, ctx, aeroCluster)
 					Expect(err).To(HaveOccurred())
 
-					// Webhook response validation
+					// CRD schema validation (enum: ClusterFirstWithHostNet, ClusterFirst, None)
+					// rejects "Default" before the webhook.
 					envtests.NewStatusErrorMatcher().
-						WithMessageSubstrings("\"vaerospikecluster.kb.io\"",
-							"dnsPolicy: Default is not supported").
+						WithMessageSubstrings(
+							"spec.podSpec.dnsPolicy",
+							"Default").
 						Validate(err)
 				})
 
@@ -934,11 +934,11 @@ var _ = Describe("AerospikeCluster validation", func() {
 					err := testCluster.DeployCluster(envtests.K8sClient, ctx, aeroCluster)
 					Expect(err).To(HaveOccurred())
 
+					// CRD schema validation (pattern: ^\S+$) rejects namespace names with spaces.
 					envtests.NewStatusErrorMatcher().
 						WithMessageSubstrings(
-							"\"vaerospikecluster.kb.io\"",
-							"namespace name `test ns` cannot have spaces",
-							"Namespaces [test ns]").
+							"spec.rackConfig.namespaces",
+							"should match").
 						Validate(err)
 				})
 			})

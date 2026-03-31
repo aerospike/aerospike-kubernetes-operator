@@ -81,7 +81,7 @@ func (acd *AerospikeClusterCustomDefaulter) setDefaults(asLog logr.Logger, clust
 	}
 
 	// Set network defaults
-	setNetworkPolicyDefaults(&cluster.Spec.AerospikeNetworkPolicy, cluster.Namespace)
+	setNetworkNamespace(cluster.Namespace, &cluster.Spec.AerospikeNetworkPolicy)
 
 	// Set common storage defaults.
 	setStorageDefaults(&cluster.Spec.Storage)
@@ -110,18 +110,6 @@ func (acd *AerospikeClusterCustomDefaulter) setDefaults(asLog logr.Logger, clust
 
 	// Set defaults for pod spec
 	setPodSpecDefaults(&cluster.Spec.PodSpec)
-
-	// Validation policy
-	if cluster.Spec.ValidationPolicy == nil {
-		validationPolicy := asdbv1.ValidationPolicySpec{}
-
-		asLog.Info(
-			"Set default validation policy", "validationPolicy",
-			validationPolicy,
-		)
-
-		cluster.Spec.ValidationPolicy = &validationPolicy
-	}
 
 	// Update rosterNodeBlockList
 	for idx, nodeID := range cluster.Spec.RosterNodeBlockList {
@@ -315,28 +303,6 @@ func setDefaultAerospikeConfigs(asLog logr.Logger,
 
 	// escape LDAP configuration
 	return escapeLDAPConfiguration(configSpec)
-}
-
-// setDefaults applies default to unspecified fields on the network policy.
-func setNetworkPolicyDefaults(networkPolicy *asdbv1.AerospikeNetworkPolicy, namespace string) {
-	if networkPolicy.AccessType == asdbv1.AerospikeNetworkTypeUnspecified {
-		networkPolicy.AccessType = asdbv1.AerospikeNetworkTypeHostInternal
-	}
-
-	if networkPolicy.AlternateAccessType == asdbv1.AerospikeNetworkTypeUnspecified {
-		networkPolicy.AlternateAccessType = asdbv1.AerospikeNetworkTypeHostExternal
-	}
-
-	if networkPolicy.TLSAccessType == asdbv1.AerospikeNetworkTypeUnspecified {
-		networkPolicy.TLSAccessType = asdbv1.AerospikeNetworkTypeHostInternal
-	}
-
-	if networkPolicy.TLSAlternateAccessType == asdbv1.AerospikeNetworkTypeUnspecified {
-		networkPolicy.TLSAlternateAccessType = asdbv1.AerospikeNetworkTypeHostExternal
-	}
-
-	// Set network namespace if not present
-	setNetworkNamespace(namespace, networkPolicy)
 }
 
 func setNetworkNamespace(namespace string, networkPolicy *asdbv1.AerospikeNetworkPolicy) {

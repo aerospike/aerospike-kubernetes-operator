@@ -190,33 +190,8 @@ func validate(aslog logr.Logger, cluster *asdbv1.AerospikeCluster) (admission.Wa
 
 	var warnings admission.Warnings
 
-	// Validate obj name
-	if cluster.Name == "" {
-		return warnings, fmt.Errorf("aerospikeCluster name cannot be empty")
-	}
-
-	if strings.Contains(cluster.Name, " ") {
-		// Few parsing logic depend on this
-		return warnings, fmt.Errorf("aerospikeCluster name cannot have spaces")
-	}
-
-	// Validate obj namespace
-	if cluster.Namespace == "" {
-		return warnings, fmt.Errorf("aerospikeCluster namespace name cannot be empty")
-	}
-
-	if strings.Contains(cluster.Namespace, " ") {
-		// Few parsing logic depend on this
-		return warnings, fmt.Errorf("aerospikeCluster namespace cannot have spaces")
-	}
-
 	if err := validateImage(&cluster.Spec); err != nil {
 		return warnings, err
-	}
-
-	// Validate size
-	if cluster.Spec.Size == 0 {
-		return warnings, fmt.Errorf("invalid cluster size 0")
 	}
 
 	// Validate Image version
@@ -254,11 +229,6 @@ func validate(aslog logr.Logger, cluster *asdbv1.AerospikeCluster) (admission.Wa
 				" for more details about enableDynamicConfigUpdate flag",
 				minInitVersionForDynamicConf)
 		}
-	}
-
-	err = validateClusterSize(aslog, int(cluster.Spec.Size))
-	if err != nil {
-		return warnings, err
 	}
 
 	err = validateOperation(cluster)
@@ -890,17 +860,6 @@ func validateRackConfig(_ logr.Logger, cluster *asdbv1.AerospikeCluster) (admiss
 		}
 	}
 
-	// Validate namespace names
-	// TODO: Add more validation for namespace name
-	for _, nsName := range cluster.Spec.RackConfig.Namespaces {
-		if strings.Contains(nsName, " ") {
-			return warnings, fmt.Errorf(
-				"namespace name `%s` cannot have spaces, Namespaces %v", nsName,
-				cluster.Spec.RackConfig.Namespaces,
-			)
-		}
-	}
-
 	rackMap := map[int]bool{}
 	migrateFillDelaySet := sets.Set[int]{}
 
@@ -917,15 +876,6 @@ func validateRackConfig(_ logr.Logger, cluster *asdbv1.AerospikeCluster) (admiss
 		}
 
 		rackMap[rack.ID] = true
-
-		// Check out of range rackID
-		// Check for defaultRackID is in mutate (user can not use defaultRackID).
-		// Allow DefaultRackID
-		if rack.ID > asdbv1.MaxRackID {
-			return warnings, fmt.Errorf(
-				"invalid rackID. RackID range (%d, %d)", asdbv1.MinRackID, asdbv1.MaxRackID,
-			)
-		}
 
 		if rack.InputAerospikeConfig != nil {
 			_, inputRackNetwork := rack.InputAerospikeConfig.Value["network"]
@@ -1109,20 +1059,6 @@ func getAllNamespaceNamesAndRFMap(spec *asdbv1.AerospikeClusterSpec) (allNsNames
 // ******************************************************************************
 // Helper
 // ******************************************************************************
-
-// TODO: This should be version specific and part of management lib.
-// max cluster size for 5.0+ cluster
-const maxEnterpriseClusterSize = 256
-
-func validateClusterSize(_ logr.Logger, sz int) error {
-	if sz > maxEnterpriseClusterSize {
-		return fmt.Errorf(
-			"cluster size cannot be more than %d", maxEnterpriseClusterSize,
-		)
-	}
-
-	return nil
-}
 
 func validateAerospikeConfig(
 	aslog logr.Logger, version string, configSpec *asdbv1.AerospikeConfigSpec,
@@ -1446,6 +1382,10 @@ func validateRequiredFileStorageForMetadata(
 		return err
 	}
 
+	if validationPolicy == nil {
+		return fmt.Errorf("validationPolicy is nil; CRD default may not have been applied correctly")
+	}
+
 	// Validate work directory.
 	if !validationPolicy.SkipWorkDirValidate {
 		workDirPath := asdbv1.GetWorkDirectory(configSpec)
@@ -1688,10 +1628,6 @@ func ValidateAerospikeObjectMeta(aerospikeObjectMeta *asdbv1.AerospikeObjectMeta
 }
 
 func validateDNS(dnsPolicy v1.DNSPolicy, dnsConfig *v1.PodDNSConfig) error {
-	if dnsPolicy == v1.DNSDefault {
-		return fmt.Errorf("dnsPolicy: Default is not supported")
-	}
-
 	if dnsPolicy == v1.DNSNone && dnsConfig == nil {
 		return fmt.Errorf("dnsConfig is required field when dnsPolicy is set to None")
 	}

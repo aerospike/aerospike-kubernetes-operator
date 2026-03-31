@@ -20,24 +20,12 @@ const (
 )
 
 const (
-	// Maximum length for role name.
-	roleNameLengthMax int = 63
-
-	// Maximum allowed length for a username.
-	userNameLengthMax int = 63
-
 	// AdminUsername for aerospike cluster
 	AdminUsername = "admin"
 
 	// DefaultAdminPassword si default admin user password.
 	DefaultAdminPassword = "admin"
 )
-
-// roleNameForbiddenChars are characters forbidden in role name.
-var roleNameForbiddenChars = []string{";", ":"}
-
-// userNameForbiddenChars are characters forbidden in username.
-var userNameForbiddenChars = []string{";", ":"}
 
 // PredefinedRoles are all roles predefined in Aerospike server.
 var PredefinedRoles = map[string]struct{}{
@@ -208,10 +196,6 @@ func isRoleSpecValid(
 			return false, fmt.Errorf("cannot create or modify predefined role: %s", roleSpec.Name)
 		}
 
-		if _, err := isRoleNameValid(roleSpec.Name); err != nil {
-			return false, err
-		}
-
 		if err := validateRoleQuotaParam(roleSpec, &aerospikeConfigSpec); err != nil {
 			return false, err
 		}
@@ -258,30 +242,6 @@ func isRoleSpecValid(
 					"role '%s' has invalid whitelist: %v", roleSpec.Name, err,
 				)
 			}
-		}
-	}
-
-	return true, nil
-}
-
-// Indicates if a role name is valid.
-func isRoleNameValid(roleName string) (bool, error) {
-	if strings.TrimSpace(roleName) == "" {
-		return false, fmt.Errorf("role name cannot be empty")
-	}
-
-	if len(roleName) > roleNameLengthMax {
-		return false, fmt.Errorf(
-			"role name '%s' cannot have more than %d characters", roleName,
-			roleNameLengthMax,
-		)
-	}
-
-	for _, forbiddenChar := range roleNameForbiddenChars {
-		if strings.Contains(roleName, forbiddenChar) {
-			return false, fmt.Errorf(
-				"role name '%s' cannot contain  %s", roleName, forbiddenChar,
-			)
 		}
 	}
 
@@ -421,10 +381,6 @@ func isUserSpecValid(
 
 		seenUsers[userSpec.Name] = true
 
-		if _, err := isUserNameValid(userSpec.Name); err != nil {
-			return false, err
-		}
-
 		// Validate roles.
 		seenRoles := map[string]bool{}
 
@@ -487,30 +443,6 @@ func isUserSpecValid(
 		return false, fmt.Errorf(
 			"no admin user with required roles: %v found", requiredRoles,
 		)
-	}
-
-	return true, nil
-}
-
-// isUserNameValid Indicates if a username is valid.
-func isUserNameValid(userName string) (bool, error) {
-	if strings.TrimSpace(userName) == "" {
-		return false, fmt.Errorf("username cannot be empty")
-	}
-
-	if len(userName) > userNameLengthMax {
-		return false, fmt.Errorf(
-			"username '%s' cannot have more than %d characters", userName,
-			userNameLengthMax,
-		)
-	}
-
-	for _, forbiddenChar := range userNameForbiddenChars {
-		if strings.Contains(userName, forbiddenChar) {
-			return false, fmt.Errorf(
-				"username '%s' cannot contain  %s", userName, forbiddenChar,
-			)
-		}
 	}
 
 	return true, nil

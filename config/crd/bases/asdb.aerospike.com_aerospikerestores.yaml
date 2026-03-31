@@ -60,9 +60,11 @@ spec:
                 properties:
                   name:
                     description: Backup service name
+                    minLength: 1
                     type: string
                   namespace:
                     description: Backup service namespace
+                    minLength: 1
                     type: string
                 required:
                 - name
@@ -75,6 +77,7 @@ spec:
                 type: object
                 x-kubernetes-preserve-unknown-fields: true
               pollingPeriod:
+                default: 1m
                 description: |-
                   PollingPeriod is the polling period for restore operation status.
                   It is used to poll the restore service to fetch restore operation status.

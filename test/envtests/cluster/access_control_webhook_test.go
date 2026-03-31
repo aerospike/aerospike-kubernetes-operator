@@ -109,6 +109,100 @@ var _ = Describe("AerospikeCluster access control validation (envtests)", func()
 			})
 		})
 
+		Context("spec.aerospikeAccessControl (role name CRD validation)", func() {
+			Context("negative", func() {
+				It("rejects role name containing colon", func() {
+					aeroCluster := testCluster.CreateDummyAerospikeCluster(clusterNamespacedName, 2)
+					aeroCluster.Spec.AerospikeAccessControl.Roles = append(
+						aeroCluster.Spec.AerospikeAccessControl.Roles,
+						asdbv1.AerospikeRoleSpec{
+							Name:       "bad:role",
+							Privileges: []string{"read"},
+						},
+					)
+
+					err := testCluster.DeployCluster(envtests.K8sClient, ctx, aeroCluster)
+					Expect(err).To(HaveOccurred())
+
+					// CRD schema validation (pattern) rejects role names containing ":".
+					envtests.NewStatusErrorMatcher().
+						WithMessageSubstrings(
+							"aerospikeAccessControl.roles",
+							"should match").
+						Validate(err)
+				})
+
+				It("rejects role name containing semicolon", func() {
+					aeroCluster := testCluster.CreateDummyAerospikeCluster(clusterNamespacedName, 2)
+					aeroCluster.Spec.AerospikeAccessControl.Roles = append(
+						aeroCluster.Spec.AerospikeAccessControl.Roles,
+						asdbv1.AerospikeRoleSpec{
+							Name:       "bad;role",
+							Privileges: []string{"read"},
+						},
+					)
+
+					err := testCluster.DeployCluster(envtests.K8sClient, ctx, aeroCluster)
+					Expect(err).To(HaveOccurred())
+
+					// CRD schema validation (pattern) rejects role names containing ";".
+					envtests.NewStatusErrorMatcher().
+						WithMessageSubstrings(
+							"aerospikeAccessControl.roles",
+							"should match").
+						Validate(err)
+				})
+			})
+		})
+
+		Context("spec.aerospikeAccessControl (user name CRD validation)", func() {
+			Context("negative", func() {
+				It("rejects user name containing colon", func() {
+					aeroCluster := testCluster.CreateDummyAerospikeCluster(clusterNamespacedName, 2)
+					aeroCluster.Spec.AerospikeAccessControl.Users = append(
+						aeroCluster.Spec.AerospikeAccessControl.Users,
+						asdbv1.AerospikeUserSpec{
+							Name:       "bad:user",
+							SecretName: test.AuthSecretName,
+							Roles:      []string{"sys-admin"},
+						},
+					)
+
+					err := testCluster.DeployCluster(envtests.K8sClient, ctx, aeroCluster)
+					Expect(err).To(HaveOccurred())
+
+					// CRD schema validation (pattern) rejects user names containing ":".
+					envtests.NewStatusErrorMatcher().
+						WithMessageSubstrings(
+							"aerospikeAccessControl.users",
+							"should match").
+						Validate(err)
+				})
+
+				It("rejects user name containing semicolon", func() {
+					aeroCluster := testCluster.CreateDummyAerospikeCluster(clusterNamespacedName, 2)
+					aeroCluster.Spec.AerospikeAccessControl.Users = append(
+						aeroCluster.Spec.AerospikeAccessControl.Users,
+						asdbv1.AerospikeUserSpec{
+							Name:       "bad;user",
+							SecretName: test.AuthSecretName,
+							Roles:      []string{"sys-admin"},
+						},
+					)
+
+					err := testCluster.DeployCluster(envtests.K8sClient, ctx, aeroCluster)
+					Expect(err).To(HaveOccurred())
+
+					// CRD schema validation (pattern) rejects user names containing ";".
+					envtests.NewStatusErrorMatcher().
+						WithMessageSubstrings(
+							"aerospikeAccessControl.users",
+							"should match").
+						Validate(err)
+				})
+			})
+		})
+
 		Context("spec.aerospikeAccessControl (users)", func() {
 			Context("negative", func() {
 				It("fails when PKIOnly authMode is used with Enterprise image below 8.1.0.0", func() {

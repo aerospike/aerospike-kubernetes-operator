@@ -20,8 +20,6 @@ import (
 	"context"
 	"fmt"
 	"reflect"
-	"time"
-
 	ctrl "sigs.k8s.io/controller-runtime"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 	logf "sigs.k8s.io/controller-runtime/pkg/log"
@@ -33,39 +31,11 @@ import (
 	asdbv1beta1 "github.com/aerospike/aerospike-kubernetes-operator/v4/api/v1beta1"
 )
 
-const defaultPollingPeriod time.Duration = 60 * time.Second
-
 // SetupAerospikeRestoreWebhookWithManager registers the webhook for AerospikeRestore in the manager.
 func SetupAerospikeRestoreWebhookWithManager(mgr ctrl.Manager) error {
 	return ctrl.NewWebhookManagedBy(mgr, &asdbv1beta1.AerospikeRestore{}).
-		WithDefaulter(&AerospikeRestoreCustomDefaulter{}).
 		WithValidator(&AerospikeRestoreCustomValidator{}).
 		Complete()
-}
-
-// +kubebuilder:object:generate=false
-// Above marker prevents controller-gen from generating DeepCopy methods,
-// as it is used only for temporary operations and does not need to be deeply copied.
-type AerospikeRestoreCustomDefaulter struct {
-	// Default values for various AerospikeRestore fields
-}
-
-var _ admission.Defaulter[*asdbv1beta1.AerospikeRestore] = &AerospikeRestoreCustomDefaulter{}
-
-//nolint:lll // for readability
-// +kubebuilder:webhook:path=/mutate-asdb-aerospike-com-v1beta1-aerospikerestore,mutating=true,failurePolicy=fail,sideEffects=None,groups=asdb.aerospike.com,resources=aerospikerestores,verbs=create;update,versions=v1beta1,name=maerospikerestore.kb.io,admissionReviewVersions=v1
-
-// Default implements admission.Defaulter so a webhook will be registered for the type
-func (ard *AerospikeRestoreCustomDefaulter) Default(_ context.Context, restore *asdbv1beta1.AerospikeRestore) error {
-	arLog := logf.Log.WithName(namespacedName(restore))
-
-	arLog.Info("Setting defaults for aerospikeRestore")
-
-	if restore.Spec.PollingPeriod.Seconds() == 0 {
-		restore.Spec.PollingPeriod.Duration = defaultPollingPeriod
-	}
-
-	return nil
 }
 
 // +kubebuilder:object:generate=false
