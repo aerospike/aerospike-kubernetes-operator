@@ -11,7 +11,6 @@ import (
 	appsv1 "k8s.io/api/apps/v1"
 	corev1 "k8s.io/api/core/v1"
 	"k8s.io/apimachinery/pkg/api/errors"
-	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/util/intstr"
 	"k8s.io/apimachinery/pkg/util/sets"
 	"sigs.k8s.io/controller-runtime/pkg/client"
@@ -100,15 +99,6 @@ func (r *SingleClusterReconciler) reconcileRacks() common.ReconcileResult {
 			// Create statefulset with 0 size rack and then scaleUp later in Reconcile
 			zeroSizedRack := &RackState{Rack: state.Rack, Size: 0}
 
-			if err := r.setConditions(metav1.Condition{
-				Type:    string(asdbv1.AerospikeClusterConditionProgressing),
-				Status:  metav1.ConditionTrue,
-				Reason:  asdbv1.AerospikeClusterReasonAddingRack,
-				Message: fmt.Sprintf("Adding rack %d", state.Rack.ID),
-			}); err != nil {
-				r.Log.Error(err, "Failed to set Progressing condition for AddingRack")
-			}
-
 			found, res = r.createEmptyRack(zeroSizedRack)
 			if !res.IsSuccess {
 				return res
@@ -140,17 +130,6 @@ func (r *SingleClusterReconciler) reconcileRacks() common.ReconcileResult {
 
 	if len(r.aeroCluster.Status.RackConfig.Racks) != 0 {
 		// Remove removed racks
-		if len(racksToDelete) > 0 {
-			if err := r.setConditions(metav1.Condition{
-				Type:    string(asdbv1.AerospikeClusterConditionProgressing),
-				Status:  metav1.ConditionTrue,
-				Reason:  asdbv1.AerospikeClusterReasonRemovingRacks,
-				Message: fmt.Sprintf("Removing %d rack(s)", len(racksToDelete)),
-			}); err != nil {
-				r.Log.Error(err, "Failed to set Progressing condition for RemovingRacks")
-			}
-		}
-
 		if res = r.deleteRacks(racksToDelete, ignorablePodNames); !res.IsSuccess {
 			if res.Err != nil {
 				r.Log.Error(
@@ -393,15 +372,6 @@ func (r *SingleClusterReconciler) upgradeOrRollingRestartRack(
 	}
 
 	if upgradeNeeded {
-		if err := r.setConditions(metav1.Condition{
-			Type:    string(asdbv1.AerospikeClusterConditionProgressing),
-			Status:  metav1.ConditionTrue,
-			Reason:  asdbv1.AerospikeClusterReasonUpgrading,
-			Message: fmt.Sprintf("Upgrading rack %d", rackState.Rack.ID),
-		}); err != nil {
-			r.Log.Error(err, "Failed to set Progressing condition for Upgrading")
-		}
-
 		found, res = r.upgradeRack(found, rackState, ignorablePodNames, failedPods)
 		if !res.IsSuccess {
 			if res.Err != nil {
@@ -427,15 +397,6 @@ func (r *SingleClusterReconciler) upgradeOrRollingRestartRack(
 		}
 
 		if rollingRestartInfo.needRestart {
-			if err := r.setConditions(metav1.Condition{
-				Type:    string(asdbv1.AerospikeClusterConditionProgressing),
-				Status:  metav1.ConditionTrue,
-				Reason:  asdbv1.AerospikeClusterReasonRollingRestart,
-				Message: fmt.Sprintf("Rolling restart of rack %d", rackState.Rack.ID),
-			}); err != nil {
-				r.Log.Error(err, "Failed to set Progressing condition for RollingRestart")
-			}
-
 			found, res = r.rollingRestartRack(
 				found, rackState, ignorablePodNames, rollingRestartInfo.restartTypeMap, failedPods,
 			)
@@ -459,15 +420,6 @@ func (r *SingleClusterReconciler) upgradeOrRollingRestartRack(
 		}
 
 		if len(failedPods) == 0 && rollingRestartInfo.needUpdateConf {
-			if err := r.setConditions(metav1.Condition{
-				Type:    string(asdbv1.AerospikeClusterConditionProgressing),
-				Status:  metav1.ConditionTrue,
-				Reason:  asdbv1.AerospikeClusterReasonUpdatingConfig,
-				Message: fmt.Sprintf("Updating config dynamically for rack %d", rackState.Rack.ID),
-			}); err != nil {
-				r.Log.Error(err, "Failed to set Progressing condition for UpdatingConfig")
-			}
-
 			res = r.updateDynamicConfig(
 				rackState, ignorablePodNames,
 				rollingRestartInfo.restartTypeMap, rollingRestartInfo.dynamicConfDiffPerPod,
@@ -611,15 +563,6 @@ func (r *SingleClusterReconciler) reconcileRack(
 
 	// Scale down
 	if currentSize > desiredSize {
-		if err := r.setConditions(metav1.Condition{
-			Type:    string(asdbv1.AerospikeClusterConditionProgressing),
-			Status:  metav1.ConditionTrue,
-			Reason:  asdbv1.AerospikeClusterReasonScalingDown,
-			Message: fmt.Sprintf("Scaling down rack %d from %d to %d", rackState.Rack.ID, currentSize, desiredSize),
-		}); err != nil {
-			r.Log.Error(err, "Failed to set Progressing condition for ScalingDown")
-		}
-
 		found, res = r.scaleDownRack(found, rackState, ignorablePodNames, nil)
 		if !res.IsSuccess {
 			if res.Err != nil {
@@ -675,15 +618,6 @@ func (r *SingleClusterReconciler) reconcileRack(
 	// Scale up after upgrading, so that new pods come up with new image
 	currentSize = *found.Spec.Replicas
 	if currentSize < desiredSize {
-		if err := r.setConditions(metav1.Condition{
-			Type:    string(asdbv1.AerospikeClusterConditionProgressing),
-			Status:  metav1.ConditionTrue,
-			Reason:  asdbv1.AerospikeClusterReasonScalingUp,
-			Message: fmt.Sprintf("Scaling up rack %d from %d to %d", rackState.Rack.ID, currentSize, desiredSize),
-		}); err != nil {
-			r.Log.Error(err, "Failed to set Progressing condition for ScalingUp")
-		}
-
 		found, res = r.scaleUpRack(found, rackState, ignorablePodNames)
 		if !res.IsSuccess {
 			r.Log.Error(

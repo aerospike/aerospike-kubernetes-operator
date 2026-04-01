@@ -56,47 +56,41 @@ const (
 	// AerospikeClusterConditionReady indicates the cluster has fully reached its desired spec and is healthy.
 	AerospikeClusterConditionReady AerospikeClusterConditionType = "Ready"
 
-	// AerospikeClusterConditionProgressing indicates the operator is actively making changes to the cluster.
-	// The Reason field carries the specific operation name (e.g. ScalingUp, Upgrading).
-	AerospikeClusterConditionProgressing AerospikeClusterConditionType = "Progressing"
+	// AerospikeClusterConditionScalingUp indicates currentPods < spec.size (new pods being added).
+	AerospikeClusterConditionScalingUp AerospikeClusterConditionType = "ScalingUp"
 
-	// AerospikeClusterConditionDegraded indicates there are failed or unhealthy pods being tolerated by the operator.
-	AerospikeClusterConditionDegraded AerospikeClusterConditionType = "Degraded"
+	// AerospikeClusterConditionScalingDown indicates currentPods > spec.size (pods being removed).
+	AerospikeClusterConditionScalingDown AerospikeClusterConditionType = "ScalingDown"
 
-	// AerospikeClusterConditionAccessControlSynced indicates Aerospike users and roles are in sync with the spec.
-	AerospikeClusterConditionAccessControlSynced AerospikeClusterConditionType = "AccessControlSynced"
+	// AerospikeClusterConditionUpgrading indicates one or more pods are not on the desired image.
+	AerospikeClusterConditionUpgrading AerospikeClusterConditionType = "Upgrading"
 
-	// AerospikeClusterConditionPaused indicates reconciliation is deliberately paused via spec.paused=true.
-	AerospikeClusterConditionPaused AerospikeClusterConditionType = "Paused"
+	// AerospikeClusterConditionRollingRestart indicates one or more pods need a restart
+	// due to config changes that cannot be applied dynamically.
+	AerospikeClusterConditionRollingRestart AerospikeClusterConditionType = "RollingRestart"
 )
 
 // Reason constants for AerospikeCluster status conditions.
 const (
-	// Ready / general reasons
+	// Ready reasons
 	AerospikeClusterReasonReconcileComplete = "ReconcileComplete"
 	AerospikeClusterReasonReconcileFailed   = "ReconcileFailed"
-	AerospikeClusterReasonAwaitingReconcile = "AwaitingReconcile"
 	AerospikeClusterReasonInitializing      = "Initializing"
+	AerospikeClusterReasonPausedByUser      = "PausedByUser"
 
-	// Progressing reasons — one per rack operation
-	AerospikeClusterReasonReconciling    = "Reconciling"
+	// ScalingUp / ScalingDown reasons
 	AerospikeClusterReasonScalingUp      = "ScalingUp"
+	AerospikeClusterReasonNotScalingUp   = "NotScalingUp"
 	AerospikeClusterReasonScalingDown    = "ScalingDown"
-	AerospikeClusterReasonUpgrading      = "Upgrading"
-	AerospikeClusterReasonRollingRestart = "RollingRestart"
-	AerospikeClusterReasonUpdatingConfig = "UpdatingConfig"
-	AerospikeClusterReasonAddingRack     = "AddingRack"
-	AerospikeClusterReasonRemovingRacks  = "RemovingRacks"
-	AerospikeClusterReasonPausedByUser   = "PausedByUser"
-	AerospikeClusterReasonResumed        = "Resumed"
+	AerospikeClusterReasonNotScalingDown = "NotScalingDown"
 
-	// Degraded reasons
-	AerospikeClusterReasonPodsIgnored    = "PodsIgnored"
-	AerospikeClusterReasonAllPodsHealthy = "AllPodsHealthy"
+	// Upgrading reasons
+	AerospikeClusterReasonUpgrading    = "Upgrading"
+	AerospikeClusterReasonNotUpgrading = "NotUpgrading"
 
-	// AccessControlSynced reasons
-	AerospikeClusterReasonACLSynced       = "ACLSynced"
-	AerospikeClusterReasonACLUpdateFailed = "ACLUpdateFailed"
+	// RollingRestart reasons
+	AerospikeClusterReasonRollingRestart    = "RollingRestart"
+	AerospikeClusterReasonNotRollingRestart = "NotRollingRestart"
 )
 
 // +kubebuilder:validation:Enum=Failed;PartiallyFailed;""
