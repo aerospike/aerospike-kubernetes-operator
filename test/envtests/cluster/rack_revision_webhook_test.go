@@ -246,6 +246,7 @@ var _ = Describe("Rack revision webhook validation", func() {
 					Expect(testCluster.DeleteCluster(envtests.K8sClient, ctx, aeroCluster)).ToNot(HaveOccurred())
 				})
 			})
+
 			Context("positive", func() {
 				It("accepts empty revision", func() {
 					aeroCluster := testCluster.CreateDummyAerospikeCluster(clusterNamespacedName, 2)
@@ -483,26 +484,6 @@ var _ = Describe("Rack revision webhook validation", func() {
 		// the StatefulSet name at runtime regardless of when it was introduced.
 		Context("naming length bounds (CREATE-only projected check; UPDATE uses actual pod name)", func() {
 			Context("negative", func() {
-				It("allows UPDATE without re-checking CREATE-only length bounds", func() {
-					// Create a valid cluster then update an unrelated field (size).
-					// The webhook must not surface any CREATE-only naming error on UPDATE.
-					aeroCluster := testCluster.CreateDummyAerospikeCluster(clusterNamespacedName, 2)
-					err := envtests.K8sClient.Create(ctx, aeroCluster)
-					Expect(err).ToNot(HaveOccurred())
-
-					current, err := testCluster.GetCluster(envtests.K8sClient, ctx, clusterNamespacedName)
-					Expect(err).ToNot(HaveOccurred())
-
-					// Change size — an otherwise valid update.
-					current.Spec.Size = 2
-					err = envtests.K8sClient.Update(ctx, current)
-					// The webhook must not surface any CREATE-only naming error on UPDATE.
-					if err != nil {
-						Expect(err).NotTo(MatchError(ContainSubstring("computed at max rack ID")),
-							"CREATE-only pod name length check must not be re-run on UPDATE")
-					}
-				})
-
 				It("rejects UPDATE when the new revision makes the actual pod name too long", func() {
 					// cluster name = 20 chars, 1 rack (ID=1), initial revision = "v1" (2 chars).
 					// At CREATE: baseline projected pod = 20+9+3+4 = 36 ≤ 63 → passes.
@@ -532,11 +513,11 @@ var _ = Describe("Rack revision webhook validation", func() {
 					envtests.NewStatusErrorMatcher().
 						WithMessageSubstrings(
 							"\"vaerospikecluster.kb.io\"",
+							"pod name \"",
 							"exceeds the maximum DNS label length",
 							"of 63 characters").
 						Validate(err)
 
-					// _ = envtests.K8sClient.Delete(ctx, aeroCluster)
 					Expect(testCluster.DeleteCluster(envtests.K8sClient, ctx, aeroCluster)).ToNot(HaveOccurred())
 				})
 
@@ -604,27 +585,31 @@ var _ = Describe("Rack revision webhook validation", func() {
 							"exceeds the maximum DNS label length",
 							"of 63 characters").
 						Validate(err)
-
-					// _ = envtests.K8sClient.Delete(ctx, aeroCluster)
 					Expect(testCluster.DeleteCluster(envtests.K8sClient, ctx, aeroCluster)).ToNot(HaveOccurred())
 				})
 			})
 
 			Context("positive", func() {
-				const updateValidationClusterName = "update-validation-cluster"
+				It("allows UPDATE without re-checking CREATE-only length bounds", func() {
+					// Create a valid cluster then update an unrelated field (size).
+					// The webhook must not surface any CREATE-only naming error on UPDATE.
+					aeroCluster := testCluster.CreateDummyAerospikeCluster(clusterNamespacedName, 2)
+					err := envtests.K8sClient.Create(ctx, aeroCluster)
+					Expect(err).ToNot(HaveOccurred())
 
-				updateValidationClusterNamespacedName := test.GetNamespacedName(
-					updateValidationClusterName, testutil.DefaultNamespace)
+					current, err := testCluster.GetCluster(envtests.K8sClient, ctx, clusterNamespacedName)
+					Expect(err).ToNot(HaveOccurred())
 
-				AfterEach(func() {
-					aeroCluster := &asdbv1.AerospikeCluster{
-						ObjectMeta: metav1.ObjectMeta{
-							Name:      updateValidationClusterNamespacedName.Name,
-							Namespace: updateValidationClusterNamespacedName.Namespace,
-						},
+					// Change size — an otherwise valid update.
+					current.Spec.Size = 2
+					err = envtests.K8sClient.Update(ctx, current)
+					// The webhook must not surface any CREATE-only naming error on UPDATE.
+					if err != nil {
+						Expect(err).NotTo(MatchError(ContainSubstring("computed at max rack ID")),
+							"CREATE-only pod name length check must not be re-run on UPDATE")
 					}
-					Expect(testCluster.DeleteCluster(envtests.K8sClient, ctx, aeroCluster)).ToNot(HaveOccurred())
 				})
+
 				// validateActualPodNames returns nil immediately when no user-defined
 				// racks are present (the controller manages a default rack internally).
 				It("allows UPDATE when cluster has no user-defined racks", func() {
@@ -666,6 +651,57 @@ var _ = Describe("Rack revision webhook validation", func() {
 					err = envtests.K8sClient.Update(ctx, current)
 					Expect(err).ToNot(HaveOccurred(),
 						"revision growth within the DNS label limit must be accepted")
+					Expect(testCluster.DeleteCluster(envtests.K8sClient, ctx, aeroCluster)).ToNot(HaveOccurred())
+				})
+
+				It("allows UPDATE when one rack has zero pods under DistributeItems"+
+					"(validateActualPodNames skips rackSize 0)", func() {
+					ns := uniqueNamespacedName("actpod-zero-rack")
+					// DistributeItems(2, 3) → [1,1,0]: only rack 1 and 2 gets a pod; rack 3 must be skipped.
+					aeroCluster := testCluster.CreateDummyAerospikeCluster(ns, 2)
+					aeroCluster.Spec.RackConfig = asdbv1.RackConfig{
+						Namespaces: []string{"test"},
+						Racks: []asdbv1.Rack{
+							{ID: 1, Revision: "v1"},
+							{ID: 2, Revision: "v1"},
+							{ID: 3, Revision: "v1"},
+						},
+					}
+
+					Expect(envtests.K8sClient.Create(ctx, aeroCluster)).To(Succeed())
+
+					current, err := testCluster.GetCluster(envtests.K8sClient, ctx, ns)
+					Expect(err).ToNot(HaveOccurred())
+
+					// Only touch the rack that actually has pods; rack 3 remains unused by the distribution.
+					current.Spec.RackConfig.Racks[0].Revision = newRackRevision
+					current.Spec.RackConfig.Racks[1].Revision = newRackRevision
+					Expect(envtests.K8sClient.Update(ctx, current)).To(Succeed())
+
+					Expect(testCluster.DeleteCluster(envtests.K8sClient, ctx, aeroCluster)).ToNot(HaveOccurred())
+				})
+
+				It("allows UPDATE when max pod ordinal is greater than zero (validateActualPodNames uses rackSize-1)", func() {
+					ns := uniqueNamespacedName("actpod-ord-gt0")
+					// DistributeItems(4, 2) → [2, 2] → pod ordinals 0 and 1 per rack.
+					aeroCluster := testCluster.CreateDummyAerospikeCluster(ns, 4)
+					aeroCluster.Spec.RackConfig = asdbv1.RackConfig{
+						Namespaces: []string{"test"},
+						Racks: []asdbv1.Rack{
+							{ID: 1, Revision: "v1"},
+							{ID: 2, Revision: "v1"},
+						},
+					}
+
+					Expect(envtests.K8sClient.Create(ctx, aeroCluster)).To(Succeed())
+
+					current, err := testCluster.GetCluster(envtests.K8sClient, ctx, ns)
+					Expect(err).ToNot(HaveOccurred())
+
+					current.Spec.RackConfig.Racks[0].Revision = newRackRevision
+					current.Spec.RackConfig.Racks[1].Revision = newRackRevision
+					Expect(envtests.K8sClient.Update(ctx, current)).To(Succeed())
+
 					Expect(testCluster.DeleteCluster(envtests.K8sClient, ctx, aeroCluster)).ToNot(HaveOccurred())
 				})
 			})
