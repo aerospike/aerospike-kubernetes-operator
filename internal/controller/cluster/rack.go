@@ -11,6 +11,7 @@ import (
 	appsv1 "k8s.io/api/apps/v1"
 	corev1 "k8s.io/api/core/v1"
 	"k8s.io/apimachinery/pkg/api/errors"
+	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/util/intstr"
 	"k8s.io/apimachinery/pkg/util/sets"
 	"sigs.k8s.io/controller-runtime/pkg/client"
@@ -372,6 +373,15 @@ func (r *SingleClusterReconciler) upgradeOrRollingRestartRack(
 	}
 
 	if upgradeNeeded {
+		if err := r.setConditions(metav1.Condition{
+			Type:    string(asdbv1.AerospikeClusterConditionUpgrading),
+			Status:  metav1.ConditionTrue,
+			Reason:  asdbv1.AerospikeClusterReasonUpgrading,
+			Message: fmt.Sprintf("Upgrading rack %d", rackState.Rack.ID),
+		}); err != nil {
+			return found, common.ReconcileError(err)
+		}
+
 		found, res = r.upgradeRack(found, rackState, ignorablePodNames, failedPods)
 		if !res.IsSuccess {
 			if res.Err != nil {
@@ -397,6 +407,18 @@ func (r *SingleClusterReconciler) upgradeOrRollingRestartRack(
 		}
 
 		if rollingRestartInfo.needRestart {
+			if err := r.setConditions(metav1.Condition{
+				Type:   string(asdbv1.AerospikeClusterConditionRollingRestart),
+				Status: metav1.ConditionTrue,
+				Reason: asdbv1.AerospikeClusterReasonRollingRestart,
+				Message: fmt.Sprintf(
+					"Rolling restart of rack %d",
+					rackState.Rack.ID,
+				),
+			}); err != nil {
+				return found, common.ReconcileError(err)
+			}
+
 			found, res = r.rollingRestartRack(
 				found, rackState, ignorablePodNames, rollingRestartInfo.restartTypeMap, failedPods,
 			)
@@ -563,6 +585,18 @@ func (r *SingleClusterReconciler) reconcileRack(
 
 	// Scale down
 	if currentSize > desiredSize {
+		if err := r.setConditions(metav1.Condition{
+			Type:   string(asdbv1.AerospikeClusterConditionScalingDown),
+			Status: metav1.ConditionTrue,
+			Reason: asdbv1.AerospikeClusterReasonScalingDown,
+			Message: fmt.Sprintf(
+				"Scaling down rack %d from %d to %d",
+				rackState.Rack.ID, currentSize, desiredSize,
+			),
+		}); err != nil {
+			return common.ReconcileError(err)
+		}
+
 		found, res = r.scaleDownRack(found, rackState, ignorablePodNames, nil)
 		if !res.IsSuccess {
 			if res.Err != nil {
@@ -618,6 +652,18 @@ func (r *SingleClusterReconciler) reconcileRack(
 	// Scale up after upgrading, so that new pods come up with new image
 	currentSize = *found.Spec.Replicas
 	if currentSize < desiredSize {
+		if err := r.setConditions(metav1.Condition{
+			Type:   string(asdbv1.AerospikeClusterConditionScalingUp),
+			Status: metav1.ConditionTrue,
+			Reason: asdbv1.AerospikeClusterReasonScalingUp,
+			Message: fmt.Sprintf(
+				"Scaling up rack %d from %d to %d",
+				rackState.Rack.ID, currentSize, desiredSize,
+			),
+		}); err != nil {
+			return common.ReconcileError(err)
+		}
+
 		found, res = r.scaleUpRack(found, rackState, ignorablePodNames)
 		if !res.IsSuccess {
 			r.Log.Error(

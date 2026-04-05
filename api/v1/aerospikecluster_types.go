@@ -68,15 +68,24 @@ const (
 	// AerospikeClusterConditionRollingRestart indicates one or more pods need a restart
 	// due to config changes that cannot be applied dynamically.
 	AerospikeClusterConditionRollingRestart AerospikeClusterConditionType = "RollingRestart"
+
+	// AerospikeClusterConditionPaused indicates reconciliation has been suspended
+	// via spec.paused=true. True = paused, False = actively reconciling.
+	AerospikeClusterConditionPaused AerospikeClusterConditionType = "Paused"
 )
 
 // Reason constants for AerospikeCluster status conditions.
 const (
 	// Ready reasons
 	AerospikeClusterReasonReconcileComplete = "ReconcileComplete"
+	AerospikeClusterReasonReconciling       = "Reconciling"
 	AerospikeClusterReasonReconcileFailed   = "ReconcileFailed"
 	AerospikeClusterReasonInitializing      = "Initializing"
 	AerospikeClusterReasonPausedByUser      = "PausedByUser"
+	AerospikeClusterReasonTerminating       = "Terminating"
+
+	// Paused reasons
+	AerospikeClusterReasonNotPaused = "NotPaused"
 
 	// ScalingUp / ScalingDown reasons
 	AerospikeClusterReasonScalingUp      = "ScalingUp"
@@ -1355,10 +1364,9 @@ type AerospikePodStatus struct { //nolint:govet // for readability
 // +kubebuilder:printcolumn:name="MultiPodPerHost",type=boolean,JSONPath=`.spec.podSpec.multiPodPerHost`
 // +kubebuilder:printcolumn:name="HostNetwork",type=boolean,JSONPath=`.spec.podSpec.hostNetwork`
 // +kubebuilder:printcolumn:name="Age",type="date",JSONPath=".metadata.creationTimestamp"
-// +kubebuilder:printcolumn:name="OPERATION",type="string",JSONPath=".status.conditions[?(@.type=='Progressing')].reason"
 // +kubebuilder:printcolumn:name="Phase",type="string",JSONPath=".status.phase"
 // +kubebuilder:printcolumn:name="Ready",type="string",JSONPath=".status.conditions[?(@.type=='Ready')].status"
-// +kubebuilder:printcolumn:name="Degraded",type=string,JSONPath=`.status.conditions[?(@.type=="Degraded")].status`,priority=1
+// +kubebuilder:printcolumn:name="Paused",type="string",JSONPath=".status.conditions[?(@.type=='Paused')].status"
 // +kubebuilder:subresource:scale:specpath=.spec.size,statuspath=.status.size,selectorpath=.status.selector
 
 // AerospikeCluster is the schema for the AerospikeCluster API
