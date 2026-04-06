@@ -22,33 +22,39 @@ import (
 
 	. "github.com/onsi/ginkgo/v2"
 	. "github.com/onsi/gomega"
+	"k8s.io/apimachinery/pkg/types"
 
 	asdbv1 "github.com/aerospike/aerospike-kubernetes-operator/v4/api/v1"
 	"github.com/aerospike/aerospike-kubernetes-operator/v4/test"
 	testCluster "github.com/aerospike/aerospike-kubernetes-operator/v4/test/cluster"
 	"github.com/aerospike/aerospike-kubernetes-operator/v4/test/envtests"
 	"github.com/aerospike/aerospike-kubernetes-operator/v4/test/testutil"
-	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 )
 
 const (
-	newRackRevision = "v2"
-	clusterName     = "rack-revision-webhook"
+	newRackRevision         = "v2"
+	rackRevisionClusterName = "rack-revision-webhook-cluster"
+	threeCharClusterName    = "abc"
 )
 
 var _ = Describe("Rack revision webhook validation", func() {
 	ctx := context.TODO()
-	clusterNamespacedName := test.GetNamespacedName(clusterName, testutil.DefaultNamespace)
+	// Primary test cluster (fixed object name for most rack-revision webhook cases).
+	clusterNamespacedName := test.GetNamespacedName(rackRevisionClusterName, testutil.DefaultNamespace)
 
+	// Another test cluster (dynamic object name for some rack-revision webhook test cases).
+	var cName types.NamespacedName
+
+	BeforeEach(func() {
+		cName = types.NamespacedName{}
+	})
 	AfterEach(func() {
-		aeroCluster := &asdbv1.AerospikeCluster{
-			ObjectMeta: metav1.ObjectMeta{
-				Name:      clusterNamespacedName.Name,
-				Namespace: clusterNamespacedName.Namespace,
-			},
-		}
 		// Delete the cluster after each test
-		Expect(testCluster.DeleteCluster(envtests.K8sClient, ctx, aeroCluster)).ToNot(HaveOccurred())
+		deleteCluster(ctx, clusterNamespacedName)
+
+		if cName.Name != "" {
+			deleteCluster(ctx, cName)
+		}
 	})
 
 	Context("Deploy validation", func() {
@@ -66,8 +72,7 @@ var _ = Describe("Rack revision webhook validation", func() {
 				It("rejects revision that makes projected pod name too long at CREATE", func() {
 					// cluster name = 3 chars, revision = 48 chars:
 					// projected pod = 3 + "-1000000-" + 48 + "-255" = 3+9+48+4 = 64 > 63
-					shortName := "abc"
-					cName := test.GetNamespacedName(shortName, clusterNamespacedName.Namespace)
+					cName = test.GetNamespacedName(threeCharClusterName, clusterNamespacedName.Namespace)
 					aeroCluster := testCluster.CreateDummyAerospikeCluster(cName, 2)
 					aeroCluster.Spec.RackConfig = asdbv1.RackConfig{
 						Namespaces: []string{"test"},
@@ -84,8 +89,6 @@ var _ = Describe("Rack revision webhook validation", func() {
 							"exceeds the maximum DNS label length",
 							"of 63 characters").
 						Validate(err)
-
-					Expect(testCluster.DeleteCluster(envtests.K8sClient, ctx, aeroCluster)).ToNot(HaveOccurred())
 				})
 
 				It("rejects revision with uppercase letters", func() {
@@ -176,7 +179,7 @@ var _ = Describe("Rack revision webhook validation", func() {
 				It("rejects cluster name too long for projected pod name (with rack config)", func() {
 					// 48-char cluster name: 48 + 16 = 64 → pod name too long.
 					longName := strings.Repeat("a", 48)
-					cName := test.GetNamespacedName(longName, clusterNamespacedName.Namespace)
+					cName = test.GetNamespacedName(longName, clusterNamespacedName.Namespace)
 					aeroCluster := testCluster.CreateDummyAerospikeCluster(cName, 2)
 					aeroCluster.Spec.RackConfig = asdbv1.RackConfig{
 						Namespaces: []string{"test"},
@@ -223,7 +226,8 @@ var _ = Describe("Rack revision webhook validation", func() {
 					// cluster name "xyz" (3), 2 racks: "v1" (2 chars) and 48-char revision.
 					// maxPlaceholderLen = max(3, 2, 48) = 48
 					// projected pod = 3 + "-1000000-" + 48 + "-255" = 3+9+48+4 = 64 > 63.
-					cName := test.GetNamespacedName("xyz", clusterNamespacedName.Namespace)
+					shortName := "xyz"
+					cName = test.GetNamespacedName(shortName, clusterNamespacedName.Namespace)
 					aeroCluster := testCluster.CreateDummyAerospikeCluster(cName, 2)
 					aeroCluster.Spec.RackConfig = asdbv1.RackConfig{
 						Namespaces: []string{"test"},
@@ -243,7 +247,6 @@ var _ = Describe("Rack revision webhook validation", func() {
 							"exceeds the maximum DNS label length",
 							"of 63 characters").
 						Validate(err)
-					Expect(testCluster.DeleteCluster(envtests.K8sClient, ctx, aeroCluster)).ToNot(HaveOccurred())
 				})
 			})
 
@@ -297,8 +300,7 @@ var _ = Describe("Rack revision webhook validation", func() {
 				// cluster name "abc" (3), revision "rev-alpha" (9):
 				//   projected pod = 3 + "-1000000-" + 9 + "-255" = 3+9+9+4 = 25 ≤ 63 ✓
 				It("accepts a revision longer than 3 chars when pod name stays within limit", func() {
-					shortName := "abc"
-					cName := test.GetNamespacedName(shortName, clusterNamespacedName.Namespace)
+					cName = test.GetNamespacedName(threeCharClusterName, clusterNamespacedName.Namespace)
 					aeroCluster := testCluster.CreateDummyAerospikeCluster(cName, 2)
 					aeroCluster.Spec.RackConfig = asdbv1.RackConfig{
 						Namespaces: []string{"test"},
@@ -307,13 +309,13 @@ var _ = Describe("Rack revision webhook validation", func() {
 
 					err := envtests.K8sClient.Create(ctx, aeroCluster)
 					Expect(err).ToNot(HaveOccurred())
-					Expect(testCluster.DeleteCluster(envtests.K8sClient, ctx, aeroCluster)).ToNot(HaveOccurred())
 				})
 
 				// cluster name "xyz" (3), revision = 47 chars:
 				// projected pod = 3 + "-1000000-" + 47 + "-255" = 3+9+47+4 = 63 → exactly at limit.
 				It("accepts a revision exactly at the projected pod name boundary (pod name = 63 chars)", func() {
-					cName := test.GetNamespacedName("xyz", clusterNamespacedName.Namespace)
+					shortName := "xyz"
+					cName = test.GetNamespacedName(shortName, clusterNamespacedName.Namespace)
 					aeroCluster := testCluster.CreateDummyAerospikeCluster(cName, 2)
 					aeroCluster.Spec.RackConfig = asdbv1.RackConfig{
 						Namespaces: []string{"test"},
@@ -322,13 +324,13 @@ var _ = Describe("Rack revision webhook validation", func() {
 
 					err := envtests.K8sClient.Create(ctx, aeroCluster)
 					Expect(err).ToNot(HaveOccurred())
-					Expect(testCluster.DeleteCluster(envtests.K8sClient, ctx, aeroCluster)).ToNot(HaveOccurred())
 				})
 
 				// Two racks with different revision lengths. The longer one (47 chars)
 				// becomes maxPlaceholderLen. projected pod = 3+9+47+4 = 63 → passes.
 				It("accepts multiple racks where the longest revision fits within the pod name limit", func() {
-					cName := test.GetNamespacedName("def", clusterNamespacedName.Namespace)
+					shortName := "def"
+					cName = test.GetNamespacedName(shortName, clusterNamespacedName.Namespace)
 					aeroCluster := testCluster.CreateDummyAerospikeCluster(cName, 2)
 					aeroCluster.Spec.RackConfig = asdbv1.RackConfig{
 						Namespaces: []string{"test"},
@@ -340,7 +342,6 @@ var _ = Describe("Rack revision webhook validation", func() {
 
 					err := envtests.K8sClient.Create(ctx, aeroCluster)
 					Expect(err).ToNot(HaveOccurred())
-					Expect(testCluster.DeleteCluster(envtests.K8sClient, ctx, aeroCluster)).ToNot(HaveOccurred())
 				})
 			})
 		})
@@ -351,7 +352,7 @@ var _ = Describe("Rack revision webhook validation", func() {
 		Context("spec.rackConfig", func() {
 			Context("negative", func() {
 				It("rejects changes in rack Storage without changing rack Revision", func() {
-					s := storageForDevice("/r1/dev")
+					s := getStorageSpecForDevice("/r1/dev")
 					aeroCluster := testCluster.CreateDummyAerospikeCluster(clusterNamespacedName, 2)
 					policies := aeroCluster.Spec.Storage
 					aeroCluster.Spec.Storage = asdbv1.AerospikeStorageSpec{
@@ -396,7 +397,7 @@ var _ = Describe("Rack revision webhook validation", func() {
 
 				It("rejects update when rack Revision bumps to a revision"+
 					"already recorded in status with different Storage", func() {
-					sV1 := storageForDevice("/r1/v1")
+					sV1 := getStorageSpecForDevice("/r1/v1")
 					aeroCluster := testCluster.CreateDummyAerospikeCluster(clusterNamespacedName, 2)
 					policies := aeroCluster.Spec.Storage
 					aeroCluster.Spec.Storage = asdbv1.AerospikeStorageSpec{
@@ -425,7 +426,7 @@ var _ = Describe("Rack revision webhook validation", func() {
 					current, err := testCluster.GetCluster(envtests.K8sClient, ctx, clusterNamespacedName)
 					Expect(err).ToNot(HaveOccurred())
 
-					sV2Conflict := storageForDevice("/r1/v1")
+					sV2Conflict := getStorageSpecForDevice("/r1/v1")
 					patchFirstPVStorageClassSpec(&sV2Conflict)
 
 					current.Spec.RackConfig.Racks[0].Revision = newRackRevision
@@ -445,7 +446,7 @@ var _ = Describe("Rack revision webhook validation", func() {
 			Context("positive", func() {
 				It("allows update that changes rack InputStorage when rack Revision changes"+
 					"and status does not imply a conflict", func() {
-					s1 := storageForDevice("/r1/a")
+					s1 := getStorageSpecForDevice("/r1/a")
 					aeroCluster := testCluster.CreateDummyAerospikeCluster(clusterNamespacedName, 2)
 					policies := aeroCluster.Spec.Storage
 					aeroCluster.Spec.Storage = asdbv1.AerospikeStorageSpec{
@@ -465,7 +466,7 @@ var _ = Describe("Rack revision webhook validation", func() {
 					current, err := testCluster.GetCluster(envtests.K8sClient, ctx, clusterNamespacedName)
 					Expect(err).ToNot(HaveOccurred())
 
-					s2 := storageForDevice("/r1/b")
+					s2 := getStorageSpecForDevice("/r1/b")
 					patchFirstPVStorageClassSpec(&s2)
 					current.Spec.RackConfig.Racks[0].InputStorage = &s2
 					current.Spec.RackConfig.Racks[0].Revision = newRackRevision
@@ -492,9 +493,9 @@ var _ = Describe("Rack revision webhook validation", func() {
 					// Actual STS  = "a"*20 + "-1-" + "b"*42 = 20+3+42 = 65 chars
 					// Actual pod  = STS + "-0"              = 65+2   = 67 chars > 63 → rejected.
 					clusterName20 := strings.Repeat("a", 20)
-					cName20 := test.GetNamespacedName(clusterName20, clusterNamespacedName.Namespace)
+					cName = test.GetNamespacedName(clusterName20, clusterNamespacedName.Namespace)
 
-					aeroCluster := testCluster.CreateDummyAerospikeCluster(cName20, 2)
+					aeroCluster := testCluster.CreateDummyAerospikeCluster(cName, 2)
 					aeroCluster.Spec.RackConfig = asdbv1.RackConfig{
 						Namespaces: []string{"test"},
 						Racks:      []asdbv1.Rack{{ID: 1, Revision: "v1"}},
@@ -502,7 +503,7 @@ var _ = Describe("Rack revision webhook validation", func() {
 					err := envtests.K8sClient.Create(ctx, aeroCluster)
 					Expect(err).ToNot(HaveOccurred())
 
-					current, err := testCluster.GetCluster(envtests.K8sClient, ctx, cName20)
+					current, err := testCluster.GetCluster(envtests.K8sClient, ctx, cName)
 					Expect(err).ToNot(HaveOccurred())
 
 					// Grow the revision to 42 chars — actual pod name will be 67 chars.
@@ -517,8 +518,6 @@ var _ = Describe("Rack revision webhook validation", func() {
 							"exceeds the maximum DNS label length",
 							"of 63 characters").
 						Validate(err)
-
-					Expect(testCluster.DeleteCluster(envtests.K8sClient, ctx, aeroCluster)).ToNot(HaveOccurred())
 				})
 
 				// validateRackConfig (character validity) still runs on UPDATE.
@@ -559,9 +558,9 @@ var _ = Describe("Rack revision webhook validation", func() {
 					//   pod for rack 2 = 20+"-2-v1-0"         = 27 chars           → fine.
 					// Longest pod name (rack 1) fails → UPDATE rejected.
 					clusterName20 := strings.Repeat("b", 20)
-					cName20 := test.GetNamespacedName(clusterName20, clusterNamespacedName.Namespace)
+					cName = test.GetNamespacedName(clusterName20, clusterNamespacedName.Namespace)
 
-					aeroCluster := testCluster.CreateDummyAerospikeCluster(cName20, 2)
+					aeroCluster := testCluster.CreateDummyAerospikeCluster(cName, 2)
 					aeroCluster.Spec.RackConfig = asdbv1.RackConfig{
 						Namespaces: []string{"test"},
 						Racks: []asdbv1.Rack{
@@ -572,7 +571,7 @@ var _ = Describe("Rack revision webhook validation", func() {
 					err := envtests.K8sClient.Create(ctx, aeroCluster)
 					Expect(err).ToNot(HaveOccurred())
 
-					current, err := testCluster.GetCluster(envtests.K8sClient, ctx, cName20)
+					current, err := testCluster.GetCluster(envtests.K8sClient, ctx, cName)
 					Expect(err).ToNot(HaveOccurred())
 
 					current.Spec.RackConfig.Racks[0].Revision = strings.Repeat("c", 42)
@@ -585,7 +584,6 @@ var _ = Describe("Rack revision webhook validation", func() {
 							"exceeds the maximum DNS label length",
 							"of 63 characters").
 						Validate(err)
-					Expect(testCluster.DeleteCluster(envtests.K8sClient, ctx, aeroCluster)).ToNot(HaveOccurred())
 				})
 			})
 
@@ -635,7 +633,7 @@ var _ = Describe("Rack revision webhook validation", func() {
 					// UPDATE to "rev-alpha" (9 chars):
 					//   DistributeItems(1, 1) = [1] → ordinal = 0.
 					//   Actual pod = "abc-1-rev-alpha-0" = 17 chars ≤ 63 → passes.
-					cName := test.GetNamespacedName("abc", clusterNamespacedName.Namespace)
+					cName = test.GetNamespacedName(threeCharClusterName, clusterNamespacedName.Namespace)
 					aeroCluster := testCluster.CreateDummyAerospikeCluster(cName, 2)
 					aeroCluster.Spec.RackConfig = asdbv1.RackConfig{
 						Namespaces: []string{"test"},
@@ -651,7 +649,6 @@ var _ = Describe("Rack revision webhook validation", func() {
 					err = envtests.K8sClient.Update(ctx, current)
 					Expect(err).ToNot(HaveOccurred(),
 						"revision growth within the DNS label limit must be accepted")
-					Expect(testCluster.DeleteCluster(envtests.K8sClient, ctx, aeroCluster)).ToNot(HaveOccurred())
 				})
 
 				It("allows UPDATE when one rack has zero pods under DistributeItems"+

@@ -47,7 +47,7 @@ var _ = Describe("Storage webhook validation", func() {
 
 				It("rejects when global namespace device is not on rack InputStorage (spec vs rack mismatch)", func() {
 					aero := testCluster.CreateDummyAerospikeCluster(nsName, 2)
-					wrongRack := storageForDevice("/other/wrong/device")
+					wrongRack := getStorageSpecForDevice("/other/wrong/device")
 					aero.Spec.RackConfig = asdbv1.RackConfig{
 						Namespaces: []string{"test"},
 						Racks: []asdbv1.Rack{
@@ -80,7 +80,7 @@ var _ = Describe("Storage webhook validation", func() {
 				It("allows CREATE when spec.storage has no volumes"+
 					"and validation is satisfied via per-rack InputStorage", func() {
 					aero := testCluster.CreateDummyAerospikeCluster(nsName, 2)
-					fullRack := storageForDevice("/test/dev/xvdf")
+					fullRack := getStorageSpecForDevice("/test/dev/xvdf")
 					policies := aero.Spec.Storage
 					aero.Spec.Storage = asdbv1.AerospikeStorageSpec{
 						BlockVolumePolicy:      policies.BlockVolumePolicy,

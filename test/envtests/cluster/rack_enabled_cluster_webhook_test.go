@@ -48,7 +48,7 @@ var _ = Describe("Rack enabled cluster webhook validation", func() {
 
 				It("rejects when rack namespace device path is not covered by that rack's InputStorage", func() {
 					aero := testCluster.CreateDummyAerospikeCluster(nsName, 2)
-					s := storageForDevice("/wrong/path/not-in-namespace")
+					s := getStorageSpecForDevice("/wrong/path/not-in-namespace")
 					policies := aero.Spec.Storage
 					aero.Spec.Storage = asdbv1.AerospikeStorageSpec{
 						BlockVolumePolicy:      policies.BlockVolumePolicy,
@@ -139,8 +139,8 @@ var _ = Describe("Rack enabled cluster webhook validation", func() {
 				It("allows explicit racks where each rack has InputStorage volumes "+
 					"satisfying that rack's aerospike namespace device paths (no spec-level volume list required)", func() {
 					aero := testCluster.CreateDummyAerospikeCluster(nsName, 2)
-					s1 := storageForDevice("/rack1/xvda")
-					s2 := storageForDevice("/rack2/xvdb")
+					s1 := getStorageSpecForDevice("/rack1/xvda")
+					s2 := getStorageSpecForDevice("/rack2/xvdb")
 					stPolicies := aero.Spec.Storage
 					aero.Spec.Storage = asdbv1.AerospikeStorageSpec{
 						BlockVolumePolicy:      stPolicies.BlockVolumePolicy,
@@ -161,8 +161,8 @@ var _ = Describe("Rack enabled cluster webhook validation", func() {
 				It("allows multiple racks each using distinct InputStorage paths consistent "+
 					"with that rack's namespace config", func() {
 					aero := testCluster.CreateDummyAerospikeCluster(nsName, 2)
-					s1 := storageForDevice("/zone-a/ns-dev")
-					s2 := storageForDevice("/zone-b/ns-dev")
+					s1 := getStorageSpecForDevice("/zone-a/ns-dev")
+					s2 := getStorageSpecForDevice("/zone-b/ns-dev")
 					policies := aero.Spec.Storage
 					aero.Spec.Storage = asdbv1.AerospikeStorageSpec{
 						BlockVolumePolicy:      policies.BlockVolumePolicy,
@@ -196,7 +196,7 @@ var _ = Describe("Rack enabled cluster webhook validation", func() {
 					deleteCluster(ctx, nsName)
 				})
 				It("allows update that adjusts only spec.storage while rack InputStorage stays unchanged", func() {
-					r := storageForDevice("/r-only/dev")
+					r := getStorageSpecForDevice("/r-only/dev")
 					aero := testCluster.CreateDummyAerospikeCluster(nsName, 2)
 					aero.Spec.RackConfig = asdbv1.RackConfig{
 						Namespaces: []string{"test"},

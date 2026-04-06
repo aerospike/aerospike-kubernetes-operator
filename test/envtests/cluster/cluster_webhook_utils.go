@@ -10,6 +10,7 @@ import (
 	"k8s.io/apimachinery/pkg/api/resource"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/types"
+	"k8s.io/utils/ptr"
 
 	asdbv1 "github.com/aerospike/aerospike-kubernetes-operator/v4/api/v1"
 	"github.com/aerospike/aerospike-kubernetes-operator/v4/test"
@@ -30,17 +31,16 @@ func uniqueNamespacedName(suffix string) types.NamespacedName {
 	return test.GetNamespacedName(name, testutil.DefaultNamespace)
 }
 
-func storageForDevice(devicePath string) asdbv1.AerospikeStorageSpec {
-	cd := false
+func getStorageSpecForDevice(devicePath string) asdbv1.AerospikeStorageSpec {
 	initM := asdbv1.AerospikeVolumeMethodDeleteFiles
 
 	return asdbv1.AerospikeStorageSpec{
 		BlockVolumePolicy: asdbv1.AerospikePersistentVolumePolicySpec{
-			InputCascadeDelete: &cd,
+			InputCascadeDelete: ptr.To(false),
 		},
 		FileSystemVolumePolicy: asdbv1.AerospikePersistentVolumePolicySpec{
 			InputInitMethod:    &initM,
-			InputCascadeDelete: &cd,
+			InputCascadeDelete: ptr.To(false),
 		},
 		Volumes: []asdbv1.VolumeSpec{
 			{
