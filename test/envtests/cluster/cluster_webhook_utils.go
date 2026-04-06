@@ -26,7 +26,7 @@ const (
 )
 
 func uniqueNamespacedName(suffix string) types.NamespacedName {
-	name := fmt.Sprintf("ko481-%s-%d", suffix, GinkgoParallelProcess())
+	name := fmt.Sprintf("envtests-%s", suffix)
 
 	return test.GetNamespacedName(name, testutil.DefaultNamespace)
 }

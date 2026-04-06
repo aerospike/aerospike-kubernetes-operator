@@ -2,6 +2,7 @@ package cluster
 
 import (
 	"context"
+	"fmt"
 	"strings"
 
 	. "github.com/onsi/ginkgo/v2"
@@ -27,7 +28,7 @@ var _ = Describe("AerospikeCluster validation", func() {
 	ctx := context.TODO()
 
 	// Create namespaced name for cluster
-	clusterNamespacedName := test.GetNamespacedName(clusterName, testutil.DefaultNamespace)
+	clusterNamespacedName := uniqueNamespacedName(clusterName)
 
 	AfterEach(func() {
 		aeroCluster := &asdbv1.AerospikeCluster{
@@ -557,7 +558,7 @@ var _ = Describe("AerospikeCluster validation", func() {
 						WithMessageSubstrings(" \"maerospikecluster.kb.io\"",
 							"failed to set default aerospikeConfig.service config:",
 							"config cluster-name can not have non-default value (string cluster-name).",
-							"It will be set internally (string invalid-cluster)").
+							fmt.Sprintf("It will be set internally (string %s)", clusterNamespacedName.Name)).
 						Validate(err)
 				})
 
@@ -1015,8 +1016,7 @@ var _ = Describe("AerospikeCluster validation", func() {
 	Context("Update validation", func() {
 		const updateValidationClusterName = "update-validation-cluster"
 
-		updateValidationClusterNamespacedName := test.GetNamespacedName(
-			updateValidationClusterName, testutil.DefaultNamespace)
+		updateValidationClusterNamespacedName := uniqueNamespacedName(updateValidationClusterName)
 
 		AfterEach(func() {
 			aeroCluster := &asdbv1.AerospikeCluster{

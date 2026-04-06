@@ -25,7 +25,6 @@ import (
 	"k8s.io/utils/ptr"
 
 	asdbv1 "github.com/aerospike/aerospike-kubernetes-operator/v4/api/v1"
-	"github.com/aerospike/aerospike-kubernetes-operator/v4/test"
 	testCluster "github.com/aerospike/aerospike-kubernetes-operator/v4/test/cluster"
 	"github.com/aerospike/aerospike-kubernetes-operator/v4/test/envtests"
 	"github.com/aerospike/aerospike-kubernetes-operator/v4/test/testutil"
@@ -33,16 +32,16 @@ import (
 
 var _ = Describe("AerospikeCluster dynamic replication-factor validation", func() {
 	const (
-		clusterName      = "dynamic-rf-webhook-cluster"
-		maxSchemaRF      = 256
-		rfAboveSchemaMax = 257
-		namespaceName    = "test"
-		namespaceName2   = "test2"
-		namespaceName3   = "test3"
+		dynameicRFClusterName = "dynamic-rf-webhook-cluster"
+		maxSchemaRF           = 256
+		rfAboveSchemaMax      = 257
+		namespaceName         = "test"
+		namespaceName2        = "test2"
+		namespaceName3        = "test3"
 	)
 
 	ctx := context.TODO()
-	clusterNamespacedName := test.GetNamespacedName(clusterName, testutil.DefaultNamespace)
+	clusterNamespacedName := uniqueNamespacedName(dynameicRFClusterName)
 
 	// apNamespaceConfig returns an AP namespace config for envtest.
 	apNamespaceConfig := func(name string, rf int, device string) map[string]interface{} {

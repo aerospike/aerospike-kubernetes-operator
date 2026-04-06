@@ -28,7 +28,6 @@ import (
 	"github.com/aerospike/aerospike-kubernetes-operator/v4/test"
 	testCluster "github.com/aerospike/aerospike-kubernetes-operator/v4/test/cluster"
 	"github.com/aerospike/aerospike-kubernetes-operator/v4/test/envtests"
-	"github.com/aerospike/aerospike-kubernetes-operator/v4/test/testutil"
 )
 
 const (
@@ -40,7 +39,7 @@ const (
 var _ = Describe("Rack revision webhook validation", func() {
 	ctx := context.TODO()
 	// Primary test cluster (fixed object name for most rack-revision webhook cases).
-	clusterNamespacedName := test.GetNamespacedName(rackRevisionClusterName, testutil.DefaultNamespace)
+	clusterNamespacedName := uniqueNamespacedName(rackRevisionClusterName)
 
 	// Another test cluster (dynamic object name for some rack-revision webhook test cases).
 	var cName types.NamespacedName
