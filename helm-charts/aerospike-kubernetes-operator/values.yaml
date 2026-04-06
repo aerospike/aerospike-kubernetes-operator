@@ -56,6 +56,28 @@ aerospikeKubernetesInitRegistryNamespace: "aerospike"
 # Name and tag of aerospike-init image
 aerospikeKubernetesInitNameTag: "aerospike-kubernetes-init:2.5.1"
 
+## Logging configuration
+## These map directly to the zap logger flags registered via opts.BindFlags()
+logging:
+  ## Development mode: console encoder, DEBUG level, WARN stacktraces, no sampling, DPanic panics
+  ## Set to false for production (JSON encoder, INFO level, ERROR stacktraces, sampling enabled)
+  development: true
+
+  ## Log level: debug, info, warn, error, dpanic, panic, fatal
+  ## Overrides the default set by the development flag
+  level: ""
+
+  ## Log encoder: json or console
+  ## Overrides the default set by the development flag
+  encoder: ""
+
+  ## Stacktrace level: debug, info, warn, error, dpanic, panic, fatal
+  ## Log stacktraces at this level and above
+  stacktraceLevel: ""
+
+  ## Time encoding: epoch, millis, nano, iso8601, rfc3339, rfc3339nano
+  timeEncoding: ""
+
 ## Resources - limits / requests
 resources:
   limits:

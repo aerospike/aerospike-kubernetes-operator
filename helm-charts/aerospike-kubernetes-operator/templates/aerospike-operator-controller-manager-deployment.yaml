@@ -53,6 +53,19 @@ spec:
           {{- if .Values.certs.metrics.create }}
           - --metrics-cert-path=/tmp/k8s-metrics-server/metrics-certs
           {{- end }}
+          - --zap-devel={{ .Values.logging.development }}
+          {{- if .Values.logging.level }}
+          - --zap-log-level={{ .Values.logging.level }}
+          {{- end }}
+          {{- if .Values.logging.encoder }}
+          - --zap-encoder={{ .Values.logging.encoder }}
+          {{- end }}
+          {{- if .Values.logging.stacktraceLevel }}
+          - --zap-stacktrace-level={{ .Values.logging.stacktraceLevel }}
+          {{- end }}
+          {{- if .Values.logging.timeEncoding }}
+          - --zap-time-encoding={{ .Values.logging.timeEncoding }}
+          {{- end }}
         imagePullPolicy: {{ .Values.operatorImage.pullPolicy }}
         ports:
         - name: webhook-server
