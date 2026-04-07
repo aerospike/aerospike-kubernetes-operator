@@ -652,9 +652,9 @@ var _ = Describe("Rack revision webhook validation", func() {
 
 				It("allows UPDATE when one rack has zero pods under DistributeItems"+
 					"(validateActualPodNames skips rackSize 0)", func() {
-					ns := uniqueNamespacedName("actpod-zero-rack")
+					cName := uniqueNamespacedName("actpod-zero-rack")
 					// DistributeItems(2, 3) → [1,1,0]: only rack 1 and 2 gets a pod; rack 3 must be skipped.
-					aeroCluster := testCluster.CreateDummyAerospikeCluster(ns, 2)
+					aeroCluster := testCluster.CreateDummyAerospikeCluster(cName, 2)
 					aeroCluster.Spec.RackConfig = asdbv1.RackConfig{
 						Namespaces: []string{"test"},
 						Racks: []asdbv1.Rack{
@@ -666,7 +666,7 @@ var _ = Describe("Rack revision webhook validation", func() {
 
 					Expect(envtests.K8sClient.Create(ctx, aeroCluster)).To(Succeed())
 
-					current, err := testCluster.GetCluster(envtests.K8sClient, ctx, ns)
+					current, err := testCluster.GetCluster(envtests.K8sClient, ctx, cName)
 					Expect(err).ToNot(HaveOccurred())
 
 					// Only touch the rack that actually has pods; rack 3 remains unused by the distribution.
@@ -676,9 +676,9 @@ var _ = Describe("Rack revision webhook validation", func() {
 				})
 
 				It("allows UPDATE when max pod ordinal is greater than zero (validateActualPodNames uses rackSize-1)", func() {
-					ns := uniqueNamespacedName("actpod-ord-gt0")
+					cName := uniqueNamespacedName("actpod-ord-gt0")
 					// DistributeItems(4, 2) → [2, 2] → pod ordinals 0 and 1 per rack.
-					aeroCluster := testCluster.CreateDummyAerospikeCluster(ns, 4)
+					aeroCluster := testCluster.CreateDummyAerospikeCluster(cName, 4)
 					aeroCluster.Spec.RackConfig = asdbv1.RackConfig{
 						Namespaces: []string{"test"},
 						Racks: []asdbv1.Rack{
@@ -689,7 +689,7 @@ var _ = Describe("Rack revision webhook validation", func() {
 
 					Expect(envtests.K8sClient.Create(ctx, aeroCluster)).To(Succeed())
 
-					current, err := testCluster.GetCluster(envtests.K8sClient, ctx, ns)
+					current, err := testCluster.GetCluster(envtests.K8sClient, ctx, cName)
 					Expect(err).ToNot(HaveOccurred())
 
 					current.Spec.RackConfig.Racks[0].Revision = newRackRevision
