@@ -32,16 +32,16 @@ import (
 
 var _ = Describe("AerospikeCluster dynamic replication-factor validation", func() {
 	const (
-		dynameicRFClusterName = "dynamic-rf-webhook-cluster"
-		maxSchemaRF           = 256
-		rfAboveSchemaMax      = 257
-		namespaceName         = "test"
-		namespaceName2        = "test2"
-		namespaceName3        = "test3"
+		dynamicRFClusterName = "dynamic-rf-webhook-cluster"
+		maxSchemaRF          = 256
+		rfAboveSchemaMax     = 257
+		namespaceName        = "test"
+		namespaceName2       = "test2"
+		namespaceName3       = "test3"
 	)
 
 	ctx := context.TODO()
-	clusterNamespacedName := uniqueNamespacedName(dynameicRFClusterName)
+	clusterNamespacedName := uniqueNamespacedName(dynamicRFClusterName)
 
 	// apNamespaceConfig returns an AP namespace config for envtest.
 	apNamespaceConfig := func(name string, rf int, device string) map[string]interface{} {

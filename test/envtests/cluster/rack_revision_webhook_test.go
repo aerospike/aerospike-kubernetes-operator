@@ -673,8 +673,6 @@ var _ = Describe("Rack revision webhook validation", func() {
 					current.Spec.RackConfig.Racks[0].Revision = newRackRevision
 					current.Spec.RackConfig.Racks[1].Revision = newRackRevision
 					Expect(envtests.K8sClient.Update(ctx, current)).To(Succeed())
-
-					Expect(testCluster.DeleteCluster(envtests.K8sClient, ctx, aeroCluster)).ToNot(HaveOccurred())
 				})
 
 				It("allows UPDATE when max pod ordinal is greater than zero (validateActualPodNames uses rackSize-1)", func() {
@@ -697,8 +695,6 @@ var _ = Describe("Rack revision webhook validation", func() {
 					current.Spec.RackConfig.Racks[0].Revision = newRackRevision
 					current.Spec.RackConfig.Racks[1].Revision = newRackRevision
 					Expect(envtests.K8sClient.Update(ctx, current)).To(Succeed())
-
-					Expect(testCluster.DeleteCluster(envtests.K8sClient, ctx, aeroCluster)).ToNot(HaveOccurred())
 				})
 			})
 		})

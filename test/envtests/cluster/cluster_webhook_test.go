@@ -10,6 +10,7 @@ import (
 	v1 "k8s.io/api/core/v1"
 	"k8s.io/apimachinery/pkg/api/resource"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
+	"k8s.io/apimachinery/pkg/types"
 	"k8s.io/apimachinery/pkg/util/intstr"
 	"k8s.io/utils/ptr"
 
@@ -30,15 +31,19 @@ var _ = Describe("AerospikeCluster validation", func() {
 	// Create namespaced name for cluster
 	clusterNamespacedName := uniqueNamespacedName(clusterName)
 
+	// Another test cluster (dynamic object name for some cluster webhook test cases).
+	var cName types.NamespacedName
+
+	BeforeEach(func() {
+		cName = types.NamespacedName{}
+	})
 	AfterEach(func() {
-		aeroCluster := &asdbv1.AerospikeCluster{
-			ObjectMeta: metav1.ObjectMeta{
-				Name:      clusterNamespacedName.Name,
-				Namespace: clusterNamespacedName.Namespace,
-			},
-		}
 		// Delete the cluster after each test
-		Expect(testCluster.DeleteCluster(envtests.K8sClient, ctx, aeroCluster)).ToNot(HaveOccurred())
+		deleteCluster(ctx, clusterNamespacedName)
+
+		if cName.Name != "" {
+			deleteCluster(ctx, cName)
+		}
 	})
 
 	Context("Deploy validation", func() {
@@ -866,9 +871,6 @@ var _ = Describe("AerospikeCluster validation", func() {
 					aeroCluster := testCluster.CreateDummyAerospikeCluster(cName, 2)
 
 					err := envtests.K8sClient.Create(ctx, aeroCluster)
-
-					defer func() { _ = envtests.K8sClient.Delete(ctx, aeroCluster) }()
-
 					Expect(err).ToNot(HaveOccurred())
 				})
 
@@ -882,9 +884,7 @@ var _ = Describe("AerospikeCluster validation", func() {
 
 					err := envtests.K8sClient.Create(ctx, aeroCluster)
 
-					defer func() { _ = envtests.K8sClient.Delete(ctx, aeroCluster) }()
-
-					Expect(err).ToNot(HaveOccurred())
+					Expect(err).To(Succeed())
 				})
 			})
 		})
@@ -1019,13 +1019,8 @@ var _ = Describe("AerospikeCluster validation", func() {
 		updateValidationClusterNamespacedName := uniqueNamespacedName(updateValidationClusterName)
 
 		AfterEach(func() {
-			aeroCluster := &asdbv1.AerospikeCluster{
-				ObjectMeta: metav1.ObjectMeta{
-					Name:      updateValidationClusterNamespacedName.Name,
-					Namespace: updateValidationClusterNamespacedName.Namespace,
-				},
-			}
-			Expect(testCluster.DeleteCluster(envtests.K8sClient, ctx, aeroCluster)).ToNot(HaveOccurred())
+			// Delete the cluster after each test
+			deleteCluster(ctx, updateValidationClusterNamespacedName)
 		})
 
 		Context("spec.storage", func() {
