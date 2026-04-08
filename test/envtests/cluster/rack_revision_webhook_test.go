@@ -353,12 +353,7 @@ var _ = Describe("Rack revision webhook validation", func() {
 				It("rejects changes in rack Storage without changing rack Revision", func() {
 					s := getStorageSpecForDevice("/r1/dev")
 					aeroCluster := testCluster.CreateDummyAerospikeCluster(clusterNamespacedName, 2)
-					policies := aeroCluster.Spec.Storage
-					aeroCluster.Spec.Storage = asdbv1.AerospikeStorageSpec{
-						BlockVolumePolicy:      policies.BlockVolumePolicy,
-						FileSystemVolumePolicy: policies.FileSystemVolumePolicy,
-						Volumes:                nil,
-					}
+					aeroCluster.Spec.Storage = asdbv1.AerospikeStorageSpec{}
 					aeroCluster.Spec.RackConfig = asdbv1.RackConfig{
 						Namespaces: []string{"test"},
 						Racks: []asdbv1.Rack{
@@ -398,12 +393,7 @@ var _ = Describe("Rack revision webhook validation", func() {
 					"already recorded in status with different Storage", func() {
 					sV1 := getStorageSpecForDevice("/r1/v1")
 					aeroCluster := testCluster.CreateDummyAerospikeCluster(clusterNamespacedName, 2)
-					policies := aeroCluster.Spec.Storage
-					aeroCluster.Spec.Storage = asdbv1.AerospikeStorageSpec{
-						BlockVolumePolicy:      policies.BlockVolumePolicy,
-						FileSystemVolumePolicy: policies.FileSystemVolumePolicy,
-						Volumes:                nil,
-					}
+					aeroCluster.Spec.Storage = asdbv1.AerospikeStorageSpec{}
 					aeroCluster.Spec.RackConfig = asdbv1.RackConfig{
 						Namespaces: []string{"test"},
 						Racks: []asdbv1.Rack{
@@ -447,12 +437,7 @@ var _ = Describe("Rack revision webhook validation", func() {
 					"and status does not imply a conflict", func() {
 					s1 := getStorageSpecForDevice("/r1/a")
 					aeroCluster := testCluster.CreateDummyAerospikeCluster(clusterNamespacedName, 2)
-					policies := aeroCluster.Spec.Storage
-					aeroCluster.Spec.Storage = asdbv1.AerospikeStorageSpec{
-						BlockVolumePolicy:      policies.BlockVolumePolicy,
-						FileSystemVolumePolicy: policies.FileSystemVolumePolicy,
-						Volumes:                nil,
-					}
+					aeroCluster.Spec.Storage = asdbv1.AerospikeStorageSpec{}
 					aeroCluster.Spec.RackConfig = asdbv1.RackConfig{
 						Namespaces: []string{"test"},
 						Racks: []asdbv1.Rack{

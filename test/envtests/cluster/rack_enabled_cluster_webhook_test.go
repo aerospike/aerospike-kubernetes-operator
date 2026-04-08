@@ -47,15 +47,10 @@ var _ = Describe("Rack enabled cluster webhook validation", func() {
 		Context("spec.rackConfig", func() {
 			Context("negative", func() {
 				It("rejects when rack namespace device path is not covered by that rack's InputStorage", func() {
-					aero := testCluster.CreateDummyAerospikeCluster(nsName, 2)
+					aeroCluster := testCluster.CreateDummyAerospikeCluster(nsName, 2)
 					s := getStorageSpecForDevice("/wrong/path/not-in-namespace")
-					policies := aero.Spec.Storage
-					aero.Spec.Storage = asdbv1.AerospikeStorageSpec{
-						BlockVolumePolicy:      policies.BlockVolumePolicy,
-						FileSystemVolumePolicy: policies.FileSystemVolumePolicy,
-						Volumes:                nil,
-					}
-					aero.Spec.RackConfig = asdbv1.RackConfig{
+					aeroCluster.Spec.Storage = asdbv1.AerospikeStorageSpec{}
+					aeroCluster.Spec.RackConfig = asdbv1.RackConfig{
 						Namespaces: []string{"test"},
 						Racks: []asdbv1.Rack{
 							{
@@ -67,7 +62,7 @@ var _ = Describe("Rack enabled cluster webhook validation", func() {
 						},
 					}
 
-					err := envtests.K8sClient.Create(ctx, aero)
+					err := envtests.K8sClient.Create(ctx, aeroCluster)
 					Expect(err).To(HaveOccurred())
 					envtests.NewStatusErrorMatcher().
 						WithMessageSubstrings(
@@ -78,10 +73,10 @@ var _ = Describe("Rack enabled cluster webhook validation", func() {
 				})
 
 				It("rejects when rack InputStorage is incomplete for rack aerospike namespace device paths", func() {
-					aero := testCluster.CreateDummyAerospikeCluster(nsName, 2)
+					aeroCluster := testCluster.CreateDummyAerospikeCluster(nsName, 2)
 					incomplete := asdbv1.AerospikeStorageSpec{
-						BlockVolumePolicy:      aero.Spec.Storage.BlockVolumePolicy,
-						FileSystemVolumePolicy: aero.Spec.Storage.FileSystemVolumePolicy,
+						BlockVolumePolicy:      aeroCluster.Spec.Storage.BlockVolumePolicy,
+						FileSystemVolumePolicy: aeroCluster.Spec.Storage.FileSystemVolumePolicy,
 						Volumes: []asdbv1.VolumeSpec{
 							{
 								Name: aerospikeConfigVolName,
@@ -96,13 +91,8 @@ var _ = Describe("Rack enabled cluster webhook validation", func() {
 							},
 						},
 					}
-					policies := aero.Spec.Storage
-					aero.Spec.Storage = asdbv1.AerospikeStorageSpec{
-						BlockVolumePolicy:      policies.BlockVolumePolicy,
-						FileSystemVolumePolicy: policies.FileSystemVolumePolicy,
-						Volumes:                nil,
-					}
-					aero.Spec.RackConfig = asdbv1.RackConfig{
+					aeroCluster.Spec.Storage = asdbv1.AerospikeStorageSpec{}
+					aeroCluster.Spec.RackConfig = asdbv1.RackConfig{
 						Namespaces: []string{"test"},
 						Racks: []asdbv1.Rack{
 							{
@@ -114,7 +104,7 @@ var _ = Describe("Rack enabled cluster webhook validation", func() {
 						},
 					}
 
-					err := envtests.K8sClient.Create(ctx, aero)
+					err := envtests.K8sClient.Create(ctx, aeroCluster)
 					Expect(err).To(HaveOccurred())
 					envtests.NewStatusErrorMatcher().
 						WithMessageSubstrings(
@@ -127,17 +117,12 @@ var _ = Describe("Rack enabled cluster webhook validation", func() {
 
 			Context("positive", func() {
 				It("allows explicit racks where each rack has InputStorage volumes "+
-					"satisfying that rack's aerospike namespace device paths (no spec-level volume list required)", func() {
-					aero := testCluster.CreateDummyAerospikeCluster(nsName, 2)
+					"satisfying that rack's aerospike namespace device paths (no spec-level storage config required)", func() {
+					aeroCluster := testCluster.CreateDummyAerospikeCluster(nsName, 2)
 					s1 := getStorageSpecForDevice("/rack1/xvda")
 					s2 := getStorageSpecForDevice("/rack2/xvdb")
-					stPolicies := aero.Spec.Storage
-					aero.Spec.Storage = asdbv1.AerospikeStorageSpec{
-						BlockVolumePolicy:      stPolicies.BlockVolumePolicy,
-						FileSystemVolumePolicy: stPolicies.FileSystemVolumePolicy,
-						Volumes:                nil,
-					}
-					aero.Spec.RackConfig = asdbv1.RackConfig{
+					aeroCluster.Spec.Storage = asdbv1.AerospikeStorageSpec{}
+					aeroCluster.Spec.RackConfig = asdbv1.RackConfig{
 						Namespaces: []string{"test"},
 						Racks: []asdbv1.Rack{
 							{ID: 1, Revision: "v1", InputStorage: &s1, InputAerospikeConfig: rackNSOverride("/rack1/xvda")},
@@ -145,29 +130,34 @@ var _ = Describe("Rack enabled cluster webhook validation", func() {
 						},
 					}
 
-					Expect(envtests.K8sClient.Create(ctx, aero)).To(Succeed())
+					Expect(envtests.K8sClient.Create(ctx, aeroCluster)).To(Succeed())
 				})
 
-				It("allows multiple racks each using distinct InputStorage paths consistent "+
-					"with that rack's namespace config", func() {
-					aero := testCluster.CreateDummyAerospikeCluster(nsName, 2)
-					s1 := getStorageSpecForDevice("/zone-a/ns-dev")
-					s2 := getStorageSpecForDevice("/zone-b/ns-dev")
-					policies := aero.Spec.Storage
-					aero.Spec.Storage = asdbv1.AerospikeStorageSpec{
-						BlockVolumePolicy:      policies.BlockVolumePolicy,
-						FileSystemVolumePolicy: policies.FileSystemVolumePolicy,
-						Volumes:                nil,
-					}
-					aero.Spec.RackConfig = asdbv1.RackConfig{
+				It("allows one rack with InputStorage and another rack falling back to spec-level storage", func() {
+					// Leave aeroCluster.Spec.Storage as from CreateDummy: includes /test/dev/xvdf for the
+					// default merged namespace config on rack 2 (no InputAerospikeConfig → global config).
+					aeroCluster := testCluster.CreateDummyAerospikeCluster(nsName, 2)
+					rack1Storage := getStorageSpecForDevice("/rack1/xvda")
+
+					aeroCluster.Spec.RackConfig = asdbv1.RackConfig{
 						Namespaces: []string{"test"},
 						Racks: []asdbv1.Rack{
-							{ID: 1, Revision: "a", InputStorage: &s1, InputAerospikeConfig: rackNSOverride("/zone-a/ns-dev")},
-							{ID: 2, Revision: "a", InputStorage: &s2, InputAerospikeConfig: rackNSOverride("/zone-b/ns-dev")},
+							{
+								ID:                   1,
+								Revision:             "v1",
+								InputStorage:         &rack1Storage,
+								InputAerospikeConfig: rackNSOverride("/rack1/xvda"),
+							},
+							{
+								ID:                   2,
+								Revision:             "v1",
+								InputStorage:         nil, // uses cluster.Spec.Storage after mutating webhook
+								InputAerospikeConfig: nil, // uses merged global AerospikeConfig (/test/dev/xvdf)
+							},
 						},
 					}
 
-					Expect(envtests.K8sClient.Create(ctx, aero)).To(Succeed())
+					Expect(envtests.K8sClient.Create(ctx, aeroCluster)).To(Succeed())
 				})
 			})
 		})
@@ -178,15 +168,15 @@ var _ = Describe("Rack enabled cluster webhook validation", func() {
 			Context("positive", func() {
 				It("allows update that adjusts only spec.storage while rack InputStorage stays unchanged", func() {
 					r := getStorageSpecForDevice("/r-only/dev")
-					aero := testCluster.CreateDummyAerospikeCluster(nsName, 2)
-					aero.Spec.RackConfig = asdbv1.RackConfig{
+					aeroCluster := testCluster.CreateDummyAerospikeCluster(nsName, 2)
+					aeroCluster.Spec.RackConfig = asdbv1.RackConfig{
 						Namespaces: []string{"test"},
 						Racks: []asdbv1.Rack{
 							{ID: 1, Revision: "v1", InputStorage: &r, InputAerospikeConfig: rackNSOverride("/r-only/dev")},
 						},
 					}
 
-					Expect(envtests.K8sClient.Create(ctx, aero)).To(Succeed())
+					Expect(envtests.K8sClient.Create(ctx, aeroCluster)).To(Succeed())
 
 					current, err := testCluster.GetCluster(envtests.K8sClient, ctx, nsName)
 					Expect(err).ToNot(HaveOccurred())
