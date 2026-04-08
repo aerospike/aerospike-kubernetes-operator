@@ -33,19 +33,19 @@ import (
 var _ = Describe("Rack enabled cluster webhook validation", func() {
 	ctx := context.TODO()
 
+	var nsName types.NamespacedName
+
+	BeforeEach(func() {
+		nsName = uniqueNamespacedName("rack-enabled")
+	})
+
+	AfterEach(func() {
+		deleteCluster(ctx, nsName)
+	})
+
 	Context("Deploy validation", func() {
 		Context("spec.rackConfig", func() {
 			Context("negative", func() {
-				var nsName types.NamespacedName
-
-				BeforeEach(func() {
-					nsName = uniqueNamespacedName("rackcfg-neg")
-				})
-
-				AfterEach(func() {
-					deleteCluster(ctx, nsName)
-				})
-
 				It("rejects when rack namespace device path is not covered by that rack's InputStorage", func() {
 					aero := testCluster.CreateDummyAerospikeCluster(nsName, 2)
 					s := getStorageSpecForDevice("/wrong/path/not-in-namespace")
@@ -126,16 +126,6 @@ var _ = Describe("Rack enabled cluster webhook validation", func() {
 			})
 
 			Context("positive", func() {
-				var nsName types.NamespacedName
-
-				BeforeEach(func() {
-					nsName = uniqueNamespacedName("rackcfg-pos")
-				})
-
-				AfterEach(func() {
-					deleteCluster(ctx, nsName)
-				})
-
 				It("allows explicit racks where each rack has InputStorage volumes "+
 					"satisfying that rack's aerospike namespace device paths (no spec-level volume list required)", func() {
 					aero := testCluster.CreateDummyAerospikeCluster(nsName, 2)
@@ -186,15 +176,6 @@ var _ = Describe("Rack enabled cluster webhook validation", func() {
 	Context("Update validation", func() {
 		Context("spec.rackConfig", func() {
 			Context("positive", func() {
-				var nsName types.NamespacedName
-
-				BeforeEach(func() {
-					nsName = uniqueNamespacedName("updrack-pos")
-				})
-
-				AfterEach(func() {
-					deleteCluster(ctx, nsName)
-				})
 				It("allows update that adjusts only spec.storage while rack InputStorage stays unchanged", func() {
 					r := getStorageSpecForDevice("/r-only/dev")
 					aero := testCluster.CreateDummyAerospikeCluster(nsName, 2)
