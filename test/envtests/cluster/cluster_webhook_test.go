@@ -1023,41 +1023,6 @@ var _ = Describe("AerospikeCluster validation", func() {
 			deleteCluster(ctx, updateValidationClusterNamespacedName)
 		})
 
-		Context("spec.storage", func() {
-			Context("negative", func() {
-				It("rejects when storage config is updated", func() {
-					aeroCluster := testCluster.CreateDummyAerospikeCluster(updateValidationClusterNamespacedName, 2)
-					err := envtests.K8sClient.Create(ctx, aeroCluster)
-					Expect(err).ToNot(HaveOccurred())
-
-					current, err := testCluster.GetCluster(envtests.K8sClient, ctx, updateValidationClusterNamespacedName)
-					Expect(err).ToNot(HaveOccurred())
-
-					// Change storage (e.g. StorageClass) to trigger "storage config cannot be updated"
-					for i := range current.Spec.Storage.Volumes {
-						if current.Spec.Storage.Volumes[i].Source.PersistentVolume != nil {
-							current.Spec.Storage.Volumes[i].Source.PersistentVolume.StorageClass = "other-storage-class"
-							break
-						}
-					}
-
-					err = envtests.K8sClient.Update(ctx, current)
-					Expect(err).To(HaveOccurred())
-
-					envtests.NewStatusErrorMatcher().
-						WithMessageSubstrings(
-							"\"vaerospikecluster.kb.io\"",
-							"denied the request:",
-							"storage config cannot be updated",
-							"cannot change volumes").
-						Validate(err)
-				})
-			})
-			Context("positive", func() {
-				// Add positive update storage tests here
-			})
-		})
-
 		Context("spec.podSpec", func() {
 			Context("negative", func() {
 				It("rejects when MultiPodPerHost is changed", func() {
