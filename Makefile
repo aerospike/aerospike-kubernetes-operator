@@ -180,7 +180,7 @@ env-test-cluster:  fmt vet setup-envtest ## Run tests.
 
 .PHONY: env-test-eviction # Run test/envtests/eviction
 env-test-eviction:  fmt vet setup-envtest ## Run tests.
-	export KUBEBUILDER_ASSETS="$(shell $(ENVTEST) use $(ENVTEST_K8S_VERSION) --bin-dir $(LOCALBIN) -p path)"; cd $(shell pwd)/test/envtests/eviction && mkdir -p ../../test-results && go run github.com/onsi/ginkgo/v2/ginkgo -r --focus "$(FOCUS)" -coverprofile envcover.out -show-node-events -timeout=1h0m0s --junit-report=../../test-results/junit-envtests-eviction.xml -- . ${ARGS}	
+	export KUBEBUILDER_ASSETS="$(shell $(ENVTEST) use $(ENVTEST_K8S_VERSION) --bin-dir $(LOCALBIN) -p path)"; cd $(shell pwd)/test/envtests/eviction && mkdir -p ../../test-results && go run github.com/onsi/ginkgo/v2/ginkgo -r --focus "$(FOCUS)" -coverprofile envcover.out -timeout=1h0m0s --junit-report=../../test-results/junit-envtests-eviction.xml -- . ${ARGS}	
 ##@ Build
 
 .PHONY: build
