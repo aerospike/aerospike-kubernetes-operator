@@ -22,12 +22,15 @@ import (
 
 	. "github.com/onsi/ginkgo/v2"
 	. "github.com/onsi/gomega"
+	corev1 "k8s.io/api/core/v1"
+	"k8s.io/apimachinery/pkg/api/resource"
 	"k8s.io/apimachinery/pkg/types"
 
 	asdbv1 "github.com/aerospike/aerospike-kubernetes-operator/v4/api/v1"
 	"github.com/aerospike/aerospike-kubernetes-operator/v4/test"
 	testCluster "github.com/aerospike/aerospike-kubernetes-operator/v4/test/cluster"
 	"github.com/aerospike/aerospike-kubernetes-operator/v4/test/envtests"
+	"github.com/aerospike/aerospike-kubernetes-operator/v4/test/testutil"
 )
 
 const (
@@ -35,6 +38,12 @@ const (
 	rackRevisionClusterName = "rack-revision-webhook-cluster"
 	threeCharClusterName    = "abc"
 )
+
+// invalidRevisionDeployCase is a struct that contains the revision string and the expected error substrings.
+type invalidRevisionDeployCase struct {
+	revision string
+	subs     []string
+}
 
 var _ = Describe("Rack revision webhook validation", func() {
 	ctx := context.TODO()
@@ -90,79 +99,55 @@ var _ = Describe("Rack revision webhook validation", func() {
 						Validate(err)
 				})
 
-				It("rejects revision with uppercase letters", func() {
-					aeroCluster := testCluster.CreateDummyAerospikeCluster(clusterNamespacedName, 2)
-					aeroCluster.Spec.RackConfig = asdbv1.RackConfig{
-						Namespaces: []string{"test"},
-						Racks:      []asdbv1.Rack{{ID: 1, Revision: "V1"}},
-					}
+				// Table: invalid rack revision strings rejected at CREATE with admission errors.
+				// Each row exercises a different IsDNS1123Label / rack-revision rule: uppercase,
+				// leading/trailing hyphen, dot (invalid inside a single DNS label), underscore.
+				// Expectations use stable message substrings from the validating webhook.
+				DescribeTable("rejects invalid rack revision on CREATE",
+					func(c invalidRevisionDeployCase) {
+						aeroCluster := testCluster.CreateDummyAerospikeCluster(clusterNamespacedName, 2)
+						aeroCluster.Spec.RackConfig = asdbv1.RackConfig{
+							Namespaces: []string{"test"},
+							Racks:      []asdbv1.Rack{{ID: 1, Revision: c.revision}},
+						}
 
-					err := testCluster.DeployCluster(envtests.K8sClient, ctx, aeroCluster)
-					Expect(err).To(HaveOccurred())
+						err := testCluster.DeployCluster(envtests.K8sClient, ctx, aeroCluster)
+						Expect(err).To(HaveOccurred())
 
-					envtests.NewStatusErrorMatcher().
-						WithMessageSubstrings(
-							"\"vaerospikecluster.kb.io\"",
-							"rack revision \"V1\" for rack ID 1 is invalid",
-							"must consist of lower case alphanumeric characters or '-'").
-						Validate(err)
-				})
-
-				It("rejects revision ending with a hyphen", func() {
-					aeroCluster := testCluster.CreateDummyAerospikeCluster(clusterNamespacedName, 2)
-					aeroCluster.Spec.RackConfig = asdbv1.RackConfig{
-						Namespaces: []string{"test"},
-						Racks:      []asdbv1.Rack{{ID: 1, Revision: "v-"}},
-					}
-
-					err := testCluster.DeployCluster(envtests.K8sClient, ctx, aeroCluster)
-					Expect(err).To(HaveOccurred())
-
-					envtests.NewStatusErrorMatcher().
-						WithMessageSubstrings(
-							"\"vaerospikecluster.kb.io\"",
-							"rack revision \"v-\" for rack ID 1 is invalid",
-							"must start and end with an alphanumeric character").
-						Validate(err)
-				})
-
-				// Dot in revision is a silent failure: k8s accepts the STS/pod as a
-				// DNS subdomain, but the dot breaks the pod's DNS label in the FQDN.
-				It("rejects revision with a dot (silent DNS breakage without webhook check)", func() {
-					aeroCluster := testCluster.CreateDummyAerospikeCluster(clusterNamespacedName, 2)
-					aeroCluster.Spec.RackConfig = asdbv1.RackConfig{
-						Namespaces: []string{"test"},
-						Racks:      []asdbv1.Rack{{ID: 1, Revision: "v.1"}},
-					}
-
-					err := testCluster.DeployCluster(envtests.K8sClient, ctx, aeroCluster)
-					Expect(err).To(HaveOccurred())
-
-					envtests.NewStatusErrorMatcher().
-						WithMessageSubstrings(
-							"\"vaerospikecluster.kb.io\"",
-							"rack revision \"v.1\" for rack ID 1 is invalid",
-							"must not contain dots").
-						Validate(err)
-				})
-
-				It("rejects revision with an underscore", func() {
-					aeroCluster := testCluster.CreateDummyAerospikeCluster(clusterNamespacedName, 2)
-					aeroCluster.Spec.RackConfig = asdbv1.RackConfig{
-						Namespaces: []string{"test"},
-						Racks:      []asdbv1.Rack{{ID: 1, Revision: "v_1"}},
-					}
-
-					err := testCluster.DeployCluster(envtests.K8sClient, ctx, aeroCluster)
-					Expect(err).To(HaveOccurred())
-
-					envtests.NewStatusErrorMatcher().
-						WithMessageSubstrings(
-							"\"vaerospikecluster.kb.io\"",
-							"rack revision \"v_1\" for rack ID 1 is invalid",
-							"must consist of lower case alphanumeric characters or '-'").
-						Validate(err)
-				})
+						subs := append([]string{"\"vaerospikecluster.kb.io\""}, c.subs...)
+						envtests.NewStatusErrorMatcher().
+							WithMessageSubstrings(subs...).
+							Validate(err)
+					},
+					Entry("Rack revision with uppercase letters", invalidRevisionDeployCase{
+						revision: "V1",
+						subs: []string{
+							`rack revision "V1" for rack ID 1 is invalid`,
+							"must consist of lower case alphanumeric characters or '-'",
+						},
+					}),
+					Entry("Rack revision with hyphen", invalidRevisionDeployCase{
+						revision: "v-",
+						subs: []string{
+							`rack revision "v-" for rack ID 1 is invalid`,
+							"must start and end with an alphanumeric character",
+						},
+					}),
+					Entry("Rack revision with dot", invalidRevisionDeployCase{
+						revision: "v.1",
+						subs: []string{
+							`rack revision "v.1" for rack ID 1 is invalid`,
+							"must not contain dots",
+						},
+					}),
+					Entry("Rack revision with underscore", invalidRevisionDeployCase{
+						revision: "v_1",
+						subs: []string{
+							`rack revision "v_1" for rack ID 1 is invalid`,
+							"must consist of lower case alphanumeric characters or '-'",
+						},
+					}),
+				)
 
 				// The baseline projected pod name uses the 3-char placeholder revision
 				// (minRevisionReservation), MaxRackID (1000000), and max ordinal (255):
@@ -250,80 +235,53 @@ var _ = Describe("Rack revision webhook validation", func() {
 			})
 
 			Context("positive", func() {
-				It("accepts empty revision", func() {
-					aeroCluster := testCluster.CreateDummyAerospikeCluster(clusterNamespacedName, 2)
-					aeroCluster.Spec.RackConfig = asdbv1.RackConfig{
-						Namespaces: []string{"test"},
-						Racks:      []asdbv1.Rack{{ID: 1, Revision: ""}},
-					}
+				// Table: valid rack revision strings accepted at CREATE when other fields are fixed
+				// (single rack ID=1, dummy cluster, default namespace device path).
+				// Covers DNS-1123–style revision rules that should pass: empty revision, lowercase short revision,
+				// rack revision with only digits and alphanumeric rack revision.
+				DescribeTable("accepts valid rack revision on CREATE",
+					func(revision string) {
+						aeroCluster := testCluster.CreateDummyAerospikeCluster(clusterNamespacedName, 2)
+						aeroCluster.Spec.RackConfig = asdbv1.RackConfig{
+							Namespaces: []string{"test"},
+							Racks:      []asdbv1.Rack{{ID: 1, Revision: revision}},
+						}
 
-					err := envtests.K8sClient.Create(ctx, aeroCluster)
-					Expect(err).ToNot(HaveOccurred())
-				})
+						err := envtests.K8sClient.Create(ctx, aeroCluster)
+						Expect(err).To(Succeed())
+					},
+					Entry("empty revision", ""),
+					Entry("1-char lowercase rack revision", "v"),
+					Entry("2-char rack revision with only digits", "01"),
+					Entry("3-char alphanumeric rack revision", "v1b"),
+				)
 
-				It("accepts a 1-char lowercase revision", func() {
-					aeroCluster := testCluster.CreateDummyAerospikeCluster(clusterNamespacedName, 2)
-					aeroCluster.Spec.RackConfig = asdbv1.RackConfig{
-						Namespaces: []string{"test"},
-						Racks:      []asdbv1.Rack{{ID: 1, Revision: "v"}},
-					}
+				// CREATE admission uses a conservative projected pod name (short cluster name placeholder,
+				// max rack ID, longest rack revision vs minRevisionReservation, max ordinal) to ensure
+				// the resulting DNS label cannot exceed 63 characters. Rows below are positive cases:
+				// a comfortably short projection, and one that lands exactly on the 63-character limit.
+				// Per-row arithmetic is in the comments above each Entry.
+				DescribeTable("accepts CREATE when a rack revision keeps the projected pod name within limit",
+					func(revision string) {
+						cName = test.GetNamespacedName(threeCharClusterName, clusterNamespacedName.Namespace)
+						aeroCluster := testCluster.CreateDummyAerospikeCluster(cName, 2)
+						aeroCluster.Spec.RackConfig = asdbv1.RackConfig{
+							Namespaces: []string{"test"},
+							Racks:      []asdbv1.Rack{{ID: 1, Revision: revision}},
+						}
 
-					err := envtests.K8sClient.Create(ctx, aeroCluster)
-					Expect(err).ToNot(HaveOccurred())
-				})
+						err := envtests.K8sClient.Create(ctx, aeroCluster)
+						Expect(err).ToNot(HaveOccurred())
+					},
 
-				It("accepts a 2-char revision with a hyphen (e.g. v1)", func() {
-					aeroCluster := testCluster.CreateDummyAerospikeCluster(clusterNamespacedName, 2)
-					aeroCluster.Spec.RackConfig = asdbv1.RackConfig{
-						Namespaces: []string{"test"},
-						Racks:      []asdbv1.Rack{{ID: 1, Revision: "v1"}},
-					}
+					// Math: cluster name "abc" (3), revision "rev-alpha" (9).
+					// Projected pod = 3 + "-1000000-" + 9 + "-255" = 3 + 9 + 9 + 4 = 25 ≤ 63 → should succeed
+					Entry("revision longer than 3 chars when pod name stays within limit", "rev-alpha"),
 
-					err := envtests.K8sClient.Create(ctx, aeroCluster)
-					Expect(err).ToNot(HaveOccurred())
-				})
-
-				It("accepts a 3-char revision", func() {
-					aeroCluster := testCluster.CreateDummyAerospikeCluster(clusterNamespacedName, 2)
-					aeroCluster.Spec.RackConfig = asdbv1.RackConfig{
-						Namespaces: []string{"test"},
-						Racks:      []asdbv1.Rack{{ID: 1, Revision: "v1b"}},
-					}
-
-					err := envtests.K8sClient.Create(ctx, aeroCluster)
-					Expect(err).ToNot(HaveOccurred())
-				})
-
-				// Revisions longer than 3 chars are accepted as long as the resulting
-				// projected pod name (with MaxRackID and max ordinal) stays ≤ 63 chars.
-				// cluster name "abc" (3), revision "rev-alpha" (9):
-				//   projected pod = 3 + "-1000000-" + 9 + "-255" = 3+9+9+4 = 25 ≤ 63 ✓
-				It("accepts a revision longer than 3 chars when pod name stays within limit", func() {
-					cName = test.GetNamespacedName(threeCharClusterName, clusterNamespacedName.Namespace)
-					aeroCluster := testCluster.CreateDummyAerospikeCluster(cName, 2)
-					aeroCluster.Spec.RackConfig = asdbv1.RackConfig{
-						Namespaces: []string{"test"},
-						Racks:      []asdbv1.Rack{{ID: 1, Revision: "rev-alpha"}}, // 9 chars
-					}
-
-					err := envtests.K8sClient.Create(ctx, aeroCluster)
-					Expect(err).ToNot(HaveOccurred())
-				})
-
-				// cluster name "xyz" (3), revision = 47 chars:
-				// projected pod = 3 + "-1000000-" + 47 + "-255" = 3+9+47+4 = 63 → exactly at limit.
-				It("accepts a revision exactly at the projected pod name boundary (pod name = 63 chars)", func() {
-					shortName := "xyz"
-					cName = test.GetNamespacedName(shortName, clusterNamespacedName.Namespace)
-					aeroCluster := testCluster.CreateDummyAerospikeCluster(cName, 2)
-					aeroCluster.Spec.RackConfig = asdbv1.RackConfig{
-						Namespaces: []string{"test"},
-						Racks:      []asdbv1.Rack{{ID: 1, Revision: strings.Repeat("a", 47)}},
-					}
-
-					err := envtests.K8sClient.Create(ctx, aeroCluster)
-					Expect(err).ToNot(HaveOccurred())
-				})
+					// Math: cluster name "abc" (3), revision = 47 'a' chars.
+					// Projected pod = 3 + "-1000000-" + 47 + "-255" = 3 + 9 + 47 + 4 = 63 → exactly at DNS label limit.
+					Entry("revision exactly at the projected pod name boundary (pod name = 63 chars)", strings.Repeat("a", 47)),
+				)
 
 				// Two racks with different revision lengths. The longer one (47 chars)
 				// becomes maxPlaceholderLen. projected pod = 3+9+47+4 = 63 → passes.
@@ -348,21 +306,19 @@ var _ = Describe("Rack revision webhook validation", func() {
 
 	// Test update validation for rack revision
 	Context("Update validation", func() {
-		Context("spec.rackConfig", func() {
+		Context("spec.rackConfig (rack revision)", func() {
 			Context("negative", func() {
 				It("rejects changes in rack Storage without changing rack Revision", func() {
-					s := getStorageSpecForDevice("/r1/dev")
 					aeroCluster := testCluster.CreateDummyAerospikeCluster(clusterNamespacedName, 2)
+					rackSt := aeroCluster.Spec.Storage.DeepCopy()
 					aeroCluster.Spec.Storage = asdbv1.AerospikeStorageSpec{}
 					aeroCluster.Spec.RackConfig = asdbv1.RackConfig{
 						Namespaces: []string{"test"},
 						Racks: []asdbv1.Rack{
-							{ID: 1, Revision: "v1", InputStorage: &s, InputAerospikeConfig: rackNSOverride("/r1/dev")},
+							{ID: 1, Revision: "v1", InputStorage: rackSt},
 						},
 					}
-
 					Expect(envtests.K8sClient.Create(ctx, aeroCluster)).To(Succeed())
-
 					current, err := testCluster.GetCluster(envtests.K8sClient, ctx, clusterNamespacedName)
 					Expect(err).ToNot(HaveOccurred())
 
@@ -377,7 +333,6 @@ var _ = Describe("Rack revision webhook validation", func() {
 
 					patchFirstPVStorageClassSpec(st)
 					r0.InputStorage = st
-
 					err = envtests.K8sClient.Update(ctx, current)
 					Expect(err).To(HaveOccurred())
 					envtests.NewStatusErrorMatcher().
@@ -391,36 +346,32 @@ var _ = Describe("Rack revision webhook validation", func() {
 
 				It("rejects update when rack Revision bumps to a revision"+
 					"already recorded in status with different Storage", func() {
-					sV1 := getStorageSpecForDevice("/r1/v1")
 					aeroCluster := testCluster.CreateDummyAerospikeCluster(clusterNamespacedName, 2)
+					rackSt := aeroCluster.Spec.Storage.DeepCopy()
 					aeroCluster.Spec.Storage = asdbv1.AerospikeStorageSpec{}
 					aeroCluster.Spec.RackConfig = asdbv1.RackConfig{
 						Namespaces: []string{"test"},
 						Racks: []asdbv1.Rack{
-							{ID: 1, Revision: "v1", InputStorage: &sV1, InputAerospikeConfig: rackNSOverride("/r1/v1")},
+							{ID: 1, Revision: "v1", InputStorage: rackSt},
 						},
 					}
-
 					Expect(envtests.K8sClient.Create(ctx, aeroCluster)).To(Succeed())
-
 					base, err := testCluster.GetCluster(envtests.K8sClient, ctx, clusterNamespacedName)
 					Expect(err).ToNot(HaveOccurred())
 
 					statusSnap := base.DeepCopy()
 					statusSnap.Status.RackConfig.Racks = []asdbv1.Rack{
-						{ID: 1, Revision: newRackRevision, Storage: sV1},
+						{ID: 1, Revision: newRackRevision, Storage: *rackSt},
 					}
 					Expect(envtests.K8sClient.Status().Update(ctx, statusSnap)).To(Succeed())
-
 					current, err := testCluster.GetCluster(envtests.K8sClient, ctx, clusterNamespacedName)
 					Expect(err).ToNot(HaveOccurred())
 
-					sV2Conflict := getStorageSpecForDevice("/r1/v1")
-					patchFirstPVStorageClassSpec(&sV2Conflict)
+					sV2Conflict := rackSt.DeepCopy()
+					patchFirstPVStorageClassSpec(sV2Conflict)
 
 					current.Spec.RackConfig.Racks[0].Revision = newRackRevision
-					current.Spec.RackConfig.Racks[0].InputStorage = &sV2Conflict
-
+					current.Spec.RackConfig.Racks[0].InputStorage = sV2Conflict
 					err = envtests.K8sClient.Update(ctx, current)
 					Expect(err).To(HaveOccurred())
 					envtests.NewStatusErrorMatcher().
@@ -430,45 +381,75 @@ var _ = Describe("Rack revision webhook validation", func() {
 						).
 						Validate(err)
 				})
-			})
 
-			Context("positive", func() {
-				It("allows update that changes rack InputStorage when rack Revision changes"+
-					"and status does not imply a conflict", func() {
-					s1 := getStorageSpecForDevice("/r1/a")
+				// Mirrors test/cluster/rack_revision_test.go:
+				// "Should reject storage update validation bypass via revision bump and rollback".
+				// 1) Bump rack revision and expand InputStorage (append volume) — allowed.
+				// 2) Status records baseline v1 storage; spec rolls back to v1 but keeps expanded
+				//    storage — must be rejected (it needs status row so validateRackUpdate can compare).
+				It("rejects rollback of rack revision after storage expansion (revision bump bypass)", func() {
 					aeroCluster := testCluster.CreateDummyAerospikeCluster(clusterNamespacedName, 2)
+					rackSt := aeroCluster.Spec.Storage.DeepCopy()
 					aeroCluster.Spec.Storage = asdbv1.AerospikeStorageSpec{}
 					aeroCluster.Spec.RackConfig = asdbv1.RackConfig{
 						Namespaces: []string{"test"},
 						Racks: []asdbv1.Rack{
-							{ID: 1, Revision: "v1", InputStorage: &s1, InputAerospikeConfig: rackNSOverride("/r1/a")},
+							{ID: 1, Revision: "v1", InputStorage: rackSt},
 						},
 					}
-
 					Expect(envtests.K8sClient.Create(ctx, aeroCluster)).To(Succeed())
 
 					current, err := testCluster.GetCluster(envtests.K8sClient, ctx, clusterNamespacedName)
 					Expect(err).ToNot(HaveOccurred())
 
-					s2 := getStorageSpecForDevice("/r1/b")
-					patchFirstPVStorageClassSpec(&s2)
-					current.Spec.RackConfig.Racks[0].InputStorage = &s2
-					current.Spec.RackConfig.Racks[0].Revision = newRackRevision
-					current.Spec.RackConfig.Racks[0].InputAerospikeConfig = rackNSOverride("/r1/b")
+					r0 := &current.Spec.RackConfig.Racks[0]
+					is := r0.InputStorage.DeepCopy()
+					is.Volumes = append(is.Volumes, asdbv1.VolumeSpec{
+						Name: "bypass-volume",
+						Source: asdbv1.VolumeSource{
+							PersistentVolume: &asdbv1.PersistentVolumeSpec{
+								Size:         resource.MustParse("2Gi"),
+								StorageClass: testutil.StorageClass,
+								VolumeMode:   corev1.PersistentVolumeFilesystem,
+							},
+						},
+						Aerospike: &asdbv1.AerospikeServerVolumeAttachment{
+							Path: "/opt/aerospike/bypass",
+						},
+					})
+					r0.InputStorage = is
+					r0.Revision = newRackRevision
 
-					Expect(envtests.K8sClient.Update(ctx, current)).To(Succeed())
+					Expect(envtests.K8sClient.Update(ctx, current)).To(Succeed(),
+						"revision bump with extra volume should be admitted")
+
+					current, err = testCluster.GetCluster(envtests.K8sClient, ctx, clusterNamespacedName)
+					Expect(err).ToNot(HaveOccurred())
+
+					// Record that revision v1 used baseline storage only (no bypass volume).
+					statusSnap := current.DeepCopy()
+					statusSnap.Status.RackConfig.Racks = []asdbv1.Rack{
+						{ID: 1, Revision: "v1", Storage: *rackSt},
+					}
+					Expect(envtests.K8sClient.Status().Update(ctx, statusSnap)).To(Succeed())
+
+					current, err = testCluster.GetCluster(envtests.K8sClient, ctx, clusterNamespacedName)
+					Expect(err).ToNot(HaveOccurred())
+
+					// Roll back revision label to v1 while keeping expanded InputStorage
+					current.Spec.RackConfig.Racks[0].Revision = "v1"
+					err = envtests.K8sClient.Update(ctx, current)
+					Expect(err).To(HaveOccurred())
+
+					envtests.NewStatusErrorMatcher().
+						WithMessageSubstrings(
+							"\"vaerospikecluster.kb.io\"",
+							"old rack with same revision v1 already exists with different storage",
+						).
+						Validate(err)
 				})
-			})
-		})
-		// Conservative projected-name length bounds are checked on CREATE only.
-		// On UPDATE, the actual pod name (real rack ID, real revision, real
-		// per-rack max ordinal via DistributeItems) is validated as a DNS label
-		// to catch any silent overflow introduced by a revision change.
-		// Revision character validity IS re-checked on UPDATE because an
-		// invalid character (dot, uppercase, underscore) would silently corrupt
-		// the StatefulSet name at runtime regardless of when it was introduced.
-		Context("naming length bounds (CREATE-only projected check; UPDATE uses actual pod name)", func() {
-			Context("negative", func() {
+
+				// rejects UPDATE when the new revision makes the actual pod name too long (actual pod name is validated on UPDATE)
 				It("rejects UPDATE when the new revision makes the actual pod name too long", func() {
 					// cluster name = 20 chars, 1 rack (ID=1), initial revision = "v1" (2 chars).
 					// At CREATE: baseline projected pod = 20+9+3+4 = 36 ≤ 63 → passes.
@@ -534,7 +515,8 @@ var _ = Describe("Rack revision webhook validation", func() {
 
 				// validateActualPodNames finds the longest pod name across all racks.
 				// Even if only one rack's pod name overflows, the whole UPDATE is rejected.
-				It("rejects UPDATE when only one rack's pod name exceeds the DNS label limit (multi-rack)", func() {
+				It("rejects UPDATE when only one rack's pod name exceeds the DNS label limit"+
+					"due to rack revision change (multi-rack)", func() {
 					// cluster name = 20 chars, 2 racks (ID=1, ID=2), Size=2.
 					// DistributeItems(2, 2) = [1, 1] → max ordinal per rack = 0.
 					// UPDATE: rack 1 revision → 42 chars.
@@ -572,9 +554,32 @@ var _ = Describe("Rack revision webhook validation", func() {
 			})
 
 			Context("positive", func() {
-				It("allows UPDATE without re-checking CREATE-only length bounds", func() {
-					// Create a valid cluster then update an unrelated field (size).
-					// The webhook must not surface any CREATE-only naming error on UPDATE.
+				It("allows update that changes rack InputStorage when rack Revision changes"+
+					"and status does not imply a conflict", func() {
+					aeroCluster := testCluster.CreateDummyAerospikeCluster(clusterNamespacedName, 2)
+					s1 := aeroCluster.Spec.Storage.DeepCopy()
+					aeroCluster.Spec.Storage = asdbv1.AerospikeStorageSpec{}
+					aeroCluster.Spec.RackConfig = asdbv1.RackConfig{
+						Namespaces: []string{"test"},
+						Racks: []asdbv1.Rack{
+							{ID: 1, Revision: "v1", InputStorage: s1},
+						},
+					}
+					Expect(envtests.K8sClient.Create(ctx, aeroCluster)).To(Succeed())
+					current, err := testCluster.GetCluster(envtests.K8sClient, ctx, clusterNamespacedName)
+					Expect(err).ToNot(HaveOccurred())
+
+					s2 := s1.DeepCopy()
+					patchFirstPVStorageClassSpec(s2)
+					current.Spec.RackConfig.Racks[0].InputStorage = s2
+					current.Spec.RackConfig.Racks[0].Revision = newRackRevision
+					Expect(envtests.K8sClient.Update(ctx, current)).To(Succeed())
+				})
+
+				// Create a valid cluster then update an unrelated field (size).
+				// The webhook must not surface any CREATE-only naming error on UPDATE
+				// because the CREATE-time projected pod name is not validated on UPDATE.
+				It("allows UPDATE without re-applying CREATE-only projected pod name checks", func() {
 					aeroCluster := testCluster.CreateDummyAerospikeCluster(clusterNamespacedName, 2)
 					err := envtests.K8sClient.Create(ctx, aeroCluster)
 					Expect(err).ToNot(HaveOccurred())
@@ -583,30 +588,13 @@ var _ = Describe("Rack revision webhook validation", func() {
 					Expect(err).ToNot(HaveOccurred())
 
 					// Change size — an otherwise valid update.
-					current.Spec.Size = 2
+					current.Spec.Size = 3
 					err = envtests.K8sClient.Update(ctx, current)
 					// The webhook must not surface any CREATE-only naming error on UPDATE.
 					if err != nil {
 						Expect(err).NotTo(MatchError(ContainSubstring("computed at max rack ID")),
 							"CREATE-only pod name length check must not be re-run on UPDATE")
 					}
-				})
-
-				// validateActualPodNames returns nil immediately when no user-defined
-				// racks are present (the controller manages a default rack internally).
-				It("allows UPDATE when cluster has no user-defined racks", func() {
-					aeroCluster := testCluster.CreateDummyAerospikeCluster(clusterNamespacedName, 2)
-					// No explicit RackConfig — controller will create a default rack.
-					err := envtests.K8sClient.Create(ctx, aeroCluster)
-					Expect(err).ToNot(HaveOccurred())
-
-					current, err := testCluster.GetCluster(envtests.K8sClient, ctx, clusterNamespacedName)
-					Expect(err).ToNot(HaveOccurred())
-
-					current.Spec.Size = 2
-					err = envtests.K8sClient.Update(ctx, current)
-					Expect(err).ToNot(HaveOccurred(),
-						"UPDATE with no user-defined racks must not fail on actual pod name check")
 				})
 
 				// Growing a revision is fine as long as the actual pod name stays
@@ -637,7 +625,7 @@ var _ = Describe("Rack revision webhook validation", func() {
 
 				It("allows UPDATE when one rack has zero pods under DistributeItems"+
 					"(validateActualPodNames skips rackSize 0)", func() {
-					cName := uniqueNamespacedName("actpod-zero-rack")
+					cName = uniqueNamespacedName("actpod-zero-rack")
 					// DistributeItems(2, 3) → [1,1,0]: only rack 1 and 2 gets a pod; rack 3 must be skipped.
 					aeroCluster := testCluster.CreateDummyAerospikeCluster(cName, 2)
 					aeroCluster.Spec.RackConfig = asdbv1.RackConfig{
@@ -655,28 +643,6 @@ var _ = Describe("Rack revision webhook validation", func() {
 					Expect(err).ToNot(HaveOccurred())
 
 					// Only touch the rack that actually has pods; rack 3 remains unused by the distribution.
-					current.Spec.RackConfig.Racks[0].Revision = newRackRevision
-					current.Spec.RackConfig.Racks[1].Revision = newRackRevision
-					Expect(envtests.K8sClient.Update(ctx, current)).To(Succeed())
-				})
-
-				It("allows UPDATE when max pod ordinal is greater than zero (validateActualPodNames uses rackSize-1)", func() {
-					cName := uniqueNamespacedName("actpod-ord-gt0")
-					// DistributeItems(4, 2) → [2, 2] → pod ordinals 0 and 1 per rack.
-					aeroCluster := testCluster.CreateDummyAerospikeCluster(cName, 4)
-					aeroCluster.Spec.RackConfig = asdbv1.RackConfig{
-						Namespaces: []string{"test"},
-						Racks: []asdbv1.Rack{
-							{ID: 1, Revision: "v1"},
-							{ID: 2, Revision: "v1"},
-						},
-					}
-
-					Expect(envtests.K8sClient.Create(ctx, aeroCluster)).To(Succeed())
-
-					current, err := testCluster.GetCluster(envtests.K8sClient, ctx, cName)
-					Expect(err).ToNot(HaveOccurred())
-
 					current.Spec.RackConfig.Racks[0].Revision = newRackRevision
 					current.Spec.RackConfig.Racks[1].Revision = newRackRevision
 					Expect(envtests.K8sClient.Update(ctx, current)).To(Succeed())

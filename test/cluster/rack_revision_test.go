@@ -19,7 +19,6 @@ import (
 	asdbv1 "github.com/aerospike/aerospike-kubernetes-operator/v4/api/v1"
 	"github.com/aerospike/aerospike-kubernetes-operator/v4/pkg/utils"
 	"github.com/aerospike/aerospike-kubernetes-operator/v4/test"
-	lib "github.com/aerospike/aerospike-management-lib"
 )
 
 var _ = Describe(
@@ -230,72 +229,6 @@ var _ = Describe(
 						aeroCluster.Spec.RackConfig.Racks[0].Revision = "v3"
 
 						Expect(updateClusterWithNoWait(k8sClient, ctx, aeroCluster)).To(HaveOccurred())
-					},
-				)
-
-				It(
-					"Should reject storage update validation bypass via revision bump and rollback", func() {
-						By("Starting a revision change with storage update")
-
-						aeroCluster, err := getCluster(k8sClient, ctx, clusterNamespacedName)
-						Expect(err).ToNot(HaveOccurred())
-
-						// Change revision and storage
-						rack1 := aeroCluster.Spec.RackConfig.Racks[0]
-						rack1.Revision = versionV2
-						rack1.InputStorage = lib.DeepCopy(&aeroCluster.Spec.Storage).(*asdbv1.AerospikeStorageSpec)
-
-						rack1.InputStorage.Volumes = append(rack1.Storage.Volumes, asdbv1.VolumeSpec{
-							Name: "bypass-volume",
-							Source: asdbv1.VolumeSource{
-								PersistentVolume: &asdbv1.PersistentVolumeSpec{
-									Size:         resource.MustParse("2Gi"),
-									StorageClass: storageClass,
-									VolumeMode:   corev1.PersistentVolumeFilesystem,
-								},
-							},
-							Aerospike: &asdbv1.AerospikeServerVolumeAttachment{
-								Path: "/opt/aerospike/bypass",
-							},
-						})
-
-						aeroCluster.Spec.RackConfig.Racks[0] = rack1
-						Expect(updateClusterWithNoWait(k8sClient, ctx, aeroCluster)).ToNot(HaveOccurred())
-
-						By("Attempting to rollback revision while keeping new storage")
-
-						aeroCluster.Spec.RackConfig.Racks[0].Revision = versionV1
-						Expect(updateClusterWithNoWait(k8sClient, ctx, aeroCluster)).To(HaveOccurred())
-					},
-				)
-
-				It(
-					"Should reject in-place storage updates with same revision", func() {
-						By("Attempting in-place storage update without revision change")
-
-						aeroCluster, err := getCluster(k8sClient, ctx, clusterNamespacedName)
-						Expect(err).ToNot(HaveOccurred())
-
-						// Try to add storage without changing revision
-						rack1 := aeroCluster.Spec.RackConfig.Racks[0]
-						rack1.InputStorage = lib.DeepCopy(&aeroCluster.Spec.Storage).(*asdbv1.AerospikeStorageSpec)
-
-						rack1.InputStorage.Volumes = append(rack1.Storage.Volumes, asdbv1.VolumeSpec{
-							Name: "inplace-volume",
-							Source: asdbv1.VolumeSource{
-								PersistentVolume: &asdbv1.PersistentVolumeSpec{
-									Size:         resource.MustParse("2Gi"),
-									StorageClass: storageClass,
-									VolumeMode:   corev1.PersistentVolumeFilesystem,
-								},
-							},
-							Aerospike: &asdbv1.AerospikeServerVolumeAttachment{
-								Path: "/opt/aerospike/inplace",
-							},
-						})
-
-						aeroCluster.Spec.RackConfig.Racks[0] = rack1
-						Expect(updateCluster(k8sClient, ctx, aeroCluster)).To(HaveOccurred())
 					},
 				)
 			},
