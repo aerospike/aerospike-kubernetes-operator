@@ -78,7 +78,19 @@ func (acv *AerospikeClusterCustomValidator) ValidateCreate(_ context.Context, ae
 		return warns, err
 	}
 
-	return warns, nil
+	// For new clusters, promote cgroup-mem-tracking to a hard error and exclude
+	// it from warnings to avoid printing the same message twice.
+	var filteredWarns admission.Warnings
+
+	for _, w := range warns {
+		if strings.HasPrefix(w, "aerospikeConfig.service.cgroup-mem-tracking") {
+			return filteredWarns, fmt.Errorf("%s", w)
+		}
+
+		filteredWarns = append(filteredWarns, w)
+	}
+
+	return filteredWarns, nil
 }
 
 // For each rack it uses a placeholder revision of length
@@ -301,11 +313,14 @@ func (acv *AerospikeClusterCustomValidator) ValidateUpdate(_ context.Context,
 	}
 
 	// Validate AerospikeConfig update
-	if err := validateAerospikeConfigUpdate(
-		aslog, aerospikeCluster.Spec.AerospikeConfig, oldObject.Spec.AerospikeConfig,
+	configUpdateWarns, configUpdateErr := validateAerospikeConfigUpdate(
+		aslog, incomingVersion, aerospikeCluster.Spec.AerospikeConfig, oldObject.Spec.AerospikeConfig,
 		aerospikeCluster.Status.AerospikeConfig,
-	); err != nil {
-		return warnings, err
+	)
+	warnings = append(warnings, configUpdateWarns...)
+
+	if configUpdateErr != nil {
+		return warnings, configUpdateErr
 	}
 
 	// Validate RackConfig update
@@ -424,10 +439,14 @@ func validate(aslog logr.Logger, cluster *asdbv1.AerospikeCluster) (admission.Wa
 		}
 
 		// Validate common aerospike config schema and fields
-		err = validateAerospikeConfig(aslog, version,
+		var configWarns admission.Warnings
+
+		configWarns, err = validateAerospikeConfig(aslog, version,
 			&rack.AerospikeConfig, &rack.Storage, int(cluster.Spec.Size),
 			cluster.Spec.OperatorClientCertSpec,
 		)
+		warnings = append(warnings, configWarns...)
+
 		if err != nil {
 			return warnings, err
 		}
@@ -803,8 +822,13 @@ func validateRackUpdate(
 					}
 
 					// Validate aerospikeConfig update
-					if err := validateAerospikeConfigUpdate(
-						aslog, &newRack.AerospikeConfig, &oldRack.AerospikeConfig,
+					clusterVersion, vErr := asdbv1.GetImageVersion(newObj.Spec.Image)
+					if vErr != nil {
+						return vErr
+					}
+
+					if _, err := validateAerospikeConfigUpdate(
+						aslog, clusterVersion, &newRack.AerospikeConfig, &oldRack.AerospikeConfig,
 						rackStatusConfig,
 					); err != nil {
 						return fmt.Errorf(
@@ -1274,23 +1298,55 @@ func validateClusterSize(_ logr.Logger, sz int) error {
 	return nil
 }
 
+// cgroupMemTrackingMessage returns a message when aerospikeConfig.service.cgroup-mem-tracking
+// is absent or not true. An empty string means the field is correctly set.
+func cgroupMemTrackingMessage(serviceConf map[string]interface{}) string {
+	val, exists := serviceConf["cgroup-mem-tracking"]
+	enabled, _ := val.(bool)
+
+	if !exists || !enabled {
+		return fmt.Sprintf(
+			"aerospikeConfig.service.cgroup-mem-tracking must be set to true for Aerospike server version %s or later",
+			minVersionForCgroupMemTracking,
+		)
+	}
+
+	return ""
+}
+
 func validateAerospikeConfig(
 	aslog logr.Logger, version string, configSpec *asdbv1.AerospikeConfigSpec,
 	storage *asdbv1.AerospikeStorageSpec, clSize int,
 	clientCert *asdbv1.AerospikeOperatorClientCertSpec,
-) error {
+) (admission.Warnings, error) {
 	// It validates the aerospikeConfig schema and generic aerospikeConfig fields
 	if err := validation.ValidateAerospikeConfig(
 		aslog, version, configSpec.Value, clSize,
 	); err != nil {
-		return err
+		return nil, err
 	}
 
 	if err := validateNetworkConfig(configSpec.Value, clientCert); err != nil {
-		return err
+		return nil, err
 	}
 
-	return validateNamespaceConfig(configSpec.Value, storage)
+	if err := validateNamespaceConfig(configSpec.Value, storage); err != nil {
+		return nil, err
+	}
+
+	var warnings admission.Warnings
+
+	cmp, err := lib.CompareVersions(version, minVersionForCgroupMemTracking)
+	if err == nil && cmp >= 0 {
+		serviceConf, ok := configSpec.Value[asdbv1.ConfKeyService].(map[string]interface{})
+		if ok {
+			if msg := cgroupMemTrackingMessage(serviceConf); msg != "" {
+				warnings = append(warnings, msg)
+			}
+		}
+	}
+
+	return warnings, nil
 }
 
 func validateNetworkConfig(config map[string]interface{},
@@ -1477,19 +1533,35 @@ func validateNamespaceConfig(
 }
 
 func validateAerospikeConfigUpdate(
-	aslog logr.Logger,
+	aslog logr.Logger, version string,
 	incomingSpec, outgoingSpec, currentStatus *asdbv1.AerospikeConfigSpec,
-) error {
+) (admission.Warnings, error) {
 	aslog.Info("Validate AerospikeConfig update")
 
 	newConf := incomingSpec.Value
 	oldConf := outgoingSpec.Value
 
 	if err := validation.ValidateAerospikeConfigUpdateWithoutSchema(oldConf, newConf); err != nil {
-		return err
+		return nil, err
 	}
 
-	return validateNsConfUpdateFromStatus(incomingSpec, currentStatus)
+	if err := validateNsConfUpdateFromStatus(incomingSpec, currentStatus); err != nil {
+		return nil, err
+	}
+
+	var warnings admission.Warnings
+
+	cmp, err := lib.CompareVersions(version, minVersionForCgroupMemTracking)
+	if err == nil && cmp >= 0 {
+		serviceConf, ok := newConf[asdbv1.ConfKeyService].(map[string]interface{})
+		if ok {
+			if msg := cgroupMemTrackingMessage(serviceConf); msg != "" {
+				warnings = append(warnings, msg)
+			}
+		}
+	}
+
+	return warnings, nil
 }
 
 func validateNetworkPolicyUpdate(oldPolicy, newPolicy *asdbv1.AerospikeNetworkPolicy) error {
