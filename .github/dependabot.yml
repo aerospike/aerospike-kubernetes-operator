@@ -4,6 +4,10 @@ updates:
     directory: /
     schedule:
       interval: daily
+    groups:
+      github-actions-all:
+        patterns:
+          - "*"
 
   - package-ecosystem: docker
     directory: /
