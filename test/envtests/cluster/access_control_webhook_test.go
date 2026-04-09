@@ -75,11 +75,11 @@ func adminOperatorCertForTest() *asdbv1.AerospikeOperatorClientCertSpec {
 
 var _ = Describe("AerospikeCluster access control validation (envtests)", func() {
 	const (
-		clusterName = "access-control-webhook-cluster"
+		accessControlClusterName = "access-control-webhook-cluster"
 	)
 
 	ctx := context.TODO()
-	clusterNamespacedName := test.GetNamespacedName(clusterName, testutil.DefaultNamespace)
+	clusterNamespacedName := uniqueNamespacedName(accessControlClusterName)
 
 	Context("Deploy validation", func() {
 		AfterEach(func() {
