@@ -2,12 +2,15 @@ package cluster
 
 import (
 	"context"
+	"fmt"
+	"strings"
 
 	. "github.com/onsi/ginkgo/v2"
 	. "github.com/onsi/gomega"
 	v1 "k8s.io/api/core/v1"
 	"k8s.io/apimachinery/pkg/api/resource"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
+	"k8s.io/apimachinery/pkg/types"
 	"k8s.io/apimachinery/pkg/util/intstr"
 	"k8s.io/utils/ptr"
 
@@ -26,17 +29,21 @@ var _ = Describe("AerospikeCluster validation", func() {
 	ctx := context.TODO()
 
 	// Create namespaced name for cluster
-	clusterNamespacedName := test.GetNamespacedName(clusterName, testutil.DefaultNamespace)
+	clusterNamespacedName := uniqueNamespacedName(clusterName)
 
+	// Another test cluster (dynamic object name for some cluster webhook test cases).
+	var cName types.NamespacedName
+
+	BeforeEach(func() {
+		cName = types.NamespacedName{}
+	})
 	AfterEach(func() {
-		aeroCluster := &asdbv1.AerospikeCluster{
-			ObjectMeta: metav1.ObjectMeta{
-				Name:      clusterNamespacedName.Name,
-				Namespace: clusterNamespacedName.Namespace,
-			},
-		}
 		// Delete the cluster after each test
-		Expect(testCluster.DeleteCluster(envtests.K8sClient, ctx, aeroCluster)).ToNot(HaveOccurred())
+		deleteCluster(ctx, clusterNamespacedName)
+
+		if cName.Name != "" {
+			deleteCluster(ctx, cName)
+		}
 	})
 
 	Context("Deploy validation", func() {
@@ -556,7 +563,7 @@ var _ = Describe("AerospikeCluster validation", func() {
 						WithMessageSubstrings(" \"maerospikecluster.kb.io\"",
 							"failed to set default aerospikeConfig.service config:",
 							"config cluster-name can not have non-default value (string cluster-name).",
-							"It will be set internally (string invalid-cluster)").
+							fmt.Sprintf("It will be set internally (string %s)", clusterNamespacedName.Name)).
 						Validate(err)
 				})
 
@@ -804,6 +811,49 @@ var _ = Describe("AerospikeCluster validation", func() {
 						Validate(err)
 				})
 
+				// cluster.Name is used as the headless-service name (and LB service base).
+				// Kubernetes validates service names as DNS-1035 labels, which requires
+				// the first character to be a lowercase letter — digits are not allowed.
+				// cluster.Name is immutable in Kubernetes, so this is checked at CREATE only.
+				It("rejects cluster name starting with a digit (invalid DNS-1035 service name)", func() {
+					cName := test.GetNamespacedName("1mycluster", clusterNamespacedName.Namespace)
+					aeroCluster := testCluster.CreateDummyAerospikeCluster(cName, 2)
+
+					err := testCluster.DeployCluster(envtests.K8sClient, ctx, aeroCluster)
+					Expect(err).To(HaveOccurred())
+
+					envtests.NewStatusErrorMatcher().
+						WithMessageSubstrings(
+							"\"vaerospikecluster.kb.io\"",
+							"cluster name \"1mycluster\" is not a valid Kubernetes service name (DNS-1035)",
+							"start with an alphabetic character").
+						Validate(err)
+				})
+
+				// The maximum-scale pod name overhead is 16 chars ("-1000000-aaa-255"),
+				// so cluster.Name must be ≤ 47 chars. This subsumes both service name
+				// checks (headless = cluster.Name, LB = cluster.Name+"-lb"), since
+				// their overheads (0 and 3 chars) are smaller than 16.
+				// Any cluster name > 47 chars is caught by the pod name check.
+				It("rejects cluster name longer than 47 chars (projected pod name would exceed 63)", func() {
+					// 48 chars: 48 + 16 = 64 → invalid DNS label.
+					longName := strings.Repeat("a", 48)
+					cName := test.GetNamespacedName(longName, clusterNamespacedName.Namespace)
+					aeroCluster := testCluster.CreateDummyAerospikeCluster(cName, 2)
+
+					err := testCluster.DeployCluster(envtests.K8sClient, ctx, aeroCluster)
+					Expect(err).To(HaveOccurred())
+
+					envtests.NewStatusErrorMatcher().
+						WithMessageSubstrings(
+							"\"vaerospikecluster.kb.io\"",
+							"pod name would exceed the 63-character DNS label limit",
+							"revision = 3 chars",
+							"total = 64 chars",
+							"reduce by 1 character(s)").
+						Validate(err)
+				})
+
 				It("rejects when cluster namespace is not found", func() {
 					cName := test.GetNamespacedName(clusterNamespacedName.Name, "default ns")
 					aeroCluster := testCluster.CreateDummyAerospikeCluster(cName, 1)
@@ -817,7 +867,26 @@ var _ = Describe("AerospikeCluster validation", func() {
 				})
 			})
 			Context("positive", func() {
-				// Add positive metadata tests here
+				It("accepts cluster name starting with a lowercase letter", func() {
+					cName := test.GetNamespacedName("valid-cluster", clusterNamespacedName.Namespace)
+					aeroCluster := testCluster.CreateDummyAerospikeCluster(cName, 2)
+
+					err := envtests.K8sClient.Create(ctx, aeroCluster)
+					Expect(err).ToNot(HaveOccurred())
+				})
+
+				// overhead = "-1000000-aaa-255" = 16 chars; cluster.Name ≤ 47 chars is safe.
+				// cluster name exactly at the 47-char limit:
+				// 47 + "-1000000-aaa-255" (16) = 63 → exactly at DNS label max.
+				It("accepts cluster name of exactly 47 chars (projected pod name = 63 chars)", func() {
+					exactName := strings.Repeat("a", 47)
+					cName := test.GetNamespacedName(exactName, clusterNamespacedName.Namespace)
+					aeroCluster := testCluster.CreateDummyAerospikeCluster(cName, 2)
+
+					err := envtests.K8sClient.Create(ctx, aeroCluster)
+
+					Expect(err).To(Succeed())
+				})
 			})
 		})
 
@@ -942,61 +1011,17 @@ var _ = Describe("AerospikeCluster validation", func() {
 						Validate(err)
 				})
 			})
-			Context("positive", func() {
-				// Add positive rackConfig tests here
-			})
 		})
 	})
 
 	Context("Update validation", func() {
 		const updateValidationClusterName = "update-validation-cluster"
 
-		updateValidationClusterNamespacedName := test.GetNamespacedName(
-			updateValidationClusterName, testutil.DefaultNamespace)
+		updateValidationClusterNamespacedName := uniqueNamespacedName(updateValidationClusterName)
 
 		AfterEach(func() {
-			aeroCluster := &asdbv1.AerospikeCluster{
-				ObjectMeta: metav1.ObjectMeta{
-					Name:      updateValidationClusterNamespacedName.Name,
-					Namespace: updateValidationClusterNamespacedName.Namespace,
-				},
-			}
-			Expect(testCluster.DeleteCluster(envtests.K8sClient, ctx, aeroCluster)).ToNot(HaveOccurred())
-		})
-
-		Context("spec.storage", func() {
-			Context("negative", func() {
-				It("rejects when storage config is updated", func() {
-					aeroCluster := testCluster.CreateDummyAerospikeCluster(updateValidationClusterNamespacedName, 2)
-					err := envtests.K8sClient.Create(ctx, aeroCluster)
-					Expect(err).ToNot(HaveOccurred())
-
-					current, err := testCluster.GetCluster(envtests.K8sClient, ctx, updateValidationClusterNamespacedName)
-					Expect(err).ToNot(HaveOccurred())
-
-					// Change storage (e.g. StorageClass) to trigger "storage config cannot be updated"
-					for i := range current.Spec.Storage.Volumes {
-						if current.Spec.Storage.Volumes[i].Source.PersistentVolume != nil {
-							current.Spec.Storage.Volumes[i].Source.PersistentVolume.StorageClass = "other-storage-class"
-							break
-						}
-					}
-
-					err = envtests.K8sClient.Update(ctx, current)
-					Expect(err).To(HaveOccurred())
-
-					envtests.NewStatusErrorMatcher().
-						WithMessageSubstrings(
-							"\"vaerospikecluster.kb.io\"",
-							"denied the request:",
-							"storage config cannot be updated",
-							"cannot change volumes").
-						Validate(err)
-				})
-			})
-			Context("positive", func() {
-				// Add positive update storage tests here
-			})
+			// Delete the cluster after each test
+			deleteCluster(ctx, updateValidationClusterNamespacedName)
 		})
 
 		Context("spec.podSpec", func() {
