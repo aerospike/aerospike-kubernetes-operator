@@ -172,7 +172,7 @@ var _ = Describe("AerospikeCluster dynamic replication-factor validation", func(
 					envtests.NewStatusErrorMatcher().
 						WithMessageSubstrings(
 							"vaerospikecluster.kb.io",
-							"replication-factor can not be zero or negative",
+							"replication-factor Must be greater than or equal to 1",
 						).
 						Validate(err)
 				})

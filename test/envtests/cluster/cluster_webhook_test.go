@@ -105,8 +105,6 @@ var _ = Describe("AerospikeCluster validation", func() {
 
 		Context("spec.image", func() {
 			Context("negative", func() {
-				// Bug: For Empty image the error message is "CommunityEdition Cluster not supported".
-				// This error messsage is not appropriate for an empty image.
 				It("rejects empty image", func() {
 					aeroCluster := testCluster.CreateDummyAerospikeCluster(clusterNamespacedName, 1)
 					aeroCluster.Spec.Image = "" // Empty image
@@ -118,7 +116,7 @@ var _ = Describe("AerospikeCluster validation", func() {
 					envtests.NewStatusErrorMatcher().
 						WithMessageSubstrings(
 							"\"vaerospikecluster.kb.io\"",
-							"CommunityEdition Cluster not supported").
+							"image cannot be empty").
 						Validate(err)
 				})
 
@@ -133,7 +131,7 @@ var _ = Describe("AerospikeCluster validation", func() {
 					envtests.NewStatusErrorMatcher().
 						WithMessageSubstrings(
 							"\"vaerospikecluster.kb.io\"",
-							"CommunityEdition Cluster not supported").
+							"only enterprise and federal images are allowed").
 						Validate(err)
 				})
 
@@ -906,8 +904,8 @@ var _ = Describe("AerospikeCluster validation", func() {
 
 					envtests.NewStatusErrorMatcher().
 						WithMessageSubstrings("\"vaerospikecluster.kb.io\"",
-							"maxUnavailable 2 cannot be greater than or equal to 2 ",
-							"as it may result in data loss. Set it to a lower value").
+							"maxUnavailable 2 is invalid",
+							"value must be less than the minimum replication factor").
 						Validate(err)
 				})
 			})
