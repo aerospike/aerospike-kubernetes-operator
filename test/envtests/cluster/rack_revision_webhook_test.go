@@ -323,16 +323,8 @@ var _ = Describe("Rack revision webhook validation", func() {
 					Expect(err).ToNot(HaveOccurred())
 
 					r0 := &current.Spec.RackConfig.Racks[0]
+					patchFirstPVStorageClassSpec(r0.InputStorage)
 
-					var st *asdbv1.AerospikeStorageSpec
-					if r0.InputStorage != nil {
-						st = r0.InputStorage.DeepCopy()
-					} else {
-						st = r0.Storage.DeepCopy()
-					}
-
-					patchFirstPVStorageClassSpec(st)
-					r0.InputStorage = st
 					err = envtests.K8sClient.Update(ctx, current)
 					Expect(err).To(HaveOccurred())
 					envtests.NewStatusErrorMatcher().
@@ -591,10 +583,7 @@ var _ = Describe("Rack revision webhook validation", func() {
 					current.Spec.Size = 3
 					err = envtests.K8sClient.Update(ctx, current)
 					// The webhook must not surface any CREATE-only naming error on UPDATE.
-					if err != nil {
-						Expect(err).NotTo(MatchError(ContainSubstring("computed at max rack ID")),
-							"CREATE-only pod name length check must not be re-run on UPDATE")
-					}
+					Expect(err).ToNot(HaveOccurred())
 				})
 
 				// Growing a revision is fine as long as the actual pod name stays
