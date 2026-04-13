@@ -301,14 +301,11 @@ func (acv *AerospikeClusterCustomValidator) ValidateUpdate(_ context.Context,
 	}
 
 	// Validate AerospikeConfig update
-	configUpdateWarns, configUpdateErr := validateAerospikeConfigUpdate(
-		aslog, incomingVersion, aerospikeCluster.Spec.AerospikeConfig, oldObject.Spec.AerospikeConfig,
+	if err := validateAerospikeConfigUpdate(
+		aslog, aerospikeCluster.Spec.AerospikeConfig, oldObject.Spec.AerospikeConfig,
 		aerospikeCluster.Status.AerospikeConfig,
-	)
-	warnings = append(warnings, configUpdateWarns...)
-
-	if configUpdateErr != nil {
-		return warnings, configUpdateErr
+	); err != nil {
+		return warnings, err
 	}
 
 	// Validate RackConfig update
@@ -810,13 +807,8 @@ func validateRackUpdate(
 					}
 
 					// Validate aerospikeConfig update
-					clusterVersion, vErr := asdbv1.GetImageVersion(newObj.Spec.Image)
-					if vErr != nil {
-						return vErr
-					}
-
-					if _, err := validateAerospikeConfigUpdate(
-						aslog, clusterVersion, &newRack.AerospikeConfig, &oldRack.AerospikeConfig,
+					if err := validateAerospikeConfigUpdate(
+						aslog, &newRack.AerospikeConfig, &oldRack.AerospikeConfig,
 						rackStatusConfig,
 					); err != nil {
 						return fmt.Errorf(
@@ -1519,23 +1511,19 @@ func validateNamespaceConfig(
 }
 
 func validateAerospikeConfigUpdate(
-	aslog logr.Logger, version string,
+	aslog logr.Logger,
 	incomingSpec, outgoingSpec, currentStatus *asdbv1.AerospikeConfigSpec,
-) (admission.Warnings, error) {
+) error {
 	aslog.Info("Validate AerospikeConfig update")
 
 	newConf := incomingSpec.Value
 	oldConf := outgoingSpec.Value
 
 	if err := validation.ValidateAerospikeConfigUpdateWithoutSchema(oldConf, newConf); err != nil {
-		return nil, err
+		return err
 	}
 
-	if err := validateNsConfUpdateFromStatus(incomingSpec, currentStatus); err != nil {
-		return nil, err
-	}
-
-	return cgroupMemTrackingWarning(version, newConf), nil
+	return validateNsConfUpdateFromStatus(incomingSpec, currentStatus)
 }
 
 func validateNetworkPolicyUpdate(oldPolicy, newPolicy *asdbv1.AerospikeNetworkPolicy) error {

@@ -23,8 +23,8 @@ import (
 	"sigs.k8s.io/controller-runtime/pkg/client"
 )
 
-// WarningCapture implements rest.WarningHandler, collecting all admission-webhook
-// warning headers emitted during a single Kubernetes API call.
+// WarningCapture implements rest.WarningHandler, collecting all API-server
+// Warning response headers emitted during Kubernetes API calls.
 type WarningCapture struct {
 	Warnings []string
 	mu       sync.Mutex
@@ -38,15 +38,35 @@ func (w *WarningCapture) HandleWarningHeader(_ int, _, text string) {
 	w.Warnings = append(w.Warnings, text)
 }
 
-// NewClientWithWarningCapture returns a new Kubernetes client that routes all
-// API-server Warning response headers into the returned *WarningCapture.
-// Each call produces a fresh capture so callers get per-operation warnings.
-func NewClientWithWarningCapture() (client.Client, *WarningCapture, error) {
-	capture := &WarningCapture{}
+// Reset clears all captured warnings. Call this in BeforeEach before each
+// operation whose warnings need to be inspected in isolation.
+func (w *WarningCapture) Reset() {
+	w.mu.Lock()
+	defer w.mu.Unlock()
+
+	w.Warnings = nil
+}
+
+// GlobalWarnings collects API-server Warning headers from WarningK8sClient.
+// Call GlobalWarnings.Reset() in BeforeEach to get per-test warnings.
+//
+// NOTE: Not safe for parallel tests. If specs run concurrently, a BeforeEach
+// Reset() in one test can wipe warnings that another test is still capturing,
+// and warnings from different tests can bleed into each other's assertions.
+var GlobalWarnings = &WarningCapture{}
+
+// WarningK8sClient is a Kubernetes client that routes all API-server Warning
+// response headers into GlobalWarnings.
+var WarningK8sClient client.Client
+
+// initWarningClient creates WarningK8sClient backed by GlobalWarnings.
+func initWarningClient() error {
 	cfgCopy := rest.CopyConfig(cfg)
-	cfgCopy.WarningHandler = capture
+	cfgCopy.WarningHandler = GlobalWarnings
 
-	c, err := client.New(cfgCopy, client.Options{Scheme: scheme})
+	var err error
 
-	return c, capture, err
+	WarningK8sClient, err = client.New(cfgCopy, client.Options{Scheme: scheme})
+
+	return err
 }
