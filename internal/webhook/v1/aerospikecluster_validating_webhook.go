@@ -78,19 +78,7 @@ func (acv *AerospikeClusterCustomValidator) ValidateCreate(_ context.Context, ae
 		return warns, err
 	}
 
-	// For new clusters, promote cgroup-mem-tracking to a hard error and exclude
-	// it from warnings to avoid printing the same message twice.
-	var filteredWarns admission.Warnings
-
-	for _, w := range warns {
-		if strings.HasPrefix(w, "aerospikeConfig.service.cgroup-mem-tracking") {
-			return filteredWarns, fmt.Errorf("%s", w)
-		}
-
-		filteredWarns = append(filteredWarns, w)
-	}
-
-	return filteredWarns, nil
+	return warns, nil
 }
 
 // For each rack it uses a placeholder revision of length
@@ -1298,20 +1286,30 @@ func validateClusterSize(_ logr.Logger, sz int) error {
 	return nil
 }
 
-// cgroupMemTrackingMessage returns a message when aerospikeConfig.service.cgroup-mem-tracking
-// is absent or not true. An empty string means the field is correctly set.
-func cgroupMemTrackingMessage(serviceConf map[string]interface{}) string {
+// cgroupMemTrackingWarning returns a warning when aerospikeConfig.service.cgroup-mem-tracking
+// is absent or not true for a version that requires it. An empty slice means no warning.
+func cgroupMemTrackingWarning(version string, conf map[string]interface{}) admission.Warnings {
+	cmp, err := lib.CompareVersions(version, minVersionForCgroupMemTracking)
+	if err != nil || cmp < 0 {
+		return nil
+	}
+
+	serviceConf, ok := conf[asdbv1.ConfKeyService].(map[string]interface{})
+	if !ok {
+		return nil
+	}
+
 	val, exists := serviceConf["cgroup-mem-tracking"]
 	enabled, _ := val.(bool)
 
 	if !exists || !enabled {
-		return fmt.Sprintf(
-			"aerospikeConfig.service.cgroup-mem-tracking must be set to true for Aerospike server version %s or later",
+		return admission.Warnings{fmt.Sprintf(
+			"aerospikeConfig.service.cgroup-mem-tracking is not set to true for Aerospike server version %s or later",
 			minVersionForCgroupMemTracking,
-		)
+		)}
 	}
 
-	return ""
+	return nil
 }
 
 func validateAerospikeConfig(
@@ -1334,19 +1332,7 @@ func validateAerospikeConfig(
 		return nil, err
 	}
 
-	var warnings admission.Warnings
-
-	cmp, err := lib.CompareVersions(version, minVersionForCgroupMemTracking)
-	if err == nil && cmp >= 0 {
-		serviceConf, ok := configSpec.Value[asdbv1.ConfKeyService].(map[string]interface{})
-		if ok {
-			if msg := cgroupMemTrackingMessage(serviceConf); msg != "" {
-				warnings = append(warnings, msg)
-			}
-		}
-	}
-
-	return warnings, nil
+	return cgroupMemTrackingWarning(version, configSpec.Value), nil
 }
 
 func validateNetworkConfig(config map[string]interface{},
@@ -1549,19 +1535,7 @@ func validateAerospikeConfigUpdate(
 		return nil, err
 	}
 
-	var warnings admission.Warnings
-
-	cmp, err := lib.CompareVersions(version, minVersionForCgroupMemTracking)
-	if err == nil && cmp >= 0 {
-		serviceConf, ok := newConf[asdbv1.ConfKeyService].(map[string]interface{})
-		if ok {
-			if msg := cgroupMemTrackingMessage(serviceConf); msg != "" {
-				warnings = append(warnings, msg)
-			}
-		}
-	}
-
-	return warnings, nil
+	return cgroupMemTrackingWarning(version, newConf), nil
 }
 
 func validateNetworkPolicyUpdate(oldPolicy, newPolicy *asdbv1.AerospikeNetworkPolicy) error {

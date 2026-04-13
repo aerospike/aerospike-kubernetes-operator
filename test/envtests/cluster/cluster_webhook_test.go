@@ -1050,4 +1050,112 @@ var _ = Describe("AerospikeCluster validation", func() {
 			})
 		})
 	})
+
+	Context("spec.aerospikeConfig.service (cgroup-mem-tracking)", func() {
+		const cgroupWarningSubstr = "cgroup-mem-tracking"
+
+		setCgroupMemTracking := func(aeroCluster *asdbv1.AerospikeCluster, value interface{}) {
+			serviceConf, ok := aeroCluster.Spec.AerospikeConfig.Value[asdbv1.ConfKeyService].(map[string]interface{})
+			Expect(ok).To(BeTrue(), "service config must be a map")
+
+			if value == nil {
+				delete(serviceConf, "cgroup-mem-tracking")
+			} else {
+				serviceConf["cgroup-mem-tracking"] = value
+			}
+		}
+
+		Context("Deploy validation", func() {
+			Context("with server version >= "+testutil.CgroupMemTrackingServerVersion, func() {
+				FIt("allows create and emits a warning when cgroup-mem-tracking is absent", func() {
+					aeroCluster := testCluster.CreateAerospikeClusterPost640(
+						clusterNamespacedName, 1, testutil.GetEnterpriseImage(testutil.CgroupMemTrackingServerVersion),
+					)
+
+					c, capture, err := envtests.NewClientWithWarningCapture()
+					Expect(err).ToNot(HaveOccurred())
+
+					Expect(c.Create(ctx, aeroCluster)).ToNot(HaveOccurred())
+					Expect(capture.Warnings).To(ContainElement(ContainSubstring(cgroupWarningSubstr)))
+				})
+
+				It("allows create and emits a warning when cgroup-mem-tracking is false", func() {
+					aeroCluster := testCluster.CreateAerospikeClusterPost640(
+						clusterNamespacedName, 1, testutil.GetEnterpriseImage(testutil.CgroupMemTrackingServerVersion),
+					)
+					setCgroupMemTracking(aeroCluster, false)
+
+					c, capture, err := envtests.NewClientWithWarningCapture()
+					Expect(err).ToNot(HaveOccurred())
+
+					Expect(c.Create(ctx, aeroCluster)).ToNot(HaveOccurred())
+					Expect(capture.Warnings).To(ContainElement(ContainSubstring(cgroupWarningSubstr)))
+				})
+
+				It("allows create without warning when cgroup-mem-tracking is true", func() {
+					aeroCluster := testCluster.CreateAerospikeClusterPost640(
+						clusterNamespacedName, 1, testutil.GetEnterpriseImage(testutil.CgroupMemTrackingServerVersion),
+					)
+					setCgroupMemTracking(aeroCluster, true)
+
+					c, capture, err := envtests.NewClientWithWarningCapture()
+					Expect(err).ToNot(HaveOccurred())
+
+					Expect(c.Create(ctx, aeroCluster)).ToNot(HaveOccurred())
+					Expect(capture.Warnings).NotTo(ContainElement(ContainSubstring(cgroupWarningSubstr)))
+				})
+			})
+
+			Context("with server version < "+testutil.CgroupMemTrackingServerVersion, func() {
+				It("allows create without warning when cgroup-mem-tracking is absent", func() {
+					aeroCluster := testCluster.CreateAerospikeClusterPost640(
+						clusterNamespacedName, 1, testutil.GetEnterpriseImage(testutil.LatestServerVersion),
+					)
+
+					c, capture, err := envtests.NewClientWithWarningCapture()
+					Expect(err).ToNot(HaveOccurred())
+
+					Expect(c.Create(ctx, aeroCluster)).ToNot(HaveOccurred())
+					Expect(capture.Warnings).NotTo(ContainElement(ContainSubstring(cgroupWarningSubstr)))
+				})
+			})
+		})
+
+		Context("Update validation", func() {
+			BeforeEach(func() {
+				aeroCluster := testCluster.CreateAerospikeClusterPost640(
+					clusterNamespacedName, 1, testutil.GetEnterpriseImage(testutil.CgroupMemTrackingServerVersion),
+				)
+				setCgroupMemTracking(aeroCluster, true)
+
+				Expect(envtests.K8sClient.Create(ctx, aeroCluster)).ToNot(HaveOccurred())
+			})
+
+			It("allows update and emits a warning when cgroup-mem-tracking is removed", func() {
+				current, err := testCluster.GetCluster(envtests.K8sClient, ctx, clusterNamespacedName)
+				Expect(err).ToNot(HaveOccurred())
+
+				setCgroupMemTracking(current, nil)
+
+				c, capture, err := envtests.NewClientWithWarningCapture()
+				Expect(err).ToNot(HaveOccurred())
+
+				Expect(c.Update(ctx, current)).ToNot(HaveOccurred())
+				Expect(capture.Warnings).To(ContainElement(ContainSubstring(cgroupWarningSubstr)))
+			})
+
+			It("allows update and emits a warning when cgroup-mem-tracking is set to false", func() {
+				current, err := testCluster.GetCluster(envtests.K8sClient, ctx, clusterNamespacedName)
+				Expect(err).ToNot(HaveOccurred())
+
+				setCgroupMemTracking(current, false)
+
+				c, capture, err := envtests.NewClientWithWarningCapture()
+				Expect(err).ToNot(HaveOccurred())
+
+				Expect(c.Update(ctx, current)).ToNot(HaveOccurred())
+				Expect(capture.Warnings).To(ContainElement(ContainSubstring(cgroupWarningSubstr)))
+			})
+		})
+	})
 })
