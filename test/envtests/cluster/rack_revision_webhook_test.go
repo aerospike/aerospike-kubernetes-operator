@@ -93,9 +93,10 @@ var _ = Describe("Rack revision webhook validation", func() {
 					envtests.NewStatusErrorMatcher().
 						WithMessageSubstrings(
 							"\"vaerospikecluster.kb.io\"",
-							"computed at max rack ID",
-							"exceeds the maximum DNS label length",
-							"of 63 characters").
+							"pod name would exceed the 63-character DNS label limit",
+							"revision = 48 chars",
+							"total = 64 chars",
+							"reduce by 1 character(s)").
 						Validate(err)
 				})
 
@@ -176,9 +177,10 @@ var _ = Describe("Rack revision webhook validation", func() {
 					envtests.NewStatusErrorMatcher().
 						WithMessageSubstrings(
 							"\"vaerospikecluster.kb.io\"",
-							"computed at max rack ID",
-							"exceeds the maximum DNS label length",
-							"of 63 characters").
+							"pod name would exceed the 63-character DNS label limit",
+							"revision = 3 chars",
+							"total = 64 chars",
+							"reduce by 1 character(s)").
 						Validate(err)
 				})
 
@@ -227,9 +229,10 @@ var _ = Describe("Rack revision webhook validation", func() {
 					envtests.NewStatusErrorMatcher().
 						WithMessageSubstrings(
 							"\"vaerospikecluster.kb.io\"",
-							"computed at max rack ID",
-							"exceeds the maximum DNS label length",
-							"of 63 characters").
+							"pod name would exceed the 63-character DNS label limit",
+							"revision = 48 chars",
+							"total = 64 chars",
+							"reduce by 1 character(s)").
 						Validate(err)
 				})
 			})
@@ -471,9 +474,8 @@ var _ = Describe("Rack revision webhook validation", func() {
 					envtests.NewStatusErrorMatcher().
 						WithMessageSubstrings(
 							"\"vaerospikecluster.kb.io\"",
-							"pod name \"",
-							"exceeds the maximum DNS label length",
-							"of 63 characters").
+							"would generate pod names exceeding the 63-character DNS label limit",
+							"reduce by 4 character(s)").
 						Validate(err)
 				})
 
@@ -539,8 +541,8 @@ var _ = Describe("Rack revision webhook validation", func() {
 					envtests.NewStatusErrorMatcher().
 						WithMessageSubstrings(
 							"\"vaerospikecluster.kb.io\"",
-							"exceeds the maximum DNS label length",
-							"of 63 characters").
+							"would generate pod names exceeding the 63-character DNS label limit",
+							"reduce by 4 character(s)").
 						Validate(err)
 				})
 			})

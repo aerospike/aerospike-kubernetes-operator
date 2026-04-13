@@ -847,9 +847,10 @@ var _ = Describe("AerospikeCluster validation", func() {
 					envtests.NewStatusErrorMatcher().
 						WithMessageSubstrings(
 							"\"vaerospikecluster.kb.io\"",
-							"computed at max rack ID",
-							"exceeds the maximum DNS label length",
-							"of 63 characters").
+							"pod name would exceed the 63-character DNS label limit",
+							"revision = 3 chars",
+							"total = 64 chars",
+							"reduce by 1 character(s)").
 						Validate(err)
 				})
 
