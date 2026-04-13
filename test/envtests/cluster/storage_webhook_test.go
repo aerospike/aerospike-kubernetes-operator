@@ -70,6 +70,7 @@ var _ = Describe("Storage webhook validation", func() {
 				It("allows CREATE when spec.storage is not set"+
 					"and validation is satisfied via per-rack InputStorage", func() {
 					aeroCluster := testCluster.CreateDummyAerospikeCluster(nsName, 2)
+					aeroCluster.Spec.Storage = asdbv1.AerospikeStorageSpec{}
 					fullRack := getStorageSpecForDevice("/test/dev/xvdf")
 					aeroCluster.Spec.RackConfig = asdbv1.RackConfig{
 						Namespaces: []string{"test"},
