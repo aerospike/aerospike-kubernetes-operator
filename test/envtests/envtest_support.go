@@ -67,7 +67,7 @@ var (
 // SetupTestEnv starts the envtest environment and webhook server. Idempotent.
 func SetupTestEnv() {
 	// Set up logger
-	logf.SetLogger(zap.New(zap.WriteTo(GinkgoWriter), zap.UseDevMode(true)))
+	logf.SetLogger(zap.New(zap.WriteTo(GinkgoWriter), zap.UseDevMode(false)))
 
 	var err error
 	// Get project root path
@@ -77,7 +77,7 @@ func SetupTestEnv() {
 	schemaMap, err := configschema.NewSchemaMap()
 	Expect(err).NotTo(HaveOccurred(), "Failed to load SchemaMap for tests")
 
-	testLog := zap.New(zap.WriteTo(GinkgoWriter), zap.UseDevMode(true))
+	testLog := zap.New(zap.WriteTo(GinkgoWriter), zap.UseDevMode(false))
 	asconfig.InitFromMap(testLog, schemaMap)
 
 	By("Bootstrapping test environment")
