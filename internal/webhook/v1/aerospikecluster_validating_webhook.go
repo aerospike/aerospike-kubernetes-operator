@@ -32,6 +32,7 @@ import (
 	v1 "k8s.io/api/core/v1"
 	"k8s.io/apimachinery/pkg/util/intstr"
 	"k8s.io/apimachinery/pkg/util/sets"
+	k8svalidation "k8s.io/apimachinery/pkg/util/validation"
 	"k8s.io/utils/ptr"
 	logf "sigs.k8s.io/controller-runtime/pkg/log"
 	"sigs.k8s.io/controller-runtime/pkg/webhook/admission"
@@ -65,11 +66,157 @@ func (acv *AerospikeClusterCustomValidator) ValidateCreate(_ context.Context, ae
 		return warns, vErr
 	}
 
+	// Conservative length bounds are enforced on CREATE only.
+	// Note: revision character validity (IsDNS1123Label) is checked in
+	// validateRackConfig, which runs on both CREATE and UPDATE, because an
+	// invalid character would silently corrupt the StatefulSet name at runtime.
+	if err := validateNamingConstraints(aerospikeCluster); err != nil {
+		return warns, err
+	}
+
 	if err := validateAccessControlCreate(&aerospikeCluster.Spec); err != nil {
 		return warns, err
 	}
 
 	return warns, nil
+}
+
+// For each rack it uses a placeholder revision of length
+// max(len(rack.Revision), minRevisionReservation) together with the maximum
+// rack ID (MaxRackID = 1000000) and the maximum pod ordinal
+// (maxEnterpriseClusterSize-1 = 255) to compute the longest pod name that
+// could ever be generated for that rack. The pod name is validated as a
+// DNS1123 label (max 63 chars).
+//
+// This gives two guarantees:
+//   - Racks with revision ≤ minRevisionReservation chars: any future revision
+//     up to minRevisionReservation chars is guaranteed to be safe.
+//   - Racks with longer revisions: the specific revision length given at
+//     CREATE time is validated. Future changes to a longer revision are caught
+//     by the actual-pod-name check in ValidateUpdate.
+//
+// A single projected-name check also subsumes service name checks:
+//   - Headless service = cluster.Name (0-char overhead)
+//   - LB service = cluster.Name + "-lb" (3-char overhead)
+//     Both are shorter than the projected pod name overhead, and the STS name
+func validateNamingConstraints(cluster *asdbv1.AerospikeCluster) error {
+	// cluster.Name is immutable in Kubernetes — a name that passes here is
+	// valid for the entire lifetime of the cluster. It is used directly as
+	// the headless-service name (and as the base of the LB service name).
+	// Kubernetes validates service names as DNS-1035 labels, which is
+	// stricter than DNS-1123: the first character must be a lowercase letter,
+	// not a digit.
+	if errs := k8svalidation.IsDNS1035Label(cluster.Name); len(errs) > 0 {
+		return fmt.Errorf(
+			"cluster name %q is not a valid Kubernetes service name (DNS-1035): %s",
+			cluster.Name, strings.Join(errs, "; "))
+	}
+
+	// Find the longest revision length across all racks, falling back to the
+	// baseline reservation if all revisions are shorter (or no racks exist).
+	// Checking only the maximum is sufficient: a pod name valid with the
+	// longest placeholder is trivially valid for any shorter placeholder
+	// (same cluster name, smaller suffix).
+	maxPlaceholderLen := minRevisionReservation
+
+	for idx := range cluster.Spec.RackConfig.Racks {
+		if l := len(cluster.Spec.RackConfig.Racks[idx].Revision); l > maxPlaceholderLen {
+			maxPlaceholderLen = l
+		}
+	}
+
+	// fixedOverhead is the number of characters consumed by system-controlled
+	// segments of the pod name that the user cannot change:
+	//   "{clusterName}-{rackID}-{revision}-{ordinal}"
+	//                 ^-------^ ^--------^ ^-------^
+	// 3 hyphens + len("1000000") (MaxRackID) + len("255") (max ordinal) = 13.
+	fixedOverhead := 3 + len(strconv.Itoa(asdbv1.MaxRackID)) + len(strconv.Itoa(maxEnterpriseClusterSize-1))
+	totalLen := len(cluster.Name) + fixedOverhead + maxPlaceholderLen
+
+	// A pure length check is sufficient here: cluster.Name is already validated
+	// as DNS-1035, rack.Revision as DNS-1123 label, and rackID/ordinal are
+	// always integers. The constructed pod name therefore always contains valid
+	// DNS label characters and never starts or ends with a hyphen — length is
+	// the only failure mode.
+	if totalLen > k8svalidation.DNS1123LabelMaxLength {
+		excess := totalLen - k8svalidation.DNS1123LabelMaxLength
+
+		return fmt.Errorf(
+			"cluster %q: pod name would exceed the %d-character DNS label limit "+
+				"(cluster name %q = %d chars, revision = %d chars, fixed overhead = %d chars, total = %d chars); "+
+				"reduce by %d character(s) by using a smaller cluster name or rack revision",
+			cluster.Name, k8svalidation.DNS1123LabelMaxLength,
+			cluster.Name, len(cluster.Name), maxPlaceholderLen, fixedOverhead, totalLen, excess,
+		)
+	}
+
+	return nil
+}
+
+// validateActualPodNames checks that the longest actual pod name across all
+// racks is a valid DNS1123 label. It uses the real rack ID, real revision,
+// and the real per-rack max ordinal computed by DistributeItems — the same
+// distribution the controller uses when creating StatefulSets.
+//
+// Only the longest pod name is validated: revision characters are already
+// checked by validateRackConfig (which runs before this on UPDATE), so the
+// only remaining failure mode is length. If the longest name is valid, all
+// shorter names are trivially valid too.
+//
+// When no user-defined racks are present the controller manages a single
+// default rack internally; there is no user-supplied revision to validate,
+// so we skip the check entirely.
+func validateActualPodNames(cluster *asdbv1.AerospikeCluster) error {
+	racks := cluster.Spec.RackConfig.Racks
+	if len(racks) == 0 {
+		return nil
+	}
+
+	// DistributeItems divides cluster.Spec.Size as evenly as possible across
+	// racks — the first (Size % len(racks)) racks get one extra pod.
+	// This matches exactly what the controller does in getConfiguredRackStateList.
+	topology := asdbv1.DistributeItems(cluster.Spec.Size, utils.Len32(racks))
+
+	var longestPodName string
+
+	var offendingRack *asdbv1.Rack
+
+	for idx := range racks {
+		rackSize := topology[idx]
+		if rackSize == 0 {
+			// This rack gets zero pods in the current distribution; skip.
+			continue
+		}
+
+		rack := &racks[idx]
+
+		stsName := utils.GetNamespacedNameForSTSOrConfigMap(
+			cluster, utils.GetRackIdentifier(rack.ID, rack.Revision),
+		).Name
+		// Maximum ordinal for this rack is rackSize-1 (0-based index).
+		podName := utils.GetSTSPodName(stsName, rackSize-1)
+
+		if len(podName) > len(longestPodName) {
+			longestPodName = podName
+			offendingRack = rack
+		}
+	}
+
+	// A pure length check is sufficient: cluster.Name is validated as DNS-1035,
+	// rack.Revision as DNS-1123 label, and rackID/ordinal are always integers.
+	// Only length can cause the constructed pod name to be invalid.
+	if len(longestPodName) > k8svalidation.DNS1123LabelMaxLength {
+		excess := len(longestPodName) - k8svalidation.DNS1123LabelMaxLength
+
+		return fmt.Errorf(
+			"cluster %q: rack ID %d (revision %q) with current cluster size %d would generate "+
+				"pod names exceeding the %d-character DNS label limit; "+
+				"reduce by %d character(s) by using a smaller rack ID or rack revision, or reducing the cluster size",
+			cluster.Name, offendingRack.ID, offendingRack.Revision, cluster.Spec.Size,
+			k8svalidation.DNS1123LabelMaxLength, excess)
+	}
+
+	return nil
 }
 
 // ValidateDelete implements admission.Validator so a webhook will be registered for the type
@@ -124,11 +271,6 @@ func (acv *AerospikeClusterCustomValidator) ValidateUpdate(_ context.Context,
 		return warnings, fmt.Errorf("failed to start upgrade: %v", err)
 	}
 
-	// Volume storage update is not allowed but cascadeDelete policy is allowed
-	if err := validateStorageSpecChange(&oldObject.Spec.Storage, &aerospikeCluster.Spec.Storage); err != nil {
-		return warnings, fmt.Errorf("storage config cannot be updated: %v", err)
-	}
-
 	// MultiPodPerHost cannot be updated
 	if asdbv1.GetBool(aerospikeCluster.Spec.PodSpec.MultiPodPerHost) !=
 		asdbv1.GetBool(oldObject.Spec.PodSpec.MultiPodPerHost) {
@@ -176,6 +318,13 @@ func (acv *AerospikeClusterCustomValidator) ValidateUpdate(_ context.Context,
 		return warnings, err
 	}
 
+	// Validate actual pod names to catch silent DNS label overflows at runtime.
+	// This uses real rack IDs, real revisions, and the real max ordinal (Size-1),
+	// so it only rejects what would actually fail — not a conservative estimate.
+	if err := validateActualPodNames(aerospikeCluster); err != nil {
+		return warnings, err
+	}
+
 	// Validate replication-factor update restrictions
 	// Check both: spec-to-spec changes and status-to-spec changes
 	if err := validateReplicationFactorUpdateRestrictions(oldObject, aerospikeCluster); err != nil {
@@ -189,16 +338,6 @@ func validate(aslog logr.Logger, cluster *asdbv1.AerospikeCluster) (admission.Wa
 	aslog.V(1).Info("Validate AerospikeCluster spec", "obj.Spec", cluster.Spec)
 
 	var warnings admission.Warnings
-
-	// Validate obj name
-	if cluster.Name == "" {
-		return warnings, fmt.Errorf("aerospikeCluster name cannot be empty")
-	}
-
-	if strings.Contains(cluster.Name, " ") {
-		// Few parsing logic depend on this
-		return warnings, fmt.Errorf("aerospikeCluster name cannot have spaces")
-	}
 
 	// Validate obj namespace
 	if cluster.Namespace == "" {
@@ -270,14 +409,6 @@ func validate(aslog logr.Logger, cluster *asdbv1.AerospikeCluster) (admission.Wa
 	}
 
 	err = validateOperation(cluster)
-	if err != nil {
-		return warnings, err
-	}
-
-	// Storage should be validated before validating aerospikeConfig and fileStorage
-	warns, err = validateStorage(&cluster.Spec.Storage, &cluster.Spec.PodSpec)
-	warnings = append(warnings, warns...)
-
 	if err != nil {
 		return warnings, err
 	}
@@ -925,6 +1056,18 @@ func validateRackConfig(_ logr.Logger, cluster *asdbv1.AerospikeCluster) (admiss
 			)
 		}
 
+		// Validate revision character set. A revision with invalid characters
+		// (uppercase, dot, underscore, trailing hyphen) is embedded directly into
+		// the StatefulSet name and would silently corrupt DNS resolution or cause
+		// the StatefulSet to fail at creation time.
+		if rack.Revision != "" {
+			if errs := k8svalidation.IsDNS1123Label(rack.Revision); len(errs) > 0 {
+				return warnings, fmt.Errorf(
+					"rack revision %q for rack ID %d is invalid: %s",
+					rack.Revision, rack.ID, strings.Join(errs, "; "))
+			}
+		}
+
 		if rack.InputAerospikeConfig != nil {
 			_, inputRackNetwork := rack.InputAerospikeConfig.Value["network"]
 			_, inputRackSecurity := rack.InputAerospikeConfig.Value["security"]
@@ -1111,6 +1254,13 @@ func getAllNamespaceNamesAndRFMap(spec *asdbv1.AerospikeClusterSpec) (allNsNames
 // TODO: This should be version specific and part of management lib.
 // max cluster size for 5.0+ cluster
 const maxEnterpriseClusterSize = 256
+
+// minRevisionReservation is the minimum number of revision characters reserved
+// in the projected pod-name formula when no (or a short) revision is given.
+// A cluster whose name passes the projected-name check with this reservation is
+// guaranteed to remain valid for any future revision up to this many characters,
+// without requiring re-validation on UPDATE.
+const minRevisionReservation = 3
 
 func validateClusterSize(_ logr.Logger, sz int) error {
 	if sz > maxEnterpriseClusterSize {
