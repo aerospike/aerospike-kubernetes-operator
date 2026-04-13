@@ -1685,12 +1685,12 @@ func isEnterprise(image string) bool {
 
 func validateImage(spec *asdbv1.AerospikeClusterSpec) error {
 	if spec.Image == "" {
-		return fmt.Errorf("image cannot be empty")
+		return fmt.Errorf("spec.image cannot be empty")
 	}
 
 	// Validate image type. Only enterprise and federal image allowed for now.
 	if !isEnterprise(spec.Image) && !asdbv1.IsFederal(spec.Image) {
-		return fmt.Errorf("image %q is not supported: only enterprise and federal images are allowed", spec.Image)
+		return fmt.Errorf("image %q is not supported: only Enterprise and Federal editions are allowed", spec.Image)
 	}
 
 	return nil

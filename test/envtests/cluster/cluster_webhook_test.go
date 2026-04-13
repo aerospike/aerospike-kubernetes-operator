@@ -116,7 +116,7 @@ var _ = Describe("AerospikeCluster validation", func() {
 					envtests.NewStatusErrorMatcher().
 						WithMessageSubstrings(
 							"\"vaerospikecluster.kb.io\"",
-							"image cannot be empty").
+							"spec.image cannot be empty").
 						Validate(err)
 				})
 
@@ -131,7 +131,7 @@ var _ = Describe("AerospikeCluster validation", func() {
 					envtests.NewStatusErrorMatcher().
 						WithMessageSubstrings(
 							"\"vaerospikecluster.kb.io\"",
-							"only enterprise and federal images are allowed").
+							"only Enterprise and Federal editions are allowed").
 						Validate(err)
 				})
 
