@@ -440,6 +440,86 @@ var _ = Describe("AerospikeCluster validation", func() {
 							"strong-consistency namespace replication-factor 3 cannot be more than cluster size 1").
 						Validate(err)
 				})
+
+				It("rejects duplicate namespace names in aerospikeConfig.namespaces", func() {
+					aeroCluster := testCluster.CreateDummyAerospikeCluster(clusterNamespacedName, 2)
+
+					nsList := aeroCluster.Spec.AerospikeConfig.Value[asdbv1.ConfKeyNamespace].([]interface{})
+					// Append a second namespace entry with the same name as the first.
+					firstNs := nsList[0].(map[string]interface{})
+					dupNs := map[string]interface{}{
+						"name":               firstNs["name"],
+						"replication-factor": 2,
+						"storage-engine": map[string]interface{}{
+							"type": "memory",
+						},
+					}
+					aeroCluster.Spec.AerospikeConfig.Value[asdbv1.ConfKeyNamespace] = append(nsList, dupNs)
+
+					err := testCluster.DeployCluster(envtests.K8sClient, ctx, aeroCluster)
+					Expect(err).To(HaveOccurred())
+
+					envtests.NewStatusErrorMatcher().
+						WithMessageSubstrings("\"vaerospikecluster.kb.io\"",
+							`duplicate name "test" in namespaces list section`).
+						Validate(err)
+				})
+
+				It("rejects duplicate namespace names in aerospikeConfig.xdr.dcs namespaces", func() {
+					aeroCluster := testCluster.CreateDummyAerospikeCluster(clusterNamespacedName, 2)
+
+					aeroCluster.Spec.AerospikeConfig.Value[asdbv1.ConfKeyXdr] = map[string]interface{}{
+						"dcs": []interface{}{
+							map[string]interface{}{
+								"name":               "dc1",
+								"node-address-ports": []interface{}{"aeroclusterdst-0-0 3000"},
+								"namespaces": []interface{}{
+									map[string]interface{}{"name": "test"},
+									map[string]interface{}{"name": "test"},
+								},
+							},
+						},
+					}
+
+					err := testCluster.DeployCluster(envtests.K8sClient, ctx, aeroCluster)
+					Expect(err).To(HaveOccurred())
+
+					envtests.NewStatusErrorMatcher().
+						WithMessageSubstrings("\"vaerospikecluster.kb.io\"",
+							`xdr: duplicate name "test" in namespaces list section`).
+						Validate(err)
+				})
+
+				It("rejects duplicate dc names in aerospikeConfig.xdr.dcs", func() {
+					aeroCluster := testCluster.CreateDummyAerospikeCluster(clusterNamespacedName, 2)
+
+					aeroCluster.Spec.AerospikeConfig.Value[asdbv1.ConfKeyXdr] = map[string]interface{}{
+						"dcs": []interface{}{
+							map[string]interface{}{
+								"name":               "dc1",
+								"node-address-ports": []interface{}{"aeroclusterdst-0-0 3000"},
+								"namespaces": []interface{}{
+									map[string]interface{}{"name": "test"},
+								},
+							},
+							map[string]interface{}{
+								"name":               "dc1",
+								"node-address-ports": []interface{}{"aeroclusterdst-0-0 3000"},
+								"namespaces": []interface{}{
+									map[string]interface{}{"name": "test"},
+								},
+							},
+						},
+					}
+
+					err := testCluster.DeployCluster(envtests.K8sClient, ctx, aeroCluster)
+					Expect(err).To(HaveOccurred())
+
+					envtests.NewStatusErrorMatcher().
+						WithMessageSubstrings("\"vaerospikecluster.kb.io\"",
+							`xdr: duplicate name "dc1" in dcs list section`).
+						Validate(err)
+				})
 			})
 			Context("positive", func() {
 				// Add positive aerospikeConfig (namespace) tests here
@@ -962,7 +1042,7 @@ var _ = Describe("AerospikeCluster validation", func() {
 				})
 
 				It("rejects negative rollingUpdateBatchSize", func() {
-					aeroCluster := testCluster.CreateDummyAerospikeCluster(clusterNamespacedName, 1)
+					aeroCluster := testCluster.CreateDummyAerospikeCluster(clusterNamespacedName, 2)
 					negVal := intstr.FromInt32(-1)
 					aeroCluster.Spec.RackConfig.RollingUpdateBatchSize = &negVal
 
@@ -977,7 +1057,7 @@ var _ = Describe("AerospikeCluster validation", func() {
 				})
 
 				It("rejects negative scaleDownBatchSize", func() {
-					aeroCluster := testCluster.CreateDummyAerospikeCluster(clusterNamespacedName, 1)
+					aeroCluster := testCluster.CreateDummyAerospikeCluster(clusterNamespacedName, 2)
 					negVal := intstr.FromInt32(-1)
 					aeroCluster.Spec.RackConfig.ScaleDownBatchSize = &negVal
 
