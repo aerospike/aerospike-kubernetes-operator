@@ -358,14 +358,6 @@ func validate(aslog logr.Logger, cluster *asdbv1.AerospikeCluster) (admission.Wa
 		return warnings, fmt.Errorf("invalid cluster size 0")
 	}
 
-	// Validate MaxUnavailable for PodDisruptionBudget
-	warns, err := validateMaxUnavailable(cluster)
-	warnings = append(warnings, warns...)
-
-	if err != nil {
-		return warnings, err
-	}
-
 	// Validate Image version
 	version, err := asdbv1.GetImageVersion(cluster.Spec.Image)
 	if err != nil {
@@ -414,7 +406,7 @@ func validate(aslog logr.Logger, cluster *asdbv1.AerospikeCluster) (admission.Wa
 	}
 
 	// Validate rackConfig
-	warns, err = validateRackConfig(aslog, cluster)
+	warns, err := validateRackConfig(aslog, cluster)
 
 	warnings = append(warnings, warns...)
 	if err != nil {
@@ -453,6 +445,16 @@ func validate(aslog logr.Logger, cluster *asdbv1.AerospikeCluster) (admission.Wa
 		if err != nil {
 			return warnings, err
 		}
+	}
+
+	// Validate MaxUnavailable for PodDisruptionBudget.
+	// Must run after validateAerospikeConfig so that replication-factor values have
+	// already been schema-validated (e.g. zero or negative RF is caught first).
+	warns, err = validateMaxUnavailable(cluster)
+	warnings = append(warnings, warns...)
+
+	if err != nil {
+		return warnings, err
 	}
 
 	// Validate resource and limit
@@ -1682,9 +1684,13 @@ func isEnterprise(image string) bool {
 }
 
 func validateImage(spec *asdbv1.AerospikeClusterSpec) error {
+	if spec.Image == "" {
+		return fmt.Errorf("spec.image cannot be empty")
+	}
+
 	// Validate image type. Only enterprise and federal image allowed for now.
 	if !isEnterprise(spec.Image) && !asdbv1.IsFederal(spec.Image) {
-		return fmt.Errorf("CommunityEdition Cluster not supported")
+		return fmt.Errorf("image %q is not supported: only Enterprise and Federal editions are allowed", spec.Image)
 	}
 
 	return nil
@@ -2076,9 +2082,9 @@ func validateMaxUnavailable(cluster *asdbv1.AerospikeCluster) (admission.Warning
 	}
 
 	if cluster.Spec.MaxUnavailable.IntValue() >= safeMaxUnavailable {
-		return warnings, fmt.Errorf("maxUnavailable %s cannot be greater than or equal to %v as it may result in "+
-			"data loss. Set it to a lower value",
-			cluster.Spec.MaxUnavailable.String(), safeMaxUnavailable)
+		return warnings, fmt.Errorf("maxUnavailable %s is invalid: value must be less than the minimum "+
+			"replication factor (%d) to avoid data loss. Set maxUnavailable to at most %d",
+			cluster.Spec.MaxUnavailable.String(), safeMaxUnavailable, safeMaxUnavailable-1)
 	}
 
 	return warnings, nil
