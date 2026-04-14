@@ -1125,9 +1125,9 @@ func createDummyAerospikeClusterWithRFAndStorage(
 			AerospikeConfig: &asdbv1.AerospikeConfigSpec{
 				Value: map[string]interface{}{
 					asdbv1.ConfKeyService: map[string]interface{}{
-						"feature-key-file":    "/etc/aerospike/secret/features.conf",
-						"proto-fd-max":        defaultProtofdmax,
-						"cgroup-mem-tracking": true,
+						"feature-key-file":                "/etc/aerospike/secret/features.conf",
+						"proto-fd-max":                    defaultProtofdmax,
+						asdbv1.ConfigKeyCgroupMemTracking: true,
 					},
 					asdbv1.ConfKeySecurity: map[string]interface{}{},
 					asdbv1.ConfKeyNetwork:  getNetworkConfig(),
@@ -1207,10 +1207,10 @@ func createDummyAerospikeCluster(
 			AerospikeConfig: &asdbv1.AerospikeConfigSpec{
 				Value: map[string]interface{}{
 					asdbv1.ConfKeyService: map[string]interface{}{
-						"feature-key-file":    "/etc/aerospike/secret/features.conf",
-						"proto-fd-max":        defaultProtofdmax,
-						"auto-pin":            "none",
-						"cgroup-mem-tracking": true,
+						"feature-key-file":                "/etc/aerospike/secret/features.conf",
+						"proto-fd-max":                    defaultProtofdmax,
+						"auto-pin":                        "none",
+						asdbv1.ConfigKeyCgroupMemTracking: true,
 					},
 					asdbv1.ConfKeySecurity: map[string]interface{}{},
 					asdbv1.ConfKeyNetwork:  getNetworkConfig(),
@@ -1369,8 +1369,8 @@ func createBasicTLSCluster(
 				Value: map[string]interface{}{
 
 					asdbv1.ConfKeyService: map[string]interface{}{
-						"feature-key-file":    "/etc/aerospike/secret/features.conf",
-						"cgroup-mem-tracking": true,
+						"feature-key-file":                "/etc/aerospike/secret/features.conf",
+						asdbv1.ConfigKeyCgroupMemTracking: true,
 					},
 					asdbv1.ConfKeySecurity: map[string]interface{}{},
 					asdbv1.ConfKeyNetwork:  getNetworkTLSConfig(),

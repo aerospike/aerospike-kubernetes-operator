@@ -1291,7 +1291,7 @@ func cgroupMemTrackingWarning(version string, conf map[string]interface{}) admis
 		return nil
 	}
 
-	val, exists := serviceConf["cgroup-mem-tracking"]
+	val, exists := serviceConf[asdbv1.ConfigKeyCgroupMemTracking]
 	enabled, _ := val.(bool)
 
 	if !exists || !enabled {
