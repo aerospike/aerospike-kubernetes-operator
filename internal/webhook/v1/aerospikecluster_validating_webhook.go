@@ -353,11 +353,6 @@ func validate(aslog logr.Logger, cluster *asdbv1.AerospikeCluster) (admission.Wa
 		return warnings, err
 	}
 
-	// Validate size
-	if cluster.Spec.Size == 0 {
-		return warnings, fmt.Errorf("invalid cluster size 0")
-	}
-
 	// Validate Image version
 	version, err := asdbv1.GetImageVersion(cluster.Spec.Image)
 	if err != nil {
@@ -406,45 +401,11 @@ func validate(aslog logr.Logger, cluster *asdbv1.AerospikeCluster) (admission.Wa
 	}
 
 	// Validate rackConfig
-	warns, err := validateRackConfig(aslog, cluster)
+	warns, err := validateRackConfig(aslog, cluster, version)
 
 	warnings = append(warnings, warns...)
 	if err != nil {
 		return warnings, err
-	}
-
-	for idx := range cluster.Spec.RackConfig.Racks {
-		rack := &cluster.Spec.RackConfig.Racks[idx]
-		// Storage should be validated before validating aerospikeConfig and fileStorage
-		warns, err = validateStorage(&rack.Storage, &cluster.Spec.PodSpec)
-		warnings = append(warnings, warns...)
-
-		if err != nil {
-			return warnings, err
-		}
-
-		// Validate common aerospike config schema and fields
-		err = validateAerospikeConfig(aslog, version,
-			&rack.AerospikeConfig, &rack.Storage, int(cluster.Spec.Size),
-			cluster.Spec.OperatorClientCertSpec,
-		)
-		if err != nil {
-			return warnings, err
-		}
-
-		err = validateRequiredFileStorageForMetadata(
-			rack.AerospikeConfig, &rack.Storage, cluster.Spec.ValidationPolicy,
-		)
-		if err != nil {
-			return warnings, err
-		}
-
-		err = validateRequiredFileStorageForAerospikeConfig(
-			rack.AerospikeConfig, &rack.Storage,
-		)
-		if err != nil {
-			return warnings, err
-		}
 	}
 
 	// Validate MaxUnavailable for PodDisruptionBudget.
@@ -999,7 +960,8 @@ func validateResourceAndLimits(
 	return nil
 }
 
-func validateRackConfig(_ logr.Logger, cluster *asdbv1.AerospikeCluster) (admission.Warnings, error) {
+func validateRackConfig(aslog logr.Logger, cluster *asdbv1.AerospikeCluster,
+	version string) (admission.Warnings, error) {
 	var warnings admission.Warnings
 
 	// If EnableRackIDOverride is enabled, only single rack is allowed
@@ -1087,6 +1049,37 @@ func validateRackConfig(_ logr.Logger, cluster *asdbv1.AerospikeCluster) (admiss
 					rack.ID,
 				)
 			}
+		}
+
+		// Storage should be validated before validating aerospikeConfig and fileStorage
+		warns, err := validateStorage(&rack.Storage, &cluster.Spec.PodSpec)
+		warnings = append(warnings, warns...)
+
+		if err != nil {
+			return warnings, err
+		}
+
+		// Validate common aerospike config schema and fields
+		err = validateAerospikeConfig(aslog, version,
+			&rack.AerospikeConfig, &rack.Storage, int(cluster.Spec.Size),
+			cluster.Spec.OperatorClientCertSpec,
+		)
+		if err != nil {
+			return warnings, err
+		}
+
+		err = validateRequiredFileStorageForMetadata(
+			rack.AerospikeConfig, &rack.Storage, cluster.Spec.ValidationPolicy,
+		)
+		if err != nil {
+			return warnings, err
+		}
+
+		err = validateRequiredFileStorageForAerospikeConfig(
+			rack.AerospikeConfig, &rack.Storage,
+		)
+		if err != nil {
+			return warnings, err
 		}
 
 		migrateFillDelay, err := asdbv1.GetMigrateFillDelay(&rack.AerospikeConfig)
@@ -1265,6 +1258,10 @@ const maxEnterpriseClusterSize = 256
 const minRevisionReservation = 3
 
 func validateClusterSize(_ logr.Logger, sz int) error {
+	if sz == 0 {
+		return fmt.Errorf("invalid cluster size 0")
+	}
+
 	if sz > maxEnterpriseClusterSize {
 		return fmt.Errorf(
 			"cluster size cannot be more than %d", maxEnterpriseClusterSize,

@@ -5,7 +5,7 @@ go 1.25.8
 require (
 	github.com/aerospike/aerospike-backup-service/v3 v3.5.0
 	github.com/aerospike/aerospike-client-go/v8 v8.6.0
-	github.com/aerospike/aerospike-management-lib v1.10.1-0.20260316162049-b2ca51eee0e7
+	github.com/aerospike/aerospike-management-lib v1.10.1-0.20260414145326-c15920642aab
 	github.com/asaskevich/govalidator v0.0.0-20210307081110-f21760c49a8d
 	github.com/deckarep/golang-set/v2 v2.8.0
 	github.com/evanphx/json-patch v5.9.11+incompatible
@@ -17,7 +17,7 @@ require (
 	github.com/stretchr/testify v1.11.1
 	golang.org/x/crypto v0.48.0
 	k8s.io/api v0.35.2
-	k8s.io/apimachinery v0.35.2
+	k8s.io/apimachinery v0.35.3
 	k8s.io/client-go v0.35.2
 	k8s.io/kubectl v0.35.2
 	k8s.io/utils v0.0.0-20251002143259-bc988d571ff4
