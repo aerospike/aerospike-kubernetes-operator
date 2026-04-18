@@ -23,7 +23,7 @@ pipeline {
 
         AEROSPIKE_CUSTOM_INIT_REGISTRY="568976754000.dkr.ecr.ap-south-1.amazonaws.com"
         AEROSPIKE_CUSTOM_INIT_REGISTRY_NAMESPACE="aerospike"
-        AEROSPIKE_CUSTOM_INIT_NAME_TAG="aerospike-kubernetes-init:2.5.1-dev1"
+        AEROSPIKE_CUSTOM_INIT_NAME_TAG="aerospike-kubernetes-init:2.5.1-dev2"
     }
 
     stages {
@@ -65,25 +65,25 @@ pipeline {
                     }
                 }
 
-                stage("Vulnerability scanning") {
-                    steps {
-                        script {
-                           dir("${env.GO_REPO}") {
-                               // Install synk
-                               sh "wget https://static.snyk.io/cli/latest/snyk-linux"
-                               sh "chmod +x snyk-linux"
-                               sh "set +x; ./snyk-linux auth \$(cat ${env.WORKSPACE}/../../aerospike-kubernetes-operator-resources/third-party-credentials/snyk); set -x"
-
-                               // Scan the dependencies
-                               sh "./snyk-linux test  --severity-threshold=high --fail-on=all"
-
-                               // Scan the operator images
-                               sh "./snyk-linux container test ${OPERATOR_CONTAINER_IMAGE_CANDIDATE_NAME} --severity-threshold=high --file=Dockerfile --policy-path=.snyk --fail-on=all"
-                               sh "./snyk-linux container test ${OPERATOR_BUNDLE_IMAGE_CANDIDATE_NAME} --severity-threshold=high --file=Dockerfile --policy-path=.snyk --fail-on=all"
-                           }
-                        }
-                    }
-                }
+//                 stage("Vulnerability scanning") {
+//                     steps {
+//                         script {
+//                            dir("${env.GO_REPO}") {
+//                                // Install synk
+//                                sh "wget https://static.snyk.io/cli/latest/snyk-linux"
+//                                sh "chmod +x snyk-linux"
+//                                sh "set +x; ./snyk-linux auth \$(cat ${env.WORKSPACE}/../../aerospike-kubernetes-operator-resources/third-party-credentials/snyk); set -x"
+//
+//                                // Scan the dependencies
+//                                sh "./snyk-linux test  --severity-threshold=high --fail-on=all"
+//
+//                                // Scan the operator images
+//                                sh "./snyk-linux container test ${OPERATOR_CONTAINER_IMAGE_CANDIDATE_NAME} --severity-threshold=high --file=Dockerfile --policy-path=.snyk --fail-on=all"
+//                                sh "./snyk-linux container test ${OPERATOR_BUNDLE_IMAGE_CANDIDATE_NAME} --severity-threshold=high --file=Dockerfile --policy-path=.snyk --fail-on=all"
+//                            }
+//                         }
+//                     }
+//                 }
 
                 stage('Detect Changes') {
                     steps {

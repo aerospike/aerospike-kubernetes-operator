@@ -173,7 +173,7 @@ func (r *SingleClusterReconciler) createSTS(
 						{
 							Name:            asdbv1.AerospikeServerContainerName,
 							Image:           r.aeroCluster.Spec.Image,
-							ImagePullPolicy: corev1.PullIfNotPresent,
+							ImagePullPolicy: corev1.PullAlways,
 							Ports:           ports,
 							Env:             envVarList,
 							VolumeMounts:    getDefaultAerospikeContainerVolumeMounts(),

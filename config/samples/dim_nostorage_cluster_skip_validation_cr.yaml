@@ -20,7 +20,7 @@ metadata:
 
 spec:
   size: 2
-  image: aerospike/aerospike-server-enterprise:8.1.1.0
+  image: aerospike/aerospike-server-enterprise:8.1.2.0
   podSpec:
     multiPodPerHost: true
 
@@ -39,6 +39,7 @@ spec:
   aerospikeConfig:
     service:
       feature-key-file: /etc/aerospike/secret/features.conf
+      cgroup-mem-tracking: true
     network:
       service:
         port: 3000

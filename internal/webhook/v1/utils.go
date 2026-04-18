@@ -7,6 +7,7 @@ const (
 	baseInitVersion                        = "1.0.0"
 	minInitVersionForDynamicConf           = "2.2.0"
 	minVersionForEnterprisePKIOnlyAuthMode = "8.1.0.0"
+	minVersionForCgroupMemTracking         = "8.1.2.0"
 )
 
 func getContainerNames(containers []v1.Container) []string {
