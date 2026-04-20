@@ -34,7 +34,7 @@ import (
 const (
 	baseEnterpriseImage = "aerospike/aerospike-server-enterprise"
 	wrongImage          = "wrong-image"
-	nextServerVersion   = "8.1.2.0_1"
+	nextServerVersion   = "8.1.2.0-20260417212432" // Get latest server timestamp tag from dockerhub
 	latestServerVersion = "8.1.2.0"
 	invalidVersion      = "3.0.0.4"
 	post6Version        = "7.0.0.0"
