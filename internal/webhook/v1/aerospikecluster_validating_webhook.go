@@ -2478,8 +2478,8 @@ func validateReplicationFactorUpdateComparison(
 	// Rule: no other spec fields may be modified alongside a replication-factor change.
 	if otherSpecChanged || namespaceAddedOrRemoved {
 		return fmt.Errorf(
-			"when updating replication-factor for namespace %v, no other fields in the "+
-				"aerospikecluster spec are allowed to be modified",
+			"cannot update replication-factor for namespace %v alongside any other spec change "+
+				"or in-progress namespace rollout; apply the change in a separate update",
 			rfChangedNamespaces.UnsortedList(),
 		)
 	}
