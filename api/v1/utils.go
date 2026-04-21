@@ -73,8 +73,9 @@ const (
 	confKeySecurityDefaultPasswordFile = "default-password-file"
 
 	// Service section keys.
-	ConfKeyService       = "service"
-	confKeyWorkDirectory = "work-directory"
+	ConfKeyService             = "service"
+	confKeyWorkDirectory       = "work-directory"
+	ConfigKeyCgroupMemTracking = "cgroup-mem-tracking"
 
 	// Defaults.
 	DefaultWorkDirectory = "/opt/aerospike"
@@ -88,7 +89,7 @@ const (
 	AerospikeInitContainerNameTagEnvVar            = "AEROSPIKE_KUBERNETES_INIT_NAME_TAG"
 	AerospikeInitContainerDefaultRegistry          = "docker.io"
 	AerospikeInitContainerDefaultRegistryNamespace = "aerospike"
-	AerospikeInitContainerDefaultNameAndTag        = "aerospike-kubernetes-init:2.5.1-dev1"
+	AerospikeInitContainerDefaultNameAndTag        = "aerospike-kubernetes-init:2.5.1-dev2"
 	AerospikeAppLabel                              = "app"
 	AerospikeAppLabelValue                         = "aerospike-cluster"
 	AerospikeCustomResourceLabel                   = "aerospike.com/cr"

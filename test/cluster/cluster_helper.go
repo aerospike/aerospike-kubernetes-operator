@@ -34,12 +34,12 @@ import (
 const (
 	baseEnterpriseImage = "aerospike/aerospike-server-enterprise"
 	wrongImage          = "wrong-image"
-	nextServerVersion   = "8.1.1.0_1"
-	latestServerVersion = "8.1.1.0"
+	nextServerVersion   = "8.1.2.0-20260417212432" // Get latest server timestamp tag from dockerhub
+	latestServerVersion = "8.1.2.0"
 	invalidVersion      = "3.0.0.4"
 	post6Version        = "7.0.0.0"
 	version6            = "6.0.0.5"
-	latestSchemaVersion = "8.1.1"
+	latestSchemaVersion = "8.1.2"
 	testClusterSize     = 4
 )
 
@@ -1125,8 +1125,9 @@ func createDummyAerospikeClusterWithRFAndStorage(
 			AerospikeConfig: &asdbv1.AerospikeConfigSpec{
 				Value: map[string]interface{}{
 					asdbv1.ConfKeyService: map[string]interface{}{
-						"feature-key-file": "/etc/aerospike/secret/features.conf",
-						"proto-fd-max":     defaultProtofdmax,
+						"feature-key-file":                "/etc/aerospike/secret/features.conf",
+						"proto-fd-max":                    defaultProtofdmax,
+						asdbv1.ConfigKeyCgroupMemTracking: true,
 					},
 					asdbv1.ConfKeySecurity: map[string]interface{}{},
 					asdbv1.ConfKeyNetwork:  getNetworkConfig(),
@@ -1206,9 +1207,10 @@ func createDummyAerospikeCluster(
 			AerospikeConfig: &asdbv1.AerospikeConfigSpec{
 				Value: map[string]interface{}{
 					asdbv1.ConfKeyService: map[string]interface{}{
-						"feature-key-file": "/etc/aerospike/secret/features.conf",
-						"proto-fd-max":     defaultProtofdmax,
-						"auto-pin":         "none",
+						"feature-key-file":                "/etc/aerospike/secret/features.conf",
+						"proto-fd-max":                    defaultProtofdmax,
+						"auto-pin":                        "none",
+						asdbv1.ConfigKeyCgroupMemTracking: true,
 					},
 					asdbv1.ConfKeySecurity: map[string]interface{}{},
 					asdbv1.ConfKeyNetwork:  getNetworkConfig(),
@@ -1367,7 +1369,8 @@ func createBasicTLSCluster(
 				Value: map[string]interface{}{
 
 					asdbv1.ConfKeyService: map[string]interface{}{
-						"feature-key-file": "/etc/aerospike/secret/features.conf",
+						"feature-key-file":                "/etc/aerospike/secret/features.conf",
+						asdbv1.ConfigKeyCgroupMemTracking: true,
 					},
 					asdbv1.ConfKeySecurity: map[string]interface{}{},
 					asdbv1.ConfKeyNetwork:  getNetworkTLSConfig(),

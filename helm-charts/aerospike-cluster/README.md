@@ -48,7 +48,7 @@ helm install aerospike ./aerospike-cluster/ \
 | -- |------------------------------------------------------------------------------------------------------------------------------|-----------------------------------------------------------|
 | `replicas` | Aerospike cluster size                                                                                                       | `3`                                                       |
 | `image.repository` | Aerospike server container image repository                                                                                  | `aerospike/aerospike-server-enterprise`                   |
-| `image.tag` | Aerospike server container image tag                                                                                         | `8.1.1.0`                                                 |
+| `image.tag` | Aerospike server container image tag                                                                                         | `8.1.2.0`                                                 |
 | `imagePullSecrets` | Secrets containing credentials to pull Aerospike container image from a private registry                                     | `{}` (nil)                                                |
 | `customLabels` | Custom labels to add on the aerospikecluster resource                                                                        | `{}` (nil)                                                |
 | `aerospikeAccessControl` | Aerospike access control configuration. Define users and roles to be created on the cluster.                                 | `{}` (nil)                                                |
@@ -79,6 +79,7 @@ The following values are set as defaults when the cluster is deployed in "dev" m
 aerospikeConfig:
   service:
     feature-key-file: /etc/aerospike/secrets/features.conf
+    cgroup-mem-tracking: true
 
   security:
     enable-security: false

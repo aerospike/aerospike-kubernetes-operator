@@ -319,8 +319,8 @@ var _ = Describe("AerospikeCluster dynamic replication-factor validation", func(
 					envtests.NewStatusErrorMatcher().
 						WithMessageSubstrings(
 							"vaerospikecluster.kb.io",
-							"when updating replication-factor",
-							"no other fields",
+							"cannot update replication-factor for namespace",
+							"alongside any other spec change or in-progress namespace rollout",
 						).
 						Validate(err)
 				})

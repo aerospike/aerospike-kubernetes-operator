@@ -424,10 +424,14 @@ func validate(aslog logr.Logger, cluster *asdbv1.AerospikeCluster) (admission.Wa
 		}
 
 		// Validate common aerospike config schema and fields
-		err = validateAerospikeConfig(aslog, version,
+		var configWarns admission.Warnings
+
+		configWarns, err = validateAerospikeConfig(aslog, version,
 			&rack.AerospikeConfig, &rack.Storage, int(cluster.Spec.Size),
 			cluster.Spec.OperatorClientCertSpec,
 		)
+		warnings = append(warnings, configWarns...)
+
 		if err != nil {
 			return warnings, err
 		}
@@ -1274,23 +1278,53 @@ func validateClusterSize(_ logr.Logger, sz int) error {
 	return nil
 }
 
+// cgroupMemTrackingWarning returns a warning when aerospikeConfig.service.cgroup-mem-tracking
+// is absent or not true for a version that requires it. An empty slice means no warning.
+func cgroupMemTrackingWarning(version string, conf map[string]interface{}) admission.Warnings {
+	cmp, err := lib.CompareVersions(version, minVersionForCgroupMemTracking)
+	if err != nil || cmp < 0 {
+		return nil
+	}
+
+	serviceConf, ok := conf[asdbv1.ConfKeyService].(map[string]interface{})
+	if !ok {
+		return nil
+	}
+
+	val, exists := serviceConf[asdbv1.ConfigKeyCgroupMemTracking]
+	enabled, _ := val.(bool)
+
+	if !exists || !enabled {
+		return admission.Warnings{fmt.Sprintf(
+			"aerospikeConfig.service.cgroup-mem-tracking is not set to true for Aerospike server version %s or later",
+			minVersionForCgroupMemTracking,
+		)}
+	}
+
+	return nil
+}
+
 func validateAerospikeConfig(
 	aslog logr.Logger, version string, configSpec *asdbv1.AerospikeConfigSpec,
 	storage *asdbv1.AerospikeStorageSpec, clSize int,
 	clientCert *asdbv1.AerospikeOperatorClientCertSpec,
-) error {
+) (admission.Warnings, error) {
 	// It validates the aerospikeConfig schema and generic aerospikeConfig fields
 	if err := validation.ValidateAerospikeConfig(
 		aslog, version, configSpec.Value, clSize,
 	); err != nil {
-		return err
+		return nil, err
 	}
 
 	if err := validateNetworkConfig(configSpec.Value, clientCert); err != nil {
-		return err
+		return nil, err
 	}
 
-	return validateNamespaceConfig(configSpec.Value, storage)
+	if err := validateNamespaceConfig(configSpec.Value, storage); err != nil {
+		return nil, err
+	}
+
+	return cgroupMemTrackingWarning(version, configSpec.Value), nil
 }
 
 func validateNetworkConfig(config map[string]interface{},
@@ -2444,8 +2478,8 @@ func validateReplicationFactorUpdateComparison(
 	// Rule: no other spec fields may be modified alongside a replication-factor change.
 	if otherSpecChanged || namespaceAddedOrRemoved {
 		return fmt.Errorf(
-			"when updating replication-factor for namespace %v, no other fields in the "+
-				"aerospikecluster spec are allowed to be modified",
+			"cannot update replication-factor for namespace %v alongside any other spec change "+
+				"or in-progress namespace rollout; apply the change in a separate update",
 			rfChangedNamespaces.UnsortedList(),
 		)
 	}
