@@ -24,7 +24,7 @@ const (
 )
 
 var (
-	unavailableImage = fmt.Sprintf("%s:%s", baseEnterpriseImage, "7.2.0.99")
+	unavailableImage = fmt.Sprintf("%s:%s", baseEnterpriseImage, "8.1.2.99")
 	availableImage1  = nextImage
 )
 

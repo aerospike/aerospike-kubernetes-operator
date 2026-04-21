@@ -13,12 +13,15 @@ const (
 	// BaseEnterpriseImage is the repo for Aerospike Enterprise server images.
 	BaseEnterpriseImage = "aerospike/aerospike-server-enterprise"
 	BaseFederalImage    = "aerospike/aerospike-server-federal"
-	LatestServerVersion = "8.1.1.0"
+	LatestServerVersion = "8.1.2.0"
 	Pre810ServerVersion = "8.0.0.0"
-	StorageClass        = "ssd"
-	ClusterNameConfig   = "cluster-name"
-	DefaultNamespace    = "default"
-	DefaultDevicePath   = "/test/dev/xvdf"
+	// CgroupMemTrackingServerVersion is the minimum Aerospike server version that requires
+	// aerospikeConfig.service.cgroup-mem-tracking to be set to true.
+	CgroupMemTrackingServerVersion = "8.1.2.0"
+	StorageClass                   = "ssd"
+	ClusterNameConfig              = "cluster-name"
+	DefaultNamespace               = "default"
+	DefaultDevicePath              = "/test/dev/xvdf"
 )
 
 var (

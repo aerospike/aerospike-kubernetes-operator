@@ -112,9 +112,10 @@ var _ = Describe("AerospikeCluster access control validation (envtests)", func()
 		Context("spec.aerospikeAccessControl (users)", func() {
 			Context("negative", func() {
 				It("fails when PKIOnly authMode is used with Enterprise image below 8.1.0.0", func() {
-					aeroCluster := testCluster.CreatePKIAuthEnabledCluster(clusterNamespacedName, 2)
-					aeroCluster.Spec.Image = testutil.GetEnterpriseImage(testutil.Pre810EnterpriseImage)
-
+					aeroCluster := testCluster.CreateAerospikeClusterPost640(clusterNamespacedName, 2,
+						testutil.GetEnterpriseImage(testutil.Pre810EnterpriseImage))
+					aeroCluster.Spec.AerospikeAccessControl.Users[0].AuthMode = asdbv1.AerospikeAuthModePKIOnly
+					aeroCluster.Spec.AerospikeAccessControl.Users[0].SecretName = ""
 					errPre810 := testCluster.DeployCluster(envtests.K8sClient, ctx, aeroCluster)
 					Expect(errPre810).To(HaveOccurred())
 

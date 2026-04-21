@@ -766,6 +766,20 @@ func validateServerRestart(ctx goctx.Context, aeroCluster *asdbv1.AerospikeClust
 	Expect(err).ToNot(HaveOccurred())
 }
 
+// findAsdPIDScript locates the Aerospike daemon PID without ps/grep/awk (often absent in minimal server images).
+// It mirrors aerospike-kubernetes-init restart-asd logic (go-ps Executable() == "asd") by scanning /proc/*/comm.
+const findAsdPIDScript = `for d in /proc/[0-9]*; do
+  [ -r "$d/comm" ] || continue
+  pid="${d#/proc/}"
+  case "$pid" in *[!0-9]*) continue;; esac
+  read -r name < "$d/comm" || continue
+  if [ "$name" = "asd" ]; then
+    printf '%s\n' "$pid"
+    exit 0
+  fi
+done
+exit 1`
+
 func getPodIDs(ctx goctx.Context, aeroCluster *asdbv1.AerospikeCluster) (map[string]podID, error) {
 	podList, err := getClusterPodList(k8sClient, ctx, aeroCluster)
 	if err != nil {
@@ -776,11 +790,7 @@ func getPodIDs(ctx goctx.Context, aeroCluster *asdbv1.AerospikeCluster) (map[str
 
 	for podIndex := range podList.Items {
 		pod := &podList.Items[podIndex]
-		cmd := []string{
-			"bash",
-			"-c",
-			"ps -A -o pid,cmd|grep \"asd\" | grep -v grep | grep -v tini |head -n 1 | awk '{print $1}'",
-		}
+		cmd := []string{"/bin/sh", "-c", findAsdPIDScript}
 
 		stdout, _, execErr := utils.Exec(
 			utils.GetNamespacedName(pod), asdbv1.AerospikeServerContainerName, cmd, k8sClientSet,
@@ -794,7 +804,7 @@ func getPodIDs(ctx goctx.Context, aeroCluster *asdbv1.AerospikeCluster) (map[str
 
 		pidMap[pod.Name] = podID{
 			podUID: string(pod.UID),
-			asdPID: stdout,
+			asdPID: strings.TrimSpace(stdout),
 		}
 	}
 

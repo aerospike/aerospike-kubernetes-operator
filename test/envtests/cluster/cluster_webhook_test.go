@@ -590,6 +590,10 @@ var _ = Describe("AerospikeCluster validation", func() {
 		})
 
 		Context("spec.aerospikeConfig (service)", func() {
+			BeforeEach(func() {
+				envtests.GlobalWarnings.Reset()
+			})
+
 			Context("negative", func() {
 				It("rejects setting advertise-ipv6", func() {
 					aeroCluster := testCluster.CreateDummyAerospikeCluster(clusterNamespacedName, 1)
@@ -663,9 +667,49 @@ var _ = Describe("AerospikeCluster validation", func() {
 							"- create an entry for '/randompath/features.conf' in 'storage.volumes'").
 						Validate(err)
 				})
+
+				It("warns when cgroup-mem-tracking is absent (version >= "+testutil.CgroupMemTrackingServerVersion+")", func() {
+					aeroCluster := testCluster.CreateAerospikeClusterPost640(
+						clusterNamespacedName, 1, testutil.GetEnterpriseImage(testutil.CgroupMemTrackingServerVersion),
+					)
+
+					Expect(envtests.WarningK8sClient.Create(ctx, aeroCluster)).ToNot(HaveOccurred())
+					Expect(envtests.GlobalWarnings.Warnings).To(ContainElement(ContainSubstring(asdbv1.ConfigKeyCgroupMemTracking)))
+				})
+
+				It("warns when cgroup-mem-tracking is false (version >= "+testutil.CgroupMemTrackingServerVersion+")", func() {
+					aeroCluster := testCluster.CreateAerospikeClusterPost640(
+						clusterNamespacedName, 1, testutil.GetEnterpriseImage(testutil.CgroupMemTrackingServerVersion),
+					)
+					aeroCluster.Spec.AerospikeConfig.Value[asdbv1.ConfKeyService].(map[string]interface {
+					})[asdbv1.ConfigKeyCgroupMemTracking] = false
+
+					Expect(envtests.WarningK8sClient.Create(ctx, aeroCluster)).ToNot(HaveOccurred())
+					Expect(envtests.GlobalWarnings.Warnings).To(ContainElement(ContainSubstring(asdbv1.ConfigKeyCgroupMemTracking)))
+				})
 			})
 			Context("positive", func() {
-				// Add positive aerospikeConfig (service) tests here
+				It("does not warn when cgroup-mem-tracking is true "+
+					"(version >= "+testutil.CgroupMemTrackingServerVersion+")", func() {
+					aeroCluster := testCluster.CreateAerospikeClusterPost640(
+						clusterNamespacedName, 1, testutil.GetEnterpriseImage(testutil.CgroupMemTrackingServerVersion),
+					)
+					aeroCluster.Spec.AerospikeConfig.Value[asdbv1.ConfKeyService].(map[string]interface {
+					})[asdbv1.ConfigKeyCgroupMemTracking] = true
+
+					Expect(envtests.WarningK8sClient.Create(ctx, aeroCluster)).ToNot(HaveOccurred())
+					Expect(envtests.GlobalWarnings.Warnings).NotTo(ContainElement(ContainSubstring(asdbv1.ConfigKeyCgroupMemTracking)))
+				})
+
+				It("does not warn when cgroup-mem-tracking is absent "+
+					"(version < "+testutil.CgroupMemTrackingServerVersion+")", func() {
+					aeroCluster := testCluster.CreateAerospikeClusterPost640(
+						clusterNamespacedName, 1, testutil.GetEnterpriseImage(testutil.Pre810ServerVersion),
+					)
+
+					Expect(envtests.WarningK8sClient.Create(ctx, aeroCluster)).ToNot(HaveOccurred())
+					Expect(envtests.GlobalWarnings.Warnings).NotTo(ContainElement(ContainSubstring(asdbv1.ConfigKeyCgroupMemTracking)))
+				})
 			})
 		})
 
@@ -1127,6 +1171,71 @@ var _ = Describe("AerospikeCluster validation", func() {
 			})
 			Context("positive", func() {
 				// Add positive update podSpec tests here
+			})
+		})
+
+		Context("spec.aerospikeConfig (service)", func() {
+			BeforeEach(func() {
+				envtests.GlobalWarnings.Reset()
+			})
+
+			Context("negative", func() {
+				It("warns when cgroup-mem-tracking is removed (version >= "+testutil.CgroupMemTrackingServerVersion+")", func() {
+					aeroCluster := testCluster.CreateAerospikeClusterPost640(
+						updateValidationClusterNamespacedName, 1, testutil.GetEnterpriseImage(testutil.CgroupMemTrackingServerVersion),
+					)
+					aeroCluster.Spec.AerospikeConfig.Value[asdbv1.ConfKeyService].(map[string]interface {
+					})[asdbv1.ConfigKeyCgroupMemTracking] = true
+					Expect(envtests.K8sClient.Create(ctx, aeroCluster)).ToNot(HaveOccurred())
+
+					current, err := testCluster.GetCluster(envtests.K8sClient, ctx, updateValidationClusterNamespacedName)
+					Expect(err).ToNot(HaveOccurred())
+
+					delete(current.Spec.AerospikeConfig.Value[asdbv1.ConfKeyService].(map[string]interface{}),
+						asdbv1.ConfigKeyCgroupMemTracking)
+
+					Expect(envtests.WarningK8sClient.Update(ctx, current)).ToNot(HaveOccurred())
+					Expect(envtests.GlobalWarnings.Warnings).To(ContainElement(ContainSubstring(asdbv1.ConfigKeyCgroupMemTracking)))
+				})
+
+				It("warns when cgroup-mem-tracking is set to false "+
+					"(version >= "+testutil.CgroupMemTrackingServerVersion+")", func() {
+					aeroCluster := testCluster.CreateAerospikeClusterPost640(
+						updateValidationClusterNamespacedName, 1, testutil.GetEnterpriseImage(testutil.CgroupMemTrackingServerVersion),
+					)
+					aeroCluster.Spec.AerospikeConfig.Value[asdbv1.ConfKeyService].(map[string]interface {
+					})[asdbv1.ConfigKeyCgroupMemTracking] = true
+					Expect(envtests.K8sClient.Create(ctx, aeroCluster)).ToNot(HaveOccurred())
+
+					current, err := testCluster.GetCluster(envtests.K8sClient, ctx, updateValidationClusterNamespacedName)
+					Expect(err).ToNot(HaveOccurred())
+
+					current.Spec.AerospikeConfig.
+						Value[asdbv1.ConfKeyService].(map[string]interface{})[asdbv1.ConfigKeyCgroupMemTracking] = false
+
+					Expect(envtests.WarningK8sClient.Update(ctx, current)).ToNot(HaveOccurred())
+					Expect(envtests.GlobalWarnings.Warnings).To(ContainElement(ContainSubstring(asdbv1.ConfigKeyCgroupMemTracking)))
+				})
+			})
+
+			Context("positive", func() {
+				It("does not warn when cgroup-mem-tracking remains true "+
+					"(version >= "+testutil.CgroupMemTrackingServerVersion+")", func() {
+					aeroCluster := testCluster.CreateAerospikeClusterPost640(
+						updateValidationClusterNamespacedName, 1, testutil.GetEnterpriseImage(testutil.CgroupMemTrackingServerVersion),
+					)
+					aeroCluster.Spec.AerospikeConfig.Value[asdbv1.ConfKeyService].(map[string]interface {
+					})[asdbv1.ConfigKeyCgroupMemTracking] = true
+					Expect(envtests.K8sClient.Create(ctx, aeroCluster)).ToNot(HaveOccurred())
+
+					current, err := testCluster.GetCluster(envtests.K8sClient, ctx, updateValidationClusterNamespacedName)
+					Expect(err).ToNot(HaveOccurred())
+
+					current.Spec.Size = 1
+
+					Expect(envtests.WarningK8sClient.Update(ctx, current)).ToNot(HaveOccurred())
+					Expect(envtests.GlobalWarnings.Warnings).NotTo(ContainElement(ContainSubstring(asdbv1.ConfigKeyCgroupMemTracking)))
+				})
 			})
 		})
 	})

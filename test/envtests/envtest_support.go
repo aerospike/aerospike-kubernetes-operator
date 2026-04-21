@@ -118,6 +118,8 @@ func SetupTestEnv() {
 	Expect(err).NotTo(HaveOccurred())
 	Expect(ClientSet).NotTo(BeNil())
 
+	Expect(initWarningClient()).NotTo(HaveOccurred())
+
 	mgr, err := ctrl.NewManager(cfg, ctrl.Options{
 		Scheme: scheme,
 		WebhookServer: &webhook.DefaultServer{
@@ -162,4 +164,7 @@ func TeardownTestEnv() {
 
 	testEnv = nil
 	K8sClient = nil
+	WarningK8sClient = nil
+
+	GlobalWarnings.Reset()
 }
