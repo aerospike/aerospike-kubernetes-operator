@@ -138,9 +138,9 @@ func validateNamingConstraints(cluster *asdbv1.AerospikeCluster) error {
 		excess := totalRuneCount - k8svalidation.DNS1123LabelMaxLength
 
 		return fmt.Errorf(
-			"cluster %q: a Pod label value would exceed the %d-character DNS label limit "+
-				"(cluster name %q = %d chars, revision placeholder = %d chars, fixed overhead = %d, total = %d); "+
-				"reduce by %d character(s) with a smaller cluster name or rack revision",
+			"cluster %q: Pod label value would exceed the %d-character DNS label limit "+
+				"(cluster name %q = %d chars, revision placeholder = %d chars, fixed overhead = %d chars, "+
+				"total = %d chars); reduce by %d character(s) with a smaller cluster name or rack revision",
 			cluster.Name, k8svalidation.DNS1123LabelMaxLength,
 			cluster.Name, len(cluster.Name), aerospikeMaxPlaceholderLen,
 			aerospikeFixedOverhead+k8sControllerRevisionHashLabelValueMaxRunes, totalRuneCount, excess,
@@ -193,9 +193,10 @@ func validateActualPodNames(cluster *asdbv1.AerospikeCluster) error {
 		}
 	}
 
-	// |StatefulSet name| + '-' + max(controller-revision hash width).
-	maxSTSNameLengthAllowed := k8svalidation.DNS1123LabelMaxLength - statefulSetLabelValueJoinerRuneCount -
-		k8sControllerRevisionHashLabelValueMaxRunes
+	// controller-revision-hash label value = |StatefulSet name| + '-' + 10 (max controller-revision hash width).
+	// maxSTSNameLengthAllowed = 63 (max allowed) - 1 (hyphen) - 10 (max controller-revision hash width).
+	maxSTSNameLengthAllowed := k8svalidation.DNS1123LabelMaxLength - 1 - k8sControllerRevisionHashLabelValueMaxRunes
+
 	if len(longestSTSName) > maxSTSNameLengthAllowed {
 		excess := len(longestSTSName) - maxSTSNameLengthAllowed
 
@@ -1256,11 +1257,6 @@ const minRevisionReservation = 3
 // the value of statefulset.kubernetes.io/controller-revision-hash on a Pod
 // (hex; current Kubernetes uses at most 10 for this value).
 const k8sControllerRevisionHashLabelValueMaxRunes = 10
-
-// statefulSetLabelValueJoinerRuneCount is a single rune in the string used when
-// validating the projected label length: StatefulSet name, '-', and the hash
-// value segment above.
-const statefulSetLabelValueJoinerRuneCount = 1
 
 func validateClusterSize(_ logr.Logger, sz int) error {
 	if sz == 0 {

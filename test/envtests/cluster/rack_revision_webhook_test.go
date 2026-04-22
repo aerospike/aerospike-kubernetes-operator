@@ -91,7 +91,7 @@ var _ = Describe("Rack revision webhook validation", func() {
 					envtests.NewStatusErrorMatcher().
 						WithMessageSubstrings(
 							"\"vaerospikecluster.kb.io\"",
-							"a Pod label value would exceed the",
+							"Pod label value would exceed the",
 							"63-character DNS label limit",
 							"revision placeholder = 48",
 							"total = 71",
@@ -165,7 +165,7 @@ var _ = Describe("Rack revision webhook validation", func() {
 					envtests.NewStatusErrorMatcher().
 						WithMessageSubstrings(
 							"\"vaerospikecluster.kb.io\"",
-							"a Pod label value would exceed the",
+							"Pod label value would exceed the",
 							"63-character DNS label limit",
 							"revision placeholder = 3",
 							"total = 71",
@@ -215,7 +215,7 @@ var _ = Describe("Rack revision webhook validation", func() {
 					envtests.NewStatusErrorMatcher().
 						WithMessageSubstrings(
 							"\"vaerospikecluster.kb.io\"",
-							"a Pod label value would exceed the",
+							"Pod label value would exceed the",
 							"63-character DNS label limit",
 							"revision placeholder = 48",
 							"total = 71",
@@ -247,7 +247,7 @@ var _ = Describe("Rack revision webhook validation", func() {
 				)
 
 				// CREATE admission projects label rune count: name + 10 (Aerospike) + revision + 10 (K8s) ≤ 63.
-				DescribeTable("accepts CREATE when a rack revision keeps the projected Pod label runes within limit",
+				DescribeTable("accepts CREATE when a rack revision keeps the projected Pod label value within limit",
 					func(revision string) {
 						cName = test.GetNamespacedName(threeCharClusterName, clusterNamespacedName.Namespace)
 						aeroCluster := testCluster.CreateDummyAerospikeCluster(cName, 2)
@@ -261,14 +261,15 @@ var _ = Describe("Rack revision webhook validation", func() {
 					},
 
 					// 3 + 10 + 9 + 10 = 32.
-					Entry("revision longer than 3 chars when label projection stays within limit", "rev-alpha"),
+					Entry("revision longer than 3 chars when Pod label value projection stays within limit",
+						"rev-alpha"),
 
 					// 3 + 10 + 40 + 10 = 63.
 					Entry("revision at projected Pod label boundary (40 chars)", strings.Repeat("a", 40)),
 				)
 
 				// Two racks: maxPlaceholderLen 40; 3+10+40+10=63.
-				It("accepts multiple racks where the longest revision fits within the label rune limit", func() {
+				It("accepts multiple racks where the longest revision fits within the Pod label value limit", func() {
 					shortName := "def"
 					cName = test.GetNamespacedName(shortName, clusterNamespacedName.Namespace)
 					aeroCluster := testCluster.CreateDummyAerospikeCluster(cName, 2)
@@ -542,7 +543,7 @@ var _ = Describe("Rack revision webhook validation", func() {
 				// Create a valid cluster then update an unrelated field (size).
 				// The webhook must not surface any CREATE-only naming error on UPDATE
 				// because the CREATE-time projected label rune check is not re-run on every UPDATE.
-				It("allows UPDATE without re-applying CREATE-only projected Pod label checks", func() {
+				It("allows UPDATE without re-applying CREATE-only projected Pod label value checks", func() {
 					aeroCluster := testCluster.CreateDummyAerospikeCluster(clusterNamespacedName, 2)
 					err := envtests.K8sClient.Create(ctx, aeroCluster)
 					Expect(err).ToNot(HaveOccurred())
@@ -559,7 +560,7 @@ var _ = Describe("Rack revision webhook validation", func() {
 
 				// validateActualPodNames uses the longest real StatefulSet name and the
 				// joiner + controller-revision rune model.
-				It("allows UPDATE when revision grows but stays within the Pod label rune model", func() {
+				It("allows UPDATE when revision grows but stays within the Pod label value model", func() {
 					// "abc" + short STS; label << 63.
 					cName = test.GetNamespacedName(threeCharClusterName, clusterNamespacedName.Namespace)
 					aeroCluster := testCluster.CreateDummyAerospikeCluster(cName, 2)

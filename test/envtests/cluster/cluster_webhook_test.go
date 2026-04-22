@@ -967,7 +967,7 @@ var _ = Describe("AerospikeCluster validation", func() {
 					envtests.NewStatusErrorMatcher().
 						WithMessageSubstrings(
 							"\"vaerospikecluster.kb.io\"",
-							"a Pod label value would exceed the",
+							"Pod label value would exceed the",
 							"63-character DNS label limit",
 							"revision placeholder = 3",
 							"total = 71",
@@ -997,7 +997,7 @@ var _ = Describe("AerospikeCluster validation", func() {
 				})
 
 				// 40 (name) + 10 (Aerospike fixed) + 3 (min revision placeholder) + 10 (K8s) = 63.
-				It("accepts cluster name of exactly 40 chars (at projected Pod label rune limit)", func() {
+				It("accepts cluster name of exactly 40 chars (at projected Pod label value limit)", func() {
 					exactName := strings.Repeat("a", 40)
 					cName := test.GetNamespacedName(exactName, clusterNamespacedName.Namespace)
 					aeroCluster := testCluster.CreateDummyAerospikeCluster(cName, 2)
