@@ -72,14 +72,12 @@ var _ = Describe("Rack revision webhook validation", func() {
 				//   • characters (CREATE + UPDATE): lowercase alphanumeric and '-', must
 				//     start/end with alphanumeric (IsDNS1123Label — catches uppercase,
 				//     dots, underscores, trailing hyphens).
-				//   • length (CREATE only): no explicit character cap. At CREATE the
-				//     webhook validates the projected pod name using a placeholder of
-				//     max(len(revision), minRevisionReservation=3) chars with MaxRackID
-				//     and max ordinal (255). On UPDATE, the actual pod name is validated
-				//     with real rack ID, real revision, and real max ordinal (Size-1).
-				It("rejects revision that makes projected pod name too long at CREATE", func() {
-					// cluster name = 3 chars, revision = 48 chars:
-					// projected pod = 3 + "-1000000-" + 48 + "-255" = 3+9+48+4 = 64 > 63
+				//   • length (CREATE only): the webhook projects label rune count using
+				//     max(len(revision), minRevisionReservation=3) with fixed Aerospike
+				//     and K8s (controller-revision hash) overheads. On UPDATE, a related
+				//     check uses the longest real StatefulSet name and the same K8s bound.
+				It("rejects revision that makes projected Pod label value too long at CREATE", func() {
+					// cluster = 3, Aerospike fixed 10, revision 48, K8s 10: 3+10+48+10 = 71.
 					cName = test.GetNamespacedName(threeCharClusterName, clusterNamespacedName.Namespace)
 					aeroCluster := testCluster.CreateDummyAerospikeCluster(cName, 2)
 					aeroCluster.Spec.RackConfig = asdbv1.RackConfig{
@@ -93,11 +91,12 @@ var _ = Describe("Rack revision webhook validation", func() {
 					envtests.NewStatusErrorMatcher().
 						WithMessageSubstrings(
 							"\"vaerospikecluster.kb.io\"",
-							"pod name would exceed the 63-character DNS label limit",
-							"revision = 48 chars",
-							"total = 64 chars",
-							"reduce by 1 character(s)").
-						Validate(err)
+							"a Pod label value would exceed the",
+							"63-character DNS label limit",
+							"revision placeholder = 48",
+							"total = 71",
+							"reduce by 8",
+						).Validate(err)
 				})
 
 				// Table: invalid rack revision strings rejected at CREATE with admission errors.
@@ -150,19 +149,8 @@ var _ = Describe("Rack revision webhook validation", func() {
 					}),
 				)
 
-				// The baseline projected pod name uses the 3-char placeholder revision
-				// (minRevisionReservation), MaxRackID (1000000), and max ordinal (255):
-				//
-				//   projected pod = cluster.Name + "-1000000-aaa-255"
-				//                                   (8)    (4) (4) = 16 chars overhead
-				//
-				// So cluster.Name must be ≤ 63 − 16 = 47 chars.
-				// "invalid-cluster" = 15 chars → well within the limit.
-				// We need a cluster name > 47 chars to trigger this error.
-				// (This test overlaps with the cluster-name test above; it is kept
-				// here to confirm the error also fires when racks are configured.)
-				It("rejects cluster name too long for projected pod name (with rack config)", func() {
-					// 48-char cluster name: 48 + 16 = 64 → pod name too long.
+				// 48 (name) + 10 (Aerospike fixed) + 3 (placeholder) + 10 (K8s) = 71.
+				It("rejects cluster name too long for projected Pod label (with rack config)", func() {
 					longName := strings.Repeat("a", 48)
 					cName = test.GetNamespacedName(longName, clusterNamespacedName.Namespace)
 					aeroCluster := testCluster.CreateDummyAerospikeCluster(cName, 2)
@@ -177,11 +165,12 @@ var _ = Describe("Rack revision webhook validation", func() {
 					envtests.NewStatusErrorMatcher().
 						WithMessageSubstrings(
 							"\"vaerospikecluster.kb.io\"",
-							"pod name would exceed the 63-character DNS label limit",
-							"revision = 3 chars",
-							"total = 64 chars",
-							"reduce by 1 character(s)").
-						Validate(err)
+							"a Pod label value would exceed the",
+							"63-character DNS label limit",
+							"revision placeholder = 3",
+							"total = 71",
+							"reduce by 8",
+						).Validate(err)
 				})
 
 				It("rejects invalid revision on second rack when first rack is valid", func() {
@@ -206,12 +195,9 @@ var _ = Describe("Rack revision webhook validation", func() {
 
 				// maxPlaceholderLen = max(minRevisionReservation=3, longest revision).
 				// When multiple racks have different revision lengths the longest one
-				// drives the check. If that makes the projected pod name > 63 chars,
-				// the whole CREATE is rejected even if the other racks are fine.
-				It("rejects CREATE when the rack with the longest revision drives projected pod name too long", func() {
-					// cluster name "xyz" (3), 2 racks: "v1" (2 chars) and 48-char revision.
-					// maxPlaceholderLen = max(3, 2, 48) = 48
-					// projected pod = 3 + "-1000000-" + 48 + "-255" = 3+9+48+4 = 64 > 63.
+				// drives the check. If that makes the projected value > 63 runes, CREATE fails.
+				It("rejects CREATE when the rack with the longest revision drives projected Pod label too long", func() {
+					// 3 + 10 + 48 + 10 = 71.
 					shortName := "xyz"
 					cName = test.GetNamespacedName(shortName, clusterNamespacedName.Namespace)
 					aeroCluster := testCluster.CreateDummyAerospikeCluster(cName, 2)
@@ -229,11 +215,12 @@ var _ = Describe("Rack revision webhook validation", func() {
 					envtests.NewStatusErrorMatcher().
 						WithMessageSubstrings(
 							"\"vaerospikecluster.kb.io\"",
-							"pod name would exceed the 63-character DNS label limit",
-							"revision = 48 chars",
-							"total = 64 chars",
-							"reduce by 1 character(s)").
-						Validate(err)
+							"a Pod label value would exceed the",
+							"63-character DNS label limit",
+							"revision placeholder = 48",
+							"total = 71",
+							"reduce by 8",
+						).Validate(err)
 				})
 			})
 
@@ -259,12 +246,8 @@ var _ = Describe("Rack revision webhook validation", func() {
 					Entry("3-char alphanumeric rack revision", "v1b"),
 				)
 
-				// CREATE admission uses a conservative projected pod name (short cluster name placeholder,
-				// max rack ID, longest rack revision vs minRevisionReservation, max ordinal) to ensure
-				// the resulting DNS label cannot exceed 63 characters. Rows below are positive cases:
-				// a comfortably short projection, and one that lands exactly on the 63-character limit.
-				// Per-row arithmetic is in the comments above each Entry.
-				DescribeTable("accepts CREATE when a rack revision keeps the projected pod name within limit",
+				// CREATE admission projects label rune count: name + 10 (Aerospike) + revision + 10 (K8s) ≤ 63.
+				DescribeTable("accepts CREATE when a rack revision keeps the projected Pod label runes within limit",
 					func(revision string) {
 						cName = test.GetNamespacedName(threeCharClusterName, clusterNamespacedName.Namespace)
 						aeroCluster := testCluster.CreateDummyAerospikeCluster(cName, 2)
@@ -277,18 +260,15 @@ var _ = Describe("Rack revision webhook validation", func() {
 						Expect(err).ToNot(HaveOccurred())
 					},
 
-					// Math: cluster name "abc" (3), revision "rev-alpha" (9).
-					// Projected pod = 3 + "-1000000-" + 9 + "-255" = 3 + 9 + 9 + 4 = 25 ≤ 63 → should succeed
-					Entry("revision longer than 3 chars when pod name stays within limit", "rev-alpha"),
+					// 3 + 10 + 9 + 10 = 32.
+					Entry("revision longer than 3 chars when label projection stays within limit", "rev-alpha"),
 
-					// Math: cluster name "abc" (3), revision = 47 'a' chars.
-					// Projected pod = 3 + "-1000000-" + 47 + "-255" = 3 + 9 + 47 + 4 = 63 → exactly at DNS label limit.
-					Entry("revision exactly at the projected pod name boundary (pod name = 63 chars)", strings.Repeat("a", 47)),
+					// 3 + 10 + 40 + 10 = 63.
+					Entry("revision at projected Pod label boundary (40 chars)", strings.Repeat("a", 40)),
 				)
 
-				// Two racks with different revision lengths. The longer one (47 chars)
-				// becomes maxPlaceholderLen. projected pod = 3+9+47+4 = 63 → passes.
-				It("accepts multiple racks where the longest revision fits within the pod name limit", func() {
+				// Two racks: maxPlaceholderLen 40; 3+10+40+10=63.
+				It("accepts multiple racks where the longest revision fits within the label rune limit", func() {
 					shortName := "def"
 					cName = test.GetNamespacedName(shortName, clusterNamespacedName.Namespace)
 					aeroCluster := testCluster.CreateDummyAerospikeCluster(cName, 2)
@@ -296,7 +276,7 @@ var _ = Describe("Rack revision webhook validation", func() {
 						Namespaces: []string{"test"},
 						Racks: []asdbv1.Rack{
 							{ID: 1, Revision: "v1"},
-							{ID: 2, Revision: strings.Repeat("a", 47)},
+							{ID: 2, Revision: strings.Repeat("a", 40)},
 						},
 					}
 
@@ -444,14 +424,9 @@ var _ = Describe("Rack revision webhook validation", func() {
 						Validate(err)
 				})
 
-				// rejects UPDATE when the new revision makes the actual pod name too long (actual pod name is validated on UPDATE)
-				It("rejects UPDATE when the new revision makes the actual pod name too long", func() {
-					// cluster name = 20 chars, 1 rack (ID=1), initial revision = "v1" (2 chars).
-					// At CREATE: baseline projected pod = 20+9+3+4 = 36 ≤ 63 → passes.
-					// On UPDATE: revision grows to 42 chars.
-					// DistributeItems(1, 1) = [1] → max ordinal for this rack = 0.
-					// Actual STS  = "a"*20 + "-1-" + "b"*42 = 20+3+42 = 65 chars
-					// Actual pod  = STS + "-0"              = 65+2   = 67 chars > 63 → rejected.
+				// On UPDATE, validate longest StatefulSet name + joiner + controller-revision budget.
+				It("rejects UPDATE when the new revision makes the projected Pod label value too long", func() {
+					// At CREATE: 20 + 10 + 3 + 10 = 43. On UPDATE, STS name = 20+3+42 = 65, label 65+1+10=76.
 					clusterName20 := strings.Repeat("a", 20)
 					cName = test.GetNamespacedName(clusterName20, clusterNamespacedName.Namespace)
 
@@ -466,7 +441,6 @@ var _ = Describe("Rack revision webhook validation", func() {
 					current, err := testCluster.GetCluster(envtests.K8sClient, ctx, cName)
 					Expect(err).ToNot(HaveOccurred())
 
-					// Grow the revision to 42 chars — actual pod name will be 67 chars.
 					current.Spec.RackConfig.Racks[0].Revision = strings.Repeat("b", 42)
 					err = envtests.K8sClient.Update(ctx, current)
 					Expect(err).To(HaveOccurred(), "UPDATE with oversized revision should be rejected")
@@ -474,9 +448,10 @@ var _ = Describe("Rack revision webhook validation", func() {
 					envtests.NewStatusErrorMatcher().
 						WithMessageSubstrings(
 							"\"vaerospikecluster.kb.io\"",
-							"would generate pod names exceeding the 63-character DNS label limit",
-							"reduce by 4 character(s)").
-						Validate(err)
+							"would generate pod label value exceeding the",
+							"63-character DNS label limit",
+							"reduce by 13",
+						).Validate(err)
 				})
 
 				// validateRackConfig (character validity) still runs on UPDATE.
@@ -507,16 +482,9 @@ var _ = Describe("Rack revision webhook validation", func() {
 						Validate(err)
 				})
 
-				// validateActualPodNames finds the longest pod name across all racks.
-				// Even if only one rack's pod name overflows, the whole UPDATE is rejected.
-				It("rejects UPDATE when only one rack's pod name exceeds the DNS label limit"+
-					"due to rack revision change (multi-rack)", func() {
-					// cluster name = 20 chars, 2 racks (ID=1, ID=2), Size=2.
-					// DistributeItems(2, 2) = [1, 1] → max ordinal per rack = 0.
-					// UPDATE: rack 1 revision → 42 chars.
-					//   pod for rack 1 = 20+"-1-"+"b"*42+"-0" = 20+3+42+2 = 67 > 63 → fails.
-					//   pod for rack 2 = 20+"-2-v1-0"         = 27 chars           → fine.
-					// Longest pod name (rack 1) fails → UPDATE rejected.
+				// Longest StatefulSet name among racks drives the UPDATE label check.
+				It("rejects UPDATE when one rack's revision makes the Pod label value exceed the limit (multi-rack)", func() {
+					// Same 65+1+10=76 as single-rack case; rack 2 is shorter.
 					clusterName20 := strings.Repeat("b", 20)
 					cName = test.GetNamespacedName(clusterName20, clusterNamespacedName.Namespace)
 
@@ -541,9 +509,10 @@ var _ = Describe("Rack revision webhook validation", func() {
 					envtests.NewStatusErrorMatcher().
 						WithMessageSubstrings(
 							"\"vaerospikecluster.kb.io\"",
-							"would generate pod names exceeding the 63-character DNS label limit",
-							"reduce by 4 character(s)").
-						Validate(err)
+							"would generate pod label value exceeding the",
+							"63-character DNS label limit",
+							"reduce by 13",
+						).Validate(err)
 				})
 			})
 
@@ -572,8 +541,8 @@ var _ = Describe("Rack revision webhook validation", func() {
 
 				// Create a valid cluster then update an unrelated field (size).
 				// The webhook must not surface any CREATE-only naming error on UPDATE
-				// because the CREATE-time projected pod name is not validated on UPDATE.
-				It("allows UPDATE without re-applying CREATE-only projected pod name checks", func() {
+				// because the CREATE-time projected label rune check is not re-run on every UPDATE.
+				It("allows UPDATE without re-applying CREATE-only projected Pod label checks", func() {
 					aeroCluster := testCluster.CreateDummyAerospikeCluster(clusterNamespacedName, 2)
 					err := envtests.K8sClient.Create(ctx, aeroCluster)
 					Expect(err).ToNot(HaveOccurred())
@@ -588,14 +557,10 @@ var _ = Describe("Rack revision webhook validation", func() {
 					Expect(err).ToNot(HaveOccurred())
 				})
 
-				// Growing a revision is fine as long as the actual pod name stays
-				// within 63 chars. validateActualPodNames uses real rack ID and real
-				// per-rack ordinal (DistributeItems), not the conservative projected value.
-				It("allows UPDATE when revision grows but actual pod name stays within limit", func() {
-					// cluster name "abc" (3), rack ID=1, Size=1, initial revision "v1".
-					// UPDATE to "rev-alpha" (9 chars):
-					//   DistributeItems(1, 1) = [1] → ordinal = 0.
-					//   Actual pod = "abc-1-rev-alpha-0" = 17 chars ≤ 63 → passes.
+				// validateActualPodNames uses the longest real StatefulSet name and the
+				// joiner + controller-revision rune model.
+				It("allows UPDATE when revision grows but stays within the Pod label rune model", func() {
+					// "abc" + short STS; label << 63.
 					cName = test.GetNamespacedName(threeCharClusterName, clusterNamespacedName.Namespace)
 					aeroCluster := testCluster.CreateDummyAerospikeCluster(cName, 2)
 					aeroCluster.Spec.RackConfig = asdbv1.RackConfig{

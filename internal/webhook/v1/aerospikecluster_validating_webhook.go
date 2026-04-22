@@ -83,22 +83,20 @@ func (acv *AerospikeClusterCustomValidator) ValidateCreate(_ context.Context, ae
 
 // For each rack it uses a placeholder revision of length
 // max(len(rack.Revision), minRevisionReservation) together with the maximum
-// rack ID (MaxRackID = 1000000) and the maximum pod ordinal
-// (maxEnterpriseClusterSize-1 = 255) to compute the longest pod name that
-// could ever be generated for that rack. The pod name is validated as a
-// DNS1123 label (max 63 chars).
+// rack ID (MaxRackID) and a fixed K8s label rune budget to bound the longest
+// label value the controller may place on a Pod in this cluster.
 //
 // This gives two guarantees:
 //   - Racks with revision ≤ minRevisionReservation chars: any future revision
 //     up to minRevisionReservation chars is guaranteed to be safe.
 //   - Racks with longer revisions: the specific revision length given at
 //     CREATE time is validated. Future changes to a longer revision are caught
-//     by the actual-pod-name check in ValidateUpdate.
+//     by the per-rack label rune check in ValidateUpdate.
 //
-// A single projected-name check also subsumes service name checks:
+// A single projected rune count also subsumes service name checks:
 //   - Headless service = cluster.Name (0-char overhead)
 //   - LB service = cluster.Name + "-lb" (3-char overhead)
-//     Both are shorter than the projected pod name overhead, and the STS name
+//     Both are shorter than the label-projection budget used for Pod/STS names.
 func validateNamingConstraints(cluster *asdbv1.AerospikeCluster) error {
 	// cluster.Name is immutable in Kubernetes — a name that passes here is
 	// valid for the entire lifetime of the cluster. It is used directly as
@@ -114,54 +112,50 @@ func validateNamingConstraints(cluster *asdbv1.AerospikeCluster) error {
 
 	// Find the longest revision length across all racks, falling back to the
 	// baseline reservation if all revisions are shorter (or no racks exist).
-	// Checking only the maximum is sufficient: a pod name valid with the
+	// Checking only the maximum is sufficient: a projection valid with the
 	// longest placeholder is trivially valid for any shorter placeholder
 	// (same cluster name, smaller suffix).
-	maxPlaceholderLen := minRevisionReservation
+	aerospikeMaxPlaceholderLen := minRevisionReservation
 
 	for idx := range cluster.Spec.RackConfig.Racks {
-		if l := len(cluster.Spec.RackConfig.Racks[idx].Revision); l > maxPlaceholderLen {
-			maxPlaceholderLen = l
+		if l := len(cluster.Spec.RackConfig.Racks[idx].Revision); l > aerospikeMaxPlaceholderLen {
+			aerospikeMaxPlaceholderLen = l
 		}
 	}
 
-	// fixedOverhead is the number of characters consumed by system-controlled
-	// segments of the pod name that the user cannot change:
-	//   "{clusterName}-{rackID}-{revision}-{ordinal}"
-	//                 ^-------^ ^--------^ ^-------^
-	// 3 hyphens + len("1000000") (MaxRackID) + len("255") (max ordinal) = 13.
-	fixedOverhead := 3 + len(strconv.Itoa(asdbv1.MaxRackID)) + len(strconv.Itoa(maxEnterpriseClusterSize-1))
-	totalLen := len(cluster.Name) + fixedOverhead + maxPlaceholderLen
+	// Label runes outside the cluster name and the revision placeholder. For
+	// the StatefulSet (and the labels derived from it), the fixed segments are
+	// three '-' separators, max-width rack id (MaxRackID), and a K8s label
+	// value chunk sized for the controller-revision hash (see constants below).
+	aerospikeFixedOverhead := 3 + len(strconv.Itoa(asdbv1.MaxRackID))
+	totalRuneCount := len(cluster.Name) + aerospikeFixedOverhead + aerospikeMaxPlaceholderLen +
+		k8sControllerRevisionHashLabelValueMaxRunes
 
-	// A pure length check is sufficient here: cluster.Name is already validated
-	// as DNS-1035, rack.Revision as DNS-1123 label, and rackID/ordinal are
-	// always integers. The constructed pod name therefore always contains valid
-	// DNS label characters and never starts or ends with a hyphen — length is
-	// the only failure mode.
-	if totalLen > k8svalidation.DNS1123LabelMaxLength {
-		excess := totalLen - k8svalidation.DNS1123LabelMaxLength
+	// A length check is sufficient: cluster.Name is already DNS-1035, revision
+	// is DNS-1123; rune count is the only remaining failure mode for the bound
+	// we use here.
+	if totalRuneCount > k8svalidation.DNS1123LabelMaxLength {
+		excess := totalRuneCount - k8svalidation.DNS1123LabelMaxLength
 
 		return fmt.Errorf(
-			"cluster %q: pod name would exceed the %d-character DNS label limit "+
-				"(cluster name %q = %d chars, revision = %d chars, fixed overhead = %d chars, total = %d chars); "+
-				"reduce by %d character(s) by using a smaller cluster name or rack revision",
+			"cluster %q: a Pod label value would exceed the %d-character DNS label limit "+
+				"(cluster name %q = %d chars, revision placeholder = %d chars, fixed overhead = %d, total = %d); "+
+				"reduce by %d character(s) with a smaller cluster name or rack revision",
 			cluster.Name, k8svalidation.DNS1123LabelMaxLength,
-			cluster.Name, len(cluster.Name), maxPlaceholderLen, fixedOverhead, totalLen, excess,
+			cluster.Name, len(cluster.Name), aerospikeMaxPlaceholderLen,
+			aerospikeFixedOverhead+k8sControllerRevisionHashLabelValueMaxRunes, totalRuneCount, excess,
 		)
 	}
 
 	return nil
 }
 
-// validateActualPodNames checks that the longest actual pod name across all
-// racks is a valid DNS1123 label. It uses the real rack ID, real revision,
-// and the real per-rack max ordinal computed by DistributeItems — the same
-// distribution the controller uses when creating StatefulSets.
-//
-// Only the longest pod name is validated: revision characters are already
-// checked by validateRackConfig (which runs before this on UPDATE), so the
-// only remaining failure mode is length. If the longest name is valid, all
-// shorter names are trivially valid too.
+// validateActualPodNames checks that, for the longest StatefulSet name in the
+// current spec, a conservative bound on a related Pod label value (StatefulSet
+// name + joiner + upper bound for controller-revision hash) does not exceed a
+// single DNS-1123 label. This matches the CREATE-time projection, using real
+// rack id and revision from the rack the StatefulSet name comes from; only the
+// longest name is needed (others are necessarily shorter or equal).
 //
 // When no user-defined racks are present the controller manages a single
 // default rack internally; there is no user-supplied revision to validate,
@@ -177,7 +171,7 @@ func validateActualPodNames(cluster *asdbv1.AerospikeCluster) error {
 	// This matches exactly what the controller does in getConfiguredRackStateList.
 	topology := asdbv1.DistributeItems(cluster.Spec.Size, utils.Len32(racks))
 
-	var longestPodName string
+	var longestSTSName string
 
 	var offendingRack *asdbv1.Rack
 
@@ -193,26 +187,23 @@ func validateActualPodNames(cluster *asdbv1.AerospikeCluster) error {
 		stsName := utils.GetNamespacedNameForSTSOrConfigMap(
 			cluster, utils.GetRackIdentifier(rack.ID, rack.Revision),
 		).Name
-		// Maximum ordinal for this rack is rackSize-1 (0-based index).
-		podName := utils.GetSTSPodName(stsName, rackSize-1)
-
-		if len(podName) > len(longestPodName) {
-			longestPodName = podName
+		if len(stsName) > len(longestSTSName) {
+			longestSTSName = stsName
 			offendingRack = rack
 		}
 	}
 
-	// A pure length check is sufficient: cluster.Name is validated as DNS-1035,
-	// rack.Revision as DNS-1123 label, and rackID/ordinal are always integers.
-	// Only length can cause the constructed pod name to be invalid.
-	if len(longestPodName) > k8svalidation.DNS1123LabelMaxLength {
-		excess := len(longestPodName) - k8svalidation.DNS1123LabelMaxLength
+	// |StatefulSet name| + '-' + max(controller-revision hash width).
+	maxSTSNameLengthAllowed := k8svalidation.DNS1123LabelMaxLength - statefulSetLabelValueJoinerRuneCount -
+		k8sControllerRevisionHashLabelValueMaxRunes
+	if len(longestSTSName) > maxSTSNameLengthAllowed {
+		excess := len(longestSTSName) - maxSTSNameLengthAllowed
 
 		return fmt.Errorf(
-			"cluster %q: rack ID %d (revision %q) with current cluster size %d would generate "+
-				"pod names exceeding the %d-character DNS label limit; "+
-				"reduce by %d character(s) by using a smaller rack ID or rack revision, or reducing the cluster size",
-			cluster.Name, offendingRack.ID, offendingRack.Revision, cluster.Spec.Size,
+			"cluster %q: rack ID %d (revision %q) would generate "+
+				"pod label value exceeding the %d-character DNS label limit; "+
+				"reduce by %d character(s) by using a smaller rack ID or rack revision",
+			cluster.Name, offendingRack.ID, offendingRack.Revision,
 			k8svalidation.DNS1123LabelMaxLength, excess)
 	}
 
@@ -1255,11 +1246,21 @@ func getAllNamespaceNamesAndRFMap(spec *asdbv1.AerospikeClusterSpec) (allNsNames
 const maxEnterpriseClusterSize = 256
 
 // minRevisionReservation is the minimum number of revision characters reserved
-// in the projected pod-name formula when no (or a short) revision is given.
+// in the projected label-rune formula on CREATE when no (or a short) revision is given.
 // A cluster whose name passes the projected-name check with this reservation is
 // guaranteed to remain valid for any future revision up to this many characters,
 // without requiring re-validation on UPDATE.
 const minRevisionReservation = 3
+
+// k8sControllerRevisionHashLabelValueMaxRunes is a conservative maximum length of
+// the value of statefulset.kubernetes.io/controller-revision-hash on a Pod
+// (hex; current Kubernetes uses at most 10 for this value).
+const k8sControllerRevisionHashLabelValueMaxRunes = 10
+
+// statefulSetLabelValueJoinerRuneCount is a single rune in the string used when
+// validating the projected label length: StatefulSet name, '-', and the hash
+// value segment above.
+const statefulSetLabelValueJoinerRuneCount = 1
 
 func validateClusterSize(_ logr.Logger, sz int) error {
 	if sz == 0 {

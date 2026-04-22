@@ -952,13 +952,11 @@ var _ = Describe("AerospikeCluster validation", func() {
 						Validate(err)
 				})
 
-				// The maximum-scale pod name overhead is 16 chars ("-1000000-aaa-255"),
-				// so cluster.Name must be ≤ 47 chars. This subsumes both service name
-				// checks (headless = cluster.Name, LB = cluster.Name+"-lb"), since
-				// their overheads (0 and 3 chars) are smaller than 16.
-				// Any cluster name > 47 chars is caught by the pod name check.
-				It("rejects cluster name longer than 47 chars (projected pod name would exceed 63)", func() {
-					// 48 chars: 48 + 16 = 64 → invalid DNS label.
+				// Projected label rune count: cluster name + 10 (3 hyphens + 7 for MaxRackID)
+				// + 3 (revision placeholder) + 10 (controller-revision hash upper bound) = 23
+				// fixed runes; name can be at most 40 for 63 (40+23=63).
+				It("rejects cluster name longer than 40 chars (projected Pod label value would exceed 63)", func() {
+					// 48 chars: 48 + 10 + 3 + 10 = 71 > 63.
 					longName := strings.Repeat("a", 48)
 					cName := test.GetNamespacedName(longName, clusterNamespacedName.Namespace)
 					aeroCluster := testCluster.CreateDummyAerospikeCluster(cName, 2)
@@ -969,11 +967,12 @@ var _ = Describe("AerospikeCluster validation", func() {
 					envtests.NewStatusErrorMatcher().
 						WithMessageSubstrings(
 							"\"vaerospikecluster.kb.io\"",
-							"pod name would exceed the 63-character DNS label limit",
-							"revision = 3 chars",
-							"total = 64 chars",
-							"reduce by 1 character(s)").
-						Validate(err)
+							"a Pod label value would exceed the",
+							"63-character DNS label limit",
+							"revision placeholder = 3",
+							"total = 71",
+							"reduce by 8",
+						).Validate(err)
 				})
 
 				It("rejects when cluster namespace is not found", func() {
@@ -997,11 +996,9 @@ var _ = Describe("AerospikeCluster validation", func() {
 					Expect(err).ToNot(HaveOccurred())
 				})
 
-				// overhead = "-1000000-aaa-255" = 16 chars; cluster.Name ≤ 47 chars is safe.
-				// cluster name exactly at the 47-char limit:
-				// 47 + "-1000000-aaa-255" (16) = 63 → exactly at DNS label max.
-				It("accepts cluster name of exactly 47 chars (projected pod name = 63 chars)", func() {
-					exactName := strings.Repeat("a", 47)
+				// 40 (name) + 10 (Aerospike fixed) + 3 (min revision placeholder) + 10 (K8s) = 63.
+				It("accepts cluster name of exactly 40 chars (at projected Pod label rune limit)", func() {
+					exactName := strings.Repeat("a", 40)
 					cName := test.GetNamespacedName(exactName, clusterNamespacedName.Namespace)
 					aeroCluster := testCluster.CreateDummyAerospikeCluster(cName, 2)
 
