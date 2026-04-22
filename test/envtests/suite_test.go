@@ -30,11 +30,3 @@ func TestAPIs(t *testing.T) {
 	RegisterFailHandler(Fail)
 	RunSpecs(t, "Env tests Suite")
 }
-
-var _ = BeforeSuite(func() {
-	SetupTestEnv()
-})
-
-var _ = AfterSuite(func() {
-	TeardownTestEnv()
-})
