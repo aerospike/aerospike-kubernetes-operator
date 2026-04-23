@@ -506,6 +506,34 @@ func IsNSSCEnabled(nsConf map[string]interface{}) bool {
 	return scEnabled.(bool)
 }
 
+// HasFilesOrDevices returns true if the storage-engine config contains a non-empty
+// files or devices list, indicating hybrid (memory + persistent) storage.
+func HasFilesOrDevices(namespaceConf map[string]interface{}) bool {
+	storage, ok := namespaceConf[ConfKeyStorageEngine]
+	if !ok {
+		return false
+	}
+
+	storageConf, ok := storage.(map[string]interface{})
+	if !ok {
+		return false
+	}
+
+	if files, ok := storageConf["files"]; ok {
+		if fileList, ok := files.([]interface{}); ok && len(fileList) > 0 {
+			return true
+		}
+	}
+
+	if devices, ok := storageConf["devices"]; ok {
+		if deviceList, ok := devices.([]interface{}); ok && len(deviceList) > 0 {
+			return true
+		}
+	}
+
+	return false
+}
+
 // GetBool returns the value of the given bool pointer. If the pointer is nil, it returns false.
 func GetBool(boolPtr *bool) bool {
 	return ptr.Deref(boolPtr, false)

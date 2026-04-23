@@ -490,6 +490,27 @@ var _ = Describe("AerospikeCluster validation", func() {
 						Validate(err)
 				})
 
+				It("rejects in-memory SC namespace without persistent storage", func() {
+					aeroCluster := testCluster.CreateDummyAerospikeCluster(clusterNamespacedName, 1)
+					rawNamespaces := aeroCluster.Spec.AerospikeConfig.Value["namespaces"].([]interface{})
+
+					if len(rawNamespaces) > 0 {
+						nsMap := rawNamespaces[0].(map[string]interface{})
+						nsMap["storage-engine"] = map[string]interface{}{
+							"type":      "memory",
+							"data-size": 1073741824,
+						}
+					}
+
+					err := testCluster.DeployCluster(envtests.K8sClient, ctx, aeroCluster)
+					Expect(err).To(HaveOccurred())
+
+					envtests.NewStatusErrorMatcher().
+						WithMessageSubstrings("\"vaerospikecluster.kb.io\"",
+							"in-memory SC namespace without persistent storage (files or devices) is not supported").
+						Validate(err)
+				})
+
 				It("rejects duplicate dc names in aerospikeConfig.xdr.dcs", func() {
 					aeroCluster := testCluster.CreateDummyAerospikeCluster(clusterNamespacedName, 2)
 
