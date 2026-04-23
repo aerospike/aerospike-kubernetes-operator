@@ -69,6 +69,7 @@ type AerospikeRestoreSpec struct {
 	// It is used to poll the restore service to fetch restore operation status.
 	// Default is 60 seconds.
 	// +operator-sdk:csv:customresourcedefinitions:type=spec,displayName="Restore Service Polling Period"
+	// +kubebuilder:default="1m"
 	// +optional
 	PollingPeriod metav1.Duration `json:"pollingPeriod,omitempty"`
 }

@@ -60,8 +60,8 @@ var _ = Describe("AerospikeCluster validation", func() {
 
 					// Webhook response validation
 					envtests.NewStatusErrorMatcher().
-						WithMessageSubstrings("\"vaerospikecluster.kb.io\"",
-							"invalid cluster size 0").
+						WithMessageSubstrings("AerospikeCluster.asdb.aerospike.com",
+							"spec.size: Invalid value: 0: spec.size in body should be greater than or equal to 1").
 						Validate(err)
 				})
 
@@ -77,11 +77,10 @@ var _ = Describe("AerospikeCluster validation", func() {
 
 					// Webhook response validation
 					envtests.NewStatusErrorMatcher().
-						WithCauses(metav1.StatusCause{
-							Type:    metav1.CauseTypeFieldValueInvalid,
-							Message: "Invalid value: -1: should be a non-negative integer",
-							Field:   ".spec.size",
-						}).
+						WithMessageSubstrings(
+							"spec.size in body should be greater than or equal to 1",
+							"should be a non-negative integer",
+						).
 						Validate(err)
 				})
 
@@ -93,8 +92,8 @@ var _ = Describe("AerospikeCluster validation", func() {
 
 					envtests.NewStatusErrorMatcher().
 						WithMessageSubstrings(
-							"\"vaerospikecluster.kb.io\"",
-							"cluster size cannot be more than 256").
+							"AerospikeCluster.asdb.aerospike.com ",
+							"spec.size: Invalid value: 257: spec.size in body should be less than or equal to 256").
 						Validate(err)
 				})
 			})
@@ -115,8 +114,8 @@ var _ = Describe("AerospikeCluster validation", func() {
 					// Webhook response validation
 					envtests.NewStatusErrorMatcher().
 						WithMessageSubstrings(
-							"\"vaerospikecluster.kb.io\"",
-							"spec.image cannot be empty").
+							"AerospikeCluster.asdb.aerospike.com",
+							"spec.image: Invalid value: \"\": spec.image in body should be at least 1 chars long").
 						Validate(err)
 				})
 
@@ -726,8 +725,9 @@ var _ = Describe("AerospikeCluster validation", func() {
 
 					// Webhook response validation
 					envtests.NewStatusErrorMatcher().
-						WithMessageSubstrings("\"vaerospikecluster.kb.io\"",
-							"dnsPolicy: Default is not supported").
+						WithMessageSubstrings("AerospikeCluster.asdb.aerospike.com",
+							"spec.podSpec.dnsPolicy: Unsupported value: \"Default\": supported values: "+
+								"\"ClusterFirstWithHostNet\", \"ClusterFirst\", \"None\"").
 						Validate(err)
 				})
 

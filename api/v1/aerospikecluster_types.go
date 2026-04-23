@@ -82,10 +82,13 @@ type AerospikeClusterSpec struct { //nolint:govet // for readability
 
 	// Aerospike cluster size
 	// +operator-sdk:csv:customresourcedefinitions:type=spec,displayName="Cluster Size"
+	// +kubebuilder:validation:Minimum=1
+	// +kubebuilder:validation:Maximum=256
 	Size int32 `json:"size"`
 
 	// Aerospike server image
 	// +operator-sdk:csv:customresourcedefinitions:type=spec,displayName="Server Image"
+	// +kubebuilder:validation:MinLength=1
 	Image string `json:"image"`
 
 	// MaxUnavailable is the percentage/number of pods that can be allowed to go down or unavailable before application
@@ -124,6 +127,7 @@ type AerospikeClusterSpec struct { //nolint:govet // for readability
 
 	// ValidationPolicy controls validation of the Aerospike cluster resource.
 	// +operator-sdk:csv:customresourcedefinitions:type=spec,displayName="Validation Policy"
+	// +kubebuilder:default={skipWorkDirValidate:false}
 	// +optional
 	ValidationPolicy *ValidationPolicySpec `json:"validationPolicy,omitempty"`
 
@@ -404,6 +408,7 @@ type AerospikePodSpec struct { //nolint:govet // for readability
 
 	// DnsPolicy same as https://kubernetes.io/docs/concepts/services-networking/dns-pod-service/#pod-s-dns-policy.
 	// If hostNetwork is true and policy is not specified, it defaults to ClusterFirstWithHostNet
+	// +kubebuilder:validation:Enum=ClusterFirstWithHostNet;ClusterFirst;None
 	// +optional
 	InputDNSPolicy *corev1.DNSPolicy `json:"dnsPolicy,omitempty"`
 
@@ -597,6 +602,8 @@ type ValidationPolicySpec struct {
 // AerospikeRoleSpec specifies an Aerospike database role and its associated privileges.
 type AerospikeRoleSpec struct {
 	// Name of this role.
+	// +kubebuilder:validation:MinLength=1
+	// +kubebuilder:validation:MaxLength=63
 	Name string `json:"name"`
 
 	// Privileges granted to this role.
@@ -624,6 +631,8 @@ type AerospikeUserSpec struct {
 	AuthMode AerospikeAuthMode `json:"authMode,omitempty"`
 
 	// Name is the user's username.
+	// +kubebuilder:validation:MinLength=1
+	// +kubebuilder:validation:MaxLength=63
 	Name string `json:"name"`
 
 	// SecretName has secret info created by the user. User needs to create this secret from password literal.
@@ -640,6 +649,7 @@ type AerospikeUserSpec struct {
 // AerospikeClientAdminPolicy specify the aerospike client admin policy for access control operations.
 type AerospikeClientAdminPolicy struct {
 	// Timeout for admin client policy in milliseconds.
+	// +kubebuilder:validation:Minimum=0
 	Timeout int `json:"timeout"`
 }
 
@@ -875,6 +885,8 @@ type AerospikeStorageSpec struct { //nolint:govet // for readability
 	BlockVolumePolicy AerospikePersistentVolumePolicySpec `json:"blockVolumePolicy,omitempty"`
 
 	// CleanupThreads contains the maximum number of cleanup threads(dd or blkdiscard) per init container.
+	// +kubebuilder:validation:Minimum=0
+	// +kubebuilder:default=1
 	// +optional
 	CleanupThreads int `json:"cleanupThreads,omitempty"`
 
@@ -1091,6 +1103,7 @@ type AerospikeNetworkPolicy struct {
 	// AccessType is the type of network address to use for Aerospike access address.
 	// Defaults to hostInternal.
 	// +kubebuilder:validation:Enum=pod;hostInternal;hostExternal;configuredIP;customInterface
+	// +kubebuilder:default="hostInternal"
 	// +optional
 	AccessType AerospikeNetworkType `json:"access,omitempty"`
 
@@ -1107,6 +1120,7 @@ type AerospikeNetworkPolicy struct {
 	// AlternateAccessType is the type of network address to use for Aerospike alternate access address.
 	// Defaults to hostExternal.
 	// +kubebuilder:validation:Enum=pod;hostInternal;hostExternal;configuredIP;customInterface
+	// +kubebuilder:default="hostExternal"
 	// +optional
 	AlternateAccessType AerospikeNetworkType `json:"alternateAccess,omitempty"`
 
@@ -1124,6 +1138,7 @@ type AerospikeNetworkPolicy struct {
 	// TLSAccessType is the type of network address to use for Aerospike TLS access address.
 	// Defaults to hostInternal.
 	// +kubebuilder:validation:Enum=pod;hostInternal;hostExternal;configuredIP;customInterface
+	// +kubebuilder:default="hostInternal"
 	// +optional
 	TLSAccessType AerospikeNetworkType `json:"tlsAccess,omitempty"`
 
@@ -1140,6 +1155,7 @@ type AerospikeNetworkPolicy struct {
 	// TLSAlternateAccessType is the type of network address to use for Aerospike TLS alternate access address.
 	// Defaults to hostExternal.
 	// +kubebuilder:validation:Enum=pod;hostInternal;hostExternal;configuredIP;customInterface
+	// +kubebuilder:default="hostExternal"
 	// +optional
 	TLSAlternateAccessType AerospikeNetworkType `json:"tlsAlternateAccess,omitempty"`
 
