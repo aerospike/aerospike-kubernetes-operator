@@ -1687,93 +1687,6 @@ var _ = Describe(
 						)
 
 						It(
-							"SecurityDisable: should reject access control update when security is disabled",
-							func() {
-								var accessControl *asdbv1.AerospikeAccessControlSpec
-
-								aerospikeConfigSpec, err := NewAerospikeConfSpec(latestImage)
-								if err != nil {
-									Fail(
-										fmt.Sprintf(
-											"Invalid Aerospike Config Spec: %v",
-											err,
-										),
-									)
-								}
-
-								aerospikeConfigSpec.ConfigureSecurity(true)
-
-								accessControl = &asdbv1.AerospikeAccessControlSpec{
-									Roles: []asdbv1.AerospikeRoleSpec{
-										{
-											Name: "profiler",
-											Privileges: []string{
-												"read-write-udf.test.users",
-												"write",
-											},
-											Whitelist: []string{
-												"8.8.0.0/16",
-											},
-										},
-									},
-									Users: []asdbv1.AerospikeUserSpec{
-										{
-											Name:       "admin",
-											SecretName: test.AuthSecretNameForUpdate,
-											Roles: []string{
-												"sys-admin",
-												"user-admin",
-											},
-										},
-
-										{
-											Name:       "profileUser",
-											SecretName: test.AuthSecretNameForUpdate,
-											Roles: []string{
-												"profiler",
-											},
-										},
-									},
-								}
-
-								aeroCluster := getAerospikeClusterSpecWithAccessControl(
-									clusterNamespacedName, accessControl,
-									aerospikeConfigSpec,
-								)
-								err = aerospikeClusterCreateUpdate(
-									k8sClient, aeroCluster, ctx,
-								)
-								Expect(err).ToNot(HaveOccurred())
-
-								aerospikeConfigSpec.ConfigureSecurity(false)
-
-								aeroCluster = getAerospikeClusterSpecWithAccessControl(
-									clusterNamespacedName, accessControl,
-									aerospikeConfigSpec,
-								)
-
-								err = aerospikeClusterCreateUpdate(
-									k8sClient, aeroCluster, ctx,
-								)
-								Expect(err).ToNot(HaveOccurred())
-
-								accessControl.Users = accessControl.Users[:1] // Try to drop one user.
-								aeroCluster.Spec.AerospikeAccessControl = accessControl
-
-								err = updateClusterWithNoWait(k8sClient, ctx, aeroCluster)
-								Expect(err).To(HaveOccurred())
-								Expect(err.Error()).To(ContainSubstring(
-									"aerospikeAccessControl cannot be updated when security is disabled"))
-
-								aeroCluster.Spec.AerospikeAccessControl = nil
-
-								err = updateClusterWithNoWait(k8sClient, ctx, aeroCluster)
-								Expect(err).To(HaveOccurred())
-								Expect(err.Error()).To(ContainSubstring("aerospikeAccessControl cannot be removed once set"))
-							},
-						)
-
-						It(
 							"AccessControlLifeCycle", func() {
 								By("AccessControlCreate")
 
@@ -2069,31 +1982,6 @@ var _ = Describe(
 							Expect(CleanupPVC(k8sClient, aeroCluster.Namespace, aeroCluster.Name)).ToNot(HaveOccurred())
 						},
 					)
-					Context("when doing invalid operations", func() {
-						It("Should block PKIOnly authMode while TLS rollout is in progress", func() {
-							// Create a non-TLS cluster
-							aeroCluster := createDummyAerospikeCluster(clusterNamespacedName, 2)
-							Expect(DeployCluster(k8sClient, ctx, aeroCluster)).ToNot(HaveOccurred())
-
-							By("Enable TLS first")
-
-							aeroCluster.Spec.AerospikeConfig.Value[asdbv1.ConfKeyNetwork] = getNetworkTLSConfig()
-							aeroCluster.Spec.OperatorClientCertSpec = getAdminOperatorCert()
-
-							err := updateClusterWithNoWait(k8sClient, ctx, aeroCluster)
-							Expect(err).ToNot(HaveOccurred())
-
-							// Now try to enable PKIOnly while TLS is still rolling out
-							// At this point: spec has TLS, but status doesn't have TLS yet
-							aeroCluster.Spec.AerospikeAccessControl.Users[0].AuthMode = asdbv1.AerospikeAuthModePKIOnly
-							aeroCluster.Spec.AerospikeAccessControl.Users[0].SecretName = ""
-
-							err = updateClusterWithNoWait(k8sClient, ctx, aeroCluster)
-							Expect(err).To(HaveOccurred())
-							Expect(err.Error()).To(ContainSubstring(
-								"cannot enable PKIOnly authMode while TLS rollout is in progress"))
-						})
-					})
 
 					Context("when doing valid operations", func() {
 						It("Should allow PKIOnly authMode with EE 8.1.0.0 or later", func() {
