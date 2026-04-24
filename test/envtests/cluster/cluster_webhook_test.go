@@ -1128,6 +1128,7 @@ var _ = Describe("AerospikeCluster validation", func() {
 
 					current, err := testCluster.GetCluster(envtests.K8sClient, ctx, updateValidationClusterNamespacedName)
 					Expect(err).ToNot(HaveOccurred())
+
 					current.Spec.Image = "InvalidImage"
 					err = envtests.K8sClient.Update(ctx, current)
 					Expect(err).To(HaveOccurred())
@@ -1140,6 +1141,7 @@ var _ = Describe("AerospikeCluster validation", func() {
 
 					current, err = testCluster.GetCluster(envtests.K8sClient, ctx, updateValidationClusterNamespacedName)
 					Expect(err).ToNot(HaveOccurred())
+
 					current.Spec.Image = testutil.InvalidImage
 					err = envtests.K8sClient.Update(ctx, current)
 					Expect(err).To(HaveOccurred())
