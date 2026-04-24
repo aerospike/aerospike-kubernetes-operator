@@ -1163,6 +1163,7 @@ var _ = Describe("AerospikeCluster validation", func() {
 
 					current, err := testCluster.GetCluster(envtests.K8sClient, ctx, updateValidationClusterNamespacedName)
 					Expect(err).ToNot(HaveOccurred())
+
 					current.Spec.Size = 0
 					err = envtests.K8sClient.Update(ctx, current)
 					Expect(err).To(HaveOccurred())
