@@ -1134,7 +1134,8 @@ var _ = Describe("AerospikeCluster validation", func() {
 					envtests.NewStatusErrorMatcher().
 						WithMessageSubstrings(
 							"\"vaerospikecluster.kb.io\"",
-							"CommunityEdition Cluster not supported").
+							"image \"InvalidImage\" is not supported",
+							"only Enterprise and Federal editions are allowed").
 						Validate(err)
 
 					current, err = testCluster.GetCluster(envtests.K8sClient, ctx, updateValidationClusterNamespacedName)
