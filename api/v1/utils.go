@@ -507,7 +507,7 @@ func IsNSSCEnabled(nsConf map[string]interface{}) bool {
 }
 
 // HasFilesOrDevices returns true if the storage-engine config contains a non-empty
-// files or devices list, indicating hybrid (memory + persistent) storage.
+// files or devices list.
 func HasFilesOrDevices(namespaceConf map[string]interface{}) bool {
 	storage, ok := namespaceConf[ConfKeyStorageEngine]
 	if !ok {

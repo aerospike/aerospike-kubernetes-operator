@@ -491,7 +491,7 @@ var _ = Describe("AerospikeCluster validation", func() {
 				})
 
 				It("rejects in-memory SC namespace without persistent storage", func() {
-					aeroCluster := testCluster.CreateDummyAerospikeCluster(clusterNamespacedName, 1)
+					aeroCluster := testCluster.CreateDummyAerospikeCluster(clusterNamespacedName, 2)
 					rawNamespaces := aeroCluster.Spec.AerospikeConfig.Value["namespaces"].([]interface{})
 
 					if len(rawNamespaces) > 0 {
