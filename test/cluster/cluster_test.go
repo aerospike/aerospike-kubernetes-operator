@@ -52,6 +52,11 @@ var _ = Describe(
 				DeployClusterWithDNSConfiguration(ctx)
 			},
 		)
+		Context(
+			"DeployClusterWithCharLimit", func() {
+				DeployClusterWithCharLimit(ctx)
+			},
+		)
 		// Need to setup some syslog related things for this
 		// Context(
 		// 	"DeployClusterWithSyslog", func() {
@@ -1363,6 +1368,77 @@ func DeployClusterWithDNSConfiguration(ctx goctx.Context) {
 			Expect(DeleteCluster(k8sClient, ctx, aeroCluster)).ToNot(HaveOccurred())
 			Expect(CleanupPVC(k8sClient, aeroCluster.Namespace, aeroCluster.Name)).ToNot(HaveOccurred())
 		},
+	)
+}
+
+func DeployClusterWithCharLimit(ctx goctx.Context) {
+	var aeroCluster *asdbv1.AerospikeCluster
+
+	AfterEach(
+		func() {
+			if aeroCluster == nil {
+				return
+			}
+
+			Expect(DeleteCluster(k8sClient, ctx, aeroCluster)).ToNot(HaveOccurred())
+			Expect(CleanupPVC(k8sClient, aeroCluster.Namespace, aeroCluster.Name)).ToNot(HaveOccurred())
+		},
+	)
+
+	type projectedLabelLengthCase struct {
+		revision       string
+		errSubs        []string
+		clusterNameLen int
+		expectErr      bool
+	}
+
+	DescribeTable(
+		"deploy validation for projected pod label length (CR name + rack revision)",
+		func(tc projectedLabelLengthCase) {
+			suffix := fmt.Sprintf("-%d", GinkgoParallelProcess())
+			Expect(tc.clusterNameLen).To(BeNumerically(">", len(suffix)))
+
+			clusterName := strings.Repeat("a", tc.clusterNameLen-len(suffix)) + suffix
+			clusterNamespacedName := test.GetNamespacedName(clusterName, namespace)
+
+			aeroCluster = createDummyAerospikeCluster(clusterNamespacedName, 2)
+			aeroCluster.Spec.RackConfig = asdbv1.RackConfig{
+				Namespaces: []string{"test"},
+				Racks:      []asdbv1.Rack{{ID: 1, Revision: tc.revision}},
+			}
+			aeroCluster.Spec.PodSpec.MultiPodPerHost = ptr.To(false)
+
+			err := DeployCluster(k8sClient, ctx, aeroCluster)
+
+			if tc.expectErr {
+				Expect(err).To(HaveOccurred())
+
+				for _, sub := range tc.errSubs {
+					Expect(err.Error()).To(ContainSubstring(sub))
+				}
+
+				return
+			}
+
+			Expect(err).ToNot(HaveOccurred())
+		},
+		Entry("accepts boundary: CR name 40 + revision 3", projectedLabelLengthCase{
+			clusterNameLen: 40,
+			revision:       "rev",
+			expectErr:      false,
+		}),
+		Entry("rejects overflow: CR name 47 + revision 3", projectedLabelLengthCase{
+			clusterNameLen: 47,
+			revision:       "rev",
+			expectErr:      true,
+			errSubs: []string{
+				"Pod label value would exceed the",
+				"63-character DNS label limit",
+				"revision placeholder = 3",
+				"total = 70",
+				"reduce by 7",
+			},
+		}),
 	)
 }
 
