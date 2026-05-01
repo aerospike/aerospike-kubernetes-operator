@@ -75,7 +75,6 @@ var (
 	logger             = logr.Discard()
 	nextImage          = fmt.Sprintf("%s:%s", baseEnterpriseImage, nextServerVersion)
 	latestImage        = fmt.Sprintf("%s:%s", baseEnterpriseImage, latestServerVersion)
-	invalidImage       = fmt.Sprintf("%s:%s", baseEnterpriseImage, invalidVersion)
 
 	// Storage wipe test
 	post6Image    = fmt.Sprintf("%s:%s", baseEnterpriseImage, post6Version)
