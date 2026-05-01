@@ -19,7 +19,6 @@ import (
 	"k8s.io/client-go/kubernetes"
 	"k8s.io/client-go/rest"
 	"k8s.io/client-go/tools/record"
-	"k8s.io/client-go/util/retry"
 	ctrl "sigs.k8s.io/controller-runtime"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 	"sigs.k8s.io/controller-runtime/pkg/reconcile"
@@ -303,22 +302,38 @@ func (r *SingleClusterReconciler) handleTerminatingCluster() error {
 }
 
 // onReconcileFailure logs the error, marks Ready=False with reason ReconcileFailed,
-// and sets the cluster phase to Error. Called from the Reconcile defer on non-nil recErr.
+// and sets the cluster phase to Error in a single patch.
+// Called from the Reconcile defer on non-nil recErr.
 func (r *SingleClusterReconciler) onReconcileFailure(recErr error) {
 	r.Log.Error(recErr, "Reconcile failed")
 
-	if err := r.setConditions(metav1.Condition{
-		Type:    string(asdbv1.AerospikeClusterConditionReady),
-		Status:  metav1.ConditionFalse,
-		Reason:  asdbv1.AerospikeClusterReasonReconcileFailed,
-		Message: recErr.Error(),
-	}); err != nil {
-		r.Log.Error(err, "Failed to set Ready condition on error")
+	patchTarget := r.aeroCluster.DeepCopy()
+	patch := client.MergeFrom(r.aeroCluster.DeepCopy())
+
+	// Set Ready=False condition
+	readyCond := metav1.Condition{
+		Type:               string(asdbv1.AerospikeClusterConditionReady),
+		Status:             metav1.ConditionFalse,
+		Reason:             asdbv1.AerospikeClusterReasonReconcileFailed,
+		Message:            recErr.Error(),
+		ObservedGeneration: patchTarget.Generation,
 	}
 
-	if err := r.setStatusPhase(asdbv1.AerospikeClusterError); err != nil {
-		r.Log.Error(err, "Failed to set cluster phase to Error")
+	apimeta.SetStatusCondition(&patchTarget.Status.Conditions, readyCond)
+
+	// Set phase to Error
+	patchTarget.Status.Phase = asdbv1.AerospikeClusterError
+
+	if err := r.Client.Status().Patch(context.TODO(), patchTarget, patch); err != nil {
+		r.Log.Error(err, "Failed to set error status on reconcile failure")
+		return
 	}
+
+	r.aeroCluster.Status.Conditions = patchTarget.Status.Conditions
+	r.aeroCluster.Status.Phase = patchTarget.Status.Phase
+	r.aeroCluster.ResourceVersion = patchTarget.ResourceVersion
+
+	r.addClusterPhaseMetric()
 }
 
 // ensureSCRoster handles Strong Consistency roster management.
@@ -596,18 +611,19 @@ func (r *SingleClusterReconciler) updateStatus() error {
 
 func (r *SingleClusterReconciler) setStatusPhase(phase asdbv1.AerospikeClusterPhase) error {
 	if r.aeroCluster.Status.Phase != phase {
-		if err := retry.RetryOnConflict(retry.DefaultRetry, func() error {
-			if err := r.Get(context.TODO(), utils.GetNamespacedName(r.aeroCluster), r.aeroCluster); err != nil {
-				return err
-			}
+		patchTarget := r.aeroCluster.DeepCopy()
+		patch := client.MergeFrom(r.aeroCluster.DeepCopy())
 
-			r.aeroCluster.Status.Phase = phase
+		patchTarget.Status.Phase = phase
 
-			return r.Client.Status().Update(context.Background(), r.aeroCluster)
-		}); err != nil {
+		if err := r.Client.Status().Patch(context.TODO(), patchTarget, patch); err != nil {
 			r.Log.Error(err, fmt.Sprintf("Failed to set cluster status to %s", phase))
 			return err
 		}
+
+		// Copy back only status and resourceVersion so r.aeroCluster.Spec is never overwritten
+		r.aeroCluster.Status.Phase = patchTarget.Status.Phase
+		r.aeroCluster.ResourceVersion = patchTarget.ResourceVersion
 
 		r.addClusterPhaseMetric()
 	}
@@ -629,39 +645,44 @@ func conditionNeedsUpdate(existing, proposed *metav1.Condition) bool {
 		existing.Message != proposed.Message
 }
 
-// setConditions updates one or more conditions on the AerospikeCluster status in a single
-// Get+Update round trip, retrying on conflicts.
+// setConditions updates one or more conditions on the AerospikeCluster status using a
+// merge patch.
 // ObservedGeneration is stamped only when a condition's Status, Reason, or Message actually
 // changes — consistent with how LastTransitionTime behaves. Conditions already in the
 // desired state are left untouched (no ObservedGeneration bump, no API call).
 func (r *SingleClusterReconciler) setConditions(conditions ...metav1.Condition) error {
-	return retry.RetryOnConflict(retry.DefaultRetry, func() error {
-		if err := r.Get(context.TODO(), utils.GetNamespacedName(r.aeroCluster), r.aeroCluster); err != nil {
-			return err
+	patchTarget := r.aeroCluster.DeepCopy()
+	patch := client.MergeFrom(r.aeroCluster.DeepCopy())
+
+	anyChanged := false
+
+	for i := range conditions {
+		existing := apimeta.FindStatusCondition(
+			patchTarget.Status.Conditions, conditions[i].Type,
+		)
+		if !conditionNeedsUpdate(existing, &conditions[i]) {
+			continue
 		}
 
-		anyChanged := false
+		conditions[i].ObservedGeneration = patchTarget.Generation
+		apimeta.SetStatusCondition(&patchTarget.Status.Conditions, conditions[i])
 
-		for i := range conditions {
-			existing := apimeta.FindStatusCondition(
-				r.aeroCluster.Status.Conditions, conditions[i].Type,
-			)
-			if !conditionNeedsUpdate(existing, &conditions[i]) {
-				continue
-			}
+		anyChanged = true
+	}
 
-			conditions[i].ObservedGeneration = r.aeroCluster.Generation
-			apimeta.SetStatusCondition(&r.aeroCluster.Status.Conditions, conditions[i])
+	if !anyChanged {
+		return nil
+	}
 
-			anyChanged = true
-		}
+	if err := r.Client.Status().Patch(context.TODO(), patchTarget, patch); err != nil {
+		return err
+	}
 
-		if !anyChanged {
-			return nil
-		}
+	// Copy back only status conditions and resourceVersion so r.aeroCluster.Spec is never overwritten
+	r.aeroCluster.Status.Conditions = patchTarget.Status.Conditions
+	r.aeroCluster.ResourceVersion = patchTarget.ResourceVersion
 
-		return r.Client.Status().Update(context.Background(), r.aeroCluster)
-	})
+	return nil
 }
 
 // initializeConditionsIfNeeded pre-seeds all conditions on the very first reconcile
@@ -672,8 +693,11 @@ func (r *SingleClusterReconciler) initializeConditionsIfNeeded() error {
 		return nil
 	}
 
+	patchTarget := r.aeroCluster.DeepCopy()
+	patch := client.MergeFrom(r.aeroCluster.DeepCopy())
+
 	now := metav1.Now()
-	gen := r.aeroCluster.Generation
+	gen := patchTarget.Generation
 
 	seedConditions := []metav1.Condition{
 		{
@@ -706,10 +730,18 @@ func (r *SingleClusterReconciler) initializeConditionsIfNeeded() error {
 	}
 
 	for i := range seedConditions {
-		apimeta.SetStatusCondition(&r.aeroCluster.Status.Conditions, seedConditions[i])
+		apimeta.SetStatusCondition(&patchTarget.Status.Conditions, seedConditions[i])
 	}
 
-	return r.Client.Status().Update(context.Background(), r.aeroCluster)
+	if err := r.Client.Status().Patch(context.TODO(), patchTarget, patch); err != nil {
+		return err
+	}
+
+	// Copy back only status conditions and resourceVersion
+	r.aeroCluster.Status.Conditions = patchTarget.Status.Conditions
+	r.aeroCluster.ResourceVersion = patchTarget.ResourceVersion
+
+	return nil
 }
 
 func (r *SingleClusterReconciler) getClusterReadinessStatus() (bool, error) {
