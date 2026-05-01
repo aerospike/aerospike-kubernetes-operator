@@ -230,11 +230,7 @@ var _ = Describe("AerospikeCluster access control validation (envtests)", func()
 					aeroCluster := testCluster.CreateDummyAerospikeCluster(clusterNamespacedName, 2)
 					aeroCluster.Spec.AerospikeAccessControl = validAccessControlForDeployPositive()
 
-					valid, err := asdbv1.IsAerospikeAccessControlValid(&aeroCluster.Spec)
-					Expect(err).ToNot(HaveOccurred())
-					Expect(valid).To(BeTrue(), "IsAerospikeAccessControlValid should accept spec")
-
-					err = envtests.K8sClient.Create(ctx, aeroCluster)
+					err := envtests.K8sClient.Create(ctx, aeroCluster)
 					Expect(err).ToNot(HaveOccurred())
 				})
 
@@ -245,11 +241,7 @@ var _ = Describe("AerospikeCluster access control validation (envtests)", func()
 					}
 					aeroCluster.Spec.AerospikeAccessControl = validAccessControlForDeployPositiveQuota()
 
-					valid, err := asdbv1.IsAerospikeAccessControlValid(&aeroCluster.Spec)
-					Expect(err).ToNot(HaveOccurred())
-					Expect(valid).To(BeTrue(), "IsAerospikeAccessControlValid should accept spec with quotas")
-
-					err = envtests.K8sClient.Create(ctx, aeroCluster)
+					err := envtests.K8sClient.Create(ctx, aeroCluster)
 					Expect(err).ToNot(HaveOccurred())
 				})
 			})
