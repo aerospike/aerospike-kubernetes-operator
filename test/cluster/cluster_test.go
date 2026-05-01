@@ -52,6 +52,11 @@ var _ = Describe(
 				DeployClusterWithDNSConfiguration(ctx)
 			},
 		)
+		Context(
+			"DeployClusterWithCharLimit", func() {
+				DeployClusterWithCharLimit(ctx)
+			},
+		)
 		// Need to setup some syslog related things for this
 		// Context(
 		// 	"DeployClusterWithSyslog", func() {
@@ -1364,6 +1369,44 @@ func DeployClusterWithDNSConfiguration(ctx goctx.Context) {
 			Expect(CleanupPVC(k8sClient, aeroCluster.Namespace, aeroCluster.Name)).ToNot(HaveOccurred())
 		},
 	)
+}
+
+func DeployClusterWithCharLimit(ctx goctx.Context) {
+	var aeroCluster *asdbv1.AerospikeCluster
+
+	AfterEach(
+		func() {
+			if aeroCluster == nil {
+				return
+			}
+
+			Expect(DeleteCluster(k8sClient, ctx, aeroCluster)).ToNot(HaveOccurred())
+			Expect(CleanupPVC(k8sClient, aeroCluster.Namespace, aeroCluster.Name)).ToNot(HaveOccurred())
+		},
+	)
+
+	It("Deploy cluster with CR name of 40 chars + revision of 3 chars", func() {
+		const (
+			clusterNameLen = 40
+			revision       = "rev"
+		)
+
+		suffix := fmt.Sprintf("-%d", GinkgoParallelProcess())
+		Expect(clusterNameLen).To(BeNumerically(">", len(suffix)))
+
+		clusterName := strings.Repeat("a", clusterNameLen-len(suffix)) + suffix
+		clusterNamespacedName := test.GetNamespacedName(clusterName, namespace)
+
+		aeroCluster = createDummyAerospikeCluster(clusterNamespacedName, 2)
+		aeroCluster.Spec.RackConfig = asdbv1.RackConfig{
+			Namespaces: []string{"test"},
+			Racks:      []asdbv1.Rack{{ID: 1, Revision: revision}},
+		}
+		aeroCluster.Spec.PodSpec.MultiPodPerHost = ptr.To(false)
+
+		err := DeployCluster(k8sClient, ctx, aeroCluster)
+		Expect(err).ToNot(HaveOccurred())
+	})
 }
 
 func DeployClusterWithSyslog(ctx goctx.Context) {
