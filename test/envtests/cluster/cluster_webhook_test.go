@@ -511,6 +511,57 @@ var _ = Describe("AerospikeCluster validation", func() {
 						Validate(err)
 				})
 
+				It("returns actionable error details for in-memory SC namespace without persistence backing", func() {
+					aeroCluster := testCluster.CreateDummyAerospikeCluster(clusterNamespacedName, 2)
+					rawNamespaces := aeroCluster.Spec.AerospikeConfig.Value["namespaces"].([]interface{})
+
+					if len(rawNamespaces) > 0 {
+						nsMap := rawNamespaces[0].(map[string]interface{})
+						nsMap["storage-engine"] = map[string]interface{}{
+							"type":      "memory",
+							"data-size": 1073741824,
+						}
+					}
+
+					err := envtests.K8sClient.Create(ctx, aeroCluster)
+					Expect(err).To(HaveOccurred())
+
+					envtests.NewStatusErrorMatcher().
+						WithMessageSubstrings(
+							"\"vaerospikecluster.kb.io\"",
+							"in-memory SC namespace without persistent storage (files or devices) is not supported",
+							"namespace test",
+						).
+						Validate(err)
+				})
+
+				// Bug: Improve the response message string to indicate correct invalid type.
+				// currently it is showing null namespaces.0.storage-engine.files instead of invalid type.
+				It("rejects in-memory SC namespace when persistence files contains non-string entry", func() {
+					aeroCluster := testCluster.CreateDummyAerospikeCluster(clusterNamespacedName, 2)
+					rawNamespaces := aeroCluster.Spec.AerospikeConfig.Value["namespaces"].([]interface{})
+
+					if len(rawNamespaces) > 0 {
+						nsMap := rawNamespaces[0].(map[string]interface{})
+						nsMap["storage-engine"] = map[string]interface{}{
+							"type":  "memory",
+							"files": []interface{}{1},
+						}
+					}
+
+					err := envtests.K8sClient.Create(ctx, aeroCluster)
+					Expect(err).To(HaveOccurred())
+
+					envtests.NewStatusErrorMatcher().
+						WithMessageSubstrings(
+							"\"vaerospikecluster.kb.io\"",
+							"aerospikeConfig not valid: generated config not valid for version",
+							" invalid_type (root).namespaces.0.storage-engine.files Invalid type",
+							"Expected: array, given: null namespaces.0.storage-engine.files",
+						).
+						Validate(err)
+				})
+
 				It("rejects duplicate dc names in aerospikeConfig.xdr.dcs", func() {
 					aeroCluster := testCluster.CreateDummyAerospikeCluster(clusterNamespacedName, 2)
 
@@ -543,7 +594,64 @@ var _ = Describe("AerospikeCluster validation", func() {
 				})
 			})
 			Context("positive", func() {
-				// Add positive aerospikeConfig (namespace) tests here
+				It("allows in-memory SC namespace with persistent devices", func() {
+					aeroCluster := testCluster.CreateDummyAerospikeCluster(clusterNamespacedName, 2)
+					rawNamespaces := aeroCluster.Spec.AerospikeConfig.Value["namespaces"].([]interface{})
+
+					if len(rawNamespaces) > 0 {
+						nsMap := rawNamespaces[0].(map[string]interface{})
+						nsMap["storage-engine"] = map[string]interface{}{
+							"type":    "memory",
+							"devices": []interface{}{"/test/dev/xvdf"},
+						}
+					}
+
+					err := envtests.K8sClient.Create(ctx, aeroCluster)
+					Expect(err).ToNot(HaveOccurred())
+				})
+
+				It("allows non-SC in-memory namespace without persistent storage (backward compatible)", func() {
+					aeroCluster := testCluster.CreateDummyAerospikeCluster(clusterNamespacedName, 2)
+					rawNamespaces := aeroCluster.Spec.AerospikeConfig.Value["namespaces"].([]interface{})
+
+					if len(rawNamespaces) > 0 {
+						nsMap := rawNamespaces[0].(map[string]interface{})
+						nsMap["strong-consistency"] = false
+						nsMap["storage-engine"] = map[string]interface{}{
+							"type":      "memory",
+							"data-size": 1073741824,
+						}
+					}
+
+					err := envtests.K8sClient.Create(ctx, aeroCluster)
+					Expect(err).ToNot(HaveOccurred())
+				})
+
+				It("allows mixed namespaces with one SC in-memory namespace using persistence", func() {
+					aeroCluster := testCluster.CreateDummyAerospikeCluster(clusterNamespacedName, 2)
+					rawNamespaces := aeroCluster.Spec.AerospikeConfig.Value["namespaces"].([]interface{})
+
+					if len(rawNamespaces) > 0 {
+						scNs := rawNamespaces[0].(map[string]interface{})
+						scNs["storage-engine"] = map[string]interface{}{
+							"type":    "memory",
+							"devices": []interface{}{"/test/dev/xvdf"},
+						}
+					}
+
+					rawNamespaces = append(rawNamespaces, map[string]interface{}{
+						"name":               "non-sc-memory",
+						"replication-factor": 2,
+						"storage-engine": map[string]interface{}{
+							"type":      "memory",
+							"data-size": 1073741824,
+						},
+					})
+					aeroCluster.Spec.AerospikeConfig.Value[asdbv1.ConfKeyNamespace] = rawNamespaces
+
+					err := envtests.K8sClient.Create(ctx, aeroCluster)
+					Expect(err).ToNot(HaveOccurred())
+				})
 			})
 		})
 
@@ -1189,6 +1297,68 @@ var _ = Describe("AerospikeCluster validation", func() {
 			})
 			Context("positive", func() {
 				// Add positive update podSpec tests here
+			})
+		})
+
+		Context("spec.aerospikeConfig (namespace)", func() {
+			Context("negative", func() {
+				It("rejects update that removes persistence backing from in-memory SC namespace", func() {
+					aeroCluster := testCluster.CreateDummyAerospikeCluster(updateValidationClusterNamespacedName, 2)
+					rawNamespaces := aeroCluster.Spec.AerospikeConfig.Value[asdbv1.ConfKeyNamespace].([]interface{})
+					nsMap := rawNamespaces[0].(map[string]interface{})
+					nsMap["storage-engine"] = map[string]interface{}{
+						"type":    "memory",
+						"devices": []interface{}{"/test/dev/xvdf"},
+					}
+
+					Expect(envtests.K8sClient.Create(ctx, aeroCluster)).To(Succeed())
+
+					current, err := testCluster.GetCluster(envtests.K8sClient, ctx, updateValidationClusterNamespacedName)
+					Expect(err).ToNot(HaveOccurred())
+
+					currentNamespaces := current.Spec.AerospikeConfig.Value[asdbv1.ConfKeyNamespace].([]interface{})
+					currentNsMap := currentNamespaces[0].(map[string]interface{})
+					currentNsMap["storage-engine"] = map[string]interface{}{
+						"type":      "memory",
+						"data-size": 1073741824,
+					}
+
+					err = envtests.K8sClient.Update(ctx, current)
+					Expect(err).To(HaveOccurred())
+
+					envtests.NewStatusErrorMatcher().
+						WithMessageSubstrings(
+							"\"vaerospikecluster.kb.io\"",
+							"in-memory SC namespace without persistent storage (files or devices) is not supported",
+						).
+						Validate(err)
+				})
+			})
+
+			Context("positive", func() {
+				It("allows update from one valid SC in-memory persistence config to another valid one", func() {
+					aeroCluster := testCluster.CreateDummyAerospikeCluster(updateValidationClusterNamespacedName, 2)
+					rawNamespaces := aeroCluster.Spec.AerospikeConfig.Value[asdbv1.ConfKeyNamespace].([]interface{})
+					nsMap := rawNamespaces[0].(map[string]interface{})
+					nsMap["storage-engine"] = map[string]interface{}{
+						"type":    "memory",
+						"devices": []interface{}{"/test/dev/xvdf"},
+					}
+
+					Expect(envtests.K8sClient.Create(ctx, aeroCluster)).To(Succeed())
+
+					current, err := testCluster.GetCluster(envtests.K8sClient, ctx, updateValidationClusterNamespacedName)
+					Expect(err).ToNot(HaveOccurred())
+
+					currentNamespaces := current.Spec.AerospikeConfig.Value[asdbv1.ConfKeyNamespace].([]interface{})
+					currentNsMap := currentNamespaces[0].(map[string]interface{})
+					currentNsMap["storage-engine"] = map[string]interface{}{
+						"type":    "memory",
+						"devices": []interface{}{"/test/dev/xvdf"},
+					}
+
+					Expect(envtests.K8sClient.Update(ctx, current)).To(Succeed())
+				})
 			})
 		})
 

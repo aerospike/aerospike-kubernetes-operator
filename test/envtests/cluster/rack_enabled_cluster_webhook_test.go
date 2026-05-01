@@ -113,6 +113,68 @@ var _ = Describe("Rack enabled cluster webhook validation", func() {
 						).
 						Validate(err)
 				})
+
+				It("rejects when one rack has in-memory SC namespace without persistence backing", func() {
+					aeroCluster := testCluster.CreateDummyAerospikeCluster(nsName, 2)
+					rack1Storage := getStorageSpecForDevice("/rack1/xvda")
+					rack2Storage := getStorageSpecForDevice("/rack2/xvdb")
+
+					aeroCluster.Spec.Storage = asdbv1.AerospikeStorageSpec{}
+					aeroCluster.Spec.RackConfig = asdbv1.RackConfig{
+						Namespaces: []string{"test"},
+						Racks: []asdbv1.Rack{
+							{
+								ID:           1,
+								Revision:     "v1",
+								InputStorage: &rack1Storage,
+								InputAerospikeConfig: &asdbv1.AerospikeConfigSpec{
+									Value: map[string]interface{}{
+										asdbv1.ConfKeyNamespace: []interface{}{
+											map[string]interface{}{
+												"name":               "test",
+												"replication-factor": 2,
+												"strong-consistency": true,
+												asdbv1.ConfKeyStorageEngine: map[string]interface{}{
+													"type":    "memory",
+													"devices": []interface{}{"/rack1/xvda"},
+												},
+											},
+										},
+									},
+								},
+							},
+							{
+								ID:           2,
+								Revision:     "v1",
+								InputStorage: &rack2Storage,
+								InputAerospikeConfig: &asdbv1.AerospikeConfigSpec{
+									Value: map[string]interface{}{
+										asdbv1.ConfKeyNamespace: []interface{}{
+											map[string]interface{}{
+												"name":               "test",
+												"replication-factor": 2,
+												"strong-consistency": true,
+												asdbv1.ConfKeyStorageEngine: map[string]interface{}{
+													"type":    "memory",
+													"devices": []interface{}{}, // missing persistence device
+												},
+											},
+										},
+									},
+								},
+							},
+						},
+					}
+
+					err := envtests.K8sClient.Create(ctx, aeroCluster)
+					Expect(err).To(HaveOccurred())
+					envtests.NewStatusErrorMatcher().
+						WithMessageSubstrings(
+							"\"vaerospikecluster.kb.io\"",
+							"in-memory SC namespace without persistent storage (files or devices) is not supported",
+						).
+						Validate(err)
+				})
 			})
 
 			Context("positive", func() {
@@ -153,6 +215,60 @@ var _ = Describe("Rack enabled cluster webhook validation", func() {
 								Revision:             "v1",
 								InputStorage:         nil, // uses cluster.Spec.Storage after mutating webhook
 								InputAerospikeConfig: nil, // uses merged global AerospikeConfig (/test/dev/xvdf)
+							},
+						},
+					}
+
+					Expect(envtests.K8sClient.Create(ctx, aeroCluster)).To(Succeed())
+				})
+
+				It("allows racks with in-memory SC namespace when each rack has persistence device backing", func() {
+					aeroCluster := testCluster.CreateDummyAerospikeCluster(nsName, 2)
+					s1 := getStorageSpecForDevice("/rack1/xvda")
+					s2 := getStorageSpecForDevice("/rack2/xvdb")
+					aeroCluster.Spec.Storage = asdbv1.AerospikeStorageSpec{}
+					aeroCluster.Spec.RackConfig = asdbv1.RackConfig{
+						Namespaces: []string{"test"},
+						Racks: []asdbv1.Rack{
+							{
+								ID:           1,
+								Revision:     "v1",
+								InputStorage: &s1,
+								InputAerospikeConfig: &asdbv1.AerospikeConfigSpec{
+									Value: map[string]interface{}{
+										asdbv1.ConfKeyNamespace: []interface{}{
+											map[string]interface{}{
+												"name":               "test",
+												"replication-factor": 2,
+												"strong-consistency": true,
+												asdbv1.ConfKeyStorageEngine: map[string]interface{}{
+													"type":    "memory",
+													"devices": []interface{}{"/rack1/xvda"},
+												},
+											},
+										},
+									},
+								},
+							},
+							{
+								ID:           2,
+								Revision:     "v1",
+								InputStorage: &s2,
+								InputAerospikeConfig: &asdbv1.AerospikeConfigSpec{
+									Value: map[string]interface{}{
+										asdbv1.ConfKeyNamespace: []interface{}{
+											map[string]interface{}{
+												"name":               "test",
+												"replication-factor": 2,
+												"strong-consistency": true,
+												asdbv1.ConfKeyStorageEngine: map[string]interface{}{
+													"type":    "memory",
+													"devices": []interface{}{"/rack2/xvdb"},
+												},
+											},
+										},
+									},
+								},
 							},
 						},
 					}
