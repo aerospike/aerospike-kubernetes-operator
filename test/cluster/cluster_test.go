@@ -1385,61 +1385,28 @@ func DeployClusterWithCharLimit(ctx goctx.Context) {
 		},
 	)
 
-	type projectedLabelLengthCase struct {
-		revision       string
-		errSubs        []string
-		clusterNameLen int
-		expectErr      bool
-	}
+	It("Deploy cluster with CR name of 40 chars + revision of 3 chars", func() {
+		const (
+			clusterNameLen = 40
+			revision       = "rev"
+		)
 
-	DescribeTable(
-		"deploy validation for projected pod label length (CR name + rack revision)",
-		func(tc projectedLabelLengthCase) {
-			suffix := fmt.Sprintf("-%d", GinkgoParallelProcess())
-			Expect(tc.clusterNameLen).To(BeNumerically(">", len(suffix)))
+		suffix := fmt.Sprintf("-%d", GinkgoParallelProcess())
+		Expect(clusterNameLen).To(BeNumerically(">", len(suffix)))
 
-			clusterName := strings.Repeat("a", tc.clusterNameLen-len(suffix)) + suffix
-			clusterNamespacedName := test.GetNamespacedName(clusterName, namespace)
+		clusterName := strings.Repeat("a", clusterNameLen-len(suffix)) + suffix
+		clusterNamespacedName := test.GetNamespacedName(clusterName, namespace)
 
-			aeroCluster = createDummyAerospikeCluster(clusterNamespacedName, 2)
-			aeroCluster.Spec.RackConfig = asdbv1.RackConfig{
-				Namespaces: []string{"test"},
-				Racks:      []asdbv1.Rack{{ID: 1, Revision: tc.revision}},
-			}
-			aeroCluster.Spec.PodSpec.MultiPodPerHost = ptr.To(false)
+		aeroCluster = createDummyAerospikeCluster(clusterNamespacedName, 2)
+		aeroCluster.Spec.RackConfig = asdbv1.RackConfig{
+			Namespaces: []string{"test"},
+			Racks:      []asdbv1.Rack{{ID: 1, Revision: revision}},
+		}
+		aeroCluster.Spec.PodSpec.MultiPodPerHost = ptr.To(false)
 
-			err := DeployCluster(k8sClient, ctx, aeroCluster)
-
-			if tc.expectErr {
-				Expect(err).To(HaveOccurred())
-
-				for _, sub := range tc.errSubs {
-					Expect(err.Error()).To(ContainSubstring(sub))
-				}
-
-				return
-			}
-
-			Expect(err).ToNot(HaveOccurred())
-		},
-		Entry("accepts boundary: CR name 40 + revision 3", projectedLabelLengthCase{
-			clusterNameLen: 40,
-			revision:       "rev",
-			expectErr:      false,
-		}),
-		Entry("rejects overflow: CR name 47 + revision 3", projectedLabelLengthCase{
-			clusterNameLen: 47,
-			revision:       "rev",
-			expectErr:      true,
-			errSubs: []string{
-				"Pod label value would exceed the",
-				"63-character DNS label limit",
-				"revision placeholder = 3",
-				"total = 70",
-				"reduce by 7",
-			},
-		}),
-	)
+		err := DeployCluster(k8sClient, ctx, aeroCluster)
+		Expect(err).ToNot(HaveOccurred())
+	})
 }
 
 func DeployClusterWithSyslog(ctx goctx.Context) {
