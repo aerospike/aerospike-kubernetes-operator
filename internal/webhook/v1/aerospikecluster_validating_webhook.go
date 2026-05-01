@@ -531,8 +531,11 @@ func validateSCNamespaces(cluster *asdbv1.AerospikeCluster) error {
 			if isEnabled {
 				tmpSCNamespaceSet.Insert(nsConf[asdbv1.ConfKeyName].(string))
 
-				if validation.IsInMemoryNamespace(nsConf) {
-					return fmt.Errorf("in-memory SC namespace is not supported, namespace %v", nsConf[asdbv1.ConfKeyName])
+				if validation.IsInMemoryNamespace(nsConf) && !asdbv1.HasFilesOrDevices(nsConf) {
+					return fmt.Errorf(
+						"in-memory SC namespace without persistent storage (files or devices) is not supported, namespace %v",
+						nsConf[asdbv1.ConfKeyName],
+					)
 				}
 			}
 		}
