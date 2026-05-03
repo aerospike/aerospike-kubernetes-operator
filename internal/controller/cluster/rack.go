@@ -396,6 +396,11 @@ func (r *SingleClusterReconciler) upgradeOrRollingRestartRack(
 					"[rack-%d] Failed to update Image {STS: %s/%s}",
 					rackState.Rack.ID, found.Namespace, found.Name,
 				)
+
+				// Format the error message with the operation type
+				res = common.ReconcileError(
+					fmt.Errorf("%s rack %d: %w", asdbv1.AerospikeClusterConditionUpgrading, rackState.Rack.ID, res.Err),
+				)
 			}
 
 			return found, res
@@ -435,6 +440,11 @@ func (r *SingleClusterReconciler) upgradeOrRollingRestartRack(
 						"[rack-%d] Failed to do rolling restart {STS: %s/%s}",
 						rackState.Rack.ID, found.Namespace, found.Name,
 					)
+
+					// Format the error message with the operation type
+					res = common.ReconcileError(
+						fmt.Errorf("%s rack %d: %w", asdbv1.AerospikeClusterConditionRollingRestart,
+							rackState.Rack.ID, res.Err))
 				}
 
 				return found, res
@@ -589,10 +599,8 @@ func (r *SingleClusterReconciler) reconcileRack(
 			Type:   string(asdbv1.AerospikeClusterConditionScalingDown),
 			Status: metav1.ConditionTrue,
 			Reason: asdbv1.AerospikeClusterReasonScalingDown,
-			Message: fmt.Sprintf(
-				"Scaling down rack %d from %d to %d",
-				rackState.Rack.ID, currentSize, desiredSize,
-			),
+			Message: fmt.Sprintf("Scaling down rack %d from %d to %d",
+				rackState.Rack.ID, currentSize, desiredSize),
 		}); err != nil {
 			return common.ReconcileError(err)
 		}
@@ -612,6 +620,11 @@ func (r *SingleClusterReconciler) reconcileRack(
 					rackState.Rack.ID, found.Namespace, found.Name, currentSize,
 					desiredSize, res.Err,
 				)
+
+				// Format the error message with the operation type
+				res = common.ReconcileError(
+					fmt.Errorf("%s rack %d: %w", asdbv1.AerospikeClusterConditionScalingDown,
+						rackState.Rack.ID, res.Err))
 			}
 
 			return res
@@ -677,6 +690,10 @@ func (r *SingleClusterReconciler) reconcileRack(
 				rackState.Rack.ID, found.Namespace, found.Name, currentSize,
 				desiredSize, res.Err,
 			)
+
+			res = common.ReconcileError(
+				fmt.Errorf("%s rack %d: %w", asdbv1.AerospikeClusterConditionScalingUp,
+					rackState.Rack.ID, res.Err))
 
 			return res
 		}

@@ -72,28 +72,31 @@ func (r *SingleClusterReconciler) Reconcile() (result ctrl.Result, recErr error)
 	if asdbv1.GetBool(r.aeroCluster.Spec.Paused) {
 		r.Log.Info("Reconciliation is paused for this AerospikeCluster")
 
-		if err := r.setConditions(
+		return reconcile.Result{}, r.setConditions(
 			metav1.Condition{
 				Type:    string(asdbv1.AerospikeClusterConditionPaused),
 				Status:  metav1.ConditionTrue,
 				Reason:  asdbv1.AerospikeClusterReasonPausedByUser,
 				Message: "Reconciliation is paused via spec.paused=true",
-			},
-		); err != nil {
-			return reconcile.Result{}, err
-		}
-
-		return reconcile.Result{}, nil
+			})
 	}
 
 	// Mark Ready=False at the start of every reconcile so it doesn't stay True
 	// while operations are in progress.
-	if err := r.setConditions(metav1.Condition{
-		Type:    string(asdbv1.AerospikeClusterConditionReady),
-		Status:  metav1.ConditionFalse,
-		Reason:  asdbv1.AerospikeClusterReasonReconciling,
-		Message: "Reconcile in progress",
-	}); err != nil {
+	if err := r.setConditions(
+		metav1.Condition{
+			Type:    string(asdbv1.AerospikeClusterConditionReady),
+			Status:  metav1.ConditionFalse,
+			Reason:  asdbv1.AerospikeClusterReasonReconciling,
+			Message: "Reconcile in progress",
+		},
+		metav1.Condition{
+			Type:    string(asdbv1.AerospikeClusterConditionPaused),
+			Status:  metav1.ConditionFalse,
+			Reason:  asdbv1.AerospikeClusterReasonNotPaused,
+			Message: "Reconciliation is active",
+		},
+	); err != nil {
 		return reconcile.Result{}, err
 	}
 
@@ -276,6 +279,7 @@ func (r *SingleClusterReconciler) handleTerminatingCluster() error {
 		Reason:  asdbv1.AerospikeClusterReasonTerminating,
 		Message: "Cluster is being deleted",
 	}); err != nil {
+		// Log error and continue with the cluster deletion
 		r.Log.Error(err, "Failed to set Ready condition for terminating cluster")
 	}
 
@@ -533,8 +537,7 @@ func (r *SingleClusterReconciler) updateStatus() error {
 	// We must deep-copy the slice: patchStatus diffs r.aeroCluster (old) vs newAeroCluster (new).
 	// A plain slice assignment shares the backing array, so in-place mutations by
 	// SetStatusCondition would modify both old and new, producing no diff.
-	newAeroCluster.Status.Conditions = make([]metav1.Condition, len(r.aeroCluster.Status.Conditions))
-	copy(newAeroCluster.Status.Conditions, r.aeroCluster.Status.Conditions)
+	newAeroCluster.Status.Conditions = lib.DeepCopy(r.aeroCluster.Status.Conditions).([]metav1.Condition)
 
 	// Set Ready=True on the success path.
 	// ObservedGeneration is only bumped if the condition actually changed.
@@ -544,6 +547,7 @@ func (r *SingleClusterReconciler) updateStatus() error {
 		Reason:  asdbv1.AerospikeClusterReasonReconcileComplete,
 		Message: "Cluster reconcile completed successfully",
 	}
+
 	if conditionNeedsUpdate(
 		apimeta.FindStatusCondition(newAeroCluster.Status.Conditions, readyCondition.Type),
 		&readyCondition,
@@ -564,7 +568,6 @@ func (r *SingleClusterReconciler) updateStatus() error {
 		{string(asdbv1.AerospikeClusterConditionScalingDown), asdbv1.AerospikeClusterReasonNotScalingDown},
 		{string(asdbv1.AerospikeClusterConditionUpgrading), asdbv1.AerospikeClusterReasonNotUpgrading},
 		{string(asdbv1.AerospikeClusterConditionRollingRestart), asdbv1.AerospikeClusterReasonNotRollingRestart},
-		{string(asdbv1.AerospikeClusterConditionPaused), asdbv1.AerospikeClusterReasonNotPaused},
 	} {
 		proposed := metav1.Condition{
 			Type:   opCond.condType,
