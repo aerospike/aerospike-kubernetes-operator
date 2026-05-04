@@ -28,6 +28,7 @@ import (
 	"github.com/aerospike/aerospike-kubernetes-operator/v4/test"
 	testCluster "github.com/aerospike/aerospike-kubernetes-operator/v4/test/cluster"
 	"github.com/aerospike/aerospike-kubernetes-operator/v4/test/envtests"
+	"github.com/aerospike/aerospike-kubernetes-operator/v4/test/testutil"
 )
 
 var _ = Describe("Rack enabled cluster webhook validation", func() {
@@ -43,11 +44,14 @@ var _ = Describe("Rack enabled cluster webhook validation", func() {
 		deleteCluster(ctx, nsName)
 	})
 
-	Context("Deploy validation", func() {
+	// rackDeployValidationTests registers all rack deploy-validation It blocks for the
+	// given server image.  Extracted so the same suite runs for both config formats;
+	// delete the legacy context below when pre-8.1.1 support is dropped.
+	rackDeployValidationTests := func(image string) {
 		Context("spec.rackConfig", func() {
 			Context("negative", func() {
 				It("rejects when rack namespace device path is not covered by that rack's InputStorage", func() {
-					aeroCluster := testCluster.CreateDummyAerospikeCluster(nsName, 2)
+					aeroCluster := testCluster.CreateDummyAerospikeClusterForImage(nsName, 2, image)
 					s := getStorageSpecForDevice("/wrong/path/not-in-namespace")
 					aeroCluster.Spec.Storage = asdbv1.AerospikeStorageSpec{}
 					aeroCluster.Spec.RackConfig = asdbv1.RackConfig{
@@ -57,7 +61,7 @@ var _ = Describe("Rack enabled cluster webhook validation", func() {
 								ID:                   1,
 								Revision:             "v1",
 								InputStorage:         &s,
-								InputAerospikeConfig: rackNSOverride("/expected/missing/device"),
+								InputAerospikeConfig: rackNSOverride("/expected/missing/device", image),
 							},
 						},
 					}
@@ -73,7 +77,7 @@ var _ = Describe("Rack enabled cluster webhook validation", func() {
 				})
 
 				It("rejects when rack InputStorage is incomplete for rack aerospike namespace device paths", func() {
-					aeroCluster := testCluster.CreateDummyAerospikeCluster(nsName, 2)
+					aeroCluster := testCluster.CreateDummyAerospikeClusterForImage(nsName, 2, image)
 					incomplete := asdbv1.AerospikeStorageSpec{
 						BlockVolumePolicy:      aeroCluster.Spec.Storage.BlockVolumePolicy,
 						FileSystemVolumePolicy: aeroCluster.Spec.Storage.FileSystemVolumePolicy,
@@ -99,7 +103,7 @@ var _ = Describe("Rack enabled cluster webhook validation", func() {
 								ID:                   1,
 								Revision:             "v1",
 								InputStorage:         &incomplete,
-								InputAerospikeConfig: rackNSOverride("/test/dev/xvdf"),
+								InputAerospikeConfig: rackNSOverride("/test/dev/xvdf", image),
 							},
 						},
 					}
@@ -118,15 +122,15 @@ var _ = Describe("Rack enabled cluster webhook validation", func() {
 			Context("positive", func() {
 				It("allows explicit racks where each rack has InputStorage volumes "+
 					"satisfying that rack's aerospike namespace device paths (no spec-level storage config required)", func() {
-					aeroCluster := testCluster.CreateDummyAerospikeCluster(nsName, 2)
+					aeroCluster := testCluster.CreateDummyAerospikeClusterForImage(nsName, 2, image)
 					s1 := getStorageSpecForDevice("/rack1/xvda")
 					s2 := getStorageSpecForDevice("/rack2/xvdb")
 					aeroCluster.Spec.Storage = asdbv1.AerospikeStorageSpec{}
 					aeroCluster.Spec.RackConfig = asdbv1.RackConfig{
 						Namespaces: []string{"test"},
 						Racks: []asdbv1.Rack{
-							{ID: 1, Revision: "v1", InputStorage: &s1, InputAerospikeConfig: rackNSOverride("/rack1/xvda")},
-							{ID: 2, Revision: "v1", InputStorage: &s2, InputAerospikeConfig: rackNSOverride("/rack2/xvdb")},
+							{ID: 1, Revision: "v1", InputStorage: &s1, InputAerospikeConfig: rackNSOverride("/rack1/xvda", image)},
+							{ID: 2, Revision: "v1", InputStorage: &s2, InputAerospikeConfig: rackNSOverride("/rack2/xvdb", image)},
 						},
 					}
 
@@ -134,9 +138,7 @@ var _ = Describe("Rack enabled cluster webhook validation", func() {
 				})
 
 				It("allows one rack with InputStorage and another rack falling back to spec-level storage", func() {
-					// Leave aeroCluster.Spec.Storage as from CreateDummy: includes /test/dev/xvdf for the
-					// default merged namespace config on rack 2 (no InputAerospikeConfig → global config).
-					aeroCluster := testCluster.CreateDummyAerospikeCluster(nsName, 2)
+					aeroCluster := testCluster.CreateDummyAerospikeClusterForImage(nsName, 2, image)
 					rack1Storage := getStorageSpecForDevice("/rack1/xvda")
 
 					aeroCluster.Spec.RackConfig = asdbv1.RackConfig{
@@ -146,7 +148,7 @@ var _ = Describe("Rack enabled cluster webhook validation", func() {
 								ID:                   1,
 								Revision:             "v1",
 								InputStorage:         &rack1Storage,
-								InputAerospikeConfig: rackNSOverride("/rack1/xvda"),
+								InputAerospikeConfig: rackNSOverride("/rack1/xvda", image),
 							},
 							{
 								ID:                   2,
@@ -161,18 +163,20 @@ var _ = Describe("Rack enabled cluster webhook validation", func() {
 				})
 			})
 		})
-	})
+	}
 
-	Context("Update validation", func() {
+	// rackUpdateValidationTests registers all rack update-validation It blocks for the
+	// given server image.
+	rackUpdateValidationTests := func(image string) {
 		Context("spec.rackConfig", func() {
 			Context("positive", func() {
 				It("allows update that adjusts only spec.storage while rack InputStorage stays unchanged", func() {
 					r := getStorageSpecForDevice("/r-only/dev")
-					aeroCluster := testCluster.CreateDummyAerospikeCluster(nsName, 2)
+					aeroCluster := testCluster.CreateDummyAerospikeClusterForImage(nsName, 2, image)
 					aeroCluster.Spec.RackConfig = asdbv1.RackConfig{
 						Namespaces: []string{"test"},
 						Racks: []asdbv1.Rack{
-							{ID: 1, Revision: "v1", InputStorage: &r, InputAerospikeConfig: rackNSOverride("/r-only/dev")},
+							{ID: 1, Revision: "v1", InputStorage: &r, InputAerospikeConfig: rackNSOverride("/r-only/dev", image)},
 						},
 					}
 
@@ -187,5 +191,24 @@ var _ = Describe("Rack enabled cluster webhook validation", func() {
 				})
 			})
 		})
+	}
+
+	// ── Legacy list format (server < 8.1.1) ──────────────────────────────────
+	// Delete this entire Context block when pre-8.1.1 server support is dropped.
+	Context("Deploy validation [legacy list format]", func() {
+		rackDeployValidationTests(testutil.Pre811EnterpriseImage)
+	})
+
+	Context("Update validation [legacy list format]", func() {
+		rackUpdateValidationTests(testutil.Pre811EnterpriseImage)
+	})
+
+	// ── New YAML map format (server >= 8.1.1) ─────────────────────────────────
+	Context("Deploy validation [new YAML map format]", func() {
+		rackDeployValidationTests(testutil.LatestEnterpriseImage)
+	})
+
+	Context("Update validation [new YAML map format]", func() {
+		rackUpdateValidationTests(testutil.LatestEnterpriseImage)
 	})
 })

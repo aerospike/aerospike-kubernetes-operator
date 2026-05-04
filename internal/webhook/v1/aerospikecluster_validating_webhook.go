@@ -392,7 +392,22 @@ func validate(aslog logr.Logger, cluster *asdbv1.AerospikeCluster) (admission.Wa
 		return warnings, err
 	}
 
-	// Validate rackConfig
+	// Schema validation must run before normalization so management-lib receives
+	// the config in the user's original format (old list or new YAML map) and
+	// can select the correct versioned schema.
+	for idx := range cluster.Spec.RackConfig.Racks {
+		rack := &cluster.Spec.RackConfig.Racks[idx]
+
+		if schemaErr := validateAerospikeConfigSchema(aslog, version, &rack.AerospikeConfig); schemaErr != nil {
+			return warnings, fmt.Errorf("schema validation failed for rack %d: %w", rack.ID, schemaErr)
+		}
+	}
+
+	// Normalize all effective rack configs to the new YAML map format.
+	// All structural validations below operate on this normalized representation.
+	normalizeEffectiveRackConfigs(cluster)
+
+	// Validate rackConfig (structural checks only; schema already validated above).
 	warns, err := validateRackConfig(aslog, cluster, version)
 
 	warnings = append(warnings, warns...)
@@ -523,16 +538,22 @@ func validateSCNamespaces(cluster *asdbv1.AerospikeCluster) error {
 		rack := &cluster.Spec.RackConfig.Racks[idx]
 		tmpSCNamespaceSet := sets.NewString()
 
-		nsList := rack.AerospikeConfig.Value[asdbv1.ConfKeyNamespace].([]interface{})
-		for _, nsConfInterface := range nsList {
-			nsConf := nsConfInterface.(map[string]interface{})
+		nsMap, ok := getNsMap(rack.AerospikeConfig.Value)
+		if !ok {
+			continue
+		}
 
-			isEnabled := asdbv1.IsNSSCEnabled(nsConf)
-			if isEnabled {
-				tmpSCNamespaceSet.Insert(nsConf[asdbv1.ConfKeyName].(string))
+		for nsName, nsVal := range nsMap {
+			nsConf, ok := nsVal.(map[string]interface{})
+			if !ok {
+				continue
+			}
+
+			if asdbv1.IsNSSCEnabled(nsConf) {
+				tmpSCNamespaceSet.Insert(nsName)
 
 				if validation.IsInMemoryNamespace(nsConf) {
-					return fmt.Errorf("in-memory SC namespace is not supported, namespace %v", nsConf[asdbv1.ConfKeyName])
+					return fmt.Errorf("in-memory SC namespace is not supported, namespace %v", nsName)
 				}
 			}
 		}
@@ -1051,17 +1072,17 @@ func validateRackConfig(aslog logr.Logger, cluster *asdbv1.AerospikeCluster,
 			return warnings, err
 		}
 
-		// Validate common aerospike config schema and fields
-		var configWarns admission.Warnings
-
-		configWarns, err = validateAerospikeConfig(aslog, version,
+		// Validate structural (non-schema) aerospike config fields.
+		// Schema validation is intentionally omitted here; it is run in validate()
+		// before normalization so management-lib receives the original user format.
+		configWarns, configErr := validateAerospikeConfig(aslog, version,
 			&rack.AerospikeConfig, &rack.Storage, int(cluster.Spec.Size),
 			cluster.Spec.OperatorClientCertSpec,
 		)
 		warnings = append(warnings, configWarns...)
 
-		if err != nil {
-			return warnings, err
+		if configErr != nil {
+			return warnings, configErr
 		}
 
 		err = validateRequiredFileStorageForMetadata(
@@ -1168,26 +1189,29 @@ func getNsConfForNamespaces(rackConfig asdbv1.RackConfig) map[string]nsConf {
 
 	for idx := range rackConfig.Racks {
 		rack := &rackConfig.Racks[idx]
-		nsList := rack.AerospikeConfig.Value[asdbv1.ConfKeyNamespace].([]interface{})
 
-		for _, nsInterface := range nsList {
-			nsName := nsInterface.(map[string]interface{})[asdbv1.ConfKeyName].(string)
+		nsMap, ok := getNsMap(rack.AerospikeConfig.Value)
+		if !ok {
+			continue
+		}
 
-			var noOfRacksForNamespaces int
-			if _, ok := nsConfs[nsName]; !ok {
-				noOfRacksForNamespaces = 1
-			} else {
-				noOfRacksForNamespaces = nsConfs[nsName].noOfRacksForNamespaces + 1
+		for nsName, nsVal := range nsMap {
+			nsCfgMap, ok := nsVal.(map[string]interface{})
+			if !ok {
+				continue
 			}
 
-			rf, _ := validation.GetNamespaceReplicationFactor(nsInterface.(map[string]interface{}))
+			noOfRacksForNamespaces := 1
+			if existing, exists := nsConfs[nsName]; exists {
+				noOfRacksForNamespaces = existing.noOfRacksForNamespaces + 1
+			}
 
-			ns := nsInterface.(map[string]interface{})
-			scEnabled := asdbv1.IsNSSCEnabled(ns)
+			rf, _ := validation.GetNamespaceReplicationFactor(nsCfgMap)
+
 			nsConfs[nsName] = nsConf{
 				noOfRacksForNamespaces: noOfRacksForNamespaces,
 				replicationFactor:      rf,
-				scEnabled:              scEnabled,
+				scEnabled:              asdbv1.IsNSSCEnabled(nsCfgMap),
 			}
 		}
 	}
@@ -1207,23 +1231,18 @@ func getAllNamespaceNamesAndRFMap(spec *asdbv1.AerospikeClusterSpec) (allNsNames
 	for idx := range spec.RackConfig.Racks {
 		rack := &spec.RackConfig.Racks[idx]
 
-		nsList, ok := rack.AerospikeConfig.Value[asdbv1.ConfKeyNamespace].([]interface{})
+		nsMap, ok := getNsMap(rack.AerospikeConfig.Value)
 		if !ok {
 			continue
 		}
 
-		for _, nsInterface := range nsList {
-			ns, ok := nsInterface.(map[string]interface{})
+		for nsName, nsVal := range nsMap {
+			ns, ok := nsVal.(map[string]interface{})
 			if !ok {
 				continue
 			}
 
-			name, ok := ns[asdbv1.ConfKeyName].(string)
-			if !ok {
-				continue
-			}
-
-			key := name + "@" + strconv.Itoa(rack.ID)
+			key := nsName + "@" + strconv.Itoa(rack.ID)
 			allNsNames.Insert(key)
 
 			rf, err := validation.GetNamespaceReplicationFactor(ns)
@@ -1241,6 +1260,85 @@ func getAllNamespaceNamesAndRFMap(spec *asdbv1.AerospikeClusterSpec) (allNsNames
 // ******************************************************************************
 // Helper
 // ******************************************************************************
+
+// normalizeEffectiveRackConfigs converts all rack.AerospikeConfig (effectiveAerospikeConfig)
+// maps in-place to the new YAML map format by calling normalizeConfigFormat on each one.
+//
+// This is safe because effectiveAerospikeConfig is computed by the mutating webhook and is
+// not the user's original input (which lives in spec.aerospikeConfig / rack.InputAerospikeConfig).
+// Schema validation must be run BEFORE calling this so it operates on the user's original format.
+func normalizeEffectiveRackConfigs(cluster *asdbv1.AerospikeCluster) {
+	for idx := range cluster.Spec.RackConfig.Racks {
+		normalizeConfigFormat(cluster.Spec.RackConfig.Racks[idx].AerospikeConfig.Value)
+	}
+}
+
+// getNsMap returns the namespaces section from a config map as a
+// map[string]interface{} keyed by namespace name.
+//
+// It handles both config representations transparently:
+//   - New YAML map format (server >= 9.0): namespaces is already a
+//     map[string]interface{} — returned as-is.
+//   - Legacy list format (server < 9.0): namespaces is a []interface{} of
+//     maps each containing a "name" field — converted on-the-fly to a map
+//     keyed by that "name" field.
+//
+// This makes callers format-agnostic and removes the requirement to always
+// call normalizeEffectiveRackConfigs before getNsMap.
+func getNsMap(config map[string]interface{}) (map[string]interface{}, bool) {
+	nsRaw, ok := config[asdbv1.ConfKeyNamespace]
+	if !ok {
+		return nil, false
+	}
+
+	// Already a map (new format or already normalized).
+	if nsMap, ok := nsRaw.(map[string]interface{}); ok {
+		return nsMap, true
+	}
+
+	// Legacy list format: build a map keyed by the "name" field on the fly.
+	nsList, ok := nsRaw.([]interface{})
+	if !ok {
+		return nil, false
+	}
+
+	nsMap := make(map[string]interface{}, len(nsList))
+
+	for _, item := range nsList {
+		m, ok := item.(map[string]interface{})
+		if !ok {
+			continue
+		}
+
+		name, ok := m[asdbv1.ConfKeyName].(string)
+		if !ok {
+			continue
+		}
+
+		nsMap[name] = m
+	}
+
+	return nsMap, len(nsMap) > 0
+}
+
+// nsMapToList converts a namespaces map (as returned by getNsMap) back into
+// the []interface{} list format expected by internal helpers like
+// getAerospikeStorageList.
+//
+// Note: this function is only called on values produced by getNsMap, which
+// preserves the "name" field inside each value map for the legacy-list path.
+// For the new-map path the "name" field is absent from values; callers must
+// not rely on it being present.
+//
+// TODO: remove once all internal callers are updated to work directly with maps.
+func nsMapToList(nsMap map[string]interface{}) []interface{} {
+	list := make([]interface{}, 0, len(nsMap))
+	for _, nsVal := range nsMap {
+		list = append(list, nsVal)
+	}
+
+	return list
+}
 
 // TODO: This should be version specific and part of management lib.
 // max cluster size for 5.0+ cluster
@@ -1298,45 +1396,73 @@ func cgroupMemTrackingWarning(version string, conf map[string]interface{}) admis
 	return nil
 }
 
+// validateAerospikeConfigSchema validates ONLY the JSON schema of the aerospike config via
+// management-lib. It must be called BEFORE normalizeEffectiveRackConfigs so that
+// management-lib receives the config in the user's original format and can select the correct
+// versioned schema (old list format for < 9.0, new map format for >= 9.0).
+func validateAerospikeConfigSchema(
+	aslog logr.Logger, version string, configSpec *asdbv1.AerospikeConfigSpec,
+) error {
+	if err := validation.ValidateAerospikeConfigSchema(aslog, version, configSpec.Value); err != nil {
+		return fmt.Errorf("aerospikeConfig schema validation failed: %w", err)
+	}
+
+	return nil
+}
+
+// validateAerospikeConfig validates the structural (non-schema) aspects of the aerospike
+// config. It must be called AFTER normalizeEffectiveRackConfigs so the config is in
+// the normalized (new YAML map format).
+//
+// Structural checks shared with the pkg layer (service invariants, network topology,
+// namespace basic validity, logging format) are delegated to
+// validation.ValidateAerospikeConfigStructural to avoid duplication.
+// Webhook-specific checks that require external state (operator cert, Kubernetes storage
+// volumes) are performed here.
 func validateAerospikeConfig(
 	aslog logr.Logger, version string, configSpec *asdbv1.AerospikeConfigSpec,
 	storage *asdbv1.AerospikeStorageSpec, clSize int,
 	clientCert *asdbv1.AerospikeOperatorClientCertSpec,
 ) (admission.Warnings, error) {
-	// It validates the aerospikeConfig schema and generic aerospikeConfig fields
-	if err := validation.ValidateAerospikeConfig(
-		aslog, version, configSpec.Value, clSize,
-	); err != nil {
+	config := configSpec.Value
+
+	// Shared structural validation: service, network topology, namespace basic
+	// validity (nil storage-engine, RF, MRT, device/file lists), logging.
+	if err := validation.ValidateAerospikeConfigStructural(aslog, version, config, clSize); err != nil {
 		return nil, err
 	}
 
-	if err := validateNetworkConfig(configSpec.Value, clientCert); err != nil {
+	// Webhook-specific: validate TLS client names against the operator certificate.
+	if err := validateTLSClientNames(config, clientCert); err != nil {
 		return nil, err
 	}
 
-	if err := validateNamespaceConfig(configSpec.Value, storage); err != nil {
+	// Webhook-specific: cross-check namespace storage devices/files and index-type
+	// mounts against the AerospikeStorageSpec volumes.
+	if err := validateNamespaceConfig(config, storage); err != nil {
 		return nil, err
 	}
 
-	return cgroupMemTrackingWarning(version, configSpec.Value), nil
+	return cgroupMemTrackingWarning(version, config), nil
 }
 
-func validateNetworkConfig(config map[string]interface{},
-	operatorClientCert *asdbv1.AerospikeOperatorClientCertSpec,
-) error {
-	// network conf
-	networkConf := config["network"].(map[string]interface{})
-	serviceConf := networkConf[asdbv1.ConfKeyNetworkService]
-
-	return validateTLSClientNames(
-		serviceConf.(map[string]interface{}), operatorClientCert,
-	)
-}
-
+// validateTLSClientNames checks that the tls-authenticate-client names configured in
+// network.service are present in the operator's own TLS certificate.  This is
+// webhook-specific because it requires reading the operator certificate from disk.
 func validateTLSClientNames(
-	serviceConf map[string]interface{},
+	config map[string]interface{},
 	clientCertSpec *asdbv1.AerospikeOperatorClientCertSpec,
 ) error {
+	networkConf, ok := config["network"].(map[string]interface{})
+	if !ok {
+		return nil
+	}
+
+	serviceConf, ok := networkConf[asdbv1.ConfKeyNetworkService].(map[string]interface{})
+	if !ok {
+		return nil
+	}
+
 	dnsNames, err := validation.ValidateTLSAuthenticateClient(serviceConf)
 	if err != nil {
 		return err
@@ -1406,15 +1532,20 @@ func readNamesFromLocalCertificate(clientCertSpec *asdbv1.AerospikeOperatorClien
 	return result, nil
 }
 
-// validateNamespaceConfig validates namespace config based on storage config
-// It validates namespace storage-engine devices and files against storage config
-// It validates namespace index-type mounts against storage config
-// It does not do any basic aerospikeConfig related validation like format, required fields etc. as it is already done
-// as part of ValidateAerospikeConfig
+// validateNamespaceConfig performs webhook-specific namespace validation that
+// requires external state: it cross-checks namespace storage devices/files against
+// the AerospikeStorageSpec block/file volumes, and validates index-type mounts.
+// Basic namespace field validity (nil storage-engine, RF, MRT, device-list format)
+// is handled by validation.ValidateAerospikeConfigStructural before this runs.
 func validateNamespaceConfig(
 	config map[string]interface{}, storage *asdbv1.AerospikeStorageSpec,
 ) error {
-	nsConfInterfaceList := config[asdbv1.ConfKeyNamespace].([]interface{})
+	nsMap, ok := getNsMap(config)
+	if !ok {
+		return fmt.Errorf("aerospikeConfig.namespaces not a valid map")
+	}
+
+	nsConfInterfaceList := nsMapToList(nsMap)
 
 	// Get list of all devices used in namespace. match it with namespace device list
 	blockStorageDeviceList, fileStorageList, err := getAerospikeStorageList(storage, true)
@@ -1427,6 +1558,12 @@ func validateNamespaceConfig(
 		nsConf := nsConfInterface.(map[string]interface{})
 
 		if nsStorage, ok := nsConf["storage-engine"]; ok {
+			if nsStorage == nil {
+				return fmt.Errorf(
+					"storage-engine cannot be nil for namespace %v", nsConf,
+				)
+			}
+
 			if validation.IsInMemoryNamespace(nsConf) {
 				// storage-engine memory
 				continue
@@ -1443,6 +1580,15 @@ func validateNamespaceConfig(
 					device = strings.TrimSpace(device.(string))
 
 					dList := strings.Fields(device.(string))
+
+					// Shadow device config allows at most 2 devices per entry.
+					if len(dList) > 2 {
+						return fmt.Errorf(
+							"invalid device name %v. Max 2 device can be mentioned in single line (Shadow device config)",
+							device,
+						)
+					}
+
 					for _, dev := range dList {
 						// Namespace device should be present in BlockStorage config section
 						if !utils.ContainsString(blockStorageDeviceList, dev) {
@@ -1460,6 +1606,15 @@ func validateNamespaceConfig(
 					file = strings.TrimSpace(file.(string))
 
 					fList := strings.Fields(file.(string))
+
+					// Shadow file config allows at most 2 files per entry.
+					if len(fList) > 2 {
+						return fmt.Errorf(
+							"invalid file name %v. Max 2 file can be mentioned in single line (Shadow file config)",
+							file,
+						)
+					}
+
 					for _, f := range fList {
 						dirPath := filepath.Dir(f)
 						if !isFileStorageConfiguredForDir(
@@ -1543,29 +1698,41 @@ func validateNetworkPolicyUpdate(oldPolicy, newPolicy *asdbv1.AerospikeNetworkPo
 }
 
 func validateNsConfUpdateFromStatus(newConfSpec, currentStatus *asdbv1.AerospikeConfigSpec) error {
-	var statusNsConfList []interface{}
+	var statusNsMap map[string]interface{}
 
 	if currentStatus != nil && len(currentStatus.Value) != 0 {
-		statusConf := currentStatus.Value
-		statusNsConfList = statusConf[asdbv1.ConfKeyNamespace].([]interface{})
+		// Normalize a copy so we do not mutate the stored status object.
+		statusCopy := normalizeConfigFormat(validation.DeepCopyConfig(currentStatus.Value))
+
+		if m, ok := getNsMap(statusCopy); ok {
+			statusNsMap = m
+		}
 	}
 
-	newConf := newConfSpec.Value
-	newNsConfList := newConf[asdbv1.ConfKeyNamespace].([]interface{})
+	newNsMap, ok := getNsMap(newConfSpec.Value)
+	if !ok {
+		return fmt.Errorf("aerospikeConfig.namespaces not a valid map")
+	}
 
-	return validateStorageEngineDeviceListUpdate(newNsConfList, statusNsConfList)
+	return validateStorageEngineDeviceListUpdate(newNsMap, statusNsMap)
 }
 
-func validateStorageEngineDeviceListUpdate(nsConfList, statusNsConfList []interface{}) error {
-	deviceList, fileList, err := validation.ValidateStorageEngineDeviceList(nsConfList)
+func validateStorageEngineDeviceListUpdate(nsMap, statusNsMap map[string]interface{}) error {
+	deviceList, fileList, err := validation.ValidateStorageEngineDeviceListFromMap(nsMap)
 	if err != nil {
 		return err
 	}
 
-	for _, statusNsConfInterface := range statusNsConfList {
-		nsConf := statusNsConfInterface.(map[string]interface{})
-		namespace := nsConf[asdbv1.ConfKeyName].(string)
-		storage := nsConf[asdbv1.ConfKeyStorageEngine].(map[string]interface{})
+	for namespace, statusNsVal := range statusNsMap {
+		nsConf, ok := statusNsVal.(map[string]interface{})
+		if !ok {
+			continue
+		}
+
+		storage, ok := nsConf[asdbv1.ConfKeyStorageEngine].(map[string]interface{})
+		if !ok {
+			continue
+		}
 
 		if devices, ok := storage["devices"]; ok {
 			for _, d := range devices.([]interface{}) {
@@ -1751,27 +1918,49 @@ func getFeatureKeyFilePaths(configSpec asdbv1.AerospikeConfigSpec) []string {
 func getTLSFilePaths(configSpec asdbv1.AerospikeConfigSpec) (nonCAPaths, caPaths []string) {
 	config := configSpec.Value
 
-	// feature-key-file needs secret
-	if network, ok := config["network"]; ok {
-		if tlsListInterface, ok := network.(map[string]interface{})["tls"]; ok {
-			if tlsList, ok := tlsListInterface.([]interface{}); ok {
-				for _, tlsInterface := range tlsList {
-					if path, ok := tlsInterface.(map[string]interface{})["cert-file"]; ok {
-						nonCAPaths = append(nonCAPaths, path.(string))
-					}
+	network, ok := config["network"]
+	if !ok {
+		return
+	}
 
-					if path, ok := tlsInterface.(map[string]interface{})["key-file"]; ok {
-						nonCAPaths = append(nonCAPaths, path.(string))
-					}
+	tlsVal, ok := network.(map[string]interface{})["tls"]
+	if !ok {
+		return
+	}
 
-					if path, ok := tlsInterface.(map[string]interface{})["ca-file"]; ok {
-						caPaths = append(caPaths, path.(string))
-					}
+	// extractTLSPaths reads cert-file/key-file/ca-file/ca-path from a single TLS entry map.
+	extractTLSPaths := func(tlsConf map[string]interface{}) {
+		if path, ok := tlsConf["cert-file"]; ok {
+			nonCAPaths = append(nonCAPaths, path.(string))
+		}
 
-					if path, ok := tlsInterface.(map[string]interface{})["ca-path"]; ok {
-						caPaths = append(caPaths, path.(string)+"/")
-					}
-				}
+		if path, ok := tlsConf["key-file"]; ok {
+			nonCAPaths = append(nonCAPaths, path.(string))
+		}
+
+		if path, ok := tlsConf["ca-file"]; ok {
+			caPaths = append(caPaths, path.(string))
+		}
+
+		if path, ok := tlsConf["ca-path"]; ok {
+			caPaths = append(caPaths, path.(string)+"/")
+		}
+	}
+
+	switch tls := tlsVal.(type) {
+	case []interface{}:
+		// Legacy format: tls is a list of maps each with a "name" field.
+		for _, tlsInterface := range tls {
+			if tlsConf, ok := tlsInterface.(map[string]interface{}); ok {
+				extractTLSPaths(tlsConf)
+			}
+		}
+
+	case map[string]interface{}:
+		// New YAML format: tls is a map keyed by TLS name.
+		for _, tlsInterface := range tls {
+			if tlsConf, ok := tlsInterface.(map[string]interface{}); ok {
+				extractTLSPaths(tlsConf)
 			}
 		}
 	}
@@ -2083,10 +2272,19 @@ func validateMaxUnavailable(cluster *asdbv1.AerospikeCluster) (admission.Warning
 
 	for idx := range cluster.Spec.RackConfig.Racks {
 		rack := &cluster.Spec.RackConfig.Racks[idx]
-		nsList := rack.AerospikeConfig.Value[asdbv1.ConfKeyNamespace].([]interface{})
 
-		for _, nsInterface := range nsList {
-			rfInterface, exists := nsInterface.(map[string]interface{})[asdbv1.ConfKeyReplicationFactor]
+		nsMap, ok := getNsMap(rack.AerospikeConfig.Value)
+		if !ok {
+			continue
+		}
+
+		for _, nsVal := range nsMap {
+			nsConf, ok := nsVal.(map[string]interface{})
+			if !ok {
+				continue
+			}
+
+			rfInterface, exists := nsConf[asdbv1.ConfKeyReplicationFactor]
 			if !exists {
 				// Default RF is 2 if not given
 				safeMaxUnavailable = 2
@@ -2098,7 +2296,7 @@ func validateMaxUnavailable(cluster *asdbv1.AerospikeCluster) (admission.Warning
 				return warnings, fmt.Errorf("namespace replication-factor %v", err)
 			}
 
-			// If RF is 1, then ignore it for maxUnavailable calculation as it will anyway result in data loss
+			// If RF is 1, ignore it for maxUnavailable calculation as it will result in data loss anyway.
 			if rf == 1 {
 				continue
 			}
@@ -2408,7 +2606,18 @@ func validateReplicationFactorUpdateComparison(
 	newObj *asdbv1.AerospikeCluster,
 	statusNsNames sets.Set[string],
 ) error {
-	oldJSON, err := json.Marshal(oldSpec)
+	// Deep-copy the old spec and normalize its effective rack configs to the
+	// same canonical map format used by newObj.Spec. The validating webhook
+	// calls normalizeEffectiveRackConfigs on the incoming object before this
+	// function runs, so newObj.Spec already has map-keyed namespaces. Without
+	// normalizing oldSpec, a legacy cluster (list format stored in etcd) would
+	// show a massive structural diff that falsely triggers otherSpecChanged.
+	oldSpecCopy := lib.DeepCopy(oldSpec).(*asdbv1.AerospikeClusterSpec)
+	for idx := range oldSpecCopy.RackConfig.Racks {
+		normalizeConfigFormat(oldSpecCopy.RackConfig.Racks[idx].AerospikeConfig.Value)
+	}
+
+	oldJSON, err := json.Marshal(oldSpecCopy)
 	if err != nil {
 		return fmt.Errorf("failed to marshal old spec: %v", err)
 	}
@@ -2499,18 +2708,13 @@ func validateReplicationFactorConsistencyAcrossRacks(racks []asdbv1.Rack) error 
 	for rackIdx := range racks {
 		rack := racks[rackIdx]
 
-		nsList, ok := rack.AerospikeConfig.Value[asdbv1.ConfKeyNamespace].([]interface{})
+		nsMap, ok := getNsMap(rack.AerospikeConfig.Value)
 		if !ok {
 			continue
 		}
 
-		for _, nsInterface := range nsList {
-			ns, ok := nsInterface.(map[string]interface{})
-			if !ok {
-				continue
-			}
-
-			nsName, ok := ns[asdbv1.ConfKeyName].(string)
+		for nsName, nsVal := range nsMap {
+			ns, ok := nsVal.(map[string]interface{})
 			if !ok {
 				continue
 			}

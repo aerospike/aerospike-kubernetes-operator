@@ -962,8 +962,8 @@ func (r *SingleClusterReconciler) removedNamespaces(nodesNamespaces map[string][
 
 	racks := r.aeroCluster.Spec.RackConfig.Racks
 	for idx := range racks {
-		for _, namespace := range racks[idx].AerospikeConfig.Value[asdbv1.ConfKeyNamespace].([]interface{}) {
-			specNamespaces.Insert(namespace.(map[string]interface{})[asdbv1.ConfKeyName].(string))
+		for _, nsConf := range asdbv1.GetNamespaceConfigList(racks[idx].AerospikeConfig.Value) {
+			specNamespaces.Insert(nsConf[asdbv1.ConfKeyName].(string))
 		}
 	}
 
@@ -1120,31 +1120,37 @@ func (r *SingleClusterReconciler) IsReclusterNeeded() bool {
 }
 
 func (r *SingleClusterReconciler) IsReclusterNeededForRack(specRack, statusRack *asdbv1.Rack) bool {
-	specNamespaces, ok := specRack.AerospikeConfig.Value[asdbv1.ConfKeyNamespace].([]interface{})
-	if !ok {
+	specNamespaces := asdbv1.GetNamespaceConfigList(specRack.AerospikeConfig.Value)
+	if len(specNamespaces) == 0 {
 		return false
 	}
 
-	statusNamespaces, ok := statusRack.AerospikeConfig.Value[asdbv1.ConfKeyNamespace].([]interface{})
-	if !ok {
+	statusNamespaces := asdbv1.GetNamespaceConfigList(statusRack.AerospikeConfig.Value)
+	if len(statusNamespaces) == 0 {
 		return false
 	}
 
-	for _, specNamespace := range specNamespaces {
-		for _, statusNamespace := range statusNamespaces {
-			if specNamespace.(map[string]interface{})[asdbv1.ConfKeyName] !=
-				statusNamespace.(map[string]interface{})[asdbv1.ConfKeyName] {
-				continue
-			}
+	// Build a lookup map from namespace name → status config for O(1) access.
+	statusNSByName := make(map[string]map[string]interface{}, len(statusNamespaces))
+	for _, statusNS := range statusNamespaces {
+		name, _ := statusNS[asdbv1.ConfKeyName].(string)
+		statusNSByName[name] = statusNS
+	}
 
-			if specNamespace.(map[string]interface{})["active-rack"] != statusNamespace.(map[string]interface{})["active-rack"] {
-				return true
-			}
+	for _, specNS := range specNamespaces {
+		name, _ := specNS[asdbv1.ConfKeyName].(string)
 
-			if specNamespace.(map[string]interface{})[asdbv1.ConfKeyReplicationFactor] !=
-				statusNamespace.(map[string]interface{})[asdbv1.ConfKeyReplicationFactor] {
-				return true
-			}
+		statusNS, found := statusNSByName[name]
+		if !found {
+			continue
+		}
+
+		if specNS["active-rack"] != statusNS["active-rack"] {
+			return true
+		}
+
+		if specNS[asdbv1.ConfKeyReplicationFactor] != statusNS[asdbv1.ConfKeyReplicationFactor] {
+			return true
 		}
 	}
 

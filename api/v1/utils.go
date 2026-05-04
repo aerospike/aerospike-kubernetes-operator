@@ -318,25 +318,59 @@ func GetBoolConfig(configMap map[string]interface{}, key string) (bool, error) {
 	return false, fmt.Errorf("%s: not present", key)
 }
 
+// GetNamespaceConfigList returns all namespace configurations as a flat slice
+// of maps, regardless of whether the namespaces section uses the legacy list
+// format ([]interface{} with a "name" key in each item) or the new YAML map
+// format (map[string]interface{} keyed by namespace name).
+//
+// For the new map format, a "name" key is synthesised and injected into each
+// returned map so that callers can always use ConfKeyName uniformly.
+func GetNamespaceConfigList(aerospikeConfig map[string]interface{}) []map[string]interface{} {
+	nsVal := aerospikeConfig[ConfKeyNamespace]
+
+	switch ns := nsVal.(type) {
+	case []interface{}:
+		result := make([]map[string]interface{}, 0, len(ns))
+
+		for _, item := range ns {
+			if m, ok := item.(map[string]interface{}); ok {
+				result = append(result, m)
+			}
+		}
+
+		return result
+
+	case map[string]interface{}:
+		result := make([]map[string]interface{}, 0, len(ns))
+
+		for name, item := range ns {
+			if m, ok := item.(map[string]interface{}); ok {
+				// Shallow-copy so we don't mutate the original map.
+				mCopy := make(map[string]interface{}, len(m)+1)
+				for k, v := range m {
+					mCopy[k] = v
+				}
+
+				mCopy[ConfKeyName] = name
+				result = append(result, mCopy)
+			}
+		}
+
+		return result
+	}
+
+	return nil
+}
+
 // IsAerospikeNamespacePresent indicates if the namespace is present in aerospikeConfig.
 // Assumes the namespace section is validated.
+// Supports both the legacy list format and the new YAML map format.
 func IsAerospikeNamespacePresent(
 	aerospikeConfigSpec AerospikeConfigSpec, namespaceName string,
 ) bool {
-	aerospikeConfig := aerospikeConfigSpec.Value
-
-	// Get namespace config.
-	if confs, ok := aerospikeConfig[ConfKeyNamespace].([]interface{}); ok {
-		for _, nsConf := range confs {
-			namespaceConf, ok := nsConf.(map[string]interface{})
-			if !ok {
-				// Should never happen
-				return false
-			}
-
-			if namespaceConf[ConfKeyName] == namespaceName {
-				return true
-			}
+	for _, nsConf := range GetNamespaceConfigList(aerospikeConfigSpec.Value) {
+		if nsConf[ConfKeyName] == namespaceName {
+			return true
 		}
 	}
 
@@ -481,15 +515,14 @@ func GetMigrateFillDelay(asConfig *AerospikeConfigSpec) (int, error) {
 	return fillDelay, nil
 }
 
-// IsClusterSCEnabled returns true if cluster has a sc namespace
+// IsClusterSCEnabled returns true if cluster has a SC (strong-consistency) namespace.
+// Supports both the legacy list format and the new YAML map format.
 func IsClusterSCEnabled(aeroCluster *AerospikeCluster) bool {
-	// Look inside only 1st rack. SC namespaces should be same across all the racks
+	// Look inside only 1st rack. SC namespaces should be same across all the racks.
 	rack := aeroCluster.Spec.RackConfig.Racks[0]
 
-	nsList := rack.AerospikeConfig.Value[ConfKeyNamespace].([]interface{})
-	for _, nsConfInterface := range nsList {
-		isEnabled := IsNSSCEnabled(nsConfInterface.(map[string]interface{}))
-		if isEnabled {
+	for _, nsConf := range GetNamespaceConfigList(rack.AerospikeConfig.Value) {
+		if IsNSSCEnabled(nsConf) {
 			return true
 		}
 	}

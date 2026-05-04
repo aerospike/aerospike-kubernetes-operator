@@ -988,9 +988,10 @@ func createAerospikeClusterPost570(
 					},
 					asdbv1.ConfKeySecurity: map[string]interface{}{},
 					asdbv1.ConfKeyNetwork:  getNetworkTLSConfig(),
-					asdbv1.ConfKeyNamespace: []interface{}{
+					asdbv1.ConfKeyNamespace: buildNSConfigForImage(
+						image,
 						getNonSCNamespaceConfigPre700("test", "/test/dev/xvdf"),
-					},
+					),
 				},
 			},
 		},
@@ -1008,9 +1009,10 @@ func CreateAerospikeClusterPost640(
 ) *asdbv1.AerospikeCluster {
 	// create Aerospike custom resource
 	aeroCluster := createAerospikeClusterPost570(clusterNamespacedName, size, image)
-	aeroCluster.Spec.AerospikeConfig.Value[asdbv1.ConfKeyNamespace] = []interface{}{
+	aeroCluster.Spec.AerospikeConfig.Value[asdbv1.ConfKeyNamespace] = buildNSConfigForImage(
+		image,
 		getNonSCNamespaceConfig("test", "/test/dev/xvdf"),
-	}
+	)
 
 	return aeroCluster
 }
@@ -1131,9 +1133,10 @@ func createDummyAerospikeClusterWithRFAndStorage(
 					},
 					asdbv1.ConfKeySecurity: map[string]interface{}{},
 					asdbv1.ConfKeyNetwork:  getNetworkConfig(),
-					asdbv1.ConfKeyNamespace: []interface{}{
+					asdbv1.ConfKeyNamespace: buildNSConfigForImage(
+						latestImage,
 						getNonSCNamespaceConfigWithRF("test", "/test/dev/xvdf", rf),
-					},
+					),
 				},
 			},
 		},
@@ -1149,9 +1152,10 @@ func createNonSCDummyAerospikeCluster(
 	clusterNamespacedName types.NamespacedName, size int32,
 ) *asdbv1.AerospikeCluster {
 	aerospikeCluster := createDummyAerospikeCluster(clusterNamespacedName, size)
-	aerospikeCluster.Spec.AerospikeConfig.Value[asdbv1.ConfKeyNamespace] = []interface{}{
+	aerospikeCluster.Spec.AerospikeConfig.Value[asdbv1.ConfKeyNamespace] = buildNSConfigForImage(
+		latestImage,
 		getNonSCNamespaceConfig("test", "/test/dev/xvdf"),
-	}
+	)
 
 	return aerospikeCluster
 }
@@ -1206,17 +1210,13 @@ func createDummyAerospikeCluster(
 
 			AerospikeConfig: &asdbv1.AerospikeConfigSpec{
 				Value: map[string]interface{}{
-					asdbv1.ConfKeyService: map[string]interface{}{
-						"feature-key-file":                "/etc/aerospike/secret/features.conf",
-						"proto-fd-max":                    defaultProtofdmax,
-						"auto-pin":                        "none",
-						asdbv1.ConfigKeyCgroupMemTracking: true,
-					},
+					asdbv1.ConfKeyService:  buildServiceConfigForImage(latestImage),
 					asdbv1.ConfKeySecurity: map[string]interface{}{},
 					asdbv1.ConfKeyNetwork:  getNetworkConfig(),
-					asdbv1.ConfKeyNamespace: []interface{}{
+					asdbv1.ConfKeyNamespace: buildNSConfigForImage(
+						latestImage,
 						getSCNamespaceConfig("test", "/test/dev/xvdf"),
-					},
+					),
 				},
 			},
 		},
@@ -1232,6 +1232,27 @@ func CreateDummyAerospikeCluster(
 	clusterNamespacedName types.NamespacedName, size int32,
 ) *asdbv1.AerospikeCluster {
 	return createDummyAerospikeCluster(clusterNamespacedName, size)
+}
+
+// CreateDummyAerospikeClusterForImage creates a dummy AerospikeCluster using the
+// specified server image. The aerospikeConfig (namespaces, service, etc.) is
+// generated in the format appropriate for that image version:
+//   - namespaces: list for < 8.1.1, map for >= 8.1.1
+//   - cgroup-mem-tracking: only included for >= 8.1.2 (schema rejects it otherwise)
+func CreateDummyAerospikeClusterForImage(
+	clusterNamespacedName types.NamespacedName, size int32, image string,
+) *asdbv1.AerospikeCluster {
+	aeroCluster := createDummyAerospikeCluster(clusterNamespacedName, size)
+	aeroCluster.Spec.Image = image
+	// Rebuild service config without version-gated fields that older schemas reject.
+	aeroCluster.Spec.AerospikeConfig.Value[asdbv1.ConfKeyService] = buildServiceConfigForImage(image)
+	// Rebuild the namespace config in the format appropriate for the image.
+	aeroCluster.Spec.AerospikeConfig.Value[asdbv1.ConfKeyNamespace] = buildNSConfigForImage(
+		image,
+		getSCNamespaceConfig("test", "/test/dev/xvdf"),
+	)
+
+	return aeroCluster
 }
 
 func UpdateClusterImage(
@@ -1386,9 +1407,10 @@ func CreateBasicTLSCluster(
 	clusterNamespacedName types.NamespacedName, size int32,
 ) *asdbv1.AerospikeCluster {
 	aeroCluster := createBasicTLSCluster(clusterNamespacedName, size)
-	aeroCluster.Spec.AerospikeConfig.Value[asdbv1.ConfKeyNamespace] = []interface{}{
+	aeroCluster.Spec.AerospikeConfig.Value[asdbv1.ConfKeyNamespace] = buildNSConfigForImage(
+		latestImage,
 		getSCNamespaceConfig("test", "/test/dev/xvdf"),
-	}
+	)
 	aeroCluster.Spec.Storage = getBasicStorageSpecObject()
 
 	return aeroCluster
@@ -1444,9 +1466,10 @@ func createSSDStorageCluster(
 		}...,
 	)
 
-	aeroCluster.Spec.AerospikeConfig.Value[asdbv1.ConfKeyNamespace] = []interface{}{
+	aeroCluster.Spec.AerospikeConfig.Value[asdbv1.ConfKeyNamespace] = buildNSConfigForImage(
+		latestImage,
 		getNonSCNamespaceConfigWithRF("test", "/test/dev/xvdf", int(repFact)),
-	}
+	)
 
 	return aeroCluster
 }
@@ -1475,7 +1498,8 @@ func createHDDAndDataInMemStorageCluster(
 		}...,
 	)
 
-	aeroCluster.Spec.AerospikeConfig.Value[asdbv1.ConfKeyNamespace] = []interface{}{
+	aeroCluster.Spec.AerospikeConfig.Value[asdbv1.ConfKeyNamespace] = buildNSConfigForImage(
+		latestImage,
 		map[string]interface{}{
 			"name":               "test",
 			"replication-factor": repFact,
@@ -1485,7 +1509,7 @@ func createHDDAndDataInMemStorageCluster(
 				"filesize": 2000955200,
 			},
 		},
-	}
+	)
 
 	return aeroCluster
 }
@@ -1496,7 +1520,8 @@ func createDataInMemWithoutPersistentStorageCluster(
 ) *asdbv1.AerospikeCluster {
 	aeroCluster := createBasicTLSCluster(clusterNamespacedName, size)
 	aeroCluster.Spec.PodSpec.MultiPodPerHost = &multiPodPerHost
-	aeroCluster.Spec.AerospikeConfig.Value[asdbv1.ConfKeyNamespace] = []interface{}{
+	aeroCluster.Spec.AerospikeConfig.Value[asdbv1.ConfKeyNamespace] = buildNSConfigForImage(
+		latestImage,
 		map[string]interface{}{
 			"name":               "test",
 			"replication-factor": repFact,
@@ -1505,7 +1530,7 @@ func createDataInMemWithoutPersistentStorageCluster(
 				"data-size": 1073741824,
 			},
 		},
-	}
+	)
 
 	return aeroCluster
 }
@@ -1620,6 +1645,92 @@ func getStorageVolumeForSecret() asdbv1.VolumeSpec {
 			Path: "/etc/aerospike/secret",
 		},
 	}
+}
+
+// minYAMLServerVersion is the first server version that uses the new YAML
+// map-keyed aerospikeConfig format (same boundary as in the operator code).
+const minYAMLServerVersion = "8.1.1"
+
+// minCgroupMemTrackingVersion is the first server version that supports the
+// cgroup-mem-tracking service parameter.  Including this field for older
+// versions causes schema validation failures.
+const minCgroupMemTrackingVersion = "8.1.2"
+
+// isYAMLFormatVersion returns true when version requires the new YAML map format.
+func isYAMLFormatVersion(version string) bool {
+	cmp, err := lib.CompareVersions(version, minYAMLServerVersion)
+	return err == nil && cmp >= 0
+}
+
+// isYAMLFormatImage returns true when the image requires the new YAML map format.
+func isYAMLFormatImage(image string) bool {
+	ver, err := asdbv1.GetImageVersion(image)
+	if err != nil {
+		return false
+	}
+
+	return isYAMLFormatVersion(ver)
+}
+
+// isCgroupMemTrackingImage returns true when the image supports the
+// cgroup-mem-tracking service parameter (server >= 8.1.2).
+func isCgroupMemTrackingImage(image string) bool {
+	ver, err := asdbv1.GetImageVersion(image)
+	if err != nil {
+		return false
+	}
+
+	cmp, err := lib.CompareVersions(ver, minCgroupMemTrackingVersion)
+
+	return err == nil && cmp >= 0
+}
+
+// buildServiceConfigForImage returns the aerospikeConfig.service map for the
+// given server image.  cgroup-mem-tracking is only included for server
+// versions that support it (>= 8.1.2); including it for older versions causes
+// schema validation failures.
+func buildServiceConfigForImage(image string) map[string]interface{} {
+	svcConf := map[string]interface{}{
+		"feature-key-file": "/etc/aerospike/secret/features.conf",
+		"proto-fd-max":     defaultProtofdmax,
+		"auto-pin":         "none",
+	}
+
+	if isCgroupMemTrackingImage(image) {
+		svcConf[asdbv1.ConfigKeyCgroupMemTracking] = true
+	}
+
+	return svcConf
+}
+
+// buildNSConfigForImage wraps one or more namespace maps into the value for
+// aerospikeConfig["namespaces"] in the correct format for the given image.
+func buildNSConfigForImage(image string, nsMaps ...map[string]interface{}) interface{} {
+	if isYAMLFormatImage(image) {
+		result := make(map[string]interface{}, len(nsMaps))
+
+		for _, nsMap := range nsMaps {
+			name, _ := nsMap["name"].(string)
+			inner := make(map[string]interface{}, len(nsMap))
+
+			for k, v := range nsMap {
+				if k != "name" {
+					inner[k] = v
+				}
+			}
+
+			result[name] = inner
+		}
+
+		return result
+	}
+
+	list := make([]interface{}, len(nsMaps))
+	for i, m := range nsMaps {
+		list[i] = m
+	}
+
+	return list
 }
 
 func getSCNamespaceConfig(name, path string) map[string]interface{} {

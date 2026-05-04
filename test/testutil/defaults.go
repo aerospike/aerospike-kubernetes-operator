@@ -18,15 +18,20 @@ const (
 	// CgroupMemTrackingServerVersion is the minimum Aerospike server version that requires
 	// aerospikeConfig.service.cgroup-mem-tracking to be set to true.
 	CgroupMemTrackingServerVersion = "8.1.2.0"
-	StorageClass                   = "ssd"
-	ClusterNameConfig              = "cluster-name"
-	DefaultNamespace               = "default"
-	DefaultDevicePath              = "/test/dev/xvdf"
+	// MinYAMLServerVersion is the first Aerospike server version that uses the
+	// new YAML map-keyed aerospikeConfig format (namespaces, network.tls, xdr.dcs
+	// as maps) instead of the legacy list-of-maps format.
+	MinYAMLServerVersion = "8.1.1.0"
+	StorageClass         = "ssd"
+	ClusterNameConfig    = "cluster-name"
+	DefaultNamespace     = "default"
+	DefaultDevicePath    = "/test/dev/xvdf"
 )
 
 var (
 	LatestEnterpriseImage = fmt.Sprintf("%s:%s", BaseEnterpriseImage, LatestServerVersion)
 	Pre810EnterpriseImage = fmt.Sprintf("%s:%s", BaseEnterpriseImage, Pre810ServerVersion)
+	Pre811EnterpriseImage = fmt.Sprintf("%s:%s", BaseEnterpriseImage, "8.1.0.0")
 	Pre810FederalImage    = fmt.Sprintf("%s:%s", BaseFederalImage, Pre810ServerVersion)
 	LatestFederalImage    = fmt.Sprintf("%s:%s", BaseFederalImage, LatestServerVersion)
 )

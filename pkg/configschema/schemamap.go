@@ -9,7 +9,10 @@ import (
 	lib "github.com/aerospike/aerospike-management-lib"
 )
 
-//go:embed schemas/json/aerospike
+// schemas/json/aerospike-server contains the YAML map-format schemas used for
+// validating aerospikeConfig against the new YAML format (server >= 8.1.1).
+//
+//go:embed schemas/json/aerospike-server
 var schemas embed.FS
 
 const minSupportedVersion = "6.0.0"
@@ -47,7 +50,9 @@ func NewSchemaMap() (SchemaMap, error) {
 				}
 
 				key := strings.TrimSuffix(baseName, filepath.Ext(baseName))
-				schema[key] = string(content)
+				if _, exists := schema[key]; !exists {
+					schema[key] = string(content)
+				}
 			}
 
 			return nil

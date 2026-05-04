@@ -10,6 +10,7 @@ import (
 	"k8s.io/apimachinery/pkg/util/sets"
 
 	asdbv1 "github.com/aerospike/aerospike-kubernetes-operator/v4/api/v1"
+	lib "github.com/aerospike/aerospike-management-lib"
 	"github.com/aerospike/aerospike-management-lib/asconfig"
 )
 
@@ -18,6 +19,12 @@ var networkConnectionTypes = []string{asdbv1.ConfKeyNetworkService, asdbv1.ConfK
 
 // ValidateAerospikeConfig validates the aerospikeConfig.
 // It validates the schema, service, network, logging and namespace configurations.
+//
+// Format handling: schema validation runs on the original config so the correct
+// versioned schema is selected. All structural checks then run on a normalized
+// deep copy (legacy list fields converted to the new YAML map format) so every
+// sub-validator operates on a single, consistent representation regardless of
+// whether the user supplied the old or new format.
 func ValidateAerospikeConfig(
 	aslog logr.Logger, version string, config map[string]interface{}, clSize int,
 ) error {
@@ -25,15 +32,33 @@ func ValidateAerospikeConfig(
 		return fmt.Errorf("aerospikeConfig cannot be empty")
 	}
 
+	// Schema validation on the original config (the schema path is format-aware).
 	if err := ValidateAerospikeConfigSchema(aslog, version, config); err != nil {
 		return fmt.Errorf("aerospikeConfig not valid: %v", err)
 	}
 
-	// service conf
-	serviceConf, ok := config[asdbv1.ConfKeyService].(map[string]interface{})
+	return ValidateAerospikeConfigStructural(aslog, version, config, clSize)
+}
+
+// ValidateAerospikeConfigStructural validates the structural (non-schema) aspects
+// of the aerospikeConfig: service invariants, network topology, namespace basic
+// validity (storage-engine, RF, MRT), and logging format.
+//
+// It operates on the original config but normalizes a deep copy internally so
+// callers need not pre-normalize.  Schema validation is intentionally excluded;
+// use ValidateAerospikeConfig or call ValidateAerospikeConfigSchema separately
+// before normalization when format-aware schema selection is required.
+func ValidateAerospikeConfigStructural(
+	_ logr.Logger, _ string, config map[string]interface{}, clSize int,
+) error {
+	// Deep copy + normalize: all structural checks below work on the new map format.
+	cfg := NormalizeConfigFormat(DeepCopyConfig(config))
+
+	// service conf (format-agnostic; always a map)
+	serviceConf, ok := cfg[asdbv1.ConfKeyService].(map[string]interface{})
 	if !ok {
 		return fmt.Errorf(
-			"aerospikeConfig.service not a valid map %v", config[asdbv1.ConfKeyService],
+			"aerospikeConfig.service not a valid map %v", cfg[asdbv1.ConfKeyService],
 		)
 	}
 
@@ -41,16 +66,15 @@ func ValidateAerospikeConfig(
 		return fmt.Errorf("advertise-ipv6 is not supported")
 	}
 
-	// TODO: Shouldn't be set by user, confirm this
 	if _, ok = serviceConf["cluster-name"]; !ok {
 		return fmt.Errorf("aerospikeCluster name not found in config. Looks like object is not mutated by webhook")
 	}
 
-	// network conf
-	networkConf, ok := config["network"].(map[string]interface{})
+	// network conf (TLS is now always a map after normalization)
+	networkConf, ok := cfg["network"].(map[string]interface{})
 	if !ok {
 		return fmt.Errorf(
-			"aerospikeConfig.network not a valid map %v", config["network"],
+			"aerospikeConfig.network not a valid map %v", cfg["network"],
 		)
 	}
 
@@ -58,38 +82,40 @@ func ValidateAerospikeConfig(
 		return err
 	}
 
-	// namespace conf
-	nsListInterface, ok := config[asdbv1.ConfKeyNamespace]
-	if !ok {
+	// namespace conf (always a map after normalization)
+	nsVal, ok := cfg[asdbv1.ConfKeyNamespace]
+	if !ok || nsVal == nil {
 		return fmt.Errorf(
-			"aerospikeConfig.namespace not a present. aerospikeConfig %v",
-			config,
+			"aerospikeConfig.namespace not present or nil. aerospikeConfig %v", cfg,
 		)
-	} else if nsListInterface == nil {
-		return fmt.Errorf("aerospikeConfig.namespace cannot be nil")
 	}
 
-	if nsList, ok1 := nsListInterface.([]interface{}); !ok1 {
-		return fmt.Errorf(
-			"aerospikeConfig.namespace not valid namespace list %v",
-			nsListInterface,
-		)
-	} else if err := validateNamespaceConfig(
-		nsList, clSize,
-	); err != nil {
+	nsMap, ok := nsVal.(map[string]interface{})
+	if !ok {
+		return fmt.Errorf("aerospikeConfig.namespace not a valid map after normalization %v", nsVal)
+	}
+
+	if err := validateNamespaceConfigFromMap(nsMap, clSize); err != nil {
 		return err
 	}
 
-	loggingConfList, ok := config["logging"].([]interface{})
+	// logging (remains a list in both formats; sink-type key may differ)
+	loggingConfList, ok := cfg["logging"].([]interface{})
 	if !ok {
 		return fmt.Errorf(
-			"aerospikeConfig.logging not a valid list %v", config["logging"],
+			"aerospikeConfig.logging not a valid list %v", cfg["logging"],
 		)
 	}
 
 	return validateLoggingConf(loggingConfList)
 }
 
+// validateLoggingConf checks that syslog-specific parameters (facility, path,
+// tag) are not used for non-syslog log sinks.
+//
+// Logging remains a list in both the legacy format (sink identified by "name")
+// and the new YAML format (sink identified by "type").  We check both keys so
+// that no separate normalization step is required for the logging section.
 func validateLoggingConf(loggingConfList []interface{}) error {
 	syslogParams := []string{"facility", "path", "tag"}
 
@@ -101,7 +127,13 @@ func validateLoggingConf(loggingConfList []interface{}) error {
 			)
 		}
 
-		if logConf["name"] != "syslog" {
+		// Accept either "name" (legacy) or "type" (new format) for the sink identifier.
+		sinkType := logConf["name"]
+		if sinkType == nil {
+			sinkType = logConf["type"]
+		}
+
+		if sinkType != "syslog" {
 			for _, param := range syslogParams {
 				if _, ok := logConf[param]; ok {
 					return fmt.Errorf("can use %s only with `syslog` in aerospikeConfig.logging %v", param, logConf)
@@ -113,6 +145,9 @@ func validateLoggingConf(loggingConfList []interface{}) error {
 	return nil
 }
 
+// validateNetworkConfig validates network section contents.
+// It expects the normalized (new YAML map) format: network.tls is a
+// map[tlsName]→{ca-file, ca-path, ...} keyed by TLS name.
 func validateNetworkConfig(networkConf map[string]interface{}) error {
 	serviceConf, serviceExist := networkConf[asdbv1.ConfKeyNetworkService]
 	if !serviceExist {
@@ -120,20 +155,26 @@ func validateNetworkConfig(networkConf map[string]interface{}) error {
 	}
 
 	tlsNames := sets.Set[string]{}
-	// network.tls conf
-	if _, ok := networkConf["tls"]; ok {
-		tlsConfList := networkConf["tls"].([]interface{})
-		for _, tlsConfInt := range tlsConfList {
-			tlsConf := tlsConfInt.(map[string]interface{})
-			if tlsName, ok := tlsConf["name"]; ok {
-				tlsNames.Insert(tlsName.(string))
+
+	if tlsVal, ok := networkConf["tls"]; ok {
+		tlsConfMap, ok := tlsVal.(map[string]interface{})
+		if !ok {
+			return fmt.Errorf("network.tls not a valid map %v", tlsVal)
+		}
+
+		for tlsName, tlsConfInt := range tlsConfMap {
+			tlsNames.Insert(tlsName)
+
+			tlsConf, ok := tlsConfInt.(map[string]interface{})
+			if !ok {
+				continue
 			}
 
 			if _, ok := tlsConf["ca-path"]; ok {
 				if _, ok1 := tlsConf["ca-file"]; ok1 {
 					return fmt.Errorf(
-						"both `ca-path` and `ca-file` cannot be set in `tls`. tlsConf %v",
-						tlsConf,
+						"both `ca-path` and `ca-file` cannot be set in `tls`. tlsName %v tlsConf %v",
+						tlsName, tlsConf,
 					)
 				}
 			}
@@ -243,6 +284,38 @@ func validateNetworkConnection(
 	}
 
 	return nil
+}
+
+// validateNamespaceConfigFromMap validates the namespace section when it uses
+// the new YAML map format (server >= 9.0), where each namespace is a key in
+// the map and the namespace name is the map key (not a "name" field inside the
+// map value).  It converts each entry into the list-of-maps representation
+// (injecting a synthetic "name" field equal to the map key) so that the
+// shared validateNamespaceConfig logic can be reused without modification.
+func validateNamespaceConfigFromMap(nsConfMap map[string]interface{}, clSize int) error {
+	if len(nsConfMap) == 0 {
+		return fmt.Errorf("aerospikeConfig.namespace map cannot be empty")
+	}
+
+	nsList := make([]interface{}, 0, len(nsConfMap))
+
+	for nsName, nsVal := range nsConfMap {
+		nsCfg, ok := nsVal.(map[string]interface{})
+		if !ok {
+			return fmt.Errorf("namespace conf not in valid format for namespace %q: %v", nsName, nsVal)
+		}
+
+		// Shallow-copy and inject the name so existing validators can locate it.
+		merged := make(map[string]interface{}, len(nsCfg)+1)
+		for k, v := range nsCfg {
+			merged[k] = v
+		}
+
+		merged[asdbv1.ConfKeyName] = nsName
+		nsList = append(nsList, merged)
+	}
+
+	return validateNamespaceConfig(nsList, clSize)
 }
 
 //nolint:gocyclo // for readability
@@ -536,14 +609,76 @@ func ValidateStorageEngineDeviceList(nsConfList []interface{}) (deviceList, file
 	return deviceList, fileList, nil
 }
 
+// ValidateStorageEngineDeviceListFromMap validates that no storage device or
+// file is shared across multiple namespaces when the namespace section is in
+// the new YAML map format (server >= 9.0).  The namespace name is the map key;
+// it is NOT expected to be present as a "name" field inside the value map.
+func ValidateStorageEngineDeviceListFromMap(nsConfMap map[string]interface{}) (deviceList, fileList map[string]string, err error) {
+	deviceList = map[string]string{}
+	fileList = map[string]string{}
+
+	for nsName, nsVal := range nsConfMap {
+		nsCfg, ok := nsVal.(map[string]interface{})
+		if !ok {
+			continue
+		}
+
+		storageVal, ok := nsCfg[asdbv1.ConfKeyStorageEngine]
+		if !ok {
+			continue
+		}
+
+		storage, ok := storageVal.(map[string]interface{})
+		if !ok {
+			continue
+		}
+
+		if devices, ok := storage["devices"]; ok {
+			for _, d := range devices.([]interface{}) {
+				device := d.(string)
+
+				if prev, exists := deviceList[device]; exists {
+					return nil, nil, fmt.Errorf(
+						"device %s is already being referenced in multiple namespaces (%s, %s)",
+						device, prev, nsName,
+					)
+				}
+
+				deviceList[device] = nsName
+			}
+		}
+
+		if files, ok := storage["files"]; ok {
+			for _, d := range files.([]interface{}) {
+				file := d.(string)
+
+				if prev, exists := fileList[file]; exists {
+					return nil, nil, fmt.Errorf(
+						"file %s is already being referenced in multiple namespaces (%s, %s)",
+						file, prev, nsName,
+					)
+				}
+
+				fileList[file] = nsName
+			}
+		}
+	}
+
+	return deviceList, fileList, nil
+}
+
 // IsInMemoryNamespace returns true if this namespace config uses memory for storage.
 func IsInMemoryNamespace(namespaceConf map[string]interface{}) bool {
 	storage, ok := namespaceConf[asdbv1.ConfKeyStorageEngine]
+	if !ok || storage == nil {
+		return false
+	}
+
+	storageConf, ok := storage.(map[string]interface{})
 	if !ok {
 		return false
 	}
 
-	storageConf := storage.(map[string]interface{})
 	typeStr, ok := storageConf["type"]
 
 	return ok && typeStr == "memory"
@@ -552,11 +687,15 @@ func IsInMemoryNamespace(namespaceConf map[string]interface{}) bool {
 // IsDeviceOrPmemNamespace returns true if this namespace config uses device for storage.
 func IsDeviceOrPmemNamespace(namespaceConf map[string]interface{}) bool {
 	storage, ok := namespaceConf[asdbv1.ConfKeyStorageEngine]
+	if !ok || storage == nil {
+		return false
+	}
+
+	storageConf, ok := storage.(map[string]interface{})
 	if !ok {
 		return false
 	}
 
-	storageConf := storage.(map[string]interface{})
 	typeStr, ok := storageConf["type"]
 
 	return ok && (typeStr == "device" || typeStr == "pmem")
@@ -597,6 +736,40 @@ func ValidateAerospikeConfigSchema(
 		return fmt.Errorf("config is nil")
 	}
 
+	cmp, err := lib.CompareVersions(version, "8.1.1")
+	if err != nil {
+		return fmt.Errorf("failed to parse server version %q: %v", version, err)
+	}
+
+	if cmp >= 0 {
+		// New YAML map format (server >= 8.1.1): validate directly against the
+		// versioned JSON schema via asconfig.ValidateConfig.
+		// Signature: ValidateConfig(configMap map[string]interface{}, ver string)
+		//            (bool, []*ValidationErr, error)
+		valid, validationErr, err := asconfig.ValidateConfig(config, version)
+		if !valid {
+			if len(validationErr) == 0 {
+				return fmt.Errorf(
+					"failed to validate config for version %s: %v", version, err,
+				)
+			}
+
+			errStrings := make([]string, 0, len(validationErr))
+			for _, e := range validationErr {
+				errStrings = append(errStrings, fmt.Sprintf("\t%v\n", *e))
+			}
+
+			return fmt.Errorf(
+				"config not valid for version %s: %v %v", version, err, errStrings,
+			)
+		}
+
+		return nil
+	}
+
+	// Legacy .conf format (server < 8.1.1): the aerospike-server/ schema
+	// directory only covers versions >= 8.1.1. For older versions that have no
+	// schema, skip schema validation rather than hard-failing.
 	asConf, err := asconfig.NewMapAsConfig(aslog, config)
 	if err != nil {
 		return fmt.Errorf("failed to load config map by lib: %v", err)
@@ -605,6 +778,11 @@ func ValidateAerospikeConfigSchema(
 	valid, validationErr, err := asConf.IsValid(aslog, version)
 	if !valid {
 		if len(validationErr) == 0 {
+			// No schema available for this version — skip validation.
+			if err != nil && strings.Contains(err.Error(), "unsupported version") {
+				return nil
+			}
+
 			return fmt.Errorf(
 				"failed to validate config for the version %s: %v", version,
 				err,
@@ -654,20 +832,31 @@ func ValidateAerospikeConfigUpdate(
 
 // ValidateAerospikeConfigUpdateWithoutSchema validates the update of aerospikeConfig except for the schema.
 // It validates the update of tls, network and namespace configurations.
+//
+// Both configs are normalized to the new map format before comparison so that
+// upgrade/downgrade scenarios (old format → new format or vice versa) are
+// handled correctly without separate code paths.
 func ValidateAerospikeConfigUpdateWithoutSchema(oldConfig, newConfig map[string]interface{}) error {
-	if err := validateTLSUpdate(oldConfig, newConfig); err != nil {
+	// Normalize deep copies so all comparisons operate on a single format.
+	oldNorm := NormalizeConfigFormat(DeepCopyConfig(oldConfig))
+	newNorm := NormalizeConfigFormat(DeepCopyConfig(newConfig))
+
+	if err := validateTLSUpdate(oldNorm, newNorm); err != nil {
 		return err
 	}
 
 	for _, connectionType := range networkConnectionTypes {
-		if err := validateNetworkConnectionUpdate(oldConfig, newConfig, connectionType); err != nil {
+		if err := validateNetworkConnectionUpdate(oldNorm, newNorm, connectionType); err != nil {
 			return err
 		}
 	}
 
-	return validateNsConfUpdate(oldConfig, newConfig)
+	return validateNsConfUpdate(oldNorm, newNorm)
 }
 
+// validateTLSUpdate checks TLS immutability constraints.
+// Both configs are expected to be already normalized (network.tls is a map
+// keyed by TLS name).
 func validateTLSUpdate(oldConf, newConf map[string]interface{}) error {
 	if newConf == nil || oldConf == nil {
 		return fmt.Errorf("config cannot be nil")
@@ -676,124 +865,136 @@ func validateTLSUpdate(oldConf, newConf map[string]interface{}) error {
 	oldTLS, oldExists := oldConf["network"].(map[string]interface{})["tls"]
 	newTLS, newExists := newConf["network"].(map[string]interface{})["tls"]
 
-	if oldExists && newExists && (!reflect.DeepEqual(oldTLS, newTLS)) {
-		oldTLSCAFileMap := make(map[string]string)
-		oldTLSCAPathMap := make(map[string]string)
-		newUsedTLS := sets.NewString()
-		oldUsedTLS := sets.NewString()
+	if !oldExists || !newExists || reflect.DeepEqual(oldTLS, newTLS) {
+		return nil
+	}
 
-		// fetching names of TLS configurations used in connections
-		for _, connectionType := range networkConnectionTypes {
-			if connectionConfig, exists := newConf["network"].(map[string]interface{})[connectionType]; exists {
-				connectionConfigMap := connectionConfig.(map[string]interface{})
-				if tlsName, ok := connectionConfigMap[asdbv1.ConfKeyTLSName]; ok {
-					newUsedTLS.Insert(tlsName.(string))
-				}
-			}
+	oldTLSMap, _ := oldTLS.(map[string]interface{})
+	newTLSMap, _ := newTLS.(map[string]interface{})
+
+	// Collect TLS names referenced by network connection sub-sections.
+	oldUsedTLS := collectUsedTLSNames(oldConf)
+	newUsedTLS := collectUsedTLSNames(newConf)
+
+	// Build a snapshot of old CA file/path info for used TLS entries.
+	oldTLSCAFileMap := make(map[string]string)
+	oldTLSCAPathMap := make(map[string]string)
+
+	for name, tlsVal := range oldTLSMap {
+		if !oldUsedTLS.Has(name) {
+			continue
 		}
 
-		// fetching names of TLS configurations used in old connections configurations
-		for _, connectionType := range networkConnectionTypes {
-			if connectionConfig, exists := oldConf["network"].(map[string]interface{})[connectionType]; exists {
-				connectionConfigMap := connectionConfig.(map[string]interface{})
-				if tlsName, ok := connectionConfigMap[asdbv1.ConfKeyTLSName]; ok {
-					oldUsedTLS.Insert(tlsName.(string))
-				}
-			}
+		tlsCfg, ok := tlsVal.(map[string]interface{})
+		if !ok {
+			continue
 		}
 
-		for _, tls := range oldTLS.([]interface{}) {
-			tlsMap := tls.(map[string]interface{})
-			if !oldUsedTLS.Has(tlsMap["name"].(string)) {
-				continue
-			}
-
-			oldCAFile, oldCAFileOK := tlsMap["ca-file"]
-			if oldCAFileOK {
-				oldTLSCAFileMap[tlsMap["name"].(string)] = oldCAFile.(string)
-			}
-
-			oldCAPath, oldCAPathOK := tlsMap["ca-path"]
-			if oldCAPathOK {
-				oldTLSCAPathMap[tlsMap["name"].(string)] = oldCAPath.(string)
-			}
+		if caFile, ok := tlsCfg["ca-file"]; ok {
+			oldTLSCAFileMap[name] = caFile.(string)
 		}
 
-		for _, tls := range newTLS.([]interface{}) {
-			tlsMap := tls.(map[string]interface{})
-			if !newUsedTLS.Has(tlsMap["name"].(string)) {
-				continue
-			}
+		if _, ok := tlsCfg["ca-path"]; ok {
+			oldTLSCAPathMap[name] = ""
+		}
+	}
 
-			_, newCAPathOK := tlsMap["ca-path"]
-			newCAFile, newCAFileOK := tlsMap["ca-file"]
+	// Validate that used TLS entries have not had their CA certs removed or changed.
+	for name, tlsVal := range newTLSMap {
+		if !newUsedTLS.Has(name) {
+			continue
+		}
 
-			oldCAFile, oldCAFileOK := oldTLSCAFileMap[tlsMap["name"].(string)]
-			_, oldCAPathOK := oldTLSCAPathMap[tlsMap["name"].(string)]
+		tlsCfg, ok := tlsVal.(map[string]interface{})
+		if !ok {
+			continue
+		}
 
-			if (oldCAFileOK || oldCAPathOK) && !newCAPathOK && !newCAFileOK {
-				return fmt.Errorf(
-					"cannot remove used `ca-file` or `ca-path` from tls",
-				)
-			}
+		_, newCAPathOK := tlsCfg["ca-path"]
+		newCAFile, newCAFileOK := tlsCfg["ca-file"]
 
-			if oldCAFileOK && newCAFileOK && newCAFile.(string) != oldCAFile {
-				return fmt.Errorf("cannot change ca-file of used tls")
-			}
+		oldCAFile, oldCAFileOK := oldTLSCAFileMap[name]
+		_, oldCAPathOK := oldTLSCAPathMap[name]
+
+		if (oldCAFileOK || oldCAPathOK) && !newCAPathOK && !newCAFileOK {
+			return fmt.Errorf("cannot remove used `ca-file` or `ca-path` from tls")
+		}
+
+		if oldCAFileOK && newCAFileOK && newCAFile.(string) != oldCAFile {
+			return fmt.Errorf("cannot change ca-file of used tls")
 		}
 	}
 
 	return nil
 }
 
+// collectUsedTLSNames returns the set of TLS names referenced in the network
+// connection subsections (service, heartbeat, fabric, admin).
+func collectUsedTLSNames(conf map[string]interface{}) sets.String {
+	used := sets.NewString()
+
+	networkConf, ok := conf["network"].(map[string]interface{})
+	if !ok {
+		return used
+	}
+
+	for _, connectionType := range networkConnectionTypes {
+		if connCfg, exists := networkConf[connectionType]; exists {
+			if connMap, ok := connCfg.(map[string]interface{}); ok {
+				if tlsName, ok := connMap[asdbv1.ConfKeyTLSName]; ok {
+					used.Insert(tlsName.(string))
+				}
+			}
+		}
+	}
+
+	return used
+}
+
+// validateNsConfUpdate validates namespace immutability constraints.
+// Both configs are expected to be already normalized (namespaces is a map
+// keyed by namespace name).
 func validateNsConfUpdate(oldConf, newConf map[string]interface{}) error {
 	if newConf == nil || oldConf == nil {
 		return fmt.Errorf("namespace conf cannot be nil")
 	}
 
-	newNsConfList := newConf[asdbv1.ConfKeyNamespace].([]interface{})
-	oldNsConfList := oldConf[asdbv1.ConfKeyNamespace].([]interface{})
+	newNsMap, ok := newConf[asdbv1.ConfKeyNamespace].(map[string]interface{})
+	if !ok {
+		return fmt.Errorf("namespace conf not a valid map in new config")
+	}
 
-	for _, singleConfInterface := range newNsConfList {
-		// Validate new namespaceconf
-		singleConf, ok := singleConfInterface.(map[string]interface{})
+	oldNsMap, _ := oldConf[asdbv1.ConfKeyNamespace].(map[string]interface{})
+
+	for nsName, newNsVal := range newNsMap {
+		newNsCfg, ok := newNsVal.(map[string]interface{})
 		if !ok {
+			return fmt.Errorf("namespace conf not in valid format for namespace %q: %v", nsName, newNsVal)
+		}
+
+		oldNsVal, exists := oldNsMap[nsName]
+		if !exists {
+			continue
+		}
+
+		oldNsCfg, ok := oldNsVal.(map[string]interface{})
+		if !ok {
+			continue
+		}
+
+		if isValueUpdated(oldNsCfg, newNsCfg, "replication-factor") &&
+			asdbv1.IsNSSCEnabled(newNsCfg) {
 			return fmt.Errorf(
-				"namespace conf not in valid format %v", singleConfInterface,
+				"replication-factor cannot be updated for SC namespaces. old nsconf %v, new nsconf %v",
+				oldNsCfg, newNsCfg,
 			)
 		}
 
-		// Validate new namespace conf from old namespace conf. Few fields cannot be updated
-		for _, oldSingleConfInterface := range oldNsConfList {
-			oldSingleConf, ok := oldSingleConfInterface.(map[string]interface{})
-			if !ok {
-				return fmt.Errorf(
-					"namespace conf not in valid format %v",
-					oldSingleConfInterface,
-				)
-			}
-
-			if singleConf[asdbv1.ConfKeyName] == oldSingleConf[asdbv1.ConfKeyName] {
-				// replication-factor update not allowed for SC namespaces
-				if isValueUpdated(
-					oldSingleConf, singleConf, "replication-factor",
-				) && asdbv1.IsNSSCEnabled(singleConf) {
-					return fmt.Errorf(
-						"replication-factor cannot be updated for SC namespaces. old nsconf %v, new nsconf %v",
-						oldSingleConf, singleConf,
-					)
-				}
-
-				// strong-consistency update not allowed
-				if isValueUpdated(
-					oldSingleConf, singleConf, asdbv1.ConfKeyStrongConsistency,
-				) {
-					return fmt.Errorf(
-						"strong-consistency cannot be updated. old nsconf %v, new nsconf %v",
-						oldSingleConf, singleConf,
-					)
-				}
-			}
+		if isValueUpdated(oldNsCfg, newNsCfg, asdbv1.ConfKeyStrongConsistency) {
+			return fmt.Errorf(
+				"strong-consistency cannot be updated. old nsconf %v, new nsconf %v",
+				oldNsCfg, newNsCfg,
+			)
 		}
 	}
 

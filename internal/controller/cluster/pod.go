@@ -24,9 +24,11 @@ import (
 	"github.com/aerospike/aerospike-kubernetes-operator/v4/internal/controller/common"
 	"github.com/aerospike/aerospike-kubernetes-operator/v4/pkg/jsonpatch"
 	"github.com/aerospike/aerospike-kubernetes-operator/v4/pkg/utils"
+	"github.com/aerospike/aerospike-kubernetes-operator/v4/pkg/validation"
 	lib "github.com/aerospike/aerospike-management-lib"
 	"github.com/aerospike/aerospike-management-lib/asconfig"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
+	sigsyaml "sigs.k8s.io/yaml"
 )
 
 // RestartType is the type of pod restart to use.
@@ -1253,42 +1255,40 @@ func (r *SingleClusterReconciler) handleNSOrDeviceRemoval(rackState *RackState, 
 		return nil
 	}
 
-	for _, statusNamespace := range rackStatus.AerospikeConfig.Value[asdbv1.ConfKeyNamespace].([]interface{}) {
-		namespaceFound := false
+	// Build a name→config lookup for spec namespaces for O(1) access.
+	specNSByName := make(map[string]map[string]interface{})
+	for _, nsConf := range asdbv1.GetNamespaceConfigList(rackState.Rack.AerospikeConfig.Value) {
+		name, _ := nsConf[asdbv1.ConfKeyName].(string)
+		specNSByName[name] = nsConf
+	}
 
-		for _, specNamespace := range rackState.Rack.AerospikeConfig.Value[asdbv1.ConfKeyNamespace].([]interface{}) {
-			if specNamespace.(map[string]interface{})[asdbv1.ConfKeyName] !=
-				statusNamespace.(map[string]interface{})[asdbv1.ConfKeyName] {
-				continue
-			}
+	for _, statusNS := range asdbv1.GetNamespaceConfigList(rackStatus.AerospikeConfig.Value) {
+		nsName, _ := statusNS[asdbv1.ConfKeyName].(string)
+		statusStorage, _ := statusNS[asdbv1.ConfKeyStorageEngine].(map[string]interface{})
 
-			namespaceFound = true
-			specStorage := specNamespace.(map[string]interface{})[asdbv1.ConfKeyStorageEngine].(map[string]interface{})
-			statusStorage := statusNamespace.(map[string]interface{})[asdbv1.ConfKeyStorageEngine].(map[string]interface{})
+		specNS, namespaceFound := specNSByName[nsName]
+
+		if namespaceFound {
+			specStorage, _ := specNS[asdbv1.ConfKeyStorageEngine].(map[string]interface{})
 
 			statusDevices := sets.Set[string]{}
 			specDevices := sets.Set[string]{}
 
 			if statusStorage["devices"] != nil {
-				for _, statusDeviceInterface := range statusStorage["devices"].([]interface{}) {
-					statusDevices.Insert(strings.Fields(statusDeviceInterface.(string))...)
+				for _, d := range statusStorage["devices"].([]interface{}) {
+					statusDevices.Insert(strings.Fields(d.(string))...)
 				}
 			}
 
 			if specStorage["devices"] != nil {
-				for _, specDeviceInterface := range specStorage["devices"].([]interface{}) {
-					specDevices.Insert(strings.Fields(specDeviceInterface.(string))...)
+				for _, d := range specStorage["devices"].([]interface{}) {
+					specDevices.Insert(strings.Fields(d.(string))...)
 				}
 			}
 
-			removedDevicesPerNS := sets.List(statusDevices.Difference(specDevices))
-			for _, removedDevice := range removedDevicesPerNS {
+			for _, removedDevice := range sets.List(statusDevices.Difference(specDevices)) {
 				deviceName := getVolumeNameFromDevicePath(rackStatus.Storage.Volumes, removedDevice)
-				r.Log.Info(
-					"Device is removed from namespace", "device", deviceName, "namespace",
-					specNamespace.(map[string]interface{})[asdbv1.ConfKeyName],
-				)
-
+				r.Log.Info("Device is removed from namespace", "device", deviceName, "namespace", nsName)
 				removedDevices = append(removedDevices, deviceName)
 			}
 
@@ -1296,19 +1296,18 @@ func (r *SingleClusterReconciler) handleNSOrDeviceRemoval(rackState *RackState, 
 			specFiles := sets.Set[string]{}
 
 			if statusStorage["files"] != nil {
-				for _, statusFileInterface := range statusStorage["files"].([]interface{}) {
-					statusFiles.Insert(strings.Fields(statusFileInterface.(string))...)
+				for _, f := range statusStorage["files"].([]interface{}) {
+					statusFiles.Insert(strings.Fields(f.(string))...)
 				}
 			}
 
 			if specStorage["files"] != nil {
-				for _, specFileInterface := range specStorage["files"].([]interface{}) {
-					specFiles.Insert(strings.Fields(specFileInterface.(string))...)
+				for _, f := range specStorage["files"].([]interface{}) {
+					specFiles.Insert(strings.Fields(f.(string))...)
 				}
 			}
 
-			removedFilesPerNS := sets.List(statusFiles.Difference(specFiles))
-			if len(removedFilesPerNS) > 0 {
+			if removedFilesPerNS := sets.List(statusFiles.Difference(specFiles)); len(removedFilesPerNS) > 0 {
 				removedFiles = append(removedFiles, removedFilesPerNS...)
 			}
 
@@ -1316,20 +1315,20 @@ func (r *SingleClusterReconciler) handleNSOrDeviceRemoval(rackState *RackState, 
 
 			specMounts := sets.Set[string]{}
 
-			if statusNamespace.(map[string]interface{})["index-type"] != nil {
-				statusIndex := statusNamespace.(map[string]interface{})["index-type"].(map[string]interface{})
+			if statusNS["index-type"] != nil {
+				statusIndex, _ := statusNS["index-type"].(map[string]interface{})
 				if statusIndex["mounts"] != nil {
-					for _, statusMountInterface := range statusIndex["mounts"].([]interface{}) {
-						statusMounts = append(statusMounts, strings.Fields(statusMountInterface.(string))...)
+					for _, m := range statusIndex["mounts"].([]interface{}) {
+						statusMounts = append(statusMounts, strings.Fields(m.(string))...)
 					}
 				}
 			}
 
-			if specNamespace.(map[string]interface{})["index-type"] != nil {
-				specIndex := specNamespace.(map[string]interface{})["index-type"].(map[string]interface{})
+			if specNS["index-type"] != nil {
+				specIndex, _ := specNS["index-type"].(map[string]interface{})
 				if specIndex["mounts"] != nil {
-					for _, specMountInterface := range specIndex["mounts"].([]interface{}) {
-						specMounts.Insert(strings.Fields(specMountInterface.(string))...)
+					for _, m := range specIndex["mounts"].([]interface{}) {
+						specMounts.Insert(strings.Fields(m.(string))...)
 					}
 				}
 			}
@@ -1347,48 +1346,31 @@ func (r *SingleClusterReconciler) handleNSOrDeviceRemoval(rackState *RackState, 
 			if indexMountRemoved {
 				removedFiles = append(removedFiles, statusMounts...)
 			}
-
-			break
-		}
-
-		if !namespaceFound {
-			r.Log.Info(
-				"Namespace is deleted", "namespace", statusNamespace.(map[string]interface{})[asdbv1.ConfKeyName],
-			)
-
-			statusStorage := statusNamespace.(map[string]interface{})[asdbv1.ConfKeyStorageEngine].(map[string]interface{})
+		} else {
+			r.Log.Info("Namespace is deleted", "namespace", nsName)
 
 			if statusStorage["devices"] != nil {
-				var statusDevices []string
-				for _, statusDeviceInterface := range statusStorage["devices"].([]interface{}) {
-					statusDevices = append(statusDevices, strings.Fields(statusDeviceInterface.(string))...)
-				}
-
-				for _, statusDevice := range statusDevices {
-					deviceName := getVolumeNameFromDevicePath(rackStatus.Storage.Volumes, statusDevice)
-					removedDevices = append(removedDevices, deviceName)
+				for _, d := range statusStorage["devices"].([]interface{}) {
+					for _, device := range strings.Fields(d.(string)) {
+						deviceName := getVolumeNameFromDevicePath(rackStatus.Storage.Volumes, device)
+						removedDevices = append(removedDevices, deviceName)
+					}
 				}
 			}
 
 			if statusStorage["files"] != nil {
-				var statusFiles []string
-				for _, statusFileInterface := range statusStorage["files"].([]interface{}) {
-					statusFiles = append(statusFiles, strings.Fields(statusFileInterface.(string))...)
+				for _, f := range statusStorage["files"].([]interface{}) {
+					removedFiles = append(removedFiles, strings.Fields(f.(string))...)
 				}
-
-				removedFiles = append(removedFiles, statusFiles...)
 			}
 
-			if statusNamespace.(map[string]interface{})["index-type"] != nil {
-				statusIndex := statusNamespace.(map[string]interface{})["index-type"].(map[string]interface{})
+			if statusNS["index-type"] != nil {
+				statusIndex, _ := statusNS["index-type"].(map[string]interface{})
 				if statusIndex["mounts"] != nil {
-					var statusMounts []string
-					for _, statusMountInterface := range statusStorage["mounts"].([]interface{}) {
-						statusMounts = append(statusMounts, strings.Fields(statusMountInterface.(string))...)
-					}
-
-					for index := range statusMounts {
-						removedFiles = append(removedFiles, statusMounts[index]+"/*")
+					for _, m := range statusIndex["mounts"].([]interface{}) {
+						for _, mount := range strings.Fields(m.(string)) {
+							removedFiles = append(removedFiles, mount+"/*")
+						}
 					}
 				}
 			}
@@ -1469,64 +1451,51 @@ func (r *SingleClusterReconciler) getNSAddedDevices(rackState *RackState) ([]str
 		return nil, nil
 	}
 
-	for _, specNamespace := range rackState.Rack.AerospikeConfig.Value[asdbv1.ConfKeyNamespace].([]interface{}) {
-		namespaceFound := false
+	// Build a name→config lookup for status namespaces for O(1) access.
+	statusNSByName := make(map[string]map[string]interface{})
+	for _, nsConf := range asdbv1.GetNamespaceConfigList(rackStatus.AerospikeConfig.Value) {
+		name, _ := nsConf[asdbv1.ConfKeyName].(string)
+		statusNSByName[name] = nsConf
+	}
 
-		for _, statusNamespace := range rackStatus.AerospikeConfig.Value[asdbv1.ConfKeyNamespace].([]interface{}) {
-			if specNamespace.(map[string]interface{})[asdbv1.ConfKeyName] !=
-				statusNamespace.(map[string]interface{})[asdbv1.ConfKeyName] {
-				continue
-			}
+	for _, specNS := range asdbv1.GetNamespaceConfigList(rackState.Rack.AerospikeConfig.Value) {
+		nsName, _ := specNS[asdbv1.ConfKeyName].(string)
+		specStorage, _ := specNS[asdbv1.ConfKeyStorageEngine].(map[string]interface{})
 
-			namespaceFound = true
-			specStorage := specNamespace.(map[string]interface{})[asdbv1.ConfKeyStorageEngine].(map[string]interface{})
-			statusStorage := statusNamespace.(map[string]interface{})[asdbv1.ConfKeyStorageEngine].(map[string]interface{})
+		statusNS, namespaceFound := statusNSByName[nsName]
 
-			var specDevices []string
+		if namespaceFound {
+			statusStorage, _ := statusNS[asdbv1.ConfKeyStorageEngine].(map[string]interface{})
 
 			statusDevices := sets.Set[string]{}
 
-			if specStorage["devices"] != nil {
-				for _, specDeviceInterface := range specStorage["devices"].([]interface{}) {
-					specDevices = append(specDevices, strings.Fields(specDeviceInterface.(string))...)
-				}
-			}
-
 			if statusStorage["devices"] != nil {
-				for _, statusDeviceInterface := range statusStorage["devices"].([]interface{}) {
-					statusDevices.Insert(strings.Fields(statusDeviceInterface.(string))...)
+				for _, d := range statusStorage["devices"].([]interface{}) {
+					statusDevices.Insert(strings.Fields(d.(string))...)
 				}
 			}
 
-			for _, specDevice := range specDevices {
-				if !statusDevices.Has(specDevice) {
-					r.Log.Info(
-						"Device is added in namespace",
-					)
+			if specStorage["devices"] != nil {
+				for _, d := range specStorage["devices"].([]interface{}) {
+					for _, specDevice := range strings.Fields(d.(string)) {
+						if !statusDevices.Has(specDevice) {
+							r.Log.Info("Device is added in namespace")
 
-					deviceName := getVolumeNameFromDevicePath(rackState.Rack.Storage.Volumes, specDevice)
-					volumes = append(volumes, deviceName)
+							deviceName := getVolumeNameFromDevicePath(rackState.Rack.Storage.Volumes, specDevice)
+							volumes = append(volumes, deviceName)
+						}
+					}
 				}
 			}
+		} else {
+			r.Log.Info("Namespace added")
 
-			break
-		}
-
-		if !namespaceFound {
-			r.Log.Info(
-				"Namespace added",
-			)
-
-			specStorage := specNamespace.(map[string]interface{})[asdbv1.ConfKeyStorageEngine].(map[string]interface{})
 			if specStorage["type"] == "device" && specStorage["devices"] != nil {
-				var specDevices []string
-				for _, specDeviceInterface := range specStorage["devices"].([]interface{}) {
-					specDevices = append(specDevices, strings.Fields(specDeviceInterface.(string))...)
-				}
-
-				for _, specDevice := range specDevices {
-					deviceName := getVolumeNameFromDevicePath(rackState.Rack.Storage.Volumes, specDevice)
-					volumes = append(volumes, deviceName)
+				for _, d := range specStorage["devices"].([]interface{}) {
+					for _, specDevice := range strings.Fields(d.(string)) {
+						deviceName := getVolumeNameFromDevicePath(rackState.Rack.Storage.Volumes, specDevice)
+						volumes = append(volumes, deviceName)
+					}
 				}
 			}
 		}
@@ -1615,54 +1584,136 @@ func isAllDynamicConfig(log logger, specToStatusDiffs asconfig.DynamicConfigMap,
 	return true
 }
 
-func getFlatConfig(log logger, confStr string) (*asconfig.Conf, error) {
-	asConf, err := asconfig.NewASConfigFromBytes(log, []byte(confStr), asconfig.AeroConfig)
-	if err != nil {
-		return nil, fmt.Errorf("failed to load config map by lib: %v", err)
+const (
+	// aerospikeConfAnnotation is the pod annotation key written by the legacy
+	// init container (< 2.6.0).  Its value is the running Aerospike config in
+	// the old .conf text format.
+	aerospikeConfAnnotation = "aerospikeConf"
+
+	// aerospikeYAMLAnnotation is the pod annotation key written by the new
+	// init container (>= 2.6.0).  Its value is the running Aerospike config in
+	// the new YAML map-keyed format.
+	aerospikeYAMLAnnotation = "aerospikeYaml"
+)
+
+// getConfDiff computes the dynamic-config diff between the desired spec and the
+// currently-running config stored in the pod annotation.
+//
+// Two annotation keys are supported:
+//   - "aerospikeYaml"  written by the new init container (>= 2.6.0); value is
+//     YAML in the new map-keyed format.  Checked first.
+//   - "aerospikeConf"  written by the legacy init container (< 2.6.0); value
+//     is the old .conf text format.  Used as a fallback.
+//
+// Both sides are always normalized to the new YAML map-keyed format before
+// being passed to asconfig.YAMLDiff so that structural differences between the
+// two formats never cause spurious diffs.
+func getConfDiff(
+	log logger,
+	specConfig map[string]interface{},
+	podAnnotations map[string]string,
+	version string,
+) (asconfig.DynamicConfigMap, error) {
+	// Determine annotation source and format.
+	var (
+		annotationContent string
+		isYAMLFormat      bool
+	)
+
+	if content, ok := podAnnotations[aerospikeYAMLAnnotation]; ok {
+		annotationContent = content
+		isYAMLFormat = true
+	} else if content, ok := podAnnotations[aerospikeConfAnnotation]; ok {
+		annotationContent = content
+		isYAMLFormat = false
+	} else {
+		log.Info("Pod config annotation missing",
+			"checkedKeys", []string{aerospikeYAMLAnnotation, aerospikeConfAnnotation})
+		return nil, nil
 	}
 
-	return asConf.GetFlatMap(), nil
+	// Normalize the spec config to the new map format and marshal to YAML.
+	specNormalized := validation.NormalizeConfigFormat(validation.DeepCopyConfig(specConfig))
+
+	desiredYAML, err := sigsyaml.Marshal(specNormalized)
+	if err != nil {
+		return nil, fmt.Errorf("failed to marshal spec config to YAML: %v", err)
+	}
+
+	// Convert the annotation content to normalized YAML bytes.
+	var currentYAML []byte
+	if isYAMLFormat {
+		currentYAML, err = yamlAnnotationToNormalizedYAML(annotationContent)
+	} else {
+		currentYAML, err = confAnnotationToNormalizedYAML(log, annotationContent)
+	}
+
+	if err != nil {
+		log.Info("Failed to convert pod annotation config to YAML, falling back to rolling restart",
+			"error", err.Error())
+		return nil, nil
+	}
+
+	configDiff, err := asconfig.YAMLDiff(log, desiredYAML, currentYAML, version)
+	if err != nil {
+		log.Info("Failed to get YAML config diff, falling back to rolling restart", "error", err.Error())
+		return nil, nil
+	}
+
+	// All() merges dynamic and static changes into a single DynamicConfigMap.
+	// isAllDynamicConfig will then decide whether a rolling restart is needed.
+	return configDiff.All(), nil
 }
 
-// getConfDiff retrieves the configuration differences between the spec and status Aerospike configurations.
-func getConfDiff(log logger, specConfig map[string]interface{}, podAnnotations map[string]string,
-	version string) (asconfig.DynamicConfigMap, error) {
-	statusFromAnnotation, ok := podAnnotations["aerospikeConf"]
-	if !ok {
-		log.Info("Pod annotation 'aerospikeConf' missing")
-		return nil, nil
+// yamlAnnotationToNormalizedYAML parses the value of the "aerospikeYaml" pod
+// annotation (written by the new init container >= 2.6.0) and returns it as
+// normalized YAML bytes.
+//
+// The annotation is expected to be valid YAML in the new map-keyed format.
+// Normalization is applied as a safety measure in case the annotation was
+// written with an intermediate format that still uses lists for some sections.
+func yamlAnnotationToNormalizedYAML(annotationStr string) ([]byte, error) {
+	var m map[string]interface{}
+	if err := sigsyaml.Unmarshal([]byte(annotationStr), &m); err != nil {
+		return nil, fmt.Errorf("failed to parse aerospikeYaml annotation as YAML: %w", err)
 	}
 
-	asConfStatus, err := getFlatConfig(log, statusFromAnnotation)
+	// Normalize to ensure consistent map-keyed format for all named sections.
+	validation.NormalizeConfigFormat(m)
+
+	normalized, err := sigsyaml.Marshal(m)
 	if err != nil {
-		return nil, fmt.Errorf("failed to load config map by lib: %v", err)
+		return nil, fmt.Errorf("failed to re-marshal normalized aerospikeYaml annotation: %w", err)
 	}
 
-	asConf, err := asconfig.NewMapAsConfig(log, specConfig)
+	return normalized, nil
+}
+
+// confAnnotationToNormalizedYAML parses the value of the "aerospikeConf" pod
+// annotation (written by the legacy init container < 2.6.0) and returns it as
+// normalized YAML bytes.
+//
+// The annotation value is in the old Aerospike .conf text format.  It is
+// parsed by the management-lib, the resulting map is normalized to the new
+// map-keyed format, and then marshalled to YAML.
+func confAnnotationToNormalizedYAML(log logger, annotationStr string) ([]byte, error) {
+	asConf, err := asconfig.NewASConfigFromBytes(log, []byte(annotationStr), asconfig.AeroConfig)
 	if err != nil {
-		return nil, fmt.Errorf("failed to load config map by lib: %v", err)
+		return nil, fmt.Errorf("failed to parse aerospikeConf annotation as .conf: %w", err)
 	}
 
-	// special handling for DNE in ldap configurations
-	specConfFile := asConf.ToConfFile()
-	specConfFile = strings.ReplaceAll(specConfFile, "$${_DNE}{un}", "${un}")
-	specConfFile = strings.ReplaceAll(specConfFile, "$${_DNE}{dn}", "${dn}")
+	// ToMap returns the expanded nested map in list format for named sections.
+	confMap := map[string]interface{}(*asConf.ToMap())
 
-	asConfSpec, err := getFlatConfig(log, specConfFile)
+	// Normalize to new map-keyed format (namespaces, network.tls, xdr.dcs, …).
+	validation.NormalizeConfigFormat(confMap)
+
+	yamlBytes, err := sigsyaml.Marshal(confMap)
 	if err != nil {
-		return nil, fmt.Errorf("failed to load config map by lib: %v", err)
+		return nil, fmt.Errorf("failed to marshal converted .conf annotation to YAML: %w", err)
 	}
 
-	specToStatusDiffs, err := asconfig.ConfDiff(log, *asConfSpec, *asConfStatus,
-		true, version)
-	if err != nil {
-		log.Info("Failed to get config diff to change config dynamically, fallback to rolling restart",
-			"error", err.Error())
-
-		return nil, nil
-	}
-
-	return specToStatusDiffs, nil
+	return yamlBytes, nil
 }
 
 func (r *SingleClusterReconciler) patchPodStatus(ctx context.Context, patches []jsonpatch.PatchOperation) error {

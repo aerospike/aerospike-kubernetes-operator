@@ -395,10 +395,13 @@ func (r *SingleClusterReconciler) createSTSConfigMap(
 	)
 	if err != nil {
 		if errors.IsNotFound(err) {
-			// build the aerospike config file based on the current spec
+			// build the aerospike config file based on the current spec.
+			// New ConfigMaps never include the legacy .conf template: new
+			// racks always target the latest image, so the YAML template is
+			// sufficient.
 			var configMapData map[string]string
 
-			configMapData, err = r.createConfigMapData(rack)
+			configMapData, err = r.createConfigMapData(rack, false)
 			if err != nil {
 				return fmt.Errorf("failed to build dotConfig from map: %v", err)
 			}
@@ -448,7 +451,8 @@ func (r *SingleClusterReconciler) createSTSConfigMap(
 	)
 
 	// Update existing configmap as it might not be current.
-	configMapData, err := r.createConfigMapData(rack)
+	// New ConfigMaps never include the legacy .conf template.
+	configMapData, err := r.createConfigMapData(rack, false)
 	if err != nil {
 		return fmt.Errorf("failed to build config map data: %v", err)
 	}
@@ -484,8 +488,14 @@ func (r *SingleClusterReconciler) updateSTSConfigMap(
 		return err
 	}
 
+	// Include the legacy aerospike.template.conf only while at least one pod
+	// is still running Aerospike Server < 8.1.1.  If all pods have already
+	// been upgraded (or there are no pods yet) we omit the legacy template and
+	// delete it from the ConfigMap if it was previously present.
+	includeLegacyConf := !r.allPodsAboveYAMLVersion()
+
 	// build the aerospike config file based on the current spec
-	configMapData, err := r.createConfigMapData(rack)
+	configMapData, err := r.createConfigMapData(rack, includeLegacyConf)
 	if err != nil {
 		return fmt.Errorf("failed to build dotConfig from map: %v", err)
 	}
@@ -493,6 +503,12 @@ func (r *SingleClusterReconciler) updateSTSConfigMap(
 	// Overwrite only spec based keys. Do not touch other keys like pod metadata.
 	for k, v := range configMapData {
 		confMap.Data[k] = v
+	}
+
+	// Once all pods have been upgraded past the YAML format boundary, remove the
+	// legacy .conf template from the ConfigMap so it does not accumulate stale data.
+	if !includeLegacyConf {
+		delete(confMap.Data, aerospikeTemplateConfFileName)
 	}
 
 	if err := r.Update(

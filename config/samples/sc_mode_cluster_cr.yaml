@@ -6,7 +6,8 @@ metadata:
 
 spec:
   size: 4
-  image: aerospike/aerospike-server-enterprise:8.1.2.0
+  enableDynamicConfigUpdate: true
+  image: aerospike/aerospike-server-enterprise:8.1.0.0
 
   rosterNodeBlockList:
     - 1A0
@@ -49,6 +50,9 @@ spec:
 
   podSpec:
     multiPodPerHost: true
+#    aerospikeInitContainer:
+#      imageRegistryNamespace: tanmayj10
+#      imageNameAndTag: aerospike-kubernetes-init:2.6.0-dev5
 
   aerospikeAccessControl:
     users:
@@ -61,7 +65,7 @@ spec:
   aerospikeConfig:
     service:
       feature-key-file: /etc/aerospike/secret/features.conf
-      cgroup-mem-tracking: true
+      proto-fd-max: 17000
     security: {}
     network:
       service:

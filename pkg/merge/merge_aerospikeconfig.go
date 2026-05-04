@@ -118,6 +118,16 @@ func handleValues(baseValue, patchValue interface{}) (interface{}, error) {
 			return patchValue, nil
 		}
 
+		// Determine the identity key for this list of maps.
+		// Legacy config uses "name" (namespaces, tls, xdr.dcs …).
+		// New YAML format logging uses "type" instead.
+		// We probe the first element of the base list to decide which key to use.
+		idKey := listIDKey(baseValue.([]interface{}))
+		if idKey == "" {
+			// Unknown shape — fall back to full replacement (safe default).
+			return patchValue, nil
+		}
+
 		var patchedList []interface{}
 
 		// merge and append ele from base
@@ -127,10 +137,9 @@ func handleValues(baseValue, patchValue interface{}) (interface{}, error) {
 				return "", fmt.Errorf("object %v should be map", bEleInt)
 			}
 
-			// get namespace name in base
-			bName, ok := bEle["name"]
+			bName, ok := bEle[idKey]
 			if !ok {
-				return "", fmt.Errorf("object %v should have `name` key", bEle)
+				return "", fmt.Errorf("object %v should have `%s` key", bEle, idKey)
 			}
 
 			var found bool
@@ -141,12 +150,9 @@ func handleValues(baseValue, patchValue interface{}) (interface{}, error) {
 					return "", fmt.Errorf("object %v should be map", pEleInt)
 				}
 
-				// get namespace name in patch
-				pName, ok := pEle["name"]
+				pName, ok := pEle[idKey]
 				if !ok {
-					return "", fmt.Errorf(
-						"object %v should have `name` key", pEle,
-					)
+					return "", fmt.Errorf("object %v should have `%s` key", pEle, idKey)
 				}
 
 				if pName == bName {
@@ -169,14 +175,22 @@ func handleValues(baseValue, patchValue interface{}) (interface{}, error) {
 		}
 
 		for _, pEleInt := range patchValue.([]interface{}) {
-			pName := pEleInt.(map[string]interface{})["name"]
+			pEle, ok := pEleInt.(map[string]interface{})
+			if !ok {
+				continue
+			}
+
+			pName := pEle[idKey]
 
 			var found bool
 
 			for _, bEleInt := range baseValue.([]interface{}) {
-				bName := bEleInt.(map[string]interface{})["name"]
+				bEle, ok := bEleInt.(map[string]interface{})
+				if !ok {
+					continue
+				}
 
-				if pName == bName {
+				if bEle[idKey] == pName {
 					found = true
 					break
 				}
@@ -203,4 +217,26 @@ func isPrimList(list []interface{}) bool {
 	}
 
 	return true
+}
+
+// listIDKey returns the key used to identify items in a list-of-maps.
+// Legacy config uses "name"; new YAML format logging uses "type".
+// Returns "" when the identity key cannot be determined.
+func listIDKey(list []interface{}) string {
+	for _, item := range list {
+		m, ok := item.(map[string]interface{})
+		if !ok {
+			continue
+		}
+
+		if _, ok := m["name"]; ok {
+			return "name"
+		}
+
+		if _, ok := m["type"]; ok {
+			return "type"
+		}
+	}
+
+	return ""
 }

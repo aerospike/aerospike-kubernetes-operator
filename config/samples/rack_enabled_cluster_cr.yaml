@@ -6,7 +6,10 @@ metadata:
 
 spec:
   size: 2
-  image: aerospike/aerospike-server-enterprise:8.1.2.0
+  paused: false
+  # This sample uses the new YAML map format for aerospikeConfig (server >= 9.0.0).
+  # Replace with the actual 9.0+ image tag for your environment.
+  image: tanmayj10/aerospike-server-enterprise:8.1.2.0
   rackConfig:
     namespaces:
       - test
@@ -14,9 +17,35 @@ spec:
       - id: 1
         # Change to the zone for your k8s cluster.
         zone: us-west1-a
+        aerospikeConfig:
+          namespaces:
+            abc:
+              replication-factor: 2
+              storage-engine:
+                type: device
+                devices:
+                  - /test/dev/xvdf1
+            xyz:
+              replication-factor: 1
+              storage-engine:
+                type: memory
+                data-size: 1073741824
       - id: 2
         # Change to the zone for your k8s cluster.
         zone: us-west1-b
+        aerospikeConfig:
+          namespaces:
+            abc:
+              replication-factor: 2
+              storage-engine:
+                type: device
+                devices:
+                  - /test/dev/xvdf1
+            xyz:
+              replication-factor: 1
+              storage-engine:
+                type: memory
+                data-size: 1073741824
 
   storage:
     filesystemVolumePolicy:
@@ -41,6 +70,14 @@ spec:
             storageClass: ssd
             volumeMode: Block
             size: 5Gi
+      - name: ns1
+        aerospike:
+          path: /test/dev/xvdf1
+        source:
+          persistentVolume:
+            storageClass: ssd
+            volumeMode: Block
+            size: 5Gi
       - name: aerospike-config-secret
         source:
           secret:
@@ -50,6 +87,9 @@ spec:
 
   podSpec:
     multiPodPerHost: true
+    aerospikeInitContainer:
+      imageRegistryNamespace: tanmayj10
+      imageNameAndTag: aerospike-kubernetes-init:2.6.0-dev5
 
   aerospikeAccessControl:
     users:
@@ -74,13 +114,13 @@ spec:
         port: 3001
 
     namespaces:
-      - name: test
+      test:
         replication-factor: 2
         storage-engine:
           type: device
           devices:
             - /test/dev/xvdf
-      - name: testMem
+      testMem:
         replication-factor: 1
         storage-engine:
           type: memory

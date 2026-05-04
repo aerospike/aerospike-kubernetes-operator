@@ -30,6 +30,7 @@ import (
 
 	asdbv1 "github.com/aerospike/aerospike-kubernetes-operator/v4/api/v1"
 	"github.com/aerospike/aerospike-kubernetes-operator/v4/pkg/merge"
+	"github.com/aerospike/aerospike-kubernetes-operator/v4/pkg/validation"
 	lib "github.com/aerospike/aerospike-management-lib"
 )
 
@@ -97,8 +98,13 @@ func (acd *AerospikeClusterCustomDefaulter) setDefaults(asLog logr.Logger, clust
 		return fmt.Errorf("spec.aerospikeConfig cannot be nil")
 	}
 
-	// Set common aerospikeConfig defaults
-	// Update configMap
+	// Reject mismatched format/version combinations before any processing:
+	//   new YAML format with server < 8.1.1, or old .conf format with server >= 8.1.1.
+	if err := validateConfigFormatForVersion(cluster.Spec.Image, cluster.Spec.AerospikeConfig.Value); err != nil {
+		return err
+	}
+
+	// Set common aerospikeConfig defaults.
 	if err := setDefaultAerospikeConfigs(asLog, *cluster.Spec.AerospikeConfig, nil, cluster); err != nil {
 		return err
 	}
@@ -366,73 +372,109 @@ func setDefaultNsConf(asLog logr.Logger, configSpec asdbv1.AerospikeConfigSpec,
 		return fmt.Errorf("aerospikeConfig.namespaces cannot be nil")
 	}
 
-	nsList, ok := nsConf.([]interface{})
-	if !ok {
-		return fmt.Errorf(
-			"aerospikeConfig.namespaces not valid namespace list %v", nsConf,
-		)
-	} else if len(nsList) == 0 {
-		return fmt.Errorf(
-			"aerospikeConfig.namespaces cannot be empty. aerospikeConfig %v",
-			config,
-		)
-	}
-
-	for _, nsInt := range nsList {
-		nsMap, ok := nsInt.(map[string]interface{})
-		if !ok {
+	switch ns := nsConf.(type) {
+	case []interface{}:
+		// Legacy .conf format: namespaces is a list of maps each containing a "name" key.
+		if len(ns) == 0 {
 			return fmt.Errorf(
-				"aerospikeConfig.namespaces does not have valid namespace map. nsMap %v",
-				nsInt,
+				"aerospikeConfig.namespaces cannot be empty. aerospikeConfig %v", config,
 			)
 		}
 
-		if nsName, ok := nsMap[asdbv1.ConfKeyName]; ok {
-			if name, ok := nsName.(string); ok {
-				if isNameExist(rackEnabledNsList, name) {
-					// Add rack-id only for rackEnabled namespaces
-					if rackID != nil {
-						// Add rack-id only in rack specific config, not in global config
-						defaultConfs := map[string]interface{}{"rack-id": *rackID}
+		for _, nsInt := range ns {
+			nsMap, ok := nsInt.(map[string]interface{})
+			if !ok {
+				return fmt.Errorf(
+					"aerospikeConfig.namespaces does not have valid namespace map. nsMap %v", nsInt,
+				)
+			}
 
-						// rack-id was historically set to 0 for all namespaces, but since the AKO 3.3.0, it reflects actual values.
-						// During the AKO 3.3.0 upgrade rack-id for namespaces in rack specific config is set to 0.
-						// Hence, deleting this 0 rack-id so that correct rack-id will be added.
-						if id, ok := nsMap["rack-id"]; ok && id == float64(0) && *rackID != 0 {
-							delete(nsMap, "rack-id")
-						}
+			nsNameVal, ok := nsMap[asdbv1.ConfKeyName]
+			if !ok {
+				continue
+			}
 
-						if err := setDefaultsInConfigMap(
-							asLog, nsMap, defaultConfs,
-						); err != nil {
-							return fmt.Errorf(
-								"failed to set default aerospikeConfig.namespaces rack config: %v",
-								err,
-							)
-						}
-					} else {
-						// Deleting rack-id for namespaces in global config.
-						// Correct rack-id will be added in rack specific config.
-						delete(nsMap, "rack-id")
-					}
-				} else {
-					// User may have added this key or may have patched object with new smaller rackEnabledNamespace list
-					// but left namespace defaults. This key should be removed then only controller will detect
-					// that some namespace is removed from rackEnabledNamespace list and cluster needs rolling restart
-					asLog.Info(
-						"Name aerospikeConfig.namespaces.name not found in rackEnabled namespace list. "+
-							"Namespace will not have any rackID",
-						"nsName", nsName, "rackEnabledNamespaces",
-						rackEnabledNsList,
-					)
+			name, ok := nsNameVal.(string)
+			if !ok {
+				continue
+			}
 
-					delete(nsMap, "rack-id")
-				}
+			if err := applyNsRackDefaults(asLog, nsMap, name, rackEnabledNsList, rackID); err != nil {
+				return err
 			}
 		}
+
+	case map[string]interface{}:
+		// New YAML format: namespaces is a map keyed by namespace name.
+		if len(ns) == 0 {
+			return fmt.Errorf(
+				"aerospikeConfig.namespaces cannot be empty. aerospikeConfig %v", config,
+			)
+		}
+
+		for nsName, nsVal := range ns {
+			nsMap, ok := nsVal.(map[string]interface{})
+			if !ok {
+				return fmt.Errorf(
+					"aerospikeConfig.namespaces does not have valid namespace map for %q. value %v",
+					nsName, nsVal,
+				)
+			}
+
+			if err := applyNsRackDefaults(asLog, nsMap, nsName, rackEnabledNsList, rackID); err != nil {
+				return err
+			}
+		}
+
+	default:
+		return fmt.Errorf(
+			"aerospikeConfig.namespaces not a valid namespace list or map %v", nsConf,
+		)
 	}
 
 	asLog.Info("Set default template values in aerospikeConfig.namespace")
+
+	return nil
+}
+
+// applyNsRackDefaults sets or removes the rack-id field on a single namespace config map.
+func applyNsRackDefaults(
+	asLog logr.Logger, nsMap map[string]interface{}, nsName string,
+	rackEnabledNsList []string, rackID *int,
+) error {
+	if isNameExist(rackEnabledNsList, nsName) {
+		if rackID != nil {
+			// Add rack-id only in rack-specific config, not in global config.
+			defaultConfs := map[string]interface{}{"rack-id": *rackID}
+
+			// rack-id was historically set to 0 for all namespaces, but since AKO 3.3.0 it
+			// reflects actual values. During an AKO 3.3.0 upgrade the rack-id in rack-specific
+			// config is 0, so delete it here so the correct value is applied below.
+			if id, ok := nsMap["rack-id"]; ok && id == float64(0) && *rackID != 0 {
+				delete(nsMap, "rack-id")
+			}
+
+			if err := setDefaultsInConfigMap(asLog, nsMap, defaultConfs); err != nil {
+				return fmt.Errorf(
+					"failed to set default aerospikeConfig.namespaces rack config: %v", err,
+				)
+			}
+		} else {
+			// Deleting rack-id from global config; it will be set in rack-specific config.
+			delete(nsMap, "rack-id")
+		}
+	} else {
+		// User may have added this key or patched the object with a smaller rackEnabledNamespaces
+		// list but left the namespace defaults. Remove rack-id so the controller can detect the
+		// change and trigger a rolling restart.
+		asLog.Info(
+			"aerospikeConfig.namespaces entry not found in rackEnabled namespace list. "+
+				"Namespace will not have any rackID",
+			"nsName", nsName, "rackEnabledNamespaces", rackEnabledNsList,
+		)
+
+		delete(nsMap, "rack-id")
+	}
 
 	return nil
 }
@@ -649,6 +691,15 @@ func addOperatorClientNameIfNeeded(
 	return nil
 }
 
+// setDefaultLoggingConf ensures a "console" sink is present in the logging config.
+//
+// Logging is a []interface{} in both formats. The structural difference is:
+//   - Old format: sink identity is the "name" key; log levels are direct sibling keys.
+//     e.g. {name: console, any: info}
+//   - New YAML format: sink identity is the "type" key; log levels are nested under "contexts".
+//     e.g. {type: console, contexts: {any: info}}
+//
+// isYAMLConfigFormat is used to distinguish the two based on the shape of "namespaces".
 func setDefaultLoggingConf(
 	asLog logr.Logger, configSpec asdbv1.AerospikeConfigSpec,
 ) error {
@@ -667,27 +718,61 @@ func setDefaultLoggingConf(
 
 	var found bool
 
-	for _, conf := range loggingConfList {
-		logConf, ok := conf.(map[string]interface{})
-		if !ok {
-			return fmt.Errorf(
-				"aerospikeConfig.logging not a list of valid map %v", logConf,
-			)
-		}
-
-		if logConf["name"] == "console" {
-			found = true
-			break
-		}
+	yamlFormat, err := isYAMLConfigFormat(config)
+	if err != nil {
+		return err
 	}
 
-	if !found {
-		loggingConfList = append(
-			loggingConfList, map[string]interface{}{
-				"name": "console",
-				"any":  "info",
-			},
-		)
+	if yamlFormat {
+		// New YAML format: sink identity key is "type".
+		for _, conf := range loggingConfList {
+			logConf, ok := conf.(map[string]interface{})
+			if !ok {
+				return fmt.Errorf(
+					"aerospikeConfig.logging not a list of valid maps %v", conf,
+				)
+			}
+
+			if logConf["type"] == "console" {
+				found = true
+				break
+			}
+		}
+
+		if !found {
+			loggingConfList = append(
+				loggingConfList, map[string]interface{}{
+					"type": "console",
+					"contexts": map[string]interface{}{
+						"any": "info",
+					},
+				},
+			)
+		}
+	} else {
+		// Legacy .conf format: sink identity key is "name"; levels are direct sibling keys.
+		for _, conf := range loggingConfList {
+			logConf, ok := conf.(map[string]interface{})
+			if !ok {
+				return fmt.Errorf(
+					"aerospikeConfig.logging not a list of valid maps %v", conf,
+				)
+			}
+
+			if logConf["name"] == "console" {
+				found = true
+				break
+			}
+		}
+
+		if !found {
+			loggingConfList = append(
+				loggingConfList, map[string]interface{}{
+					"name": "console",
+					"any":  "info",
+				},
+			)
+		}
 	}
 
 	asLog.Info(
@@ -696,6 +781,79 @@ func setDefaultLoggingConf(
 	)
 
 	config["logging"] = loggingConfList
+
+	return nil
+}
+
+// isYAMLConfigFormat inspects the aerospikeConfig's namespaces field to determine
+// which wire format the user supplied:
+//   - map[string]interface{} → new YAML map format (server >= 8.1.1)  → (true,  nil)
+//   - []interface{}          → legacy .conf list format               → (false, nil)
+//   - absent                 → namespaces not present yet             → (false, nil)
+//   - nil value              → namespaces key present but nil          → (false, error)
+func isYAMLConfigFormat(config map[string]interface{}) (bool, error) {
+	nsConf, ok := config[asdbv1.ConfKeyNamespace]
+	if !ok || nsConf == nil {
+		return false, fmt.Errorf("aerospikeConfig.namespaces cannot be nil or not present")
+	}
+
+	if nsConf == nil {
+		return false, fmt.Errorf("aerospikeConfig.namespaces cannot be nil")
+	}
+
+	_, isMap := nsConf.(map[string]interface{})
+	_, isList := nsConf.([]interface{})
+
+	if !isList && !isMap {
+		return false, fmt.Errorf("aerospikeConfig.namespaces not a valid namespace list or map %v", nsConf)
+	}
+
+	return isMap, nil
+}
+
+// isYAMLConfigVersion returns true when the server version requires the new YAML
+// map-keyed config format, i.e. version >= 8.1.1.
+func isYAMLConfigVersion(version string) bool {
+	res, err := lib.CompareVersions(version, "8.1.1")
+	if err != nil {
+		return false
+	}
+
+	return res >= 0
+}
+
+// validateConfigFormatForVersion returns an error when the aerospikeConfig format does
+// not match the server image version:
+//   - new YAML map format (namespaces as map)  with server < 8.1.1 is invalid
+//   - legacy .conf list format (namespaces as list) with server >= 8.1.1 is invalid
+func validateConfigFormatForVersion(image string, config map[string]interface{}) error {
+	version, err := asdbv1.GetImageVersion(image)
+	if err != nil {
+		return fmt.Errorf("failed to get server image version: %v", err)
+	}
+
+	yamlVersion := isYAMLConfigVersion(version)
+
+	yamlFormat, err := isYAMLConfigFormat(config)
+	if err != nil {
+		return err
+	}
+
+	if yamlFormat && !yamlVersion {
+		return fmt.Errorf(
+			"aerospikeConfig is in new YAML map format but server version %s is older than 8.1.1; "+
+				"use the legacy list format for server versions below 8.1.1",
+			version,
+		)
+	}
+
+	if !yamlFormat && yamlVersion {
+		return fmt.Errorf(
+			"aerospikeConfig requires the new YAML map format for server version %s; "+
+				"update aerospikeConfig to use the new map format for server versions 8.1.1 and above",
+			version,
+		)
+	}
 
 	return nil
 }
@@ -823,6 +981,13 @@ func escapeString(str string) string {
 	str = strings.ReplaceAll(str, "${dn}", "$${_DNE}{dn}")
 
 	return str
+}
+
+// normalizeConfigFormat is a package-level alias for validation.NormalizeConfigFormat.
+// It operates in-place on the supplied map and also returns it for convenience.
+// See validation.NormalizeConfigFormat for the full list of converted fields.
+func normalizeConfigFormat(config map[string]interface{}) map[string]interface{} {
+	return validation.NormalizeConfigFormat(config)
 }
 
 func setNamespaceDefault(networks []string, namespace string) {

@@ -300,31 +300,54 @@ func getAdminOperatorCert() *asdbv1.AerospikeOperatorClientCertSpec {
 }
 
 func getNetworkTLSConfig() map[string]interface{} {
+	return getNetworkTLSConfigForImage(latestImage)
+}
+
+// getNetworkTLSConfigForImage returns a TLS network config in the format
+// appropriate for the given server image:
+//   - server < 8.1.1 → "tls" is []interface{} (list with "name" key)
+//   - server >= 8.1.1 → "tls" is map[string]interface{} keyed by TLS name
+func getNetworkTLSConfigForImage(image string) map[string]interface{} {
+	const tlsName = "aerospike-a-0.test-runner"
+
+	tlsFields := map[string]interface{}{
+		"cert-file": "/etc/aerospike/secret/svc_cluster_chain.pem",
+		"key-file":  "/etc/aerospike/secret/svc_key.pem",
+		"ca-file":   "/etc/aerospike/secret/cacert.pem",
+	}
+
+	var tls interface{}
+
+	if isYAMLFormatImage(image) {
+		tls = map[string]interface{}{tlsName: tlsFields}
+	} else {
+		entry := make(map[string]interface{}, len(tlsFields)+1)
+		entry["name"] = tlsName
+
+		for k, v := range tlsFields {
+			entry[k] = v
+		}
+
+		tls = []interface{}{entry}
+	}
+
 	return map[string]interface{}{
 		"service": map[string]interface{}{
-			"tls-name": "aerospike-a-0.test-runner",
+			"tls-name": tlsName,
 			"tls-port": serviceTLSPort,
 			"port":     serviceNonTLSPort,
 		},
 		"fabric": map[string]interface{}{
-			"tls-name": "aerospike-a-0.test-runner",
+			"tls-name": tlsName,
 			"tls-port": 3011,
 			"port":     3001,
 		},
 		"heartbeat": map[string]interface{}{
-			"tls-name": "aerospike-a-0.test-runner",
+			"tls-name": tlsName,
 			"tls-port": 3012,
 			"port":     3002,
 		},
-
-		"tls": []interface{}{
-			map[string]interface{}{
-				"name":      "aerospike-a-0.test-runner",
-				"cert-file": "/etc/aerospike/secret/svc_cluster_chain.pem",
-				"key-file":  "/etc/aerospike/secret/svc_key.pem",
-				"ca-file":   "/etc/aerospike/secret/cacert.pem",
-			},
-		},
+		"tls": tls,
 	}
 }
 
