@@ -1637,7 +1637,7 @@ var _ = Describe("AerospikeCluster validation", func() {
 				})
 
 				Context("positive", func() {
-					It("allows update from one valid SC in-memory persistence config to another valid one", func() {
+					It("allows update from one valid device-backed SC in-memory persistence config to another valid one", func() {
 						Expect(
 							runInMemorySCNamespaceUpdate(
 								updateValidationClusterNamespacedName,
@@ -1647,7 +1647,7 @@ var _ = Describe("AerospikeCluster validation", func() {
 								},
 								map[string]interface{}{
 									"type":    "memory",
-									"devices": []interface{}{"/test/dev/xvdf"},
+									"devices": []interface{}{"/test/dev/xvdg"},
 								},
 							),
 						).To(Succeed())
