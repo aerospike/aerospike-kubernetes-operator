@@ -18,10 +18,11 @@ package cluster
 
 import (
 	"context"
+	"strings"
 
 	. "github.com/onsi/ginkgo/v2"
 	. "github.com/onsi/gomega"
-	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
+	corev1 "k8s.io/api/core/v1"
 	"k8s.io/apimachinery/pkg/types"
 
 	asdbv1 "github.com/aerospike/aerospike-kubernetes-operator/v4/api/v1"
@@ -73,6 +74,98 @@ func adminOperatorCertForTest() *asdbv1.AerospikeOperatorClientCertSpec {
 	}
 }
 
+// expectDeployFailsACWebhook expects admission create to fail with the given message substrings.
+func expectDeployFailsACWebhook(ctx context.Context, cluster *asdbv1.AerospikeCluster, subs ...string) {
+	err := envtests.K8sClient.Create(ctx, cluster)
+	Expect(err).To(HaveOccurred())
+
+	args := append([]string{"\"vaerospikecluster.kb.io\""}, subs...)
+	envtests.NewStatusErrorMatcher().WithMessageSubstrings(args...).Validate(err)
+}
+
+// profilerRoleForWebhookTest matches namespace "test" from CreateDummyAerospikeCluster.
+func profilerRoleForWebhookTest() []asdbv1.AerospikeRoleSpec {
+	return []asdbv1.AerospikeRoleSpec{
+		{
+			Name:       "profiler",
+			Privileges: []string{"read-write.test", "read.test"},
+		},
+	}
+}
+
+// validAccessControlForDeployPositive mirrors test/cluster Try ValidAccessControl; privileges use
+// namespace "test" to match CreateDummyAerospikeCluster rack namespace config.
+func validAccessControlForDeployPositive() *asdbv1.AerospikeAccessControlSpec {
+	return &asdbv1.AerospikeAccessControlSpec{
+		Roles: []asdbv1.AerospikeRoleSpec{
+			{
+				Name: "profiler",
+				Privileges: []string{
+					"read-write.test",
+					"read.test",
+					"sindex-admin",
+					"truncate.test",
+					"udf-admin",
+				},
+				Whitelist: []string{"8.8.0.0/16"},
+			},
+		},
+		Users: []asdbv1.AerospikeUserSpec{
+			{
+				Name:       "admin",
+				SecretName: test.AuthSecretName,
+				Roles: []string{
+					"sys-admin",
+					"user-admin",
+					"truncate",
+					"sindex-admin",
+					"udf-admin",
+				},
+			},
+			{
+				Name:       "profileUser",
+				SecretName: test.AuthSecretName,
+				Roles:      []string{"profiler"},
+			},
+		},
+	}
+}
+
+// validAccessControlForDeployPositiveQuota mirrors test/cluster Try ValidAccessControlQuota.
+func validAccessControlForDeployPositiveQuota() *asdbv1.AerospikeAccessControlSpec {
+	return &asdbv1.AerospikeAccessControlSpec{
+		Roles: []asdbv1.AerospikeRoleSpec{
+			{
+				Name: "profiler",
+				Privileges: []string{
+					"read-write.test",
+					"read.test",
+				},
+				Whitelist: []string{
+					"8.8.0.0/16",
+				},
+				ReadQuota:  1,
+				WriteQuota: 1,
+			},
+		},
+		Users: []asdbv1.AerospikeUserSpec{
+			{
+				Name:       "admin",
+				SecretName: test.AuthSecretName,
+				Roles: []string{
+					"sys-admin",
+					"user-admin",
+				},
+			},
+			{
+				Name:       "profileUser",
+				SecretName: test.AuthSecretName,
+				Roles:      []string{"profiler"},
+			},
+		},
+	}
+}
+
 var _ = Describe("AerospikeCluster access control validation (envtests)", func() {
 	const (
 		accessControlClusterName = "access-control-webhook-cluster"
@@ -83,13 +176,7 @@ var _ = Describe("AerospikeCluster access control validation (envtests)", func()
 
 	Context("Deploy validation", func() {
 		AfterEach(func() {
-			aeroCluster := &asdbv1.AerospikeCluster{
-				ObjectMeta: metav1.ObjectMeta{
-					Name:      clusterNamespacedName.Name,
-					Namespace: clusterNamespacedName.Namespace,
-				},
-			}
-			Expect(testCluster.DeleteCluster(envtests.K8sClient, ctx, aeroCluster)).ToNot(HaveOccurred())
+			deleteCluster(ctx, clusterNamespacedName)
 		})
 
 		Context("spec.aerospikeAccessControl (validation)", func() {
@@ -98,13 +185,418 @@ var _ = Describe("AerospikeCluster access control validation (envtests)", func()
 					aeroCluster := testCluster.CreateDummyAerospikeCluster(clusterNamespacedName, 2)
 					delete(aeroCluster.Spec.AerospikeConfig.Value, asdbv1.ConfKeySecurity)
 
-					err := testCluster.DeployCluster(envtests.K8sClient, ctx, aeroCluster)
+					err := envtests.K8sClient.Create(ctx, aeroCluster)
 					Expect(err).To(HaveOccurred())
 
 					envtests.NewStatusErrorMatcher().
 						WithMessageSubstrings("\"vaerospikecluster.kb.io\"",
 							"security is disabled but access control is specified").
 						Validate(err)
+				})
+
+				It("fails when admin user is missing the user-admin role", func() {
+					aeroCluster := testCluster.CreateDummyAerospikeCluster(clusterNamespacedName, 2)
+					aeroCluster.Spec.AerospikeAccessControl.Users[0].Roles = []string{
+						"sys-admin",
+						"read-write",
+					}
+
+					expectDeployFailsACWebhook(ctx, aeroCluster, "no admin user with required roles")
+				})
+
+				It("fails when admin user is missing with required roles", func() {
+					aeroCluster := testCluster.CreateDummyAerospikeCluster(clusterNamespacedName, 2)
+					aeroCluster.Spec.AerospikeAccessControl = &asdbv1.AerospikeAccessControlSpec{
+						Users: []asdbv1.AerospikeUserSpec{
+							{
+								Name:       "aerospike",
+								SecretName: test.AuthSecretName,
+								Roles:      []string{"sys-admin"},
+							},
+							{
+								Name:       "other",
+								SecretName: test.AuthSecretName,
+								Roles:      []string{"read"},
+							},
+						},
+					}
+
+					expectDeployFailsACWebhook(ctx, aeroCluster, "no admin user with required roles")
+				})
+			})
+
+			Context("positive", func() {
+				It("allows deploy with valid roles and users", func() {
+					aeroCluster := testCluster.CreateDummyAerospikeCluster(clusterNamespacedName, 2)
+					aeroCluster.Spec.AerospikeAccessControl = validAccessControlForDeployPositive()
+
+					err := envtests.K8sClient.Create(ctx, aeroCluster)
+					Expect(err).ToNot(HaveOccurred())
+				})
+
+				It("allows deploy with role quotas when security.enable-quotas is true", func() {
+					aeroCluster := testCluster.CreateDummyAerospikeCluster(clusterNamespacedName, 2)
+					aeroCluster.Spec.AerospikeConfig.Value[asdbv1.ConfKeySecurity] = map[string]interface{}{
+						"enable-quotas": true,
+					}
+					aeroCluster.Spec.AerospikeAccessControl = validAccessControlForDeployPositiveQuota()
+
+					err := envtests.K8sClient.Create(ctx, aeroCluster)
+					Expect(err).ToNot(HaveOccurred())
+				})
+			})
+		})
+
+		Context("spec.aerospikeAccessControl (roles)", func() {
+			Context("negative", func() {
+				It("fails on duplicate custom role definitions", func() {
+					aeroCluster := testCluster.CreateDummyAerospikeCluster(clusterNamespacedName, 2)
+					aeroCluster.Spec.AerospikeAccessControl = &asdbv1.AerospikeAccessControlSpec{
+						Roles: []asdbv1.AerospikeRoleSpec{
+							{Name: "profiler", Privileges: []string{"read-write.test", "read.test"}},
+							{Name: "profiler", Privileges: []string{"read-write.test", "read.test"}},
+						},
+						Users: []asdbv1.AerospikeUserSpec{
+							{
+								Name:       "admin",
+								SecretName: test.AuthSecretName,
+								Roles:      []string{"sys-admin", "user-admin"},
+							},
+							{
+								Name:       "u1",
+								SecretName: test.AuthSecretName,
+								Roles:      []string{"profiler"},
+							},
+						},
+					}
+
+					err := envtests.K8sClient.Create(ctx, aeroCluster)
+					Expect(err).To(HaveOccurred())
+					envtests.NewStatusErrorMatcher().
+						WithMessageSubstrings("AerospikeCluster.asdb.aerospike.com",
+							"Duplicate value: {\"name\":\"profiler\"}").
+						Validate(err)
+				})
+
+				DescribeTable("fails on invalid custom role name",
+					func(invalidRoleName string, msgSubs []string) {
+						aeroCluster := testCluster.CreateDummyAerospikeCluster(clusterNamespacedName, 2)
+						aeroCluster.Spec.AerospikeAccessControl = &asdbv1.AerospikeAccessControlSpec{
+							Roles: []asdbv1.AerospikeRoleSpec{
+								{
+									Name:       invalidRoleName,
+									Privileges: []string{"read-write.test", "read.test"},
+								},
+							},
+							Users: []asdbv1.AerospikeUserSpec{
+								{
+									Name:       "aerospike",
+									SecretName: test.AuthSecretName,
+									Roles:      []string{"sys-admin"},
+								},
+								{
+									Name:       "profileUser",
+									SecretName: test.AuthSecretName,
+									Roles:      []string{"profiler"},
+								},
+							},
+						}
+
+						expectDeployFailsACWebhook(ctx, aeroCluster, msgSubs...)
+					},
+					Entry("empty string", "", []string{"role name cannot be empty"}),
+					Entry("whitespace only", "    ", []string{"role name cannot be empty"}),
+					Entry("exceeds max length", strings.Repeat("a", 64), []string{"cannot have more than 63 characters"}),
+					Entry("colon in role name", "aerospike:user", []string{"cannot contain", ":"}),
+					Entry("semicolon in role name", "aerospike;user", []string{"cannot contain", ";"}),
+				)
+
+				It("fails when attempting to define a predefined role", func() {
+					aeroCluster := testCluster.CreateDummyAerospikeCluster(clusterNamespacedName, 2)
+					aeroCluster.Spec.AerospikeAccessControl = &asdbv1.AerospikeAccessControlSpec{
+						Roles: []asdbv1.AerospikeRoleSpec{
+							{
+								Name:       "sys-admin",
+								Privileges: []string{"read-write.test", "read.test"},
+								Whitelist:  []string{"8.8.0.0/16"},
+							},
+						},
+						Users: []asdbv1.AerospikeUserSpec{
+							{
+								Name:       "admin",
+								SecretName: test.AuthSecretName,
+								Roles:      []string{"sys-admin", "user-admin"},
+							},
+							{
+								Name:       "u1",
+								SecretName: test.AuthSecretName,
+								Roles:      []string{"sys-admin"},
+							},
+						},
+					}
+
+					expectDeployFailsACWebhook(ctx, aeroCluster, "cannot create or modify predefined role")
+				})
+
+				It("fails on duplicate privilege in a role", func() {
+					aeroCluster := testCluster.CreateDummyAerospikeCluster(clusterNamespacedName, 2)
+					aeroCluster.Spec.AerospikeAccessControl = &asdbv1.AerospikeAccessControlSpec{
+						Roles: []asdbv1.AerospikeRoleSpec{
+							{
+								Name: "profiler",
+								Privileges: []string{
+									"read-write.test",
+									"read-write.test",
+									"read.test",
+								},
+							},
+						},
+						Users: []asdbv1.AerospikeUserSpec{
+							{
+								Name:       "admin",
+								SecretName: test.AuthSecretName,
+								Roles:      []string{"sys-admin", "user-admin"},
+							},
+							{
+								Name:       "u1",
+								SecretName: test.AuthSecretName,
+								Roles:      []string{"profiler"},
+							},
+						},
+					}
+
+					err := envtests.K8sClient.Create(ctx, aeroCluster)
+					Expect(err).To(HaveOccurred())
+					envtests.NewStatusErrorMatcher().
+						WithMessageSubstrings("AerospikeCluster.asdb.aerospike.com",
+							"Duplicate value: \"read-write.test\"").
+						Validate(err)
+				})
+
+				It("fails on duplicate whitelist entry for a role", func() {
+					aeroCluster := testCluster.CreateDummyAerospikeCluster(clusterNamespacedName, 2)
+					aeroCluster.Spec.AerospikeAccessControl = &asdbv1.AerospikeAccessControlSpec{
+						Roles: []asdbv1.AerospikeRoleSpec{
+							{
+								Name:       "profiler",
+								Privileges: []string{"read-write.test", "read.test"},
+								Whitelist:  []string{"8.8.0.0/16", "8.8.0.0/16"},
+							},
+						},
+						Users: []asdbv1.AerospikeUserSpec{
+							{
+								Name:       "admin",
+								SecretName: test.AuthSecretName,
+								Roles:      []string{"sys-admin", "user-admin"},
+							},
+							{
+								Name:       "u1",
+								SecretName: test.AuthSecretName,
+								Roles:      []string{"profiler"},
+							},
+						},
+					}
+
+					err := envtests.K8sClient.Create(ctx, aeroCluster)
+					Expect(err).To(HaveOccurred())
+					envtests.NewStatusErrorMatcher().
+						WithMessageSubstrings("AerospikeCluster.asdb.aerospike.com",
+							"Duplicate value: \"8.8.0.0/16\"").
+						Validate(err)
+				})
+
+				It("fails on invalid CIDR in role whitelist", func() {
+					aeroCluster := testCluster.CreateDummyAerospikeCluster(clusterNamespacedName, 2)
+					aeroCluster.Spec.AerospikeAccessControl = &asdbv1.AerospikeAccessControlSpec{
+						Roles: []asdbv1.AerospikeRoleSpec{
+							{
+								Name:       "profiler",
+								Privileges: []string{"read-write.test", "read.test"},
+								Whitelist:  []string{"8.8.8.8/16"},
+							},
+						},
+						Users: []asdbv1.AerospikeUserSpec{
+							{
+								Name:       "admin",
+								SecretName: test.AuthSecretName,
+								Roles:      []string{"sys-admin", "user-admin"},
+							},
+							{
+								Name:       "u1",
+								SecretName: test.AuthSecretName,
+								Roles:      []string{"profiler"},
+							},
+						},
+					}
+
+					expectDeployFailsACWebhook(ctx, aeroCluster, "invalid whitelist")
+				})
+
+				DescribeTable("fails on invalid role whitelist entry",
+					func(invalidWhitelist string, msgSubs []string) {
+						aeroCluster := testCluster.CreateDummyAerospikeCluster(clusterNamespacedName, 2)
+						aeroCluster.Spec.AerospikeAccessControl = &asdbv1.AerospikeAccessControlSpec{
+							Roles: []asdbv1.AerospikeRoleSpec{
+								{
+									Name:       "profiler",
+									Privileges: []string{"read-write.test", "read.test"},
+									Whitelist:  []string{invalidWhitelist},
+								},
+							},
+							Users: []asdbv1.AerospikeUserSpec{
+								{
+									Name:       "aerospike",
+									SecretName: test.AuthSecretName,
+									Roles:      []string{"sys-admin"},
+								},
+								{
+									Name:       "profileUser",
+									SecretName: test.AuthSecretName,
+									Roles:      []string{"profiler"},
+								},
+							},
+						}
+
+						expectDeployFailsACWebhook(ctx, aeroCluster, msgSubs...)
+					},
+					Entry("empty string", "", []string{"invalid whitelist"}),
+					Entry("whitespace only", "    ", []string{"invalid whitelist"}),
+					Entry("exceeds reasonable address length", strings.Repeat("x", 64), []string{"invalid whitelist"}),
+				)
+
+				It("fails when privilege references a namespace not in config", func() {
+					aeroCluster := testCluster.CreateDummyAerospikeCluster(clusterNamespacedName, 2)
+					aeroCluster.Spec.AerospikeAccessControl = &asdbv1.AerospikeAccessControlSpec{
+						Roles: []asdbv1.AerospikeRoleSpec{
+							{
+								Name:       "profiler",
+								Privileges: []string{"read-write.missingNs", "read.test"},
+							},
+						},
+						Users: []asdbv1.AerospikeUserSpec{
+							{
+								Name:       "admin",
+								SecretName: test.AuthSecretName,
+								Roles:      []string{"sys-admin", "user-admin"},
+							},
+							{
+								Name:       "u1",
+								SecretName: test.AuthSecretName,
+								Roles:      []string{"profiler"},
+							},
+						},
+					}
+
+					expectDeployFailsACWebhook(ctx, aeroCluster, "missingNs", "not configured")
+				})
+
+				It("fails when namespace-scoped privilege has an empty set name", func() {
+					aeroCluster := testCluster.CreateDummyAerospikeCluster(clusterNamespacedName, 2)
+					aeroCluster.Spec.AerospikeAccessControl = &asdbv1.AerospikeAccessControlSpec{
+						Roles: []asdbv1.AerospikeRoleSpec{
+							{
+								Name:       "profiler",
+								Privileges: []string{"read-write.test.", "read.test"},
+							},
+						},
+						Users: []asdbv1.AerospikeUserSpec{
+							{
+								Name:       "admin",
+								SecretName: test.AuthSecretName,
+								Roles:      []string{"sys-admin", "user-admin"},
+							},
+							{
+								Name:       "u1",
+								SecretName: test.AuthSecretName,
+								Roles:      []string{"profiler"},
+							},
+						},
+					}
+					expectDeployFailsACWebhook(ctx, aeroCluster,
+						"role 'profiler' has invalid privilege",
+						"read-write.test.",
+						"invalid set name")
+				})
+
+				It("fails on unknown privilege string", func() {
+					aeroCluster := testCluster.CreateDummyAerospikeCluster(clusterNamespacedName, 2)
+					aeroCluster.Spec.AerospikeAccessControl = &asdbv1.AerospikeAccessControlSpec{
+						Roles: []asdbv1.AerospikeRoleSpec{
+							{
+								Name:       "profiler",
+								Privileges: []string{"read-write.test", "read.test", "non-existent"},
+							},
+						},
+						Users: []asdbv1.AerospikeUserSpec{
+							{
+								Name:       "admin",
+								SecretName: test.AuthSecretName,
+								Roles:      []string{"sys-admin", "user-admin"},
+							},
+							{
+								Name:       "u1",
+								SecretName: test.AuthSecretName,
+								Roles:      []string{"profiler"},
+							},
+						},
+					}
+
+					expectDeployFailsACWebhook(ctx, aeroCluster, "invalid privilege", "non-existent")
+				})
+
+				It("fails when a global-only privilege uses namespace scope", func() {
+					aeroCluster := testCluster.CreateDummyAerospikeCluster(clusterNamespacedName, 2)
+					aeroCluster.Spec.AerospikeAccessControl = &asdbv1.AerospikeAccessControlSpec{
+						Roles: []asdbv1.AerospikeRoleSpec{
+							{
+								Name:       "profiler",
+								Privileges: []string{"read-write.test", "read.test", "sys-admin.test"},
+							},
+						},
+						Users: []asdbv1.AerospikeUserSpec{
+							{
+								Name:       "admin",
+								SecretName: test.AuthSecretName,
+								Roles:      []string{"sys-admin", "user-admin"},
+							},
+							{
+								Name:       "u1",
+								SecretName: test.AuthSecretName,
+								Roles:      []string{"profiler"},
+							},
+						},
+					}
+
+					expectDeployFailsACWebhook(ctx, aeroCluster, "namespace or set scope", "sys-admin.test")
+				})
+
+				It("fails when role quotas are set but security enable-quotas is not configured", func() {
+					aeroCluster := testCluster.CreateDummyAerospikeCluster(clusterNamespacedName, 2)
+					aeroCluster.Spec.AerospikeAccessControl = &asdbv1.AerospikeAccessControlSpec{
+						Roles: []asdbv1.AerospikeRoleSpec{
+							{
+								Name:       "profiler",
+								Privileges: []string{"read-write.test", "read.test"},
+								ReadQuota:  1,
+								WriteQuota: 1,
+							},
+						},
+						Users: []asdbv1.AerospikeUserSpec{
+							{
+								Name:       "admin",
+								SecretName: test.AuthSecretName,
+								Roles:      []string{"sys-admin", "user-admin"},
+							},
+							{
+								Name:       "u1",
+								SecretName: test.AuthSecretName,
+								Roles:      []string{"profiler"},
+							},
+						},
+					}
+
+					expectDeployFailsACWebhook(ctx, aeroCluster,
+						"invalid aerospike.security conf.", "enable-quotas: not present")
 				})
 			})
 		})
@@ -116,7 +608,7 @@ var _ = Describe("AerospikeCluster access control validation (envtests)", func()
 						testutil.GetEnterpriseImage(testutil.Pre810EnterpriseImage))
 					aeroCluster.Spec.AerospikeAccessControl.Users[0].AuthMode = asdbv1.AerospikeAuthModePKIOnly
 					aeroCluster.Spec.AerospikeAccessControl.Users[0].SecretName = ""
-					errPre810 := testCluster.DeployCluster(envtests.K8sClient, ctx, aeroCluster)
+					errPre810 := envtests.K8sClient.Create(ctx, aeroCluster)
 					Expect(errPre810).To(HaveOccurred())
 
 					envtests.NewStatusErrorMatcher().
@@ -150,7 +642,7 @@ var _ = Describe("AerospikeCluster access control validation (envtests)", func()
 					)
 					aeroCluster.Spec.Image = testutil.LatestFederalImage
 
-					err := testCluster.DeployCluster(envtests.K8sClient, ctx, aeroCluster)
+					err := envtests.K8sClient.Create(ctx, aeroCluster)
 					Expect(err).To(HaveOccurred())
 
 					envtests.NewStatusErrorMatcher().
@@ -163,7 +655,7 @@ var _ = Describe("AerospikeCluster access control validation (envtests)", func()
 					aeroCluster := testCluster.CreatePKIAuthEnabledCluster(clusterNamespacedName, 2)
 					aeroCluster.Spec.AerospikeAccessControl.Users[0].SecretName = test.AuthSecretName
 
-					err := testCluster.DeployCluster(envtests.K8sClient, ctx, aeroCluster)
+					err := envtests.K8sClient.Create(ctx, aeroCluster)
 					Expect(err).To(HaveOccurred())
 
 					envtests.NewStatusErrorMatcher().
@@ -177,7 +669,7 @@ var _ = Describe("AerospikeCluster access control validation (envtests)", func()
 					aeroCluster.Spec.AerospikeAccessControl.Users[0].AuthMode = asdbv1.AerospikeAuthModePKIOnly
 					aeroCluster.Spec.AerospikeAccessControl.Users[0].SecretName = ""
 
-					err := testCluster.DeployCluster(envtests.K8sClient, ctx, aeroCluster)
+					err := envtests.K8sClient.Create(ctx, aeroCluster)
 					Expect(err).To(HaveOccurred())
 
 					envtests.NewStatusErrorMatcher().
@@ -185,19 +677,173 @@ var _ = Describe("AerospikeCluster access control validation (envtests)", func()
 							"PKIOnly authMode requires Aerospike cluster to be mTLS enabled").
 						Validate(err)
 				})
+
+				It("fails on duplicate user entries", func() {
+					aeroCluster := testCluster.CreateDummyAerospikeCluster(clusterNamespacedName, 2)
+					aeroCluster.Spec.AerospikeAccessControl = &asdbv1.AerospikeAccessControlSpec{
+						Users: []asdbv1.AerospikeUserSpec{
+							{
+								Name:       "admin",
+								SecretName: test.AuthSecretName,
+								Roles:      []string{"sys-admin", "user-admin"},
+							},
+							{
+								Name:       "bob",
+								SecretName: test.AuthSecretName,
+								Roles:      []string{"read"},
+							},
+							{
+								Name:       "bob",
+								SecretName: test.AuthSecretName,
+								Roles:      []string{"read"},
+							},
+						},
+					}
+
+					err := envtests.K8sClient.Create(ctx, aeroCluster)
+					Expect(err).To(HaveOccurred())
+					envtests.NewStatusErrorMatcher().
+						WithMessageSubstrings("AerospikeCluster.asdb.aerospike.com",
+							"Duplicate value: {\"name\":\"bob\"}").
+						Validate(err)
+				})
+
+				It("fails on duplicate role assignment for a user", func() {
+					aeroCluster := testCluster.CreateDummyAerospikeCluster(clusterNamespacedName, 2)
+					aeroCluster.Spec.AerospikeAccessControl.Users[0].Roles = []string{
+						"sys-admin",
+						"user-admin",
+						"sys-admin",
+					}
+
+					err := envtests.K8sClient.Create(ctx, aeroCluster)
+					Expect(err).To(HaveOccurred())
+					envtests.NewStatusErrorMatcher().
+						WithMessageSubstrings("AerospikeCluster.asdb.aerospike.com",
+							"Duplicate value: \"sys-admin\"").
+						Validate(err)
+				})
+
+				It("fails when a user references a role that does not exist", func() {
+					aeroCluster := testCluster.CreateDummyAerospikeCluster(clusterNamespacedName, 2)
+					aeroCluster.Spec.AerospikeAccessControl = &asdbv1.AerospikeAccessControlSpec{
+						Roles: profilerRoleForWebhookTest(),
+						Users: []asdbv1.AerospikeUserSpec{
+							{
+								Name:       "admin",
+								SecretName: test.AuthSecretName,
+								Roles:      []string{"sys-admin", "user-admin"},
+							},
+							{
+								Name:       "profileUser",
+								SecretName: test.AuthSecretName,
+								Roles:      []string{"profiler", "missingRole"},
+							},
+						},
+					}
+
+					expectDeployFailsACWebhook(ctx, aeroCluster, "non-existent role", "missingRole")
+				})
+
+				DescribeTable("fails when a non-PKI user has an invalid secret name",
+					func(invalidSecretName string) {
+						aeroCluster := testCluster.CreateDummyAerospikeCluster(clusterNamespacedName, 2)
+						aeroCluster.Spec.AerospikeAccessControl = &asdbv1.AerospikeAccessControlSpec{
+							Roles: profilerRoleForWebhookTest(),
+							Users: []asdbv1.AerospikeUserSpec{
+								{
+									Name:       "aerospike",
+									SecretName: test.AuthSecretName,
+									Roles:      []string{"sys-admin"},
+								},
+								{
+									Name:       "profileUser",
+									SecretName: invalidSecretName,
+									Roles:      []string{"profiler"},
+								},
+							},
+						}
+
+						expectDeployFailsACWebhook(ctx, aeroCluster, "empty secret name")
+					},
+					Entry("empty string", ""),
+					Entry("whitespace only", "   "),
+				)
+
+				DescribeTable("fails on invalid username",
+					func(invalidUserName string, msgSubs []string) {
+						aeroCluster := testCluster.CreateDummyAerospikeCluster(clusterNamespacedName, 2)
+						aeroCluster.Spec.AerospikeAccessControl = &asdbv1.AerospikeAccessControlSpec{
+							Roles: profilerRoleForWebhookTest(),
+							Users: []asdbv1.AerospikeUserSpec{
+								{
+									Name:       "aerospike",
+									SecretName: test.AuthSecretName,
+									Roles:      []string{"sys-admin"},
+								},
+								{
+									Name:       invalidUserName,
+									SecretName: test.AuthSecretName,
+									Roles:      []string{"profiler"},
+								},
+							},
+						}
+
+						expectDeployFailsACWebhook(ctx, aeroCluster, msgSubs...)
+					},
+					Entry("empty string", "", []string{"username cannot be empty"}),
+					Entry("whitespace only", "    ", []string{"username cannot be empty"}),
+					Entry("exceeds max length", strings.Repeat("u", 64), []string{"cannot have more than 63 characters"}),
+					Entry("colon in username", "aerospike:user", []string{"cannot contain", ":"}),
+					Entry("semicolon in username", "aerospike;user", []string{"cannot contain", ";"}),
+				)
+			})
+		})
+
+		Context("spec.aerospikeConfig.security.default-password-file", func() {
+			Context("negative", func() {
+				It("fails if volume is not present for default-password-file", func() {
+					aeroCluster := testCluster.CreateDummyAerospikeCluster(clusterNamespacedName, 4)
+					aeroCluster.Spec.RackConfig.Racks = []asdbv1.Rack{{ID: 1}, {ID: 2}}
+					aeroCluster.Spec.RackConfig.Namespaces = []string{"test"}
+					aeroCluster.Spec.AerospikeConfig.Value[asdbv1.ConfKeySecurity] = map[string]interface{}{
+						"default-password-file": "randompath",
+					}
+
+					expectDeployFailsACWebhook(ctx, aeroCluster,
+						"feature-key-file paths or tls paths or default-password-file path are not mounted",
+						"create an entry for 'randompath' in 'storage.volumes'")
+				})
+
+				It("fails if volume source is not secret for default-password-file", func() {
+					aeroCluster := testCluster.CreateDummyAerospikeCluster(clusterNamespacedName, 4)
+					aeroCluster.Spec.RackConfig.Racks = []asdbv1.Rack{{ID: 1}, {ID: 2}}
+					aeroCluster.Spec.RackConfig.Namespaces = []string{"test"}
+					//nolint:gosec // G101 test path literal, not real credentials
+					aeroCluster.Spec.AerospikeConfig.Value[asdbv1.ConfKeySecurity] = map[string]interface{}{
+						"default-password-file": "/etc/aerospike/defaultpass/password.conf",
+					}
+					aeroCluster.Spec.Storage.Volumes = append(aeroCluster.Spec.Storage.Volumes, asdbv1.VolumeSpec{
+						Name: "defaultpass",
+						Source: asdbv1.VolumeSource{
+							EmptyDir: &corev1.EmptyDirVolumeSource{},
+						},
+						Aerospike: &asdbv1.AerospikeServerVolumeAttachment{
+							Path: "/etc/aerospike/defaultpass",
+						},
+					})
+
+					expectDeployFailsACWebhook(ctx, aeroCluster,
+						"default-password-file path /etc/aerospike/defaultpass/password.conf",
+						"volume source should be secret in storage config, volume")
+				})
 			})
 		})
 	})
 
 	Context("Update validation", func() {
 		AfterEach(func() {
-			aeroCluster := &asdbv1.AerospikeCluster{
-				ObjectMeta: metav1.ObjectMeta{
-					Name:      clusterNamespacedName.Name,
-					Namespace: clusterNamespacedName.Namespace,
-				},
-			}
-			Expect(testCluster.DeleteCluster(envtests.K8sClient, ctx, aeroCluster)).ToNot(HaveOccurred())
+			deleteCluster(ctx, clusterNamespacedName)
 		})
 		Context("spec.aerospikeAccessControl (users)", func() {
 			Context("negative", func() {
@@ -226,6 +872,157 @@ var _ = Describe("AerospikeCluster access control validation (envtests)", func()
 
 		Context("spec.aerospikeAccessControl (validation)", func() {
 			Context("negative", func() {
+				It("fails when access control is updated while security is disabled", func() {
+					aeroCluster := testCluster.CreateDummyAerospikeCluster(clusterNamespacedName, 2)
+					err := envtests.K8sClient.Create(ctx, aeroCluster)
+					Expect(err).ToNot(HaveOccurred())
+
+					current := &asdbv1.AerospikeCluster{}
+					err = envtests.K8sClient.Get(ctx, types.NamespacedName{
+						Name: clusterNamespacedName.Name, Namespace: clusterNamespacedName.Namespace}, current)
+					Expect(err).ToNot(HaveOccurred())
+
+					// Disable security and attempt to update aerospikeAccessControl.
+					delete(current.Spec.AerospikeConfig.Value, asdbv1.ConfKeySecurity)
+					current.Spec.AerospikeAccessControl.Users = append(
+						current.Spec.AerospikeAccessControl.Users,
+						asdbv1.AerospikeUserSpec{
+							Name:       "u1",
+							SecretName: test.AuthSecretName,
+							Roles:      []string{"read"},
+						},
+					)
+
+					err = envtests.K8sClient.Update(ctx, current)
+					Expect(err).To(HaveOccurred())
+
+					envtests.NewStatusErrorMatcher().
+						WithMessageSubstrings("\"vaerospikecluster.kb.io\"",
+							"aerospikeAccessControl cannot be updated when security is disabled").
+						Validate(err)
+				})
+
+				It("fails when aerospikeAccessControl is removed once set", func() {
+					aeroCluster := testCluster.CreateDummyAerospikeCluster(clusterNamespacedName, 2)
+					err := envtests.K8sClient.Create(ctx, aeroCluster)
+					Expect(err).ToNot(HaveOccurred())
+
+					current := &asdbv1.AerospikeCluster{}
+					err = envtests.K8sClient.Get(ctx, types.NamespacedName{
+						Name: clusterNamespacedName.Name, Namespace: clusterNamespacedName.Namespace}, current)
+					Expect(err).ToNot(HaveOccurred())
+
+					current.Spec.AerospikeAccessControl = nil
+					err = envtests.K8sClient.Update(ctx, current)
+					Expect(err).To(HaveOccurred())
+
+					envtests.NewStatusErrorMatcher().
+						WithMessageSubstrings("\"vaerospikecluster.kb.io\"",
+							"security is enabled but access control is missing").
+						Validate(err)
+				})
+
+				It("fails when role quota params are set but security.enable-quotas is false", func() {
+					aeroCluster := testCluster.CreateDummyAerospikeCluster(clusterNamespacedName, 2)
+					aeroCluster.Spec.AerospikeConfig.Value[asdbv1.ConfKeySecurity] = map[string]interface{}{
+						"enable-quotas": true,
+					}
+					aeroCluster.Spec.AerospikeAccessControl = &asdbv1.AerospikeAccessControlSpec{
+						Roles: []asdbv1.AerospikeRoleSpec{
+							{
+								Name:       "profiler",
+								Privileges: []string{"read-write.test", "read.test"},
+								ReadQuota:  1,
+								WriteQuota: 1,
+							},
+						},
+						Users: []asdbv1.AerospikeUserSpec{
+							{
+								Name:       "admin",
+								SecretName: test.AuthSecretName,
+								Roles:      []string{"sys-admin", "user-admin"},
+							},
+							{
+								Name:       "profileUser",
+								SecretName: test.AuthSecretName,
+								Roles:      []string{"profiler"},
+							},
+						},
+					}
+
+					err := envtests.K8sClient.Create(ctx, aeroCluster)
+					Expect(err).ToNot(HaveOccurred())
+
+					current := &asdbv1.AerospikeCluster{}
+					err = envtests.K8sClient.Get(ctx, types.NamespacedName{
+						Name: clusterNamespacedName.Name, Namespace: clusterNamespacedName.Namespace}, current)
+					Expect(err).ToNot(HaveOccurred())
+
+					current.Spec.AerospikeConfig.Value[asdbv1.ConfKeySecurity] = map[string]interface{}{
+						"enable-quotas": false,
+					}
+					err = envtests.K8sClient.Update(ctx, current)
+					Expect(err).To(HaveOccurred())
+
+					envtests.NewStatusErrorMatcher().
+						WithMessageSubstrings("\"vaerospikecluster.kb.io\"",
+							"security.enable-quotas is set to false but quota params are").
+						Validate(err)
+				})
+
+				It("fails when PKIOnly authMode is enabled while TLS rollout is in progress", func() {
+					aeroCluster := testCluster.CreateDummyAerospikeCluster(clusterNamespacedName, 2)
+					err := envtests.K8sClient.Create(ctx, aeroCluster)
+					Expect(err).ToNot(HaveOccurred())
+
+					current := &asdbv1.AerospikeCluster{}
+					err = envtests.K8sClient.Get(ctx, types.NamespacedName{
+						Name: clusterNamespacedName.Name, Namespace: clusterNamespacedName.Namespace}, current)
+					Expect(err).ToNot(HaveOccurred())
+
+					// Step 1: enable TLS first (valid standalone update).
+					current.Spec.AerospikeConfig.Value[asdbv1.ConfKeyNetwork] = networkTLSConfigForTest()
+					current.Spec.OperatorClientCertSpec = adminOperatorCertForTest()
+					err = envtests.K8sClient.Update(ctx, current)
+					Expect(err).ToNot(HaveOccurred())
+
+					// Step 2: simulate rollout-in-progress by keeping status on non-TLS config.
+					// This mirrors "spec has TLS while status does not" used by webhook validation.
+					currentWithStatus := &asdbv1.AerospikeCluster{}
+					err = envtests.K8sClient.Get(ctx, types.NamespacedName{
+						Name: clusterNamespacedName.Name, Namespace: clusterNamespacedName.Namespace}, currentWithStatus)
+					Expect(err).ToNot(HaveOccurred())
+
+					currentWithStatus.Status.AerospikeConfig = &asdbv1.AerospikeConfigSpec{
+						Value: map[string]interface{}{
+							asdbv1.ConfKeyNetwork: map[string]interface{}{
+								asdbv1.ConfKeyNetworkService: map[string]interface{}{
+									asdbv1.ConfKeyPort: 3000,
+								},
+							},
+						},
+					}
+					err = envtests.K8sClient.Status().Update(ctx, currentWithStatus)
+					Expect(err).ToNot(HaveOccurred())
+
+					// Step 3: now enable PKIOnly while TLS rollout is still in progress.
+					toUpdate := &asdbv1.AerospikeCluster{}
+					err = envtests.K8sClient.Get(ctx, types.NamespacedName{
+						Name: clusterNamespacedName.Name, Namespace: clusterNamespacedName.Namespace}, toUpdate)
+					Expect(err).ToNot(HaveOccurred())
+
+					toUpdate.Spec.AerospikeAccessControl.Users[0].AuthMode = asdbv1.AerospikeAuthModePKIOnly
+					toUpdate.Spec.AerospikeAccessControl.Users[0].SecretName = ""
+
+					err = envtests.K8sClient.Update(ctx, toUpdate)
+					Expect(err).To(HaveOccurred())
+
+					envtests.NewStatusErrorMatcher().
+						WithMessageSubstrings("\"vaerospikecluster.kb.io\"",
+							"cannot enable PKIOnly authMode while TLS rollout is in progress").
+						Validate(err)
+				})
+
 				It("fails when TLS and PKIOnly are enabled in a single update", func() {
 					aeroCluster := testCluster.CreateDummyAerospikeCluster(clusterNamespacedName, 2)
 					err := envtests.K8sClient.Create(ctx, aeroCluster)
@@ -256,9 +1053,6 @@ var _ = Describe("AerospikeCluster access control validation (envtests)", func()
 						Validate(err)
 				})
 			})
-			// Context("positive", func() {
-			// 	// Add positive validation tests here
-			// })
 		})
 	})
 })
