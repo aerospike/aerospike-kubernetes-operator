@@ -370,226 +370,6 @@ var _ = Describe("SCMode", func() {
 		})
 	})
 
-	Context("KO-521 in-memory SC persistence integration", func() {
-		clusterName := fmt.Sprintf("ko521-sc-mem-%d", GinkgoParallelProcess())
-		clusterNamespacedName := test.GetNamespacedName(clusterName, namespace)
-		ko521NSName := "ko521sc"
-		ko521DevicePath := "/test/dev/xvdf"
-
-		AfterEach(func() {
-			aeroCluster := &asdbv1.AerospikeCluster{
-				ObjectMeta: metav1.ObjectMeta{
-					Name:      clusterName,
-					Namespace: namespace,
-				},
-			}
-			Expect(DeleteCluster(k8sClient, ctx, aeroCluster)).ToNot(HaveOccurred())
-			Expect(CleanupPVC(k8sClient, aeroCluster.Namespace, aeroCluster.Name)).ToNot(HaveOccurred())
-		})
-
-		It("INT-KO521-001: deploys 3-node SC in-memory cluster with storage-backed persistence", func() {
-			aeroCluster := createDummyAerospikeCluster(clusterNamespacedName, 3)
-			configureSCInMemoryPersistentNamespace(aeroCluster, ko521NSName, ko521DevicePath)
-
-			Expect(DeployCluster(k8sClient, ctx, aeroCluster)).ToNot(HaveOccurred())
-
-			current, err := getCluster(k8sClient, ctx, clusterNamespacedName)
-			Expect(err).ToNot(HaveOccurred())
-			Expect(current.Status.Pods).To(HaveLen(int(current.Spec.Size)))
-
-			// Service reachable check through AS client bootstrap.
-			hostConns, err := newAllHostConn(logger, current, k8sClient)
-			Expect(err).ToNot(HaveOccurred())
-			Expect(hostConns).ToNot(BeEmpty())
-		})
-
-		It("INT-KO521-002: validates write/read for SC in-memory persistent namespace", func() {
-			aeroCluster := createDummyAerospikeCluster(clusterNamespacedName, 3)
-			configureSCInMemoryPersistentNamespace(aeroCluster, ko521NSName, ko521DevicePath)
-
-			Expect(DeployCluster(k8sClient, ctx, aeroCluster)).ToNot(HaveOccurred())
-			Expect(WriteDataToCluster(aeroCluster, k8sClient, []string{ko521NSName})).ToNot(HaveOccurred())
-
-			records, err := CheckDataInCluster(aeroCluster, k8sClient, []string{ko521NSName})
-			Expect(err).ToNot(HaveOccurred())
-			Expect(records[ko521NSName]).To(BeTrue())
-
-			// SC quorum behavior proxy check: roster is established and healthy.
-			validateRoster(k8sClient, ctx, clusterNamespacedName, ko521NSName)
-		})
-
-		It("INT-KO521-003: rolling restart with batch size and cold restart preserves data", func() {
-			aeroCluster := createDummyAerospikeCluster(clusterNamespacedName, 6)
-			configureSCInMemoryPersistentNamespace(aeroCluster, ko521NSName, ko521DevicePath)
-			aeroCluster.Spec.RackConfig = asdbv1.RackConfig{
-				Namespaces: []string{ko521NSName},
-				Racks:      []asdbv1.Rack{{ID: 1}, {ID: 2}},
-				RollingUpdateBatchSize: &intstr.IntOrString{
-					Type:   intstr.Int,
-					IntVal: 2,
-				},
-			}
-
-			Expect(DeployCluster(k8sClient, ctx, aeroCluster)).ToNot(HaveOccurred())
-			Expect(WriteDataToCluster(aeroCluster, k8sClient, []string{ko521NSName})).ToNot(HaveOccurred())
-
-			By("Rolling restart with batchRollingUpdateSize=2")
-			Expect(rollingRestartClusterTest(logger, k8sClient, ctx, clusterNamespacedName)).ToNot(HaveOccurred())
-			Expect(assertNamespaceDataPresent(clusterNamespacedName, ko521NSName)).ToNot(HaveOccurred())
-
-			By("Cold restart scenario by deleting all pods")
-
-			current, err := getCluster(k8sClient, ctx, clusterNamespacedName)
-			Expect(err).ToNot(HaveOccurred())
-
-			podList, err := getClusterPodList(k8sClient, ctx, current)
-			Expect(err).ToNot(HaveOccurred())
-			Expect(podList.Items).ToNot(BeEmpty())
-
-			oldPodUIDByName := map[string]string{}
-
-			for idx := range podList.Items {
-				pod := &podList.Items[idx]
-				oldPodUIDByName[pod.Name] = string(pod.UID)
-				Expect(k8sClient.Delete(ctx, pod)).ToNot(HaveOccurred())
-			}
-
-			for podName, oldUID := range oldPodUIDByName {
-				Expect(waitForPodRestart(ctx, podName, namespace, oldUID)).ToNot(HaveOccurred())
-			}
-
-			Expect(waitForAerospikeCluster(
-				k8sClient, ctx, current, int(current.Spec.Size), retryInterval,
-				getTimeout(current.Spec.Size), []asdbv1.AerospikeClusterPhase{asdbv1.AerospikeClusterCompleted},
-			)).ToNot(HaveOccurred())
-
-			Expect(assertNamespaceDataPresent(clusterNamespacedName, ko521NSName)).ToNot(HaveOccurred())
-		})
-
-		It("INT-KO521-004: single pod delete/recreate preserves data", func() {
-			aeroCluster := createDummyAerospikeCluster(clusterNamespacedName, 3)
-			configureSCInMemoryPersistentNamespace(aeroCluster, ko521NSName, ko521DevicePath)
-			Expect(DeployCluster(k8sClient, ctx, aeroCluster)).ToNot(HaveOccurred())
-
-			Expect(WriteDataToCluster(aeroCluster, k8sClient, []string{ko521NSName})).ToNot(HaveOccurred())
-
-			podList, err := getClusterPodList(k8sClient, ctx, aeroCluster)
-			Expect(err).ToNot(HaveOccurred())
-			Expect(podList.Items).ToNot(BeEmpty())
-
-			targetPod := &podList.Items[0]
-			oldUID := string(targetPod.UID)
-			Expect(k8sClient.Delete(ctx, targetPod)).ToNot(HaveOccurred())
-			Expect(waitForPodRestart(ctx, targetPod.Name, targetPod.Namespace, oldUID)).ToNot(HaveOccurred())
-
-			Expect(assertNamespaceDataPresent(clusterNamespacedName, ko521NSName)).ToNot(HaveOccurred())
-		})
-
-		It("INT-KO521-005: scale up and scale down preserve data integrity", func() {
-			aeroCluster := createDummyAerospikeCluster(clusterNamespacedName, 3)
-			configureSCInMemoryPersistentNamespace(aeroCluster, ko521NSName, ko521DevicePath)
-			Expect(DeployCluster(k8sClient, ctx, aeroCluster)).ToNot(HaveOccurred())
-			Expect(WriteDataToCluster(aeroCluster, k8sClient, []string{ko521NSName})).ToNot(HaveOccurred())
-
-			Expect(scaleUpClusterTest(k8sClient, ctx, clusterNamespacedName, 1)).ToNot(HaveOccurred())
-			Expect(assertNamespaceDataPresent(clusterNamespacedName, ko521NSName)).ToNot(HaveOccurred())
-
-			Expect(scaleDownClusterTest(k8sClient, ctx, clusterNamespacedName, 1)).ToNot(HaveOccurred())
-			Expect(assertNamespaceDataPresent(clusterNamespacedName, ko521NSName)).ToNot(HaveOccurred())
-		})
-
-		It("INT-KO521-006: operator rolling upgrade preserves SC in-memory persistent data", func() {
-			aeroCluster := createDummyAerospikeCluster(clusterNamespacedName, 3)
-			configureSCInMemoryPersistentNamespace(aeroCluster, ko521NSName, ko521DevicePath)
-			Expect(DeployCluster(k8sClient, ctx, aeroCluster)).ToNot(HaveOccurred())
-			Expect(WriteDataToCluster(aeroCluster, k8sClient, []string{ko521NSName})).ToNot(HaveOccurred())
-
-			// Distinct from existing generic upgrade checks: validates KO-521 data durability path.
-			Expect(upgradeClusterTest(k8sClient, ctx, clusterNamespacedName, nextImage)).ToNot(HaveOccurred())
-			Expect(assertNamespaceDataPresent(clusterNamespacedName, ko521NSName)).ToNot(HaveOccurred())
-		})
-
-		It("INT-KO521-007: rack-enabled deployment works for SC in-memory persistent namespace", func() {
-			aeroCluster := createDummyAerospikeCluster(clusterNamespacedName, 4)
-			configureSCInMemoryPersistentNamespace(aeroCluster, ko521NSName, ko521DevicePath)
-			aeroCluster.Spec.RackConfig = asdbv1.RackConfig{
-				Namespaces: []string{ko521NSName},
-				Racks:      []asdbv1.Rack{{ID: 1}, {ID: 2}},
-			}
-
-			Expect(DeployCluster(k8sClient, ctx, aeroCluster)).ToNot(HaveOccurred())
-			Expect(validateRackEnabledCluster(k8sClient, ctx, clusterNamespacedName)).ToNot(HaveOccurred())
-
-			Expect(WriteDataToCluster(aeroCluster, k8sClient, []string{ko521NSName})).ToNot(HaveOccurred())
-			Expect(assertNamespaceDataPresent(clusterNamespacedName, ko521NSName)).ToNot(HaveOccurred())
-		})
-
-		It("INT-KO521-008: invalid in-memory persistence deploy fails without partial long-running resources", func() {
-			aeroCluster := createDummyAerospikeCluster(clusterNamespacedName, 3)
-			configureSCInMemoryPersistentNamespace(aeroCluster, ko521NSName, "/missing/dev/ko521")
-
-			err := DeployCluster(k8sClient, ctx, aeroCluster)
-			Expect(err).To(HaveOccurred())
-
-			existing, getErr := getClusterIfExists(k8sClient, ctx, clusterNamespacedName)
-			Expect(getErr).ToNot(HaveOccurred())
-
-			if existing == nil {
-				return
-			}
-
-			Expect(existing.Status.Pods).To(BeEmpty())
-		})
-
-		It("INT-KO521-009: invalid update removing persistence backing is rejected and cluster stays healthy", func() {
-			aeroCluster := createDummyAerospikeCluster(clusterNamespacedName, 3)
-			configureSCInMemoryPersistentNamespace(aeroCluster, ko521NSName, ko521DevicePath)
-			Expect(DeployCluster(k8sClient, ctx, aeroCluster)).ToNot(HaveOccurred())
-			Expect(WriteDataToCluster(aeroCluster, k8sClient, []string{ko521NSName})).ToNot(HaveOccurred())
-			current, err := getCluster(k8sClient, ctx, clusterNamespacedName)
-			Expect(err).ToNot(HaveOccurred())
-
-			namespaceCfg :=
-				current.Spec.AerospikeConfig.Value[asdbv1.ConfKeyNamespace].([]interface{})[0].(map[string]interface{})
-			namespaceCfg["storage-engine"] = map[string]interface{}{
-				"type":      "memory",
-				"data-size": 1073741824,
-			}
-
-			err = k8sClient.Update(ctx, current)
-			Expect(err).To(HaveOccurred())
-
-			Expect(assertNamespaceDataPresent(clusterNamespacedName, ko521NSName)).ToNot(HaveOccurred())
-		})
-
-		It("INT-KO521-010: invalid KO-521 update returns clear diagnostics and status remains stable", func() {
-			aeroCluster := createDummyAerospikeCluster(clusterNamespacedName, 3)
-			configureSCInMemoryPersistentNamespace(aeroCluster, ko521NSName, ko521DevicePath)
-			Expect(DeployCluster(k8sClient, ctx, aeroCluster)).ToNot(HaveOccurred())
-
-			current, err := getCluster(k8sClient, ctx, clusterNamespacedName)
-			Expect(err).ToNot(HaveOccurred())
-
-			initialGeneration := current.Generation
-
-			namespaceCfg :=
-				current.Spec.AerospikeConfig.Value[asdbv1.ConfKeyNamespace].([]interface{})[0].(map[string]interface{})
-			namespaceCfg["storage-engine"] = map[string]interface{}{
-				"type":      "memory",
-				"data-size": 1073741824,
-			}
-
-			err = k8sClient.Update(ctx, current)
-			Expect(err).To(HaveOccurred())
-			Expect(err.Error()).To(ContainSubstring("in-memory SC namespace without persistent storage"))
-
-			refreshed, err := getCluster(k8sClient, ctx, clusterNamespacedName)
-			Expect(err).ToNot(HaveOccurred())
-			Expect(refreshed.Generation).To(Equal(initialGeneration), "rejected update should not mutate stored spec generation")
-			Expect(refreshed.Status.Phase).To(Equal(asdbv1.AerospikeClusterCompleted))
-		})
-	})
-
 	Context("When doing invalid operation", func() {
 		clusterName := fmt.Sprintf("sc-mode-invalid-%d", GinkgoParallelProcess())
 		clusterNamespacedName := test.GetNamespacedName(
@@ -805,6 +585,192 @@ var _ = Describe("SCMode", func() {
 			Expect(err).Should(HaveOccurred())
 			Expect(err.Error()).To(ContainSubstring(
 				"all racks cannot have forceBlockFromRoster enabled. At least one rack must remain in the roster"))
+		})
+	})
+
+	// KO-521 in-memory SC persistence integration tests
+	Context("in-memory SC persistence integration tests", func() {
+		clusterName := fmt.Sprintf("ko521-sc-mem-%d", GinkgoParallelProcess())
+		clusterNamespacedName := test.GetNamespacedName(clusterName, namespace)
+		ko521NSName := "ko521sc"
+		ko521DevicePath := "/test/dev/xvdf"
+
+		AfterEach(func() {
+			aeroCluster := &asdbv1.AerospikeCluster{
+				ObjectMeta: metav1.ObjectMeta{
+					Name:      clusterName,
+					Namespace: namespace,
+				},
+			}
+			Expect(DeleteCluster(k8sClient, ctx, aeroCluster)).ToNot(HaveOccurred())
+			Expect(CleanupPVC(k8sClient, aeroCluster.Namespace, aeroCluster.Name)).ToNot(HaveOccurred())
+		})
+
+		It("Deploy 3-node SC in-memory cluster with storage-backed persistence", func() {
+			aeroCluster := createDummyAerospikeCluster(clusterNamespacedName, 3)
+			configureSCInMemoryPersistentNamespace(aeroCluster, ko521NSName, ko521DevicePath)
+
+			Expect(DeployCluster(k8sClient, ctx, aeroCluster)).ToNot(HaveOccurred())
+
+			current, err := getCluster(k8sClient, ctx, clusterNamespacedName)
+			Expect(err).ToNot(HaveOccurred())
+			Expect(current.Status.Pods).To(HaveLen(int(current.Spec.Size)))
+
+			// Service reachable check through AS client bootstrap.
+			hostConns, err := newAllHostConn(logger, current, k8sClient)
+			Expect(err).ToNot(HaveOccurred())
+			Expect(hostConns).ToNot(BeEmpty())
+		})
+
+		It("Validates write/read & roster; operator rolling upgrade preserves SC in-memory persistent data", func() {
+			aeroCluster := createDummyAerospikeCluster(clusterNamespacedName, 3)
+			configureSCInMemoryPersistentNamespace(aeroCluster, ko521NSName, ko521DevicePath)
+			Expect(DeployCluster(k8sClient, ctx, aeroCluster)).ToNot(HaveOccurred())
+			Expect(WriteDataToCluster(aeroCluster, k8sClient, []string{ko521NSName})).ToNot(HaveOccurred())
+
+			records, err := CheckDataInCluster(aeroCluster, k8sClient, []string{ko521NSName})
+			Expect(err).ToNot(HaveOccurred())
+			Expect(records[ko521NSName]).To(BeTrue())
+
+			// SC quorum behavior proxy check: roster is established and healthy.
+			validateRoster(k8sClient, ctx, clusterNamespacedName, ko521NSName)
+
+			// Distinct from existing generic upgrade checks: validates KO-521 data durability path.
+			Expect(upgradeClusterTest(k8sClient, ctx, clusterNamespacedName, nextImage)).ToNot(HaveOccurred())
+			Expect(assertNamespaceDataPresent(clusterNamespacedName, ko521NSName)).ToNot(HaveOccurred())
+		})
+
+		It("Rolling restart with batch size and cold restart preserves data", func() {
+			aeroCluster := createDummyAerospikeCluster(clusterNamespacedName, 6)
+			configureSCInMemoryPersistentNamespace(aeroCluster, ko521NSName, ko521DevicePath)
+			aeroCluster.Spec.RackConfig = asdbv1.RackConfig{
+				Namespaces: []string{ko521NSName},
+				Racks:      []asdbv1.Rack{{ID: 1}, {ID: 2}},
+				RollingUpdateBatchSize: &intstr.IntOrString{
+					Type:   intstr.Int,
+					IntVal: 2,
+				},
+			}
+
+			Expect(DeployCluster(k8sClient, ctx, aeroCluster)).ToNot(HaveOccurred())
+			Expect(WriteDataToCluster(aeroCluster, k8sClient, []string{ko521NSName})).ToNot(HaveOccurred())
+
+			By("Rolling restart with batchRollingUpdateSize=2")
+			Expect(rollingRestartClusterTest(logger, k8sClient, ctx, clusterNamespacedName)).ToNot(HaveOccurred())
+			Expect(assertNamespaceDataPresent(clusterNamespacedName, ko521NSName)).ToNot(HaveOccurred())
+
+			By("Cold restart scenario by deleting all pods")
+
+			current, err := getCluster(k8sClient, ctx, clusterNamespacedName)
+			Expect(err).ToNot(HaveOccurred())
+
+			podList, err := getClusterPodList(k8sClient, ctx, current)
+			Expect(err).ToNot(HaveOccurred())
+			Expect(podList.Items).ToNot(BeEmpty())
+
+			oldPodUIDByName := map[string]string{}
+
+			for idx := range podList.Items {
+				pod := &podList.Items[idx]
+				oldPodUIDByName[pod.Name] = string(pod.UID)
+				Expect(k8sClient.Delete(ctx, pod)).ToNot(HaveOccurred())
+			}
+
+			for podName, oldUID := range oldPodUIDByName {
+				Expect(waitForPodRestart(ctx, podName, namespace, oldUID)).ToNot(HaveOccurred())
+			}
+
+			Expect(waitForAerospikeCluster(
+				k8sClient, ctx, current, int(current.Spec.Size), retryInterval,
+				getTimeout(current.Spec.Size), []asdbv1.AerospikeClusterPhase{asdbv1.AerospikeClusterCompleted},
+			)).ToNot(HaveOccurred())
+
+			Expect(assertNamespaceDataPresent(clusterNamespacedName, ko521NSName)).ToNot(HaveOccurred())
+		})
+
+		It("Single pod delete/recreate preserves data", func() {
+			aeroCluster := createDummyAerospikeCluster(clusterNamespacedName, 3)
+			configureSCInMemoryPersistentNamespace(aeroCluster, ko521NSName, ko521DevicePath)
+			Expect(DeployCluster(k8sClient, ctx, aeroCluster)).ToNot(HaveOccurred())
+
+			Expect(WriteDataToCluster(aeroCluster, k8sClient, []string{ko521NSName})).ToNot(HaveOccurred())
+
+			podList, err := getClusterPodList(k8sClient, ctx, aeroCluster)
+			Expect(err).ToNot(HaveOccurred())
+			Expect(podList.Items).ToNot(BeEmpty())
+
+			targetPod := &podList.Items[0]
+			oldUID := string(targetPod.UID)
+			Expect(k8sClient.Delete(ctx, targetPod)).ToNot(HaveOccurred())
+			Expect(waitForPodRestart(ctx, targetPod.Name, targetPod.Namespace, oldUID)).ToNot(HaveOccurred())
+
+			Expect(assertNamespaceDataPresent(clusterNamespacedName, ko521NSName)).ToNot(HaveOccurred())
+		})
+
+		It("Scale up and scale down preserve data integrity", func() {
+			aeroCluster := createDummyAerospikeCluster(clusterNamespacedName, 3)
+			configureSCInMemoryPersistentNamespace(aeroCluster, ko521NSName, ko521DevicePath)
+			Expect(DeployCluster(k8sClient, ctx, aeroCluster)).ToNot(HaveOccurred())
+			Expect(WriteDataToCluster(aeroCluster, k8sClient, []string{ko521NSName})).ToNot(HaveOccurred())
+
+			Expect(scaleUpClusterTest(k8sClient, ctx, clusterNamespacedName, 1)).ToNot(HaveOccurred())
+			Expect(assertNamespaceDataPresent(clusterNamespacedName, ko521NSName)).ToNot(HaveOccurred())
+
+			Expect(scaleDownClusterTest(k8sClient, ctx, clusterNamespacedName, 1)).ToNot(HaveOccurred())
+			Expect(assertNamespaceDataPresent(clusterNamespacedName, ko521NSName)).ToNot(HaveOccurred())
+		})
+
+		It("Rack-enabled deployment works for SC in-memory persistent namespace", func() {
+			aeroCluster := createDummyAerospikeCluster(clusterNamespacedName, 4)
+			configureSCInMemoryPersistentNamespace(aeroCluster, ko521NSName, ko521DevicePath)
+			aeroCluster.Spec.RackConfig = asdbv1.RackConfig{
+				Namespaces: []string{ko521NSName},
+				Racks:      []asdbv1.Rack{{ID: 1}, {ID: 2}},
+			}
+
+			Expect(DeployCluster(k8sClient, ctx, aeroCluster)).ToNot(HaveOccurred())
+			Expect(validateRackEnabledCluster(k8sClient, ctx, clusterNamespacedName)).ToNot(HaveOccurred())
+
+			Expect(WriteDataToCluster(aeroCluster, k8sClient, []string{ko521NSName})).ToNot(HaveOccurred())
+			Expect(assertNamespaceDataPresent(clusterNamespacedName, ko521NSName)).ToNot(HaveOccurred())
+		})
+
+		It("Invalid in-memory persistence deploy fails without partial long-running resources", func() {
+			aeroCluster := createDummyAerospikeCluster(clusterNamespacedName, 3)
+			configureSCInMemoryPersistentNamespace(aeroCluster, ko521NSName, "/missing/dev/ko521")
+
+			err := DeployCluster(k8sClient, ctx, aeroCluster)
+			Expect(err).To(HaveOccurred())
+
+			existing, getErr := getClusterIfExists(k8sClient, ctx, clusterNamespacedName)
+			Expect(getErr).ToNot(HaveOccurred())
+
+			if existing == nil {
+				return
+			}
+
+			Expect(existing.Status.Pods).To(BeEmpty())
+		})
+
+		It("Invalid update removing persistence backing is rejected and cluster stays healthy", func() {
+			aeroCluster := createDummyAerospikeCluster(clusterNamespacedName, 3)
+			configureSCInMemoryPersistentNamespace(aeroCluster, ko521NSName, ko521DevicePath)
+			Expect(DeployCluster(k8sClient, ctx, aeroCluster)).ToNot(HaveOccurred())
+			Expect(WriteDataToCluster(aeroCluster, k8sClient, []string{ko521NSName})).ToNot(HaveOccurred())
+			current, err := getCluster(k8sClient, ctx, clusterNamespacedName)
+			Expect(err).ToNot(HaveOccurred())
+
+			namespaceCfg :=
+				current.Spec.AerospikeConfig.Value[asdbv1.ConfKeyNamespace].([]interface{})[0].(map[string]interface{})
+			namespaceCfg["storage-engine"] = map[string]interface{}{
+				"type":      "memory",
+				"data-size": 1073741824,
+			}
+
+			err = k8sClient.Update(ctx, current)
+			Expect(err).To(HaveOccurred())
+
+			Expect(assertNamespaceDataPresent(clusterNamespacedName, ko521NSName)).ToNot(HaveOccurred())
 		})
 	})
 })
