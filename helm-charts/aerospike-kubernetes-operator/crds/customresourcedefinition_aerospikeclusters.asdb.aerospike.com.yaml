@@ -7057,7 +7057,10 @@ spec:
                             It may result in data loss. Use this with caution.
                           type: boolean
                         id:
-                          description: Identifier for the rack
+                          description: Identifier for the rack. Allowed range matches
+                            Aerospike namespace rack-id.
+                          maximum: 1000000
+                          minimum: 0
                           type: integer
                         nodeName:
                           description: K8s Node name for setting rack affinity. Rack
@@ -16583,7 +16586,10 @@ spec:
                             It may result in data loss. Use this with caution.
                           type: boolean
                         id:
-                          description: Identifier for the rack
+                          description: Identifier for the rack. Allowed range matches
+                            Aerospike namespace rack-id.
+                          maximum: 1000000
+                          minimum: 0
                           type: integer
                         nodeName:
                           description: K8s Node name for setting rack affinity. Rack

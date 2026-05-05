@@ -526,7 +526,9 @@ type RackConfig struct { //nolint:govet // for readability
 
 // Rack specifies single rack config
 type Rack struct { //nolint:govet // for readability
-	// Identifier for the rack
+	// Identifier for the rack. Allowed range matches Aerospike namespace rack-id.
+	// +kubebuilder:validation:Minimum=0
+	// +kubebuilder:validation:Maximum=1000000
 	ID int `json:"id"`
 
 	// Revision is a version identifier for this rack's specification, used to trigger controlled migrations

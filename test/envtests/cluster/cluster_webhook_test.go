@@ -1051,10 +1051,8 @@ var _ = Describe("AerospikeCluster validation", func() {
 
 					// Webhook response validation
 					envtests.NewStatusErrorMatcher().
-						WithMessageSubstrings(testutil.WebhookErrorPrefix,
-							"aerospikeConfig not valid: generated config not valid for version",
-							"config schema error",
-							"{-1 number_gte (root).namespaces.0.rack-id Must be greater than or equal to 0 namespaces.0.rack-id}").
+						WithMessageSubstrings(testutil.CRDSchemaErrorPrefix,
+							"Invalid value: -1: spec.rackConfig.racks[0].id in body should be greater than or equal to 0").
 						Validate(err)
 				})
 
