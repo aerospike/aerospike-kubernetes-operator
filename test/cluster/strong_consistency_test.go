@@ -954,9 +954,8 @@ func configureSCInMemoryPersistentNamespace(
 	namespaceCfg[asdbv1.ConfKeyReplicationFactor] = 2
 	namespaceCfg["strong-consistency"] = true
 	namespaceCfg[asdbv1.ConfKeyStorageEngine] = map[string]interface{}{
-		"type":      "memory",
-		"data-size": 1073741824,
-		"devices":   []interface{}{devicePath},
+		"type":    "memory",
+		"devices": []interface{}{devicePath},
 	}
 	namespaces[0] = namespaceCfg
 	aeroCluster.Spec.AerospikeConfig.Value[asdbv1.ConfKeyNamespace] = namespaces
