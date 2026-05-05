@@ -260,6 +260,10 @@ func isRoleSpecValid(
 
 // Indicates if a role name is valid.
 func isRoleNameValid(roleName string) (bool, error) {
+	if strings.TrimSpace(roleName) == "" {
+		return false, fmt.Errorf("role name cannot be empty")
+	}
+
 	for _, forbiddenChar := range roleNameForbiddenChars {
 		if strings.Contains(roleName, forbiddenChar) {
 			return false, fmt.Errorf(
@@ -477,6 +481,10 @@ func isUserSpecValid(
 
 // isUserNameValid Indicates if a username is valid.
 func isUserNameValid(userName string) (bool, error) {
+	if strings.TrimSpace(userName) == "" {
+		return false, fmt.Errorf("username cannot be empty")
+	}
+
 	for _, forbiddenChar := range userNameForbiddenChars {
 		if strings.Contains(userName, forbiddenChar) {
 			return false, fmt.Errorf(

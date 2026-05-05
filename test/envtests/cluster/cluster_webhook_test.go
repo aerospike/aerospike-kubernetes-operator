@@ -60,7 +60,7 @@ var _ = Describe("AerospikeCluster validation", func() {
 
 					// Webhook response validation
 					envtests.NewStatusErrorMatcher().
-						WithMessageSubstrings("AerospikeCluster.asdb.aerospike.com",
+						WithMessageSubstrings(testutil.CRDSchemaErrorPrefix,
 							"spec.size: Invalid value: 0: spec.size in body should be greater than or equal to 1").
 						Validate(err)
 				})
@@ -111,7 +111,7 @@ var _ = Describe("AerospikeCluster validation", func() {
 					// Webhook response validation
 					envtests.NewStatusErrorMatcher().
 						WithMessageSubstrings(
-							"AerospikeCluster.asdb.aerospike.com",
+							testutil.CRDSchemaErrorPrefix,
 							"spec.image: Invalid value: \"\": spec.image in body should be at least 1 chars long").
 						Validate(err)
 				})
@@ -126,7 +126,7 @@ var _ = Describe("AerospikeCluster validation", func() {
 					// Webhook response validation
 					envtests.NewStatusErrorMatcher().
 						WithMessageSubstrings(
-							"\"vaerospikecluster.kb.io\"",
+							testutil.WebhookErrorPrefix,
 							"only Enterprise and Federal editions are allowed").
 						Validate(err)
 				})
@@ -140,7 +140,7 @@ var _ = Describe("AerospikeCluster validation", func() {
 
 					envtests.NewStatusErrorMatcher().
 						WithMessageSubstrings(
-							"\"vaerospikecluster.kb.io\"",
+							testutil.WebhookErrorPrefix,
 							"image version 5.0.0.0 not supported. Base version 6.0.0.0").
 						Validate(err)
 				})
@@ -158,7 +158,7 @@ var _ = Describe("AerospikeCluster validation", func() {
 
 					// Webhook response validation
 					envtests.NewStatusErrorMatcher().
-						WithMessageSubstrings("\"vaerospikecluster.kb.io\"",
+						WithMessageSubstrings(testutil.WebhookErrorPrefix,
 							"namespace storage device related devicePath /test/dev/xvdf not found in Storage config",
 							"<nil>", "deleteFiles deleteFiles false}",
 							"{<nil> <nil>", "none dd false} 1 [] <nil> []}").
@@ -182,7 +182,7 @@ var _ = Describe("AerospikeCluster validation", func() {
 
 						// Webhook response validation
 						envtests.NewStatusErrorMatcher().
-							WithMessageSubstrings("\"vaerospikecluster.kb.io\"",
+							WithMessageSubstrings(testutil.WebhookErrorPrefix,
 								"namespace storage device related devicePath andRandomDevice not found in Storage config").
 							Validate(err)
 					}
@@ -209,7 +209,7 @@ var _ = Describe("AerospikeCluster validation", func() {
 
 					// Webhook response validation
 					envtests.NewStatusErrorMatcher().
-						WithMessageSubstrings("\"vaerospikecluster.kb.io\"",
+						WithMessageSubstrings(testutil.WebhookErrorPrefix,
 							"storage-engine cannot be nil for namespace map[name:test replication-factor:2 storage-engine:<nil>",
 							"strong-consistency:true]").
 						Validate(err)
@@ -240,7 +240,7 @@ var _ = Describe("AerospikeCluster validation", func() {
 
 					// Webhook response validation
 					envtests.NewStatusErrorMatcher().
-						WithMessageSubstrings("\"vaerospikecluster.kb.io\"",
+						WithMessageSubstrings(testutil.WebhookErrorPrefix,
 							"aerospikeConfig not valid: generated config not valid for version",
 							"config schema error",
 							"{map[devices:<nil> type:device] number_one_of (root).",
@@ -274,7 +274,7 @@ var _ = Describe("AerospikeCluster validation", func() {
 
 					// Webhook response validation
 					envtests.NewStatusErrorMatcher().
-						WithMessageSubstrings("\"vaerospikecluster.kb.io\"",
+						WithMessageSubstrings(testutil.WebhookErrorPrefix,
 							" aerospikeConfig not valid: generated config not valid for version",
 							"config schema error [\t{map[devices:[/test/dev/xvdf] files:<nil> type:device]",
 							"number_one_of (root).namespaces.0.storage-engine Must validate one and only one schema",
@@ -344,7 +344,7 @@ var _ = Describe("AerospikeCluster validation", func() {
 
 						// Webhook response validation
 						envtests.NewStatusErrorMatcher().
-							WithMessageSubstrings("\"vaerospikecluster.kb.io\"",
+							WithMessageSubstrings(testutil.WebhookErrorPrefix,
 								"invalid device name /dev/xvdf1 /dev/xvdf2 /dev/xvdf3.",
 								"Max 2 device can be mentioned in single line (Shadow device config)").
 							Validate(err)
@@ -370,7 +370,7 @@ var _ = Describe("AerospikeCluster validation", func() {
 
 					// Webhook response validation
 					envtests.NewStatusErrorMatcher().
-						WithMessageSubstrings("\"vaerospikecluster.kb.io\"",
+						WithMessageSubstrings(testutil.WebhookErrorPrefix,
 							"device /test/dev/xvdf is already being referenced in multiple namespaces (test, ns1)").
 						Validate(err)
 				})
@@ -426,7 +426,7 @@ var _ = Describe("AerospikeCluster validation", func() {
 
 					// Webhook response validation
 					envtests.NewStatusErrorMatcher().
-						WithMessageSubstrings("\"vaerospikecluster.kb.io\"",
+						WithMessageSubstrings(testutil.WebhookErrorPrefix,
 							"strong-consistency namespace replication-factor 3 cannot be more than cluster size 1").
 						Validate(err)
 				})
@@ -450,7 +450,7 @@ var _ = Describe("AerospikeCluster validation", func() {
 					Expect(err).To(HaveOccurred())
 
 					envtests.NewStatusErrorMatcher().
-						WithMessageSubstrings("\"vaerospikecluster.kb.io\"",
+						WithMessageSubstrings(testutil.WebhookErrorPrefix,
 							`duplicate name "test" in namespaces list section`).
 						Validate(err)
 				})
@@ -475,7 +475,7 @@ var _ = Describe("AerospikeCluster validation", func() {
 					Expect(err).To(HaveOccurred())
 
 					envtests.NewStatusErrorMatcher().
-						WithMessageSubstrings("\"vaerospikecluster.kb.io\"",
+						WithMessageSubstrings(testutil.WebhookErrorPrefix,
 							`xdr: duplicate name "test" in namespaces list section`).
 						Validate(err)
 				})
@@ -506,7 +506,7 @@ var _ = Describe("AerospikeCluster validation", func() {
 					Expect(err).To(HaveOccurred())
 
 					envtests.NewStatusErrorMatcher().
-						WithMessageSubstrings("\"vaerospikecluster.kb.io\"",
+						WithMessageSubstrings(testutil.WebhookErrorPrefix,
 							`xdr: duplicate name "dc1" in dcs list section`).
 						Validate(err)
 				})
@@ -568,7 +568,7 @@ var _ = Describe("AerospikeCluster validation", func() {
 
 					// Webhook response validation
 					envtests.NewStatusErrorMatcher().
-						WithMessageSubstrings("\"vaerospikecluster.kb.io\"",
+						WithMessageSubstrings(testutil.WebhookErrorPrefix,
 							"can use facility only with `syslog` in aerospikeConfig.logging",
 							"map[facility:local0 name:anyFileName path:/dev/log tag:asd]").
 						Validate(err)
@@ -592,7 +592,7 @@ var _ = Describe("AerospikeCluster validation", func() {
 
 					// Webhook response validation
 					envtests.NewStatusErrorMatcher().
-						WithMessageSubstrings("\"vaerospikecluster.kb.io\"",
+						WithMessageSubstrings(testutil.WebhookErrorPrefix,
 							"advertise-ipv6 is not supported").
 						Validate(err)
 				})
@@ -649,7 +649,7 @@ var _ = Describe("AerospikeCluster validation", func() {
 
 					// Webhook response validation
 					envtests.NewStatusErrorMatcher().
-						WithMessageSubstrings("\"vaerospikecluster.kb.io\"",
+						WithMessageSubstrings(testutil.WebhookErrorPrefix,
 							"feature-key-file paths or tls paths or default-password-file path are not mounted",
 							"- create an entry for '/randompath/features.conf' in 'storage.volumes'").
 						Validate(err)
@@ -713,7 +713,7 @@ var _ = Describe("AerospikeCluster validation", func() {
 
 					// Webhook response validation
 					envtests.NewStatusErrorMatcher().
-						WithMessageSubstrings("AerospikeCluster.asdb.aerospike.com",
+						WithMessageSubstrings(testutil.CRDSchemaErrorPrefix,
 							"spec.podSpec.dnsPolicy: Unsupported value: \"Default\": supported values: "+
 								"\"ClusterFirstWithHostNet\", \"ClusterFirst\", \"None\"").
 						Validate(err)
@@ -730,7 +730,7 @@ var _ = Describe("AerospikeCluster validation", func() {
 
 					// Webhook response validation
 					envtests.NewStatusErrorMatcher().
-						WithMessageSubstrings("\"vaerospikecluster.kb.io\"",
+						WithMessageSubstrings(testutil.WebhookErrorPrefix,
 							"dnsConfig is required field when dnsPolicy is set to None").
 						Validate(err)
 				})
@@ -745,7 +745,7 @@ var _ = Describe("AerospikeCluster validation", func() {
 
 					envtests.NewStatusErrorMatcher().
 						WithMessageSubstrings(
-							"\"vaerospikecluster.kb.io\"",
+							testutil.WebhookErrorPrefix,
 							"host networking cannot be enabled with multi pod per host").
 						Validate(err)
 				})
@@ -766,7 +766,7 @@ var _ = Describe("AerospikeCluster validation", func() {
 
 					// Webhook response validation
 					envtests.NewStatusErrorMatcher().
-						WithMessageSubstrings("\"vaerospikecluster.kb.io\"",
+						WithMessageSubstrings(testutil.WebhookErrorPrefix,
 							"either `secretCertSource` or `certPathInOperator` must be set in `operatorClientCertSpec` but not both").
 						Validate(err)
 				})
@@ -783,7 +783,7 @@ var _ = Describe("AerospikeCluster validation", func() {
 
 					// Webhook response validation
 					envtests.NewStatusErrorMatcher().
-						WithMessageSubstrings("\"vaerospikecluster.kb.io\"",
+						WithMessageSubstrings(testutil.WebhookErrorPrefix,
 							"both `clientCertFilename` and `clientKeyFilename` should be either set or not set in `secretCertSource`").
 						Validate(err)
 				})
@@ -800,7 +800,7 @@ var _ = Describe("AerospikeCluster validation", func() {
 
 					// Webhook response validation
 					envtests.NewStatusErrorMatcher().
-						WithMessageSubstrings("\"vaerospikecluster.kb.io\"",
+						WithMessageSubstrings(testutil.WebhookErrorPrefix,
 							"both `caCertsFilename` or `caCertsSource` cannot be set in `secretCertSource`").
 						Validate(err)
 				})
@@ -823,7 +823,7 @@ var _ = Describe("AerospikeCluster validation", func() {
 
 					// Webhook response validation
 					envtests.NewStatusErrorMatcher().
-						WithMessageSubstrings("\"vaerospikecluster.kb.io\"",
+						WithMessageSubstrings(testutil.WebhookErrorPrefix,
 							"both `clientCertPath` and `clientKeyPath` should be either set or not set in `certPathInOperator`").
 						Validate(err)
 				})
@@ -840,7 +840,7 @@ var _ = Describe("AerospikeCluster validation", func() {
 
 					// Webhook response validation
 					envtests.NewStatusErrorMatcher().
-						WithMessageSubstrings("\"vaerospikecluster.kb.io\"",
+						WithMessageSubstrings(testutil.WebhookErrorPrefix,
 							"operator client cert is not specified").
 						Validate(err)
 				})
@@ -857,7 +857,7 @@ var _ = Describe("AerospikeCluster validation", func() {
 
 					// Webhook response validation
 					envtests.NewStatusErrorMatcher().
-						WithMessageSubstrings("AerospikeCluster.asdb.aerospike.com",
+						WithMessageSubstrings(testutil.CRDSchemaErrorPrefix,
 							"\"\" is invalid:",
 							"metadata.name: Required value: name or generateName is required").
 						WithCauses(metav1.StatusCause{
@@ -928,7 +928,7 @@ var _ = Describe("AerospikeCluster validation", func() {
 
 					envtests.NewStatusErrorMatcher().
 						WithMessageSubstrings(
-							"\"vaerospikecluster.kb.io\"",
+							testutil.WebhookErrorPrefix,
 							"cluster name \"1mycluster\" is not a valid Kubernetes service name (DNS-1035)",
 							"start with an alphabetic character").
 						Validate(err)
@@ -948,7 +948,7 @@ var _ = Describe("AerospikeCluster validation", func() {
 
 					envtests.NewStatusErrorMatcher().
 						WithMessageSubstrings(
-							"\"vaerospikecluster.kb.io\"",
+							testutil.WebhookErrorPrefix,
 							"Pod label value would exceed the",
 							"63-character DNS label limit",
 							"revision placeholder = 3",
@@ -1006,7 +1006,7 @@ var _ = Describe("AerospikeCluster validation", func() {
 					Expect(err).To(HaveOccurred())
 
 					envtests.NewStatusErrorMatcher().
-						WithMessageSubstrings("\"vaerospikecluster.kb.io\"",
+						WithMessageSubstrings(testutil.WebhookErrorPrefix,
 							"maxUnavailable 2 is invalid",
 							"value must be less than the minimum replication factor").
 						Validate(err)
@@ -1027,7 +1027,7 @@ var _ = Describe("AerospikeCluster validation", func() {
 
 					envtests.NewStatusErrorMatcher().
 						WithMessageSubstrings(
-							"\"vaerospikecluster.kb.io\"",
+							testutil.WebhookErrorPrefix,
 							"security is disabled but access control is specified").
 						Validate(err)
 				})
@@ -1051,7 +1051,7 @@ var _ = Describe("AerospikeCluster validation", func() {
 
 					// Webhook response validation
 					envtests.NewStatusErrorMatcher().
-						WithMessageSubstrings("\"vaerospikecluster.kb.io\"",
+						WithMessageSubstrings(testutil.WebhookErrorPrefix,
 							"aerospikeConfig not valid: generated config not valid for version",
 							"config schema error",
 							"{-1 number_gte (root).namespaces.0.rack-id Must be greater than or equal to 0 namespaces.0.rack-id}").
@@ -1068,7 +1068,7 @@ var _ = Describe("AerospikeCluster validation", func() {
 
 					envtests.NewStatusErrorMatcher().
 						WithMessageSubstrings(
-							"\"vaerospikecluster.kb.io\"",
+							testutil.WebhookErrorPrefix,
 							"can not use negative spec.rackConfig.rollingUpdateBatchSize: -1").
 						Validate(err)
 				})
@@ -1083,7 +1083,7 @@ var _ = Describe("AerospikeCluster validation", func() {
 
 					envtests.NewStatusErrorMatcher().
 						WithMessageSubstrings(
-							"\"vaerospikecluster.kb.io\"",
+							testutil.WebhookErrorPrefix,
 							"can not use negative spec.rackConfig.scaleDownBatchSize: -1").
 						Validate(err)
 				})
@@ -1100,7 +1100,7 @@ var _ = Describe("AerospikeCluster validation", func() {
 
 					envtests.NewStatusErrorMatcher().
 						WithMessageSubstrings(
-							"\"vaerospikecluster.kb.io\"",
+							testutil.WebhookErrorPrefix,
 							"namespace name `test ns` cannot have spaces",
 							"Namespaces [test ns]").
 						Validate(err)
@@ -1135,7 +1135,7 @@ var _ = Describe("AerospikeCluster validation", func() {
 					Expect(err).To(HaveOccurred())
 					envtests.NewStatusErrorMatcher().
 						WithMessageSubstrings(
-							"\"vaerospikecluster.kb.io\"",
+							testutil.WebhookErrorPrefix,
 							"image \"InvalidImage\" is not supported",
 							"only Enterprise and Federal editions are allowed").
 						Validate(err)
@@ -1148,7 +1148,7 @@ var _ = Describe("AerospikeCluster validation", func() {
 					Expect(err).To(HaveOccurred())
 					envtests.NewStatusErrorMatcher().
 						WithMessageSubstrings(
-							"\"vaerospikecluster.kb.io\"",
+							testutil.WebhookErrorPrefix,
 							"image version 3.0.0.4 not supported. Base version 6.0.0.0").
 						Validate(err)
 				})
@@ -1171,8 +1171,8 @@ var _ = Describe("AerospikeCluster validation", func() {
 					Expect(err).To(HaveOccurred())
 					envtests.NewStatusErrorMatcher().
 						WithMessageSubstrings(
-							"\"vaerospikecluster.kb.io\"",
-							"invalid cluster size 0").
+							testutil.CRDSchemaErrorPrefix,
+							"spec.size: Invalid value: 0").
 						Validate(err)
 				})
 			})
@@ -1196,7 +1196,7 @@ var _ = Describe("AerospikeCluster validation", func() {
 
 					envtests.NewStatusErrorMatcher().
 						WithMessageSubstrings(
-							"\"vaerospikecluster.kb.io\"",
+							testutil.WebhookErrorPrefix,
 							"denied the request:",
 							"cannot update MultiPodPerHost setting").
 						Validate(err)

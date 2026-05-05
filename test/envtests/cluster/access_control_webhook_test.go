@@ -79,8 +79,7 @@ func expectDeployFailsACWebhook(ctx context.Context, cluster *asdbv1.AerospikeCl
 	err := envtests.K8sClient.Create(ctx, cluster)
 	Expect(err).To(HaveOccurred())
 
-	args := append([]string{"\"vaerospikecluster.kb.io\""}, subs...)
-	envtests.NewStatusErrorMatcher().WithMessageSubstrings(args...).Validate(err)
+	envtests.NewStatusErrorMatcher().WithMessageSubstrings(subs...).Validate(err)
 }
 
 // profilerRoleForWebhookTest matches namespace "test" from CreateDummyAerospikeCluster.
@@ -189,7 +188,7 @@ var _ = Describe("AerospikeCluster access control validation (envtests)", func()
 					Expect(err).To(HaveOccurred())
 
 					envtests.NewStatusErrorMatcher().
-						WithMessageSubstrings("\"vaerospikecluster.kb.io\"",
+						WithMessageSubstrings(testutil.WebhookErrorPrefix,
 							"security is disabled but access control is specified").
 						Validate(err)
 				})
@@ -201,7 +200,7 @@ var _ = Describe("AerospikeCluster access control validation (envtests)", func()
 						"read-write",
 					}
 
-					expectDeployFailsACWebhook(ctx, aeroCluster, "no admin user with required roles")
+					expectDeployFailsACWebhook(ctx, aeroCluster, "no admin user with required roles", testutil.WebhookErrorPrefix)
 				})
 
 				It("fails when admin user is missing with required roles", func() {
@@ -221,7 +220,7 @@ var _ = Describe("AerospikeCluster access control validation (envtests)", func()
 						},
 					}
 
-					expectDeployFailsACWebhook(ctx, aeroCluster, "no admin user with required roles")
+					expectDeployFailsACWebhook(ctx, aeroCluster, "no admin user with required roles", testutil.WebhookErrorPrefix)
 				})
 			})
 
@@ -273,7 +272,7 @@ var _ = Describe("AerospikeCluster access control validation (envtests)", func()
 					err := envtests.K8sClient.Create(ctx, aeroCluster)
 					Expect(err).To(HaveOccurred())
 					envtests.NewStatusErrorMatcher().
-						WithMessageSubstrings("AerospikeCluster.asdb.aerospike.com",
+						WithMessageSubstrings(testutil.CRDSchemaErrorPrefix,
 							"Duplicate value: {\"name\":\"profiler\"}").
 						Validate(err)
 				})
@@ -304,11 +303,18 @@ var _ = Describe("AerospikeCluster access control validation (envtests)", func()
 
 						expectDeployFailsACWebhook(ctx, aeroCluster, msgSubs...)
 					},
-					Entry("empty string", "", []string{"role name cannot be empty"}),
-					Entry("whitespace only", "    ", []string{"role name cannot be empty"}),
-					Entry("exceeds max length", strings.Repeat("a", 64), []string{"cannot have more than 63 characters"}),
-					Entry("colon in role name", "aerospike:user", []string{"cannot contain", ":"}),
-					Entry("semicolon in role name", "aerospike;user", []string{"cannot contain", ";"}),
+					Entry("empty string", "",
+						[]string{"spec.aerospikeAccessControl.roles[0].name in body should be at least 1 chars long",
+							testutil.CRDSchemaErrorPrefix}),
+					Entry("whitespace only", "    ", []string{"role name cannot be empty",
+						testutil.WebhookErrorPrefix}),
+					Entry("exceeds max length", strings.Repeat("a", 64),
+						[]string{"spec.aerospikeAccessControl.roles[0].name: Too long: may not be more than 63 bytes",
+							testutil.CRDSchemaErrorPrefix}),
+					Entry("colon in role name", "aerospike:user", []string{"cannot contain", ":",
+						testutil.WebhookErrorPrefix}),
+					Entry("semicolon in role name", "aerospike;user", []string{"cannot contain", ";",
+						testutil.WebhookErrorPrefix}),
 				)
 
 				It("fails when attempting to define a predefined role", func() {
@@ -335,7 +341,8 @@ var _ = Describe("AerospikeCluster access control validation (envtests)", func()
 						},
 					}
 
-					expectDeployFailsACWebhook(ctx, aeroCluster, "cannot create or modify predefined role")
+					expectDeployFailsACWebhook(ctx, aeroCluster, "cannot create or modify predefined role",
+						testutil.WebhookErrorPrefix)
 				})
 
 				It("fails on duplicate privilege in a role", func() {
@@ -368,7 +375,7 @@ var _ = Describe("AerospikeCluster access control validation (envtests)", func()
 					err := envtests.K8sClient.Create(ctx, aeroCluster)
 					Expect(err).To(HaveOccurred())
 					envtests.NewStatusErrorMatcher().
-						WithMessageSubstrings("AerospikeCluster.asdb.aerospike.com",
+						WithMessageSubstrings(testutil.CRDSchemaErrorPrefix,
 							"Duplicate value: \"read-write.test\"").
 						Validate(err)
 				})
@@ -400,7 +407,7 @@ var _ = Describe("AerospikeCluster access control validation (envtests)", func()
 					err := envtests.K8sClient.Create(ctx, aeroCluster)
 					Expect(err).To(HaveOccurred())
 					envtests.NewStatusErrorMatcher().
-						WithMessageSubstrings("AerospikeCluster.asdb.aerospike.com",
+						WithMessageSubstrings(testutil.CRDSchemaErrorPrefix,
 							"Duplicate value: \"8.8.0.0/16\"").
 						Validate(err)
 				})
@@ -429,7 +436,7 @@ var _ = Describe("AerospikeCluster access control validation (envtests)", func()
 						},
 					}
 
-					expectDeployFailsACWebhook(ctx, aeroCluster, "invalid whitelist")
+					expectDeployFailsACWebhook(ctx, aeroCluster, "invalid whitelist", testutil.WebhookErrorPrefix)
 				})
 
 				DescribeTable("fails on invalid role whitelist entry",
@@ -459,9 +466,10 @@ var _ = Describe("AerospikeCluster access control validation (envtests)", func()
 
 						expectDeployFailsACWebhook(ctx, aeroCluster, msgSubs...)
 					},
-					Entry("empty string", "", []string{"invalid whitelist"}),
-					Entry("whitespace only", "    ", []string{"invalid whitelist"}),
-					Entry("exceeds reasonable address length", strings.Repeat("x", 64), []string{"invalid whitelist"}),
+					Entry("empty string", "", []string{"invalid whitelist", testutil.WebhookErrorPrefix}),
+					Entry("whitespace only", "    ", []string{"invalid whitelist", testutil.WebhookErrorPrefix}),
+					Entry("exceeds reasonable address length", strings.Repeat("x", 64),
+						[]string{"invalid whitelist", testutil.WebhookErrorPrefix}),
 				)
 
 				It("fails when privilege references a namespace not in config", func() {
@@ -487,7 +495,7 @@ var _ = Describe("AerospikeCluster access control validation (envtests)", func()
 						},
 					}
 
-					expectDeployFailsACWebhook(ctx, aeroCluster, "missingNs", "not configured")
+					expectDeployFailsACWebhook(ctx, aeroCluster, "missingNs", "not configured", testutil.WebhookErrorPrefix)
 				})
 
 				It("fails when namespace-scoped privilege has an empty set name", func() {
@@ -515,7 +523,8 @@ var _ = Describe("AerospikeCluster access control validation (envtests)", func()
 					expectDeployFailsACWebhook(ctx, aeroCluster,
 						"role 'profiler' has invalid privilege",
 						"read-write.test.",
-						"invalid set name")
+						"invalid set name",
+						testutil.WebhookErrorPrefix)
 				})
 
 				It("fails on unknown privilege string", func() {
@@ -541,7 +550,7 @@ var _ = Describe("AerospikeCluster access control validation (envtests)", func()
 						},
 					}
 
-					expectDeployFailsACWebhook(ctx, aeroCluster, "invalid privilege", "non-existent")
+					expectDeployFailsACWebhook(ctx, aeroCluster, "invalid privilege", "non-existent", testutil.WebhookErrorPrefix)
 				})
 
 				It("fails when a global-only privilege uses namespace scope", func() {
@@ -567,7 +576,8 @@ var _ = Describe("AerospikeCluster access control validation (envtests)", func()
 						},
 					}
 
-					expectDeployFailsACWebhook(ctx, aeroCluster, "namespace or set scope", "sys-admin.test")
+					expectDeployFailsACWebhook(ctx, aeroCluster, "namespace or set scope", "sys-admin.test",
+						testutil.WebhookErrorPrefix)
 				})
 
 				It("fails when role quotas are set but security enable-quotas is not configured", func() {
@@ -596,7 +606,7 @@ var _ = Describe("AerospikeCluster access control validation (envtests)", func()
 					}
 
 					expectDeployFailsACWebhook(ctx, aeroCluster,
-						"invalid aerospike.security conf.", "enable-quotas: not present")
+						"invalid aerospike.security conf.", "enable-quotas: not present", testutil.WebhookErrorPrefix)
 				})
 			})
 		})
@@ -612,7 +622,7 @@ var _ = Describe("AerospikeCluster access control validation (envtests)", func()
 					Expect(errPre810).To(HaveOccurred())
 
 					envtests.NewStatusErrorMatcher().
-						WithMessageSubstrings("\"vaerospikecluster.kb.io\"",
+						WithMessageSubstrings(testutil.WebhookErrorPrefix,
 							"PKIOnly authMode requires Enterprise Edition version 8.1.0.0 or later").
 						Validate(errPre810)
 				})
@@ -646,7 +656,7 @@ var _ = Describe("AerospikeCluster access control validation (envtests)", func()
 					Expect(err).To(HaveOccurred())
 
 					envtests.NewStatusErrorMatcher().
-						WithMessageSubstrings("\"vaerospikecluster.kb.io\"",
+						WithMessageSubstrings(testutil.WebhookErrorPrefix,
 							"authMode for all users must be PKI with Federal Edition").
 						Validate(err)
 				})
@@ -659,7 +669,7 @@ var _ = Describe("AerospikeCluster access control validation (envtests)", func()
 					Expect(err).To(HaveOccurred())
 
 					envtests.NewStatusErrorMatcher().
-						WithMessageSubstrings("\"vaerospikecluster.kb.io\"",
+						WithMessageSubstrings(testutil.WebhookErrorPrefix,
 							"user admin cannot set secretName when authMode is PKIOnly").
 						Validate(err)
 				})
@@ -673,7 +683,7 @@ var _ = Describe("AerospikeCluster access control validation (envtests)", func()
 					Expect(err).To(HaveOccurred())
 
 					envtests.NewStatusErrorMatcher().
-						WithMessageSubstrings("\"vaerospikecluster.kb.io\"",
+						WithMessageSubstrings(testutil.WebhookErrorPrefix,
 							"PKIOnly authMode requires Aerospike cluster to be mTLS enabled").
 						Validate(err)
 				})
@@ -703,7 +713,7 @@ var _ = Describe("AerospikeCluster access control validation (envtests)", func()
 					err := envtests.K8sClient.Create(ctx, aeroCluster)
 					Expect(err).To(HaveOccurred())
 					envtests.NewStatusErrorMatcher().
-						WithMessageSubstrings("AerospikeCluster.asdb.aerospike.com",
+						WithMessageSubstrings(testutil.CRDSchemaErrorPrefix,
 							"Duplicate value: {\"name\":\"bob\"}").
 						Validate(err)
 				})
@@ -719,7 +729,7 @@ var _ = Describe("AerospikeCluster access control validation (envtests)", func()
 					err := envtests.K8sClient.Create(ctx, aeroCluster)
 					Expect(err).To(HaveOccurred())
 					envtests.NewStatusErrorMatcher().
-						WithMessageSubstrings("AerospikeCluster.asdb.aerospike.com",
+						WithMessageSubstrings(testutil.CRDSchemaErrorPrefix,
 							"Duplicate value: \"sys-admin\"").
 						Validate(err)
 				})
@@ -742,7 +752,7 @@ var _ = Describe("AerospikeCluster access control validation (envtests)", func()
 						},
 					}
 
-					expectDeployFailsACWebhook(ctx, aeroCluster, "non-existent role", "missingRole")
+					expectDeployFailsACWebhook(ctx, aeroCluster, "non-existent role", "missingRole", testutil.WebhookErrorPrefix)
 				})
 
 				DescribeTable("fails when a non-PKI user has an invalid secret name",
@@ -764,7 +774,7 @@ var _ = Describe("AerospikeCluster access control validation (envtests)", func()
 							},
 						}
 
-						expectDeployFailsACWebhook(ctx, aeroCluster, "empty secret name")
+						expectDeployFailsACWebhook(ctx, aeroCluster, "empty secret name", testutil.WebhookErrorPrefix)
 					},
 					Entry("empty string", ""),
 					Entry("whitespace only", "   "),
@@ -791,11 +801,14 @@ var _ = Describe("AerospikeCluster access control validation (envtests)", func()
 
 						expectDeployFailsACWebhook(ctx, aeroCluster, msgSubs...)
 					},
-					Entry("empty string", "", []string{"username cannot be empty"}),
-					Entry("whitespace only", "    ", []string{"username cannot be empty"}),
-					Entry("exceeds max length", strings.Repeat("u", 64), []string{"cannot have more than 63 characters"}),
-					Entry("colon in username", "aerospike:user", []string{"cannot contain", ":"}),
-					Entry("semicolon in username", "aerospike;user", []string{"cannot contain", ";"}),
+					Entry("empty string", "",
+						[]string{"spec.aerospikeAccessControl.users[1].name in body should be at least 1 chars long",
+							testutil.CRDSchemaErrorPrefix}),
+					Entry("whitespace only", "    ", []string{"username cannot be empty", testutil.WebhookErrorPrefix}),
+					Entry("exceeds max length", strings.Repeat("u", 64), []string{"may not be more than 63 bytes",
+						testutil.CRDSchemaErrorPrefix}),
+					Entry("colon in username", "aerospike:user", []string{"cannot contain", ":", testutil.WebhookErrorPrefix}),
+					Entry("semicolon in username", "aerospike;user", []string{"cannot contain", ";", testutil.WebhookErrorPrefix}),
 				)
 			})
 		})
@@ -812,7 +825,8 @@ var _ = Describe("AerospikeCluster access control validation (envtests)", func()
 
 					expectDeployFailsACWebhook(ctx, aeroCluster,
 						"feature-key-file paths or tls paths or default-password-file path are not mounted",
-						"create an entry for 'randompath' in 'storage.volumes'")
+						"create an entry for 'randompath' in 'storage.volumes'",
+						testutil.WebhookErrorPrefix)
 				})
 
 				It("fails if volume source is not secret for default-password-file", func() {
@@ -835,7 +849,8 @@ var _ = Describe("AerospikeCluster access control validation (envtests)", func()
 
 					expectDeployFailsACWebhook(ctx, aeroCluster,
 						"default-password-file path /etc/aerospike/defaultpass/password.conf",
-						"volume source should be secret in storage config, volume")
+						"volume source should be secret in storage config, volume",
+						testutil.WebhookErrorPrefix)
 				})
 			})
 		})
@@ -863,7 +878,7 @@ var _ = Describe("AerospikeCluster access control validation (envtests)", func()
 					Expect(err).To(HaveOccurred())
 
 					envtests.NewStatusErrorMatcher().
-						WithMessageSubstrings("\"vaerospikecluster.kb.io\"",
+						WithMessageSubstrings(testutil.WebhookErrorPrefix,
 							"user admin is not allowed to update authMode from PKI to Internal").
 						Validate(err)
 				})
@@ -897,7 +912,7 @@ var _ = Describe("AerospikeCluster access control validation (envtests)", func()
 					Expect(err).To(HaveOccurred())
 
 					envtests.NewStatusErrorMatcher().
-						WithMessageSubstrings("\"vaerospikecluster.kb.io\"",
+						WithMessageSubstrings(testutil.WebhookErrorPrefix,
 							"aerospikeAccessControl cannot be updated when security is disabled").
 						Validate(err)
 				})
@@ -917,7 +932,7 @@ var _ = Describe("AerospikeCluster access control validation (envtests)", func()
 					Expect(err).To(HaveOccurred())
 
 					envtests.NewStatusErrorMatcher().
-						WithMessageSubstrings("\"vaerospikecluster.kb.io\"",
+						WithMessageSubstrings(testutil.WebhookErrorPrefix,
 							"security is enabled but access control is missing").
 						Validate(err)
 				})
@@ -965,7 +980,7 @@ var _ = Describe("AerospikeCluster access control validation (envtests)", func()
 					Expect(err).To(HaveOccurred())
 
 					envtests.NewStatusErrorMatcher().
-						WithMessageSubstrings("\"vaerospikecluster.kb.io\"",
+						WithMessageSubstrings(testutil.WebhookErrorPrefix,
 							"security.enable-quotas is set to false but quota params are").
 						Validate(err)
 				})
@@ -1018,7 +1033,7 @@ var _ = Describe("AerospikeCluster access control validation (envtests)", func()
 					Expect(err).To(HaveOccurred())
 
 					envtests.NewStatusErrorMatcher().
-						WithMessageSubstrings("\"vaerospikecluster.kb.io\"",
+						WithMessageSubstrings(testutil.WebhookErrorPrefix,
 							"cannot enable PKIOnly authMode while TLS rollout is in progress").
 						Validate(err)
 				})
@@ -1048,7 +1063,7 @@ var _ = Describe("AerospikeCluster access control validation (envtests)", func()
 					Expect(err).To(HaveOccurred())
 
 					envtests.NewStatusErrorMatcher().
-						WithMessageSubstrings("\"vaerospikecluster.kb.io\"",
+						WithMessageSubstrings(testutil.WebhookErrorPrefix,
 							"cannot enable TLS and PKIOnly authMode in a single update").
 						Validate(err)
 				})
