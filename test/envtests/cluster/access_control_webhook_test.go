@@ -872,6 +872,157 @@ var _ = Describe("AerospikeCluster access control validation (envtests)", func()
 
 		Context("spec.aerospikeAccessControl (validation)", func() {
 			Context("negative", func() {
+				It("fails when access control is updated while security is disabled", func() {
+					aeroCluster := testCluster.CreateDummyAerospikeCluster(clusterNamespacedName, 2)
+					err := envtests.K8sClient.Create(ctx, aeroCluster)
+					Expect(err).ToNot(HaveOccurred())
+
+					current := &asdbv1.AerospikeCluster{}
+					err = envtests.K8sClient.Get(ctx, types.NamespacedName{
+						Name: clusterNamespacedName.Name, Namespace: clusterNamespacedName.Namespace}, current)
+					Expect(err).ToNot(HaveOccurred())
+
+					// Disable security and attempt to update aerospikeAccessControl.
+					delete(current.Spec.AerospikeConfig.Value, asdbv1.ConfKeySecurity)
+					current.Spec.AerospikeAccessControl.Users = append(
+						current.Spec.AerospikeAccessControl.Users,
+						asdbv1.AerospikeUserSpec{
+							Name:       "u1",
+							SecretName: test.AuthSecretName,
+							Roles:      []string{"read"},
+						},
+					)
+
+					err = envtests.K8sClient.Update(ctx, current)
+					Expect(err).To(HaveOccurred())
+
+					envtests.NewStatusErrorMatcher().
+						WithMessageSubstrings("\"vaerospikecluster.kb.io\"",
+							"aerospikeAccessControl cannot be updated when security is disabled").
+						Validate(err)
+				})
+
+				It("fails when aerospikeAccessControl is removed once set", func() {
+					aeroCluster := testCluster.CreateDummyAerospikeCluster(clusterNamespacedName, 2)
+					err := envtests.K8sClient.Create(ctx, aeroCluster)
+					Expect(err).ToNot(HaveOccurred())
+
+					current := &asdbv1.AerospikeCluster{}
+					err = envtests.K8sClient.Get(ctx, types.NamespacedName{
+						Name: clusterNamespacedName.Name, Namespace: clusterNamespacedName.Namespace}, current)
+					Expect(err).ToNot(HaveOccurred())
+
+					current.Spec.AerospikeAccessControl = nil
+					err = envtests.K8sClient.Update(ctx, current)
+					Expect(err).To(HaveOccurred())
+
+					envtests.NewStatusErrorMatcher().
+						WithMessageSubstrings("\"vaerospikecluster.kb.io\"",
+							"security is enabled but access control is missing").
+						Validate(err)
+				})
+
+				It("fails when role quota params are set but security.enable-quotas is false", func() {
+					aeroCluster := testCluster.CreateDummyAerospikeCluster(clusterNamespacedName, 2)
+					aeroCluster.Spec.AerospikeConfig.Value[asdbv1.ConfKeySecurity] = map[string]interface{}{
+						"enable-quotas": true,
+					}
+					aeroCluster.Spec.AerospikeAccessControl = &asdbv1.AerospikeAccessControlSpec{
+						Roles: []asdbv1.AerospikeRoleSpec{
+							{
+								Name:       "profiler",
+								Privileges: []string{"read-write.test", "read.test"},
+								ReadQuota:  1,
+								WriteQuota: 1,
+							},
+						},
+						Users: []asdbv1.AerospikeUserSpec{
+							{
+								Name:       "admin",
+								SecretName: test.AuthSecretName,
+								Roles:      []string{"sys-admin", "user-admin"},
+							},
+							{
+								Name:       "profileUser",
+								SecretName: test.AuthSecretName,
+								Roles:      []string{"profiler"},
+							},
+						},
+					}
+
+					err := envtests.K8sClient.Create(ctx, aeroCluster)
+					Expect(err).ToNot(HaveOccurred())
+
+					current := &asdbv1.AerospikeCluster{}
+					err = envtests.K8sClient.Get(ctx, types.NamespacedName{
+						Name: clusterNamespacedName.Name, Namespace: clusterNamespacedName.Namespace}, current)
+					Expect(err).ToNot(HaveOccurred())
+
+					current.Spec.AerospikeConfig.Value[asdbv1.ConfKeySecurity] = map[string]interface{}{
+						"enable-quotas": false,
+					}
+					err = envtests.K8sClient.Update(ctx, current)
+					Expect(err).To(HaveOccurred())
+
+					envtests.NewStatusErrorMatcher().
+						WithMessageSubstrings("\"vaerospikecluster.kb.io\"",
+							"security.enable-quotas is set to false but quota params are").
+						Validate(err)
+				})
+
+				It("fails when PKIOnly authMode is enabled while TLS rollout is in progress", func() {
+					aeroCluster := testCluster.CreateDummyAerospikeCluster(clusterNamespacedName, 2)
+					err := envtests.K8sClient.Create(ctx, aeroCluster)
+					Expect(err).ToNot(HaveOccurred())
+
+					current := &asdbv1.AerospikeCluster{}
+					err = envtests.K8sClient.Get(ctx, types.NamespacedName{
+						Name: clusterNamespacedName.Name, Namespace: clusterNamespacedName.Namespace}, current)
+					Expect(err).ToNot(HaveOccurred())
+
+					// Step 1: enable TLS first (valid standalone update).
+					current.Spec.AerospikeConfig.Value[asdbv1.ConfKeyNetwork] = networkTLSConfigForTest()
+					current.Spec.OperatorClientCertSpec = adminOperatorCertForTest()
+					err = envtests.K8sClient.Update(ctx, current)
+					Expect(err).ToNot(HaveOccurred())
+
+					// Step 2: simulate rollout-in-progress by keeping status on non-TLS config.
+					// This mirrors "spec has TLS while status does not" used by webhook validation.
+					currentWithStatus := &asdbv1.AerospikeCluster{}
+					err = envtests.K8sClient.Get(ctx, types.NamespacedName{
+						Name: clusterNamespacedName.Name, Namespace: clusterNamespacedName.Namespace}, currentWithStatus)
+					Expect(err).ToNot(HaveOccurred())
+
+					currentWithStatus.Status.AerospikeConfig = &asdbv1.AerospikeConfigSpec{
+						Value: map[string]interface{}{
+							asdbv1.ConfKeyNetwork: map[string]interface{}{
+								asdbv1.ConfKeyNetworkService: map[string]interface{}{
+									asdbv1.ConfKeyPort: 3000,
+								},
+							},
+						},
+					}
+					err = envtests.K8sClient.Status().Update(ctx, currentWithStatus)
+					Expect(err).ToNot(HaveOccurred())
+
+					// Step 3: now enable PKIOnly while TLS rollout is still in progress.
+					toUpdate := &asdbv1.AerospikeCluster{}
+					err = envtests.K8sClient.Get(ctx, types.NamespacedName{
+						Name: clusterNamespacedName.Name, Namespace: clusterNamespacedName.Namespace}, toUpdate)
+					Expect(err).ToNot(HaveOccurred())
+
+					toUpdate.Spec.AerospikeAccessControl.Users[0].AuthMode = asdbv1.AerospikeAuthModePKIOnly
+					toUpdate.Spec.AerospikeAccessControl.Users[0].SecretName = ""
+
+					err = envtests.K8sClient.Update(ctx, toUpdate)
+					Expect(err).To(HaveOccurred())
+
+					envtests.NewStatusErrorMatcher().
+						WithMessageSubstrings("\"vaerospikecluster.kb.io\"",
+							"cannot enable PKIOnly authMode while TLS rollout is in progress").
+						Validate(err)
+				})
+
 				It("fails when TLS and PKIOnly are enabled in a single update", func() {
 					aeroCluster := testCluster.CreateDummyAerospikeCluster(clusterNamespacedName, 2)
 					err := envtests.K8sClient.Create(ctx, aeroCluster)
@@ -902,9 +1053,6 @@ var _ = Describe("AerospikeCluster access control validation (envtests)", func()
 						Validate(err)
 				})
 			})
-			// Context("positive", func() {
-			// 	// Add positive validation tests here
-			// })
 		})
 	})
 })
