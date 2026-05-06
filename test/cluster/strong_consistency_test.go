@@ -628,16 +628,11 @@ var _ = Describe("SCMode", func() {
 			Expect(DeployCluster(k8sClient, ctx, aeroCluster)).ToNot(HaveOccurred())
 			Expect(WriteDataToCluster(aeroCluster, k8sClient, []string{ko521NSName})).ToNot(HaveOccurred())
 
-			records, err := CheckDataInCluster(aeroCluster, k8sClient, []string{ko521NSName})
-			Expect(err).ToNot(HaveOccurred())
-			Expect(records[ko521NSName]).To(BeTrue())
-
-			// SC quorum behavior proxy check: roster is established and healthy.
-			validateRoster(k8sClient, ctx, clusterNamespacedName, ko521NSName)
+			eventuallyAssertKO521DataAfterTopologyChange(clusterNamespacedName, ko521NSName)
 
 			// Distinct from existing generic upgrade checks: validates KO-521 data durability path.
 			Expect(upgradeClusterTest(k8sClient, ctx, clusterNamespacedName, nextImage)).ToNot(HaveOccurred())
-			Expect(assertNamespaceDataPresent(clusterNamespacedName, ko521NSName)).ToNot(HaveOccurred())
+			eventuallyAssertKO521DataAfterTopologyChange(clusterNamespacedName, ko521NSName)
 		})
 
 		It("Rolling restart with batch size and cold restart preserves data", func() {
@@ -655,9 +650,11 @@ var _ = Describe("SCMode", func() {
 			Expect(DeployCluster(k8sClient, ctx, aeroCluster)).ToNot(HaveOccurred())
 			Expect(WriteDataToCluster(aeroCluster, k8sClient, []string{ko521NSName})).ToNot(HaveOccurred())
 
+			eventuallyAssertKO521DataAfterTopologyChange(clusterNamespacedName, ko521NSName)
+
 			By("Rolling restart with batchRollingUpdateSize=2")
 			Expect(rollingRestartClusterTest(logger, k8sClient, ctx, clusterNamespacedName)).ToNot(HaveOccurred())
-			Expect(assertNamespaceDataPresent(clusterNamespacedName, ko521NSName)).ToNot(HaveOccurred())
+			eventuallyAssertKO521DataAfterTopologyChange(clusterNamespacedName, ko521NSName)
 
 			By("Cold restart scenario by deleting all pods")
 
@@ -685,7 +682,7 @@ var _ = Describe("SCMode", func() {
 				getTimeout(current.Spec.Size), []asdbv1.AerospikeClusterPhase{asdbv1.AerospikeClusterCompleted},
 			)).ToNot(HaveOccurred())
 
-			Expect(assertNamespaceDataPresent(clusterNamespacedName, ko521NSName)).ToNot(HaveOccurred())
+			eventuallyAssertKO521DataAfterTopologyChange(clusterNamespacedName, ko521NSName)
 		})
 
 		It("Single pod delete/recreate preserves data", func() {
@@ -694,6 +691,8 @@ var _ = Describe("SCMode", func() {
 			Expect(DeployCluster(k8sClient, ctx, aeroCluster)).ToNot(HaveOccurred())
 
 			Expect(WriteDataToCluster(aeroCluster, k8sClient, []string{ko521NSName})).ToNot(HaveOccurred())
+
+			eventuallyAssertKO521DataAfterTopologyChange(clusterNamespacedName, ko521NSName)
 
 			podList, err := getClusterPodList(k8sClient, ctx, aeroCluster)
 			Expect(err).ToNot(HaveOccurred())
@@ -704,7 +703,7 @@ var _ = Describe("SCMode", func() {
 			Expect(k8sClient.Delete(ctx, targetPod)).ToNot(HaveOccurred())
 			Expect(waitForPodRestart(ctx, targetPod.Name, targetPod.Namespace, oldUID)).ToNot(HaveOccurred())
 
-			Expect(assertNamespaceDataPresent(clusterNamespacedName, ko521NSName)).ToNot(HaveOccurred())
+			eventuallyAssertKO521DataAfterTopologyChange(clusterNamespacedName, ko521NSName)
 		})
 
 		It("Scale up and scale down preserve data integrity", func() {
@@ -713,11 +712,13 @@ var _ = Describe("SCMode", func() {
 			Expect(DeployCluster(k8sClient, ctx, aeroCluster)).ToNot(HaveOccurred())
 			Expect(WriteDataToCluster(aeroCluster, k8sClient, []string{ko521NSName})).ToNot(HaveOccurred())
 
+			eventuallyAssertKO521DataAfterTopologyChange(clusterNamespacedName, ko521NSName)
+
 			Expect(scaleUpClusterTest(k8sClient, ctx, clusterNamespacedName, 1)).ToNot(HaveOccurred())
-			Expect(assertNamespaceDataPresent(clusterNamespacedName, ko521NSName)).ToNot(HaveOccurred())
+			eventuallyAssertKO521DataAfterTopologyChange(clusterNamespacedName, ko521NSName)
 
 			Expect(scaleDownClusterTest(k8sClient, ctx, clusterNamespacedName, 1)).ToNot(HaveOccurred())
-			Expect(assertNamespaceDataPresent(clusterNamespacedName, ko521NSName)).ToNot(HaveOccurred())
+			eventuallyAssertKO521DataAfterTopologyChange(clusterNamespacedName, ko521NSName)
 		})
 
 		It("Rack-enabled deployment works for SC in-memory persistent namespace", func() {
@@ -732,7 +733,7 @@ var _ = Describe("SCMode", func() {
 			Expect(validateRackEnabledCluster(k8sClient, ctx, clusterNamespacedName)).ToNot(HaveOccurred())
 
 			Expect(WriteDataToCluster(aeroCluster, k8sClient, []string{ko521NSName})).ToNot(HaveOccurred())
-			Expect(assertNamespaceDataPresent(clusterNamespacedName, ko521NSName)).ToNot(HaveOccurred())
+			eventuallyAssertKO521DataAfterTopologyChange(clusterNamespacedName, ko521NSName)
 		})
 
 		It("Invalid in-memory persistence deploy fails without partial long-running resources", func() {
@@ -757,6 +758,9 @@ var _ = Describe("SCMode", func() {
 			configureSCInMemoryPersistentNamespace(aeroCluster, ko521NSName, ko521DevicePath)
 			Expect(DeployCluster(k8sClient, ctx, aeroCluster)).ToNot(HaveOccurred())
 			Expect(WriteDataToCluster(aeroCluster, k8sClient, []string{ko521NSName})).ToNot(HaveOccurred())
+
+			eventuallyAssertKO521DataAfterTopologyChange(clusterNamespacedName, ko521NSName)
+
 			current, err := getCluster(k8sClient, ctx, clusterNamespacedName)
 			Expect(err).ToNot(HaveOccurred())
 
@@ -770,7 +774,7 @@ var _ = Describe("SCMode", func() {
 			err = k8sClient.Update(ctx, current)
 			Expect(err).To(HaveOccurred())
 
-			Expect(assertNamespaceDataPresent(clusterNamespacedName, ko521NSName)).ToNot(HaveOccurred())
+			eventuallyAssertKO521DataAfterTopologyChange(clusterNamespacedName, ko521NSName)
 		})
 	})
 })
@@ -959,6 +963,18 @@ func configureSCInMemoryPersistentNamespace(
 	}
 	namespaces[0] = namespaceCfg
 	aeroCluster.Spec.AerospikeConfig.Value[asdbv1.ConfKeyNamespace] = namespaces
+}
+
+// eventuallyAssertKO521DataAfterTopologyChange waits for SC roster consistency and readable probe data
+// after deploy/write or topology changes (scale, upgrade, restart, etc.). Operator "Completed" can precede
+// Aerospike partition map readiness.
+func eventuallyAssertKO521DataAfterTopologyChange(
+	clusterNamespacedName types.NamespacedName, nsName string,
+) {
+	Eventually(func(g Gomega) {
+		validateRoster(k8sClient, goctx.TODO(), clusterNamespacedName, nsName)
+		g.Expect(assertNamespaceDataPresent(clusterNamespacedName, nsName)).To(Succeed())
+	}).WithTimeout(20 * time.Minute).WithPolling(10 * time.Second).Should(Succeed())
 }
 
 func assertNamespaceDataPresent(clusterNamespacedName types.NamespacedName, namespaceName string) error {
