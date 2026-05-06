@@ -2,9 +2,11 @@ package cluster
 
 import (
 	goctx "context"
+	"errors"
 	"fmt"
 	"reflect"
 	"strconv"
+	"strings"
 	"time"
 
 	"github.com/go-logr/logr"
@@ -24,6 +26,7 @@ import (
 	"sigs.k8s.io/controller-runtime/pkg/client"
 
 	as "github.com/aerospike/aerospike-client-go/v8"
+	ast "github.com/aerospike/aerospike-client-go/v8/types"
 	asdbv1 "github.com/aerospike/aerospike-kubernetes-operator/v4/api/v1"
 	"github.com/aerospike/aerospike-kubernetes-operator/v4/pkg/utils"
 	"github.com/aerospike/aerospike-kubernetes-operator/v4/test"
@@ -1729,6 +1732,29 @@ func getAeroClusterPVCList(
 	return pvcList.Items, nil
 }
 
+// isAerospikeTransientDataPlaneErr reports errors that often clear after topology or
+// operator "Completed" while the Aerospike client partition map is still warming.
+func isAerospikeTransientDataPlaneErr(err error) bool {
+	if err == nil {
+		return false
+	}
+
+	var ae *as.AerospikeError
+	if errors.As(err, &ae) {
+		rc := ae.ResultCode
+
+		return rc == ast.INVALID_NAMESPACE ||
+			rc == ast.INVALID_CLUSTER_PARTITION_MAP ||
+			rc == ast.SERVER_NOT_AVAILABLE ||
+			rc == ast.NO_AVAILABLE_CONNECTIONS_TO_NODE ||
+			rc == ast.NETWORK_ERROR ||
+			rc == ast.TIMEOUT ||
+			rc == ast.MAX_RETRIES_EXCEEDED
+	}
+
+	return strings.Contains(strings.ToLower(err.Error()), "partition map empty")
+}
+
 func WriteDataToCluster(
 	aeroCluster *asdbv1.AerospikeCluster,
 	k8sClient client.Client,
@@ -1753,12 +1779,27 @@ func WriteDataToCluster(
 			return err
 		}
 
-		if err := asClient.Put(
-			wp, newKey, as.BinMap{
-				binName: binValue,
-			},
-		); err != nil {
-			return err
+		var putErr error
+
+		for attempt := 0; attempt < 90; attempt++ {
+			putErr = asClient.Put(
+				wp, newKey, as.BinMap{
+					binName: binValue,
+				},
+			)
+			if putErr == nil {
+				break
+			}
+
+			if !isAerospikeTransientDataPlaneErr(putErr) {
+				return putErr
+			}
+
+			time.Sleep(2 * time.Second)
+		}
+
+		if putErr != nil {
+			return putErr
 		}
 	}
 
@@ -1791,7 +1832,17 @@ func CheckDataInCluster(
 
 		record, err := asClient.Get(nil, newKey)
 		if err != nil {
-			return nil, nil
+			if errors.Is(err, as.ErrKeyNotFound) {
+				data[ns] = false
+
+				continue
+			}
+
+			return nil, err
+		}
+
+		if record == nil {
+			return nil, fmt.Errorf("nil record from Get for namespace %q", ns)
 		}
 
 		if bin, exists := record.Bins[binName]; exists {

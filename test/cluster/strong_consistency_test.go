@@ -827,16 +827,25 @@ func validateLifecycleOperationInSCCluster(
 	validateRoster(k8sClient, ctx, clusterNamespacedName, scNamespace)
 }
 
-func validateRoster(k8sClient client.Client, ctx goctx.Context,
-	clusterNamespacedName types.NamespacedName, aeroNamespace string) {
+// validateRosterErr checks SC roster consistency against pod/node state. Returns a non-nil error on failure
+// (including transient Aerospike info errors) so callers can retry inside Eventually(func(g Gomega) { ... }).
+func validateRosterErr(k8sClient client.Client, ctx goctx.Context,
+	clusterNamespacedName types.NamespacedName, aeroNamespace string,
+) error {
 	aeroCluster, err := getCluster(k8sClient, ctx, clusterNamespacedName)
-	Expect(err).ToNot(HaveOccurred())
+	if err != nil {
+		return err
+	}
 
 	hostConns, err := newAllHostConn(logger, aeroCluster, k8sClient)
-	Expect(err).ToNot(HaveOccurred())
+	if err != nil {
+		return err
+	}
 
 	rosterNodesMap, err := getRoster(hostConns[0], getClientPolicy(aeroCluster, k8sClient), aeroNamespace)
-	Expect(err).ToNot(HaveOccurred())
+	if err != nil {
+		return err
+	}
 
 	// Roster is in uppercase, whereas nodeID is in lower case in server. Keep it in mind when comparing list
 	rosterStr := rosterNodesMap["roster"]
@@ -844,9 +853,8 @@ func validateRoster(k8sClient client.Client, ctx goctx.Context,
 
 	// Check2 roster+blockList >= len(pods)
 	if len(rosterList)+len(aeroCluster.Spec.RosterNodeBlockList) < len(aeroCluster.Status.Pods) {
-		err := fmt.Errorf("roster len not matching pods list. "+
+		return fmt.Errorf("roster len not matching pods list. "+
 			"roster %v, blockList %v, pods %v", rosterList, aeroCluster.Spec.RosterNodeBlockList, aeroCluster.Status.Pods)
-		Expect(err).ToNot(HaveOccurred())
 	}
 
 	rosterNodeBlockListSet := sets.NewString(aeroCluster.Spec.RosterNodeBlockList...)
@@ -860,20 +868,26 @@ func validateRoster(k8sClient client.Client, ctx goctx.Context,
 	for _, rosterNode := range rosterList {
 		nodeID := strings.Split(rosterNode, "@")[0]
 		// Check1 roster should not have blocked pod
-		Expect(rosterNodeBlockListSet.Has(nodeID)).To(
-			BeFalse(), fmt.Sprintf("roster should not have blocked node. roster %v, blockList %v",
-				rosterNode, aeroCluster.Spec.RosterNodeBlockList))
+		if rosterNodeBlockListSet.Has(nodeID) {
+			return fmt.Errorf("roster should not have blocked node. roster %v, blockList %v",
+				rosterNode, aeroCluster.Spec.RosterNodeBlockList)
+		}
+
 		// Check4 Scaledown: all the roster should be in pod list
-		Expect(podNodeIDSet.Has(nodeID)).To(
-			BeTrue(), fmt.Sprintf("roster node should be in pod list. roster %v, podNodeIDs %v", rosterNode, podNodeIDSet))
+		if !podNodeIDSet.Has(nodeID) {
+			return fmt.Errorf("roster node should be in pod list. roster %v, podNodeIDs %v", rosterNode, podNodeIDSet)
+		}
 	}
 
 	rosterListSet := sets.NewString(rosterList...)
 	// Check3 Scaleup: pod should be in roster or in blockList
 	for podName := range aeroCluster.Status.Pods {
 		nodeID := strings.ToUpper(strings.TrimLeft(aeroCluster.Status.Pods[podName].Aerospike.NodeID, "0"))
+
 		rackID, _, err := utils.GetRackIDAndRevisionFromPodName(clusterNamespacedName.Name, podName)
-		Expect(err).ToNot(HaveOccurred())
+		if err != nil {
+			return err
+		}
 
 		nodeRoster := nodeID
 		if rackID != 0 {
@@ -882,12 +896,18 @@ func validateRoster(k8sClient client.Client, ctx goctx.Context,
 
 		if !rosterNodeBlockListSet.Has(nodeID) &&
 			!rosterListSet.Has(nodeRoster) {
-			err := fmt.Errorf("pod not found in roster or blockList. roster %v,"+
+			return fmt.Errorf("pod not found in roster or blockList. roster %v,"+
 				" blockList %v, missing pod roster %v, rackID %v",
 				rosterList, aeroCluster.Spec.RosterNodeBlockList, nodeRoster, rackID)
-			Expect(err).ToNot(HaveOccurred())
 		}
 	}
+
+	return nil
+}
+
+func validateRoster(k8sClient client.Client, ctx goctx.Context,
+	clusterNamespacedName types.NamespacedName, aeroNamespace string) {
+	Expect(validateRosterErr(k8sClient, ctx, clusterNamespacedName, aeroNamespace)).To(Succeed())
 }
 
 func getRoster(hostConn *deployment.HostConn, aerospikePolicy *as.ClientPolicy,
@@ -972,7 +992,7 @@ func eventuallyAssertKO521DataAfterTopologyChange(
 	clusterNamespacedName types.NamespacedName, nsName string,
 ) {
 	Eventually(func(g Gomega) {
-		validateRoster(k8sClient, goctx.TODO(), clusterNamespacedName, nsName)
+		g.Expect(validateRosterErr(k8sClient, goctx.TODO(), clusterNamespacedName, nsName)).To(Succeed())
 		g.Expect(assertNamespaceDataPresent(clusterNamespacedName, nsName)).To(Succeed())
 	}).WithTimeout(20 * time.Minute).WithPolling(10 * time.Second).Should(Succeed())
 }
