@@ -67,7 +67,6 @@ const (
 )
 
 var aerospikeVolumeInitMethodDeleteFiles = asdbv1.AerospikeVolumeMethodDeleteFiles
-
 var (
 	retryInterval      = time.Second * 30
 	shortRetryInterval = time.Second * 1
@@ -1554,10 +1553,11 @@ func aerospikeClusterCreateUpdate(
 func getBasicStorageSpecObject() asdbv1.AerospikeStorageSpec {
 	storage := asdbv1.AerospikeStorageSpec{
 		BlockVolumePolicy: asdbv1.AerospikePersistentVolumePolicySpec{
+			InputInitMethod:    ptr.To(asdbv1.AerospikeVolumeMethodDD),
+			InputWipeMethod:    ptr.To(asdbv1.AerospikeVolumeMethodDD),
 			InputCascadeDelete: &cascadeDeleteFalse,
 		},
 		FileSystemVolumePolicy: asdbv1.AerospikePersistentVolumePolicySpec{
-			InputInitMethod:    &aerospikeVolumeInitMethodDeleteFiles,
 			InputCascadeDelete: &cascadeDeleteFalse,
 		},
 		Volumes: []asdbv1.VolumeSpec{
