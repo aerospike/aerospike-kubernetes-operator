@@ -10,12 +10,14 @@ import (
 	. "github.com/onsi/ginkgo/v2"
 	. "github.com/onsi/gomega"
 	apierrors "k8s.io/apimachinery/pkg/api/errors"
+	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/types"
 	"k8s.io/apimachinery/pkg/util/wait"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 
 	as "github.com/aerospike/aerospike-client-go/v8"
 	asdbv1 "github.com/aerospike/aerospike-kubernetes-operator/v4/api/v1"
+	"github.com/aerospike/aerospike-kubernetes-operator/v4/pkg/utils"
 	"github.com/aerospike/aerospike-kubernetes-operator/v4/test"
 )
 
@@ -187,8 +189,67 @@ var _ = Describe(
 					},
 				)
 				It(
-					"ColdStart", func() {
-						// Not needed for this, isClusterStable call should fail and this will requeue request.
+					"Cold restart to Completed takes longer after more records are loaded (no secondary indexes)", func() {
+						clusterName := fmt.Sprintf("lr-cold-restart-%d", GinkgoParallelProcess())
+						clusterNamespacedName := test.GetNamespacedName(clusterName, namespace)
+						aeroCluster := createDummyAerospikeCluster(clusterNamespacedName, 3)
+						aeroCluster.Spec.AerospikeNetworkPolicy = asdbv1.AerospikeNetworkPolicy{
+							AccessType:             asdbv1.AerospikeNetworkType(*defaultNetworkType),
+							AlternateAccessType:    asdbv1.AerospikeNetworkType(*defaultNetworkType),
+							TLSAccessType:          asdbv1.AerospikeNetworkType(*defaultNetworkType),
+							TLSAlternateAccessType: asdbv1.AerospikeNetworkType(*defaultNetworkType),
+						}
+
+						defer func() {
+							cl := &asdbv1.AerospikeCluster{
+								ObjectMeta: metav1.ObjectMeta{
+									Name:      clusterName,
+									Namespace: namespace,
+								},
+							}
+							Expect(DeleteCluster(k8sClient, ctx, cl)).ToNot(HaveOccurred())
+							Expect(CleanupPVC(k8sClient, namespace, clusterName)).ToNot(HaveOccurred())
+						}()
+
+						Expect(DeployCluster(k8sClient, ctx, aeroCluster)).ToNot(HaveOccurred())
+
+						cur, err := getCluster(k8sClient, ctx, clusterNamespacedName)
+						Expect(err).ToNot(HaveOccurred())
+
+						const (
+							smallKeys      = 25
+							largeExtraKeys = 350
+							valueBytes     = 8192
+						)
+
+						By("Load a small record set and cold-restart; measure time to Completed")
+						Expect(loadDataInClusterWithParams(k8sClient, cur, smallKeys, valueBytes, 0)).ToNot(HaveOccurred())
+
+						cur, err = getCluster(k8sClient, ctx, clusterNamespacedName)
+						Expect(err).ToNot(HaveOccurred())
+
+						durationAfterSmallLoad, err := measureColdRestartToClusterCompleted(ctx, k8sClient, cur)
+						Expect(err).ToNot(HaveOccurred())
+
+						By("Load many more records and cold-restart; measure time to Completed")
+
+						cur, err = getCluster(k8sClient, ctx, clusterNamespacedName)
+						Expect(err).ToNot(HaveOccurred())
+
+						Expect(loadDataInClusterWithParams(k8sClient, cur, largeExtraKeys, valueBytes, smallKeys)).ToNot(HaveOccurred())
+
+						cur, err = getCluster(k8sClient, ctx, clusterNamespacedName)
+						Expect(err).ToNot(HaveOccurred())
+
+						durationAfterLargeLoad, err := measureColdRestartToClusterCompleted(ctx, k8sClient, cur)
+						Expect(err).ToNot(HaveOccurred())
+
+						By("Expect restart duration to grow with on-disk / cold-start record volume")
+						Expect(durationAfterLargeLoad).To(
+							BeNumerically(">", durationAfterSmallLoad),
+							"larger dataset should tend to lengthen cold-start / readiness; if this flakes on CI, "+
+								"increase key counts or valueBytes",
+						)
 					},
 				)
 			},
@@ -198,6 +259,15 @@ var _ = Describe(
 
 func loadDataInCluster(
 	k8sClient client.Client, aeroCluster *asdbv1.AerospikeCluster,
+) error {
+	return loadDataInClusterWithParams(k8sClient, aeroCluster, 100, 10000, 0)
+}
+
+// loadDataInClusterWithParams writes keyCount records into namespace/set "test"/"testset" used by
+// createDummyAerospikeCluster. Keys are testkey<keyOffset>, ... testkey<keyOffset+keyCount-1>.
+func loadDataInClusterWithParams(
+	k8sClient client.Client, aeroCluster *asdbv1.AerospikeCluster,
+	keyCount, bufferSize, keyOffset int,
 ) error {
 	asClient, err := getAerospikeClient(aeroCluster, k8sClient)
 	if err != nil {
@@ -211,8 +281,6 @@ func loadDataInCluster(
 
 	keyPrefix := "testkey"
 
-	size := 100
-	bufferSize := 10000
 	token := make([]byte, bufferSize)
 
 	_, readErr := rand.Read(token)
@@ -221,18 +289,18 @@ func loadDataInCluster(
 	}
 
 	pkgLog.Info(
-		"Loading record", "nodes", asClient.GetNodeNames(),
+		"Loading records", "nodes", asClient.GetNodeNames(),
+		"keyCount", keyCount, "bufferSize", bufferSize, "keyOffset", keyOffset,
 	)
 
-	// The k8s services take time to come up so the timeouts are on the
-	// higher side.
 	wp := as.NewWritePolicy(0, 0)
 
-	// loads size * bufferSize data
-	for i := 0; i < size; i++ {
-		key, err := as.NewKey("test", "testset", keyPrefix+strconv.Itoa(i))
-		if err != nil {
-			return err
+	for i := 0; i < keyCount; i++ {
+		idx := keyOffset + i
+
+		key, keyErr := as.NewKey("test", "testset", keyPrefix+strconv.Itoa(idx))
+		if keyErr != nil {
+			return keyErr
 		}
 
 		binMap := map[string]interface{}{
@@ -252,12 +320,63 @@ func loadDataInCluster(
 			return err
 		}
 
-		fmt.Print(strconv.Itoa(i) + ", ")
+		fmt.Print(strconv.Itoa(idx) + ", ")
 	}
 
 	fmt.Println("added records")
 
 	return nil
+}
+
+// measureColdRestartToClusterCompleted deletes all Aerospike pods (cold restart), waits for new pods to be
+// Ready, then waits for AerospikeCluster phase Completed. Returns elapsed wall time from first delete.
+func measureColdRestartToClusterCompleted(
+	ctx goctx.Context, k8sClient client.Client, aeroCluster *asdbv1.AerospikeCluster,
+) (time.Duration, error) {
+	start := time.Now()
+
+	current, err := getCluster(k8sClient, ctx, utils.GetNamespacedName(aeroCluster))
+	if err != nil {
+		return 0, err
+	}
+
+	podList, err := getClusterPodList(k8sClient, ctx, current)
+	if err != nil {
+		return 0, err
+	}
+
+	if len(podList.Items) == 0 {
+		return 0, fmt.Errorf("no pods to delete for cold restart")
+	}
+
+	oldUIDByName := make(map[string]string, len(podList.Items))
+
+	for idx := range podList.Items {
+		pod := &podList.Items[idx]
+		oldUIDByName[pod.Name] = string(pod.UID)
+
+		if delErr := k8sClient.Delete(ctx, pod); delErr != nil {
+			return 0, delErr
+		}
+	}
+
+	for podName, oldUID := range oldUIDByName {
+		if restartErr := waitForPodRestart(ctx, podName, current.Namespace, oldUID); restartErr != nil {
+			return 0, restartErr
+		}
+	}
+
+	current, err = getCluster(k8sClient, ctx, utils.GetNamespacedName(aeroCluster))
+	if err != nil {
+		return 0, err
+	}
+
+	err = waitForAerospikeCluster(
+		k8sClient, ctx, current, int(current.Spec.Size), retryInterval,
+		getTimeout(current.Spec.Size), []asdbv1.AerospikeClusterPhase{asdbv1.AerospikeClusterCompleted},
+	)
+
+	return time.Since(start), err
 }
 
 func waitForClusterScaleDown(
