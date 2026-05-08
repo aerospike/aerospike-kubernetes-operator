@@ -40,6 +40,20 @@ func SetupAerospikeRestoreWebhookWithManager(mgr ctrl.Manager) error {
 }
 
 // +kubebuilder:object:generate=false
+// Above marker prevents controller-gen from generating DeepCopy methods,
+// as it is used only for temporary operations and does not need to be deeply copied.
+type AerospikeRestoreCustomDefaulter struct {
+	// Default values for various AerospikeRestore fields
+}
+
+var _ admission.Defaulter[*asdbv1beta1.AerospikeRestore] = &AerospikeRestoreCustomDefaulter{}
+
+// Default implements admission.Defaulter so a webhook will be registered for the type
+func (ard *AerospikeRestoreCustomDefaulter) Default(_ context.Context, restore *asdbv1beta1.AerospikeRestore) error {
+	return nil
+}
+
+// +kubebuilder:object:generate=false
 type AerospikeRestoreCustomValidator struct {
 }
 

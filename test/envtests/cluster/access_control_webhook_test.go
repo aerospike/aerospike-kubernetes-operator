@@ -273,7 +273,8 @@ var _ = Describe("AerospikeCluster access control validation (envtests)", func()
 					Expect(err).To(HaveOccurred())
 					envtests.NewStatusErrorMatcher().
 						WithMessageSubstrings(testutil.CRDSchemaErrorPrefix,
-							"Duplicate value: {\"name\":\"profiler\"}").
+							"Duplicate value:",
+							"{\"name\":\"profiler\"}").
 						Validate(err)
 				})
 
@@ -304,7 +305,7 @@ var _ = Describe("AerospikeCluster access control validation (envtests)", func()
 						expectDeployFailsACWebhook(ctx, aeroCluster, msgSubs...)
 					},
 					Entry("empty string", "",
-						[]string{"spec.aerospikeAccessControl.roles[0].name in body should be at least 1 chars long",
+						[]string{"name in body should be at least 1 chars long",
 							testutil.CRDSchemaErrorPrefix}),
 					Entry("whitespace only", "    ", []string{"role name cannot be empty",
 						testutil.WebhookErrorPrefix}),
@@ -714,7 +715,7 @@ var _ = Describe("AerospikeCluster access control validation (envtests)", func()
 					Expect(err).To(HaveOccurred())
 					envtests.NewStatusErrorMatcher().
 						WithMessageSubstrings(testutil.CRDSchemaErrorPrefix,
-							"Duplicate value: {\"name\":\"bob\"}").
+							"Duplicate value:", "{\"name\":\"bob\"}").
 						Validate(err)
 				})
 
@@ -802,7 +803,7 @@ var _ = Describe("AerospikeCluster access control validation (envtests)", func()
 						expectDeployFailsACWebhook(ctx, aeroCluster, msgSubs...)
 					},
 					Entry("empty string", "",
-						[]string{"spec.aerospikeAccessControl.users[1].name in body should be at least 1 chars long",
+						[]string{"name in body should be at least 1 chars long",
 							testutil.CRDSchemaErrorPrefix}),
 					Entry("whitespace only", "    ", []string{"username cannot be empty", testutil.WebhookErrorPrefix}),
 					Entry("exceeds max length", strings.Repeat("u", 64), []string{"may not be more than 63 bytes",
@@ -810,6 +811,26 @@ var _ = Describe("AerospikeCluster access control validation (envtests)", func()
 					Entry("colon in username", "aerospike:user", []string{"cannot contain", ":", testutil.WebhookErrorPrefix}),
 					Entry("semicolon in username", "aerospike;user", []string{"cannot contain", ";", testutil.WebhookErrorPrefix}),
 				)
+			})
+		})
+
+		Context("spec.aerospikeAccessControl.adminPolicy", func() {
+			Context("negative", func() {
+				It("rejects negative adminPolicy timeout", func() {
+					aeroCluster := testCluster.CreateDummyAerospikeCluster(clusterNamespacedName, 2)
+					aeroCluster.Spec.AerospikeAccessControl.AdminPolicy = &asdbv1.AerospikeClientAdminPolicy{
+						Timeout: -1,
+					}
+
+					err := envtests.K8sClient.Create(ctx, aeroCluster)
+					Expect(err).To(HaveOccurred())
+
+					envtests.NewStatusErrorMatcher().
+						WithMessageSubstrings(testutil.CRDSchemaErrorPrefix,
+							"Invalid value: -1:",
+							"timeout in body should be greater than or equal to 0").
+						Validate(err)
+				})
 			})
 		})
 

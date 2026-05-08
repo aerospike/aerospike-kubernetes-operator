@@ -287,7 +287,7 @@ func (r *SingleClusterReconciler) appendCACertFromSecret(
 	found := &corev1.Secret{}
 
 	if secretSource.CaCertsSource != nil {
-		//nolint:staticcheck // for backward compatibility
+		//nolint:staticcheck // SA1019: must read deprecated SecretNamespace to resolve secret until field is removed
 		secretName := namespacedSecret(secretSource.CaCertsSource.SecretNamespace,
 			secretSource.CaCertsSource.SecretName, defaultNamespace)
 		if err := r.Get(context.TODO(), secretName, found); err != nil {
@@ -308,7 +308,7 @@ func (r *SingleClusterReconciler) appendCACertFromSecret(
 			serverPool.AppendCertsFromPEM(caData)
 		}
 	} else {
-		//nolint:staticcheck // for backward compatibility
+		//nolint:staticcheck // SA1019: must read deprecated SecretNamespace to resolve secret until field is removed
 		secretName := namespacedSecret(secretSource.SecretNamespace, secretSource.SecretName, defaultNamespace)
 		if err := r.Get(context.TODO(), secretName, found); err != nil {
 			r.Log.Error(
@@ -363,7 +363,7 @@ func (r *SingleClusterReconciler) loadCertAndKeyFromSecret(
 	// get the tls info from secret
 	found := &corev1.Secret{}
 
-	//nolint:staticcheck // for backward compatibility
+	//nolint:staticcheck // SA1019: must read deprecated SecretNamespace to resolve secret until field is removed
 	secretName := namespacedSecret(secretSource.SecretNamespace, secretSource.SecretName, defaultNamespace)
 	if err := r.Get(context.TODO(), secretName, found); err != nil {
 		r.Log.Info(

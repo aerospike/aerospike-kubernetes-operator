@@ -46,6 +46,20 @@ var _ = Describe("Storage webhook validation", func() {
 	Context("Deploy validation", func() {
 		Context("spec.storage", func() {
 			Context("negative", func() {
+				It("rejects negative cleanupThreads", func() {
+					aeroCluster := testCluster.CreateDummyAerospikeCluster(nsName, 2)
+					aeroCluster.Spec.Storage.CleanupThreads = -1
+
+					err := envtests.K8sClient.Create(ctx, aeroCluster)
+					Expect(err).To(HaveOccurred())
+
+					envtests.NewStatusErrorMatcher().
+						WithMessageSubstrings(testutil.CRDSchemaErrorPrefix,
+							"Invalid value: -1:",
+							"cleanupThreads in body should be greater than or equal to 0").
+						Validate(err)
+				})
+
 				It("rejects when global namespace device is not on rack InputStorage (spec vs rack mismatch)", func() {
 					aeroCluster := testCluster.CreateDummyAerospikeCluster(nsName, 2)
 					wrongRack := getStorageSpecForDevice("/other/wrong/device")
