@@ -1233,6 +1233,13 @@ func CreateDummyAerospikeCluster(
 	return createDummyAerospikeCluster(clusterNamespacedName, size)
 }
 
+// CreateDummyAerospikeClusterWithRF is the exported variant of createDummyAerospikeClusterWithRF for envtests.
+func CreateDummyAerospikeClusterWithRF(
+	clusterNamespacedName types.NamespacedName, size int32, rf int,
+) *asdbv1.AerospikeCluster {
+	return createDummyAerospikeClusterWithRF(clusterNamespacedName, size, rf)
+}
+
 func UpdateClusterImage(
 	aerocluster *asdbv1.AerospikeCluster, image string,
 ) error {
