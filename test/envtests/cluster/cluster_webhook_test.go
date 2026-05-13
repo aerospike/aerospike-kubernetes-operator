@@ -376,8 +376,6 @@ var _ = Describe("AerospikeCluster validation", func() {
 						Validate(err)
 				})
 
-				// Bug: aerospikeConfig map should not be listed in Failure message.
-				// It is making failure message unnecessarily long.
 				It("rejects when namespace configuration is missing", func() {
 					aeroCluster := testCluster.CreateDummyAerospikeCluster(clusterNamespacedName, 1)
 					// Remove namespaces from AerospikeConfigSpec
@@ -509,6 +507,76 @@ var _ = Describe("AerospikeCluster validation", func() {
 					envtests.NewStatusErrorMatcher().
 						WithMessageSubstrings("\"vaerospikecluster.kb.io\"",
 							`xdr: duplicate name "dc1" in dcs list section`).
+						Validate(err)
+				})
+
+				It("rejects in-memory SC namespace without persistent storage", func() {
+					aeroCluster := testCluster.CreateDummyAerospikeCluster(clusterNamespacedName, 2)
+					rawNamespaces := aeroCluster.Spec.AerospikeConfig.Value["namespaces"].([]interface{})
+
+					if len(rawNamespaces) > 0 {
+						nsMap := rawNamespaces[0].(map[string]interface{})
+						nsMap["storage-engine"] = map[string]interface{}{
+							"type":      "memory",
+							"data-size": 1073741824,
+						}
+					}
+
+					err := testCluster.DeployCluster(envtests.K8sClient, ctx, aeroCluster)
+					Expect(err).To(HaveOccurred())
+
+					envtests.NewStatusErrorMatcher().
+						WithMessageSubstrings("\"vaerospikecluster.kb.io\"",
+							"in-memory SC namespace without persistent storage (files or devices) is not supported").
+						Validate(err)
+				})
+
+				// Bug: Add validation for missing persistence device.
+				It("rejects in-memory SC namespace when persistence device is not in storage config", func() {
+					aeroCluster := testCluster.CreateDummyAerospikeCluster(clusterNamespacedName, 2)
+					rawNamespaces := aeroCluster.Spec.AerospikeConfig.Value["namespaces"].([]interface{})
+
+					if len(rawNamespaces) > 0 {
+						nsMap := rawNamespaces[0].(map[string]interface{})
+						nsMap["storage-engine"] = map[string]interface{}{
+							"type":    "memory",
+							"devices": []interface{}{"/missing/dev/device0"},
+						}
+					}
+
+					err := envtests.K8sClient.Create(ctx, aeroCluster)
+					Expect(err).To(HaveOccurred())
+
+					envtests.NewStatusErrorMatcher().
+						WithMessageSubstrings("\"vaerospikecluster.kb.io\"",
+							"namespace storage device related devicePath /missing/dev/device0 not found in Storage config").
+						Validate(err)
+				})
+
+				// Bug: Improve the response message string to indicate correct invalid type.
+				// currently it is showing null namespaces.0.storage-engine.files instead of invalid type.
+				It("rejects in-memory SC namespace when persistence files contains non-string entry", func() {
+					aeroCluster := testCluster.CreateDummyAerospikeCluster(clusterNamespacedName, 2)
+					rawNamespaces := aeroCluster.Spec.AerospikeConfig.Value["namespaces"].([]interface{})
+
+					if len(rawNamespaces) > 0 {
+						nsMap := rawNamespaces[0].(map[string]interface{})
+						nsMap["storage-engine"] = map[string]interface{}{
+							"type":  "memory",
+							"files": []interface{}{1},
+						}
+					}
+
+					err := envtests.K8sClient.Create(ctx, aeroCluster)
+					Expect(err).To(HaveOccurred())
+
+					envtests.NewStatusErrorMatcher().
+						WithMessageSubstrings(
+							"\"vaerospikecluster.kb.io\"",
+							"aerospikeConfig not valid: generated config not valid for version",
+							" invalid_type (root).namespaces.0.storage-engine.files Invalid type",
+							"Expected: array, given: null namespaces.0.storage-engine.files",
+						).
 						Validate(err)
 				})
 			})
@@ -1254,6 +1322,76 @@ var _ = Describe("AerospikeCluster validation", func() {
 
 					Expect(envtests.WarningK8sClient.Update(ctx, current)).ToNot(HaveOccurred())
 					Expect(envtests.GlobalWarnings.Warnings).NotTo(ContainElement(ContainSubstring(asdbv1.ConfigKeyCgroupMemTracking)))
+				})
+			})
+		})
+
+		Context("spec.aerospikeConfig (namespace)", func() {
+			Context("negative", func() {
+				// Bug: Improve the response message string to indicate the expected type is []interface{}.
+				It("rejects update when in-memory SC namespace persistence devices has invalid type", func() {
+					aeroCluster := testCluster.CreateDummyAerospikeCluster(updateValidationClusterNamespacedName, 2)
+					rawNamespaces := aeroCluster.Spec.AerospikeConfig.Value[asdbv1.ConfKeyNamespace].([]interface{})
+					nsMap := rawNamespaces[0].(map[string]interface{})
+					nsMap["storage-engine"] = map[string]interface{}{
+						"type":    "memory",
+						"devices": []interface{}{"/test/dev/xvdf"},
+					}
+
+					Expect(envtests.K8sClient.Create(ctx, aeroCluster)).To(Succeed())
+
+					current, err := testCluster.GetCluster(envtests.K8sClient, ctx, updateValidationClusterNamespacedName)
+					Expect(err).ToNot(HaveOccurred())
+
+					currentNamespaces := current.Spec.AerospikeConfig.Value[asdbv1.ConfKeyNamespace].([]interface{})
+					currentNsMap := currentNamespaces[0].(map[string]interface{})
+					currentNsMap["storage-engine"] = map[string]interface{}{
+						"type":    "memory",
+						"devices": "not-a-list",
+					}
+
+					err = envtests.K8sClient.Update(ctx, current)
+					Expect(err).To(HaveOccurred())
+
+					envtests.NewStatusErrorMatcher().
+						WithMessageSubstrings(
+							"\"vaerospikecluster.kb.io\"",
+							"panic: interface conversion: interface {} is string, not []interface {} [recovered]",
+						).
+						Validate(err)
+				})
+
+				// Bug: Add validation for missing persistence device.
+				It("rejects update when in-memory SC namespace points to missing persistence device", func() {
+					aeroCluster := testCluster.CreateDummyAerospikeCluster(updateValidationClusterNamespacedName, 2)
+					rawNamespaces := aeroCluster.Spec.AerospikeConfig.Value[asdbv1.ConfKeyNamespace].([]interface{})
+					nsMap := rawNamespaces[0].(map[string]interface{})
+					nsMap["storage-engine"] = map[string]interface{}{
+						"type":    "memory",
+						"devices": []interface{}{"/test/dev/xvdf"},
+					}
+
+					Expect(envtests.K8sClient.Create(ctx, aeroCluster)).To(Succeed())
+
+					current, err := testCluster.GetCluster(envtests.K8sClient, ctx, updateValidationClusterNamespacedName)
+					Expect(err).ToNot(HaveOccurred())
+
+					currentNamespaces := current.Spec.AerospikeConfig.Value[asdbv1.ConfKeyNamespace].([]interface{})
+					currentNsMap := currentNamespaces[0].(map[string]interface{})
+					currentNsMap["storage-engine"] = map[string]interface{}{
+						"type":    "memory",
+						"devices": []interface{}{"/missing/dev/device1"},
+					}
+
+					err = envtests.K8sClient.Update(ctx, current)
+					Expect(err).To(HaveOccurred())
+
+					envtests.NewStatusErrorMatcher().
+						WithMessageSubstrings(
+							"\"vaerospikecluster.kb.io\"",
+							"namespace storage device related devicePath /missing/dev/device1 not found in Storage config",
+						).
+						Validate(err)
 				})
 			})
 		})
