@@ -728,7 +728,7 @@ func hasData(pod *corev1.Pod, volume *asdbv1.VolumeSpec) bool {
 			return false
 		}
 
-		// Log the error and wait before retrying
+		// Log the error and wait hasDataPollInterval between volume-readiness checks
 		fmt.Printf("Attempt %d/%d failed: %v. Retrying in %v...\n", i+1, maxRetries, err, retryInterval)
 		time.Sleep(hasDataPollInterval)
 	}

@@ -1655,6 +1655,26 @@ func getSCNamespaceConfigWithSet(name, path string) map[string]interface{} {
 	}
 }
 
+// getSCInMemoryNamespaceConfigWithSet returns a strong-consistency namespace with storage-engine memory
+// backed by a persistence device (type + devices only; Aerospike 8.x schema forbids data-size together
+// with devices under storage-engine). devicePath must match a block volume in spec.storage.
+func getSCInMemoryNamespaceConfigWithSet(name, devicePath string) map[string]interface{} {
+	return map[string]interface{}{
+		"name":               name,
+		"replication-factor": 2,
+		"strong-consistency": true,
+		asdbv1.ConfKeyStorageEngine: map[string]interface{}{
+			"type":    "memory",
+			"devices": []interface{}{devicePath},
+		},
+		"sets": []map[string]interface{}{
+			{
+				"name": "testset",
+			},
+		},
+	}
+}
+
 func getNonSCInMemoryNamespaceConfig(name string) map[string]interface{} {
 	return map[string]interface{}{
 		"name":               name,
