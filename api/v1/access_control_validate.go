@@ -6,6 +6,8 @@ import (
 	"fmt"
 	"net"
 	"strings"
+
+	"k8s.io/apimachinery/pkg/util/sets"
 )
 
 // PrivilegeScope enumerates valid scopes for privileges.
@@ -103,10 +105,14 @@ func IsAerospikeAccessControlValid(aerospikeClusterSpec *AerospikeClusterSpec) (
 		return false, fmt.Errorf("security is enabled but access control is missing")
 	}
 
-	// Validate roles.
+	// Collect all logical namespace names from every rack's effective config.
+	nsNames := GetAllNamespaceNames(aerospikeClusterSpec)
+
+	// Validate roles (quota check uses global config; privilege check uses nsNames).
 	_, err = isRoleSpecValid(
 		aerospikeClusterSpec.AerospikeAccessControl.Roles,
 		*aerospikeClusterSpec.AerospikeConfig,
+		nsNames,
 	)
 	if err != nil {
 		return false, err
@@ -188,8 +194,10 @@ func validateRoleQuotaParam(
 }
 
 // isRoleSpecValid indicates if input role spec is valid.
+// nsNames is the set of all logical namespace names
+// present across all racks, used to validate namespace-scoped privileges.
 func isRoleSpecValid(
-	roles []AerospikeRoleSpec, aerospikeConfigSpec AerospikeConfigSpec,
+	roles []AerospikeRoleSpec, aerospikeConfigSpec AerospikeConfigSpec, nsNames sets.Set[string],
 ) (bool, error) {
 	seenRoles := map[string]bool{}
 	for _, roleSpec := range roles {
@@ -231,7 +239,7 @@ func isRoleSpecValid(
 
 			seenPrivileges[privilege] = true
 
-			if _, err := isPrivilegeValid(privilege, aerospikeConfigSpec); err != nil {
+			if _, err := isPrivilegeValid(privilege, nsNames); err != nil {
 				return false, fmt.Errorf(
 					"role '%s' has invalid privilege: %v", roleSpec.Name, err,
 				)
@@ -289,9 +297,8 @@ func isRoleNameValid(roleName string) (bool, error) {
 }
 
 // Indicates if privilege is a valid privilege.
-func isPrivilegeValid(
-	privilege string, aerospikeConfigSpec AerospikeConfigSpec,
-) (bool, error) {
+// nsNames is the set of all logical namespace names present across all racks.
+func isPrivilegeValid(privilege string, nsNames sets.Set[string]) (bool, error) {
 	parts := strings.Split(privilege, ".")
 
 	_, ok := Privileges[parts[0]]
@@ -317,7 +324,7 @@ func isPrivilegeValid(
 
 		namespaceName := parts[1]
 
-		if !IsAerospikeNamespacePresent(aerospikeConfigSpec, namespaceName) {
+		if !nsNames.Has(namespaceName) {
 			return false, fmt.Errorf(
 				"for privilege %s, namespace %s not configured", privilege,
 				namespaceName,
