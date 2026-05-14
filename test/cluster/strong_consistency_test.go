@@ -649,6 +649,10 @@ var _ = Describe("SCMode", func() {
 			}
 
 			Expect(DeployCluster(k8sClient, ctx, aeroCluster)).ToNot(HaveOccurred())
+
+			By("Validate rack-aware StatefulSets and pod layout for rack config")
+			Expect(validateRackEnabledCluster(k8sClient, ctx, clusterNamespacedName)).ToNot(HaveOccurred())
+
 			eventuallyWaitForKO521RosterReady(clusterNamespacedName, ko521NSName)
 			Expect(WriteDataToCluster(aeroCluster, k8sClient, []string{ko521NSName})).ToNot(HaveOccurred())
 
@@ -724,22 +728,7 @@ var _ = Describe("SCMode", func() {
 			eventuallyAssertKO521DataAfterTopologyChange(clusterNamespacedName, ko521NSName)
 		})
 
-		It("Rack-enabled deployment works for SC in-memory persistent namespace", func() {
-			aeroCluster := createDummyAerospikeCluster(clusterNamespacedName, 4)
-			configureSCInMemoryPersistentNamespace(aeroCluster, ko521NSName, ko521DevicePath)
-			aeroCluster.Spec.RackConfig = asdbv1.RackConfig{
-				Namespaces: []string{ko521NSName},
-				Racks:      []asdbv1.Rack{{ID: 1}, {ID: 2}},
-			}
-
-			Expect(DeployCluster(k8sClient, ctx, aeroCluster)).ToNot(HaveOccurred())
-			Expect(validateRackEnabledCluster(k8sClient, ctx, clusterNamespacedName)).ToNot(HaveOccurred())
-			eventuallyWaitForKO521RosterReady(clusterNamespacedName, ko521NSName)
-			Expect(WriteDataToCluster(aeroCluster, k8sClient, []string{ko521NSName})).ToNot(HaveOccurred())
-			eventuallyAssertKO521DataAfterTopologyChange(clusterNamespacedName, ko521NSName)
-		})
-
-		It("Invalid in-memory persistence deploy fails without partial long-running resources", func() {
+		It("Invalid SC in-memory persistence device path rejects deploy and cluster never completes", func() {
 			aeroCluster := createDummyAerospikeCluster(clusterNamespacedName, 3)
 			configureSCInMemoryPersistentNamespace(aeroCluster, ko521NSName, "/missing/dev/ko521")
 
