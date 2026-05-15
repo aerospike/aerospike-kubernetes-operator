@@ -758,6 +758,146 @@ var _ = Describe("AerospikeCluster validation", func() {
 			})
 		})
 
+		Context("spec.aerospikeConfig (network)", func() {
+			Context("negative", func() {
+				It("rejects non-default access-addresses on network.service", func() {
+					aeroCluster := testCluster.CreateDummyAerospikeCluster(clusterNamespacedName, 1)
+					networkConf := aeroCluster.Spec.AerospikeConfig.Value[asdbv1.ConfKeyNetwork].(map[string]interface{})
+					serviceConf := networkConf[asdbv1.ConfKeyNetworkService].(map[string]interface{})
+					serviceConf["access-addresses"] = []string{"<access_addresses>"}
+
+					err := testCluster.DeployCluster(envtests.K8sClient, ctx, aeroCluster)
+					Expect(err).To(HaveOccurred())
+
+					envtests.NewStatusErrorMatcher().
+						WithMessageSubstrings(" \"maerospikecluster.kb.io\"",
+							"failed to set default aerospikeConfig.network.service config:",
+							"access-addresses",
+							"can not have non-default value",
+						).
+						Validate(err)
+				})
+
+				It("rejects non-default tls-access-addresses on network.service when TLS is enabled", func() {
+					aeroCluster := testCluster.CreateAerospikeClusterPost640(
+						clusterNamespacedName, 1, testutil.LatestEnterpriseImage,
+					)
+					networkConf := aeroCluster.Spec.AerospikeConfig.Value[asdbv1.ConfKeyNetwork].(map[string]interface{})
+					serviceConf := networkConf[asdbv1.ConfKeyNetworkService].(map[string]interface{})
+					serviceConf["tls-access-addresses"] = []string{"<tls-access-addresses>"}
+
+					err := testCluster.DeployCluster(envtests.K8sClient, ctx, aeroCluster)
+					Expect(err).To(HaveOccurred())
+
+					envtests.NewStatusErrorMatcher().
+						WithMessageSubstrings(" \"maerospikecluster.kb.io\"",
+							"failed to set default aerospikeConfig.network.service config:",
+							"tls-access-addresses",
+							"can not have non-default value",
+						).
+						Validate(err)
+				})
+
+				It("rejects TLS cert-file path not mounted in storage volumes", func() {
+					aeroCluster := testCluster.CreateAerospikeClusterPost640(
+						clusterNamespacedName, 1, testutil.LatestEnterpriseImage,
+					)
+					networkConf := aeroCluster.Spec.AerospikeConfig.Value[asdbv1.ConfKeyNetwork].(map[string]interface{})
+					networkConf["tls"] = []interface{}{
+						map[string]interface{}{
+							"name":      "aerospike-a-0.test-runner",
+							"cert-file": "/randompath/svc_cluster_chain.pem",
+						},
+					}
+
+					err := testCluster.DeployCluster(envtests.K8sClient, ctx, aeroCluster)
+					Expect(err).To(HaveOccurred())
+
+					envtests.NewStatusErrorMatcher().
+						WithMessageSubstrings("\"vaerospikecluster.kb.io\"",
+							"feature-key-file paths or tls paths or default-password-file path are not mounted",
+							"/randompath/svc_cluster_chain.pem",
+						).
+						Validate(err)
+				})
+
+				It("rejects both ca-file and ca-path in network.tls", func() {
+					aeroCluster := testCluster.CreateAerospikeClusterPost640(
+						clusterNamespacedName, 1, testutil.LatestEnterpriseImage,
+					)
+					networkConf := aeroCluster.Spec.AerospikeConfig.Value[asdbv1.ConfKeyNetwork].(map[string]interface{})
+					networkConf["tls"] = []interface{}{
+						map[string]interface{}{
+							"name":      "aerospike-a-0.test-runner",
+							"cert-file": "/etc/aerospike/secret/svc_cluster_chain.pem",
+							"key-file":  "/etc/aerospike/secret/svc_key.pem",
+							"ca-file":   "/etc/aerospike/secret/cacert.pem",
+							"ca-path":   "/etc/aerospike/secret/cacerts",
+						},
+					}
+
+					err := testCluster.DeployCluster(envtests.K8sClient, ctx, aeroCluster)
+					Expect(err).To(HaveOccurred())
+
+					envtests.NewStatusErrorMatcher().
+						WithMessageSubstrings("\"vaerospikecluster.kb.io\"",
+							"both `ca-path` and `ca-file` cannot be set in `tls`",
+						).
+						Validate(err)
+				})
+
+				It("rejects ca-file path using Secret Manager syntax in network.tls", func() {
+					aeroCluster := testCluster.CreateAerospikeClusterPost640(
+						clusterNamespacedName, 1, testutil.LatestEnterpriseImage,
+					)
+					networkConf := aeroCluster.Spec.AerospikeConfig.Value[asdbv1.ConfKeyNetwork].(map[string]interface{})
+					networkConf["tls"] = []interface{}{
+						map[string]interface{}{
+							"name":      "aerospike-a-0.test-runner",
+							"cert-file": "/etc/aerospike/secret/svc_cluster_chain.pem",
+							"key-file":  "/etc/aerospike/secret/svc_key.pem",
+							"ca-file":   "secrets:Test-secret:Key",
+						},
+					}
+
+					err := testCluster.DeployCluster(envtests.K8sClient, ctx, aeroCluster)
+					Expect(err).To(HaveOccurred())
+
+					envtests.NewStatusErrorMatcher().
+						WithMessageSubstrings("\"vaerospikecluster.kb.io\"",
+							"feature-key-file paths or tls paths or default-password-file path are not mounted",
+							"secrets:Test-secret:Key",
+						).
+						Validate(err)
+				})
+
+				It("rejects ca-path using Secret Manager syntax in network.tls", func() {
+					aeroCluster := testCluster.CreateAerospikeClusterPost640(
+						clusterNamespacedName, 1, testutil.LatestEnterpriseImage,
+					)
+					networkConf := aeroCluster.Spec.AerospikeConfig.Value[asdbv1.ConfKeyNetwork].(map[string]interface{})
+					networkConf["tls"] = []interface{}{
+						map[string]interface{}{
+							"name":      "aerospike-a-0.test-runner",
+							"cert-file": "/etc/aerospike/secret/svc_cluster_chain.pem",
+							"key-file":  "/etc/aerospike/secret/svc_key.pem",
+							"ca-path":   "secrets:Test-secret:Key",
+						},
+					}
+
+					err := testCluster.DeployCluster(envtests.K8sClient, ctx, aeroCluster)
+					Expect(err).To(HaveOccurred())
+
+					envtests.NewStatusErrorMatcher().
+						WithMessageSubstrings("\"vaerospikecluster.kb.io\"",
+							"feature-key-file paths or tls paths or default-password-file path are not mounted",
+							"secrets:Test-secret:Key",
+						).
+						Validate(err)
+				})
+			})
+		})
+
 		Context("spec.podSpec", func() {
 			Context("negative", func() {
 				It("rejects dnsPolicy Default", func() {
