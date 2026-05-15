@@ -31,6 +31,54 @@ func uniqueNamespacedName(suffix string) types.NamespacedName {
 	return test.GetNamespacedName(name, testutil.DefaultNamespace)
 }
 
+// apNamespaceMemoryDataSizeOnly returns an AP namespace with pure in-memory storage (no devices/files).
+func apNamespaceMemoryDataSizeOnly(name string, rf int) map[string]interface{} {
+	return map[string]interface{}{
+		asdbv1.ConfKeyName:              name,
+		asdbv1.ConfKeyReplicationFactor: rf,
+		asdbv1.ConfKeyStorageEngine: map[string]interface{}{
+			"type":      "memory",
+			"data-size": 1073741824,
+		},
+	}
+}
+
+// apNamespaceMemoryWithDevices returns an AP in-memory namespace listing persistence device paths.
+func apNamespaceMemoryWithDevices(name string, rf int, devices []interface{}) map[string]interface{} {
+	return map[string]interface{}{
+		asdbv1.ConfKeyName:              name,
+		asdbv1.ConfKeyReplicationFactor: rf,
+		asdbv1.ConfKeyStorageEngine: map[string]interface{}{
+			"type":    "memory",
+			"devices": devices,
+		},
+	}
+}
+
+// apNamespaceDeviceWithPath returns an AP namespace with device storage-engine (non-SC).
+func apNamespaceDeviceWithPath(name string, rf int, devicePath string) map[string]interface{} {
+	return map[string]interface{}{
+		asdbv1.ConfKeyName:              name,
+		asdbv1.ConfKeyReplicationFactor: rf,
+		asdbv1.ConfKeyStorageEngine: map[string]interface{}{
+			"type":    "device",
+			"devices": []interface{}{devicePath},
+		},
+	}
+}
+
+// apNamespaceMemoryBadFileTypes returns an AP in-memory namespace with a non-string entry in storage-engine.files.
+func apNamespaceMemoryBadFileTypes(name string, rf int) map[string]interface{} {
+	return map[string]interface{}{
+		asdbv1.ConfKeyName:              name,
+		asdbv1.ConfKeyReplicationFactor: rf,
+		asdbv1.ConfKeyStorageEngine: map[string]interface{}{
+			"type":  "memory",
+			"files": []interface{}{1},
+		},
+	}
+}
+
 func getStorageSpecForDevice(devicePath string) asdbv1.AerospikeStorageSpec {
 	initM := asdbv1.AerospikeVolumeMethodDeleteFiles
 
