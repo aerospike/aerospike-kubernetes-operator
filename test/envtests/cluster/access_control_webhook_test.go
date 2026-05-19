@@ -234,6 +234,56 @@ var _ = Describe("AerospikeCluster access control validation (envtests)", func()
 					Expect(err).ToNot(HaveOccurred())
 				})
 
+				It("allows privilege scoped to a rack-only in-memory namespace", func() {
+					aeroCluster := testCluster.CreateDummyAerospikeCluster(clusterNamespacedName, 2)
+					// Rack 2 adds an extra in-memory namespace "ccff" via InputAerospikeConfig.
+					// The merge logic appends it to the global "test" namespace list, so
+					// rack 2's effective config ends up with both "test" and "ccff".
+					aeroCluster.Spec.RackConfig.Racks = []asdbv1.Rack{
+						{ID: 1},
+						{
+							ID: 2,
+							InputAerospikeConfig: &asdbv1.AerospikeConfigSpec{
+								Value: map[string]interface{}{
+									asdbv1.ConfKeyNamespace: []interface{}{
+										map[string]interface{}{
+											"name":               "ccff",
+											"replication-factor": 1,
+											asdbv1.ConfKeyStorageEngine: map[string]interface{}{
+												"type":      "memory",
+												"data-size": 1073741824,
+											},
+										},
+									},
+								},
+							},
+						},
+					}
+					aeroCluster.Spec.AerospikeAccessControl = &asdbv1.AerospikeAccessControlSpec{
+						Roles: []asdbv1.AerospikeRoleSpec{
+							{
+								Name:       "rack-ns-reader",
+								Privileges: []string{"read.ccff"},
+							},
+						},
+						Users: []asdbv1.AerospikeUserSpec{
+							{
+								Name:       "admin",
+								SecretName: test.AuthSecretName,
+								Roles:      []string{"sys-admin", "user-admin"},
+							},
+							{
+								Name:       "user",
+								SecretName: test.AuthSecretName,
+								Roles:      []string{"rack-ns-reader"},
+							},
+						},
+					}
+
+					err := envtests.K8sClient.Create(ctx, aeroCluster)
+					Expect(err).ToNot(HaveOccurred())
+				})
+
 				It("allows deploy with role quotas when security.enable-quotas is true", func() {
 					aeroCluster := testCluster.CreateDummyAerospikeCluster(clusterNamespacedName, 2)
 					aeroCluster.Spec.AerospikeConfig.Value[asdbv1.ConfKeySecurity] = map[string]interface{}{
@@ -488,6 +538,37 @@ var _ = Describe("AerospikeCluster access control validation (envtests)", func()
 					}
 
 					expectDeployFailsACWebhook(ctx, aeroCluster, "missingNs", "not configured")
+				})
+
+				It("fails when privilege references a namespace absent from all rack effective configs", func() {
+					aeroCluster := testCluster.CreateDummyAerospikeCluster(clusterNamespacedName, 2)
+					// Two explicit racks; neither introduces "ghostNs".
+					aeroCluster.Spec.RackConfig.Racks = []asdbv1.Rack{
+						{ID: 1},
+						{ID: 2},
+					}
+					aeroCluster.Spec.AerospikeAccessControl = &asdbv1.AerospikeAccessControlSpec{
+						Roles: []asdbv1.AerospikeRoleSpec{
+							{
+								Name:       "profiler",
+								Privileges: []string{"read.ghostNs"},
+							},
+						},
+						Users: []asdbv1.AerospikeUserSpec{
+							{
+								Name:       "admin",
+								SecretName: test.AuthSecretName,
+								Roles:      []string{"sys-admin", "user-admin"},
+							},
+							{
+								Name:       "u1",
+								SecretName: test.AuthSecretName,
+								Roles:      []string{"profiler"},
+							},
+						},
+					}
+
+					expectDeployFailsACWebhook(ctx, aeroCluster, "ghostNs", "not configured")
 				})
 
 				It("fails when namespace-scoped privilege has an empty set name", func() {
