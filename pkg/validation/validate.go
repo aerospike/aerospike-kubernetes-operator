@@ -137,6 +137,16 @@ func validateNetworkConfig(networkConf map[string]interface{}) error {
 					)
 				}
 			}
+
+			_, certFileOK := tlsConf["cert-file"]
+			_, keyFileOK := tlsConf["key-file"]
+
+			if certFileOK != keyFileOK {
+				return fmt.Errorf(
+					"both `cert-file` and `key-file` must be set together in tlsConf %v",
+					tlsConf,
+				)
+			}
 		}
 	}
 
