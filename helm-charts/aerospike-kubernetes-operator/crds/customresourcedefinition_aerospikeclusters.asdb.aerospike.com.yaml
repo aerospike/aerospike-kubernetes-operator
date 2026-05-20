@@ -6475,10 +6475,19 @@ spec:
                               description: CleanupThreads contains the maximum number
                                 of cleanup threads(dd or blkdiscard) per init container.
                               type: integer
+                            deleteLocalStorageOnPodFailureRecovery:
+                              description: |-
+                                DeleteLocalStorageOnPodFailureRecovery enables the deletion of local storage PVCs when AKO recovers a failed pod.
+                                Defaults to false.
+                                WARNING: enabling this will cause permanent data loss for local volumes on the failed pod.
+                                Only enable this when the data on the local disk is known to be corrupted or unrecoverable.
+                                Requires localStorageClasses to be non-empty.
+                              type: boolean
                             deleteLocalStorageOnRestart:
                               description: |-
                                 DeleteLocalStorageOnRestart enables the deletion of local storage PVCs when a pod is restarted or rescheduled
-                                by AKO. It only considers local storage classes given in the localStorageClasses field.
+                                by AKO as part of a planned operation (rolling restart, image upgrade).
+                                It only considers local storage classes given in the localStorageClasses field.
                               type: boolean
                             filesystemVolumePolicy:
                               description: FileSystemVolumePolicy contains default
@@ -8110,10 +8119,19 @@ spec:
                               description: CleanupThreads contains the maximum number
                                 of cleanup threads(dd or blkdiscard) per init container.
                               type: integer
+                            deleteLocalStorageOnPodFailureRecovery:
+                              description: |-
+                                DeleteLocalStorageOnPodFailureRecovery enables the deletion of local storage PVCs when AKO recovers a failed pod.
+                                Defaults to false.
+                                WARNING: enabling this will cause permanent data loss for local volumes on the failed pod.
+                                Only enable this when the data on the local disk is known to be corrupted or unrecoverable.
+                                Requires localStorageClasses to be non-empty.
+                              type: boolean
                             deleteLocalStorageOnRestart:
                               description: |-
                                 DeleteLocalStorageOnRestart enables the deletion of local storage PVCs when a pod is restarted or rescheduled
-                                by AKO. It only considers local storage classes given in the localStorageClasses field.
+                                by AKO as part of a planned operation (rolling restart, image upgrade).
+                                It only considers local storage classes given in the localStorageClasses field.
                               type: boolean
                             filesystemVolumePolicy:
                               description: FileSystemVolumePolicy contains default
@@ -8812,10 +8830,19 @@ spec:
                     description: CleanupThreads contains the maximum number of cleanup
                       threads(dd or blkdiscard) per init container.
                     type: integer
+                  deleteLocalStorageOnPodFailureRecovery:
+                    description: |-
+                      DeleteLocalStorageOnPodFailureRecovery enables the deletion of local storage PVCs when AKO recovers a failed pod.
+                      Defaults to false.
+                      WARNING: enabling this will cause permanent data loss for local volumes on the failed pod.
+                      Only enable this when the data on the local disk is known to be corrupted or unrecoverable.
+                      Requires localStorageClasses to be non-empty.
+                    type: boolean
                   deleteLocalStorageOnRestart:
                     description: |-
                       DeleteLocalStorageOnRestart enables the deletion of local storage PVCs when a pod is restarted or rescheduled
-                      by AKO. It only considers local storage classes given in the localStorageClasses field.
+                      by AKO as part of a planned operation (rolling restart, image upgrade).
+                      It only considers local storage classes given in the localStorageClasses field.
                     type: boolean
                   filesystemVolumePolicy:
                     description: FileSystemVolumePolicy contains default policies
@@ -15978,10 +16005,19 @@ spec:
                               description: CleanupThreads contains the maximum number
                                 of cleanup threads(dd or blkdiscard) per init container.
                               type: integer
+                            deleteLocalStorageOnPodFailureRecovery:
+                              description: |-
+                                DeleteLocalStorageOnPodFailureRecovery enables the deletion of local storage PVCs when AKO recovers a failed pod.
+                                Defaults to false.
+                                WARNING: enabling this will cause permanent data loss for local volumes on the failed pod.
+                                Only enable this when the data on the local disk is known to be corrupted or unrecoverable.
+                                Requires localStorageClasses to be non-empty.
+                              type: boolean
                             deleteLocalStorageOnRestart:
                               description: |-
                                 DeleteLocalStorageOnRestart enables the deletion of local storage PVCs when a pod is restarted or rescheduled
-                                by AKO. It only considers local storage classes given in the localStorageClasses field.
+                                by AKO as part of a planned operation (rolling restart, image upgrade).
+                                It only considers local storage classes given in the localStorageClasses field.
                               type: boolean
                             filesystemVolumePolicy:
                               description: FileSystemVolumePolicy contains default
@@ -17613,10 +17649,19 @@ spec:
                               description: CleanupThreads contains the maximum number
                                 of cleanup threads(dd or blkdiscard) per init container.
                               type: integer
+                            deleteLocalStorageOnPodFailureRecovery:
+                              description: |-
+                                DeleteLocalStorageOnPodFailureRecovery enables the deletion of local storage PVCs when AKO recovers a failed pod.
+                                Defaults to false.
+                                WARNING: enabling this will cause permanent data loss for local volumes on the failed pod.
+                                Only enable this when the data on the local disk is known to be corrupted or unrecoverable.
+                                Requires localStorageClasses to be non-empty.
+                              type: boolean
                             deleteLocalStorageOnRestart:
                               description: |-
                                 DeleteLocalStorageOnRestart enables the deletion of local storage PVCs when a pod is restarted or rescheduled
-                                by AKO. It only considers local storage classes given in the localStorageClasses field.
+                                by AKO as part of a planned operation (rolling restart, image upgrade).
+                                It only considers local storage classes given in the localStorageClasses field.
                               type: boolean
                             filesystemVolumePolicy:
                               description: FileSystemVolumePolicy contains default
@@ -18382,10 +18427,19 @@ spec:
                     description: CleanupThreads contains the maximum number of cleanup
                       threads(dd or blkdiscard) per init container.
                     type: integer
+                  deleteLocalStorageOnPodFailureRecovery:
+                    description: |-
+                      DeleteLocalStorageOnPodFailureRecovery enables the deletion of local storage PVCs when AKO recovers a failed pod.
+                      Defaults to false.
+                      WARNING: enabling this will cause permanent data loss for local volumes on the failed pod.
+                      Only enable this when the data on the local disk is known to be corrupted or unrecoverable.
+                      Requires localStorageClasses to be non-empty.
+                    type: boolean
                   deleteLocalStorageOnRestart:
                     description: |-
                       DeleteLocalStorageOnRestart enables the deletion of local storage PVCs when a pod is restarted or rescheduled
-                      by AKO. It only considers local storage classes given in the localStorageClasses field.
+                      by AKO as part of a planned operation (rolling restart, image upgrade).
+                      It only considers local storage classes given in the localStorageClasses field.
                     type: boolean
                   filesystemVolumePolicy:
                     description: FileSystemVolumePolicy contains default policies

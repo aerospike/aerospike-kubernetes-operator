@@ -160,9 +160,7 @@ var _ = Describe("AerospikeCluster validation", func() {
 					// Webhook response validation
 					envtests.NewStatusErrorMatcher().
 						WithMessageSubstrings("\"vaerospikecluster.kb.io\"",
-							"namespace storage device related devicePath /test/dev/xvdf not found in Storage config",
-							"<nil>", "deleteFiles deleteFiles false}",
-							"{<nil> <nil>", "none dd false} 1 [] <nil> []}").
+							"namespace storage device related devicePath /test/dev/xvdf not found in Storage config").
 						Validate(err)
 				})
 
