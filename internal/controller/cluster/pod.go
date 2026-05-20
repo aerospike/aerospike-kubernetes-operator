@@ -321,11 +321,13 @@ func (r *SingleClusterReconciler) rollingRestartPods(
 ) common.ReconcileResult {
 	failedPods, failedWithinGracePeriodPods, activePods := getFailedAndActivePods(podsToRestart, true)
 
-	// If already dead node (failed pod) then no need to check node safety, migration
+	// Failed pods are always restarted as failure recovery regardless of the outer operation
+	// (upgrade, k8sNodeBlockList, planned rolling restart) — they failed for an unknown reason
+	// and their local disk data must be protected.
 	if len(failedPods) != 0 {
 		r.Log.Info("Restart failed pods", "pods", getPodNames(failedPods))
 
-		if res := r.restartPods(rackState, failedPods, restartTypeMap); !res.IsSuccess {
+		if res := r.restartPods(rackState, failedPods, restartTypeMap, true); !res.IsSuccess {
 			return res
 		}
 	}
@@ -360,7 +362,8 @@ func (r *SingleClusterReconciler) rollingRestartPods(
 			}
 		}
 
-		if res := r.restartPods(rackState, activePods, restartTypeMap); !res.IsSuccess {
+		// Active pods are healthy — any restart of them is a planned operation.
+		if res := r.restartPods(rackState, activePods, restartTypeMap, false); !res.IsSuccess {
 			return res
 		}
 
@@ -483,6 +486,7 @@ func (r *SingleClusterReconciler) restartASDOrUpdateAerospikeConf(podName string
 
 func (r *SingleClusterReconciler) restartPods(
 	rackState *RackState, podsToRestart []*corev1.Pod, restartTypeMap map[string]RestartType,
+	isFailureRecovery bool,
 ) common.ReconcileResult {
 	// For each block volume removed from a namespace, pod status dirtyVolumes is appended with that volume name.
 	// For each file removed from a namespace, it is deleted right away.
@@ -509,10 +513,12 @@ func (r *SingleClusterReconciler) restartPods(
 
 			restartedASDPodNames = append(restartedASDPodNames, pod.Name)
 		case podRestart:
-			if r.isLocalPVCDeletionRequired(rackState, pod) {
+			if r.isLocalPVCDeletionRequired(rackState, pod, isFailureRecovery) {
 				if err := r.deleteLocalPVCs(rackState, pod); err != nil {
 					return common.ReconcileError(err)
 				}
+			} else if isFailureRecovery && len(rackState.Rack.Storage.LocalStorageClasses) != 0 {
+				r.Log.Info("Skipping local PVC deletion for failed pod", "podName", pod.Name)
 			}
 
 			if err := r.Delete(context.TODO(), pod); err != nil {
@@ -667,7 +673,7 @@ func (r *SingleClusterReconciler) safelyDeletePodsAndEnsureImageUpdated(
 	if len(failedPods) != 0 {
 		r.Log.Info("Restart failed pods with updated container image", "pods", getPodNames(failedPods))
 
-		if res := r.deletePodAndEnsureImageUpdated(rackState, failedPods); !res.IsSuccess {
+		if res := r.deletePodAndEnsureImageUpdated(rackState, failedPods, true); !res.IsSuccess {
 			return res
 		}
 	}
@@ -701,7 +707,7 @@ func (r *SingleClusterReconciler) safelyDeletePodsAndEnsureImageUpdated(
 			}
 		}
 
-		if res := r.deletePodAndEnsureImageUpdated(rackState, activePods); !res.IsSuccess {
+		if res := r.deletePodAndEnsureImageUpdated(rackState, activePods, false); !res.IsSuccess {
 			return res
 		}
 
@@ -730,7 +736,7 @@ func (r *SingleClusterReconciler) safelyDeletePodsAndEnsureImageUpdated(
 }
 
 func (r *SingleClusterReconciler) deletePodAndEnsureImageUpdated(
-	rackState *RackState, podsToUpdate []*corev1.Pod,
+	rackState *RackState, podsToUpdate []*corev1.Pod, isFailureRecovery bool,
 ) common.ReconcileResult {
 	// For each block volume removed from a namespace, pod status dirtyVolumes is appended with that volume name.
 	// For each file removed from a namespace, it is deleted right away.
@@ -740,7 +746,7 @@ func (r *SingleClusterReconciler) deletePodAndEnsureImageUpdated(
 
 	// Delete pods
 	for _, pod := range podsToUpdate {
-		if r.isLocalPVCDeletionRequired(rackState, pod) {
+		if r.isLocalPVCDeletionRequired(rackState, pod, isFailureRecovery) {
 			if err := r.deleteLocalPVCs(rackState, pod); err != nil {
 				return common.ReconcileError(err)
 			}
@@ -760,8 +766,25 @@ func (r *SingleClusterReconciler) deletePodAndEnsureImageUpdated(
 	return r.ensurePodsImageUpdated(podsToUpdate)
 }
 
-func (r *SingleClusterReconciler) isLocalPVCDeletionRequired(rackState *RackState, pod *corev1.Pod) bool {
-	// Check if pod is being deleted due to eviction
+func (r *SingleClusterReconciler) isLocalPVCDeletionRequired(
+	rackState *RackState, pod *corev1.Pod, isFailureRecovery bool,
+) bool {
+	if isFailureRecovery {
+		// During unplanned failure recovery the pod may have failed for any reason (OOM kill, Aerospike
+		// crash, container runtime error, etc.). The local disk data is almost certainly intact.
+		// Do not delete local PVCs unless the user has explicitly opted in via deleteLocalStorageOnPodFailure,
+		// regardless of the eviction-blocked annotation, node block-list, or deleteLocalStorageOnRestart.
+		if asdbv1.GetBool(rackState.Rack.Storage.DeleteLocalStorageOnPodFailureRecovery) {
+			r.Log.Info("deleteLocalStorageOnPodFailure is enabled, deleting local PVCs for failed pod",
+				"podName", pod.Name)
+
+			return true
+		}
+
+		return false
+	}
+
+	// Planned restart path — existing logic unchanged.
 	if _, hasEvictionBlocked := pod.Annotations[asdbv1.EvictionBlockedAnnotation]; hasEvictionBlocked {
 		r.Log.Info("Pod has eviction-blocked annotation, deleting corresponding local PVCs if any",
 			"podName", pod.Name)
@@ -1005,11 +1028,10 @@ func (r *SingleClusterReconciler) cleanupDanglingPodsRack(sts *appsv1.StatefulSe
 
 // getIgnorablePods returns pods:
 // 1. From racksToDelete that are currently not running and can be ignored in stability checks.
-// 2. Failed/pending pods from the configuredRacks identified using maxIgnorablePods field and
-// 3. Failed pods from old revisions of revision-changed racks that will be replaced anyway can be
-// ignored from stability checks.
+// 2. Failed/pending pods including old revisions pods from the configuredRacks identified using maxIgnorablePods field
+// are ignored from stability checks.
 func (r *SingleClusterReconciler) getIgnorablePods(
-	racksToDelete []asdbv1.Rack, configuredRacks []RackState, revisionChangedRacks map[int]revisionChangedRack,
+	racksToDelete []asdbv1.Rack, configuredRacks []RackState,
 ) (sets.Set[string], error) {
 	ignorablePodNames := sets.Set[string]{}
 	ignorableRackIDs := sets.Set[int]{}
@@ -1033,34 +1055,6 @@ func (r *SingleClusterReconciler) getIgnorablePods(
 		ignorableRackIDs.Insert(ignorableRacks[rackIdx].ID)
 	}
 
-	// Handle failed pods from old revisions of revision-changed racks
-	for rackID, revisionChangedRackInfo := range revisionChangedRacks {
-		oldRackState := revisionChangedRackInfo.oldRack
-		r.Log.Info("Checking old revision failed pods for revision-changed rack",
-			"rackID", rackID, "oldRevision", oldRackState.Rack.Revision)
-
-		oldPodList, err := r.getRackPodList(oldRackState.Rack.ID, oldRackState.Rack.Revision)
-		if err != nil {
-			return nil, err
-		}
-
-		var oldFailedPods []string
-
-		for podIdx := range oldPodList.Items {
-			pod := oldPodList.Items[podIdx]
-			if !utils.IsPodRunningAndReady(&pod) {
-				oldFailedPods = append(oldFailedPods, pod.Name)
-				ignorablePodNames.Insert(pod.Name)
-			}
-		}
-
-		if len(oldFailedPods) > 0 {
-			r.Log.Info("Adding old revision failed pods to ignore list (will be replaced)",
-				"rackID", oldRackState.Rack.ID, "oldRevision", oldRackState.Rack.Revision,
-				"failedPods", oldFailedPods)
-		}
-	}
-
 	for idx := range configuredRacks {
 		rackState := &configuredRacks[idx]
 		if ignorableRackIDs.Has(rackState.Rack.ID) {
@@ -1072,7 +1066,7 @@ func (r *SingleClusterReconciler) getIgnorablePods(
 			r.aeroCluster.Spec.RackConfig.MaxIgnorablePods, int(rackState.Size), false,
 		)
 
-		podList, err := r.getRackPodList(rackState.Rack.ID, rackState.Rack.Revision)
+		podList, err := r.getAllRevisionRackPodList(rackState.Rack.ID)
 		if err != nil {
 			return nil, err
 		}
