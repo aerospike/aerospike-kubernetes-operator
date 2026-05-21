@@ -299,8 +299,7 @@ func validateNamespaceConfig(
 
 				if _, ok := devices.([]interface{}); !ok {
 					return fmt.Errorf(
-						"namespace storage device format not valid %v",
-						nsStorage,
+						"namespace storage devices must be a list, got %T", devices,
 					)
 				}
 
@@ -313,8 +312,7 @@ func validateNamespaceConfig(
 				for _, device := range devices.([]interface{}) {
 					if _, ok := device.(string); !ok {
 						return fmt.Errorf(
-							"namespace storage device not valid string %v",
-							device,
+							"namespace storage device must be a string, got %T", device,
 						)
 					}
 
@@ -339,8 +337,7 @@ func validateNamespaceConfig(
 
 				if _, ok := files.([]interface{}); !ok {
 					return fmt.Errorf(
-						"namespace storage files format not valid %v",
-						nsStorage,
+						"namespace storage files must be a list, got %T", files,
 					)
 				}
 
@@ -353,7 +350,7 @@ func validateNamespaceConfig(
 				for _, file := range files.([]interface{}) {
 					if _, ok := file.(string); !ok {
 						return fmt.Errorf(
-							"namespace storage file not valid string %v", file,
+							"namespace storage file must be a string, got %T", file,
 						)
 					}
 
