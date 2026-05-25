@@ -111,25 +111,30 @@ func CheckPodFailedWithGrace(pod *corev1.Pod, allowGrace bool) PodState {
 
 // checkContainerFailures checks for container-level failure states and returns a failure reason.
 // Returns an empty string if no failure is found.
+// All init container failures are reported because a failing init container prevents the
+// aerospike server from starting. Among regular containers, only the aerospike server
+// container is checked — sidecar failures are not treated as aerospike node failures since
+// the server remains reachable for cluster operations even if a sidecar is crashing.
 func checkContainerFailures(pod *corev1.Pod) string {
-	// grab the status of every container in the pod (including its init containers)
-	containerStatus := make(
-		[]corev1.ContainerStatus, 0,
-		len(pod.Status.InitContainerStatuses)+len(pod.Status.ContainerStatuses),
-	)
+	// Check all init containers — their failures block server startup entirely.
+	for idx := range pod.Status.InitContainerStatuses {
+		container := &pod.Status.InitContainerStatuses[idx]
+		if waiting := container.State.Waiting; waiting != nil &&
+			(isPodImageError(waiting.Reason) || isPodCrashError(waiting.Reason) || isPodError(waiting.Reason)) {
+			return fmt.Sprintf(
+				"pod failed message in container %s: %s reason: %s",
+				container.Name, waiting.Message, waiting.Reason,
+			)
+		}
+	}
 
-	containerStatus = append(containerStatus, pod.Status.InitContainerStatuses...)
-	containerStatus = append(containerStatus, pod.Status.ContainerStatuses...)
+	// Among regular containers, only inspect the aerospike server container.
+	for idx := range pod.Status.ContainerStatuses {
+		container := &pod.Status.ContainerStatuses[idx]
+		if container.Name != asdbv1.AerospikeServerContainerName {
+			continue
+		}
 
-	// inspect the status of each individual container for common failure states
-	for idx := range containerStatus {
-		container := &containerStatus[idx]
-		// if the container is marked as "Terminated", check if its exit code is non-zero since this may still represent
-		// a container that has terminated successfully (such as an init container)
-		// if terminated := container.State.Terminated; terminated != nil && terminated.ExitCode != 0 {
-		// 	return "pod has terminated status"
-		// }
-		// if the container is marked as "Waiting", check for common image-related errors or container crashing.
 		if waiting := container.State.Waiting; waiting != nil &&
 			(isPodImageError(waiting.Reason) || isPodCrashError(waiting.Reason) || isPodError(waiting.Reason)) {
 			return fmt.Sprintf(
@@ -369,6 +374,22 @@ func GetFailedPodGracePeriod() time.Duration {
 	}
 
 	return time.Duration(sec) * time.Second
+}
+
+// IsAerospikeServerRunning returns true if the aerospike server container is currently
+// in the Running state. A true result indicates the aerospike node is reachable for
+// cluster operations even if other containers in the pod (e.g. sidecars) are failing.
+func IsAerospikeServerRunning(pod *corev1.Pod) bool {
+	for idx := range pod.Status.ContainerStatuses {
+		cs := &pod.Status.ContainerStatuses[idx]
+		if cs.Name != asdbv1.AerospikeServerContainerName {
+			continue
+		}
+
+		return cs.State.Running != nil
+	}
+
+	return false
 }
 
 // IsAerospikePod checks if the given pod is an Aerospike pod

@@ -34,25 +34,32 @@ import (
 // Aerospike helper
 // ------------------------------------------------------------------------------------
 
-// waitForMultipleNodesSafeStopReady waits until the input pods are safe to stop,
-// skipping pods that are not running and present in ignorablePodNames for stability check.
-// The ignorablePodNames is the list of failed or pending pods that are either::
-// 1. going to be deleted eventually and are safe to ignore in stability checks
-// 2. given in ignorePodList by the user and are safe to ignore in stability checks
+// waitForMultipleNodesSafeStopReady waits until the input pods are safe to stop.
+// ignorablePods.ServerFailedPodNames are pods whose Aerospike server is unreachable and are
+// skipped for cluster-operation queries (host connections, roster, quiesce).
+// ignorablePods.SidecarFailedPodNames are pods whose server is running but whose sidecar
+// is failing; they are additionally skipped for readiness checks since they will never
+// become IsPodRunningAndReady until the sidecar is fixed.
 func (r *SingleClusterReconciler) waitForMultipleNodesSafeStopReady(
-	pods []*corev1.Pod, ignorablePodNames sets.Set[string],
+	pods []*corev1.Pod, ignorablePods IgnorablePods,
 ) common.ReconcileResult {
 	if len(pods) == 0 {
 		return common.ReconcileSuccess()
 	}
 
-	// Remove a node only if the cluster is stable
-	if err := r.waitForAllSTSToBeReady(ignorablePodNames); err != nil {
+	// Remove a node only if the cluster is stable.
+	// Skip both server-failed and sidecar-failed pods for readiness: sidecar-failed
+	// pods will never satisfy IsPodRunningAndReady until the sidecar is fixed.
+	if err := r.waitForAllSTSToBeReady(ignorablePods); err != nil {
 		return common.ReconcileError(fmt.Errorf("failed to wait for cluster to be ready: %v", err))
 	}
 
+	// For cluster-operation queries only server-failed pods are skipped; sidecar-failed
+	// pods still have reachable Aerospike nodes.
+	clusterOpIgnorableNames := ignorablePods.ServerFailedPodNames
+
 	// This doesn't make actual connection, only objects having connection info are created
-	allHostConns, err := r.newAllHostConnWithOption(ignorablePodNames)
+	allHostConns, err := r.newAllHostConnWithOption(clusterOpIgnorableNames)
 	if err != nil {
 		return common.ReconcileError(fmt.Errorf("failed to get hostConn for aerospike cluster nodes: %v", err))
 	}
@@ -70,12 +77,12 @@ func (r *SingleClusterReconciler) waitForMultipleNodesSafeStopReady(
 	}
 
 	// Setup roster after migration.
-	if err = r.getAndSetRoster(policy, r.aeroCluster.Spec.RosterNodeBlockList, ignorablePodNames); err != nil {
+	if err = r.getAndSetRoster(policy, r.aeroCluster.Spec.RosterNodeBlockList, clusterOpIgnorableNames); err != nil {
 		r.Log.Error(err, "Failed to set roster for cluster")
 		return common.ReconcileRequeueAfter(1)
 	}
 
-	if err := r.quiescePods(policy, allHostConns, pods, ignorablePodNames); err != nil {
+	if err := r.quiescePods(policy, allHostConns, pods, clusterOpIgnorableNames); err != nil {
 		return common.ReconcileError(err)
 	}
 

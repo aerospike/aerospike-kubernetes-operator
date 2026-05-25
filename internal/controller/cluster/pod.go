@@ -48,6 +48,36 @@ const (
 
 const minInitVersionForOverrideRackID = "2.5.0"
 
+// IgnorablePods categorises not-fully-healthy pods by which containers are failing,
+// enabling callers to apply different handling for server failures versus sidecar failures.
+type IgnorablePods struct {
+	// ServerFailedPodNames holds pods whose aerospike server container is not running
+	// (server crashed, image pull failed, pod unschedulable, or rack being deleted/replaced).
+	// These pods are genuinely unavailable as aerospike nodes and are excluded from cluster
+	// operations such as info calls, quiesce, and roster management.
+	// They consume the MaxIgnorablePods budget when configured.
+	ServerFailedPodNames sets.Set[string]
+
+	// SidecarFailedPodNames holds pods where only non-server (sidecar) containers are
+	// failing while the aerospike server container is still running.
+	// The aerospike node is reachable on these pods so they remain available for cluster
+	// operations, but the pod is not fully reconciled to the desired state.
+	// These pods consume the MaxIgnorablePods budget just like server-failed pods.
+	SidecarFailedPodNames sets.Set[string]
+}
+
+// AllPodNames returns the union of ServerFailedPodNames and SidecarFailedPodNames.
+// Use this when both categories must be treated identically (e.g. skipping a pod in
+// a rolling-restart loop regardless of which container is failing).
+func (i IgnorablePods) AllPodNames() sets.Set[string] {
+	return i.ServerFailedPodNames.Union(i.SidecarFailedPodNames)
+}
+
+// Len returns the total number of pods across both sets.
+func (i IgnorablePods) Len() int {
+	return i.ServerFailedPodNames.Len() + i.SidecarFailedPodNames.Len()
+}
+
 // mergeRestartType generates the updated restart type based on precedence.
 // podRestart > quickRestart > noRestartUpdateConf > noRestart
 func mergeRestartType(current, incoming RestartType) RestartType {
@@ -333,7 +363,11 @@ func (r *SingleClusterReconciler) rollingRestartPods(
 	if len(activePods) != 0 {
 		r.Log.Info("Restart active pods", "pods", getPodNames(activePods))
 
-		if res := r.waitForMultipleNodesSafeStopReady(activePods, ignorablePodNames); !res.IsSuccess {
+		// ignorablePodNames already holds AllPodNames() (server + sidecar failures) from
+		// the caller. This function has not yet been migrated to IgnorablePods, so we
+		// place the full set into ServerFailedPodNames; AllPodNames() on the struct then
+		// returns the same set, preserving behaviour for both readiness and cluster-op paths.
+		if res := r.waitForMultipleNodesSafeStopReady(activePods, IgnorablePods{ServerFailedPodNames: ignorablePodNames}); !res.IsSuccess {
 			return res
 		}
 
@@ -675,7 +709,9 @@ func (r *SingleClusterReconciler) safelyDeletePodsAndEnsureImageUpdated(
 	if len(activePods) != 0 {
 		r.Log.Info("Restart active pods with updated container image", "pods", getPodNames(activePods))
 
-		if res := r.waitForMultipleNodesSafeStopReady(activePods, ignorablePodNames); !res.IsSuccess {
+		// See comment in rollingRestartPods — ignorablePodNames holds AllPodNames() and
+		// this function has not yet been migrated to IgnorablePods.
+		if res := r.waitForMultipleNodesSafeStopReady(activePods, IgnorablePods{ServerFailedPodNames: ignorablePodNames}); !res.IsSuccess {
 			return res
 		}
 
@@ -1010,8 +1046,11 @@ func (r *SingleClusterReconciler) cleanupDanglingPodsRack(sts *appsv1.StatefulSe
 // ignored from stability checks.
 func (r *SingleClusterReconciler) getIgnorablePods(
 	racksToDelete []asdbv1.Rack, configuredRacks []RackState, revisionChangedRacks map[int]revisionChangedRack,
-) (sets.Set[string], error) {
-	ignorablePodNames := sets.Set[string]{}
+) (IgnorablePods, error) {
+	ignorable := IgnorablePods{
+		ServerFailedPodNames:  sets.Set[string]{},
+		SidecarFailedPodNames: sets.Set[string]{},
+	}
 	ignorableRackIDs := sets.Set[int]{}
 
 	ignorableRacks := append([]asdbv1.Rack{}, racksToDelete...)
@@ -1020,13 +1059,17 @@ func (r *SingleClusterReconciler) getIgnorablePods(
 	for rackIdx := range ignorableRacks {
 		rackPods, err := r.getRackPodList(ignorableRacks[rackIdx].ID, ignorableRacks[rackIdx].Revision)
 		if err != nil {
-			return nil, err
+			return ignorable, err
 		}
 
 		for podIdx := range rackPods.Items {
 			pod := rackPods.Items[podIdx]
 			if !utils.IsPodRunningAndReady(&pod) {
-				ignorablePodNames.Insert(pod.Name)
+				if utils.IsAerospikeServerRunning(&pod) {
+					ignorable.SidecarFailedPodNames.Insert(pod.Name)
+				} else {
+					ignorable.ServerFailedPodNames.Insert(pod.Name)
+				}
 			}
 		}
 
@@ -1041,7 +1084,7 @@ func (r *SingleClusterReconciler) getIgnorablePods(
 
 		oldPodList, err := r.getRackPodList(oldRackState.Rack.ID, oldRackState.Rack.Revision)
 		if err != nil {
-			return nil, err
+			return ignorable, err
 		}
 
 		var oldFailedPods []string
@@ -1050,7 +1093,12 @@ func (r *SingleClusterReconciler) getIgnorablePods(
 			pod := oldPodList.Items[podIdx]
 			if !utils.IsPodRunningAndReady(&pod) {
 				oldFailedPods = append(oldFailedPods, pod.Name)
-				ignorablePodNames.Insert(pod.Name)
+				// Old-revision pods are being replaced; classify by which container is failing.
+				if utils.IsAerospikeServerRunning(&pod) {
+					ignorable.SidecarFailedPodNames.Insert(pod.Name)
+				} else {
+					ignorable.ServerFailedPodNames.Insert(pod.Name)
+				}
 			}
 		}
 
@@ -1074,10 +1122,11 @@ func (r *SingleClusterReconciler) getIgnorablePods(
 
 		podList, err := r.getRackPodList(rackState.Rack.ID, rackState.Rack.Revision)
 		if err != nil {
-			return nil, err
+			return ignorable, err
 		}
 
 		var failedPod, pendingPod []string
+		sidecarFailedPod := sets.Set[string]{}
 
 		for podIdx := range podList.Items {
 			pod := &podList.Items[podIdx]
@@ -1089,6 +1138,9 @@ func (r *SingleClusterReconciler) getIgnorablePods(
 				}
 
 				failedPod = append(failedPod, pod.Name)
+				if utils.IsAerospikeServerRunning(pod) {
+					sidecarFailedPod.Insert(pod.Name)
+				}
 			}
 		}
 
@@ -1100,13 +1152,17 @@ func (r *SingleClusterReconciler) getIgnorablePods(
 				break
 			}
 
-			ignorablePodNames.Insert(failedPod[podIdx])
+			if sidecarFailedPod.Has(failedPod[podIdx]) {
+				ignorable.SidecarFailedPodNames.Insert(failedPod[podIdx])
+			} else {
+				ignorable.ServerFailedPodNames.Insert(failedPod[podIdx])
+			}
 
 			failedAllowed--
 		}
 	}
 
-	return ignorablePodNames, nil
+	return ignorable, nil
 }
 
 func (r *SingleClusterReconciler) getPodsPVCList(

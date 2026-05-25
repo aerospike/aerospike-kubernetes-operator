@@ -207,7 +207,7 @@ func (r *SingleClusterReconciler) createSTS(
 		"StatefulSet.Name", st.Name,
 	)
 
-	if err := r.waitForSTSToBeReady(st, nil); err != nil {
+	if err := r.waitForSTSToBeReady(st, IgnorablePods{}); err != nil {
 		return st, fmt.Errorf(
 			"failed to wait for statefulset to be ready: %v", err,
 		)
@@ -248,8 +248,9 @@ func (r *SingleClusterReconciler) deleteSTS(st *appsv1.StatefulSet) error {
 }
 
 func (r *SingleClusterReconciler) waitForSTSToBeReady(
-	st *appsv1.StatefulSet, ignorablePodNames sets.Set[string],
+	st *appsv1.StatefulSet, ignorablePods IgnorablePods,
 ) error {
+	ignorablePodNames := ignorablePods.AllPodNames()
 	const (
 		podStatusMaxRetry      = 18
 		podStatusRetryInterval = time.Second * 10
@@ -1078,7 +1079,7 @@ func updateSTSContainers(
 	return finalContainers
 }
 
-func (r *SingleClusterReconciler) waitForAllSTSToBeReady(ignorablePodNames sets.Set[string]) error {
+func (r *SingleClusterReconciler) waitForAllSTSToBeReady(ignorablePods IgnorablePods) error {
 	r.Log.Info("Waiting for all cluster STSs to be ready")
 
 	allRackIdentifiers := sets.NewString()
@@ -1107,7 +1108,7 @@ func (r *SingleClusterReconciler) waitForAllSTSToBeReady(ignorablePodNames sets.
 			continue
 		}
 
-		if err := r.waitForSTSToBeReady(st, ignorablePodNames); err != nil {
+		if err := r.waitForSTSToBeReady(st, ignorablePods); err != nil {
 			return err
 		}
 	}

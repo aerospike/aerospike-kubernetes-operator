@@ -173,12 +173,18 @@ func (r *SingleClusterReconciler) Reconcile() (result ctrl.Result, recErr error)
 		return reconcile.Result{}, recErr
 	}
 
-	ignorablePodNames, err := r.getIgnorablePods(nil, getConfiguredRackStateList(r.aeroCluster), nil)
+	ignorablePods, err := r.getIgnorablePods(nil, getConfiguredRackStateList(r.aeroCluster), nil)
 	if err != nil {
 		r.Log.Error(err, "Failed to determine pods to be ignored")
 
 		return reconcile.Result{}, err
 	}
+
+	// All downstream helpers that currently accept sets.Set[string] receive AllPodNames()
+	// so that both server-failed and sidecar-only-failed pods are handled identically for
+	// now. Future changes can consume ignorablePods.ServerFailedPodNames or
+	// ignorablePods.SidecarFailedPodNames where finer-grained distinctions are needed.
+	ignorablePodNames := ignorablePods.AllPodNames()
 
 	// Check if there is any node with quiesce status. We need to undo that
 	// It may have been left from previous steps
@@ -277,9 +283,11 @@ func (r *SingleClusterReconciler) Reconcile() (result ctrl.Result, recErr error)
 		return reconcile.Result{}, err
 	}
 
-	// Try to recover pods only if there are any ignorable pods, which may be failed or pending.
-	if len(ignorablePodNames) > 0 {
-		if res := r.recoverIgnorablePods(ignorablePodNames); !res.IsSuccess {
+	// Try to recover pods only if there are any server-failed ignorable pods.
+	// Sidecar-only failing pods are not recovered here — they are restarted safely
+	// by handleFailedPodsInRack on every reconcile cycle.
+	if ignorablePods.ServerFailedPodNames.Len() > 0 {
+		if res := r.recoverIgnorablePods(ignorablePods); !res.IsSuccess {
 			return res.GetResult()
 		}
 	}
@@ -289,7 +297,7 @@ func (r *SingleClusterReconciler) Reconcile() (result ctrl.Result, recErr error)
 	return reconcile.Result{}, nil
 }
 
-func (r *SingleClusterReconciler) recoverIgnorablePods(ignorablePodNames sets.Set[string]) common.ReconcileResult {
+func (r *SingleClusterReconciler) recoverIgnorablePods(ignorablePods IgnorablePods) common.ReconcileResult {
 	podList, gErr := r.getClusterPodList()
 	if gErr != nil {
 		r.Log.Error(gErr, "Failed to get cluster pod list")
@@ -303,9 +311,11 @@ func (r *SingleClusterReconciler) recoverIgnorablePods(ignorablePodNames sets.Se
 		requeueInterval int
 	)
 
-	// Try to recover failed/pending pods by deleting them if grace period is over.
+	// Only recover pods whose aerospike server container is not running.
+	// Sidecar-only failing pods are handled by handleFailedPodsInRack and must not
+	// be force-deleted here, as that would bypass the cluster stability checks.
 	for idx := range podList.Items {
-		if ignorablePodNames.Has(podList.Items[idx].Name) {
+		if ignorablePods.ServerFailedPodNames.Has(podList.Items[idx].Name) {
 			podState := utils.CheckPodFailedWithGrace(&podList.Items[idx], true)
 
 			if podState.State != utils.PodHealthy {
