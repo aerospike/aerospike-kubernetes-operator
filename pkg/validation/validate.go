@@ -294,12 +294,7 @@ func validateNamespaceConfig(
 				)
 			}
 
-			if IsInMemoryNamespace(nsConf) {
-				// storage-engine memory
-				continue
-			}
-
-			if !IsDeviceOrPmemNamespace(nsConf) {
+			if !IsInMemoryNamespace(nsConf) && !IsDeviceOrPmemNamespace(nsConf) {
 				return fmt.Errorf(
 					"%s not supported for namespace %v", asdbv1.ConfKeyStorageEngine, nsConf,
 				)
@@ -314,8 +309,7 @@ func validateNamespaceConfig(
 
 				if _, ok := devices.([]interface{}); !ok {
 					return fmt.Errorf(
-						"namespace storage device format not valid %v",
-						nsStorage,
+						"namespace storage devices must be a list, got %T", devices,
 					)
 				}
 
@@ -328,8 +322,7 @@ func validateNamespaceConfig(
 				for _, device := range devices.([]interface{}) {
 					if _, ok := device.(string); !ok {
 						return fmt.Errorf(
-							"namespace storage device not valid string %v",
-							device,
+							"namespace storage device must be a string, got %T", device,
 						)
 					}
 
@@ -354,8 +347,7 @@ func validateNamespaceConfig(
 
 				if _, ok := files.([]interface{}); !ok {
 					return fmt.Errorf(
-						"namespace storage files format not valid %v",
-						nsStorage,
+						"namespace storage files must be a list, got %T", files,
 					)
 				}
 
@@ -368,7 +360,7 @@ func validateNamespaceConfig(
 				for _, file := range files.([]interface{}) {
 					if _, ok := file.(string); !ok {
 						return fmt.Errorf(
-							"namespace storage file not valid string %v", file,
+							"namespace storage file must be a string, got %T", file,
 						)
 					}
 
@@ -511,8 +503,20 @@ func ValidateStorageEngineDeviceList(nsConfList []interface{}) (deviceList, file
 		storage := nsConf[asdbv1.ConfKeyStorageEngine].(map[string]interface{})
 
 		if devices, ok := storage["devices"]; ok {
-			for _, d := range devices.([]interface{}) {
-				device := d.(string)
+			deviceSlice, ok := devices.([]interface{})
+			if !ok {
+				return nil, nil, fmt.Errorf(
+					"namespace %s storage devices must be a list, got %T", namespace, devices,
+				)
+			}
+
+			for _, d := range deviceSlice {
+				device, ok := d.(string)
+				if !ok {
+					return nil, nil, fmt.Errorf(
+						"namespace %s storage device must be a string, got %T", namespace, d,
+					)
+				}
 
 				previousNamespace, exists := deviceList[device]
 				if exists {
@@ -527,8 +531,20 @@ func ValidateStorageEngineDeviceList(nsConfList []interface{}) (deviceList, file
 		}
 
 		if files, ok := storage["files"]; ok {
-			for _, d := range files.([]interface{}) {
-				file := d.(string)
+			fileSlice, ok := files.([]interface{})
+			if !ok {
+				return nil, nil, fmt.Errorf(
+					"namespace %s storage files must be a list, got %T", namespace, files,
+				)
+			}
+
+			for _, d := range fileSlice {
+				file, ok := d.(string)
+				if !ok {
+					return nil, nil, fmt.Errorf(
+						"namespace %s storage file must be a string, got %T", namespace, d,
+					)
+				}
 
 				previousNamespace, exists := fileList[file]
 				if exists {
