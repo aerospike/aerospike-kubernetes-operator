@@ -114,6 +114,34 @@ func networkTLSConfigSecondTLSEntryKeyOnlyForTest() map[string]interface{} {
 	return cfg
 }
 
+// networkTLSConfigSecondTLSEntryCAFileOnly appends a second tls stanza with only ca-file (no cert-file/key-file).
+func networkTLSConfigSecondTLSEntryCAFileOnly() map[string]interface{} {
+	cfg := networkTLSConfigForTest()
+	tlsList := cfg["tls"].([]interface{})
+	first := maps.Clone(tlsList[0].(map[string]interface{}))
+	second := map[string]interface{}{
+		"name":    "aerospike-a-0.test-runner-secondary",
+		"ca-file": "/etc/aerospike/secret/cacert.pem",
+	}
+	cfg["tls"] = []interface{}{first, second}
+
+	return cfg
+}
+
+// networkTLSConfigSecondTLSEntryCAPathOnly appends a second tls stanza with only ca-path (no cert-file/key-file).
+func networkTLSConfigSecondTLSEntryCAPathOnly() map[string]interface{} {
+	cfg := networkTLSConfigForTest()
+	tlsList := cfg["tls"].([]interface{})
+	first := maps.Clone(tlsList[0].(map[string]interface{}))
+	second := map[string]interface{}{
+		"name":    "aerospike-a-0.test-runner-secondary",
+		"ca-path": "/etc/aerospike/secret/cacerts",
+	}
+	cfg["tls"] = []interface{}{first, second}
+
+	return cfg
+}
+
 // tlsCertKeyParityWebhookSubstrings matches admission errors for pkg/validation cert-file/key-file parity (KO-537).
 var tlsCertKeyParityWebhookSubstrings = []string{
 	"\"vaerospikecluster.kb.io\"",
@@ -904,9 +932,8 @@ var _ = Describe("AerospikeCluster access control validation (envtests)", func()
 		Context("spec.aerospikeConfig.network.tls", func() {
 			Context("negative", func() {
 				It("rejects Create when tls entry has cert-file without key-file", func() {
-					aeroCluster := testCluster.CreateDummyAerospikeCluster(clusterNamespacedName, 2)
+					aeroCluster := testCluster.CreateBasicTLSCluster(clusterNamespacedName, 2)
 					aeroCluster.Spec.AerospikeConfig.Value[asdbv1.ConfKeyNetwork] = networkTLSConfigCertOnlyForTest()
-					aeroCluster.Spec.OperatorClientCertSpec = adminOperatorCertForTest()
 
 					err := envtests.K8sClient.Create(ctx, aeroCluster)
 					Expect(err).To(HaveOccurred())
@@ -916,9 +943,8 @@ var _ = Describe("AerospikeCluster access control validation (envtests)", func()
 				})
 
 				It("rejects Create when tls entry has key-file without cert-file", func() {
-					aeroCluster := testCluster.CreateDummyAerospikeCluster(clusterNamespacedName, 2)
+					aeroCluster := testCluster.CreateBasicTLSCluster(clusterNamespacedName, 2)
 					aeroCluster.Spec.AerospikeConfig.Value[asdbv1.ConfKeyNetwork] = networkTLSConfigKeyOnlyForTest()
-					aeroCluster.Spec.OperatorClientCertSpec = adminOperatorCertForTest()
 
 					err := envtests.K8sClient.Create(ctx, aeroCluster)
 					Expect(err).To(HaveOccurred())
@@ -928,9 +954,8 @@ var _ = Describe("AerospikeCluster access control validation (envtests)", func()
 				})
 
 				It("rejects Create when first tls entry is valid and second has cert-file without key-file", func() {
-					aeroCluster := testCluster.CreateDummyAerospikeCluster(clusterNamespacedName, 2)
+					aeroCluster := testCluster.CreateBasicTLSCluster(clusterNamespacedName, 2)
 					aeroCluster.Spec.AerospikeConfig.Value[asdbv1.ConfKeyNetwork] = networkTLSConfigSecondTLSEntryCertOnlyForTest()
-					aeroCluster.Spec.OperatorClientCertSpec = adminOperatorCertForTest()
 
 					err := envtests.K8sClient.Create(ctx, aeroCluster)
 					Expect(err).To(HaveOccurred())
@@ -940,15 +965,32 @@ var _ = Describe("AerospikeCluster access control validation (envtests)", func()
 				})
 
 				It("rejects Create when first tls entry is valid and second has key-file without cert-file", func() {
-					aeroCluster := testCluster.CreateDummyAerospikeCluster(clusterNamespacedName, 2)
+					aeroCluster := testCluster.CreateBasicTLSCluster(clusterNamespacedName, 2)
 					aeroCluster.Spec.AerospikeConfig.Value[asdbv1.ConfKeyNetwork] = networkTLSConfigSecondTLSEntryKeyOnlyForTest()
-					aeroCluster.Spec.OperatorClientCertSpec = adminOperatorCertForTest()
 
 					err := envtests.K8sClient.Create(ctx, aeroCluster)
 					Expect(err).To(HaveOccurred())
 					envtests.NewStatusErrorMatcher().
 						WithMessageSubstrings(tlsCertKeyParityWebhookSubstrings...).
 						Validate(err)
+				})
+			})
+
+			Context("positive", func() {
+				It("allows Create when first tls entry is valid and second has only ca-file", func() {
+					aeroCluster := testCluster.CreateBasicTLSCluster(clusterNamespacedName, 2)
+					aeroCluster.Spec.AerospikeConfig.Value[asdbv1.ConfKeyNetwork] = networkTLSConfigSecondTLSEntryCAFileOnly()
+
+					err := envtests.K8sClient.Create(ctx, aeroCluster)
+					Expect(err).ToNot(HaveOccurred())
+				})
+
+				It("allows Create when first tls entry is valid and second has only ca-path", func() {
+					aeroCluster := testCluster.CreateBasicTLSCluster(clusterNamespacedName, 2)
+					aeroCluster.Spec.AerospikeConfig.Value[asdbv1.ConfKeyNetwork] = networkTLSConfigSecondTLSEntryCAPathOnly()
+
+					err := envtests.K8sClient.Create(ctx, aeroCluster)
+					Expect(err).ToNot(HaveOccurred())
 				})
 			})
 		})
@@ -961,17 +1003,10 @@ var _ = Describe("AerospikeCluster access control validation (envtests)", func()
 
 		Context("spec.aerospikeConfig.network.tls", func() {
 			Context("negative", func() {
-				DescribeTable("rejects Update when tls entry violates cert-file and key-file parity (KO-537)",
+				DescribeTable("rejects Update when tls entry violates cert-file and key-file parity",
 					func(invalidNetwork map[string]interface{}) {
-						aeroCluster := testCluster.CreateDummyAerospikeCluster(clusterNamespacedName, 2)
+						aeroCluster := testCluster.CreateBasicTLSCluster(clusterNamespacedName, 2)
 						Expect(envtests.K8sClient.Create(ctx, aeroCluster)).To(Succeed())
-
-						current, err := testCluster.GetCluster(envtests.K8sClient, ctx, clusterNamespacedName)
-						Expect(err).ToNot(HaveOccurred())
-
-						current.Spec.AerospikeConfig.Value[asdbv1.ConfKeyNetwork] = networkTLSConfigForTest()
-						current.Spec.OperatorClientCertSpec = adminOperatorCertForTest()
-						Expect(envtests.K8sClient.Update(ctx, current)).To(Succeed())
 
 						toBreak, err := testCluster.GetCluster(envtests.K8sClient, ctx, clusterNamespacedName)
 						Expect(err).ToNot(HaveOccurred())
