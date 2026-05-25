@@ -525,8 +525,6 @@ var _ = Describe("AerospikeCluster validation", func() {
 						Validate(err)
 				})
 
-				// Bug: Add meaningful response message string for invalid devices type
-				// instead of panic: interface conversion (ValidateStorageEngineDeviceList).
 				It("rejects AP in-memory namespace when persistence devices has invalid type", func() {
 					aeroCluster := testCluster.CreateDummyAerospikeCluster(clusterNamespacedName, 2)
 					aeroCluster.Spec.AerospikeConfig.Value[asdbv1.ConfKeyNamespace] = []interface{}{
@@ -539,7 +537,7 @@ var _ = Describe("AerospikeCluster validation", func() {
 					envtests.NewStatusErrorMatcher().
 						WithMessageSubstrings(
 							"\"vaerospikecluster.kb.io\"",
-							"panic: interface conversion: interface {} is string, not []interface {} [recovered]",
+							"namespace storage devices must be a list, got string",
 						).
 						Validate(err)
 				})
@@ -1319,7 +1317,6 @@ var _ = Describe("AerospikeCluster validation", func() {
 
 		Context("spec.aerospikeConfig (namespace)", func() {
 			Context("negative", func() {
-				// Bug: Add meaningful response message string for invalid type.
 				It("rejects update when AP in-memory namespace persistence devices has invalid type", func() {
 					aeroCluster := testCluster.CreateDummyAerospikeCluster(updateValidationClusterNamespacedName, 2)
 					aeroCluster.Spec.AerospikeConfig.Value[asdbv1.ConfKeyNamespace] = []interface{}{
@@ -1340,7 +1337,7 @@ var _ = Describe("AerospikeCluster validation", func() {
 					envtests.NewStatusErrorMatcher().
 						WithMessageSubstrings(
 							"\"vaerospikecluster.kb.io\"",
-							"panic: interface conversion: interface {} is string, not []interface {} [recovered]",
+							"namespace storage devices must be a list, got string",
 						).
 						Validate(err)
 				})
