@@ -79,6 +79,19 @@ func apNamespaceMemoryBadFileTypes(name string, rf int) map[string]interface{} {
 	}
 }
 
+// apNamespaceMemoryInvalidDevicesType returns an AP in-memory namespace
+// with storage-engine.devices set to a string (invalid type).
+func apNamespaceMemoryInvalidDevicesType(name string, rf int) map[string]interface{} {
+	return map[string]interface{}{
+		asdbv1.ConfKeyName:              name,
+		asdbv1.ConfKeyReplicationFactor: rf,
+		asdbv1.ConfKeyStorageEngine: map[string]interface{}{
+			"type":    "memory",
+			"devices": "not-a-list",
+		},
+	}
+}
+
 func getStorageSpecForDevice(devicePath string) asdbv1.AerospikeStorageSpec {
 	initM := asdbv1.AerospikeVolumeMethodDeleteFiles
 
