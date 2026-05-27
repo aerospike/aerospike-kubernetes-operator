@@ -815,8 +815,7 @@ var _ = Describe("AerospikeCluster validation", func() {
 
 					envtests.NewStatusErrorMatcher().
 						WithMessageSubstrings("\"vaerospikecluster.kb.io\"",
-							"feature-key-file paths or tls paths or default-password-file path are not mounted",
-							"/randompath/svc_cluster_chain.pem",
+							"both `cert-file` and `key-file` must be set together in tlsConf map",
 						).
 						Validate(err)
 				})

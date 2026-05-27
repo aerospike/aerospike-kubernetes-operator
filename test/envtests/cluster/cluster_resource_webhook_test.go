@@ -27,9 +27,9 @@ import (
 	"github.com/aerospike/aerospike-kubernetes-operator/v4/test/envtests"
 )
 
-var _ = Describe("Cluster resource deploy validation", func() {
+var _ = Describe("Cluster resource validation", func() {
 	const (
-		clusterName = "cluster-resource-webhook-cluster"
+		clusterName = "pod-resource-webhook-cluster"
 	)
 
 	ctx := context.TODO()
@@ -47,7 +47,8 @@ var _ = Describe("Cluster resource deploy validation", func() {
 					aeroCluster := testCluster.CreateDummyAerospikeCluster(clusterNamespacedName, 2)
 					aeroCluster.Spec.PodSpec.AerospikeContainerSpec.Resources = podResourcesWithLimitsLessThanRequests()
 
-					err := testCluster.DeployCluster(envtests.K8sClient, ctx, aeroCluster)
+					err := envtests.K8sClient.Create(ctx, aeroCluster)
+					// err := testCluster.DeployCluster(envtests.K8sClient, ctx, aeroCluster)
 					Expect(err).To(HaveOccurred())
 
 					envtests.NewStatusErrorMatcher().
@@ -70,7 +71,8 @@ var _ = Describe("Cluster resource deploy validation", func() {
 
 					aeroCluster.Spec.PodSpec.AerospikeInitContainerSpec.Resources = podResourcesWithLimitsLessThanRequests()
 
-					err := testCluster.DeployCluster(envtests.K8sClient, ctx, aeroCluster)
+					// err := testCluster.DeployCluster(envtests.K8sClient, ctx, aeroCluster)
+					err := envtests.K8sClient.Create(ctx, aeroCluster)
 					Expect(err).To(HaveOccurred())
 
 					envtests.NewStatusErrorMatcher().

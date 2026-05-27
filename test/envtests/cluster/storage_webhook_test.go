@@ -70,8 +70,9 @@ var _ = Describe("Storage webhook validation", func() {
 
 				It("rejects when per-rack InputStorage is FS-only workdir volumes and does not include the "+
 					"namespace block device (rack-local storage shape)", func() {
-					// Mirrors integration "CommonConfigLocalStorage": common dummy namespace uses /test/dev/xvdf,
-					// rack InputStorage only defines a filesystem workdir volume at a different path (no ns device).
+					// Per-rack InputStorage is filesystem-only (workdir PV); it does not define a volume
+					// for the namespace storage-engine device path from the merged cluster aerospikeConfig (/test/dev/xvdf).
+					// Create should be rejected: that device path must appear in this rack's InputStorage.
 					initM := asdbv1.AerospikeVolumeMethodDeleteFiles
 					cascade := true
 					rackFSOnlyStorage := &asdbv1.AerospikeStorageSpec{

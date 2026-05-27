@@ -29,7 +29,7 @@ import (
 	"github.com/aerospike/aerospike-kubernetes-operator/v4/test/envtests"
 )
 
-var _ = Describe("RollingUpdateBatchSize deploy validation", func() {
+var _ = Describe("RollingUpdateBatchSize validation", func() {
 	const (
 		clusterName = "batch-deploy-webhook-cluster"
 	)
@@ -45,7 +45,7 @@ var _ = Describe("RollingUpdateBatchSize deploy validation", func() {
 	Context("Deploy validation", func() {
 		Context("spec.rackConfig with rollingUpdateBatchSize (rack namespaces)", func() {
 			Context("negative", func() {
-				It("rejects create when replication-factor is 1 by using RollingUpdateBatchSizePercent", func() {
+				It("rejects create when replication-factor is 1 along with RollingUpdateBatchSizePercent", func() {
 					aeroCluster := testCluster.CreateDummyAerospikeClusterWithRF(clusterNamespacedName, 2, 1)
 					aeroCluster.Spec.RackConfig.Racks = testCluster.GetDummyRackConf(1, 2)
 					aeroCluster.Spec.RackConfig.Namespaces = []string{"test"}
@@ -64,7 +64,7 @@ var _ = Describe("RollingUpdateBatchSize deploy validation", func() {
 						Validate(err)
 				})
 
-				It("rejects create when replication-factor is 1 by using RollingUpdateBatchSize", func() {
+				It("rejects create when replication-factor is 1 along with RollingUpdateBatchSize", func() {
 					aeroCluster := testCluster.CreateDummyAerospikeClusterWithRF(clusterNamespacedName, 2, 1)
 					aeroCluster.Spec.RackConfig.Racks = testCluster.GetDummyRackConf(1, 2)
 					aeroCluster.Spec.RackConfig.Namespaces = []string{"test"}
