@@ -128,6 +128,8 @@ func (r *SingleClusterReconciler) getRollingRestartTypeMap(rackState *RackState,
 			continue
 		}
 
+		r.Log.Info("in getRollingRestartTypeMap")
+
 		if blockedK8sNodes.Has(pods[idx].Spec.NodeName) {
 			r.Log.Info("Pod found in blocked nodes list, will be migrated to a different node",
 				"podName", pods[idx].Name)
@@ -214,16 +216,17 @@ func (r *SingleClusterReconciler) getRollingRestartTypePod(
 ) (RestartType, error) {
 	restartType := noRestart
 
-	// AerospikeConfig nil means status not updated yet
-	if r.IsStatusEmpty() {
+	// If this pod has no status entry yet it was just created with the current
+	// config — no restart is needed and the hash fields would all be empty
+	// strings, which would incorrectly trigger every comparison below.
+	podStatus, exists := r.aeroCluster.Status.Pods[pod.Name]
+	if !exists {
 		return restartType, nil
 	}
 
 	requiredConfHash := confMap.Data[aerospikeConfHashFileName]
 	requiredNetworkPolicyHash := confMap.Data[networkPolicyHashFileName]
 	requiredPodSpecHash := confMap.Data[podSpecHashFileName]
-
-	podStatus := r.aeroCluster.Status.Pods[pod.Name]
 
 	// Check if aerospikeConfig is updated
 	if podStatus.AerospikeConfigHash != requiredConfHash {
@@ -415,6 +418,8 @@ func (r *SingleClusterReconciler) rollingRestartPods(
 			"Pods are in failed state but within grace period, will not delete",
 			"pods", getPodNames(failedWithinGracePeriodPods),
 		)
+
+		// todo tanmay mark phase to error and increase RequeueIntervalSeconds...
 
 		return common.ReconcileRequeueAfter(asdbv1.RequeueIntervalSeconds10)
 	}
@@ -618,7 +623,7 @@ func (r *SingleClusterReconciler) ensurePodsRunningAndReady(podsToCheck []*corev
 				return common.ReconcileError(err)
 			}
 
-			if err := utils.CheckPodFailed(updatedPod); err != nil {
+			if err := utils.CheckPodFailed(updatedPod, false); err != nil {
 				return common.ReconcileError(err)
 			}
 
@@ -853,7 +858,7 @@ func (r *SingleClusterReconciler) ensurePodsImageUpdated(podsToCheck []*corev1.P
 			}
 
 			// For existing cluster operations, no grace period for immediate responsiveness
-			if err := utils.CheckPodFailed(updatedPod); err != nil {
+			if err := utils.CheckPodFailed(updatedPod, false); err != nil {
 				return common.ReconcileError(err)
 			}
 

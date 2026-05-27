@@ -762,7 +762,7 @@ func (r *SingleBackupServiceReconciler) waitForDeploymentToBeReady() error {
 			for idx := range podList.Items {
 				pod := &podList.Items[idx]
 
-				if err := utils.CheckPodFailed(pod); err != nil {
+				if err := utils.CheckPodFailed(pod, false); err != nil {
 					return false, fmt.Errorf("pod %s failed: %v", pod.Name, err)
 				}
 

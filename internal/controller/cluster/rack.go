@@ -2,6 +2,7 @@ package cluster
 
 import (
 	"context"
+	stderrors "errors"
 	"fmt"
 	"path/filepath"
 	"reflect"
@@ -169,18 +170,17 @@ func (r *SingleClusterReconciler) reconcileRacks() common.ReconcileResult {
 
 		// Wait for pods to be ready.
 		if err := r.waitForSTSToBeReady(found, ignorablePods); err != nil {
-			// If the wait times out try again.
-			// The wait is required in cases where scale up waits for a pod to
-			// terminate times out and event is re-queued.
-			// Next reconcile will not invoke scale up or down and will
-			// fall through,
-			// and might run reconcile steps common to all racks before the racks
-			// have scaled up.
-			r.Log.Error(
-				err, "Failed to wait for statefulset to be ready",
-				"STS", stsName,
-			)
+			r.Log.Error(err, "Failed to wait for statefulset to be ready", "STS", stsName)
 
+			// A genuine pod failure (CrashLoopBackOff, ImagePullBackOff, …) is a
+			// permanent error that requires user intervention — surface it as such
+			// rather than requeueing indefinitely.
+			if stderrors.Is(err, ErrPodFailed) {
+				return common.ReconcileError(err)
+			}
+
+			// Readiness timeout is likely transient (slow init, node pressure).
+			// Requeue so the next reconcile cycle checks again.
 			return common.ReconcileRequeueAfter(1)
 		}
 	}
@@ -996,6 +996,11 @@ func (r *SingleClusterReconciler) scaleDownRack(
 		// Wait for pods to get terminated
 		if err = r.waitForSTSToBeReady(found, ignorablePods); err != nil {
 			r.Log.Error(err, "Failed to wait for statefulset to be ready")
+
+			if stderrors.Is(err, ErrPodFailed) {
+				return found, common.ReconcileError(err)
+			}
+
 			return found, common.ReconcileRequeueAfter(1)
 		}
 
@@ -1026,7 +1031,11 @@ func (r *SingleClusterReconciler) scaleDownRack(
 			}
 
 			if err = r.waitForSTSToBeReady(found, ignorablePods); err != nil {
-				r.Log.Error(err, "Failed to wait for statefulset to be ready")
+				r.Log.Error(err, "Failed to wait for statefulset to be ready after scale-back-up")
+
+				if stderrors.Is(err, ErrPodFailed) {
+					return found, common.ReconcileError(err)
+				}
 			}
 
 			return found, common.ReconcileRequeueAfter(1)
@@ -1281,6 +1290,8 @@ func (r *SingleClusterReconciler) getRollingRestartInfo(rackState *RackState, ig
 	if err != nil {
 		return nil, err
 	}
+
+	r.Log.Info("Getting rolling restart info", "rackState", rackState.Rack.ID, "restartTypeMap", restartTypeMap)
 
 	needRestart, needUpdateConf := false, false
 

@@ -94,9 +94,14 @@ func (r *SingleClusterReconciler) Reconcile() (result ctrl.Result, recErr error)
 		return reconcile.Result{}, nil
 	}
 
-	// Set the status to AerospikeClusterInProgress before starting any operations
-	if err := r.setStatusPhase(asdbv1.AerospikeClusterInProgress); err != nil {
-		return reconcile.Result{}, err
+	// Set the status to AerospikeClusterInProgress before starting any operations.
+	// Skip the transition if the cluster is already in Error phase — the error will
+	// be re-evaluated this cycle and the phase updated accordingly, avoiding a
+	// visible InProgress ↔ Error flicker on every requeue.
+	if r.aeroCluster.Status.Phase != asdbv1.AerospikeClusterError {
+		if err := r.setStatusPhase(asdbv1.AerospikeClusterInProgress); err != nil {
+			return reconcile.Result{}, err
+		}
 	}
 
 	// The cluster is not being deleted, add finalizer if not added already
