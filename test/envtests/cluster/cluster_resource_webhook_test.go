@@ -48,7 +48,6 @@ var _ = Describe("Cluster resource validation", func() {
 					aeroCluster.Spec.PodSpec.AerospikeContainerSpec.Resources = podResourcesWithLimitsLessThanRequests()
 
 					err := envtests.K8sClient.Create(ctx, aeroCluster)
-					// err := testCluster.DeployCluster(envtests.K8sClient, ctx, aeroCluster)
 					Expect(err).To(HaveOccurred())
 
 					envtests.NewStatusErrorMatcher().
@@ -71,7 +70,6 @@ var _ = Describe("Cluster resource validation", func() {
 
 					aeroCluster.Spec.PodSpec.AerospikeInitContainerSpec.Resources = podResourcesWithLimitsLessThanRequests()
 
-					// err := testCluster.DeployCluster(envtests.K8sClient, ctx, aeroCluster)
 					err := envtests.K8sClient.Create(ctx, aeroCluster)
 					Expect(err).To(HaveOccurred())
 
