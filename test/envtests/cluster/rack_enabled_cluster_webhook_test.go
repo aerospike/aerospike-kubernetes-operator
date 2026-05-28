@@ -36,7 +36,7 @@ var _ = Describe("Rack enabled cluster webhook validation", func() {
 	var nsName types.NamespacedName
 
 	BeforeEach(func() {
-		nsName = uniqueNamespacedName("rack-enabled")
+		nsName = uniqueNamespacedName("rack-enabled-cluster")
 	})
 
 	AfterEach(func() {

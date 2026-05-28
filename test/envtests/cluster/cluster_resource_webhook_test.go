@@ -29,7 +29,7 @@ import (
 
 var _ = Describe("Cluster resource validation", func() {
 	const (
-		clusterName = "pod-resource-webhook-cluster"
+		clusterName = "pod-resource-cluster"
 	)
 
 	ctx := context.TODO()

@@ -35,7 +35,7 @@ import (
 
 const (
 	newRackRevision         = "v2"
-	rackRevisionClusterName = "rack-revision-webhook-cluster"
+	rackRevisionClusterName = "rack-revision-cluster"
 	threeCharClusterName    = "abc"
 )
 

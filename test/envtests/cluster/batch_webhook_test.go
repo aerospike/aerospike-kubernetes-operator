@@ -31,7 +31,7 @@ import (
 
 var _ = Describe("RollingUpdateBatchSize validation", func() {
 	const (
-		clusterName = "batch-deploy-webhook-cluster"
+		clusterName = "batch-cluster"
 	)
 
 	ctx := context.TODO()

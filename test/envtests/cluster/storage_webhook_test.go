@@ -38,7 +38,7 @@ var _ = Describe("Storage webhook validation", func() {
 	var nsName types.NamespacedName
 
 	BeforeEach(func() {
-		nsName = uniqueNamespacedName("storage-webhook")
+		nsName = uniqueNamespacedName("storage-cluster")
 	})
 
 	AfterEach(func() {
