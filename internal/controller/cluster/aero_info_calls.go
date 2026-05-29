@@ -277,7 +277,7 @@ func (r *SingleClusterReconciler) setMigrateFillDelay(
 ) common.ReconcileResult {
 	migrateFillDelay, err := asdbv1.GetMigrateFillDelay(asConfig)
 	if err != nil {
-		common.ReconcileError(err)
+		return common.ReconcileError(err)
 	}
 
 	var oldMigrateFillDelay int
@@ -285,7 +285,7 @@ func (r *SingleClusterReconciler) setMigrateFillDelay(
 	if len(r.aeroCluster.Status.RackConfig.Racks) > 0 {
 		oldMigrateFillDelay, err = asdbv1.GetMigrateFillDelay(&r.aeroCluster.Status.RackConfig.Racks[0].AerospikeConfig)
 		if err != nil {
-			common.ReconcileError(err)
+			return common.ReconcileError(err)
 		}
 	}
 
