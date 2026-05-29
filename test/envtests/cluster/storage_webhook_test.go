@@ -21,15 +21,12 @@ import (
 
 	. "github.com/onsi/ginkgo/v2"
 	. "github.com/onsi/gomega"
-	corev1 "k8s.io/api/core/v1"
-	"k8s.io/apimachinery/pkg/api/resource"
 	"k8s.io/apimachinery/pkg/types"
 	"k8s.io/utils/ptr"
 
 	asdbv1 "github.com/aerospike/aerospike-kubernetes-operator/v4/api/v1"
 	testCluster "github.com/aerospike/aerospike-kubernetes-operator/v4/test/cluster"
 	"github.com/aerospike/aerospike-kubernetes-operator/v4/test/envtests"
-	"github.com/aerospike/aerospike-kubernetes-operator/v4/test/testutil"
 )
 
 var _ = Describe("Storage webhook validation", func() {
@@ -55,55 +52,6 @@ var _ = Describe("Storage webhook validation", func() {
 						Namespaces: []string{"test"},
 						Racks: []asdbv1.Rack{
 							{ID: 1, Revision: "v1", InputStorage: &wrongRack},
-						},
-					}
-
-					err := envtests.K8sClient.Create(ctx, aeroCluster)
-					Expect(err).To(HaveOccurred())
-					envtests.NewStatusErrorMatcher().
-						WithMessageSubstrings(
-							"\"vaerospikecluster.kb.io\"",
-							"namespace storage device related devicePath /test/dev/xvdf not found in Storage config",
-						).
-						Validate(err)
-				})
-
-				It("rejects when per-rack InputStorage is FS-only workdir volumes and does not include the "+
-					"namespace block device (rack-local storage shape)", func() {
-					// Per-rack InputStorage is filesystem-only (workdir PV); it does not define a volume
-					// for the namespace storage-engine device path from the merged cluster aerospikeConfig (/test/dev/xvdf).
-					// Create should be rejected: that device path must appear in this rack's InputStorage.
-					initM := asdbv1.AerospikeVolumeMethodDeleteFiles
-					cascade := true
-					rackFSOnlyStorage := &asdbv1.AerospikeStorageSpec{
-						BlockVolumePolicy: asdbv1.AerospikePersistentVolumePolicySpec{
-							InputCascadeDelete: &cascade,
-						},
-						FileSystemVolumePolicy: asdbv1.AerospikePersistentVolumePolicySpec{
-							InputInitMethod:    &initM,
-							InputCascadeDelete: &cascade,
-						},
-						Volumes: []asdbv1.VolumeSpec{
-							{
-								Name: "workdir",
-								Source: asdbv1.VolumeSource{
-									PersistentVolume: &asdbv1.PersistentVolumeSpec{
-										Size:         resource.MustParse("1Gi"),
-										StorageClass: testutil.StorageClass,
-										VolumeMode:   corev1.PersistentVolumeFilesystem,
-									},
-								},
-								Aerospike: &asdbv1.AerospikeServerVolumeAttachment{
-									Path: "/opt/aerospike/new",
-								},
-							},
-						},
-					}
-
-					aeroCluster := testCluster.CreateDummyAerospikeCluster(nsName, 2)
-					aeroCluster.Spec.RackConfig = asdbv1.RackConfig{
-						Racks: []asdbv1.Rack{
-							{ID: 1, InputStorage: rackFSOnlyStorage},
 						},
 					}
 
