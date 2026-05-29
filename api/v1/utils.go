@@ -89,7 +89,7 @@ const (
 	AerospikeInitContainerNameTagEnvVar            = "AEROSPIKE_KUBERNETES_INIT_NAME_TAG"
 	AerospikeInitContainerDefaultRegistry          = "docker.io"
 	AerospikeInitContainerDefaultRegistryNamespace = "aerospike"
-	AerospikeInitContainerDefaultNameAndTag        = "aerospike-kubernetes-init:2.5.1"
+	AerospikeInitContainerDefaultNameAndTag        = "aerospike-kubernetes-init:2.5.2"
 	AerospikeAppLabel                              = "app"
 	AerospikeAppLabelValue                         = "aerospike-cluster"
 	AerospikeCustomResourceLabel                   = "aerospike.com/cr"
@@ -554,6 +554,34 @@ func DistributeItems(totalItems, totalGroups int32) []int32 {
 	}
 
 	return topology
+}
+
+// getAllNamespaceNames collects all unique plain namespace names across every
+// rack in the spec.
+func GetAllNamespaceNames(spec *AerospikeClusterSpec) sets.Set[string] {
+	nsNames := make(sets.Set[string])
+
+	for idx := range spec.RackConfig.Racks {
+		rack := &spec.RackConfig.Racks[idx]
+
+		nsList, ok := rack.AerospikeConfig.Value[ConfKeyNamespace].([]interface{})
+		if !ok {
+			continue
+		}
+
+		for _, nsInterface := range nsList {
+			ns, ok := nsInterface.(map[string]interface{})
+			if !ok {
+				continue
+			}
+
+			if name, ok := ns[ConfKeyName].(string); ok {
+				nsNames.Insert(name)
+			}
+		}
+	}
+
+	return nsNames
 }
 
 func GetAllPodNames(pods map[string]AerospikePodStatus) sets.Set[string] {

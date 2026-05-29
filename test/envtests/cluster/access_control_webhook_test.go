@@ -18,6 +18,7 @@ package cluster
 
 import (
 	"context"
+	"maps"
 	"strings"
 
 	. "github.com/onsi/ginkgo/v2"
@@ -59,6 +60,94 @@ func networkTLSConfigForTest() map[string]interface{} {
 			},
 		},
 	}
+}
+
+// networkTLSConfigCertOnlyForTest is like networkTLSConfigForTest but omits key-file (invalid).
+func networkTLSConfigCertOnlyForTest() map[string]interface{} {
+	cfg := networkTLSConfigForTest()
+	tlsList := cfg["tls"].([]interface{})
+	first := maps.Clone(tlsList[0].(map[string]interface{}))
+	delete(first, "key-file")
+	cfg["tls"] = []interface{}{first}
+
+	return cfg
+}
+
+// networkTLSConfigKeyOnlyForTest is like networkTLSConfigForTest but omits cert-file (invalid).
+func networkTLSConfigKeyOnlyForTest() map[string]interface{} {
+	cfg := networkTLSConfigForTest()
+	tlsList := cfg["tls"].([]interface{})
+	first := maps.Clone(tlsList[0].(map[string]interface{}))
+	delete(first, "cert-file")
+	cfg["tls"] = []interface{}{first}
+
+	return cfg
+}
+
+// networkTLSConfigSecondTLSEntryCertOnlyForTest appends a second tls stanza missing key-file (invalid).
+func networkTLSConfigSecondTLSEntryCertOnlyForTest() map[string]interface{} {
+	cfg := networkTLSConfigForTest()
+	tlsList := cfg["tls"].([]interface{})
+	first := maps.Clone(tlsList[0].(map[string]interface{}))
+	second := map[string]interface{}{
+		"name":      "aerospike-a-0.test-runner-secondary",
+		"cert-file": "/etc/aerospike/secret/svc_cluster_chain.pem",
+		"ca-file":   "/etc/aerospike/secret/cacert.pem",
+	}
+	cfg["tls"] = []interface{}{first, second}
+
+	return cfg
+}
+
+// networkTLSConfigSecondTLSEntryKeyOnlyForTest appends a second tls stanza missing cert-file (invalid).
+func networkTLSConfigSecondTLSEntryKeyOnlyForTest() map[string]interface{} {
+	cfg := networkTLSConfigForTest()
+	tlsList := cfg["tls"].([]interface{})
+	first := maps.Clone(tlsList[0].(map[string]interface{}))
+	second := map[string]interface{}{
+		"name":     "aerospike-a-0.test-runner-secondary",
+		"key-file": "/etc/aerospike/secret/svc_key.pem",
+		"ca-file":  "/etc/aerospike/secret/cacert.pem",
+	}
+	cfg["tls"] = []interface{}{first, second}
+
+	return cfg
+}
+
+// networkTLSConfigSecondTLSEntryCAFileOnly appends a second tls stanza with only ca-file (no cert-file/key-file).
+func networkTLSConfigSecondTLSEntryCAFileOnly() map[string]interface{} {
+	cfg := networkTLSConfigForTest()
+	tlsList := cfg["tls"].([]interface{})
+	first := maps.Clone(tlsList[0].(map[string]interface{}))
+	second := map[string]interface{}{
+		"name":    "aerospike-a-0.test-runner-secondary",
+		"ca-file": "/etc/aerospike/secret/cacert.pem",
+	}
+	cfg["tls"] = []interface{}{first, second}
+
+	return cfg
+}
+
+// networkTLSConfigSecondTLSEntryCAPathOnly appends a second tls stanza with only ca-path (no cert-file/key-file).
+func networkTLSConfigSecondTLSEntryCAPathOnly() map[string]interface{} {
+	cfg := networkTLSConfigForTest()
+	tlsList := cfg["tls"].([]interface{})
+	first := maps.Clone(tlsList[0].(map[string]interface{}))
+	second := map[string]interface{}{
+		"name":    "aerospike-a-0.test-runner-secondary",
+		"ca-path": "/etc/aerospike/secret/cacerts",
+	}
+	cfg["tls"] = []interface{}{first, second}
+
+	return cfg
+}
+
+// tlsCertKeyParityWebhookSubstrings matches admission errors for pkg/validation cert-file/key-file parity (KO-537).
+var tlsCertKeyParityWebhookSubstrings = []string{
+	"\"vaerospikecluster.kb.io\"",
+	"must be set together in tlsConf",
+	"cert-file",
+	"key-file",
 }
 
 func adminOperatorCertForTest() *asdbv1.AerospikeOperatorClientCertSpec {
@@ -228,6 +317,56 @@ var _ = Describe("AerospikeCluster access control validation (envtests)", func()
 				It("allows deploy with valid roles and users", func() {
 					aeroCluster := testCluster.CreateDummyAerospikeCluster(clusterNamespacedName, 2)
 					aeroCluster.Spec.AerospikeAccessControl = validAccessControlForDeployPositive()
+
+					err := envtests.K8sClient.Create(ctx, aeroCluster)
+					Expect(err).ToNot(HaveOccurred())
+				})
+
+				It("allows privilege scoped to a rack-only in-memory namespace", func() {
+					aeroCluster := testCluster.CreateDummyAerospikeCluster(clusterNamespacedName, 2)
+					// Rack 2 adds an extra in-memory namespace "ccff" via InputAerospikeConfig.
+					// The merge logic appends it to the global "test" namespace list, so
+					// rack 2's effective config ends up with both "test" and "ccff".
+					aeroCluster.Spec.RackConfig.Racks = []asdbv1.Rack{
+						{ID: 1},
+						{
+							ID: 2,
+							InputAerospikeConfig: &asdbv1.AerospikeConfigSpec{
+								Value: map[string]interface{}{
+									asdbv1.ConfKeyNamespace: []interface{}{
+										map[string]interface{}{
+											"name":               "ccff",
+											"replication-factor": 1,
+											asdbv1.ConfKeyStorageEngine: map[string]interface{}{
+												"type":      "memory",
+												"data-size": 1073741824,
+											},
+										},
+									},
+								},
+							},
+						},
+					}
+					aeroCluster.Spec.AerospikeAccessControl = &asdbv1.AerospikeAccessControlSpec{
+						Roles: []asdbv1.AerospikeRoleSpec{
+							{
+								Name:       "rack-ns-reader",
+								Privileges: []string{"read.ccff"},
+							},
+						},
+						Users: []asdbv1.AerospikeUserSpec{
+							{
+								Name:       "admin",
+								SecretName: test.AuthSecretName,
+								Roles:      []string{"sys-admin", "user-admin"},
+							},
+							{
+								Name:       "user",
+								SecretName: test.AuthSecretName,
+								Roles:      []string{"rack-ns-reader"},
+							},
+						},
+					}
 
 					err := envtests.K8sClient.Create(ctx, aeroCluster)
 					Expect(err).ToNot(HaveOccurred())
@@ -497,6 +636,37 @@ var _ = Describe("AerospikeCluster access control validation (envtests)", func()
 					}
 
 					expectDeployFailsACWebhook(ctx, aeroCluster, "missingNs", "not configured", testutil.WebhookErrorPrefix)
+				})
+
+				It("fails when privilege references a namespace absent from all rack effective configs", func() {
+					aeroCluster := testCluster.CreateDummyAerospikeCluster(clusterNamespacedName, 2)
+					// Two explicit racks; neither introduces "ghostNs".
+					aeroCluster.Spec.RackConfig.Racks = []asdbv1.Rack{
+						{ID: 1},
+						{ID: 2},
+					}
+					aeroCluster.Spec.AerospikeAccessControl = &asdbv1.AerospikeAccessControlSpec{
+						Roles: []asdbv1.AerospikeRoleSpec{
+							{
+								Name:       "profiler",
+								Privileges: []string{"read.ghostNs"},
+							},
+						},
+						Users: []asdbv1.AerospikeUserSpec{
+							{
+								Name:       "admin",
+								SecretName: test.AuthSecretName,
+								Roles:      []string{"sys-admin", "user-admin"},
+							},
+							{
+								Name:       "u1",
+								SecretName: test.AuthSecretName,
+								Roles:      []string{"profiler"},
+							},
+						},
+					}
+
+					expectDeployFailsACWebhook(ctx, aeroCluster, "ghostNs", "not configured")
 				})
 
 				It("fails when namespace-scoped privilege has an empty set name", func() {
@@ -875,12 +1045,103 @@ var _ = Describe("AerospikeCluster access control validation (envtests)", func()
 				})
 			})
 		})
+
+		Context("spec.aerospikeConfig.network.tls", func() {
+			Context("negative", func() {
+				It("rejects Create when tls entry has cert-file without key-file", func() {
+					aeroCluster := testCluster.CreateBasicTLSCluster(clusterNamespacedName, 2)
+					aeroCluster.Spec.AerospikeConfig.Value[asdbv1.ConfKeyNetwork] = networkTLSConfigCertOnlyForTest()
+
+					err := envtests.K8sClient.Create(ctx, aeroCluster)
+					Expect(err).To(HaveOccurred())
+					envtests.NewStatusErrorMatcher().
+						WithMessageSubstrings(tlsCertKeyParityWebhookSubstrings...).
+						Validate(err)
+				})
+
+				It("rejects Create when tls entry has key-file without cert-file", func() {
+					aeroCluster := testCluster.CreateBasicTLSCluster(clusterNamespacedName, 2)
+					aeroCluster.Spec.AerospikeConfig.Value[asdbv1.ConfKeyNetwork] = networkTLSConfigKeyOnlyForTest()
+
+					err := envtests.K8sClient.Create(ctx, aeroCluster)
+					Expect(err).To(HaveOccurred())
+					envtests.NewStatusErrorMatcher().
+						WithMessageSubstrings(tlsCertKeyParityWebhookSubstrings...).
+						Validate(err)
+				})
+
+				It("rejects Create when first tls entry is valid and second has cert-file without key-file", func() {
+					aeroCluster := testCluster.CreateBasicTLSCluster(clusterNamespacedName, 2)
+					aeroCluster.Spec.AerospikeConfig.Value[asdbv1.ConfKeyNetwork] = networkTLSConfigSecondTLSEntryCertOnlyForTest()
+
+					err := envtests.K8sClient.Create(ctx, aeroCluster)
+					Expect(err).To(HaveOccurred())
+					envtests.NewStatusErrorMatcher().
+						WithMessageSubstrings(tlsCertKeyParityWebhookSubstrings...).
+						Validate(err)
+				})
+
+				It("rejects Create when first tls entry is valid and second has key-file without cert-file", func() {
+					aeroCluster := testCluster.CreateBasicTLSCluster(clusterNamespacedName, 2)
+					aeroCluster.Spec.AerospikeConfig.Value[asdbv1.ConfKeyNetwork] = networkTLSConfigSecondTLSEntryKeyOnlyForTest()
+
+					err := envtests.K8sClient.Create(ctx, aeroCluster)
+					Expect(err).To(HaveOccurred())
+					envtests.NewStatusErrorMatcher().
+						WithMessageSubstrings(tlsCertKeyParityWebhookSubstrings...).
+						Validate(err)
+				})
+			})
+
+			Context("positive", func() {
+				It("allows Create when first tls entry is valid and second has only ca-file", func() {
+					aeroCluster := testCluster.CreateBasicTLSCluster(clusterNamespacedName, 2)
+					aeroCluster.Spec.AerospikeConfig.Value[asdbv1.ConfKeyNetwork] = networkTLSConfigSecondTLSEntryCAFileOnly()
+
+					err := envtests.K8sClient.Create(ctx, aeroCluster)
+					Expect(err).ToNot(HaveOccurred())
+				})
+
+				It("allows Create when first tls entry is valid and second has only ca-path", func() {
+					aeroCluster := testCluster.CreateBasicTLSCluster(clusterNamespacedName, 2)
+					aeroCluster.Spec.AerospikeConfig.Value[asdbv1.ConfKeyNetwork] = networkTLSConfigSecondTLSEntryCAPathOnly()
+
+					err := envtests.K8sClient.Create(ctx, aeroCluster)
+					Expect(err).ToNot(HaveOccurred())
+				})
+			})
+		})
 	})
 
 	Context("Update validation", func() {
 		AfterEach(func() {
 			deleteCluster(ctx, clusterNamespacedName)
 		})
+
+		Context("spec.aerospikeConfig.network.tls", func() {
+			Context("negative", func() {
+				DescribeTable("rejects Update when tls entry violates cert-file and key-file parity",
+					func(invalidNetwork map[string]interface{}) {
+						aeroCluster := testCluster.CreateBasicTLSCluster(clusterNamespacedName, 2)
+						Expect(envtests.K8sClient.Create(ctx, aeroCluster)).To(Succeed())
+
+						toBreak, err := testCluster.GetCluster(envtests.K8sClient, ctx, clusterNamespacedName)
+						Expect(err).ToNot(HaveOccurred())
+
+						toBreak.Spec.AerospikeConfig.Value[asdbv1.ConfKeyNetwork] = invalidNetwork
+
+						err = envtests.K8sClient.Update(ctx, toBreak)
+						Expect(err).To(HaveOccurred())
+						envtests.NewStatusErrorMatcher().
+							WithMessageSubstrings(tlsCertKeyParityWebhookSubstrings...).
+							Validate(err)
+					},
+					Entry("cert-file without key-file", networkTLSConfigCertOnlyForTest()),
+					Entry("key-file without cert-file", networkTLSConfigKeyOnlyForTest()),
+				)
+			})
+		})
+
 		Context("spec.aerospikeAccessControl (users)", func() {
 			Context("negative", func() {
 				It("fails when user authMode is changed from PKI to Internal", func() {

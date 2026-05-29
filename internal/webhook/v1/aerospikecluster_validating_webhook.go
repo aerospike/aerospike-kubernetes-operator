@@ -1385,28 +1385,37 @@ func validateNamespaceConfig(
 		nsConf := nsConfInterface.(map[string]interface{})
 
 		if nsStorage, ok := nsConf["storage-engine"]; ok {
-			if validation.IsInMemoryNamespace(nsConf) {
-				// storage-engine memory
-				continue
-			}
-
-			if !validation.IsDeviceOrPmemNamespace(nsConf) {
+			if !validation.IsInMemoryNamespace(nsConf) && !validation.IsDeviceOrPmemNamespace(nsConf) {
 				return fmt.Errorf(
 					"storage-engine not supported for namespace %v", nsConf,
 				)
 			}
 
 			if devices, ok := nsStorage.(map[string]interface{})["devices"]; ok {
-				for _, device := range devices.([]interface{}) {
-					device = strings.TrimSpace(device.(string))
+				deviceSlice, ok := devices.([]interface{})
+				if !ok {
+					return fmt.Errorf(
+						"namespace storage devices must be a list, got %T", devices,
+					)
+				}
 
-					dList := strings.Fields(device.(string))
-					for _, dev := range dList {
+				for _, device := range deviceSlice {
+					dev, ok := device.(string)
+					if !ok {
+						return fmt.Errorf(
+							"namespace storage device must be a string, got %T", device,
+						)
+					}
+
+					dev = strings.TrimSpace(dev)
+
+					dList := strings.Fields(dev)
+					for _, d := range dList {
 						// Namespace device should be present in BlockStorage config section
-						if !utils.ContainsString(blockStorageDeviceList, dev) {
+						if !utils.ContainsString(blockStorageDeviceList, d) {
 							return fmt.Errorf(
 								"namespace storage device related devicePath %v not found in Storage config %v",
-								dev, storage,
+								d, storage,
 							)
 						}
 					}
@@ -1414,12 +1423,26 @@ func validateNamespaceConfig(
 			}
 
 			if files, ok := nsStorage.(map[string]interface{})["files"]; ok {
-				for _, file := range files.([]interface{}) {
-					file = strings.TrimSpace(file.(string))
+				fileSlice, ok := files.([]interface{})
+				if !ok {
+					return fmt.Errorf(
+						"namespace storage files must be a list, got %T", files,
+					)
+				}
 
-					fList := strings.Fields(file.(string))
-					for _, f := range fList {
-						dirPath := filepath.Dir(f)
+				for _, file := range fileSlice {
+					f, ok := file.(string)
+					if !ok {
+						return fmt.Errorf(
+							"namespace storage file must be a string, got %T", file,
+						)
+					}
+
+					f = strings.TrimSpace(f)
+
+					fList := strings.Fields(f)
+					for _, fp := range fList {
+						dirPath := filepath.Dir(fp)
 						if !isFileStorageConfiguredForDir(
 							fileStorageList, dirPath,
 						) {
@@ -1526,8 +1549,21 @@ func validateStorageEngineDeviceListUpdate(nsConfList, statusNsConfList []interf
 		storage := nsConf[asdbv1.ConfKeyStorageEngine].(map[string]interface{})
 
 		if devices, ok := storage["devices"]; ok {
-			for _, d := range devices.([]interface{}) {
-				device := d.(string)
+			deviceSlice, ok := devices.([]interface{})
+			if !ok {
+				return fmt.Errorf(
+					"namespace %s storage devices must be a list, got %T", namespace, devices,
+				)
+			}
+
+			for _, d := range deviceSlice {
+				device, ok := d.(string)
+				if !ok {
+					return fmt.Errorf(
+						"namespace %s storage device must be a string, got %T", namespace, d,
+					)
+				}
+
 				if deviceList[device] != "" && deviceList[device] != namespace {
 					return fmt.Errorf(
 						"device %s can not be removed and re-used in a different namespace at the same time. "+
@@ -1539,8 +1575,21 @@ func validateStorageEngineDeviceListUpdate(nsConfList, statusNsConfList []interf
 		}
 
 		if files, ok := storage["files"]; ok {
-			for _, d := range files.([]interface{}) {
-				file := d.(string)
+			fileSlice, ok := files.([]interface{})
+			if !ok {
+				return fmt.Errorf(
+					"namespace %s storage files must be a list, got %T", namespace, files,
+				)
+			}
+
+			for _, d := range fileSlice {
+				file, ok := d.(string)
+				if !ok {
+					return fmt.Errorf(
+						"namespace %s storage file must be a string, got %T", namespace, d,
+					)
+				}
+
 				if fileList[file] != "" && fileList[file] != namespace {
 					return fmt.Errorf(
 						"file %s can not be removed and re-used in a different namespace at the same time. "+
