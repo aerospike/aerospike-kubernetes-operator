@@ -749,8 +749,8 @@ func (in *AerospikeStorageSpec) DeepCopyInto(out *AerospikeStorageSpec) {
 		*out = new(bool)
 		**out = **in
 	}
-	if in.DeleteLocalStorageOnPodFailureRecovery != nil {
-		in, out := &in.DeleteLocalStorageOnPodFailureRecovery, &out.DeleteLocalStorageOnPodFailureRecovery
+	if in.DeleteLocalStorageOnPodRecovery != nil {
+		in, out := &in.DeleteLocalStorageOnPodRecovery, &out.DeleteLocalStorageOnPodRecovery
 		*out = new(bool)
 		**out = **in
 	}

@@ -19,6 +19,7 @@ package cluster
 import (
 	"context"
 
+	"github.com/aerospike/aerospike-kubernetes-operator/v4/test/testutil"
 	. "github.com/onsi/ginkgo/v2"
 	. "github.com/onsi/gomega"
 	"k8s.io/apimachinery/pkg/types"
@@ -106,6 +107,47 @@ var _ = Describe("Storage webhook validation", func() {
 							{ID: 1, Revision: "v1", InputStorage: &fullRack},
 						},
 					}
+
+					Expect(envtests.K8sClient.Create(ctx, aeroCluster)).To(Succeed())
+				})
+			})
+		})
+
+		Context("spec.storage deleteLocalStorageOnPodFailureRecovery validation", func() {
+			Context("negative", func() {
+				It("rejects deploy when deleteLocalStorageOnPodFailureRecovery is true "+
+					"but localStorageClasses is empty", func() {
+					aeroCluster := testCluster.CreateDummyAerospikeCluster(nsName, 2)
+					aeroCluster.Spec.Storage.DeleteLocalStorageOnPodRecovery = ptr.To(true)
+					aeroCluster.Spec.Storage.LocalStorageClasses = nil
+
+					err := envtests.K8sClient.Create(ctx, aeroCluster)
+					Expect(err).To(HaveOccurred())
+
+					envtests.NewStatusErrorMatcher().
+						WithMessageSubstrings(
+							"\"vaerospikecluster.kb.io\"",
+							"localStorageClasses cannot be empty if deleteLocalStorageOnPodFailureRecovery is set",
+						).
+						Validate(err)
+				})
+			})
+
+			Context("positive", func() {
+				It("allows deploy when deleteLocalStorageOnPodFailureRecovery is true "+
+					"and localStorageClasses is set", func() {
+					aeroCluster := testCluster.CreateDummyAerospikeCluster(nsName, 2)
+					aeroCluster.Spec.Storage.DeleteLocalStorageOnPodRecovery = ptr.To(true)
+					aeroCluster.Spec.Storage.LocalStorageClasses = []string{testutil.StorageClass}
+
+					Expect(envtests.K8sClient.Create(ctx, aeroCluster)).To(Succeed())
+				})
+
+				It("allows deploy when deleteLocalStorageOnPodFailureRecovery is false "+
+					"without localStorageClasses", func() {
+					aeroCluster := testCluster.CreateDummyAerospikeCluster(nsName, 2)
+					aeroCluster.Spec.Storage.DeleteLocalStorageOnPodRecovery = ptr.To(false)
+					// no localStorageClasses required when the flag is false
 
 					Expect(envtests.K8sClient.Create(ctx, aeroCluster)).To(Succeed())
 				})
@@ -279,6 +321,50 @@ var _ = Describe("Storage webhook validation", func() {
 					for i := range current.Spec.RackConfig.Racks {
 						current.Spec.RackConfig.Racks[i].InputStorage = nil
 					}
+
+					Expect(envtests.K8sClient.Update(ctx, current)).To(Succeed())
+				})
+			})
+		})
+
+		Context("spec.storage deleteLocalStorageOnPodFailureRecovery validation", func() {
+			Context("negative", func() {
+				It("rejects update that enables deleteLocalStorageOnPodFailureRecovery "+
+					"without localStorageClasses", func() {
+					aeroCluster := testCluster.CreateDummyAerospikeCluster(nsName, 2)
+					Expect(envtests.K8sClient.Create(ctx, aeroCluster)).To(Succeed())
+
+					current, err := testCluster.GetCluster(envtests.K8sClient, ctx, nsName)
+					Expect(err).ToNot(HaveOccurred())
+
+					current.Spec.Storage.DeleteLocalStorageOnPodRecovery = ptr.To(true)
+					aeroCluster.Spec.Storage.LocalStorageClasses = nil
+
+					err = envtests.K8sClient.Update(ctx, current)
+					Expect(err).To(HaveOccurred())
+
+					envtests.NewStatusErrorMatcher().
+						WithMessageSubstrings(
+							"\"vaerospikecluster.kb.io\"",
+							"localStorageClasses cannot be empty if deleteLocalStorageOnPodFailureRecovery is set",
+						).
+						Validate(err)
+				})
+			})
+
+			Context("positive", func() {
+				It("allows disabling deleteLocalStorageOnPodFailureRecovery via update"+
+					" without localStorageClasses", func() {
+					aeroCluster := testCluster.CreateDummyAerospikeCluster(nsName, 2)
+					aeroCluster.Spec.Storage.DeleteLocalStorageOnPodRecovery = ptr.To(true)
+					aeroCluster.Spec.Storage.LocalStorageClasses = []string{testutil.StorageClass}
+					Expect(envtests.K8sClient.Create(ctx, aeroCluster)).To(Succeed())
+
+					current, err := testCluster.GetCluster(envtests.K8sClient, ctx, nsName)
+					Expect(err).ToNot(HaveOccurred())
+
+					current.Spec.Storage.DeleteLocalStorageOnPodRecovery = ptr.To(false)
+					current.Spec.Storage.LocalStorageClasses = nil
 
 					Expect(envtests.K8sClient.Update(ctx, current)).To(Succeed())
 				})

@@ -774,7 +774,7 @@ func (r *SingleClusterReconciler) isLocalPVCDeletionRequired(
 		// crash, container runtime error, etc.). The local disk data is almost certainly intact.
 		// Do not delete local PVCs unless the user has explicitly opted in via deleteLocalStorageOnPodFailure,
 		// regardless of the eviction-blocked annotation, node block-list, or deleteLocalStorageOnRestart.
-		if asdbv1.GetBool(rackState.Rack.Storage.DeleteLocalStorageOnPodFailureRecovery) {
+		if asdbv1.GetBool(rackState.Rack.Storage.DeleteLocalStorageOnPodRecovery) {
 			r.Log.Info("deleteLocalStorageOnPodFailure is enabled, deleting local PVCs for failed pod",
 				"podName", pod.Name)
 
@@ -1071,7 +1071,9 @@ func (r *SingleClusterReconciler) getIgnorablePods(
 			return nil, err
 		}
 
-		var failedPod, pendingPod []string
+		var oldRevisionFailed, currentRevisionFailed, failedPod, pendingPod []string
+
+		currentRevision := rackState.Rack.Revision
 
 		for podIdx := range podList.Items {
 			pod := &podList.Items[podIdx]
@@ -1082,12 +1084,25 @@ func (r *SingleClusterReconciler) getIgnorablePods(
 					continue
 				}
 
-				failedPod = append(failedPod, pod.Name)
+				// Old-revision pods belong to an STS that is being replaced and cannot
+				// recover on their own. Prioritise them so they always consume the
+				// maxIgnorablePods budget first, leaving leftover capacity for
+				// current-revision pods which may still recover.
+				if pod.Labels[asdbv1.AerospikeRackRevisionLabel] != currentRevision {
+					oldRevisionFailed = append(oldRevisionFailed, pod.Name)
+				} else {
+					currentRevisionFailed = append(currentRevisionFailed, pod.Name)
+				}
 			}
 		}
 
-		// prepend pendingPod to failedPod
-		failedPod = append(pendingPod, failedPod...)
+		// Budget priority order:
+		// 1. Pending (unschedulable) — least likely to recover on their own
+		// 2. Old-revision failed — STS is being replaced, recovery is impossible
+		// 3. Current-revision failed — may recover; use remaining budget only
+		failedPod = append(failedPod, pendingPod...)
+		failedPod = append(failedPod, oldRevisionFailed...)
+		failedPod = append(failedPod, currentRevisionFailed...)
 
 		for podIdx := range failedPod {
 			if failedAllowed <= 0 {
