@@ -6475,9 +6475,9 @@ spec:
                               description: CleanupThreads contains the maximum number
                                 of cleanup threads(dd or blkdiscard) per init container.
                               type: integer
-                            deleteLocalStorageOnPodFailureRecovery:
+                            deleteLocalStorageOnPodRecovery:
                               description: |-
-                                DeleteLocalStorageOnPodFailureRecovery enables the deletion of local storage PVCs when AKO recovers a failed pod.
+                                DeleteLocalStorageOnPodRecovery enables the deletion of local storage PVCs when AKO recovers a failed pod.
                                 Defaults to false.
                                 WARNING: enabling this will cause permanent data loss for local volumes on the failed pod.
                                 Only enable this when the data on the local disk is known to be corrupted or unrecoverable.
@@ -8119,9 +8119,9 @@ spec:
                               description: CleanupThreads contains the maximum number
                                 of cleanup threads(dd or blkdiscard) per init container.
                               type: integer
-                            deleteLocalStorageOnPodFailureRecovery:
+                            deleteLocalStorageOnPodRecovery:
                               description: |-
-                                DeleteLocalStorageOnPodFailureRecovery enables the deletion of local storage PVCs when AKO recovers a failed pod.
+                                DeleteLocalStorageOnPodRecovery enables the deletion of local storage PVCs when AKO recovers a failed pod.
                                 Defaults to false.
                                 WARNING: enabling this will cause permanent data loss for local volumes on the failed pod.
                                 Only enable this when the data on the local disk is known to be corrupted or unrecoverable.
@@ -8830,9 +8830,9 @@ spec:
                     description: CleanupThreads contains the maximum number of cleanup
                       threads(dd or blkdiscard) per init container.
                     type: integer
-                  deleteLocalStorageOnPodFailureRecovery:
+                  deleteLocalStorageOnPodRecovery:
                     description: |-
-                      DeleteLocalStorageOnPodFailureRecovery enables the deletion of local storage PVCs when AKO recovers a failed pod.
+                      DeleteLocalStorageOnPodRecovery enables the deletion of local storage PVCs when AKO recovers a failed pod.
                       Defaults to false.
                       WARNING: enabling this will cause permanent data loss for local volumes on the failed pod.
                       Only enable this when the data on the local disk is known to be corrupted or unrecoverable.
@@ -16005,9 +16005,9 @@ spec:
                               description: CleanupThreads contains the maximum number
                                 of cleanup threads(dd or blkdiscard) per init container.
                               type: integer
-                            deleteLocalStorageOnPodFailureRecovery:
+                            deleteLocalStorageOnPodRecovery:
                               description: |-
-                                DeleteLocalStorageOnPodFailureRecovery enables the deletion of local storage PVCs when AKO recovers a failed pod.
+                                DeleteLocalStorageOnPodRecovery enables the deletion of local storage PVCs when AKO recovers a failed pod.
                                 Defaults to false.
                                 WARNING: enabling this will cause permanent data loss for local volumes on the failed pod.
                                 Only enable this when the data on the local disk is known to be corrupted or unrecoverable.
@@ -17649,9 +17649,9 @@ spec:
                               description: CleanupThreads contains the maximum number
                                 of cleanup threads(dd or blkdiscard) per init container.
                               type: integer
-                            deleteLocalStorageOnPodFailureRecovery:
+                            deleteLocalStorageOnPodRecovery:
                               description: |-
-                                DeleteLocalStorageOnPodFailureRecovery enables the deletion of local storage PVCs when AKO recovers a failed pod.
+                                DeleteLocalStorageOnPodRecovery enables the deletion of local storage PVCs when AKO recovers a failed pod.
                                 Defaults to false.
                                 WARNING: enabling this will cause permanent data loss for local volumes on the failed pod.
                                 Only enable this when the data on the local disk is known to be corrupted or unrecoverable.
@@ -18427,9 +18427,9 @@ spec:
                     description: CleanupThreads contains the maximum number of cleanup
                       threads(dd or blkdiscard) per init container.
                     type: integer
-                  deleteLocalStorageOnPodFailureRecovery:
+                  deleteLocalStorageOnPodRecovery:
                     description: |-
-                      DeleteLocalStorageOnPodFailureRecovery enables the deletion of local storage PVCs when AKO recovers a failed pod.
+                      DeleteLocalStorageOnPodRecovery enables the deletion of local storage PVCs when AKO recovers a failed pod.
                       Defaults to false.
                       WARNING: enabling this will cause permanent data loss for local volumes on the failed pod.
                       Only enable this when the data on the local disk is known to be corrupted or unrecoverable.

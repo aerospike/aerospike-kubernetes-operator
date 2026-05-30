@@ -250,6 +250,12 @@ func validateStorage(
 		)
 	}
 
+	if asdbv1.GetBool(storage.DeleteLocalStorageOnPodRecovery) && len(storage.LocalStorageClasses) == 0 {
+		return warnings, fmt.Errorf(
+			"localStorageClasses cannot be empty if deleteLocalStorageOnPodFailureRecovery is set",
+		)
+	}
+
 	reservedPaths := map[string]int{
 		// Reserved mount paths for the operator.
 		"/etc/aerospike": 1,
