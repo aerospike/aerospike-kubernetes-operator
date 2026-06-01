@@ -15,6 +15,7 @@ package cluster
 
 import (
 	"context"
+	stder
 	"fmt"
 	"time"
 
@@ -34,25 +35,35 @@ import (
 // Aerospike helper
 // ------------------------------------------------------------------------------------
 
-// waitForMultipleNodesSafeStopReady waits until the input pods are safe to stop,
-// skipping pods that are not running and present in ignorablePodNames for stability check.
-// The ignorablePodNames is the list of failed or pending pods that are either::
-// 1. going to be deleted eventually and are safe to ignore in stability checks
-// 2. given in ignorePodList by the user and are safe to ignore in stability checks
+// waitForMultipleNodesSafeStopReady waits until the input pods are safe to stop.
+// ignorablePods.ServerFailedPodNames are pods whose Aerospike server is unreachable and are
+// skipped for cluster-operation queries (host connections, roster, quiesce).
+// ignorablePods.SidecarFailedPodNames are pods whose server is running but whose sidecar
+// is failing; they are included in all cluster-operation calls since their servers are reachable.
 func (r *SingleClusterReconciler) waitForMultipleNodesSafeStopReady(
-	pods []*corev1.Pod, ignorablePodNames sets.Set[string],
+	pods []*corev1.Pod, ignorablePods IgnorablePods,
 ) common.ReconcileResult {
 	if len(pods) == 0 {
 		return common.ReconcileSuccess()
 	}
 
-	// Remove a node only if the cluster is stable
-	if err := r.waitForAllSTSToBeReady(ignorablePodNames); err != nil {
-		return common.ReconcileError(fmt.Errorf("failed to wait for cluster to be ready: %v", err))
+	// Only require the Aerospike server container to be Running on each pod —
+	// sidecar-failed pods still have reachable servers and must not block
+	// scale-down. Server-failed pods (ignorablePods.ServerFailedPodNames) are
+	// skipped because they have no running server to query.
+	if err := r.waitForAllAerospikeServersRunning(ignorablePods); err != nil {
+		if stderrors.Is(err, ErrPodFailed) {
+			return common.ReconcileError(fmt.Errorf("failed to wait for cluster server containers to be running: %v", err))
+		}
+
+		return common.ReconcileRequeueAfter(1)
 	}
 
+	// For cluster-operation calls (host connections, migration, quiesce, roster) we
+	// only skip server-failed pods. Sidecar-failed pods have a running Aerospike server
+	// that must participate in these checks (plan items 3 and 5).
 	// This doesn't make actual connection, only objects having connection info are created
-	allHostConns, err := r.newAllHostConnWithOption(ignorablePodNames)
+	allHostConns, err := r.newAllHostConnWithOption(ignorablePods.ServerFailedPodNames)
 	if err != nil {
 		return common.ReconcileError(fmt.Errorf("failed to get hostConn for aerospike cluster nodes: %v", err))
 	}
@@ -70,12 +81,12 @@ func (r *SingleClusterReconciler) waitForMultipleNodesSafeStopReady(
 	}
 
 	// Setup roster after migration.
-	if err = r.getAndSetRoster(policy, r.aeroCluster.Spec.RosterNodeBlockList, ignorablePodNames); err != nil {
+	if err = r.getAndSetRoster(policy, r.aeroCluster.Spec.RosterNodeBlockList, ignorablePods.ServerFailedPodNames); err != nil {
 		r.Log.Error(err, "Failed to set roster for cluster")
 		return common.ReconcileRequeueAfter(1)
 	}
 
-	if err := r.quiescePods(policy, allHostConns, pods, ignorablePodNames); err != nil {
+	if err := r.quiescePods(policy, allHostConns, pods, ignorablePods.ServerFailedPodNames); err != nil {
 		return common.ReconcileError(err)
 	}
 
@@ -224,18 +235,20 @@ func (r *SingleClusterReconciler) newPodsHostConnWithOption(pods []corev1.Pod, i
 			continue
 		}
 
-		// Checking if all the container in the pod are ready or not
-		if !utils.IsPodRunningAndReady(pod) {
+		// Only the Aerospike server container needs to be running to accept info calls.
+		// Sidecar failures do not prevent the server from being reachable, so we only
+		// skip / error when the server container itself is not yet running.
+		if !utils.IsAerospikeServerRunning(pod) {
 			if ignorablePodNames.Has(pod.Name) {
-				// This pod is not running and ignorable.
+				// This pod's server is not running and it is marked ignorable.
 				r.Log.Info(
-					"Ignoring info call on non-running pod ", "pod", pod.Name,
+					"Ignoring info call on pod with non-running server container", "pod", pod.Name,
 				)
 
 				continue
 			}
 
-			return nil, fmt.Errorf("pod %v is not ready", pod.Name)
+			return nil, fmt.Errorf("pod %v server container is not running", pod.Name)
 		}
 
 		asConn := r.newAsConn(pod)

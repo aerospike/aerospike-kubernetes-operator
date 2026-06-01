@@ -173,16 +173,21 @@ func (r *SingleClusterReconciler) Reconcile() (result ctrl.Result, recErr error)
 		return reconcile.Result{}, recErr
 	}
 
-	ignorablePodNames, err := r.getIgnorablePods(nil, getConfiguredRackStateList(r.aeroCluster), nil)
+	ignorablePods, err := r.getIgnorablePods(nil, getConfiguredRackStateList(r.aeroCluster), nil)
 	if err != nil {
 		r.Log.Error(err, "Failed to determine pods to be ignored")
 
 		return reconcile.Result{}, err
 	}
 
+	// For info calls, host connections, ACL, migrate-fill-delay, and roster we
+	// only skip server-failed pods. Sidecar-failed pods have a running Aerospike
+	// server so they are reachable and must participate in those operations.
+	serverIgnorablePodNames := ignorablePods.ServerFailedPodNames
+
 	// Check if there is any node with quiesce status. We need to undo that
 	// It may have been left from previous steps
-	allHostConns, err := r.newAllHostConnWithOption(ignorablePodNames)
+	allHostConns, err := r.newAllHostConnWithOption(serverIgnorablePodNames)
 	if err != nil {
 		e := fmt.Errorf(
 			"failed to get hostConn for aerospike cluster nodes: %v", err,
@@ -206,7 +211,7 @@ func (r *SingleClusterReconciler) Reconcile() (result ctrl.Result, recErr error)
 
 	// Setup access control.
 	// Assuming all pods must be security enabled or disabled.
-	if err = r.validateAndReconcileAccessControl(nil, ignorablePodNames); err != nil {
+	if err = r.validateAndReconcileAccessControl(nil, serverIgnorablePodNames); err != nil {
 		r.Log.Error(err, "Failed to Reconcile access control")
 		r.Recorder.Eventf(
 			r.aeroCluster, corev1.EventTypeWarning, "ACLUpdateFailed",
@@ -227,7 +232,7 @@ func (r *SingleClusterReconciler) Reconcile() (result ctrl.Result, recErr error)
 	// Redundant safe check to revert migrate-fill-delay if the previous revert operation missed/skipped somehow
 	if res := r.setMigrateFillDelay(
 		policy, &r.aeroCluster.Spec.RackConfig.Racks[0].AerospikeConfig,
-		false, ignorablePodNames,
+		false, serverIgnorablePodNames,
 	); !res.IsSuccess {
 		r.Log.Error(res.Err, "Failed to revert migrate-fill-delay")
 
@@ -257,7 +262,7 @@ func (r *SingleClusterReconciler) Reconcile() (result ctrl.Result, recErr error)
 		}
 
 		// Setup roster
-		if err = r.getAndSetRoster(policy, r.aeroCluster.Spec.RosterNodeBlockList, ignorablePodNames); err != nil {
+		if err = r.getAndSetRoster(policy, r.aeroCluster.Spec.RosterNodeBlockList, serverIgnorablePodNames); err != nil {
 			r.Log.Error(err, "Failed to set roster for cluster")
 			recErr = err
 
@@ -277,9 +282,11 @@ func (r *SingleClusterReconciler) Reconcile() (result ctrl.Result, recErr error)
 		return reconcile.Result{}, err
 	}
 
-	// Try to recover pods only if there are any ignorable pods, which may be failed or pending.
-	if len(ignorablePodNames) > 0 {
-		if res := r.recoverIgnorablePods(ignorablePodNames); !res.IsSuccess {
+	// Try to recover pods only if there are any server-failed ignorable pods.
+	// Sidecar-failed pods are excluded: their Aerospike server is still running
+	// and they are handled by the config-change-driven path in handleFailedPodsInRack.
+	if ignorablePods.ServerFailedPodNames.Len() > 0 {
+		if res := r.recoverIgnorablePods(ignorablePods.ServerFailedPodNames); !res.IsSuccess {
 			return res.GetResult()
 		}
 	}
@@ -791,7 +798,48 @@ func (r *SingleClusterReconciler) recoverFailedCreate() error {
 		}
 	}
 
+	// Clear ACL status so that the next reconcile applies credentials fresh
+	// against the default admin account. When STSes and PVCs are deleted above,
+	// all user/credential data on the Aerospike nodes is wiped. If the stale
+	// ACL status is left intact, the operator would attempt to authenticate with
+	// those old credentials on the newly recreated nodes, causing info commands
+	// to fail.
+	if err := r.clearAerospikeAccessControlStatus(); err != nil {
+		return fmt.Errorf("failed to clear access control status during cluster recovery: %v", err)
+	}
+
 	return fmt.Errorf("forcing recreate of the cluster as status is nil")
+}
+
+// clearAerospikeAccessControlStatus sets AerospikeAccessControl to nil in the
+// CR status. This is called during recoverFailedCreate so that the operator
+// does not attempt to authenticate with stale credentials against freshly
+// recreated Aerospike nodes that have no user data.
+func (r *SingleClusterReconciler) clearAerospikeAccessControlStatus() error {
+	if r.aeroCluster.Status.AerospikeAccessControl == nil {
+		return nil
+	}
+
+	newAeroCluster := &asdbv1.AerospikeCluster{}
+	if err := r.Get(
+		context.TODO(), types.NamespacedName{
+			Name: r.aeroCluster.Name, Namespace: r.aeroCluster.Namespace,
+		}, newAeroCluster,
+	); err != nil {
+		return err
+	}
+
+	newAeroCluster.Status.AerospikeAccessControl = nil
+
+	if err := r.patchStatus(newAeroCluster); err != nil {
+		return fmt.Errorf("error clearing access control status: %w", err)
+	}
+
+	r.aeroCluster.Status.AerospikeAccessControl = nil
+
+	r.Log.Info("Cleared access control status for cluster recovery")
+
+	return nil
 }
 
 func (r *SingleClusterReconciler) addFinalizer(finalizerName string) error {

@@ -48,6 +48,36 @@ const (
 
 const minInitVersionForOverrideRackID = "2.5.0"
 
+// IgnorablePods categorises not-fully-healthy pods by which containers are failing,
+// enabling callers to apply different handling for server failures versus sidecar failures.
+type IgnorablePods struct {
+	// ServerFailedPodNames holds pods whose aerospike server container is not running
+	// (server crashed, image pull failed, pod unschedulable, or rack being deleted/replaced).
+	// These pods are genuinely unavailable as aerospike nodes and are excluded from cluster
+	// operations such as info calls, quiesce, and roster management.
+	// They consume the MaxIgnorablePods budget when configured.
+	ServerFailedPodNames sets.Set[string]
+
+	// SidecarFailedPodNames holds pods where only non-server (sidecar) containers are
+	// failing while the aerospike server container is still running.
+	// The aerospike node is reachable on these pods so they remain available for cluster
+	// operations, but the pod is not fully reconciled to the desired state.
+	// These pods consume the MaxIgnorablePods budget just like server-failed pods.
+	SidecarFailedPodNames sets.Set[string]
+}
+
+// AllPodNames returns the union of ServerFailedPodNames and SidecarFailedPodNames.
+// Use this when both categories must be treated identically (e.g. skipping a pod in
+// a rolling-restart loop regardless of which container is failing).
+func (i IgnorablePods) AllPodNames() sets.Set[string] {
+	return i.ServerFailedPodNames.Union(i.SidecarFailedPodNames)
+}
+
+// Len returns the total number of pods across both sets.
+func (i IgnorablePods) Len() int {
+	return i.ServerFailedPodNames.Len() + i.SidecarFailedPodNames.Len()
+}
+
 // mergeRestartType generates the updated restart type based on precedence.
 // podRestart > quickRestart > noRestartUpdateConf > noRestart
 func mergeRestartType(current, incoming RestartType) RestartType {
@@ -184,16 +214,17 @@ func (r *SingleClusterReconciler) getRollingRestartTypePod(
 ) (RestartType, error) {
 	restartType := noRestart
 
-	// AerospikeConfig nil means status not updated yet
-	if r.IsStatusEmpty() {
+	// If this pod has no status entry yet it was just created with the current
+	// config — no restart is needed and the hash fields would all be empty
+	// strings, which would incorrectly trigger every comparison below.
+	podStatus, exists := r.aeroCluster.Status.Pods[pod.Name]
+	if !exists {
 		return restartType, nil
 	}
 
 	requiredConfHash := confMap.Data[aerospikeConfHashFileName]
 	requiredNetworkPolicyHash := confMap.Data[networkPolicyHashFileName]
 	requiredPodSpecHash := confMap.Data[podSpecHashFileName]
-
-	podStatus := r.aeroCluster.Status.Pods[pod.Name]
 
 	// Check if aerospikeConfig is updated
 	if podStatus.AerospikeConfigHash != requiredConfHash {
@@ -316,10 +347,10 @@ func (r *SingleClusterReconciler) getRollingRestartTypePod(
 }
 
 func (r *SingleClusterReconciler) rollingRestartPods(
-	rackState *RackState, podsToRestart []*corev1.Pod, ignorablePodNames sets.Set[string],
+	rackState *RackState, podsToRestart []*corev1.Pod, ignorablePods IgnorablePods,
 	restartTypeMap map[string]RestartType,
 ) common.ReconcileResult {
-	failedPods, failedWithinGracePeriodPods, activePods := getFailedAndActivePods(podsToRestart, true)
+	failedPods, failedWithinGracePeriodPods, activePods := getServerFailedAndActivePods(podsToRestart, true)
 
 	// If already dead node (failed pod) then no need to check node safety, migration
 	if len(failedPods) != 0 {
@@ -333,7 +364,7 @@ func (r *SingleClusterReconciler) rollingRestartPods(
 	if len(activePods) != 0 {
 		r.Log.Info("Restart active pods", "pods", getPodNames(activePods))
 
-		if res := r.waitForMultipleNodesSafeStopReady(activePods, ignorablePodNames); !res.IsSuccess {
+		if res := r.waitForMultipleNodesSafeStopReady(activePods, ignorablePods); !res.IsSuccess {
 			return res
 		}
 
@@ -351,7 +382,7 @@ func (r *SingleClusterReconciler) rollingRestartPods(
 			clientPolicy = r.getClientPolicy()
 
 			if res := r.setMigrateFillDelay(clientPolicy, &rackState.Rack.AerospikeConfig, false,
-				ignorablePodNames,
+				ignorablePods.ServerFailedPodNames,
 			); !res.IsSuccess {
 				r.Log.Error(res.Err,
 					"Failed to set migrate-fill-delay to original value before restarting the running pods")
@@ -368,7 +399,7 @@ func (r *SingleClusterReconciler) rollingRestartPods(
 		// in the next reconcile.
 		if setMigrateFillDelay {
 			if res := r.setMigrateFillDelay(clientPolicy, &rackState.Rack.AerospikeConfig, true,
-				ignorablePodNames,
+				ignorablePods.ServerFailedPodNames,
 			); !res.IsSuccess {
 				r.Log.Error(res.Err, "Failed to set migrate-fill-delay to `0` after restarting the running pods")
 				return res
@@ -642,6 +673,51 @@ func getFailedAndActivePods(
 	return failedPods, failedWithinGracePeriodPods, activePods
 }
 
+// getServerFailedAndActivePods is like getFailedAndActivePods but only
+// considers the Aerospike server container (and blocking init containers) when
+// determining failure. Sidecar failures are ignored, so a pod whose server is
+// running but a sidecar is crashing is classified as active, not failed.
+// Use this wherever the "failed" branch must skip safety checks or bypass batch
+// size (e.g. rolling-restart and upgrade loops), so that sidecar-failed pods
+// are not incorrectly treated as server-down pods.
+func getServerFailedAndActivePods(
+	pods []*corev1.Pod, withGracePeriod bool) (failedPods, failedWithinGracePeriodPods, activePods []*corev1.Pod,
+) {
+	for idx := range pods {
+		pod := pods[idx]
+
+		podState := utils.CheckServerFailedWithGrace(pod, withGracePeriod)
+
+		switch podState.State {
+		case utils.PodHealthy:
+			activePods = append(activePods, pod)
+		case utils.PodFailedInGrace:
+			failedWithinGracePeriodPods = append(failedWithinGracePeriodPods, pod)
+		case utils.PodFailed:
+			failedPods = append(failedPods, pod)
+		}
+	}
+
+	return failedPods, failedWithinGracePeriodPods, activePods
+}
+
+// getSidecarFailedPods returns pods whose Aerospike server container is Running
+// but the overall pod is not ready, meaning a sidecar container is failing.
+// These pods are distinct from server-failed pods: their Aerospike node is
+// reachable and should not skip safety checks or batching during rolling restart.
+func getSidecarFailedPods(pods []*corev1.Pod) []*corev1.Pod {
+	var sidecarFailed []*corev1.Pod
+
+	for idx := range pods {
+		pod := pods[idx]
+		if !utils.IsPodTerminating(pod) && utils.IsAerospikeServerRunning(pod) && !utils.IsPodReady(pod) {
+			sidecarFailed = append(sidecarFailed, pod)
+		}
+	}
+
+	return sidecarFailed
+}
+
 func getNonIgnorablePods(pods []*corev1.Pod, ignorablePodNames sets.Set[string],
 ) []*corev1.Pod {
 	nonIgnorablePods := make([]*corev1.Pod, 0, len(pods))
@@ -659,9 +735,9 @@ func getNonIgnorablePods(pods []*corev1.Pod, ignorablePodNames sets.Set[string],
 }
 
 func (r *SingleClusterReconciler) safelyDeletePodsAndEnsureImageUpdated(
-	rackState *RackState, podsToUpdate []*corev1.Pod, ignorablePodNames sets.Set[string],
+	rackState *RackState, podsToUpdate []*corev1.Pod, ignorablePods IgnorablePods,
 ) common.ReconcileResult {
-	failedPods, failedWithinGracePeriodPods, activePods := getFailedAndActivePods(podsToUpdate, true)
+	failedPods, failedWithinGracePeriodPods, activePods := getServerFailedAndActivePods(podsToUpdate, true)
 
 	// If already dead node (failed pod) then no need to check node safety, migration
 	if len(failedPods) != 0 {
@@ -675,7 +751,7 @@ func (r *SingleClusterReconciler) safelyDeletePodsAndEnsureImageUpdated(
 	if len(activePods) != 0 {
 		r.Log.Info("Restart active pods with updated container image", "pods", getPodNames(activePods))
 
-		if res := r.waitForMultipleNodesSafeStopReady(activePods, ignorablePodNames); !res.IsSuccess {
+		if res := r.waitForMultipleNodesSafeStopReady(activePods, ignorablePods); !res.IsSuccess {
 			return res
 		}
 
@@ -692,7 +768,7 @@ func (r *SingleClusterReconciler) safelyDeletePodsAndEnsureImageUpdated(
 			clientPolicy = r.getClientPolicy()
 
 			if res := r.setMigrateFillDelay(clientPolicy, &rackState.Rack.AerospikeConfig, false,
-				ignorablePodNames,
+				ignorablePods.ServerFailedPodNames,
 			); !res.IsSuccess {
 				r.Log.Error(res.Err,
 					"Failed to set migrate-fill-delay to original value before upgrading the running pods")
@@ -709,7 +785,7 @@ func (r *SingleClusterReconciler) safelyDeletePodsAndEnsureImageUpdated(
 		// in the next reconcile.
 		if setMigrateFillDelay {
 			if res := r.setMigrateFillDelay(clientPolicy, &rackState.Rack.AerospikeConfig, true,
-				ignorablePodNames,
+				ignorablePods.ServerFailedPodNames,
 			); !res.IsSuccess {
 				r.Log.Error(res.Err, "Failed to set migrate-fill-delay to `0` after upgrading the running pods")
 				return res
@@ -1003,15 +1079,19 @@ func (r *SingleClusterReconciler) cleanupDanglingPodsRack(sts *appsv1.StatefulSe
 	return nil
 }
 
-// getIgnorablePods returns pods:
-// 1. From racksToDelete that are currently not running and can be ignored in stability checks.
-// 2. Failed/pending pods from the configuredRacks identified using maxIgnorablePods field and
-// 3. Failed pods from old revisions of revision-changed racks that will be replaced anyway can be
-// ignored from stability checks.
+// getIgnorablePods returns pods categorised into server-failed and sidecar-failed:
+// 1. From racksToDelete for which server containers are currently not running and can be ignored in stability checks.
+// 2. Failed/pending pods from the configuredRacks identified using maxIgnorablePods field.
+// 3. Failed pods from old revisions of revision-changed racks that will be replaced anyway.
+// Pods whose Aerospike server is still running but a sidecar is failing are placed in
+// SidecarFailedPodNames; all other not-ready pods go into ServerFailedPodNames.
 func (r *SingleClusterReconciler) getIgnorablePods(
 	racksToDelete []asdbv1.Rack, configuredRacks []RackState, revisionChangedRacks map[int]revisionChangedRack,
-) (sets.Set[string], error) {
-	ignorablePodNames := sets.Set[string]{}
+) (IgnorablePods, error) {
+	ignorable := IgnorablePods{
+		ServerFailedPodNames:  sets.New[string](),
+		SidecarFailedPodNames: sets.New[string](),
+	}
 	ignorableRackIDs := sets.Set[int]{}
 
 	ignorableRacks := append([]asdbv1.Rack{}, racksToDelete...)
@@ -1020,13 +1100,17 @@ func (r *SingleClusterReconciler) getIgnorablePods(
 	for rackIdx := range ignorableRacks {
 		rackPods, err := r.getRackPodList(ignorableRacks[rackIdx].ID, ignorableRacks[rackIdx].Revision)
 		if err != nil {
-			return nil, err
+			return ignorable, err
 		}
 
 		for podIdx := range rackPods.Items {
-			pod := rackPods.Items[podIdx]
-			if !utils.IsPodRunningAndReady(&pod) {
-				ignorablePodNames.Insert(pod.Name)
+			pod := &rackPods.Items[podIdx]
+			if !utils.IsPodRunningAndReady(pod) {
+				if utils.IsAerospikeServerRunning(pod) {
+					ignorable.SidecarFailedPodNames.Insert(pod.Name)
+				} else {
+					ignorable.ServerFailedPodNames.Insert(pod.Name)
+				}
 			}
 		}
 
@@ -1041,16 +1125,20 @@ func (r *SingleClusterReconciler) getIgnorablePods(
 
 		oldPodList, err := r.getRackPodList(oldRackState.Rack.ID, oldRackState.Rack.Revision)
 		if err != nil {
-			return nil, err
+			return ignorable, err
 		}
 
 		var oldFailedPods []string
 
 		for podIdx := range oldPodList.Items {
-			pod := oldPodList.Items[podIdx]
-			if !utils.IsPodRunningAndReady(&pod) {
+			pod := &oldPodList.Items[podIdx]
+			if !utils.IsPodRunningAndReady(pod) {
 				oldFailedPods = append(oldFailedPods, pod.Name)
-				ignorablePodNames.Insert(pod.Name)
+				if utils.IsAerospikeServerRunning(pod) {
+					ignorable.SidecarFailedPodNames.Insert(pod.Name)
+				} else {
+					ignorable.ServerFailedPodNames.Insert(pod.Name)
+				}
 			}
 		}
 
@@ -1074,39 +1162,54 @@ func (r *SingleClusterReconciler) getIgnorablePods(
 
 		podList, err := r.getRackPodList(rackState.Rack.ID, rackState.Rack.Revision)
 		if err != nil {
-			return nil, err
+			return ignorable, err
 		}
 
-		var failedPod, pendingPod []string
-
+		// First pass: pending (unschedulable) pods consume budget first.
+		// They have no node assigned so no container can be running — server-failed by definition.
 		for podIdx := range podList.Items {
-			pod := &podList.Items[podIdx]
-
-			if !utils.IsPodRunningAndReady(pod) {
-				if isPodUnschedulable, _ := utils.IsPodReasonUnschedulable(pod); isPodUnschedulable {
-					pendingPod = append(pendingPod, pod.Name)
-					continue
-				}
-
-				failedPod = append(failedPod, pod.Name)
-			}
-		}
-
-		// prepend pendingPod to failedPod
-		failedPod = append(pendingPod, failedPod...)
-
-		for podIdx := range failedPod {
 			if failedAllowed <= 0 {
 				break
 			}
 
-			ignorablePodNames.Insert(failedPod[podIdx])
+			pod := &podList.Items[podIdx]
+			if utils.IsPodRunningAndReady(pod) {
+				continue
+			}
+
+			if isPodUnschedulable, _ := utils.IsPodReasonUnschedulable(pod); isPodUnschedulable {
+				ignorable.ServerFailedPodNames.Insert(pod.Name)
+				failedAllowed--
+			}
+		}
+
+		// Second pass: remaining not-ready pods in scan order.
+		// IsAerospikeServerRunning distinguishes sidecar-only failures from server failures.
+		for podIdx := range podList.Items {
+			if failedAllowed <= 0 {
+				break
+			}
+
+			pod := &podList.Items[podIdx]
+			if utils.IsPodRunningAndReady(pod) {
+				continue
+			}
+
+			if isPodUnschedulable, _ := utils.IsPodReasonUnschedulable(pod); isPodUnschedulable {
+				continue // already handled in first pass
+			}
+
+			if utils.IsAerospikeServerRunning(pod) {
+				ignorable.SidecarFailedPodNames.Insert(pod.Name)
+			} else {
+				ignorable.ServerFailedPodNames.Insert(pod.Name)
+			}
 
 			failedAllowed--
 		}
 	}
 
-	return ignorablePodNames, nil
+	return ignorable, nil
 }
 
 func (r *SingleClusterReconciler) getPodsPVCList(
