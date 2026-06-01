@@ -977,7 +977,8 @@ var _ = Describe("AerospikeCluster validation", func() {
 						})[asdbv1.ConfigKeyCgroupMemTracking] = true
 
 						Expect(envtests.WarningK8sClient.Create(ctx, aeroCluster)).ToNot(HaveOccurred())
-						Expect(envtests.GlobalWarnings.Warnings).NotTo(ContainElement(ContainSubstring(asdbv1.ConfigKeyCgroupMemTracking)))
+						Expect(envtests.GlobalWarnings.Warnings).NotTo(ContainElement(
+							ContainSubstring(asdbv1.ConfigKeyCgroupMemTracking)))
 					})
 
 					It("does not warn when cgroup-mem-tracking is absent "+
@@ -987,7 +988,8 @@ var _ = Describe("AerospikeCluster validation", func() {
 						)
 
 						Expect(envtests.WarningK8sClient.Create(ctx, aeroCluster)).ToNot(HaveOccurred())
-						Expect(envtests.GlobalWarnings.Warnings).NotTo(ContainElement(ContainSubstring(asdbv1.ConfigKeyCgroupMemTracking)))
+						Expect(envtests.GlobalWarnings.Warnings).NotTo(ContainElement(
+							ContainSubstring(asdbv1.ConfigKeyCgroupMemTracking)))
 					})
 				})
 			})
@@ -1695,7 +1697,8 @@ var _ = Describe("AerospikeCluster validation", func() {
 						current.Spec.Size = 1
 
 						Expect(envtests.WarningK8sClient.Update(ctx, current)).ToNot(HaveOccurred())
-						Expect(envtests.GlobalWarnings.Warnings).NotTo(ContainElement(ContainSubstring(asdbv1.ConfigKeyCgroupMemTracking)))
+						Expect(envtests.GlobalWarnings.Warnings).NotTo(ContainElement(
+							ContainSubstring(asdbv1.ConfigKeyCgroupMemTracking)))
 					})
 				})
 			})
