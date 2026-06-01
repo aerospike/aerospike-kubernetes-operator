@@ -83,7 +83,7 @@ var _ = Describe("RollingUpdateBatchSize validation", func() {
 						Validate(err)
 				})
 
-				It("rejects create when a rack-enabled namespace is configured on a single rack only", func() {
+				It("rejects create when rollingUpdateBatchSize is set with a rack-enabled namespace on a single rack only", func() {
 					aeroCluster := testCluster.CreateDummyAerospikeClusterWithRF(clusterNamespacedName, 2, 2)
 					aeroCluster.Spec.RackConfig.Racks = testCluster.GetDummyRackConf(1, 2)
 					aeroCluster.Spec.RackConfig.Namespaces = []string{"test", "bar"}

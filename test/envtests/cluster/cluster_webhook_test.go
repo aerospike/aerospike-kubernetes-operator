@@ -798,7 +798,7 @@ var _ = Describe("AerospikeCluster validation", func() {
 						Validate(err)
 				})
 
-				It("rejects TLS cert-file path not mounted in storage volumes", func() {
+				It("rejects TLS config when cert-file is set without key-file", func() {
 					aeroCluster := testCluster.CreateAerospikeClusterPost640(
 						clusterNamespacedName, 1, testutil.LatestEnterpriseImage,
 					)
@@ -845,7 +845,7 @@ var _ = Describe("AerospikeCluster validation", func() {
 						Validate(err)
 				})
 
-				It("rejects ca-file path using Secret Manager syntax in network.tls", func() {
+				It("rejects ca-file path pointing to Secret Manager", func() {
 					aeroCluster := testCluster.CreateAerospikeClusterPost640(
 						clusterNamespacedName, 1, testutil.LatestEnterpriseImage,
 					)
@@ -870,7 +870,7 @@ var _ = Describe("AerospikeCluster validation", func() {
 						Validate(err)
 				})
 
-				It("rejects ca-path using Secret Manager syntax in network.tls", func() {
+				It("rejects ca-path pointing to Secret Manager", func() {
 					aeroCluster := testCluster.CreateAerospikeClusterPost640(
 						clusterNamespacedName, 1, testutil.LatestEnterpriseImage,
 					)
