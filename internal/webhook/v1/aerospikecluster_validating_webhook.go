@@ -331,16 +331,6 @@ func validate(aslog logr.Logger, cluster *asdbv1.AerospikeCluster) (admission.Wa
 
 	var warnings admission.Warnings
 
-	// Validate obj namespace
-	if cluster.Namespace == "" {
-		return warnings, fmt.Errorf("aerospikeCluster namespace name cannot be empty")
-	}
-
-	if strings.Contains(cluster.Namespace, " ") {
-		// Few parsing logic depend on this
-		return warnings, fmt.Errorf("aerospikeCluster namespace cannot have spaces")
-	}
-
 	if err := validateImage(&cluster.Spec); err != nil {
 		return warnings, err
 	}
@@ -380,11 +370,6 @@ func validate(aslog logr.Logger, cluster *asdbv1.AerospikeCluster) (admission.Wa
 				" for more details about enableDynamicConfigUpdate flag",
 				minInitVersionForDynamicConf)
 		}
-	}
-
-	err = validateClusterSize(aslog, int(cluster.Spec.Size))
-	if err != nil {
-		return warnings, err
 	}
 
 	err = validateOperation(cluster)
@@ -1003,15 +988,6 @@ func validateRackConfig(aslog logr.Logger, cluster *asdbv1.AerospikeCluster,
 
 		rackMap[rack.ID] = true
 
-		// Check out of range rackID
-		// Check for defaultRackID is in mutate (user can not use defaultRackID).
-		// Allow DefaultRackID
-		if rack.ID > asdbv1.MaxRackID {
-			return warnings, fmt.Errorf(
-				"invalid rackID. RackID range (%d, %d)", asdbv1.MinRackID, asdbv1.MaxRackID,
-			)
-		}
-
 		// Validate revision character set. A revision with invalid characters
 		// (uppercase, dot, underscore, trailing hyphen) is embedded directly into
 		// the StatefulSet name and would silently corrupt DNS resolution or cause
@@ -1242,10 +1218,6 @@ func getAllNamespaceNamesAndRFMap(spec *asdbv1.AerospikeClusterSpec) (allNsNames
 // Helper
 // ******************************************************************************
 
-// TODO: This should be version specific and part of management lib.
-// max cluster size for 5.0+ cluster
-const maxEnterpriseClusterSize = 256
-
 // minRevisionReservation is the minimum number of revision characters reserved
 // in the projected label-rune formula on CREATE when no (or a short) revision is given.
 // A cluster whose name passes the projected-name check with this reservation is
@@ -1257,20 +1229,6 @@ const minRevisionReservation = 3
 // the value of statefulset.kubernetes.io/controller-revision-hash on a Pod
 // (hex; current Kubernetes uses at most 10 for this value).
 const k8sControllerRevisionHashLabelValueMaxRunes = 10
-
-func validateClusterSize(_ logr.Logger, sz int) error {
-	if sz == 0 {
-		return fmt.Errorf("invalid cluster size 0")
-	}
-
-	if sz > maxEnterpriseClusterSize {
-		return fmt.Errorf(
-			"cluster size cannot be more than %d", maxEnterpriseClusterSize,
-		)
-	}
-
-	return nil
-}
 
 // cgroupMemTrackingWarning returns a warning when aerospikeConfig.service.cgroup-mem-tracking
 // is absent or not true for a version that requires it. An empty slice means no warning.

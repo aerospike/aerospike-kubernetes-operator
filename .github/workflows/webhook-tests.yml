@@ -21,6 +21,11 @@ on:
 jobs:
   test:
     runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        k8s-version: ["1.35", "1.23"]
+    name: EnvTest (k8s ${{ matrix.k8s-version }})
     steps:
       - name: Harden the runner (Audit all outbound calls)
         uses: step-security/harden-runner@a5ad31d6a139d249332a2605b85202e8c0b78450 # v2.19.1
@@ -42,4 +47,4 @@ jobs:
 
       # Run your env-test target
       - name: Run EnvTest Suite
-        run: make env-test
+        run: make env-test ENVTEST_K8S_VERSION=${{ matrix.k8s-version }}

@@ -90,7 +90,7 @@ var _ = Describe("Rack revision webhook validation", func() {
 
 					envtests.NewStatusErrorMatcher().
 						WithMessageSubstrings(
-							"\"vaerospikecluster.kb.io\"",
+							testutil.WebhookErrorPrefix,
 							"Pod label value would exceed the",
 							"63-character DNS label limit",
 							"revision placeholder = 48",
@@ -114,7 +114,7 @@ var _ = Describe("Rack revision webhook validation", func() {
 						err := testCluster.DeployCluster(envtests.K8sClient, ctx, aeroCluster)
 						Expect(err).To(HaveOccurred())
 
-						subs := append([]string{"\"vaerospikecluster.kb.io\""}, c.subs...)
+						subs := append([]string{testutil.WebhookErrorPrefix}, c.subs...)
 						envtests.NewStatusErrorMatcher().
 							WithMessageSubstrings(subs...).
 							Validate(err)
@@ -164,7 +164,7 @@ var _ = Describe("Rack revision webhook validation", func() {
 
 					envtests.NewStatusErrorMatcher().
 						WithMessageSubstrings(
-							"\"vaerospikecluster.kb.io\"",
+							testutil.WebhookErrorPrefix,
 							"Pod label value would exceed the",
 							"63-character DNS label limit",
 							"revision placeholder = 3",
@@ -188,7 +188,7 @@ var _ = Describe("Rack revision webhook validation", func() {
 
 					envtests.NewStatusErrorMatcher().
 						WithMessageSubstrings(
-							"\"vaerospikecluster.kb.io\"",
+							testutil.WebhookErrorPrefix,
 							"rack revision \"BAD\" for rack ID 2 is invalid").
 						Validate(err)
 				})
@@ -214,7 +214,7 @@ var _ = Describe("Rack revision webhook validation", func() {
 
 					envtests.NewStatusErrorMatcher().
 						WithMessageSubstrings(
-							"\"vaerospikecluster.kb.io\"",
+							testutil.WebhookErrorPrefix,
 							"Pod label value would exceed the",
 							"63-character DNS label limit",
 							"revision placeholder = 48",
@@ -313,7 +313,7 @@ var _ = Describe("Rack revision webhook validation", func() {
 					Expect(err).To(HaveOccurred())
 					envtests.NewStatusErrorMatcher().
 						WithMessageSubstrings(
-							"\"vaerospikecluster.kb.io\"",
+							testutil.WebhookErrorPrefix,
 							"rack storage config cannot be updated",
 							"cannot change volumes",
 						).
@@ -352,7 +352,7 @@ var _ = Describe("Rack revision webhook validation", func() {
 					Expect(err).To(HaveOccurred())
 					envtests.NewStatusErrorMatcher().
 						WithMessageSubstrings(
-							"\"vaerospikecluster.kb.io\"",
+							testutil.WebhookErrorPrefix,
 							"old rack with same revision v2 already exists with different storage",
 						).
 						Validate(err)
@@ -419,7 +419,7 @@ var _ = Describe("Rack revision webhook validation", func() {
 
 					envtests.NewStatusErrorMatcher().
 						WithMessageSubstrings(
-							"\"vaerospikecluster.kb.io\"",
+							testutil.WebhookErrorPrefix,
 							"old rack with same revision v1 already exists with different storage",
 						).
 						Validate(err)
@@ -448,7 +448,7 @@ var _ = Describe("Rack revision webhook validation", func() {
 
 					envtests.NewStatusErrorMatcher().
 						WithMessageSubstrings(
-							"\"vaerospikecluster.kb.io\"",
+							testutil.WebhookErrorPrefix,
 							"would generate pod label value exceeding the",
 							"63-character DNS label limit",
 							"reduce by 13",
@@ -477,7 +477,7 @@ var _ = Describe("Rack revision webhook validation", func() {
 
 					envtests.NewStatusErrorMatcher().
 						WithMessageSubstrings(
-							"\"vaerospikecluster.kb.io\"",
+							testutil.WebhookErrorPrefix,
 							"rack revision \"V2\" for rack ID 1 is invalid",
 							"must consist of lower case alphanumeric characters or '-'").
 						Validate(err)
@@ -509,7 +509,7 @@ var _ = Describe("Rack revision webhook validation", func() {
 
 					envtests.NewStatusErrorMatcher().
 						WithMessageSubstrings(
-							"\"vaerospikecluster.kb.io\"",
+							testutil.WebhookErrorPrefix,
 							"would generate pod label value exceeding the",
 							"63-character DNS label limit",
 							"reduce by 13",

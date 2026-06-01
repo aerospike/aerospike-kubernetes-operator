@@ -52,9 +52,11 @@ type AerospikeBackupSpec struct {
 
 type BackupService struct {
 	// Backup service name
+	// +kubebuilder:validation:MinLength=1
 	Name string `json:"name"`
 
 	// Backup service namespace
+	// +kubebuilder:validation:MinLength=1
 	Namespace string `json:"namespace"`
 }
 
@@ -70,6 +72,7 @@ type OnDemandBackupSpec struct {
 	// Type is the type of on-demand backup to trigger: Full or Incremental.
 	// Incremental backups require ABS >= 3.5.0. Defaults to "Full".
 	// +kubebuilder:validation:Enum=Full;Incremental
+	// +kubebuilder:default="Full"
 	// +optional
 	Type BackupType `json:"type,omitempty"`
 
