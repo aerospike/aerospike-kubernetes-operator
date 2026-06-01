@@ -58,8 +58,10 @@ pipeline {
 
                         dir("${env.GO_REPO}") {
                             withCredentials([
-                                string(credentialsId: 'aerospike-docker-org-name', variable: 'DOCKERHUB_USER'),
-                                string(credentialsId: 'aerospike-docker-org-rw-token', variable: 'DOCKERHUB_TOKEN')
+                                STRING(CREDENTIALSID: 'AEROSPIKE-DOCKER-ORG-NAME', VARIABLE: 'DOCKERHUB_USER'),
+                           
+                                STRING(CREDENTIALSID: 'AEROSPIKE-DOCKER-ORG-RW-TOKEN', VARIABLE: 'DOCKERHUB_TOKEN')
+                           
                             ]) {
                                 sh '''
                                     set +x
