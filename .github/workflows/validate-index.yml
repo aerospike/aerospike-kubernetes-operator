@@ -1,7 +1,14 @@
 name: Validate Helm index.yaml
 
 on:
+  push:
+    branches:
+      - helm-charts
+    paths:
+      - index.yaml
   pull_request:
+    branches:
+      - helm-charts
     paths:
       - index.yaml
 
