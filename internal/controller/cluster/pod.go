@@ -1071,7 +1071,7 @@ func (r *SingleClusterReconciler) getIgnorablePods(
 			return nil, err
 		}
 
-		var oldRevisionFailed, currentRevisionFailed, failedPod, pendingPod []string
+		var oldRevisionFailed, currentRevisionFailed, pendingPod []string
 
 		currentRevision := rackState.Rack.Revision
 
@@ -1100,6 +1100,8 @@ func (r *SingleClusterReconciler) getIgnorablePods(
 		// 1. Pending (unschedulable) — least likely to recover on their own
 		// 2. Old-revision failed — STS is being replaced, recovery is impossible
 		// 3. Current-revision failed — may recover; use remaining budget only
+
+		failedPod := make([]string, 0, len(pendingPod)+len(oldRevisionFailed)+len(currentRevisionFailed))
 		failedPod = append(failedPod, pendingPod...)
 		failedPod = append(failedPod, oldRevisionFailed...)
 		failedPod = append(failedPod, currentRevisionFailed...)

@@ -28,7 +28,6 @@ import (
 	asdbv1 "github.com/aerospike/aerospike-kubernetes-operator/v4/api/v1"
 	testCluster "github.com/aerospike/aerospike-kubernetes-operator/v4/test/cluster"
 	"github.com/aerospike/aerospike-kubernetes-operator/v4/test/envtests"
-	"github.com/aerospike/aerospike-kubernetes-operator/v4/test/testutil"
 )
 
 var _ = Describe("Storage webhook validation", func() {
