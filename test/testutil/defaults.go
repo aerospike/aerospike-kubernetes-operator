@@ -23,6 +23,8 @@ const (
 	ClusterNameConfig              = "cluster-name"
 	DefaultNamespace               = "default"
 	DefaultDevicePath              = "/test/dev/xvdf"
+	WebhookErrorPrefix             = "vaerospikecluster.kb.io"
+	CRDSchemaErrorPrefix           = "AerospikeCluster.asdb.aerospike.com"
 )
 
 var (

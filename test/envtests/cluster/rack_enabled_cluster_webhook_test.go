@@ -28,6 +28,7 @@ import (
 	"github.com/aerospike/aerospike-kubernetes-operator/v4/test"
 	testCluster "github.com/aerospike/aerospike-kubernetes-operator/v4/test/cluster"
 	"github.com/aerospike/aerospike-kubernetes-operator/v4/test/envtests"
+	"github.com/aerospike/aerospike-kubernetes-operator/v4/test/testutil"
 )
 
 var _ = Describe("Rack enabled cluster webhook validation", func() {
@@ -66,7 +67,7 @@ var _ = Describe("Rack enabled cluster webhook validation", func() {
 					Expect(err).To(HaveOccurred())
 					envtests.NewStatusErrorMatcher().
 						WithMessageSubstrings(
-							"\"vaerospikecluster.kb.io\"",
+							testutil.WebhookErrorPrefix,
 							"namespace storage device related devicePath /expected/missing/device not found in Storage config",
 						).
 						Validate(err)
@@ -108,7 +109,7 @@ var _ = Describe("Rack enabled cluster webhook validation", func() {
 					Expect(err).To(HaveOccurred())
 					envtests.NewStatusErrorMatcher().
 						WithMessageSubstrings(
-							"\"vaerospikecluster.kb.io\"",
+							testutil.WebhookErrorPrefix,
 							"namespace storage device related devicePath /test/dev/xvdf not found in Storage config",
 						).
 						Validate(err)

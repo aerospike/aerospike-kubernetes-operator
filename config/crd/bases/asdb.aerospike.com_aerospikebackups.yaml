@@ -58,9 +58,11 @@ spec:
                 properties:
                   name:
                     description: Backup service name
+                    minLength: 1
                     type: string
                   namespace:
                     description: Backup service namespace
+                    minLength: 1
                     type: string
                 required:
                 - name
@@ -89,6 +91,7 @@ spec:
                         on-demand backup.
                       type: string
                     type:
+                      default: Full
                       description: |-
                         Type is the type of on-demand backup to trigger: Full or Incremental.
                         Incremental backups require ABS >= 3.5.0. Defaults to "Full".
@@ -115,9 +118,11 @@ spec:
                 properties:
                   name:
                     description: Backup service name
+                    minLength: 1
                     type: string
                   namespace:
                     description: Backup service namespace
+                    minLength: 1
                     type: string
                 required:
                 - name
@@ -146,6 +151,7 @@ spec:
                         on-demand backup.
                       type: string
                     type:
+                      default: Full
                       description: |-
                         Type is the type of on-demand backup to trigger: Full or Incremental.
                         Incremental backups require ABS >= 3.5.0. Defaults to "Full".
