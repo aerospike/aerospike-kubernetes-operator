@@ -25,20 +25,20 @@ var _ = Describe(
 		migrateFillDelay := int64(300)
 		clusterNamespacedName := test.GetNamespacedName(clusterName, namespace)
 
-		Context("When doing valid operations", func() {
-			AfterEach(
-				func() {
-					aeroCluster := &asdbv1.AerospikeCluster{
-						ObjectMeta: metav1.ObjectMeta{
-							Name:      clusterName,
-							Namespace: namespace,
-						},
-					}
-					Expect(DeleteCluster(k8sClient, ctx, aeroCluster)).ToNot(HaveOccurred())
-					Expect(CleanupPVC(k8sClient, aeroCluster.Namespace, aeroCluster.Name)).ToNot(HaveOccurred())
-				},
-			)
+		AfterEach(
+			func() {
+				aeroCluster := &asdbv1.AerospikeCluster{
+					ObjectMeta: metav1.ObjectMeta{
+						Name:      clusterName,
+						Namespace: namespace,
+					},
+				}
+				Expect(DeleteCluster(k8sClient, ctx, aeroCluster)).ToNot(HaveOccurred())
+				Expect(CleanupPVC(k8sClient, aeroCluster.Namespace, aeroCluster.Name)).ToNot(HaveOccurred())
+			},
+		)
 
+		Context("When doing valid operations", func() {
 			Context("When doing rolling restart", func() {
 				It("Should delete the local PVCs when deleteLocalStorageOnRestart is set and set MFD dynamically",
 					func() {
@@ -161,6 +161,113 @@ var _ = Describe(
 					By("Validating PVCs deletion")
 					validateClusterPVCDeletion(ctx, oldPvcInfoPerPod, clusterName+"-2-0")
 				})
+			})
+		})
+
+		Context("When a pod is failed (failure recovery path)", func() {
+			It("Should NOT delete local PVCs for a failed pod during rolling restart even if "+
+				"deleteLocalStorageOnRestart is set", func() {
+				aeroCluster := createDummyAerospikeCluster(clusterNamespacedName, 3)
+				aeroCluster.Spec.Storage.DeleteLocalStorageOnRestart = ptr.To(true)
+				aeroCluster.Spec.Storage.LocalStorageClasses = []string{storageClass}
+				Expect(DeployCluster(k8sClient, ctx, aeroCluster)).ToNot(HaveOccurred())
+
+				oldPvcInfoPerPod, err := extractClusterPVC(ctx, k8sClient, aeroCluster)
+				Expect(err).ToNot(HaveOccurred())
+
+				failedPodName := clusterName + "-0-0"
+
+				By("Marking pod as failed")
+				Expect(markPodAsFailed(ctx, k8sClient, failedPodName, namespace)).ToNot(HaveOccurred())
+
+				By("Triggering rolling restart via pod metadata update")
+
+				aeroCluster.Spec.PodSpec.AerospikeObjectMeta = asdbv1.AerospikeObjectMeta{
+					Labels: map[string]string{"test-label": "failure-recovery"},
+				}
+				Expect(updateCluster(k8sClient, ctx, aeroCluster)).ToNot(HaveOccurred())
+
+				By("Validating failed pod PVC is preserved; active pods PVCs are deleted")
+				// Failed pod PVC must survive (isFailureRecovery=true, no deleteLocalStorageOnPodFailureRecovery).
+				// All other pods are active restarts: their PVCs should be replaced.
+				validateClusterPVCDeletion(ctx, oldPvcInfoPerPod, failedPodName)
+			})
+
+			It("Should delete local PVCs for a failed pod during rolling restart when "+
+				"deleteLocalStorageOnPodFailureRecovery is set", func() {
+				aeroCluster := createDummyAerospikeCluster(clusterNamespacedName, 3)
+				aeroCluster.Spec.Storage.DeleteLocalStorageOnRestart = ptr.To(true)
+				aeroCluster.Spec.Storage.DeleteLocalStorageOnPodRecovery = ptr.To(true)
+				aeroCluster.Spec.Storage.LocalStorageClasses = []string{storageClass}
+				Expect(DeployCluster(k8sClient, ctx, aeroCluster)).ToNot(HaveOccurred())
+
+				oldPvcInfoPerPod, err := extractClusterPVC(ctx, k8sClient, aeroCluster)
+				Expect(err).ToNot(HaveOccurred())
+
+				failedPodName := clusterName + "-0-0"
+
+				By("Marking pod as failed")
+				Expect(markPodAsFailed(ctx, k8sClient, failedPodName, namespace)).ToNot(HaveOccurred())
+
+				By("Triggering rolling restart via pod metadata update")
+
+				aeroCluster, err = getCluster(k8sClient, ctx, clusterNamespacedName)
+				Expect(err).ToNot(HaveOccurred())
+
+				aeroCluster.Spec.PodSpec.AerospikeObjectMeta = asdbv1.AerospikeObjectMeta{
+					Labels: map[string]string{"test-label": "failure-recovery-delete"},
+				}
+				Expect(updateCluster(k8sClient, ctx, aeroCluster)).ToNot(HaveOccurred())
+
+				By("Validating all pods PVCs are deleted (including failed pod)")
+				validateClusterPVCDeletion(ctx, oldPvcInfoPerPod)
+			})
+
+			It("Should NOT delete local PVCs for a failed pod during image upgrade even if "+
+				"deleteLocalStorageOnRestart is set", func() {
+				aeroCluster := createDummyAerospikeCluster(clusterNamespacedName, 3)
+				aeroCluster.Spec.Storage.DeleteLocalStorageOnRestart = ptr.To(true)
+				aeroCluster.Spec.Storage.LocalStorageClasses = []string{storageClass}
+				Expect(DeployCluster(k8sClient, ctx, aeroCluster)).ToNot(HaveOccurred())
+
+				oldPvcInfoPerPod, err := extractClusterPVC(ctx, k8sClient, aeroCluster)
+				Expect(err).ToNot(HaveOccurred())
+
+				failedPodName := clusterName + "-0-0"
+
+				By("Marking pod as failed")
+				Expect(markPodAsFailed(ctx, k8sClient, failedPodName, namespace)).ToNot(HaveOccurred())
+
+				By("Triggering image upgrade")
+				Expect(UpdateClusterImage(aeroCluster, nextImage)).ToNot(HaveOccurred())
+				Expect(updateCluster(k8sClient, ctx, aeroCluster)).ToNot(HaveOccurred())
+
+				By("Validating failed pod PVC is preserved; active pods PVCs are deleted")
+				validateClusterPVCDeletion(ctx, oldPvcInfoPerPod, failedPodName)
+			})
+
+			It("Should delete local PVCs for a failed pod during upgrade when "+
+				"deleteLocalStorageOnPodFailureRecovery is set", func() {
+				aeroCluster := createDummyAerospikeCluster(clusterNamespacedName, 3)
+				aeroCluster.Spec.Storage.DeleteLocalStorageOnRestart = ptr.To(true)
+				aeroCluster.Spec.Storage.DeleteLocalStorageOnPodRecovery = ptr.To(true)
+				aeroCluster.Spec.Storage.LocalStorageClasses = []string{storageClass}
+				Expect(DeployCluster(k8sClient, ctx, aeroCluster)).ToNot(HaveOccurred())
+
+				oldPvcInfoPerPod, err := extractClusterPVC(ctx, k8sClient, aeroCluster)
+				Expect(err).ToNot(HaveOccurred())
+
+				failedPodName := clusterName + "-0-0"
+
+				By("Marking pod as failed")
+				Expect(markPodAsFailed(ctx, k8sClient, failedPodName, namespace)).ToNot(HaveOccurred())
+
+				By("Triggering image upgrade")
+				Expect(UpdateClusterImage(aeroCluster, nextImage)).ToNot(HaveOccurred())
+				Expect(updateCluster(k8sClient, ctx, aeroCluster)).ToNot(HaveOccurred())
+
+				By("Validating all pods PVCs are deleted (including failed pod)")
+				validateClusterPVCDeletion(ctx, oldPvcInfoPerPod)
 			})
 		})
 

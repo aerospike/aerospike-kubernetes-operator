@@ -97,6 +97,83 @@ var _ = Describe("BatchScaleDown", func() {
 		})
 	})
 
+	Context("When a pod in the scale-down batch is failed", func() {
+		BeforeEach(
+			func() {
+				aeroCluster := createNonSCDummyAerospikeCluster(clusterNamespacedName, 4)
+				Expect(DeployCluster(k8sClient, ctx, aeroCluster)).ToNot(HaveOccurred())
+			},
+		)
+
+		It("Should block scale-down when the last pod is failed and maxIgnorablePods is not set", func() {
+			aeroCluster, err := getCluster(k8sClient, ctx, clusterNamespacedName)
+			Expect(err).ToNot(HaveOccurred())
+
+			// Highest-ordinal pod is first in the scale-down batch.
+			failedPodName := clusterName + "-0-3"
+
+			By("Marking the pod as failed")
+			Expect(markPodAsFailed(ctx, k8sClient, failedPodName, namespace)).ToNot(HaveOccurred())
+
+			By("Triggering scale-down by 1 without maxIgnorablePods")
+
+			aeroCluster.Spec.Size--
+			Expect(k8sClient.Update(ctx, aeroCluster)).ToNot(HaveOccurred())
+
+			By("Asserting cluster does not complete (blocked waiting for pod recovery)")
+
+			err = waitForAerospikeCluster(
+				k8sClient, ctx, aeroCluster, int(aeroCluster.Spec.Size),
+				retryInterval, 2*time.Minute,
+				[]asdbv1.AerospikeClusterPhase{asdbv1.AerospikeClusterInProgress, asdbv1.AerospikeClusterError},
+			)
+			Expect(err).To(HaveOccurred())
+		})
+
+		It("Should allow scale-down when the failed pod is covered by maxIgnorablePods", func() {
+			aeroCluster, err := getCluster(k8sClient, ctx, clusterNamespacedName)
+			Expect(err).ToNot(HaveOccurred())
+
+			failedPodName := clusterName + "-0-3"
+
+			By("Marking the pod as failed")
+			Expect(markPodAsFailed(ctx, k8sClient, failedPodName, namespace)).ToNot(HaveOccurred())
+
+			By("Setting maxIgnorablePods=1 and triggering scale-down")
+
+			maxIgnorable := intstr.FromInt32(1)
+			aeroCluster.Spec.RackConfig.MaxIgnorablePods = &maxIgnorable
+			aeroCluster.Spec.Size--
+
+			Expect(updateCluster(k8sClient, ctx, aeroCluster)).ToNot(HaveOccurred())
+		})
+
+		It("Should block scale-down when pod other than the pod to be scaled down is in failed and "+
+			"maxIgnorablePods is not set", func() {
+			aeroCluster, err := getCluster(k8sClient, ctx, clusterNamespacedName)
+			Expect(err).ToNot(HaveOccurred())
+
+			failedPodName := clusterName + "-0-1"
+
+			By("Marking the pod as failed")
+			Expect(markPodAsFailed(ctx, k8sClient, failedPodName, namespace)).ToNot(HaveOccurred())
+
+			By("Triggering scale-down by 1 without maxIgnorablePods")
+
+			aeroCluster.Spec.Size--
+			Expect(k8sClient.Update(ctx, aeroCluster)).ToNot(HaveOccurred())
+
+			By("Asserting cluster does not complete (blocked waiting for pod recovery)")
+
+			err = waitForAerospikeCluster(
+				k8sClient, ctx, aeroCluster, int(aeroCluster.Spec.Size),
+				retryInterval, 2*time.Minute,
+				[]asdbv1.AerospikeClusterPhase{asdbv1.AerospikeClusterInProgress, asdbv1.AerospikeClusterError},
+			)
+			Expect(err).To(HaveOccurred())
+		})
+	})
+
 	// TODO: Do we need to add all the invalid operation test-cases here?
 	// Skipped for now as they are exactly same as RollingUpdateBatchSize invalid operation test-cases
 	Context("When doing invalid operations", func() {
