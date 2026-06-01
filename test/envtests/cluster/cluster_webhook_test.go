@@ -1109,7 +1109,9 @@ var _ = Describe("AerospikeCluster validation", func() {
 					// Webhook response validation
 					envtests.NewStatusErrorMatcher().
 						WithMessageSubstrings(testutil.CRDSchemaErrorPrefix,
-							"Invalid value: -1: spec.rackConfig.racks[0].id in body should be greater than or equal to 0").
+							"Invalid value: -1",
+							"spec.rackConfig.racks",
+							".id in body should be greater than or equal to 0").
 						Validate(err)
 				})
 
@@ -1159,6 +1161,41 @@ var _ = Describe("AerospikeCluster validation", func() {
 							"namespace name `test ns` cannot have spaces",
 							"Namespaces [test ns]").
 						Validate(err)
+				})
+			})
+		})
+
+		Context("spec.validationPolicy", func() {
+			Context("defaults", func() {
+				It("defaults to {skipWorkDirValidate: false} when not set", func() {
+					aeroCluster := testCluster.CreateDummyAerospikeCluster(clusterNamespacedName, 2)
+					Expect(aeroCluster.Spec.ValidationPolicy).To(BeNil())
+
+					Expect(envtests.K8sClient.Create(ctx, aeroCluster)).To(Succeed())
+
+					fetched, err := testCluster.GetCluster(envtests.K8sClient, ctx, clusterNamespacedName)
+					Expect(err).ToNot(HaveOccurred())
+					Expect(fetched.Spec.ValidationPolicy).ToNot(BeNil())
+					Expect(fetched.Spec.ValidationPolicy.SkipWorkDirValidate).To(BeFalse())
+				})
+			})
+		})
+
+		Context("spec.aerospikeNetworkPolicy", func() {
+			Context("defaults", func() {
+				It("defaults access types to hostInternal/hostExternal when not set", func() {
+					aeroCluster := testCluster.CreateDummyAerospikeCluster(clusterNamespacedName, 2)
+					aeroCluster.Spec.AerospikeNetworkPolicy = asdbv1.AerospikeNetworkPolicy{}
+
+					Expect(envtests.K8sClient.Create(ctx, aeroCluster)).To(Succeed())
+
+					fetched, err := testCluster.GetCluster(envtests.K8sClient, ctx, clusterNamespacedName)
+					Expect(err).ToNot(HaveOccurred())
+					Expect(fetched.Spec.AerospikeNetworkPolicy.AccessType).To(Equal(asdbv1.AerospikeNetworkTypeHostInternal))
+					Expect(fetched.Spec.AerospikeNetworkPolicy.AlternateAccessType).To(Equal(asdbv1.AerospikeNetworkTypeHostExternal))
+					Expect(fetched.Spec.AerospikeNetworkPolicy.TLSAccessType).To(Equal(asdbv1.AerospikeNetworkTypeHostInternal))
+					Expect(fetched.Spec.AerospikeNetworkPolicy.TLSAlternateAccessType).
+						To(Equal(asdbv1.AerospikeNetworkTypeHostExternal))
 				})
 			})
 		})

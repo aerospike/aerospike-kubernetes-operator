@@ -81,6 +81,19 @@ var _ = Describe("Storage webhook validation", func() {
 				})
 			})
 
+			Context("defaults", func() {
+				It("defaults cleanupThreads to 1 when not set", func() {
+					aeroCluster := testCluster.CreateDummyAerospikeCluster(nsName, 2)
+					Expect(aeroCluster.Spec.Storage.CleanupThreads).To(Equal(0))
+
+					Expect(envtests.K8sClient.Create(ctx, aeroCluster)).To(Succeed())
+
+					fetched, err := testCluster.GetCluster(envtests.K8sClient, ctx, nsName)
+					Expect(err).ToNot(HaveOccurred())
+					Expect(fetched.Spec.Storage.CleanupThreads).To(Equal(1))
+				})
+			})
+
 			Context("positive", func() {
 				It("allows CREATE when spec.storage is not set"+
 					"and validation is satisfied via per-rack InputStorage", func() {
