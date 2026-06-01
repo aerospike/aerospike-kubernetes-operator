@@ -1,0 +1,37 @@
+name: Validate Helm index.yaml
+
+on:
+  push:
+    branches:
+      - helm-charts
+    paths:
+      - index.yaml
+  pull_request:
+    branches:
+      - helm-charts
+    paths:
+      - index.yaml
+
+jobs:
+  validate:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Lint index.yaml (yamllint)
+        run: |
+          pip install --quiet yamllint
+          yamllint index.yaml
+
+      - name: Install Helm
+        uses: azure/setup-helm@v4
+
+      - name: Validate index.yaml via local Helm repo
+        run: |
+          python3 -m http.server 8080 --directory "$GITHUB_WORKSPACE" &
+          sleep 2
+          helm repo add ako-local http://localhost:8080
+          helm repo update
+          helm search repo ako-local --versions
+          helm repo remove ako-local
+          kill %1
