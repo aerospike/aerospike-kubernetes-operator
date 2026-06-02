@@ -185,3 +185,18 @@ func patchFirstPVStorageClassSpec(storage *asdbv1.AerospikeStorageSpec) {
 
 	Fail("no PersistentVolume volume found in storage spec")
 }
+
+// podResourcesWithLimitsLessThanRequests returns resource requirements where limits are below requests
+// (invalid per validateResourceAndLimits in the validating webhook).
+func podResourcesWithLimitsLessThanRequests() *corev1.ResourceRequirements {
+	return &corev1.ResourceRequirements{
+		Requests: corev1.ResourceList{
+			corev1.ResourceCPU:    resource.MustParse("250m"),
+			corev1.ResourceMemory: resource.MustParse("3Gi"),
+		},
+		Limits: corev1.ResourceList{
+			corev1.ResourceCPU:    resource.MustParse("200m"),
+			corev1.ResourceMemory: resource.MustParse("2Gi"),
+		},
+	}
+}

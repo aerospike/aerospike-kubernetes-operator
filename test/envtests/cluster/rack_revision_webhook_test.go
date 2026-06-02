@@ -35,7 +35,7 @@ import (
 
 const (
 	newRackRevision         = "v2"
-	rackRevisionClusterName = "rack-revision-webhook-cluster"
+	rackRevisionClusterName = "rack-revision-cluster"
 	threeCharClusterName    = "abc"
 )
 
@@ -85,7 +85,7 @@ var _ = Describe("Rack revision webhook validation", func() {
 						Racks:      []asdbv1.Rack{{ID: 1, Revision: strings.Repeat("a", 48)}},
 					}
 
-					err := testCluster.DeployCluster(envtests.K8sClient, ctx, aeroCluster)
+					err := envtests.K8sClient.Create(ctx, aeroCluster)
 					Expect(err).To(HaveOccurred())
 
 					envtests.NewStatusErrorMatcher().
@@ -111,7 +111,7 @@ var _ = Describe("Rack revision webhook validation", func() {
 							Racks:      []asdbv1.Rack{{ID: 1, Revision: c.revision}},
 						}
 
-						err := testCluster.DeployCluster(envtests.K8sClient, ctx, aeroCluster)
+						err := envtests.K8sClient.Create(ctx, aeroCluster)
 						Expect(err).To(HaveOccurred())
 
 						subs := append([]string{testutil.WebhookErrorPrefix}, c.subs...)
@@ -159,7 +159,7 @@ var _ = Describe("Rack revision webhook validation", func() {
 						Racks:      []asdbv1.Rack{{ID: 1, Revision: "v1"}},
 					}
 
-					err := testCluster.DeployCluster(envtests.K8sClient, ctx, aeroCluster)
+					err := envtests.K8sClient.Create(ctx, aeroCluster)
 					Expect(err).To(HaveOccurred())
 
 					envtests.NewStatusErrorMatcher().
@@ -183,7 +183,7 @@ var _ = Describe("Rack revision webhook validation", func() {
 						},
 					}
 
-					err := testCluster.DeployCluster(envtests.K8sClient, ctx, aeroCluster)
+					err := envtests.K8sClient.Create(ctx, aeroCluster)
 					Expect(err).To(HaveOccurred())
 
 					envtests.NewStatusErrorMatcher().
@@ -209,7 +209,7 @@ var _ = Describe("Rack revision webhook validation", func() {
 						},
 					}
 
-					err := testCluster.DeployCluster(envtests.K8sClient, ctx, aeroCluster)
+					err := envtests.K8sClient.Create(ctx, aeroCluster)
 					Expect(err).To(HaveOccurred())
 
 					envtests.NewStatusErrorMatcher().

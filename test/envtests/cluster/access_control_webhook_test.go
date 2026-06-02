@@ -256,7 +256,7 @@ func validAccessControlForDeployPositiveQuota() *asdbv1.AerospikeAccessControlSp
 
 var _ = Describe("AerospikeCluster access control validation (envtests)", func() {
 	const (
-		accessControlClusterName = "access-control-webhook-cluster"
+		accessControlClusterName = "access-control-cluster"
 	)
 
 	ctx := context.TODO()
