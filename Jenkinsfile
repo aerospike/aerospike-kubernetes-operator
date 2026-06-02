@@ -57,16 +57,6 @@ pipeline {
                         sh 'ln -sfn ${WORKSPACE} ${GO_REPO}'
 
                         dir("${env.GO_REPO}") {
-                            withCredentials([
-                                string(credentialsId: 'aerospike-docker-org-name', variable: 'DOCKERHUB_USER'),
-                                string(credentialsId: 'aerospike-docker-org-rw-token', variable: 'DOCKERHUB_TOKEN')
-                            ]) {
-                                sh '''
-                                    set +x
-                                    echo "$DOCKERHUB_TOKEN" | docker login -u "$DOCKERHUB_USER" --password-stdin docker.io
-                                    set -x
-                                '''
-                            }
                             // Changing directory again otherwise operator generates binary with the symlink name
                             sh "cd ${GO_REPO} && make docker-buildx"
                             sh "cd ${GO_REPO} && make bundle"
