@@ -46,6 +46,39 @@ var _ = Describe("AerospikeCluster validation", func() {
 		}
 	})
 
+	runInMemorySCNamespaceUpdate := func(
+		targetNamespacedName types.NamespacedName,
+		initialStorageEngine, updatedStorageEngine map[string]interface{},
+		mutateCluster ...func(*asdbv1.AerospikeCluster),
+	) error {
+		aeroCluster := testCluster.CreateDummyAerospikeCluster(targetNamespacedName, 2)
+
+		for _, m := range mutateCluster {
+			if m != nil {
+				m(aeroCluster)
+			}
+		}
+
+		rawNamespaces := aeroCluster.Spec.AerospikeConfig.Value[asdbv1.ConfKeyNamespace].([]interface{})
+		nsMap := rawNamespaces[0].(map[string]interface{})
+		nsMap["storage-engine"] = initialStorageEngine
+
+		if err := envtests.K8sClient.Create(ctx, aeroCluster); err != nil {
+			return err
+		}
+
+		current, err := testCluster.GetCluster(envtests.K8sClient, ctx, targetNamespacedName)
+		if err != nil {
+			return err
+		}
+
+		currentNamespaces := current.Spec.AerospikeConfig.Value[asdbv1.ConfKeyNamespace].([]interface{})
+		currentNsMap := currentNamespaces[0].(map[string]interface{})
+		currentNsMap["storage-engine"] = updatedStorageEngine
+
+		return envtests.K8sClient.Update(ctx, current)
+	}
+
 	Context("Deploy validation", func() {
 		Context("spec.size", func() {
 			Context("negative", func() {
@@ -160,8 +193,7 @@ var _ = Describe("AerospikeCluster validation", func() {
 					envtests.NewStatusErrorMatcher().
 						WithMessageSubstrings(testutil.WebhookErrorPrefix,
 							"namespace storage device related devicePath /test/dev/xvdf not found in Storage config",
-							"<nil>", "deleteFiles deleteFiles false}",
-							"{<nil> <nil>", "none dd false} 1 [] <nil> []}").
+						).
 						Validate(err)
 				})
 
@@ -480,7 +512,7 @@ var _ = Describe("AerospikeCluster validation", func() {
 
 				It("rejects in-memory SC namespace without persistent storage", func() {
 					aeroCluster := testCluster.CreateDummyAerospikeCluster(clusterNamespacedName, 2)
-					rawNamespaces := aeroCluster.Spec.AerospikeConfig.Value["namespaces"].([]interface{})
+					rawNamespaces := aeroCluster.Spec.AerospikeConfig.Value[asdbv1.ConfKeyNamespace].([]interface{})
 
 					if len(rawNamespaces) > 0 {
 						nsMap := rawNamespaces[0].(map[string]interface{})
@@ -490,12 +522,129 @@ var _ = Describe("AerospikeCluster validation", func() {
 						}
 					}
 
-					err := testCluster.DeployCluster(envtests.K8sClient, ctx, aeroCluster)
+					err := envtests.K8sClient.Create(ctx, aeroCluster)
 					Expect(err).To(HaveOccurred())
 
 					envtests.NewStatusErrorMatcher().
 						WithMessageSubstrings("\"vaerospikecluster.kb.io\"",
-							"in-memory SC namespace without persistent storage (files or devices) is not supported").
+							"in-memory SC namespace without persistent storage (files or devices) is not supported",
+							"namespace test",
+						).
+						Validate(err)
+				})
+
+				// devices: [] hits pkg/validation before validateSCNamespaces (empty list is not the same as omitting devices).
+				It("rejects in-memory SC namespace when persistence devices list is explicitly empty", func() {
+					aeroCluster := testCluster.CreateDummyAerospikeCluster(clusterNamespacedName, 2)
+					rawNamespaces := aeroCluster.Spec.AerospikeConfig.Value[asdbv1.ConfKeyNamespace].([]interface{})
+
+					if len(rawNamespaces) > 0 {
+						nsMap := rawNamespaces[0].(map[string]interface{})
+						nsMap["storage-engine"] = map[string]interface{}{
+							"type":    "memory",
+							"devices": []interface{}{},
+						}
+					}
+
+					err := envtests.K8sClient.Create(ctx, aeroCluster)
+					Expect(err).To(HaveOccurred())
+
+					envtests.NewStatusErrorMatcher().
+						WithMessageSubstrings(
+							"\"vaerospikecluster.kb.io\"",
+							"no devices for namespace storage map[devices:[] type:memory]",
+						).
+						Validate(err)
+				})
+
+				It("rejects in-memory SC namespace when persistence files list is explicitly empty", func() {
+					aeroCluster := testCluster.CreateDummyAerospikeCluster(clusterNamespacedName, 2)
+					rawNamespaces := aeroCluster.Spec.AerospikeConfig.Value["namespaces"].([]interface{})
+
+					if len(rawNamespaces) > 0 {
+						nsMap := rawNamespaces[0].(map[string]interface{})
+						nsMap["storage-engine"] = map[string]interface{}{
+							"type":  "memory",
+							"files": []interface{}{},
+						}
+					}
+
+					err := envtests.K8sClient.Create(ctx, aeroCluster)
+					Expect(err).To(HaveOccurred())
+
+					envtests.NewStatusErrorMatcher().
+						WithMessageSubstrings(
+							"\"vaerospikecluster.kb.io\"",
+							"aerospikeConfig not valid: generated config not valid for version",
+							"config schema error",
+							"(root).namespaces.0.storage-engine",
+						).
+						Validate(err)
+				})
+
+				// Bug: Improve the response message string to indicate correct invalid type.
+				// currently it is showing null namespaces.0.storage-engine.files instead of invalid type.
+				It("rejects in-memory SC namespace when persistence files contains non-string entry", func() {
+					aeroCluster := testCluster.CreateDummyAerospikeCluster(clusterNamespacedName, 2)
+					rawNamespaces := aeroCluster.Spec.AerospikeConfig.Value["namespaces"].([]interface{})
+
+					if len(rawNamespaces) > 0 {
+						nsMap := rawNamespaces[0].(map[string]interface{})
+						nsMap["storage-engine"] = map[string]interface{}{
+							"type":  "memory",
+							"files": []interface{}{1},
+						}
+					}
+
+					err := envtests.K8sClient.Create(ctx, aeroCluster)
+					Expect(err).To(HaveOccurred())
+
+					envtests.NewStatusErrorMatcher().
+						WithMessageSubstrings(
+							"\"vaerospikecluster.kb.io\"",
+							"aerospikeConfig not valid: generated config not valid for version",
+							" invalid_type (root).namespaces.0.storage-engine.files Invalid type",
+							"Expected: array, given: null namespaces.0.storage-engine.files",
+						).
+						Validate(err)
+				})
+
+				It("rejects mixed SC in-memory namespaces when one namespace has no persistence backing", func() {
+					aeroCluster := testCluster.CreateDummyAerospikeCluster(clusterNamespacedName, 2)
+					rawNamespaces := aeroCluster.Spec.AerospikeConfig.Value["namespaces"].([]interface{})
+
+					if len(rawNamespaces) > 0 {
+						validSC := rawNamespaces[0].(map[string]interface{})
+						validSC["name"] = "valid-sc-memory"
+						validSC["storage-engine"] = map[string]interface{}{
+							"type":    "memory",
+							"devices": []interface{}{"/test/dev/xvdf"},
+						}
+					}
+
+					// Pure in-memory (type + data-size only, no devices/files keys) so pkg/validation does not
+					// reject first with "no devices for namespace storage"; validateSCNamespaces rejects invalid-sc-memory.
+					rawNamespaces = append(rawNamespaces, map[string]interface{}{
+						"name":               "invalid-sc-memory",
+						"replication-factor": 2,
+						"strong-consistency": true,
+						"storage-engine": map[string]interface{}{
+							"type":      "memory",
+							"data-size": 1073741824,
+						},
+					})
+
+					aeroCluster.Spec.AerospikeConfig.Value[asdbv1.ConfKeyNamespace] = rawNamespaces
+
+					err := envtests.K8sClient.Create(ctx, aeroCluster)
+					Expect(err).To(HaveOccurred())
+
+					envtests.NewStatusErrorMatcher().
+						WithMessageSubstrings(
+							"\"vaerospikecluster.kb.io\"",
+							"in-memory SC namespace without persistent storage (files or devices) is not supported",
+							"namespace invalid-sc-memory",
+						).
 						Validate(err)
 				})
 
@@ -545,6 +694,27 @@ var _ = Describe("AerospikeCluster validation", func() {
 						Validate(err)
 				})
 
+				It("rejects in-memory SC namespace when persistence device is not in storage config", func() {
+					aeroCluster := testCluster.CreateDummyAerospikeCluster(clusterNamespacedName, 2)
+					rawNamespaces := aeroCluster.Spec.AerospikeConfig.Value[asdbv1.ConfKeyNamespace].([]interface{})
+
+					if len(rawNamespaces) > 0 {
+						nsMap := rawNamespaces[0].(map[string]interface{})
+						nsMap["storage-engine"] = map[string]interface{}{
+							"type":    "memory",
+							"devices": []interface{}{"/missing/dev/device0"},
+						}
+					}
+
+					err := envtests.K8sClient.Create(ctx, aeroCluster)
+					Expect(err).To(HaveOccurred())
+
+					envtests.NewStatusErrorMatcher().
+						WithMessageSubstrings("\"vaerospikecluster.kb.io\"",
+							"namespace storage device related devicePath /missing/dev/device0 not found in Storage config").
+						Validate(err)
+				})
+
 				It("rejects AP in-memory namespace when persistence devices has invalid type", func() {
 					aeroCluster := testCluster.CreateDummyAerospikeCluster(clusterNamespacedName, 2)
 					aeroCluster.Spec.AerospikeConfig.Value[asdbv1.ConfKeyNamespace] = []interface{}{
@@ -583,6 +753,19 @@ var _ = Describe("AerospikeCluster validation", func() {
 				})
 			})
 			Context("positive", func() {
+				expectCreateToSucceedWithInMemorySCStorageEngine := func(storageEngine map[string]interface{}) {
+					aeroCluster := testCluster.CreateDummyAerospikeCluster(clusterNamespacedName, 2)
+					rawNamespaces := aeroCluster.Spec.AerospikeConfig.Value["namespaces"].([]interface{})
+
+					if len(rawNamespaces) > 0 {
+						nsMap := rawNamespaces[0].(map[string]interface{})
+						nsMap["storage-engine"] = storageEngine
+					}
+
+					err := envtests.K8sClient.Create(ctx, aeroCluster)
+					Expect(err).ToNot(HaveOccurred())
+				}
+
 				It("allows AP in-memory namespace without persistent files or devices", func() {
 					aeroCluster := testCluster.CreateDummyAerospikeCluster(clusterNamespacedName, 2)
 					aeroCluster.Spec.AerospikeConfig.Value[asdbv1.ConfKeyNamespace] = []interface{}{
@@ -591,840 +774,1076 @@ var _ = Describe("AerospikeCluster validation", func() {
 
 					Expect(envtests.K8sClient.Create(ctx, aeroCluster)).To(Succeed())
 				})
-			})
-		})
 
-		Context("spec.aerospikeConfig", func() {
-			Context("negative", func() {
-				It("rejects empty aerospikeConfig", func() {
-					aeroCluster := testCluster.CreateDummyAerospikeCluster(clusterNamespacedName, 1)
-					aeroCluster.Spec.AerospikeConfig = &asdbv1.AerospikeConfigSpec{}
-					err := testCluster.DeployCluster(envtests.K8sClient, ctx, aeroCluster)
-					Expect(err).To(HaveOccurred())
-
-					// Webhook response validation
-					envtests.NewStatusErrorMatcher().
-						WithMessageSubstrings(" ",
-							"\"maerospikecluster.kb.io\"",
-							"spec.aerospikeConfig cannot be nil").
-						Validate(err)
-				})
-
-				It("rejects invalid aerospikeConfig", func() {
-					aeroCluster := testCluster.CreateDummyAerospikeCluster(clusterNamespacedName, 1)
-					aeroCluster.Spec.AerospikeConfig = &asdbv1.AerospikeConfigSpec{
-						Value: map[string]interface{}{
-							asdbv1.ConfKeyNamespace: "invalidConf",
-						},
-					}
-					err := testCluster.DeployCluster(envtests.K8sClient, ctx, aeroCluster)
-					Expect(err).To(HaveOccurred())
-
-					// Webhook response validation
-					envtests.NewStatusErrorMatcher().
-						WithMessageSubstrings(" ",
-							"\"maerospikecluster.kb.io\"",
-							"aerospikeConfig.namespaces not valid namespace list invalidConf").
-						Validate(err)
-				})
-
-				It("rejects using syslog param with file or console logging", func() {
-					aeroCluster := testCluster.CreateDummyAerospikeCluster(clusterNamespacedName, 2)
-					loggingConf := []interface{}{
+				It("allows in-memory SC namespace with persistent devices", func() {
+					expectCreateToSucceedWithInMemorySCStorageEngine(
 						map[string]interface{}{
-							"name":     "anyFileName",
-							"path":     "/dev/log",
-							"tag":      "asd",
-							"facility": "local0",
+							"type":    "memory",
+							"devices": []interface{}{"/test/dev/xvdf"},
 						},
+					)
+				})
+
+				It("allows non-SC in-memory namespace without persistent storage (backward compatible)", func() {
+					aeroCluster := testCluster.CreateDummyAerospikeCluster(clusterNamespacedName, 2)
+					rawNamespaces := aeroCluster.Spec.AerospikeConfig.Value["namespaces"].([]interface{})
+
+					if len(rawNamespaces) > 0 {
+						nsMap := rawNamespaces[0].(map[string]interface{})
+						nsMap["strong-consistency"] = false
+						nsMap["storage-engine"] = map[string]interface{}{
+							"type":      "memory",
+							"data-size": 1073741824,
+						}
 					}
-					aeroCluster.Spec.AerospikeConfig.Value["logging"] = loggingConf
 
-					// Deploy cluster
-					err := testCluster.DeployCluster(envtests.K8sClient, ctx, aeroCluster)
-					Expect(err).To(HaveOccurred())
+					err := envtests.K8sClient.Create(ctx, aeroCluster)
+					Expect(err).ToNot(HaveOccurred())
+				})
 
-					// Webhook response validation
-					envtests.NewStatusErrorMatcher().
-						WithMessageSubstrings(testutil.WebhookErrorPrefix,
-							"can use facility only with `syslog` in aerospikeConfig.logging",
-							"map[facility:local0 name:anyFileName path:/dev/log tag:asd]").
-						Validate(err)
+				It("allows mixed namespaces with one SC in-memory namespace using persistence", func() {
+					aeroCluster := testCluster.CreateDummyAerospikeCluster(clusterNamespacedName, 2)
+					rawNamespaces := aeroCluster.Spec.AerospikeConfig.Value["namespaces"].([]interface{})
+
+					if len(rawNamespaces) > 0 {
+						scNs := rawNamespaces[0].(map[string]interface{})
+						scNs["storage-engine"] = map[string]interface{}{
+							"type":    "memory",
+							"devices": []interface{}{"/test/dev/xvdf"},
+						}
+					}
+
+					rawNamespaces = append(rawNamespaces, map[string]interface{}{
+						"name":               "non-sc-memory",
+						"replication-factor": 2,
+						"storage-engine": map[string]interface{}{
+							"type":      "memory",
+							"data-size": 1073741824,
+						},
+					})
+					aeroCluster.Spec.AerospikeConfig.Value[asdbv1.ConfKeyNamespace] = rawNamespaces
+
+					err := envtests.K8sClient.Create(ctx, aeroCluster)
+					Expect(err).ToNot(HaveOccurred())
+				})
+
+				It("allows in-memory SC namespace with persistent files", func() {
+					expectCreateToSucceedWithInMemorySCStorageEngine(
+						map[string]interface{}{
+							"type":  "memory",
+							"files": []interface{}{"/opt/aerospike/sc-ns.dat"},
+						},
+					)
+				})
+			})
+
+			Context("spec.aerospikeConfig", func() {
+				Context("negative", func() {
+					It("rejects empty aerospikeConfig", func() {
+						aeroCluster := testCluster.CreateDummyAerospikeCluster(clusterNamespacedName, 1)
+						aeroCluster.Spec.AerospikeConfig = &asdbv1.AerospikeConfigSpec{}
+						err := testCluster.DeployCluster(envtests.K8sClient, ctx, aeroCluster)
+						Expect(err).To(HaveOccurred())
+
+						// Webhook response validation
+						envtests.NewStatusErrorMatcher().
+							WithMessageSubstrings(" ",
+								"\"maerospikecluster.kb.io\"",
+								"spec.aerospikeConfig cannot be nil").
+							Validate(err)
+					})
+
+					It("rejects invalid aerospikeConfig", func() {
+						aeroCluster := testCluster.CreateDummyAerospikeCluster(clusterNamespacedName, 1)
+						aeroCluster.Spec.AerospikeConfig = &asdbv1.AerospikeConfigSpec{
+							Value: map[string]interface{}{
+								asdbv1.ConfKeyNamespace: "invalidConf",
+							},
+						}
+						err := testCluster.DeployCluster(envtests.K8sClient, ctx, aeroCluster)
+						Expect(err).To(HaveOccurred())
+
+						// Webhook response validation
+						envtests.NewStatusErrorMatcher().
+							WithMessageSubstrings(" ",
+								"\"maerospikecluster.kb.io\"",
+								"aerospikeConfig.namespaces not valid namespace list invalidConf").
+							Validate(err)
+					})
+
+					It("rejects using syslog param with file or console logging", func() {
+						aeroCluster := testCluster.CreateDummyAerospikeCluster(clusterNamespacedName, 2)
+						loggingConf := []interface{}{
+							map[string]interface{}{
+								"name":     "anyFileName",
+								"path":     "/dev/log",
+								"tag":      "asd",
+								"facility": "local0",
+							},
+						}
+						aeroCluster.Spec.AerospikeConfig.Value["logging"] = loggingConf
+
+						// Deploy cluster
+						err := testCluster.DeployCluster(envtests.K8sClient, ctx, aeroCluster)
+						Expect(err).To(HaveOccurred())
+
+						// Webhook response validation
+						envtests.NewStatusErrorMatcher().
+							WithMessageSubstrings(testutil.WebhookErrorPrefix,
+								"can use facility only with `syslog` in aerospikeConfig.logging",
+								"map[facility:local0 name:anyFileName path:/dev/log tag:asd]").
+							Validate(err)
+					})
+				})
+			})
+
+			Context("spec.aerospikeConfig (service)", func() {
+				BeforeEach(func() {
+					envtests.GlobalWarnings.Reset()
+				})
+
+				Context("negative", func() {
+					It("rejects setting advertise-ipv6", func() {
+						aeroCluster := testCluster.CreateDummyAerospikeCluster(clusterNamespacedName, 1)
+						aeroCluster.Spec.AerospikeConfig.Value[asdbv1.ConfKeyService].(map[string]interface{})["advertise-ipv6"] = true
+
+						// Deploy cluster
+						err := testCluster.DeployCluster(envtests.K8sClient, ctx, aeroCluster)
+						Expect(err).To(HaveOccurred())
+
+						// Webhook response validation
+						envtests.NewStatusErrorMatcher().
+							WithMessageSubstrings(testutil.WebhookErrorPrefix,
+								"advertise-ipv6 is not supported").
+							Validate(err)
+					})
+
+					It("rejects setting node-id", func() {
+						// Service conf: "node-id"
+						aeroCluster := testCluster.CreateDummyAerospikeCluster(clusterNamespacedName, 1)
+						aeroCluster.Spec.AerospikeConfig.Value[asdbv1.ConfKeyService].(map[string]interface{})["node-id"] = "a1"
+
+						// Deploy cluster
+						err := testCluster.DeployCluster(envtests.K8sClient, ctx, aeroCluster)
+						Expect(err).To(HaveOccurred())
+
+						// Webhook response validation
+						envtests.NewStatusErrorMatcher().
+							WithMessageSubstrings(" \"maerospikecluster.kb.io\"",
+								"failed to set default aerospikeConfig.service config:",
+								"config node-id can not have non-default value (string a1).",
+								"It will be set internally (string ENV_NODE_ID)").
+							Validate(err)
+					})
+
+					It("rejects setting cluster-name", func() {
+						aeroCluster := testCluster.CreateDummyAerospikeCluster(clusterNamespacedName, 1)
+						// 1. Extract the service configuration map
+						serviceConf := aeroCluster.Spec.AerospikeConfig.Value[asdbv1.ConfKeyService].(map[string]interface{})
+
+						// 2. Assign the value to the specific key
+						serviceConf[testutil.ClusterNameConfig] = testutil.ClusterNameConfig
+
+						// Deploy cluster
+						err := testCluster.DeployCluster(envtests.K8sClient, ctx, aeroCluster)
+						Expect(err).To(HaveOccurred())
+
+						// Webhook response validation
+						envtests.NewStatusErrorMatcher().
+							WithMessageSubstrings(" \"maerospikecluster.kb.io\"",
+								"failed to set default aerospikeConfig.service config:",
+								"config cluster-name can not have non-default value (string cluster-name).",
+								fmt.Sprintf("It will be set internally (string %s)", clusterNamespacedName.Name)).
+							Validate(err)
+					})
+
+					It("rejects feature-key-file path not in storage volumes", func() {
+						aeroCluster := testCluster.CreateAerospikeClusterPost640(
+							clusterNamespacedName, 1, testutil.LatestEnterpriseImage,
+						)
+						aeroCluster.Spec.AerospikeConfig.Value[asdbv1.ConfKeyService] = map[string]interface{}{
+							"feature-key-file": "/randompath/features.conf",
+						}
+						// Deploy cluster
+						err := testCluster.DeployCluster(envtests.K8sClient, ctx, aeroCluster)
+						Expect(err).To(HaveOccurred())
+
+						// Webhook response validation
+						envtests.NewStatusErrorMatcher().
+							WithMessageSubstrings(testutil.WebhookErrorPrefix,
+								"feature-key-file paths or tls paths or default-password-file path are not mounted",
+								"- create an entry for '/randompath/features.conf' in 'storage.volumes'").
+							Validate(err)
+					})
+
+					It("warns when cgroup-mem-tracking is absent (version >= "+testutil.CgroupMemTrackingServerVersion+")", func() {
+						aeroCluster := testCluster.CreateAerospikeClusterPost640(
+							clusterNamespacedName, 1, testutil.GetEnterpriseImage(testutil.CgroupMemTrackingServerVersion),
+						)
+
+						Expect(envtests.WarningK8sClient.Create(ctx, aeroCluster)).ToNot(HaveOccurred())
+						Expect(envtests.GlobalWarnings.Warnings).To(ContainElement(ContainSubstring(asdbv1.ConfigKeyCgroupMemTracking)))
+					})
+
+					It("warns when cgroup-mem-tracking is false (version >= "+testutil.CgroupMemTrackingServerVersion+")", func() {
+						aeroCluster := testCluster.CreateAerospikeClusterPost640(
+							clusterNamespacedName, 1, testutil.GetEnterpriseImage(testutil.CgroupMemTrackingServerVersion),
+						)
+						aeroCluster.Spec.AerospikeConfig.Value[asdbv1.ConfKeyService].(map[string]interface {
+						})[asdbv1.ConfigKeyCgroupMemTracking] = false
+
+						Expect(envtests.WarningK8sClient.Create(ctx, aeroCluster)).ToNot(HaveOccurred())
+						Expect(envtests.GlobalWarnings.Warnings).To(ContainElement(ContainSubstring(asdbv1.ConfigKeyCgroupMemTracking)))
+					})
+				})
+				Context("positive", func() {
+					It("does not warn when cgroup-mem-tracking is true "+
+						"(version >= "+testutil.CgroupMemTrackingServerVersion+")", func() {
+						aeroCluster := testCluster.CreateAerospikeClusterPost640(
+							clusterNamespacedName, 1, testutil.GetEnterpriseImage(testutil.CgroupMemTrackingServerVersion),
+						)
+						aeroCluster.Spec.AerospikeConfig.Value[asdbv1.ConfKeyService].(map[string]interface {
+						})[asdbv1.ConfigKeyCgroupMemTracking] = true
+
+						Expect(envtests.WarningK8sClient.Create(ctx, aeroCluster)).ToNot(HaveOccurred())
+						Expect(envtests.GlobalWarnings.Warnings).NotTo(ContainElement(
+							ContainSubstring(asdbv1.ConfigKeyCgroupMemTracking)))
+					})
+
+					It("does not warn when cgroup-mem-tracking is absent "+
+						"(version < "+testutil.CgroupMemTrackingServerVersion+")", func() {
+						aeroCluster := testCluster.CreateAerospikeClusterPost640(
+							clusterNamespacedName, 1, testutil.GetEnterpriseImage(testutil.Pre810ServerVersion),
+						)
+
+						Expect(envtests.WarningK8sClient.Create(ctx, aeroCluster)).ToNot(HaveOccurred())
+						Expect(envtests.GlobalWarnings.Warnings).NotTo(ContainElement(
+							ContainSubstring(asdbv1.ConfigKeyCgroupMemTracking)))
+					})
+				})
+			})
+
+			Context("spec.podSpec", func() {
+				Context("negative", func() {
+					It("rejects dnsPolicy Default", func() {
+						aeroCluster := testCluster.CreateDummyAerospikeCluster(clusterNamespacedName, 2)
+						defaultDNS := v1.DNSDefault
+						aeroCluster.Spec.PodSpec.InputDNSPolicy = &defaultDNS
+
+						// Deploy cluster
+						err := testCluster.DeployCluster(envtests.K8sClient, ctx, aeroCluster)
+						Expect(err).To(HaveOccurred())
+
+						// Webhook response validation
+						envtests.NewStatusErrorMatcher().
+							WithMessageSubstrings(testutil.CRDSchemaErrorPrefix,
+								"spec.podSpec.dnsPolicy: Unsupported value: \"Default\": supported values: "+
+									"\"ClusterFirstWithHostNet\", \"ClusterFirst\", \"None\"").
+							Validate(err)
+					})
+
+					It("rejects dnsPolicy None without dnsConfig", func() {
+						aeroCluster := testCluster.CreateDummyAerospikeCluster(clusterNamespacedName, 2)
+						noneDNS := v1.DNSNone
+						aeroCluster.Spec.PodSpec.InputDNSPolicy = &noneDNS
+
+						// Deploy cluster
+						err := testCluster.DeployCluster(envtests.K8sClient, ctx, aeroCluster)
+						Expect(err).To(HaveOccurred())
+
+						// Webhook response validation
+						envtests.NewStatusErrorMatcher().
+							WithMessageSubstrings(testutil.WebhookErrorPrefix,
+								"dnsConfig is required field when dnsPolicy is set to None").
+							Validate(err)
+					})
+
+					It("rejects hostNetwork and MultiPodPerHost both enabled", func() {
+						aeroCluster := testCluster.CreateDummyAerospikeCluster(clusterNamespacedName, 2)
+						aeroCluster.Spec.PodSpec.HostNetwork = true
+						aeroCluster.Spec.PodSpec.MultiPodPerHost = ptr.To(true)
+
+						err := testCluster.DeployCluster(envtests.K8sClient, ctx, aeroCluster)
+						Expect(err).To(HaveOccurred())
+
+						envtests.NewStatusErrorMatcher().
+							WithMessageSubstrings(
+								testutil.WebhookErrorPrefix,
+								"host networking cannot be enabled with multi pod per host").
+							Validate(err)
+					})
+				})
+			})
+
+			Context("spec.operatorClientCertSpec", func() {
+				Context("negative", func() {
+					It("rejects both SecretCertSource and CertPathInOperator set", func() {
+						aeroCluster := testCluster.CreateAerospikeClusterPost640(
+							clusterNamespacedName, 1, testutil.LatestEnterpriseImage,
+						)
+						aeroCluster.Spec.OperatorClientCertSpec.CertPathInOperator = &asdbv1.AerospikeCertPathInOperatorSource{}
+
+						// Deploy cluster
+						err := testCluster.DeployCluster(envtests.K8sClient, ctx, aeroCluster)
+						Expect(err).To(HaveOccurred())
+
+						// Webhook response validation
+						envtests.NewStatusErrorMatcher().
+							WithMessageSubstrings(testutil.WebhookErrorPrefix,
+								"either `secretCertSource` or `certPathInOperator` must be set in `operatorClientCertSpec` but not both").
+							Validate(err)
+					})
+
+					It("rejects missing ClientKeyFilename", func() {
+						aeroCluster := testCluster.CreateAerospikeClusterPost640(
+							clusterNamespacedName, 1, testutil.LatestEnterpriseImage,
+						)
+						aeroCluster.Spec.OperatorClientCertSpec.SecretCertSource.ClientKeyFilename = ""
+
+						// Deploy cluster
+						err := testCluster.DeployCluster(envtests.K8sClient, ctx, aeroCluster)
+						Expect(err).To(HaveOccurred())
+
+						// Webhook response validation
+						envtests.NewStatusErrorMatcher().
+							WithMessageSubstrings(testutil.WebhookErrorPrefix,
+								"both `clientCertFilename` and `clientKeyFilename` should be either set or not set in `secretCertSource`").
+							Validate(err)
+					})
+
+					It("rejects both CaCertsFilename and CaCertsSource set", func() {
+						aeroCluster := testCluster.CreateAerospikeClusterPost640(
+							clusterNamespacedName, 1, testutil.LatestEnterpriseImage,
+						)
+						aeroCluster.Spec.OperatorClientCertSpec.SecretCertSource.CaCertsSource = &asdbv1.CaCertsSource{}
+
+						// Deploy cluster
+						err := testCluster.DeployCluster(envtests.K8sClient, ctx, aeroCluster)
+						Expect(err).To(HaveOccurred())
+
+						// Webhook response validation
+						envtests.NewStatusErrorMatcher().
+							WithMessageSubstrings(testutil.WebhookErrorPrefix,
+								"both `caCertsFilename` or `caCertsSource` cannot be set in `secretCertSource`").
+							Validate(err)
+					})
+
+					It("rejects missing clientCertPath", func() {
+						aeroCluster := testCluster.CreateAerospikeClusterPost640(
+							clusterNamespacedName, 1, testutil.LatestEnterpriseImage,
+						)
+						aeroCluster.Spec.OperatorClientCertSpec.SecretCertSource = nil
+						aeroCluster.Spec.OperatorClientCertSpec.CertPathInOperator =
+							&asdbv1.AerospikeCertPathInOperatorSource{
+								CaCertsPath:    "cacert.pem",
+								ClientKeyPath:  "svc_key.pem",
+								ClientCertPath: "",
+							}
+
+						// Deploy cluster
+						err := testCluster.DeployCluster(envtests.K8sClient, ctx, aeroCluster)
+						Expect(err).To(HaveOccurred())
+
+						// Webhook response validation
+						envtests.NewStatusErrorMatcher().
+							WithMessageSubstrings(testutil.WebhookErrorPrefix,
+								"both `clientCertPath` and `clientKeyPath` should be either set or not set in `certPathInOperator`").
+							Validate(err)
+					})
+
+					It("rejects when operator client cert is not configured", func() {
+						aeroCluster := testCluster.CreateAerospikeClusterPost640(
+							clusterNamespacedName, 1, testutil.LatestEnterpriseImage,
+						)
+						aeroCluster.Spec.OperatorClientCertSpec = nil
+
+						// Deploy cluster
+						err := testCluster.DeployCluster(envtests.K8sClient, ctx, aeroCluster)
+						Expect(err).To(HaveOccurred())
+
+						// Webhook response validation
+						envtests.NewStatusErrorMatcher().
+							WithMessageSubstrings(testutil.WebhookErrorPrefix,
+								"operator client cert is not specified").
+							Validate(err)
+					})
+				})
+			})
+
+			Context("metadata", func() {
+				Context("negative", func() {
+					It("rejects empty cluster name", func() {
+						cName := test.GetNamespacedName("", clusterNamespacedName.Namespace)
+						aeroCluster := testCluster.CreateDummyAerospikeCluster(cName, 1)
+						err := testCluster.DeployCluster(envtests.K8sClient, ctx, aeroCluster)
+						Expect(err).To(HaveOccurred())
+
+						// Webhook response validation
+						envtests.NewStatusErrorMatcher().
+							WithMessageSubstrings(testutil.CRDSchemaErrorPrefix,
+								"\"\" is invalid:",
+								"metadata.name: Required value: name or generateName is required").
+							WithCauses(metav1.StatusCause{
+								Type:    metav1.CauseTypeFieldValueRequired,
+								Message: "Required value: name or generateName is required",
+								Field:   "metadata.name",
+							}).
+							Validate(err)
+					})
+
+					It("rejects empty namespace name", func() {
+						cName := test.GetNamespacedName(clusterNamespacedName.Name, "")
+						aeroCluster := testCluster.CreateDummyAerospikeCluster(cName, 1)
+						err := testCluster.DeployCluster(envtests.K8sClient, ctx, aeroCluster)
+						Expect(err).To(HaveOccurred())
+
+						// err is not a Kubernetes StatusError,
+						// so we need to check the error message
+						Expect(err.Error()).To(Or(
+							ContainSubstring("an empty namespace may not be set during creation"),
+						))
+					})
+
+					It("rejects cluster name with spaces", func() {
+						cName := test.GetNamespacedName("my cluster", clusterNamespacedName.Namespace)
+						aeroCluster := testCluster.CreateDummyAerospikeCluster(cName, 1)
+
+						err := testCluster.DeployCluster(envtests.K8sClient, ctx, aeroCluster)
+						Expect(err).To(HaveOccurred())
+
+						// Webhook response validation
+						envtests.NewStatusErrorMatcher().
+							WithMessageSubstrings("AerospikeCluster.asdb.aerospike.com \"my cluster\" is invalid:",
+								"metadata.name: Invalid value: \"my cluster\": a lowercase RFC 1123 subdomain ",
+								"must consist of lower case alphanumeric characters,",
+								"'-' or '.', and must start and end with an alphanumeric character (e.g. 'example.com',",
+								"regex used for validation is '[a-z0-9]([-a-z0-9]*[a-z0-9])?(\\.[a-z0-9]([-a-z0-9]*[a-z0-9])?)*')").
+							Validate(err)
+					})
+
+					It("rejects cluster name with uppercase characters", func() {
+						cName := test.GetNamespacedName("MyCluster", clusterNamespacedName.Namespace)
+						aeroCluster := testCluster.CreateDummyAerospikeCluster(cName, 1)
+
+						err := testCluster.DeployCluster(envtests.K8sClient, ctx, aeroCluster)
+						Expect(err).To(HaveOccurred())
+
+						// Webhook response validation
+						envtests.NewStatusErrorMatcher().
+							WithMessageSubstrings("AerospikeCluster.asdb.aerospike.com \"MyCluster\" is invalid:",
+								"metadata.name: Invalid value: \"MyCluster\": a lowercase RFC 1123 subdomain",
+								"must consist of lower case alphanumeric characters,",
+								"'-' or '.', and must start and end with an alphanumeric character (e.g. 'example.com',",
+								"regex used for validation is '[a-z0-9]([-a-z0-9]*[a-z0-9])?(\\.[a-z0-9]([-a-z0-9]*[a-z0-9])?)*')").
+							Validate(err)
+					})
+
+					// cluster.Name is used as the headless-service name (and LB service base).
+					// Kubernetes validates service names as DNS-1035 labels, which requires
+					// the first character to be a lowercase letter — digits are not allowed.
+					// cluster.Name is immutable in Kubernetes, so this is checked at CREATE only.
+					It("rejects cluster name starting with a digit (invalid DNS-1035 service name)", func() {
+						cName := test.GetNamespacedName("1mycluster", clusterNamespacedName.Namespace)
+						aeroCluster := testCluster.CreateDummyAerospikeCluster(cName, 2)
+
+						err := testCluster.DeployCluster(envtests.K8sClient, ctx, aeroCluster)
+						Expect(err).To(HaveOccurred())
+
+						envtests.NewStatusErrorMatcher().
+							WithMessageSubstrings(
+								testutil.WebhookErrorPrefix,
+								"cluster name \"1mycluster\" is not a valid Kubernetes service name (DNS-1035)",
+								"start with an alphabetic character").
+							Validate(err)
+					})
+
+					// Projected label rune count: cluster name + 10 (3 hyphens + 7 for MaxRackID)
+					// + 3 (revision placeholder) + 10 (controller-revision hash upper bound) = 23
+					// fixed runes; name can be at most 40 for 63 (40+23=63).
+					It("rejects cluster name longer than 40 chars (projected Pod label value would exceed 63)", func() {
+						// 48 chars: 48 + 10 + 3 + 10 = 71 > 63.
+						longName := strings.Repeat("a", 48)
+						cName := test.GetNamespacedName(longName, clusterNamespacedName.Namespace)
+						aeroCluster := testCluster.CreateDummyAerospikeCluster(cName, 2)
+
+						err := testCluster.DeployCluster(envtests.K8sClient, ctx, aeroCluster)
+						Expect(err).To(HaveOccurred())
+
+						envtests.NewStatusErrorMatcher().
+							WithMessageSubstrings(
+								testutil.WebhookErrorPrefix,
+								"Pod label value would exceed the",
+								"63-character DNS label limit",
+								"revision placeholder = 3",
+								"total = 71",
+								"reduce by 8",
+							).Validate(err)
+					})
+
+					It("rejects when cluster namespace is not found", func() {
+						cName := test.GetNamespacedName(clusterNamespacedName.Name, "default ns")
+						aeroCluster := testCluster.CreateDummyAerospikeCluster(cName, 1)
+
+						err := testCluster.DeployCluster(envtests.K8sClient, ctx, aeroCluster)
+						Expect(err).To(HaveOccurred())
+
+						envtests.NewStatusErrorMatcher().
+							WithMessageSubstrings("namespaces \"default ns\" not found").
+							Validate(err)
+					})
+				})
+				Context("positive", func() {
+					It("accepts cluster name starting with a lowercase letter", func() {
+						cName := test.GetNamespacedName("valid-cluster", clusterNamespacedName.Namespace)
+						aeroCluster := testCluster.CreateDummyAerospikeCluster(cName, 2)
+
+						err := envtests.K8sClient.Create(ctx, aeroCluster)
+						Expect(err).ToNot(HaveOccurred())
+					})
+
+					// 40 (name) + 10 (Aerospike fixed) + 3 (min revision placeholder) + 10 (K8s) = 63.
+					It("accepts cluster name of exactly 40 chars (at projected Pod label value limit)", func() {
+						exactName := strings.Repeat("a", 40)
+						cName := test.GetNamespacedName(exactName, clusterNamespacedName.Namespace)
+						aeroCluster := testCluster.CreateDummyAerospikeCluster(cName, 2)
+
+						err := envtests.K8sClient.Create(ctx, aeroCluster)
+
+						Expect(err).To(Succeed())
+					})
+				})
+			})
+
+			Context("spec.maxUnavailable", func() {
+				Context("negative", func() {
+					// Bug: Improve response message string to indicate acceptable value is 1 and not 2.
+					// Current string "maxUnavailable 2 cannot be greater than or equal to 2" is not a clear message
+					It("rejects maxUnavailable >= RF across all namespaces", func() {
+						aeroCluster := testCluster.CreateDummyAerospikeCluster(clusterNamespacedName, 2)
+						maxUnav := intstr.FromInt32(2)
+						aeroCluster.Spec.MaxUnavailable = &maxUnav
+						// Ensure PDB is not disabled so MaxUnavailable is validated
+						aeroCluster.Spec.DisablePDB = nil
+
+						err := testCluster.DeployCluster(envtests.K8sClient, ctx, aeroCluster)
+						Expect(err).To(HaveOccurred())
+
+						envtests.NewStatusErrorMatcher().
+							WithMessageSubstrings(testutil.WebhookErrorPrefix,
+								"maxUnavailable 2 is invalid",
+								"value must be less than the minimum replication factor").
+							Validate(err)
+					})
+				})
+			})
+
+			Context("spec.aerospikeAccessControl", func() {
+				Context("negative", func() {
+					It("rejects when security is disabled but access control is specified", func() {
+						aeroCluster := testCluster.CreateDummyAerospikeCluster(clusterNamespacedName, 2)
+						// Remove security config so IsSecurityEnabled returns false
+						delete(aeroCluster.Spec.AerospikeConfig.Value, asdbv1.ConfKeySecurity)
+						// AerospikeAccessControl is already set on the dummy cluster; keep it set
+
+						err := testCluster.DeployCluster(envtests.K8sClient, ctx, aeroCluster)
+						Expect(err).To(HaveOccurred())
+
+						envtests.NewStatusErrorMatcher().
+							WithMessageSubstrings(
+								testutil.WebhookErrorPrefix,
+								"security is disabled but access control is specified").
+							Validate(err)
+					})
+				})
+			})
+
+			Context("spec.rackConfig", func() {
+				Context("negative", func() {
+					It("rejects negative rack ID", func() {
+						aeroCluster := testCluster.CreateDummyAerospikeCluster(clusterNamespacedName, 1)
+						// Add a rack with an ID that is too large or invalid structure
+						aeroCluster.Spec.RackConfig = asdbv1.RackConfig{
+							Namespaces: []string{"test"},
+							Racks: []asdbv1.Rack{
+								{ID: -1}, // Negative rack ID
+							},
+						}
+
+						err := testCluster.DeployCluster(envtests.K8sClient, ctx, aeroCluster)
+						Expect(err).To(HaveOccurred())
+
+						// Webhook response validation
+						envtests.NewStatusErrorMatcher().
+							WithMessageSubstrings(testutil.CRDSchemaErrorPrefix,
+								"Invalid value: -1",
+								"spec.rackConfig.racks",
+								".id in body should be greater than or equal to 0").
+							Validate(err)
+					})
+
+					It("rejects negative rollingUpdateBatchSize", func() {
+						aeroCluster := testCluster.CreateDummyAerospikeCluster(clusterNamespacedName, 2)
+						negVal := intstr.FromInt32(-1)
+						aeroCluster.Spec.RackConfig.RollingUpdateBatchSize = &negVal
+
+						err := testCluster.DeployCluster(envtests.K8sClient, ctx, aeroCluster)
+						Expect(err).To(HaveOccurred())
+
+						envtests.NewStatusErrorMatcher().
+							WithMessageSubstrings(
+								testutil.WebhookErrorPrefix,
+								"can not use negative spec.rackConfig.rollingUpdateBatchSize: -1").
+							Validate(err)
+					})
+
+					It("rejects negative scaleDownBatchSize", func() {
+						aeroCluster := testCluster.CreateDummyAerospikeCluster(clusterNamespacedName, 2)
+						negVal := intstr.FromInt32(-1)
+						aeroCluster.Spec.RackConfig.ScaleDownBatchSize = &negVal
+
+						err := testCluster.DeployCluster(envtests.K8sClient, ctx, aeroCluster)
+						Expect(err).To(HaveOccurred())
+
+						envtests.NewStatusErrorMatcher().
+							WithMessageSubstrings(
+								testutil.WebhookErrorPrefix,
+								"can not use negative spec.rackConfig.scaleDownBatchSize: -1").
+							Validate(err)
+					})
+
+					It("rejects namespace name in rackConfig.Namespaces containing spaces", func() {
+						aeroCluster := testCluster.CreateDummyAerospikeCluster(clusterNamespacedName, 2)
+						aeroCluster.Spec.RackConfig = asdbv1.RackConfig{
+							Namespaces: []string{"test ns"},
+							Racks:      []asdbv1.Rack{{ID: 1}},
+						}
+
+						err := testCluster.DeployCluster(envtests.K8sClient, ctx, aeroCluster)
+						Expect(err).To(HaveOccurred())
+
+						envtests.NewStatusErrorMatcher().
+							WithMessageSubstrings(
+								testutil.WebhookErrorPrefix,
+								"namespace name `test ns` cannot have spaces",
+								"Namespaces [test ns]").
+							Validate(err)
+					})
+				})
+			})
+
+			Context("spec.validationPolicy", func() {
+				Context("defaults", func() {
+					It("defaults to {skipWorkDirValidate: false} when not set", func() {
+						aeroCluster := testCluster.CreateDummyAerospikeCluster(clusterNamespacedName, 2)
+						Expect(aeroCluster.Spec.ValidationPolicy).To(BeNil())
+
+						Expect(envtests.K8sClient.Create(ctx, aeroCluster)).To(Succeed())
+
+						fetched, err := testCluster.GetCluster(envtests.K8sClient, ctx, clusterNamespacedName)
+						Expect(err).ToNot(HaveOccurred())
+						Expect(fetched.Spec.ValidationPolicy).ToNot(BeNil())
+						Expect(fetched.Spec.ValidationPolicy.SkipWorkDirValidate).To(BeFalse())
+					})
+				})
+			})
+
+			Context("spec.aerospikeNetworkPolicy", func() {
+				Context("defaults", func() {
+					It("defaults access types to hostInternal/hostExternal when not set", func() {
+						aeroCluster := testCluster.CreateDummyAerospikeCluster(clusterNamespacedName, 2)
+						aeroCluster.Spec.AerospikeNetworkPolicy = asdbv1.AerospikeNetworkPolicy{}
+
+						Expect(envtests.K8sClient.Create(ctx, aeroCluster)).To(Succeed())
+
+						fetched, err := testCluster.GetCluster(envtests.K8sClient, ctx, clusterNamespacedName)
+						Expect(err).ToNot(HaveOccurred())
+						Expect(fetched.Spec.AerospikeNetworkPolicy.AccessType).To(Equal(asdbv1.AerospikeNetworkTypeHostInternal))
+						Expect(fetched.Spec.AerospikeNetworkPolicy.AlternateAccessType).To(Equal(asdbv1.AerospikeNetworkTypeHostExternal))
+						Expect(fetched.Spec.AerospikeNetworkPolicy.TLSAccessType).To(Equal(asdbv1.AerospikeNetworkTypeHostInternal))
+						Expect(fetched.Spec.AerospikeNetworkPolicy.TLSAlternateAccessType).
+							To(Equal(asdbv1.AerospikeNetworkTypeHostExternal))
+					})
 				})
 			})
 		})
 
-		Context("spec.aerospikeConfig (service)", func() {
-			BeforeEach(func() {
-				envtests.GlobalWarnings.Reset()
+		Context("Update validation", func() {
+			const updateValidationClusterName = "update-validation-cluster"
+
+			updateValidationClusterNamespacedName := uniqueNamespacedName(updateValidationClusterName)
+
+			AfterEach(func() {
+				// Delete the cluster after each test
+				deleteCluster(ctx, updateValidationClusterNamespacedName)
 			})
 
-			Context("negative", func() {
-				It("rejects setting advertise-ipv6", func() {
-					aeroCluster := testCluster.CreateDummyAerospikeCluster(clusterNamespacedName, 1)
-					aeroCluster.Spec.AerospikeConfig.Value[asdbv1.ConfKeyService].(map[string]interface{})["advertise-ipv6"] = true
-
-					// Deploy cluster
-					err := testCluster.DeployCluster(envtests.K8sClient, ctx, aeroCluster)
-					Expect(err).To(HaveOccurred())
-
-					// Webhook response validation
-					envtests.NewStatusErrorMatcher().
-						WithMessageSubstrings(testutil.WebhookErrorPrefix,
-							"advertise-ipv6 is not supported").
-						Validate(err)
+			Context("spec.image", func() {
+				BeforeEach(func() {
+					aeroCluster := testCluster.CreateDummyAerospikeCluster(updateValidationClusterNamespacedName, 3)
+					Expect(envtests.K8sClient.Create(ctx, aeroCluster)).To(Succeed())
 				})
 
-				It("rejects setting node-id", func() {
-					// Service conf: "node-id"
-					aeroCluster := testCluster.CreateDummyAerospikeCluster(clusterNamespacedName, 1)
-					aeroCluster.Spec.AerospikeConfig.Value[asdbv1.ConfKeyService].(map[string]interface{})["node-id"] = "a1"
+				Context("negative", func() {
+					It("rejects InvalidImage and image lower than base", func() {
+						current, err := testCluster.GetCluster(envtests.K8sClient, ctx, updateValidationClusterNamespacedName)
+						Expect(err).ToNot(HaveOccurred())
 
-					// Deploy cluster
-					err := testCluster.DeployCluster(envtests.K8sClient, ctx, aeroCluster)
-					Expect(err).To(HaveOccurred())
+						current.Spec.Image = "InvalidImage"
+						err = envtests.K8sClient.Update(ctx, current)
+						Expect(err).To(HaveOccurred())
+						envtests.NewStatusErrorMatcher().
+							WithMessageSubstrings(
+								testutil.WebhookErrorPrefix,
+								"image \"InvalidImage\" is not supported",
+								"only Enterprise and Federal editions are allowed").
+							Validate(err)
 
-					// Webhook response validation
-					envtests.NewStatusErrorMatcher().
-						WithMessageSubstrings(" \"maerospikecluster.kb.io\"",
-							"failed to set default aerospikeConfig.service config:",
-							"config node-id can not have non-default value (string a1).",
-							"It will be set internally (string ENV_NODE_ID)").
-						Validate(err)
-				})
+						current, err = testCluster.GetCluster(envtests.K8sClient, ctx, updateValidationClusterNamespacedName)
+						Expect(err).ToNot(HaveOccurred())
 
-				It("rejects setting cluster-name", func() {
-					aeroCluster := testCluster.CreateDummyAerospikeCluster(clusterNamespacedName, 1)
-					// 1. Extract the service configuration map
-					serviceConf := aeroCluster.Spec.AerospikeConfig.Value[asdbv1.ConfKeyService].(map[string]interface{})
-
-					// 2. Assign the value to the specific key
-					serviceConf[testutil.ClusterNameConfig] = testutil.ClusterNameConfig
-
-					// Deploy cluster
-					err := testCluster.DeployCluster(envtests.K8sClient, ctx, aeroCluster)
-					Expect(err).To(HaveOccurred())
-
-					// Webhook response validation
-					envtests.NewStatusErrorMatcher().
-						WithMessageSubstrings(" \"maerospikecluster.kb.io\"",
-							"failed to set default aerospikeConfig.service config:",
-							"config cluster-name can not have non-default value (string cluster-name).",
-							fmt.Sprintf("It will be set internally (string %s)", clusterNamespacedName.Name)).
-						Validate(err)
-				})
-
-				It("rejects feature-key-file path not in storage volumes", func() {
-					aeroCluster := testCluster.CreateAerospikeClusterPost640(
-						clusterNamespacedName, 1, testutil.LatestEnterpriseImage,
-					)
-					aeroCluster.Spec.AerospikeConfig.Value[asdbv1.ConfKeyService] = map[string]interface{}{
-						"feature-key-file": "/randompath/features.conf",
-					}
-					// Deploy cluster
-					err := testCluster.DeployCluster(envtests.K8sClient, ctx, aeroCluster)
-					Expect(err).To(HaveOccurred())
-
-					// Webhook response validation
-					envtests.NewStatusErrorMatcher().
-						WithMessageSubstrings(testutil.WebhookErrorPrefix,
-							"feature-key-file paths or tls paths or default-password-file path are not mounted",
-							"- create an entry for '/randompath/features.conf' in 'storage.volumes'").
-						Validate(err)
-				})
-
-				It("warns when cgroup-mem-tracking is absent (version >= "+testutil.CgroupMemTrackingServerVersion+")", func() {
-					aeroCluster := testCluster.CreateAerospikeClusterPost640(
-						clusterNamespacedName, 1, testutil.GetEnterpriseImage(testutil.CgroupMemTrackingServerVersion),
-					)
-
-					Expect(envtests.WarningK8sClient.Create(ctx, aeroCluster)).ToNot(HaveOccurred())
-					Expect(envtests.GlobalWarnings.Warnings).To(ContainElement(ContainSubstring(asdbv1.ConfigKeyCgroupMemTracking)))
-				})
-
-				It("warns when cgroup-mem-tracking is false (version >= "+testutil.CgroupMemTrackingServerVersion+")", func() {
-					aeroCluster := testCluster.CreateAerospikeClusterPost640(
-						clusterNamespacedName, 1, testutil.GetEnterpriseImage(testutil.CgroupMemTrackingServerVersion),
-					)
-					aeroCluster.Spec.AerospikeConfig.Value[asdbv1.ConfKeyService].(map[string]interface {
-					})[asdbv1.ConfigKeyCgroupMemTracking] = false
-
-					Expect(envtests.WarningK8sClient.Create(ctx, aeroCluster)).ToNot(HaveOccurred())
-					Expect(envtests.GlobalWarnings.Warnings).To(ContainElement(ContainSubstring(asdbv1.ConfigKeyCgroupMemTracking)))
+						current.Spec.Image = testutil.InvalidImage
+						err = envtests.K8sClient.Update(ctx, current)
+						Expect(err).To(HaveOccurred())
+						envtests.NewStatusErrorMatcher().
+							WithMessageSubstrings(
+								testutil.WebhookErrorPrefix,
+								"image version 3.0.0.4 not supported. Base version 6.0.0.0").
+							Validate(err)
+					})
 				})
 			})
-			Context("positive", func() {
-				It("does not warn when cgroup-mem-tracking is true "+
-					"(version >= "+testutil.CgroupMemTrackingServerVersion+")", func() {
+
+			Context("spec.size", func() {
+				BeforeEach(func() {
+					aeroCluster := testCluster.CreateDummyAerospikeCluster(updateValidationClusterNamespacedName, 3)
+					Expect(envtests.K8sClient.Create(ctx, aeroCluster)).To(Succeed())
+				})
+
+				Context("negative", func() {
+					It("rejects zero size", func() {
+						current, err := testCluster.GetCluster(envtests.K8sClient, ctx, updateValidationClusterNamespacedName)
+						Expect(err).ToNot(HaveOccurred())
+
+						current.Spec.Size = 0
+						err = envtests.K8sClient.Update(ctx, current)
+						Expect(err).To(HaveOccurred())
+						envtests.NewStatusErrorMatcher().
+							WithMessageSubstrings(
+								testutil.CRDSchemaErrorPrefix,
+								"spec.size: Invalid value: 0").
+							Validate(err)
+					})
+				})
+			})
+
+			Context("spec.podSpec", func() {
+				BeforeEach(func() {
+					aeroCluster := testCluster.CreateDummyAerospikeCluster(updateValidationClusterNamespacedName, 3)
+					Expect(envtests.K8sClient.Create(ctx, aeroCluster)).To(Succeed())
+				})
+
+				Context("negative", func() {
+					It("rejects when MultiPodPerHost is changed", func() {
+						current, err := testCluster.GetCluster(envtests.K8sClient, ctx, updateValidationClusterNamespacedName)
+						Expect(err).ToNot(HaveOccurred())
+
+						// Toggle MultiPodPerHost to trigger "cannot update MultiPodPerHost setting"
+						current.Spec.PodSpec.MultiPodPerHost = ptr.To(false)
+						err = envtests.K8sClient.Update(ctx, current)
+						Expect(err).To(HaveOccurred())
+
+						envtests.NewStatusErrorMatcher().
+							WithMessageSubstrings(
+								testutil.WebhookErrorPrefix,
+								"denied the request:",
+								"cannot update MultiPodPerHost setting").
+							Validate(err)
+					})
+				})
+				Context("positive", func() {
+					// Add positive update podSpec tests here
+				})
+			})
+
+			Context("spec.aerospikeConfig (namespace)", func() {
+				Context("negative", func() {
+					It("rejects update that removes persistence backing from in-memory SC namespace", func() {
+						aeroCluster := testCluster.CreateDummyAerospikeCluster(updateValidationClusterNamespacedName, 2)
+						rawNamespaces := aeroCluster.Spec.AerospikeConfig.Value[asdbv1.ConfKeyNamespace].([]interface{})
+						nsMap := rawNamespaces[0].(map[string]interface{})
+						nsMap["storage-engine"] = map[string]interface{}{
+							"type":    "memory",
+							"devices": []interface{}{"/test/dev/xvdf"},
+						}
+
+						Expect(envtests.K8sClient.Create(ctx, aeroCluster)).To(Succeed())
+
+						current, err := testCluster.GetCluster(envtests.K8sClient, ctx, updateValidationClusterNamespacedName)
+						Expect(err).ToNot(HaveOccurred())
+
+						currentNamespaces := current.Spec.AerospikeConfig.Value[asdbv1.ConfKeyNamespace].([]interface{})
+						currentNsMap := currentNamespaces[0].(map[string]interface{})
+						currentNsMap["storage-engine"] = map[string]interface{}{
+							"type":      "memory",
+							"data-size": 1073741824,
+						}
+
+						err = envtests.K8sClient.Update(ctx, current)
+						Expect(err).To(HaveOccurred())
+
+						envtests.NewStatusErrorMatcher().
+							WithMessageSubstrings(
+								"\"vaerospikecluster.kb.io\"",
+								"in-memory SC namespace without persistent storage (files or devices) is not supported",
+							).
+							Validate(err)
+					})
+
+					It("rejects update that removes device-backed persistence from SC in-memory namespace (data-size only)", func() {
+						err := runInMemorySCNamespaceUpdate(
+							updateValidationClusterNamespacedName,
+							map[string]interface{}{
+								"type":    "memory",
+								"devices": []interface{}{"/test/dev/xvdf"},
+							},
+							map[string]interface{}{
+								"type":      "memory",
+								"data-size": 1073741824,
+							},
+						)
+						Expect(err).To(HaveOccurred())
+
+						envtests.NewStatusErrorMatcher().
+							WithMessageSubstrings(
+								"\"vaerospikecluster.kb.io\"",
+								"in-memory SC namespace without persistent storage (files or devices) is not supported",
+							).
+							Validate(err)
+					})
+
+					It("rejects update that sets in-memory SC namespace persistence files to empty list", func() {
+						err := runInMemorySCNamespaceUpdate(
+							updateValidationClusterNamespacedName,
+							map[string]interface{}{
+								"type":  "memory",
+								"files": []interface{}{"/opt/aerospike/sc-before-update.dat"},
+							},
+							map[string]interface{}{
+								"type":  "memory",
+								"files": []interface{}{},
+							},
+						)
+						Expect(err).To(HaveOccurred())
+
+						envtests.NewStatusErrorMatcher().
+							WithMessageSubstrings(
+								"\"vaerospikecluster.kb.io\"",
+								"generated config not valid for version 8.1.2.0: config schema error",
+								"Must validate one and only one schema (oneOf) namespaces.0.storage-engine",
+							).
+							Validate(err)
+					})
+				})
+
+				Context("positive", func() {
+					It("allows update from one valid device-backed SC in-memory persistence config to another valid one", func() {
+						Expect(
+							runInMemorySCNamespaceUpdate(
+								updateValidationClusterNamespacedName,
+								map[string]interface{}{
+									"type":    "memory",
+									"devices": []interface{}{"/test/dev/xvdf"},
+								},
+								map[string]interface{}{
+									"type":    "memory",
+									"devices": []interface{}{"/test/dev/xvdg"},
+								},
+								func(ac *asdbv1.AerospikeCluster) {
+									appendExtraBlockDeviceVolume(&ac.Spec.Storage, "ns-inmem-sc-2", "/test/dev/xvdg")
+								},
+							),
+						).To(Succeed())
+					})
+
+					It("allows update from device-backed SC in-memory namespace to file-backed SC in-memory namespace", func() {
+						Expect(
+							runInMemorySCNamespaceUpdate(
+								updateValidationClusterNamespacedName,
+								map[string]interface{}{
+									"type":    "memory",
+									"devices": []interface{}{"/test/dev/xvdf"},
+								},
+								map[string]interface{}{
+									"type":  "memory",
+									"files": []interface{}{"/opt/aerospike/sc-after-update.dat"},
+								},
+							),
+						).To(Succeed())
+					})
+				})
+			})
+
+			Context("spec.aerospikeConfig (service)", func() {
+				BeforeEach(func() {
+					envtests.GlobalWarnings.Reset()
+
 					aeroCluster := testCluster.CreateAerospikeClusterPost640(
-						clusterNamespacedName, 1, testutil.GetEnterpriseImage(testutil.CgroupMemTrackingServerVersion),
+						updateValidationClusterNamespacedName, 1, testutil.GetEnterpriseImage(testutil.CgroupMemTrackingServerVersion),
 					)
 					aeroCluster.Spec.AerospikeConfig.Value[asdbv1.ConfKeyService].(map[string]interface {
 					})[asdbv1.ConfigKeyCgroupMemTracking] = true
-
-					Expect(envtests.WarningK8sClient.Create(ctx, aeroCluster)).ToNot(HaveOccurred())
-					Expect(envtests.GlobalWarnings.Warnings).NotTo(ContainElement(ContainSubstring(asdbv1.ConfigKeyCgroupMemTracking)))
+					Expect(envtests.K8sClient.Create(ctx, aeroCluster)).To(Succeed())
 				})
 
-				It("does not warn when cgroup-mem-tracking is absent "+
-					"(version < "+testutil.CgroupMemTrackingServerVersion+")", func() {
-					aeroCluster := testCluster.CreateAerospikeClusterPost640(
-						clusterNamespacedName, 1, testutil.GetEnterpriseImage(testutil.Pre810ServerVersion),
-					)
+				Context("negative", func() {
+					It("warns when cgroup-mem-tracking is removed (version >= "+testutil.CgroupMemTrackingServerVersion+")", func() {
+						current, err := testCluster.GetCluster(envtests.K8sClient, ctx, updateValidationClusterNamespacedName)
+						Expect(err).ToNot(HaveOccurred())
 
-					Expect(envtests.WarningK8sClient.Create(ctx, aeroCluster)).ToNot(HaveOccurred())
-					Expect(envtests.GlobalWarnings.Warnings).NotTo(ContainElement(ContainSubstring(asdbv1.ConfigKeyCgroupMemTracking)))
-				})
-			})
-		})
+						delete(current.Spec.AerospikeConfig.Value[asdbv1.ConfKeyService].(map[string]interface{}),
+							asdbv1.ConfigKeyCgroupMemTracking)
 
-		Context("spec.podSpec", func() {
-			Context("negative", func() {
-				It("rejects dnsPolicy Default", func() {
-					aeroCluster := testCluster.CreateDummyAerospikeCluster(clusterNamespacedName, 2)
-					defaultDNS := v1.DNSDefault
-					aeroCluster.Spec.PodSpec.InputDNSPolicy = &defaultDNS
+						Expect(envtests.WarningK8sClient.Update(ctx, current)).ToNot(HaveOccurred())
+						Expect(envtests.GlobalWarnings.Warnings).To(ContainElement(ContainSubstring(asdbv1.ConfigKeyCgroupMemTracking)))
+					})
 
-					// Deploy cluster
-					err := testCluster.DeployCluster(envtests.K8sClient, ctx, aeroCluster)
-					Expect(err).To(HaveOccurred())
+					It("warns when cgroup-mem-tracking is set to false "+
+						"(version >= "+testutil.CgroupMemTrackingServerVersion+")", func() {
+						current, err := testCluster.GetCluster(envtests.K8sClient, ctx, updateValidationClusterNamespacedName)
+						Expect(err).ToNot(HaveOccurred())
 
-					// Webhook response validation
-					envtests.NewStatusErrorMatcher().
-						WithMessageSubstrings(testutil.CRDSchemaErrorPrefix,
-							"spec.podSpec.dnsPolicy: Unsupported value: \"Default\": supported values: "+
-								"\"ClusterFirstWithHostNet\", \"ClusterFirst\", \"None\"").
-						Validate(err)
+						current.Spec.AerospikeConfig.
+							Value[asdbv1.ConfKeyService].(map[string]interface{})[asdbv1.ConfigKeyCgroupMemTracking] = false
+
+						Expect(envtests.WarningK8sClient.Update(ctx, current)).ToNot(HaveOccurred())
+						Expect(envtests.GlobalWarnings.Warnings).To(ContainElement(ContainSubstring(asdbv1.ConfigKeyCgroupMemTracking)))
+					})
 				})
 
-				It("rejects dnsPolicy None without dnsConfig", func() {
-					aeroCluster := testCluster.CreateDummyAerospikeCluster(clusterNamespacedName, 2)
-					noneDNS := v1.DNSNone
-					aeroCluster.Spec.PodSpec.InputDNSPolicy = &noneDNS
+				Context("positive", func() {
+					It("does not warn when cgroup-mem-tracking remains true "+
+						"(version >= "+testutil.CgroupMemTrackingServerVersion+")", func() {
+						current, err := testCluster.GetCluster(envtests.K8sClient, ctx, updateValidationClusterNamespacedName)
+						Expect(err).ToNot(HaveOccurred())
 
-					// Deploy cluster
-					err := testCluster.DeployCluster(envtests.K8sClient, ctx, aeroCluster)
-					Expect(err).To(HaveOccurred())
+						current.Spec.Size = 1
 
-					// Webhook response validation
-					envtests.NewStatusErrorMatcher().
-						WithMessageSubstrings(testutil.WebhookErrorPrefix,
-							"dnsConfig is required field when dnsPolicy is set to None").
-						Validate(err)
-				})
-
-				It("rejects hostNetwork and MultiPodPerHost both enabled", func() {
-					aeroCluster := testCluster.CreateDummyAerospikeCluster(clusterNamespacedName, 2)
-					aeroCluster.Spec.PodSpec.HostNetwork = true
-					aeroCluster.Spec.PodSpec.MultiPodPerHost = ptr.To(true)
-
-					err := testCluster.DeployCluster(envtests.K8sClient, ctx, aeroCluster)
-					Expect(err).To(HaveOccurred())
-
-					envtests.NewStatusErrorMatcher().
-						WithMessageSubstrings(
-							testutil.WebhookErrorPrefix,
-							"host networking cannot be enabled with multi pod per host").
-						Validate(err)
+						Expect(envtests.WarningK8sClient.Update(ctx, current)).ToNot(HaveOccurred())
+						Expect(envtests.GlobalWarnings.Warnings).NotTo(ContainElement(
+							ContainSubstring(asdbv1.ConfigKeyCgroupMemTracking)))
+					})
 				})
 			})
-		})
 
-		Context("spec.operatorClientCertSpec", func() {
-			Context("negative", func() {
-				It("rejects both SecretCertSource and CertPathInOperator set", func() {
-					aeroCluster := testCluster.CreateAerospikeClusterPost640(
-						clusterNamespacedName, 1, testutil.LatestEnterpriseImage,
-					)
-					aeroCluster.Spec.OperatorClientCertSpec.CertPathInOperator = &asdbv1.AerospikeCertPathInOperatorSource{}
-
-					// Deploy cluster
-					err := testCluster.DeployCluster(envtests.K8sClient, ctx, aeroCluster)
-					Expect(err).To(HaveOccurred())
-
-					// Webhook response validation
-					envtests.NewStatusErrorMatcher().
-						WithMessageSubstrings(testutil.WebhookErrorPrefix,
-							"either `secretCertSource` or `certPathInOperator` must be set in `operatorClientCertSpec` but not both").
-						Validate(err)
-				})
-
-				It("rejects missing ClientKeyFilename", func() {
-					aeroCluster := testCluster.CreateAerospikeClusterPost640(
-						clusterNamespacedName, 1, testutil.LatestEnterpriseImage,
-					)
-					aeroCluster.Spec.OperatorClientCertSpec.SecretCertSource.ClientKeyFilename = ""
-
-					// Deploy cluster
-					err := testCluster.DeployCluster(envtests.K8sClient, ctx, aeroCluster)
-					Expect(err).To(HaveOccurred())
-
-					// Webhook response validation
-					envtests.NewStatusErrorMatcher().
-						WithMessageSubstrings(testutil.WebhookErrorPrefix,
-							"both `clientCertFilename` and `clientKeyFilename` should be either set or not set in `secretCertSource`").
-						Validate(err)
-				})
-
-				It("rejects both CaCertsFilename and CaCertsSource set", func() {
-					aeroCluster := testCluster.CreateAerospikeClusterPost640(
-						clusterNamespacedName, 1, testutil.LatestEnterpriseImage,
-					)
-					aeroCluster.Spec.OperatorClientCertSpec.SecretCertSource.CaCertsSource = &asdbv1.CaCertsSource{}
-
-					// Deploy cluster
-					err := testCluster.DeployCluster(envtests.K8sClient, ctx, aeroCluster)
-					Expect(err).To(HaveOccurred())
-
-					// Webhook response validation
-					envtests.NewStatusErrorMatcher().
-						WithMessageSubstrings(testutil.WebhookErrorPrefix,
-							"both `caCertsFilename` or `caCertsSource` cannot be set in `secretCertSource`").
-						Validate(err)
-				})
-
-				It("rejects missing clientCertPath", func() {
-					aeroCluster := testCluster.CreateAerospikeClusterPost640(
-						clusterNamespacedName, 1, testutil.LatestEnterpriseImage,
-					)
-					aeroCluster.Spec.OperatorClientCertSpec.SecretCertSource = nil
-					aeroCluster.Spec.OperatorClientCertSpec.CertPathInOperator =
-						&asdbv1.AerospikeCertPathInOperatorSource{
-							CaCertsPath:    "cacert.pem",
-							ClientKeyPath:  "svc_key.pem",
-							ClientCertPath: "",
+			Context("spec.aerospikeConfig (namespace)", func() {
+				Context("negative", func() {
+					It("rejects update when AP in-memory namespace persistence devices has invalid type", func() {
+						aeroCluster := testCluster.CreateDummyAerospikeCluster(updateValidationClusterNamespacedName, 2)
+						aeroCluster.Spec.AerospikeConfig.Value[asdbv1.ConfKeyNamespace] = []interface{}{
+							apNamespaceMemoryWithDevices("test", 2, []interface{}{testutil.DefaultDevicePath}),
 						}
 
-					// Deploy cluster
-					err := testCluster.DeployCluster(envtests.K8sClient, ctx, aeroCluster)
-					Expect(err).To(HaveOccurred())
-
-					// Webhook response validation
-					envtests.NewStatusErrorMatcher().
-						WithMessageSubstrings(testutil.WebhookErrorPrefix,
-							"both `clientCertPath` and `clientKeyPath` should be either set or not set in `certPathInOperator`").
-						Validate(err)
-				})
-
-				It("rejects when operator client cert is not configured", func() {
-					aeroCluster := testCluster.CreateAerospikeClusterPost640(
-						clusterNamespacedName, 1, testutil.LatestEnterpriseImage,
-					)
-					aeroCluster.Spec.OperatorClientCertSpec = nil
-
-					// Deploy cluster
-					err := testCluster.DeployCluster(envtests.K8sClient, ctx, aeroCluster)
-					Expect(err).To(HaveOccurred())
-
-					// Webhook response validation
-					envtests.NewStatusErrorMatcher().
-						WithMessageSubstrings(testutil.WebhookErrorPrefix,
-							"operator client cert is not specified").
-						Validate(err)
-				})
-			})
-		})
-
-		Context("metadata", func() {
-			Context("negative", func() {
-				It("rejects empty cluster name", func() {
-					cName := test.GetNamespacedName("", clusterNamespacedName.Namespace)
-					aeroCluster := testCluster.CreateDummyAerospikeCluster(cName, 1)
-					err := testCluster.DeployCluster(envtests.K8sClient, ctx, aeroCluster)
-					Expect(err).To(HaveOccurred())
-
-					// Webhook response validation
-					envtests.NewStatusErrorMatcher().
-						WithMessageSubstrings(testutil.CRDSchemaErrorPrefix,
-							"\"\" is invalid:",
-							"metadata.name: Required value: name or generateName is required").
-						WithCauses(metav1.StatusCause{
-							Type:    metav1.CauseTypeFieldValueRequired,
-							Message: "Required value: name or generateName is required",
-							Field:   "metadata.name",
-						}).
-						Validate(err)
-				})
-
-				It("rejects empty namespace name", func() {
-					cName := test.GetNamespacedName(clusterNamespacedName.Name, "")
-					aeroCluster := testCluster.CreateDummyAerospikeCluster(cName, 1)
-					err := testCluster.DeployCluster(envtests.K8sClient, ctx, aeroCluster)
-					Expect(err).To(HaveOccurred())
-
-					// err is not a Kubernetes StatusError,
-					// so we need to check the error message
-					Expect(err.Error()).To(Or(
-						ContainSubstring("an empty namespace may not be set during creation"),
-					))
-				})
-
-				It("rejects cluster name with spaces", func() {
-					cName := test.GetNamespacedName("my cluster", clusterNamespacedName.Namespace)
-					aeroCluster := testCluster.CreateDummyAerospikeCluster(cName, 1)
-
-					err := testCluster.DeployCluster(envtests.K8sClient, ctx, aeroCluster)
-					Expect(err).To(HaveOccurred())
-
-					// Webhook response validation
-					envtests.NewStatusErrorMatcher().
-						WithMessageSubstrings("AerospikeCluster.asdb.aerospike.com \"my cluster\" is invalid:",
-							"metadata.name: Invalid value: \"my cluster\": a lowercase RFC 1123 subdomain ",
-							"must consist of lower case alphanumeric characters,",
-							"'-' or '.', and must start and end with an alphanumeric character (e.g. 'example.com',",
-							"regex used for validation is '[a-z0-9]([-a-z0-9]*[a-z0-9])?(\\.[a-z0-9]([-a-z0-9]*[a-z0-9])?)*')").
-						Validate(err)
-				})
-
-				It("rejects cluster name with uppercase characters", func() {
-					cName := test.GetNamespacedName("MyCluster", clusterNamespacedName.Namespace)
-					aeroCluster := testCluster.CreateDummyAerospikeCluster(cName, 1)
-
-					err := testCluster.DeployCluster(envtests.K8sClient, ctx, aeroCluster)
-					Expect(err).To(HaveOccurred())
-
-					// Webhook response validation
-					envtests.NewStatusErrorMatcher().
-						WithMessageSubstrings("AerospikeCluster.asdb.aerospike.com \"MyCluster\" is invalid:",
-							"metadata.name: Invalid value: \"MyCluster\": a lowercase RFC 1123 subdomain",
-							"must consist of lower case alphanumeric characters,",
-							"'-' or '.', and must start and end with an alphanumeric character (e.g. 'example.com',",
-							"regex used for validation is '[a-z0-9]([-a-z0-9]*[a-z0-9])?(\\.[a-z0-9]([-a-z0-9]*[a-z0-9])?)*')").
-						Validate(err)
-				})
-
-				// cluster.Name is used as the headless-service name (and LB service base).
-				// Kubernetes validates service names as DNS-1035 labels, which requires
-				// the first character to be a lowercase letter — digits are not allowed.
-				// cluster.Name is immutable in Kubernetes, so this is checked at CREATE only.
-				It("rejects cluster name starting with a digit (invalid DNS-1035 service name)", func() {
-					cName := test.GetNamespacedName("1mycluster", clusterNamespacedName.Namespace)
-					aeroCluster := testCluster.CreateDummyAerospikeCluster(cName, 2)
-
-					err := testCluster.DeployCluster(envtests.K8sClient, ctx, aeroCluster)
-					Expect(err).To(HaveOccurred())
-
-					envtests.NewStatusErrorMatcher().
-						WithMessageSubstrings(
-							testutil.WebhookErrorPrefix,
-							"cluster name \"1mycluster\" is not a valid Kubernetes service name (DNS-1035)",
-							"start with an alphabetic character").
-						Validate(err)
-				})
-
-				// Projected label rune count: cluster name + 10 (3 hyphens + 7 for MaxRackID)
-				// + 3 (revision placeholder) + 10 (controller-revision hash upper bound) = 23
-				// fixed runes; name can be at most 40 for 63 (40+23=63).
-				It("rejects cluster name longer than 40 chars (projected Pod label value would exceed 63)", func() {
-					// 48 chars: 48 + 10 + 3 + 10 = 71 > 63.
-					longName := strings.Repeat("a", 48)
-					cName := test.GetNamespacedName(longName, clusterNamespacedName.Namespace)
-					aeroCluster := testCluster.CreateDummyAerospikeCluster(cName, 2)
-
-					err := testCluster.DeployCluster(envtests.K8sClient, ctx, aeroCluster)
-					Expect(err).To(HaveOccurred())
-
-					envtests.NewStatusErrorMatcher().
-						WithMessageSubstrings(
-							testutil.WebhookErrorPrefix,
-							"Pod label value would exceed the",
-							"63-character DNS label limit",
-							"revision placeholder = 3",
-							"total = 71",
-							"reduce by 8",
-						).Validate(err)
-				})
-
-				It("rejects when cluster namespace is not found", func() {
-					cName := test.GetNamespacedName(clusterNamespacedName.Name, "default ns")
-					aeroCluster := testCluster.CreateDummyAerospikeCluster(cName, 1)
-
-					err := testCluster.DeployCluster(envtests.K8sClient, ctx, aeroCluster)
-					Expect(err).To(HaveOccurred())
-
-					envtests.NewStatusErrorMatcher().
-						WithMessageSubstrings("namespaces \"default ns\" not found").
-						Validate(err)
-				})
-			})
-			Context("positive", func() {
-				It("accepts cluster name starting with a lowercase letter", func() {
-					cName := test.GetNamespacedName("valid-cluster", clusterNamespacedName.Namespace)
-					aeroCluster := testCluster.CreateDummyAerospikeCluster(cName, 2)
-
-					err := envtests.K8sClient.Create(ctx, aeroCluster)
-					Expect(err).ToNot(HaveOccurred())
-				})
-
-				// 40 (name) + 10 (Aerospike fixed) + 3 (min revision placeholder) + 10 (K8s) = 63.
-				It("accepts cluster name of exactly 40 chars (at projected Pod label value limit)", func() {
-					exactName := strings.Repeat("a", 40)
-					cName := test.GetNamespacedName(exactName, clusterNamespacedName.Namespace)
-					aeroCluster := testCluster.CreateDummyAerospikeCluster(cName, 2)
-
-					err := envtests.K8sClient.Create(ctx, aeroCluster)
-
-					Expect(err).To(Succeed())
-				})
-			})
-		})
-
-		Context("spec.maxUnavailable", func() {
-			Context("negative", func() {
-				// Bug: Improve response message string to indicate acceptable value is 1 and not 2.
-				// Current string "maxUnavailable 2 cannot be greater than or equal to 2" is not a clear message
-				It("rejects maxUnavailable >= RF across all namespaces", func() {
-					aeroCluster := testCluster.CreateDummyAerospikeCluster(clusterNamespacedName, 2)
-					maxUnav := intstr.FromInt32(2)
-					aeroCluster.Spec.MaxUnavailable = &maxUnav
-					// Ensure PDB is not disabled so MaxUnavailable is validated
-					aeroCluster.Spec.DisablePDB = nil
-
-					err := testCluster.DeployCluster(envtests.K8sClient, ctx, aeroCluster)
-					Expect(err).To(HaveOccurred())
-
-					envtests.NewStatusErrorMatcher().
-						WithMessageSubstrings(testutil.WebhookErrorPrefix,
-							"maxUnavailable 2 is invalid",
-							"value must be less than the minimum replication factor").
-						Validate(err)
-				})
-			})
-		})
-
-		Context("spec.aerospikeAccessControl", func() {
-			Context("negative", func() {
-				It("rejects when security is disabled but access control is specified", func() {
-					aeroCluster := testCluster.CreateDummyAerospikeCluster(clusterNamespacedName, 2)
-					// Remove security config so IsSecurityEnabled returns false
-					delete(aeroCluster.Spec.AerospikeConfig.Value, asdbv1.ConfKeySecurity)
-					// AerospikeAccessControl is already set on the dummy cluster; keep it set
-
-					err := testCluster.DeployCluster(envtests.K8sClient, ctx, aeroCluster)
-					Expect(err).To(HaveOccurred())
-
-					envtests.NewStatusErrorMatcher().
-						WithMessageSubstrings(
-							testutil.WebhookErrorPrefix,
-							"security is disabled but access control is specified").
-						Validate(err)
-				})
-			})
-		})
-
-		Context("spec.rackConfig", func() {
-			Context("negative", func() {
-				It("rejects negative rack ID", func() {
-					aeroCluster := testCluster.CreateDummyAerospikeCluster(clusterNamespacedName, 1)
-					// Add a rack with an ID that is too large or invalid structure
-					aeroCluster.Spec.RackConfig = asdbv1.RackConfig{
-						Namespaces: []string{"test"},
-						Racks: []asdbv1.Rack{
-							{ID: -1}, // Negative rack ID
-						},
-					}
-
-					err := testCluster.DeployCluster(envtests.K8sClient, ctx, aeroCluster)
-					Expect(err).To(HaveOccurred())
-
-					// Webhook response validation
-					envtests.NewStatusErrorMatcher().
-						WithMessageSubstrings(testutil.CRDSchemaErrorPrefix,
-							"Invalid value: -1",
-							"spec.rackConfig.racks",
-							".id in body should be greater than or equal to 0").
-						Validate(err)
-				})
-
-				It("rejects negative rollingUpdateBatchSize", func() {
-					aeroCluster := testCluster.CreateDummyAerospikeCluster(clusterNamespacedName, 2)
-					negVal := intstr.FromInt32(-1)
-					aeroCluster.Spec.RackConfig.RollingUpdateBatchSize = &negVal
-
-					err := testCluster.DeployCluster(envtests.K8sClient, ctx, aeroCluster)
-					Expect(err).To(HaveOccurred())
-
-					envtests.NewStatusErrorMatcher().
-						WithMessageSubstrings(
-							testutil.WebhookErrorPrefix,
-							"can not use negative spec.rackConfig.rollingUpdateBatchSize: -1").
-						Validate(err)
-				})
-
-				It("rejects negative scaleDownBatchSize", func() {
-					aeroCluster := testCluster.CreateDummyAerospikeCluster(clusterNamespacedName, 2)
-					negVal := intstr.FromInt32(-1)
-					aeroCluster.Spec.RackConfig.ScaleDownBatchSize = &negVal
-
-					err := testCluster.DeployCluster(envtests.K8sClient, ctx, aeroCluster)
-					Expect(err).To(HaveOccurred())
-
-					envtests.NewStatusErrorMatcher().
-						WithMessageSubstrings(
-							testutil.WebhookErrorPrefix,
-							"can not use negative spec.rackConfig.scaleDownBatchSize: -1").
-						Validate(err)
-				})
-
-				It("rejects namespace name in rackConfig.Namespaces containing spaces", func() {
-					aeroCluster := testCluster.CreateDummyAerospikeCluster(clusterNamespacedName, 2)
-					aeroCluster.Spec.RackConfig = asdbv1.RackConfig{
-						Namespaces: []string{"test ns"},
-						Racks:      []asdbv1.Rack{{ID: 1}},
-					}
-
-					err := testCluster.DeployCluster(envtests.K8sClient, ctx, aeroCluster)
-					Expect(err).To(HaveOccurred())
-
-					envtests.NewStatusErrorMatcher().
-						WithMessageSubstrings(
-							testutil.WebhookErrorPrefix,
-							"namespace name `test ns` cannot have spaces",
-							"Namespaces [test ns]").
-						Validate(err)
-				})
-			})
-		})
-
-		Context("spec.validationPolicy", func() {
-			Context("defaults", func() {
-				It("defaults to {skipWorkDirValidate: false} when not set", func() {
-					aeroCluster := testCluster.CreateDummyAerospikeCluster(clusterNamespacedName, 2)
-					Expect(aeroCluster.Spec.ValidationPolicy).To(BeNil())
-
-					Expect(envtests.K8sClient.Create(ctx, aeroCluster)).To(Succeed())
-
-					fetched, err := testCluster.GetCluster(envtests.K8sClient, ctx, clusterNamespacedName)
-					Expect(err).ToNot(HaveOccurred())
-					Expect(fetched.Spec.ValidationPolicy).ToNot(BeNil())
-					Expect(fetched.Spec.ValidationPolicy.SkipWorkDirValidate).To(BeFalse())
-				})
-			})
-		})
-
-		Context("spec.aerospikeNetworkPolicy", func() {
-			Context("defaults", func() {
-				It("defaults access types to hostInternal/hostExternal when not set", func() {
-					aeroCluster := testCluster.CreateDummyAerospikeCluster(clusterNamespacedName, 2)
-					aeroCluster.Spec.AerospikeNetworkPolicy = asdbv1.AerospikeNetworkPolicy{}
-
-					Expect(envtests.K8sClient.Create(ctx, aeroCluster)).To(Succeed())
-
-					fetched, err := testCluster.GetCluster(envtests.K8sClient, ctx, clusterNamespacedName)
-					Expect(err).ToNot(HaveOccurred())
-					Expect(fetched.Spec.AerospikeNetworkPolicy.AccessType).To(Equal(asdbv1.AerospikeNetworkTypeHostInternal))
-					Expect(fetched.Spec.AerospikeNetworkPolicy.AlternateAccessType).To(Equal(asdbv1.AerospikeNetworkTypeHostExternal))
-					Expect(fetched.Spec.AerospikeNetworkPolicy.TLSAccessType).To(Equal(asdbv1.AerospikeNetworkTypeHostInternal))
-					Expect(fetched.Spec.AerospikeNetworkPolicy.TLSAlternateAccessType).
-						To(Equal(asdbv1.AerospikeNetworkTypeHostExternal))
-				})
-			})
-		})
-	})
-
-	Context("Update validation", func() {
-		const updateValidationClusterName = "update-validation-cluster"
-
-		updateValidationClusterNamespacedName := uniqueNamespacedName(updateValidationClusterName)
-
-		AfterEach(func() {
-			// Delete the cluster after each test
-			deleteCluster(ctx, updateValidationClusterNamespacedName)
-		})
-
-		Context("spec.image", func() {
-			BeforeEach(func() {
-				aeroCluster := testCluster.CreateDummyAerospikeCluster(updateValidationClusterNamespacedName, 3)
-				Expect(envtests.K8sClient.Create(ctx, aeroCluster)).To(Succeed())
-			})
-
-			Context("negative", func() {
-				It("rejects InvalidImage and image lower than base", func() {
-					current, err := testCluster.GetCluster(envtests.K8sClient, ctx, updateValidationClusterNamespacedName)
-					Expect(err).ToNot(HaveOccurred())
-
-					current.Spec.Image = "InvalidImage"
-					err = envtests.K8sClient.Update(ctx, current)
-					Expect(err).To(HaveOccurred())
-					envtests.NewStatusErrorMatcher().
-						WithMessageSubstrings(
-							testutil.WebhookErrorPrefix,
-							"image \"InvalidImage\" is not supported",
-							"only Enterprise and Federal editions are allowed").
-						Validate(err)
-
-					current, err = testCluster.GetCluster(envtests.K8sClient, ctx, updateValidationClusterNamespacedName)
-					Expect(err).ToNot(HaveOccurred())
-
-					current.Spec.Image = testutil.InvalidImage
-					err = envtests.K8sClient.Update(ctx, current)
-					Expect(err).To(HaveOccurred())
-					envtests.NewStatusErrorMatcher().
-						WithMessageSubstrings(
-							testutil.WebhookErrorPrefix,
-							"image version 3.0.0.4 not supported. Base version 6.0.0.0").
-						Validate(err)
-				})
-			})
-		})
-
-		Context("spec.size", func() {
-			BeforeEach(func() {
-				aeroCluster := testCluster.CreateDummyAerospikeCluster(updateValidationClusterNamespacedName, 3)
-				Expect(envtests.K8sClient.Create(ctx, aeroCluster)).To(Succeed())
-			})
-
-			Context("negative", func() {
-				It("rejects zero size", func() {
-					current, err := testCluster.GetCluster(envtests.K8sClient, ctx, updateValidationClusterNamespacedName)
-					Expect(err).ToNot(HaveOccurred())
-
-					current.Spec.Size = 0
-					err = envtests.K8sClient.Update(ctx, current)
-					Expect(err).To(HaveOccurred())
-					envtests.NewStatusErrorMatcher().
-						WithMessageSubstrings(
-							testutil.CRDSchemaErrorPrefix,
-							"spec.size: Invalid value: 0").
-						Validate(err)
-				})
-			})
-		})
-
-		Context("spec.podSpec", func() {
-			BeforeEach(func() {
-				aeroCluster := testCluster.CreateDummyAerospikeCluster(updateValidationClusterNamespacedName, 3)
-				Expect(envtests.K8sClient.Create(ctx, aeroCluster)).To(Succeed())
-			})
-
-			Context("negative", func() {
-				It("rejects when MultiPodPerHost is changed", func() {
-					current, err := testCluster.GetCluster(envtests.K8sClient, ctx, updateValidationClusterNamespacedName)
-					Expect(err).ToNot(HaveOccurred())
-
-					// Toggle MultiPodPerHost to trigger "cannot update MultiPodPerHost setting"
-					current.Spec.PodSpec.MultiPodPerHost = ptr.To(false)
-					err = envtests.K8sClient.Update(ctx, current)
-					Expect(err).To(HaveOccurred())
-
-					envtests.NewStatusErrorMatcher().
-						WithMessageSubstrings(
-							testutil.WebhookErrorPrefix,
-							"denied the request:",
-							"cannot update MultiPodPerHost setting").
-						Validate(err)
-				})
-			})
-			Context("positive", func() {
-				// Add positive update podSpec tests here
-			})
-		})
-
-		Context("spec.aerospikeConfig (service)", func() {
-			BeforeEach(func() {
-				envtests.GlobalWarnings.Reset()
-
-				aeroCluster := testCluster.CreateAerospikeClusterPost640(
-					updateValidationClusterNamespacedName, 1, testutil.GetEnterpriseImage(testutil.CgroupMemTrackingServerVersion),
-				)
-				aeroCluster.Spec.AerospikeConfig.Value[asdbv1.ConfKeyService].(map[string]interface {
-				})[asdbv1.ConfigKeyCgroupMemTracking] = true
-				Expect(envtests.K8sClient.Create(ctx, aeroCluster)).To(Succeed())
-			})
-
-			Context("negative", func() {
-				It("warns when cgroup-mem-tracking is removed (version >= "+testutil.CgroupMemTrackingServerVersion+")", func() {
-					current, err := testCluster.GetCluster(envtests.K8sClient, ctx, updateValidationClusterNamespacedName)
-					Expect(err).ToNot(HaveOccurred())
-
-					delete(current.Spec.AerospikeConfig.Value[asdbv1.ConfKeyService].(map[string]interface{}),
-						asdbv1.ConfigKeyCgroupMemTracking)
-
-					Expect(envtests.WarningK8sClient.Update(ctx, current)).ToNot(HaveOccurred())
-					Expect(envtests.GlobalWarnings.Warnings).To(ContainElement(ContainSubstring(asdbv1.ConfigKeyCgroupMemTracking)))
-				})
-
-				It("warns when cgroup-mem-tracking is set to false "+
-					"(version >= "+testutil.CgroupMemTrackingServerVersion+")", func() {
-					current, err := testCluster.GetCluster(envtests.K8sClient, ctx, updateValidationClusterNamespacedName)
-					Expect(err).ToNot(HaveOccurred())
-
-					current.Spec.AerospikeConfig.
-						Value[asdbv1.ConfKeyService].(map[string]interface{})[asdbv1.ConfigKeyCgroupMemTracking] = false
-
-					Expect(envtests.WarningK8sClient.Update(ctx, current)).ToNot(HaveOccurred())
-					Expect(envtests.GlobalWarnings.Warnings).To(ContainElement(ContainSubstring(asdbv1.ConfigKeyCgroupMemTracking)))
-				})
-			})
-
-			Context("positive", func() {
-				It("does not warn when cgroup-mem-tracking remains true "+
-					"(version >= "+testutil.CgroupMemTrackingServerVersion+")", func() {
-					current, err := testCluster.GetCluster(envtests.K8sClient, ctx, updateValidationClusterNamespacedName)
-					Expect(err).ToNot(HaveOccurred())
-
-					current.Spec.Size = 1
-
-					Expect(envtests.WarningK8sClient.Update(ctx, current)).ToNot(HaveOccurred())
-					Expect(envtests.GlobalWarnings.Warnings).NotTo(ContainElement(ContainSubstring(asdbv1.ConfigKeyCgroupMemTracking)))
-				})
-			})
-		})
-
-		Context("spec.aerospikeConfig (namespace)", func() {
-			Context("negative", func() {
-				It("rejects update when AP in-memory namespace persistence devices has invalid type", func() {
-					aeroCluster := testCluster.CreateDummyAerospikeCluster(updateValidationClusterNamespacedName, 2)
-					aeroCluster.Spec.AerospikeConfig.Value[asdbv1.ConfKeyNamespace] = []interface{}{
-						apNamespaceMemoryWithDevices("test", 2, []interface{}{testutil.DefaultDevicePath}),
-					}
-
-					Expect(envtests.K8sClient.Create(ctx, aeroCluster)).To(Succeed())
-
-					current, err := testCluster.GetCluster(envtests.K8sClient, ctx, updateValidationClusterNamespacedName)
-					Expect(err).ToNot(HaveOccurred())
-
-					currentNamespaces := current.Spec.AerospikeConfig.Value[asdbv1.ConfKeyNamespace].([]interface{})
-					currentNamespaces[0] = apNamespaceMemoryInvalidDevicesType("test", 2)
-
-					err = envtests.K8sClient.Update(ctx, current)
-					Expect(err).To(HaveOccurred())
-
-					envtests.NewStatusErrorMatcher().
-						WithMessageSubstrings(
-							"\"vaerospikecluster.kb.io\"",
-							"namespace storage devices must be a list, got string",
-						).
-						Validate(err)
-				})
-
-				It("rejects update when AP namespace points to persistence device not in storage config", func() {
-					aeroCluster := testCluster.CreateDummyAerospikeCluster(updateValidationClusterNamespacedName, 2)
-					aeroCluster.Spec.AerospikeConfig.Value[asdbv1.ConfKeyNamespace] = []interface{}{
-						apNamespaceDeviceWithPath("test", 2, testutil.DefaultDevicePath),
-					}
-
-					Expect(envtests.K8sClient.Create(ctx, aeroCluster)).To(Succeed())
-
-					current, err := testCluster.GetCluster(envtests.K8sClient, ctx, updateValidationClusterNamespacedName)
-					Expect(err).ToNot(HaveOccurred())
-
-					currentNamespaces := current.Spec.AerospikeConfig.Value[asdbv1.ConfKeyNamespace].([]interface{})
-					currentNsMap := currentNamespaces[0].(map[string]interface{})
-					currentNsMap["storage-engine"] = map[string]interface{}{
-						"type":    "device",
-						"devices": []interface{}{"/missing/dev/device1"},
-					}
-
-					err = envtests.K8sClient.Update(ctx, current)
-					Expect(err).To(HaveOccurred())
-
-					envtests.NewStatusErrorMatcher().
-						WithMessageSubstrings(
-							"\"vaerospikecluster.kb.io\"",
-							"namespace storage device related devicePath /missing/dev/device1 not found in Storage config",
-						).
-						Validate(err)
+						Expect(envtests.K8sClient.Create(ctx, aeroCluster)).To(Succeed())
+
+						current, err := testCluster.GetCluster(envtests.K8sClient, ctx, updateValidationClusterNamespacedName)
+						Expect(err).ToNot(HaveOccurred())
+
+						currentNamespaces := current.Spec.AerospikeConfig.Value[asdbv1.ConfKeyNamespace].([]interface{})
+						currentNamespaces[0] = apNamespaceMemoryInvalidDevicesType("test", 2)
+
+						err = envtests.K8sClient.Update(ctx, current)
+						Expect(err).To(HaveOccurred())
+
+						envtests.NewStatusErrorMatcher().
+							WithMessageSubstrings(
+								"\"vaerospikecluster.kb.io\"",
+								"namespace storage devices must be a list, got string",
+							).
+							Validate(err)
+					})
+
+					It("rejects update when in-memory SC namespace persistence devices has invalid type", func() {
+						aeroCluster := testCluster.CreateDummyAerospikeCluster(updateValidationClusterNamespacedName, 2)
+						aeroCluster.Spec.AerospikeConfig.Value[asdbv1.ConfKeyNamespace] = []interface{}{
+							scNamespaceMemoryWithDevices("test", 2, []interface{}{testutil.DefaultDevicePath}),
+						}
+
+						Expect(envtests.K8sClient.Create(ctx, aeroCluster)).To(Succeed())
+
+						current, err := testCluster.GetCluster(envtests.K8sClient, ctx, updateValidationClusterNamespacedName)
+						Expect(err).ToNot(HaveOccurred())
+
+						currentNamespaces := current.Spec.AerospikeConfig.Value[asdbv1.ConfKeyNamespace].([]interface{})
+						currentNamespaces[0] = scNamespaceMemoryInvalidDevicesType("test", 2)
+
+						err = envtests.K8sClient.Update(ctx, current)
+						Expect(err).To(HaveOccurred())
+
+						envtests.NewStatusErrorMatcher().
+							WithMessageSubstrings(
+								"\"vaerospikecluster.kb.io\"",
+								"namespace storage devices must be a list, got string",
+							).
+							Validate(err)
+					})
+
+					It("rejects update when AP namespace points to persistence device not in storage config", func() {
+						aeroCluster := testCluster.CreateDummyAerospikeCluster(updateValidationClusterNamespacedName, 2)
+						aeroCluster.Spec.AerospikeConfig.Value[asdbv1.ConfKeyNamespace] = []interface{}{
+							apNamespaceDeviceWithPath("test", 2, testutil.DefaultDevicePath),
+						}
+
+						Expect(envtests.K8sClient.Create(ctx, aeroCluster)).To(Succeed())
+
+						current, err := testCluster.GetCluster(envtests.K8sClient, ctx, updateValidationClusterNamespacedName)
+						Expect(err).ToNot(HaveOccurred())
+
+						currentNamespaces := current.Spec.AerospikeConfig.Value[asdbv1.ConfKeyNamespace].([]interface{})
+						currentNsMap := currentNamespaces[0].(map[string]interface{})
+						currentNsMap["storage-engine"] = map[string]interface{}{
+							"type":    "device",
+							"devices": []interface{}{"/missing/dev/device1"},
+						}
+
+						err = envtests.K8sClient.Update(ctx, current)
+						Expect(err).To(HaveOccurred())
+
+						envtests.NewStatusErrorMatcher().
+							WithMessageSubstrings(
+								"\"vaerospikecluster.kb.io\"",
+								"namespace storage device related devicePath /missing/dev/device1 not found in Storage config",
+							).
+							Validate(err)
+					})
+
+					It("rejects update when in-memory SC namespace points to missing persistence device", func() {
+						aeroCluster := testCluster.CreateDummyAerospikeCluster(updateValidationClusterNamespacedName, 2)
+						aeroCluster.Spec.AerospikeConfig.Value[asdbv1.ConfKeyNamespace] = []interface{}{
+							scNamespaceMemoryWithDevices("test", 2, []interface{}{testutil.DefaultDevicePath}),
+						}
+
+						Expect(envtests.K8sClient.Create(ctx, aeroCluster)).To(Succeed())
+
+						current, err := testCluster.GetCluster(envtests.K8sClient, ctx, updateValidationClusterNamespacedName)
+						Expect(err).ToNot(HaveOccurred())
+
+						currentNamespaces := current.Spec.AerospikeConfig.Value[asdbv1.ConfKeyNamespace].([]interface{})
+						currentNsMap := currentNamespaces[0].(map[string]interface{})
+						currentNsMap["storage-engine"] = map[string]interface{}{
+							"type":    "memory",
+							"devices": []interface{}{"/missing/dev/device1"},
+						}
+
+						err = envtests.K8sClient.Update(ctx, current)
+						Expect(err).To(HaveOccurred())
+
+						envtests.NewStatusErrorMatcher().
+							WithMessageSubstrings(
+								"\"vaerospikecluster.kb.io\"",
+								"namespace storage device related devicePath /missing/dev/device1 not found in Storage config",
+							).
+							Validate(err)
+					})
 				})
 			})
 		})

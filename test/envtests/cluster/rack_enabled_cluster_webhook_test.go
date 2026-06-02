@@ -44,6 +44,72 @@ var _ = Describe("Rack enabled cluster webhook validation", func() {
 		deleteCluster(ctx, nsName)
 	})
 
+	newSCMemoryNamespaceWithStorageEngine := func(storageEngine map[string]interface{}) map[string]interface{} {
+		return map[string]interface{}{
+			"name":                      "test",
+			"replication-factor":        2,
+			"strong-consistency":        true,
+			asdbv1.ConfKeyStorageEngine: storageEngine,
+		}
+	}
+
+	buildTwoRackSCMemoryCluster := func(
+		rack1StoragePath string, rack1StorageEngine map[string]interface{},
+		rack2StoragePath string, rack2StorageEngine map[string]interface{},
+	) *asdbv1.AerospikeCluster {
+		aeroCluster := testCluster.CreateDummyAerospikeCluster(nsName, 2)
+		// Global and rack InputAerospikeConfig are merged by namespace `name`. Dummy CreateDummy uses SC
+		// device-backed "test", which deep-merges with rack patches (e.g. memory+data-size) and violates
+		// storage-engine oneOf. Use a differently named global stub so rack "test" configs merge only
+		// from each rack's Input (mutating webhook requires non-empty global namespaces).
+		aeroCluster.Spec.AerospikeConfig.Value[asdbv1.ConfKeyNamespace] = []interface{}{
+			map[string]interface{}{
+				"name":               "rack-merge-stub",
+				"replication-factor": 2,
+				"storage-engine": map[string]interface{}{
+					"type":      "memory",
+					"data-size": 1073741824,
+				},
+			},
+		}
+
+		rack1Storage := getStorageSpecForDevice(rack1StoragePath)
+		rack2Storage := getStorageSpecForDevice(rack2StoragePath)
+
+		aeroCluster.Spec.Storage = asdbv1.AerospikeStorageSpec{}
+		aeroCluster.Spec.RackConfig = asdbv1.RackConfig{
+			Namespaces: []string{"test"},
+			Racks: []asdbv1.Rack{
+				{
+					ID:           1,
+					Revision:     "v1",
+					InputStorage: &rack1Storage,
+					InputAerospikeConfig: &asdbv1.AerospikeConfigSpec{
+						Value: map[string]interface{}{
+							asdbv1.ConfKeyNamespace: []interface{}{
+								newSCMemoryNamespaceWithStorageEngine(rack1StorageEngine),
+							},
+						},
+					},
+				},
+				{
+					ID:           2,
+					Revision:     "v1",
+					InputStorage: &rack2Storage,
+					InputAerospikeConfig: &asdbv1.AerospikeConfigSpec{
+						Value: map[string]interface{}{
+							asdbv1.ConfKeyNamespace: []interface{}{
+								newSCMemoryNamespaceWithStorageEngine(rack2StorageEngine),
+							},
+						},
+					},
+				},
+			},
+		}
+
+		return aeroCluster
+	}
+
 	Context("Deploy validation", func() {
 		Context("spec.rackConfig", func() {
 			Context("negative", func() {
@@ -114,6 +180,125 @@ var _ = Describe("Rack enabled cluster webhook validation", func() {
 						).
 						Validate(err)
 				})
+
+				It("rejects when one rack has in-memory SC namespace without persistence backing", func() {
+					aeroCluster := buildTwoRackSCMemoryCluster(
+						"/rack1/xvda", map[string]interface{}{"type": "memory", "devices": []interface{}{"/rack1/xvda"}},
+						"/rack2/xvdb", map[string]interface{}{
+							"type":      "memory",
+							"data-size": 1073741824,
+						},
+					)
+
+					err := envtests.K8sClient.Create(ctx, aeroCluster)
+					Expect(err).To(HaveOccurred())
+					envtests.NewStatusErrorMatcher().
+						WithMessageSubstrings(
+							"\"vaerospikecluster.kb.io\"",
+							"in-memory SC namespace without persistent storage (files or devices) is not supported",
+							"namespace test",
+						).
+						Validate(err)
+				})
+
+				It("rejects when one rack has in-memory SC namespace with empty files persistence list", func() {
+					aeroCluster := buildTwoRackSCMemoryCluster(
+						"/rack1/xvda", map[string]interface{}{"type": "memory", "devices": []interface{}{"/rack1/xvda"}},
+						"/rack2/xvdb", map[string]interface{}{"type": "memory", "files": []interface{}{}},
+					)
+
+					err := envtests.K8sClient.Create(ctx, aeroCluster)
+					Expect(err).To(HaveOccurred())
+					envtests.NewStatusErrorMatcher().
+						WithMessageSubstrings(
+							"\"vaerospikecluster.kb.io\"",
+							"aerospikeConfig not valid: generated config not valid for version",
+							"config schema error",
+							"Must validate one and only one schema (oneOf) namespaces.1.storage-engine",
+						).
+						Validate(err)
+				})
+
+				It("rejects when racks have different SC-enabled namespace sets", func() {
+					aeroCluster := testCluster.CreateDummyAerospikeCluster(nsName, 2)
+					aeroCluster.Spec.AerospikeConfig.Value[asdbv1.ConfKeyNamespace] = []interface{}{
+						map[string]interface{}{
+							"name":               "rack-merge-stub",
+							"replication-factor": 2,
+							"storage-engine": map[string]interface{}{
+								"type":      "memory",
+								"data-size": 1073741824,
+							},
+						},
+					}
+
+					rack1Storage := getStorageSpecForDevice("/rack1/xvda")
+					rack2Storage := getStorageSpecForDevice("/rack2/xvdb")
+					appendExtraBlockDeviceVolume(&rack2Storage, "extra-sc-vol", "/rack2/xvdc")
+
+					aeroCluster.Spec.Storage = asdbv1.AerospikeStorageSpec{}
+					aeroCluster.Spec.RackConfig = asdbv1.RackConfig{
+						Namespaces: []string{"test", "extra"},
+						Racks: []asdbv1.Rack{
+							{
+								ID:           1,
+								Revision:     "v1",
+								InputStorage: &rack1Storage,
+								InputAerospikeConfig: &asdbv1.AerospikeConfigSpec{
+									Value: map[string]interface{}{
+										asdbv1.ConfKeyNamespace: []interface{}{
+											newSCMemoryNamespaceWithStorageEngine(map[string]interface{}{
+												"type":    "memory",
+												"devices": []interface{}{"/rack1/xvda"},
+											}),
+											map[string]interface{}{
+												"name":               "extra",
+												"replication-factor": 2,
+												asdbv1.ConfKeyStorageEngine: map[string]interface{}{
+													"type":      "memory",
+													"data-size": 1073741824,
+												},
+											},
+										},
+									},
+								},
+							},
+							{
+								ID:           2,
+								Revision:     "v1",
+								InputStorage: &rack2Storage,
+								InputAerospikeConfig: &asdbv1.AerospikeConfigSpec{
+									Value: map[string]interface{}{
+										asdbv1.ConfKeyNamespace: []interface{}{
+											newSCMemoryNamespaceWithStorageEngine(map[string]interface{}{
+												"type":    "memory",
+												"devices": []interface{}{"/rack2/xvdb"},
+											}),
+											map[string]interface{}{
+												"name":               "extra",
+												"replication-factor": 2,
+												"strong-consistency": true,
+												asdbv1.ConfKeyStorageEngine: map[string]interface{}{
+													"type":    "memory",
+													"devices": []interface{}{"/rack2/xvdc"},
+												},
+											},
+										},
+									},
+								},
+							},
+						},
+					}
+
+					err := envtests.K8sClient.Create(ctx, aeroCluster)
+					Expect(err).To(HaveOccurred())
+					envtests.NewStatusErrorMatcher().
+						WithMessageSubstrings(
+							"\"vaerospikecluster.kb.io\"",
+							"SC namespaces list is different for different racks",
+						).
+						Validate(err)
+				})
 			})
 
 			Context("positive", func() {
@@ -160,12 +345,71 @@ var _ = Describe("Rack enabled cluster webhook validation", func() {
 
 					Expect(envtests.K8sClient.Create(ctx, aeroCluster)).To(Succeed())
 				})
+
+				It("allows racks with in-memory SC namespace when each rack has persistence device backing", func() {
+					aeroCluster := buildTwoRackSCMemoryCluster(
+						"/rack1/xvda", map[string]interface{}{"type": "memory", "devices": []interface{}{"/rack1/xvda"}},
+						"/rack2/xvdb", map[string]interface{}{"type": "memory", "devices": []interface{}{"/rack2/xvdb"}},
+					)
+
+					Expect(envtests.K8sClient.Create(ctx, aeroCluster)).To(Succeed())
+				})
+
+				It("allows racks with in-memory SC namespace when each rack has persistence files backing", func() {
+					aeroCluster := buildTwoRackSCMemoryCluster(
+						"/rack1/xvda", map[string]interface{}{"type": "memory", "files": []interface{}{"/opt/aerospike/r1-sc.dat"}},
+						"/rack2/xvdb", map[string]interface{}{"type": "memory", "files": []interface{}{"/opt/aerospike/r2-sc.dat"}},
+					)
+
+					Expect(envtests.K8sClient.Create(ctx, aeroCluster)).To(Succeed())
+				})
 			})
 		})
 	})
 
 	Context("Update validation", func() {
 		Context("spec.rackConfig", func() {
+			Context("negative", func() {
+				It("rejects update when one rack's SC in-memory namespace loses persistence (data-size only)", func() {
+					aeroCluster := buildTwoRackSCMemoryCluster(
+						"/rack1/xvda", map[string]interface{}{"type": "memory", "devices": []interface{}{"/rack1/xvda"}},
+						"/rack2/xvdb", map[string]interface{}{"type": "memory", "devices": []interface{}{"/rack2/xvdb"}},
+					)
+
+					Expect(envtests.K8sClient.Create(ctx, aeroCluster)).To(Succeed())
+
+					current, err := testCluster.GetCluster(envtests.K8sClient, ctx, nsName)
+					Expect(err).ToNot(HaveOccurred())
+
+					// memory + data-size only (no devices/files keys) hits validateSCNamespaces
+					current.Spec.RackConfig.Racks[1].InputAerospikeConfig = &asdbv1.AerospikeConfigSpec{
+						Value: map[string]interface{}{
+							asdbv1.ConfKeyNamespace: []interface{}{
+								map[string]interface{}{
+									"name":               "test",
+									"replication-factor": 2,
+									"strong-consistency": true,
+									asdbv1.ConfKeyStorageEngine: map[string]interface{}{
+										"type":      "memory",
+										"data-size": 1073741824,
+									},
+								},
+							},
+						},
+					}
+
+					err = envtests.K8sClient.Update(ctx, current)
+					Expect(err).To(HaveOccurred())
+					envtests.NewStatusErrorMatcher().
+						WithMessageSubstrings(
+							"\"vaerospikecluster.kb.io\"",
+							"in-memory SC namespace without persistent storage (files or devices) is not supported",
+							"namespace test",
+						).
+						Validate(err)
+				})
+			})
+
 			Context("positive", func() {
 				It("allows update that adjusts only spec.storage while rack InputStorage stays unchanged", func() {
 					r := getStorageSpecForDevice("/r-only/dev")

@@ -92,6 +92,52 @@ func apNamespaceMemoryInvalidDevicesType(name string, rf int) map[string]interfa
 	}
 }
 
+// scNamespaceMemoryWithDevices returns an SC (strong-consistency) in-memory namespace
+// listing persistence device paths.
+func scNamespaceMemoryWithDevices(name string, rf int, devices []interface{}) map[string]interface{} {
+	return map[string]interface{}{
+		asdbv1.ConfKeyName:              name,
+		asdbv1.ConfKeyReplicationFactor: rf,
+		"strong-consistency":            true,
+		asdbv1.ConfKeyStorageEngine: map[string]interface{}{
+			"type":    "memory",
+			"devices": devices,
+		},
+	}
+}
+
+// scNamespaceMemoryInvalidDevicesType returns an SC in-memory namespace with
+// storage-engine.devices set to a string (invalid type).
+func scNamespaceMemoryInvalidDevicesType(name string, rf int) map[string]interface{} {
+	return map[string]interface{}{
+		asdbv1.ConfKeyName:              name,
+		asdbv1.ConfKeyReplicationFactor: rf,
+		"strong-consistency":            true,
+		asdbv1.ConfKeyStorageEngine: map[string]interface{}{
+			"type":    "memory",
+			"devices": "not-a-list",
+		},
+	}
+}
+
+// appendExtraBlockDeviceVolume appends a block PV volume so tests can reference an additional device path
+// (CreateDummyAerospikeCluster only mounts /test/dev/xvdf by default).
+func appendExtraBlockDeviceVolume(spec *asdbv1.AerospikeStorageSpec, volumeName, devicePath string) {
+	spec.Volumes = append(spec.Volumes, asdbv1.VolumeSpec{
+		Name: volumeName,
+		Source: asdbv1.VolumeSource{
+			PersistentVolume: &asdbv1.PersistentVolumeSpec{
+				Size:         resource.MustParse("1Gi"),
+				StorageClass: testutil.StorageClass,
+				VolumeMode:   corev1.PersistentVolumeBlock,
+			},
+		},
+		Aerospike: &asdbv1.AerospikeServerVolumeAttachment{
+			Path: devicePath,
+		},
+	})
+}
+
 func getStorageSpecForDevice(devicePath string) asdbv1.AerospikeStorageSpec {
 	initM := asdbv1.AerospikeVolumeMethodDeleteFiles
 

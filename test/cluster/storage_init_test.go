@@ -716,7 +716,7 @@ func hasData(pod *corev1.Pod, volume *asdbv1.VolumeSpec) bool {
 	}
 
 	maxRetries := 15 // 5 minutes / 20 seconds = 15 retries
-	retryInterval := 20 * time.Second
+	hasDataPollInterval := 20 * time.Second
 
 	for i := 0; i < maxRetries; i++ {
 		stdout, _, err := utils.Exec(utils.GetNamespacedName(pod), cName, cmd, k8sClientSet, cfg)
@@ -728,9 +728,9 @@ func hasData(pod *corev1.Pod, volume *asdbv1.VolumeSpec) bool {
 			return false
 		}
 
-		// Log the error and wait before retrying
+		// Log the error and wait hasDataPollInterval between volume-readiness checks
 		fmt.Printf("Attempt %d/%d failed: %v. Retrying in %v...\n", i+1, maxRetries, err, retryInterval)
-		time.Sleep(retryInterval)
+		time.Sleep(hasDataPollInterval)
 	}
 
 	fmt.Println("Max retries reached. Returning false.")

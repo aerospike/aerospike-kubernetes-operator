@@ -587,6 +587,191 @@ var _ = Describe("SCMode", func() {
 				"all racks cannot have forceBlockFromRoster enabled. At least one rack must remain in the roster"))
 		})
 	})
+
+	// KO-521 in-memory SC persistence integration tests
+	Context("in-memory SC persistence integration tests", func() {
+		clusterName := fmt.Sprintf("ko521-sc-mem-%d", GinkgoParallelProcess())
+		clusterNamespacedName := test.GetNamespacedName(clusterName, namespace)
+		ko521NSName := "ko521sc"
+		ko521DevicePath := "/test/dev/xvdf"
+
+		AfterEach(func() {
+			aeroCluster := &asdbv1.AerospikeCluster{
+				ObjectMeta: metav1.ObjectMeta{
+					Name:      clusterName,
+					Namespace: namespace,
+				},
+			}
+			Expect(DeleteCluster(k8sClient, ctx, aeroCluster)).ToNot(HaveOccurred())
+			Expect(CleanupPVC(k8sClient, aeroCluster.Namespace, aeroCluster.Name)).ToNot(HaveOccurred())
+		})
+
+		It("Deploy 3-node SC in-memory cluster with storage-backed persistence", func() {
+			aeroCluster := createDummyAerospikeCluster(clusterNamespacedName, 3)
+			configureSCInMemoryPersistentNamespace(aeroCluster, ko521NSName, ko521DevicePath)
+
+			Expect(DeployCluster(k8sClient, ctx, aeroCluster)).ToNot(HaveOccurred())
+
+			current, err := getCluster(k8sClient, ctx, clusterNamespacedName)
+			Expect(err).ToNot(HaveOccurred())
+			Expect(current.Status.Pods).To(HaveLen(int(current.Spec.Size)))
+
+			// Service reachable check through AS client bootstrap.
+			hostConns, err := newAllHostConn(logger, current, k8sClient)
+			Expect(err).ToNot(HaveOccurred())
+			Expect(hostConns).ToNot(BeEmpty())
+		})
+
+		It("Validates write/read & roster; operator rolling upgrade preserves SC in-memory persistent data", func() {
+			aeroCluster := createDummyAerospikeCluster(clusterNamespacedName, 3)
+			configureSCInMemoryPersistentNamespace(aeroCluster, ko521NSName, ko521DevicePath)
+			Expect(DeployCluster(k8sClient, ctx, aeroCluster)).ToNot(HaveOccurred())
+			eventuallyWaitForKO521RosterReady(clusterNamespacedName, ko521NSName)
+			Expect(WriteDataToCluster(aeroCluster, k8sClient, []string{ko521NSName})).ToNot(HaveOccurred())
+
+			eventuallyAssertKO521DataAfterTopologyChange(clusterNamespacedName, ko521NSName)
+
+			// Distinct from existing generic upgrade checks: validates KO-521 data durability path.
+			Expect(upgradeClusterTest(k8sClient, ctx, clusterNamespacedName, nextImage)).ToNot(HaveOccurred())
+			eventuallyAssertKO521DataAfterTopologyChange(clusterNamespacedName, ko521NSName)
+		})
+
+		It("Rolling restart with batch size and cold restart preserves data", func() {
+			aeroCluster := createDummyAerospikeCluster(clusterNamespacedName, 6)
+			configureSCInMemoryPersistentNamespace(aeroCluster, ko521NSName, ko521DevicePath)
+			aeroCluster.Spec.RackConfig = asdbv1.RackConfig{
+				Namespaces: []string{ko521NSName},
+				Racks:      []asdbv1.Rack{{ID: 1}, {ID: 2}},
+				RollingUpdateBatchSize: &intstr.IntOrString{
+					Type:   intstr.Int,
+					IntVal: 2,
+				},
+			}
+
+			Expect(DeployCluster(k8sClient, ctx, aeroCluster)).ToNot(HaveOccurred())
+
+			By("Validate rack-aware StatefulSets and pod layout for rack config")
+			Expect(validateRackEnabledCluster(k8sClient, ctx, clusterNamespacedName)).ToNot(HaveOccurred())
+
+			eventuallyWaitForKO521RosterReady(clusterNamespacedName, ko521NSName)
+			Expect(WriteDataToCluster(aeroCluster, k8sClient, []string{ko521NSName})).ToNot(HaveOccurred())
+
+			eventuallyAssertKO521DataAfterTopologyChange(clusterNamespacedName, ko521NSName)
+
+			By("Rolling restart with batchRollingUpdateSize=2")
+			Expect(rollingRestartClusterTest(logger, k8sClient, ctx, clusterNamespacedName)).ToNot(HaveOccurred())
+			eventuallyAssertKO521DataAfterTopologyChange(clusterNamespacedName, ko521NSName)
+
+			By("Cold restart scenario by deleting all pods")
+
+			current, err := getCluster(k8sClient, ctx, clusterNamespacedName)
+			Expect(err).ToNot(HaveOccurred())
+
+			podList, err := getClusterPodList(k8sClient, ctx, current)
+			Expect(err).ToNot(HaveOccurred())
+			Expect(podList.Items).ToNot(BeEmpty())
+
+			oldPodUIDByName := map[string]string{}
+
+			for idx := range podList.Items {
+				pod := &podList.Items[idx]
+				oldPodUIDByName[pod.Name] = string(pod.UID)
+				Expect(k8sClient.Delete(ctx, pod)).ToNot(HaveOccurred())
+			}
+
+			for podName, oldUID := range oldPodUIDByName {
+				Expect(waitForPodRestart(ctx, podName, namespace, oldUID)).ToNot(HaveOccurred())
+			}
+
+			Expect(waitForAerospikeCluster(
+				k8sClient, ctx, current, int(current.Spec.Size), retryInterval,
+				getTimeout(current.Spec.Size), []asdbv1.AerospikeClusterPhase{asdbv1.AerospikeClusterCompleted},
+			)).ToNot(HaveOccurred())
+
+			eventuallyAssertKO521DataAfterTopologyChange(clusterNamespacedName, ko521NSName)
+		})
+
+		It("Single pod delete/recreate preserves data", func() {
+			aeroCluster := createDummyAerospikeCluster(clusterNamespacedName, 3)
+			configureSCInMemoryPersistentNamespace(aeroCluster, ko521NSName, ko521DevicePath)
+			Expect(DeployCluster(k8sClient, ctx, aeroCluster)).ToNot(HaveOccurred())
+			eventuallyWaitForKO521RosterReady(clusterNamespacedName, ko521NSName)
+			Expect(WriteDataToCluster(aeroCluster, k8sClient, []string{ko521NSName})).ToNot(HaveOccurred())
+
+			eventuallyAssertKO521DataAfterTopologyChange(clusterNamespacedName, ko521NSName)
+
+			podList, err := getClusterPodList(k8sClient, ctx, aeroCluster)
+			Expect(err).ToNot(HaveOccurred())
+			Expect(podList.Items).ToNot(BeEmpty())
+
+			targetPod := &podList.Items[0]
+			oldUID := string(targetPod.UID)
+			Expect(k8sClient.Delete(ctx, targetPod)).ToNot(HaveOccurred())
+			Expect(waitForPodRestart(ctx, targetPod.Name, targetPod.Namespace, oldUID)).ToNot(HaveOccurred())
+
+			eventuallyAssertKO521DataAfterTopologyChange(clusterNamespacedName, ko521NSName)
+		})
+
+		It("Scale up and scale down preserve data integrity", func() {
+			aeroCluster := createDummyAerospikeCluster(clusterNamespacedName, 3)
+			configureSCInMemoryPersistentNamespace(aeroCluster, ko521NSName, ko521DevicePath)
+			Expect(DeployCluster(k8sClient, ctx, aeroCluster)).ToNot(HaveOccurred())
+			eventuallyWaitForKO521RosterReady(clusterNamespacedName, ko521NSName)
+			Expect(WriteDataToCluster(aeroCluster, k8sClient, []string{ko521NSName})).ToNot(HaveOccurred())
+
+			eventuallyAssertKO521DataAfterTopologyChange(clusterNamespacedName, ko521NSName)
+
+			Expect(scaleUpClusterTest(k8sClient, ctx, clusterNamespacedName, 1)).ToNot(HaveOccurred())
+			eventuallyAssertKO521DataAfterTopologyChange(clusterNamespacedName, ko521NSName)
+
+			Expect(scaleDownClusterTest(k8sClient, ctx, clusterNamespacedName, 1)).ToNot(HaveOccurred())
+			eventuallyAssertKO521DataAfterTopologyChange(clusterNamespacedName, ko521NSName)
+		})
+
+		It("Invalid SC in-memory persistence device path rejects deploy and cluster never completes", func() {
+			aeroCluster := createDummyAerospikeCluster(clusterNamespacedName, 3)
+			configureSCInMemoryPersistentNamespace(aeroCluster, ko521NSName, "/missing/dev/ko521")
+
+			err := DeployCluster(k8sClient, ctx, aeroCluster)
+			Expect(err).To(HaveOccurred())
+
+			existing, getErr := getClusterIfExists(k8sClient, ctx, clusterNamespacedName)
+			Expect(getErr).ToNot(HaveOccurred())
+
+			if existing == nil {
+				return
+			}
+
+			// Pods may still appear in Status (StatefulSet exists, ASD crash-loops on bad device path).
+			// Deploy failure is that we never reach a completed, healthy cluster.
+			Expect(existing.Status.Phase).ToNot(Equal(asdbv1.AerospikeClusterCompleted))
+		})
+
+		It("Invalid update removing persistence backing is rejected and cluster stays healthy", func() {
+			aeroCluster := createDummyAerospikeCluster(clusterNamespacedName, 3)
+			configureSCInMemoryPersistentNamespace(aeroCluster, ko521NSName, ko521DevicePath)
+			Expect(DeployCluster(k8sClient, ctx, aeroCluster)).ToNot(HaveOccurred())
+			eventuallyWaitForKO521RosterReady(clusterNamespacedName, ko521NSName)
+			Expect(WriteDataToCluster(aeroCluster, k8sClient, []string{ko521NSName})).ToNot(HaveOccurred())
+
+			eventuallyAssertKO521DataAfterTopologyChange(clusterNamespacedName, ko521NSName)
+
+			current, err := getCluster(k8sClient, ctx, clusterNamespacedName)
+			Expect(err).ToNot(HaveOccurred())
+
+			namespaceCfg :=
+				current.Spec.AerospikeConfig.Value[asdbv1.ConfKeyNamespace].([]interface{})[0].(map[string]interface{})
+			namespaceCfg["storage-engine"] = map[string]interface{}{
+				"type":      "memory",
+				"data-size": 1073741824,
+			}
+
+			err = k8sClient.Update(ctx, current)
+			Expect(err).To(HaveOccurred())
+
+			eventuallyAssertKO521DataAfterTopologyChange(clusterNamespacedName, ko521NSName)
+		})
+	})
 })
 
 // roster: node-id@rack-id
@@ -637,16 +822,25 @@ func validateLifecycleOperationInSCCluster(
 	validateRoster(k8sClient, ctx, clusterNamespacedName, scNamespace)
 }
 
-func validateRoster(k8sClient client.Client, ctx goctx.Context,
-	clusterNamespacedName types.NamespacedName, aeroNamespace string) {
+// validateRosterErr checks SC roster consistency against pod/node state. Returns a non-nil error on failure
+// (including transient Aerospike info errors) so callers can retry inside Eventually(func(g Gomega) { ... }).
+func validateRosterErr(k8sClient client.Client, ctx goctx.Context,
+	clusterNamespacedName types.NamespacedName, aeroNamespace string,
+) error {
 	aeroCluster, err := getCluster(k8sClient, ctx, clusterNamespacedName)
-	Expect(err).ToNot(HaveOccurred())
+	if err != nil {
+		return err
+	}
 
 	hostConns, err := newAllHostConn(logger, aeroCluster, k8sClient)
-	Expect(err).ToNot(HaveOccurred())
+	if err != nil {
+		return err
+	}
 
 	rosterNodesMap, err := getRoster(hostConns[0], getClientPolicy(aeroCluster, k8sClient), aeroNamespace)
-	Expect(err).ToNot(HaveOccurred())
+	if err != nil {
+		return err
+	}
 
 	// Roster is in uppercase, whereas nodeID is in lower case in server. Keep it in mind when comparing list
 	rosterStr := rosterNodesMap["roster"]
@@ -654,9 +848,8 @@ func validateRoster(k8sClient client.Client, ctx goctx.Context,
 
 	// Check2 roster+blockList >= len(pods)
 	if len(rosterList)+len(aeroCluster.Spec.RosterNodeBlockList) < len(aeroCluster.Status.Pods) {
-		err := fmt.Errorf("roster len not matching pods list. "+
+		return fmt.Errorf("roster len not matching pods list. "+
 			"roster %v, blockList %v, pods %v", rosterList, aeroCluster.Spec.RosterNodeBlockList, aeroCluster.Status.Pods)
-		Expect(err).ToNot(HaveOccurred())
 	}
 
 	rosterNodeBlockListSet := sets.NewString(aeroCluster.Spec.RosterNodeBlockList...)
@@ -670,20 +863,26 @@ func validateRoster(k8sClient client.Client, ctx goctx.Context,
 	for _, rosterNode := range rosterList {
 		nodeID := strings.Split(rosterNode, "@")[0]
 		// Check1 roster should not have blocked pod
-		Expect(rosterNodeBlockListSet.Has(nodeID)).To(
-			BeFalse(), fmt.Sprintf("roster should not have blocked node. roster %v, blockList %v",
-				rosterNode, aeroCluster.Spec.RosterNodeBlockList))
+		if rosterNodeBlockListSet.Has(nodeID) {
+			return fmt.Errorf("roster should not have blocked node. roster %v, blockList %v",
+				rosterNode, aeroCluster.Spec.RosterNodeBlockList)
+		}
+
 		// Check4 Scaledown: all the roster should be in pod list
-		Expect(podNodeIDSet.Has(nodeID)).To(
-			BeTrue(), fmt.Sprintf("roster node should be in pod list. roster %v, podNodeIDs %v", rosterNode, podNodeIDSet))
+		if !podNodeIDSet.Has(nodeID) {
+			return fmt.Errorf("roster node should be in pod list. roster %v, podNodeIDs %v", rosterNode, podNodeIDSet)
+		}
 	}
 
 	rosterListSet := sets.NewString(rosterList...)
 	// Check3 Scaleup: pod should be in roster or in blockList
 	for podName := range aeroCluster.Status.Pods {
 		nodeID := strings.ToUpper(strings.TrimLeft(aeroCluster.Status.Pods[podName].Aerospike.NodeID, "0"))
+
 		rackID, _, err := utils.GetRackIDAndRevisionFromPodName(clusterNamespacedName.Name, podName)
-		Expect(err).ToNot(HaveOccurred())
+		if err != nil {
+			return err
+		}
 
 		nodeRoster := nodeID
 		if rackID != 0 {
@@ -692,12 +891,18 @@ func validateRoster(k8sClient client.Client, ctx goctx.Context,
 
 		if !rosterNodeBlockListSet.Has(nodeID) &&
 			!rosterListSet.Has(nodeRoster) {
-			err := fmt.Errorf("pod not found in roster or blockList. roster %v,"+
+			return fmt.Errorf("pod not found in roster or blockList. roster %v,"+
 				" blockList %v, missing pod roster %v, rackID %v",
 				rosterList, aeroCluster.Spec.RosterNodeBlockList, nodeRoster, rackID)
-			Expect(err).ToNot(HaveOccurred())
 		}
 	}
+
+	return nil
+}
+
+func validateRoster(k8sClient client.Client, ctx goctx.Context,
+	clusterNamespacedName types.NamespacedName, aeroNamespace string) {
+	Expect(validateRosterErr(k8sClient, ctx, clusterNamespacedName, aeroNamespace)).To(Succeed())
 }
 
 func getRoster(hostConn *deployment.HostConn, aerospikePolicy *as.ClientPolicy,
@@ -756,4 +961,60 @@ func compareRoster(hostConn *deployment.HostConn, expectedRoster string,
 	currentRoster = rosterNodesMap["roster"]
 
 	return currentRoster == expectedRoster, currentRoster, nil
+}
+
+func configureSCInMemoryPersistentNamespace(
+	aeroCluster *asdbv1.AerospikeCluster, namespaceName, devicePath string,
+) {
+	namespaces := aeroCluster.Spec.AerospikeConfig.Value[asdbv1.ConfKeyNamespace].([]interface{})
+	namespaceCfg := namespaces[0].(map[string]interface{})
+
+	namespaceCfg[asdbv1.ConfKeyName] = namespaceName
+	namespaceCfg[asdbv1.ConfKeyReplicationFactor] = 2
+	namespaceCfg["strong-consistency"] = true
+	namespaceCfg[asdbv1.ConfKeyStorageEngine] = map[string]interface{}{
+		"type":    "memory",
+		"devices": []interface{}{devicePath},
+	}
+	namespaces[0] = namespaceCfg
+	aeroCluster.Spec.AerospikeConfig.Value[asdbv1.ConfKeyNamespace] = namespaces
+}
+
+// eventuallyWaitForKO521RosterReady waits until SC roster matches pods before client writes. Operator
+// "Completed" and even successful DeployCluster can precede partition-map readiness; without this,
+// WriteDataToCluster often fails with INVALID_NAMESPACE / partition map empty on slow clusters.
+func eventuallyWaitForKO521RosterReady(clusterNamespacedName types.NamespacedName, nsName string) {
+	Eventually(func(g Gomega) {
+		g.Expect(validateRosterErr(k8sClient, goctx.TODO(), clusterNamespacedName, nsName)).To(Succeed())
+	}).WithTimeout(20 * time.Minute).WithPolling(10 * time.Second).Should(Succeed())
+}
+
+// eventuallyAssertKO521DataAfterTopologyChange waits for SC roster consistency and readable probe data
+// after deploy/write or topology changes (scale, upgrade, restart, etc.). Operator "Completed" can precede
+// Aerospike partition map readiness.
+func eventuallyAssertKO521DataAfterTopologyChange(
+	clusterNamespacedName types.NamespacedName, nsName string,
+) {
+	Eventually(func(g Gomega) {
+		g.Expect(validateRosterErr(k8sClient, goctx.TODO(), clusterNamespacedName, nsName)).To(Succeed())
+		g.Expect(assertNamespaceDataPresent(clusterNamespacedName, nsName)).To(Succeed())
+	}).WithTimeout(20 * time.Minute).WithPolling(10 * time.Second).Should(Succeed())
+}
+
+func assertNamespaceDataPresent(clusterNamespacedName types.NamespacedName, namespaceName string) error {
+	aeroCluster, err := getCluster(k8sClient, goctx.TODO(), clusterNamespacedName)
+	if err != nil {
+		return err
+	}
+
+	records, err := CheckDataInCluster(aeroCluster, k8sClient, []string{namespaceName})
+	if err != nil {
+		return err
+	}
+
+	if !records[namespaceName] {
+		return fmt.Errorf("expected data in namespace %s but did not find expected record", namespaceName)
+	}
+
+	return nil
 }

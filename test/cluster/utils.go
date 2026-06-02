@@ -683,21 +683,43 @@ func getPasswordFromSecret(k8sClient client.Client,
 }
 
 func getAerospikeClient(aeroCluster *asdbv1.AerospikeCluster, k8sClient client.Client) (*as.Client, error) {
-	policy := getClientPolicy(aeroCluster, k8sClient)
+	// Read the live CR: callers often still hold the object from before Create/Apply whose
+	// Status was never updated in memory after DeployCluster / waitForAerospikeCluster (those
+	// paths GET into a different variable). Empty Status.Pods yields no seeds, "nodes": [],
+	// and client errors such as INVALID_NAMESPACE / partition map empty.
+	latest := &asdbv1.AerospikeCluster{}
+
+	err := k8sClient.Get(
+		goctx.TODO(),
+		types.NamespacedName{Namespace: aeroCluster.Namespace, Name: aeroCluster.Name},
+		latest,
+	)
+	if err != nil {
+		return nil, err
+	}
+
+	if len(latest.Status.Pods) == 0 {
+		return nil, fmt.Errorf(
+			"aerospike cluster %s/%s has no pods in status yet",
+			aeroCluster.Namespace, aeroCluster.Name,
+		)
+	}
+
+	policy := getClientPolicy(latest, k8sClient)
 	policy.FailIfNotConnected = false
 	policy.Timeout = time.Minute * 2
 	policy.UseServicesAlternate = true
 	policy.ConnectionQueueSize = 100
 	policy.LimitConnectionsToQueueSize = true
 
-	hostList := make([]*as.Host, 0, len(aeroCluster.Status.Pods))
+	hostList := make([]*as.Host, 0, len(latest.Status.Pods))
 
-	for podName := range aeroCluster.Status.Pods {
-		pod := aeroCluster.Status.Pods[podName]
+	for podName := range latest.Status.Pods {
+		pod := latest.Status.Pods[podName]
 
-		host, err := createHost(&pod, "service")
-		if err != nil {
-			return nil, err
+		host, hostErr := createHost(&pod, "service")
+		if hostErr != nil {
+			return nil, hostErr
 		}
 
 		hostList = append(hostList, host)
