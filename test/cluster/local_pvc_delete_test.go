@@ -4,9 +4,11 @@ import (
 	goctx "context"
 	"fmt"
 	"strconv"
+	"time"
 
 	. "github.com/onsi/ginkgo/v2"
 	. "github.com/onsi/gomega"
+	corev1 "k8s.io/api/core/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/types"
 	"k8s.io/utils/ptr"
@@ -182,19 +184,22 @@ var _ = Describe(
 
 				By("Triggering rolling restart via pod metadata update")
 
+				aeroCluster, err = getCluster(k8sClient, ctx, clusterNamespacedName)
+				Expect(err).ToNot(HaveOccurred())
+
 				aeroCluster.Spec.PodSpec.AerospikeObjectMeta = asdbv1.AerospikeObjectMeta{
 					Labels: map[string]string{"test-label": "failure-recovery"},
 				}
 				Expect(updateCluster(k8sClient, ctx, aeroCluster)).ToNot(HaveOccurred())
 
 				By("Validating failed pod PVC is preserved; active pods PVCs are deleted")
-				// Failed pod PVC must survive (isFailureRecovery=true, no deleteLocalStorageOnPodFailureRecovery).
+				// Failed pod PVC must survive (isFailureRecovery=true, no deleteLocalStorageOnPodRecovery).
 				// All other pods are active restarts: their PVCs should be replaced.
 				validateClusterPVCDeletion(ctx, oldPvcInfoPerPod, failedPodName)
 			})
 
 			It("Should delete local PVCs for a failed pod during rolling restart when "+
-				"deleteLocalStorageOnPodFailureRecovery is set", func() {
+				"deleteLocalStorageOnPodRecovery is set", func() {
 				aeroCluster := createDummyAerospikeCluster(clusterNamespacedName, 3)
 				aeroCluster.Spec.Storage.DeleteLocalStorageOnRestart = ptr.To(true)
 				aeroCluster.Spec.Storage.DeleteLocalStorageOnPodRecovery = ptr.To(true)
@@ -247,7 +252,7 @@ var _ = Describe(
 			})
 
 			It("Should delete local PVCs for a failed pod during upgrade when "+
-				"deleteLocalStorageOnPodFailureRecovery is set", func() {
+				"deleteLocalStorageOnPodRecovery is set", func() {
 				aeroCluster := createDummyAerospikeCluster(clusterNamespacedName, 3)
 				aeroCluster.Spec.Storage.DeleteLocalStorageOnRestart = ptr.To(true)
 				aeroCluster.Spec.Storage.DeleteLocalStorageOnPodRecovery = ptr.To(true)
@@ -268,6 +273,81 @@ var _ = Describe(
 
 				By("Validating all pods PVCs are deleted (including failed pod)")
 				validateClusterPVCDeletion(ctx, oldPvcInfoPerPod)
+			})
+
+			It("Should NOT delete local PVCs for a failed pod when its k8s node is blocked", func() {
+				aeroCluster := createDummyAerospikeCluster(clusterNamespacedName, 3)
+				aeroCluster.Spec.Storage.LocalStorageClasses = []string{storageClass}
+				Expect(DeployCluster(k8sClient, ctx, aeroCluster)).ToNot(HaveOccurred())
+
+				oldPvcInfoPerPod, err := extractClusterPVC(ctx, k8sClient, aeroCluster)
+				Expect(err).ToNot(HaveOccurred())
+
+				failedPodName := clusterName + "-0-0"
+
+				By("Recording original pod UID and node name")
+
+				originalPod := &corev1.Pod{}
+				Expect(k8sClient.Get(ctx, types.NamespacedName{Name: failedPodName, Namespace: namespace},
+					originalPod)).ToNot(HaveOccurred())
+
+				originalPodUID := string(originalPod.UID)
+				blockedNode := originalPod.Spec.NodeName
+
+				By("Marking pod as failed")
+				Expect(markPodAsFailed(ctx, k8sClient, failedPodName, namespace)).ToNot(HaveOccurred())
+
+				By("Adding the pod's node to k8sNodeBlockList (non-blocking)")
+
+				aeroCluster, err = getCluster(k8sClient, ctx, clusterNamespacedName)
+				Expect(err).ToNot(HaveOccurred())
+
+				aeroCluster.Spec.K8sNodeBlockList = []string{blockedNode}
+				Expect(k8sClient.Update(ctx, aeroCluster)).ToNot(HaveOccurred())
+
+				By("Waiting for AKO to delete the failed pod (failure recovery — no PVC deletion)")
+				// AKO treats the failed pod with isFailureRecovery=true → PVC preserved → pod deleted →
+				// STS recreates pod with new anti-affinity, but local PVC pins it to blocked node → Pending.
+				Eventually(func() bool {
+					pod := &corev1.Pod{}
+					err = k8sClient.Get(ctx, types.NamespacedName{Name: failedPodName, Namespace: namespace}, pod)
+
+					return err == nil && string(pod.UID) != originalPodUID
+				}, 3*time.Minute, retryInterval).Should(BeTrue(), "pod should have been recreated by AKO")
+
+				By("Asserting failed pod PVC is preserved (bypassed k8sNodeBlockList PVC deletion)")
+				Expect(validatePVCDeletion(ctx, oldPvcInfoPerPod[failedPodName], false)).ToNot(HaveOccurred())
+			})
+
+			It("Should delete local PVCs for a failed pod when its k8s node is blocked and "+
+				"deleteLocalStorageOnPodRecovery is set from the start", func() {
+				aeroCluster := createDummyAerospikeCluster(clusterNamespacedName, 3)
+				aeroCluster.Spec.Storage.LocalStorageClasses = []string{storageClass}
+				aeroCluster.Spec.Storage.DeleteLocalStorageOnPodRecovery = ptr.To(true)
+				Expect(DeployCluster(k8sClient, ctx, aeroCluster)).ToNot(HaveOccurred())
+
+				oldPvcInfoPerPod, err := extractClusterPVC(ctx, k8sClient, aeroCluster)
+				Expect(err).ToNot(HaveOccurred())
+
+				failedPodName := clusterName + "-0-0"
+
+				By("Recording the pod's node name")
+
+				pod := &corev1.Pod{}
+				Expect(k8sClient.Get(ctx, types.NamespacedName{Name: failedPodName, Namespace: namespace}, pod)).
+					ToNot(HaveOccurred())
+				blockedNode := pod.Spec.NodeName
+
+				By("Marking pod as failed")
+				Expect(markPodAsFailed(ctx, k8sClient, failedPodName, namespace)).ToNot(HaveOccurred())
+
+				By("Adding the pod's node to k8sNodeBlockList")
+
+				aeroCluster.Spec.K8sNodeBlockList = []string{blockedNode}
+				Expect(updateCluster(k8sClient, ctx, aeroCluster)).ToNot(HaveOccurred())
+
+				By("Asserting failed pod PVC was deleted (deleteLocalStorageOnPodRecovery=true)")
+				Expect(validatePVCDeletion(ctx, oldPvcInfoPerPod[failedPodName], true)).ToNot(HaveOccurred())
 			})
 		})
 

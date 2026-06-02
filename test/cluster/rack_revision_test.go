@@ -158,7 +158,8 @@ var _ = Describe(
 						)
 
 						It(
-							"Should handle failed pods during rack revision migration", func() {
+							"Should stuck at old revision failed pods during rack revision migration, "+
+								"and recover when maxIgnorablePods is set", func() {
 								By("Creating cluster and triggering migration")
 
 								aeroCluster := createDummyClusterWithRackRevision(clusterNamespacedName, versionV1, 6)
@@ -168,7 +169,64 @@ var _ = Describe(
 								err := markPodAsFailed(ctx, k8sClient, podName, clusterNamespacedName.Namespace)
 								Expect(err).ToNot(HaveOccurred())
 
-								_ = changeRackRevision(k8sClient, ctx, clusterNamespacedName)
+								By("Changing rack revision to v2")
+
+								aeroCluster = changeRackRevision(k8sClient, ctx, clusterNamespacedName)
+
+								err = waitForAerospikeCluster(
+									k8sClient, ctx, aeroCluster, int(aeroCluster.Spec.Size), retryInterval,
+									2*time.Minute,
+									[]asdbv1.AerospikeClusterPhase{asdbv1.AerospikeClusterInProgress,
+										asdbv1.AerospikeClusterError})
+								Expect(err).To(HaveOccurred())
+
+								By("Setting maxIgnorablePods to 1")
+
+								maxIgnorable := intstr.FromInt32(1)
+								aeroCluster.Spec.RackConfig.MaxIgnorablePods = &maxIgnorable
+
+								err = updateCluster(k8sClient, ctx, aeroCluster)
+								Expect(err).ToNot(HaveOccurred())
+
+								// Validate final state
+								err = validateRackEnabledCluster(k8sClient, ctx, clusterNamespacedName)
+								Expect(err).ToNot(HaveOccurred())
+
+								// Ensure v1 revision resources are cleaned up
+								err = validateRackRevisionCleanup(k8sClient, ctx, aeroCluster, []int{1}, versionV1)
+								Expect(err).ToNot(HaveOccurred())
+							},
+						)
+
+						It(
+							"Should recover new revision failed pods automatically via failed pod handling, "+
+								"and ignore old revision failed pods through maxIgnorablePods",
+							func() {
+								By("Creating cluster and triggering migration")
+
+								aeroCluster := createDummyClusterWithRackRevision(clusterNamespacedName, versionV1, 6)
+								maxIgnorable := intstr.FromInt32(1)
+								aeroCluster.Spec.RackConfig.MaxIgnorablePods = &maxIgnorable
+								Expect(DeployCluster(k8sClient, ctx, aeroCluster)).ToNot(HaveOccurred())
+
+								v1PodName := clusterName + "-1-v1-0"
+								err := markPodAsFailed(ctx, k8sClient, v1PodName, clusterNamespacedName.Namespace)
+								Expect(err).ToNot(HaveOccurred())
+
+								By("Changing rack revision to v2")
+
+								aeroCluster = changeRackRevision(k8sClient, ctx, clusterNamespacedName)
+
+								// Both rack revision StatefulSets should exist during migration
+								Eventually(func() bool {
+									return checkBothRevisionsExist(k8sClient, ctx, clusterNamespacedName, versionV1, versionV2)
+								}, 10*time.Minute, 10*time.Second).Should(BeTrue())
+
+								v2PodName := clusterName + "-1-v2-0"
+								err = markPodAsFailed(ctx, k8sClient, v2PodName, clusterNamespacedName.Namespace)
+								Expect(err).ToNot(HaveOccurred())
+
+								By("v2 revision pod should recover automatically via failed pod handling")
 
 								err = waitForAerospikeCluster(
 									k8sClient, ctx, aeroCluster, int(aeroCluster.Spec.Size), retryInterval,

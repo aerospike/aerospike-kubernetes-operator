@@ -772,10 +772,10 @@ func (r *SingleClusterReconciler) isLocalPVCDeletionRequired(
 	if isFailureRecovery {
 		// During unplanned failure recovery the pod may have failed for any reason (OOM kill, Aerospike
 		// crash, container runtime error, etc.). The local disk data is almost certainly intact.
-		// Do not delete local PVCs unless the user has explicitly opted in via deleteLocalStorageOnPodFailure,
+		// Do not delete local PVCs unless the user has explicitly opted in via deleteLocalStorageOnPodRecovery,
 		// regardless of the eviction-blocked annotation, node block-list, or deleteLocalStorageOnRestart.
 		if asdbv1.GetBool(rackState.Rack.Storage.DeleteLocalStorageOnPodRecovery) {
-			r.Log.Info("deleteLocalStorageOnPodFailure is enabled, deleting local PVCs for failed pod",
+			r.Log.Info("deleteLocalStorageOnPodRecovery is enabled, deleting local PVCs for failed pod",
 				"podName", pod.Name)
 
 			return true

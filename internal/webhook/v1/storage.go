@@ -247,7 +247,7 @@ func validateStorage(
 
 	if asdbv1.GetBool(storage.DeleteLocalStorageOnPodRecovery) && len(storage.LocalStorageClasses) == 0 {
 		return warnings, fmt.Errorf(
-			"localStorageClasses cannot be empty if deleteLocalStorageOnPodFailureRecovery is set",
+			"localStorageClasses cannot be empty if deleteLocalStorageOnPodRecovery is set",
 		)
 	}
 
