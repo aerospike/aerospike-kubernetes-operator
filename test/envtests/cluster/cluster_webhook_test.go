@@ -54,7 +54,7 @@ var _ = Describe("AerospikeCluster validation", func() {
 					aeroCluster := testCluster.CreateDummyAerospikeCluster(clusterNamespacedName, 0)
 
 					// Deploy the cluster and expect an error due to invalid cluster size.
-					err := testCluster.DeployCluster(envtests.K8sClient, ctx, aeroCluster)
+					err := envtests.K8sClient.Create(ctx, aeroCluster)
 
 					Expect(err).To(HaveOccurred())
 
@@ -71,7 +71,7 @@ var _ = Describe("AerospikeCluster validation", func() {
 					aeroCluster.Spec.Size = -1
 
 					// Deploy the cluster and expect an error due to invalid cluster size (negative integer).
-					err := testCluster.DeployCluster(envtests.K8sClient, ctx, aeroCluster)
+					err := envtests.K8sClient.Create(ctx, aeroCluster)
 
 					Expect(err).To(HaveOccurred())
 
@@ -87,7 +87,7 @@ var _ = Describe("AerospikeCluster validation", func() {
 				It("rejects size above 256", func() {
 					aeroCluster := testCluster.CreateDummyAerospikeCluster(clusterNamespacedName, 257)
 
-					err := testCluster.DeployCluster(envtests.K8sClient, ctx, aeroCluster)
+					err := envtests.K8sClient.Create(ctx, aeroCluster)
 					Expect(err).To(HaveOccurred())
 
 					envtests.NewStatusErrorMatcher().
@@ -105,7 +105,7 @@ var _ = Describe("AerospikeCluster validation", func() {
 					aeroCluster := testCluster.CreateDummyAerospikeCluster(clusterNamespacedName, 1)
 					aeroCluster.Spec.Image = "" // Empty image
 
-					err := testCluster.DeployCluster(envtests.K8sClient, ctx, aeroCluster)
+					err := envtests.K8sClient.Create(ctx, aeroCluster)
 					Expect(err).To(HaveOccurred())
 
 					// Webhook response validation
@@ -120,7 +120,7 @@ var _ = Describe("AerospikeCluster validation", func() {
 					aeroCluster := testCluster.CreateDummyAerospikeCluster(clusterNamespacedName, 1)
 					aeroCluster.Spec.Image = "aerospike/nosuchimage:latest@invalid-digest"
 
-					err := testCluster.DeployCluster(envtests.K8sClient, ctx, aeroCluster)
+					err := envtests.K8sClient.Create(ctx, aeroCluster)
 					Expect(err).To(HaveOccurred())
 
 					// Webhook response validation
@@ -135,7 +135,7 @@ var _ = Describe("AerospikeCluster validation", func() {
 					oldImage := testutil.GetEnterpriseImage("5.0.0.0")
 					aeroCluster := testCluster.CreateAerospikeClusterPost640(clusterNamespacedName, 1, oldImage)
 
-					err := testCluster.DeployCluster(envtests.K8sClient, ctx, aeroCluster)
+					err := envtests.K8sClient.Create(ctx, aeroCluster)
 					Expect(err).To(HaveOccurred())
 
 					envtests.NewStatusErrorMatcher().
@@ -153,7 +153,7 @@ var _ = Describe("AerospikeCluster validation", func() {
 					aeroCluster := testCluster.CreateDummyAerospikeCluster(clusterNamespacedName, 2)
 					aeroCluster.Spec.Storage.Volumes = nil // Remove volumes
 
-					err := testCluster.DeployCluster(envtests.K8sClient, ctx, aeroCluster)
+					err := envtests.K8sClient.Create(ctx, aeroCluster)
 					Expect(err).To(HaveOccurred())
 
 					// Webhook response validation
@@ -175,7 +175,7 @@ var _ = Describe("AerospikeCluster validation", func() {
 						)
 						namespaceConfig["storage-engine"].(map[string]interface{})["devices"] = devList
 						aeroCluster.Spec.AerospikeConfig.Value[asdbv1.ConfKeyNamespace].([]interface{})[0] = namespaceConfig
-						err := testCluster.DeployCluster(envtests.K8sClient, ctx, aeroCluster)
+						err := envtests.K8sClient.Create(ctx, aeroCluster)
 						Expect(err).To(HaveOccurred())
 
 						// Webhook response validation
@@ -202,7 +202,7 @@ var _ = Describe("AerospikeCluster validation", func() {
 					namespaceConfig := namespaces[0].(map[string]interface{})
 					namespaceConfig["storage-engine"] = nil
 					aeroCluster.Spec.AerospikeConfig.Value[asdbv1.ConfKeyNamespace].([]interface{})[0] = namespaceConfig
-					err := testCluster.DeployCluster(envtests.K8sClient, ctx, aeroCluster)
+					err := envtests.K8sClient.Create(ctx, aeroCluster)
 					Expect(err).To(HaveOccurred())
 
 					// Webhook response validation
@@ -233,7 +233,7 @@ var _ = Describe("AerospikeCluster validation", func() {
 
 					aeroCluster.Spec.AerospikeConfig.Value[asdbv1.ConfKeyNamespace].([]interface{})[0] = namespaceConfig
 
-					err := testCluster.DeployCluster(envtests.K8sClient, ctx, aeroCluster)
+					err := envtests.K8sClient.Create(ctx, aeroCluster)
 					Expect(err).To(HaveOccurred())
 
 					// Webhook response validation
@@ -267,7 +267,7 @@ var _ = Describe("AerospikeCluster validation", func() {
 						}
 					}
 
-					err := testCluster.DeployCluster(envtests.K8sClient, ctx, aeroCluster)
+					err := envtests.K8sClient.Create(ctx, aeroCluster)
 					Expect(err).To(HaveOccurred())
 
 					// Webhook response validation
@@ -337,7 +337,7 @@ var _ = Describe("AerospikeCluster validation", func() {
 						namespaceConfig["storage-engine"].(map[string]interface{})["devices"] =
 							[]string{"/dev/xvdf1 /dev/xvdf2 /dev/xvdf3"}
 						aeroCluster.Spec.AerospikeConfig.Value[asdbv1.ConfKeyNamespace].([]interface{})[0] = namespaceConfig
-						err := testCluster.DeployCluster(envtests.K8sClient, ctx, aeroCluster)
+						err := envtests.K8sClient.Create(ctx, aeroCluster)
 						Expect(err).To(HaveOccurred())
 
 						// Webhook response validation
@@ -363,7 +363,7 @@ var _ = Describe("AerospikeCluster validation", func() {
 					nsList := aeroCluster.Spec.AerospikeConfig.Value[asdbv1.ConfKeyNamespace].([]interface{})
 					nsList = append(nsList, secondNs)
 					aeroCluster.Spec.AerospikeConfig.Value[asdbv1.ConfKeyNamespace] = nsList
-					err := testCluster.DeployCluster(envtests.K8sClient, ctx, aeroCluster)
+					err := envtests.K8sClient.Create(ctx, aeroCluster)
 					Expect(err).To(HaveOccurred())
 
 					// Webhook response validation
@@ -378,7 +378,7 @@ var _ = Describe("AerospikeCluster validation", func() {
 					// Remove namespaces from AerospikeConfigSpec
 					delete(aeroCluster.Spec.AerospikeConfig.Value, "namespaces")
 
-					err := testCluster.DeployCluster(envtests.K8sClient, ctx, aeroCluster)
+					err := envtests.K8sClient.Create(ctx, aeroCluster)
 					Expect(err).To(HaveOccurred())
 
 					// Webhook response validation
@@ -394,7 +394,7 @@ var _ = Describe("AerospikeCluster validation", func() {
 
 					// Set Namespace to nil
 					aeroCluster.Spec.AerospikeConfig.Value[asdbv1.ConfKeyNamespace] = nil
-					err := testCluster.DeployCluster(envtests.K8sClient, ctx, aeroCluster)
+					err := envtests.K8sClient.Create(ctx, aeroCluster)
 					Expect(err).To(HaveOccurred())
 
 					// Webhook response validation
@@ -417,7 +417,7 @@ var _ = Describe("AerospikeCluster validation", func() {
 						nsMap["replication-factor"] = 3
 					}
 
-					err := testCluster.DeployCluster(envtests.K8sClient, ctx, aeroCluster)
+					err := envtests.K8sClient.Create(ctx, aeroCluster)
 					Expect(err).To(HaveOccurred())
 
 					// Webhook response validation
@@ -442,7 +442,7 @@ var _ = Describe("AerospikeCluster validation", func() {
 					}
 					aeroCluster.Spec.AerospikeConfig.Value[asdbv1.ConfKeyNamespace] = append(nsList, dupNs)
 
-					err := testCluster.DeployCluster(envtests.K8sClient, ctx, aeroCluster)
+					err := envtests.K8sClient.Create(ctx, aeroCluster)
 					Expect(err).To(HaveOccurred())
 
 					envtests.NewStatusErrorMatcher().
@@ -467,7 +467,7 @@ var _ = Describe("AerospikeCluster validation", func() {
 						},
 					}
 
-					err := testCluster.DeployCluster(envtests.K8sClient, ctx, aeroCluster)
+					err := envtests.K8sClient.Create(ctx, aeroCluster)
 					Expect(err).To(HaveOccurred())
 
 					envtests.NewStatusErrorMatcher().
@@ -498,7 +498,7 @@ var _ = Describe("AerospikeCluster validation", func() {
 						},
 					}
 
-					err := testCluster.DeployCluster(envtests.K8sClient, ctx, aeroCluster)
+					err := envtests.K8sClient.Create(ctx, aeroCluster)
 					Expect(err).To(HaveOccurred())
 
 					envtests.NewStatusErrorMatcher().
@@ -576,7 +576,7 @@ var _ = Describe("AerospikeCluster validation", func() {
 				It("rejects empty aerospikeConfig", func() {
 					aeroCluster := testCluster.CreateDummyAerospikeCluster(clusterNamespacedName, 1)
 					aeroCluster.Spec.AerospikeConfig = &asdbv1.AerospikeConfigSpec{}
-					err := testCluster.DeployCluster(envtests.K8sClient, ctx, aeroCluster)
+					err := envtests.K8sClient.Create(ctx, aeroCluster)
 					Expect(err).To(HaveOccurred())
 
 					// Webhook response validation
@@ -594,7 +594,7 @@ var _ = Describe("AerospikeCluster validation", func() {
 							asdbv1.ConfKeyNamespace: "invalidConf",
 						},
 					}
-					err := testCluster.DeployCluster(envtests.K8sClient, ctx, aeroCluster)
+					err := envtests.K8sClient.Create(ctx, aeroCluster)
 					Expect(err).To(HaveOccurred())
 
 					// Webhook response validation
@@ -618,7 +618,7 @@ var _ = Describe("AerospikeCluster validation", func() {
 					aeroCluster.Spec.AerospikeConfig.Value["logging"] = loggingConf
 
 					// Deploy cluster
-					err := testCluster.DeployCluster(envtests.K8sClient, ctx, aeroCluster)
+					err := envtests.K8sClient.Create(ctx, aeroCluster)
 					Expect(err).To(HaveOccurred())
 
 					// Webhook response validation
@@ -642,7 +642,7 @@ var _ = Describe("AerospikeCluster validation", func() {
 					aeroCluster.Spec.AerospikeConfig.Value[asdbv1.ConfKeyService].(map[string]interface{})["advertise-ipv6"] = true
 
 					// Deploy cluster
-					err := testCluster.DeployCluster(envtests.K8sClient, ctx, aeroCluster)
+					err := envtests.K8sClient.Create(ctx, aeroCluster)
 					Expect(err).To(HaveOccurred())
 
 					// Webhook response validation
@@ -658,7 +658,7 @@ var _ = Describe("AerospikeCluster validation", func() {
 					aeroCluster.Spec.AerospikeConfig.Value[asdbv1.ConfKeyService].(map[string]interface{})["node-id"] = "a1"
 
 					// Deploy cluster
-					err := testCluster.DeployCluster(envtests.K8sClient, ctx, aeroCluster)
+					err := envtests.K8sClient.Create(ctx, aeroCluster)
 					Expect(err).To(HaveOccurred())
 
 					// Webhook response validation
@@ -679,7 +679,7 @@ var _ = Describe("AerospikeCluster validation", func() {
 					serviceConf[testutil.ClusterNameConfig] = testutil.ClusterNameConfig
 
 					// Deploy cluster
-					err := testCluster.DeployCluster(envtests.K8sClient, ctx, aeroCluster)
+					err := envtests.K8sClient.Create(ctx, aeroCluster)
 					Expect(err).To(HaveOccurred())
 
 					// Webhook response validation
@@ -699,7 +699,7 @@ var _ = Describe("AerospikeCluster validation", func() {
 						"feature-key-file": "/randompath/features.conf",
 					}
 					// Deploy cluster
-					err := testCluster.DeployCluster(envtests.K8sClient, ctx, aeroCluster)
+					err := envtests.K8sClient.Create(ctx, aeroCluster)
 					Expect(err).To(HaveOccurred())
 
 					// Webhook response validation
@@ -755,6 +755,145 @@ var _ = Describe("AerospikeCluster validation", func() {
 			})
 		})
 
+		Context("spec.aerospikeConfig (network)", func() {
+			Context("negative", func() {
+				It("rejects non-default access-addresses on network.service", func() {
+					aeroCluster := testCluster.CreateDummyAerospikeCluster(clusterNamespacedName, 1)
+					networkConf := aeroCluster.Spec.AerospikeConfig.Value[asdbv1.ConfKeyNetwork].(map[string]interface{})
+					serviceConf := networkConf[asdbv1.ConfKeyNetworkService].(map[string]interface{})
+					serviceConf["access-addresses"] = []string{"<access_addresses>"}
+
+					err := envtests.K8sClient.Create(ctx, aeroCluster)
+					Expect(err).To(HaveOccurred())
+
+					envtests.NewStatusErrorMatcher().
+						WithMessageSubstrings(" \"maerospikecluster.kb.io\"",
+							"failed to set default aerospikeConfig.network.service config:",
+							"access-addresses",
+							"can not have non-default value",
+						).
+						Validate(err)
+				})
+
+				It("rejects non-default tls-access-addresses on network.service when TLS is enabled", func() {
+					aeroCluster := testCluster.CreateAerospikeClusterPost640(
+						clusterNamespacedName, 1, testutil.LatestEnterpriseImage,
+					)
+					networkConf := aeroCluster.Spec.AerospikeConfig.Value[asdbv1.ConfKeyNetwork].(map[string]interface{})
+					serviceConf := networkConf[asdbv1.ConfKeyNetworkService].(map[string]interface{})
+					serviceConf["tls-access-addresses"] = []string{"<tls-access-addresses>"}
+
+					err := envtests.K8sClient.Create(ctx, aeroCluster)
+					Expect(err).To(HaveOccurred())
+
+					envtests.NewStatusErrorMatcher().
+						WithMessageSubstrings(" \"maerospikecluster.kb.io\"",
+							"failed to set default aerospikeConfig.network.service config:",
+							"tls-access-addresses",
+							"can not have non-default value",
+						).
+						Validate(err)
+				})
+
+				It("rejects TLS config when cert-file is set without key-file", func() {
+					aeroCluster := testCluster.CreateAerospikeClusterPost640(
+						clusterNamespacedName, 1, testutil.LatestEnterpriseImage,
+					)
+					networkConf := aeroCluster.Spec.AerospikeConfig.Value[asdbv1.ConfKeyNetwork].(map[string]interface{})
+					networkConf["tls"] = []interface{}{
+						map[string]interface{}{
+							"name":      "aerospike-a-0.test-runner",
+							"cert-file": "/randompath/svc_cluster_chain.pem",
+						},
+					}
+
+					err := envtests.K8sClient.Create(ctx, aeroCluster)
+					Expect(err).To(HaveOccurred())
+
+					envtests.NewStatusErrorMatcher().
+						WithMessageSubstrings("\"vaerospikecluster.kb.io\"",
+							"both `cert-file` and `key-file` must be set together in tlsConf map",
+						).
+						Validate(err)
+				})
+
+				It("rejects both ca-file and ca-path in network.tls", func() {
+					aeroCluster := testCluster.CreateAerospikeClusterPost640(
+						clusterNamespacedName, 1, testutil.LatestEnterpriseImage,
+					)
+					networkConf := aeroCluster.Spec.AerospikeConfig.Value[asdbv1.ConfKeyNetwork].(map[string]interface{})
+					networkConf["tls"] = []interface{}{
+						map[string]interface{}{
+							"name":      "aerospike-a-0.test-runner",
+							"cert-file": "/etc/aerospike/secret/svc_cluster_chain.pem",
+							"key-file":  "/etc/aerospike/secret/svc_key.pem",
+							"ca-file":   "/etc/aerospike/secret/cacert.pem",
+							"ca-path":   "/etc/aerospike/secret/cacerts",
+						},
+					}
+
+					err := envtests.K8sClient.Create(ctx, aeroCluster)
+					Expect(err).To(HaveOccurred())
+
+					envtests.NewStatusErrorMatcher().
+						WithMessageSubstrings("\"vaerospikecluster.kb.io\"",
+							"both `ca-path` and `ca-file` cannot be set in `tls`",
+						).
+						Validate(err)
+				})
+
+				It("rejects ca-file path pointing to Secret Manager", func() {
+					aeroCluster := testCluster.CreateAerospikeClusterPost640(
+						clusterNamespacedName, 1, testutil.LatestEnterpriseImage,
+					)
+					networkConf := aeroCluster.Spec.AerospikeConfig.Value[asdbv1.ConfKeyNetwork].(map[string]interface{})
+					networkConf["tls"] = []interface{}{
+						map[string]interface{}{
+							"name":      "aerospike-a-0.test-runner",
+							"cert-file": "/etc/aerospike/secret/svc_cluster_chain.pem",
+							"key-file":  "/etc/aerospike/secret/svc_key.pem",
+							"ca-file":   "secrets:Test-secret:Key",
+						},
+					}
+
+					err := envtests.K8sClient.Create(ctx, aeroCluster)
+					Expect(err).To(HaveOccurred())
+
+					envtests.NewStatusErrorMatcher().
+						WithMessageSubstrings("\"vaerospikecluster.kb.io\"",
+							"feature-key-file paths or tls paths or default-password-file path are not mounted",
+							"secrets:Test-secret:Key",
+						).
+						Validate(err)
+				})
+
+				It("rejects ca-path pointing to Secret Manager", func() {
+					aeroCluster := testCluster.CreateAerospikeClusterPost640(
+						clusterNamespacedName, 1, testutil.LatestEnterpriseImage,
+					)
+					networkConf := aeroCluster.Spec.AerospikeConfig.Value[asdbv1.ConfKeyNetwork].(map[string]interface{})
+					networkConf["tls"] = []interface{}{
+						map[string]interface{}{
+							"name":      "aerospike-a-0.test-runner",
+							"cert-file": "/etc/aerospike/secret/svc_cluster_chain.pem",
+							"key-file":  "/etc/aerospike/secret/svc_key.pem",
+							"ca-path":   "secrets:Test-secret:Key",
+						},
+					}
+
+					err := envtests.K8sClient.Create(ctx, aeroCluster)
+					Expect(err).To(HaveOccurred())
+
+					envtests.NewStatusErrorMatcher().
+						WithMessageSubstrings("\"vaerospikecluster.kb.io\"",
+							"feature-key-file paths or tls paths or default-password-file path are not mounted",
+							"secrets:Test-secret:Key",
+						).
+						Validate(err)
+				})
+			})
+		})
+
 		Context("spec.podSpec", func() {
 			Context("negative", func() {
 				It("rejects dnsPolicy Default", func() {
@@ -763,7 +902,7 @@ var _ = Describe("AerospikeCluster validation", func() {
 					aeroCluster.Spec.PodSpec.InputDNSPolicy = &defaultDNS
 
 					// Deploy cluster
-					err := testCluster.DeployCluster(envtests.K8sClient, ctx, aeroCluster)
+					err := envtests.K8sClient.Create(ctx, aeroCluster)
 					Expect(err).To(HaveOccurred())
 
 					// Webhook response validation
@@ -780,7 +919,7 @@ var _ = Describe("AerospikeCluster validation", func() {
 					aeroCluster.Spec.PodSpec.InputDNSPolicy = &noneDNS
 
 					// Deploy cluster
-					err := testCluster.DeployCluster(envtests.K8sClient, ctx, aeroCluster)
+					err := envtests.K8sClient.Create(ctx, aeroCluster)
 					Expect(err).To(HaveOccurred())
 
 					// Webhook response validation
@@ -795,7 +934,7 @@ var _ = Describe("AerospikeCluster validation", func() {
 					aeroCluster.Spec.PodSpec.HostNetwork = true
 					aeroCluster.Spec.PodSpec.MultiPodPerHost = ptr.To(true)
 
-					err := testCluster.DeployCluster(envtests.K8sClient, ctx, aeroCluster)
+					err := envtests.K8sClient.Create(ctx, aeroCluster)
 					Expect(err).To(HaveOccurred())
 
 					envtests.NewStatusErrorMatcher().
@@ -816,7 +955,7 @@ var _ = Describe("AerospikeCluster validation", func() {
 					aeroCluster.Spec.OperatorClientCertSpec.CertPathInOperator = &asdbv1.AerospikeCertPathInOperatorSource{}
 
 					// Deploy cluster
-					err := testCluster.DeployCluster(envtests.K8sClient, ctx, aeroCluster)
+					err := envtests.K8sClient.Create(ctx, aeroCluster)
 					Expect(err).To(HaveOccurred())
 
 					// Webhook response validation
@@ -833,7 +972,7 @@ var _ = Describe("AerospikeCluster validation", func() {
 					aeroCluster.Spec.OperatorClientCertSpec.SecretCertSource.ClientKeyFilename = ""
 
 					// Deploy cluster
-					err := testCluster.DeployCluster(envtests.K8sClient, ctx, aeroCluster)
+					err := envtests.K8sClient.Create(ctx, aeroCluster)
 					Expect(err).To(HaveOccurred())
 
 					// Webhook response validation
@@ -850,7 +989,7 @@ var _ = Describe("AerospikeCluster validation", func() {
 					aeroCluster.Spec.OperatorClientCertSpec.SecretCertSource.CaCertsSource = &asdbv1.CaCertsSource{}
 
 					// Deploy cluster
-					err := testCluster.DeployCluster(envtests.K8sClient, ctx, aeroCluster)
+					err := envtests.K8sClient.Create(ctx, aeroCluster)
 					Expect(err).To(HaveOccurred())
 
 					// Webhook response validation
@@ -873,7 +1012,7 @@ var _ = Describe("AerospikeCluster validation", func() {
 						}
 
 					// Deploy cluster
-					err := testCluster.DeployCluster(envtests.K8sClient, ctx, aeroCluster)
+					err := envtests.K8sClient.Create(ctx, aeroCluster)
 					Expect(err).To(HaveOccurred())
 
 					// Webhook response validation
@@ -890,7 +1029,7 @@ var _ = Describe("AerospikeCluster validation", func() {
 					aeroCluster.Spec.OperatorClientCertSpec = nil
 
 					// Deploy cluster
-					err := testCluster.DeployCluster(envtests.K8sClient, ctx, aeroCluster)
+					err := envtests.K8sClient.Create(ctx, aeroCluster)
 					Expect(err).To(HaveOccurred())
 
 					// Webhook response validation
@@ -907,7 +1046,7 @@ var _ = Describe("AerospikeCluster validation", func() {
 				It("rejects empty cluster name", func() {
 					cName := test.GetNamespacedName("", clusterNamespacedName.Namespace)
 					aeroCluster := testCluster.CreateDummyAerospikeCluster(cName, 1)
-					err := testCluster.DeployCluster(envtests.K8sClient, ctx, aeroCluster)
+					err := envtests.K8sClient.Create(ctx, aeroCluster)
 					Expect(err).To(HaveOccurred())
 
 					// Webhook response validation
@@ -926,7 +1065,7 @@ var _ = Describe("AerospikeCluster validation", func() {
 				It("rejects empty namespace name", func() {
 					cName := test.GetNamespacedName(clusterNamespacedName.Name, "")
 					aeroCluster := testCluster.CreateDummyAerospikeCluster(cName, 1)
-					err := testCluster.DeployCluster(envtests.K8sClient, ctx, aeroCluster)
+					err := envtests.K8sClient.Create(ctx, aeroCluster)
 					Expect(err).To(HaveOccurred())
 
 					// err is not a Kubernetes StatusError,
@@ -940,7 +1079,7 @@ var _ = Describe("AerospikeCluster validation", func() {
 					cName := test.GetNamespacedName("my cluster", clusterNamespacedName.Namespace)
 					aeroCluster := testCluster.CreateDummyAerospikeCluster(cName, 1)
 
-					err := testCluster.DeployCluster(envtests.K8sClient, ctx, aeroCluster)
+					err := envtests.K8sClient.Create(ctx, aeroCluster)
 					Expect(err).To(HaveOccurred())
 
 					// Webhook response validation
@@ -957,7 +1096,7 @@ var _ = Describe("AerospikeCluster validation", func() {
 					cName := test.GetNamespacedName("MyCluster", clusterNamespacedName.Namespace)
 					aeroCluster := testCluster.CreateDummyAerospikeCluster(cName, 1)
 
-					err := testCluster.DeployCluster(envtests.K8sClient, ctx, aeroCluster)
+					err := envtests.K8sClient.Create(ctx, aeroCluster)
 					Expect(err).To(HaveOccurred())
 
 					// Webhook response validation
@@ -978,7 +1117,7 @@ var _ = Describe("AerospikeCluster validation", func() {
 					cName := test.GetNamespacedName("1mycluster", clusterNamespacedName.Namespace)
 					aeroCluster := testCluster.CreateDummyAerospikeCluster(cName, 2)
 
-					err := testCluster.DeployCluster(envtests.K8sClient, ctx, aeroCluster)
+					err := envtests.K8sClient.Create(ctx, aeroCluster)
 					Expect(err).To(HaveOccurred())
 
 					envtests.NewStatusErrorMatcher().
@@ -998,7 +1137,7 @@ var _ = Describe("AerospikeCluster validation", func() {
 					cName := test.GetNamespacedName(longName, clusterNamespacedName.Namespace)
 					aeroCluster := testCluster.CreateDummyAerospikeCluster(cName, 2)
 
-					err := testCluster.DeployCluster(envtests.K8sClient, ctx, aeroCluster)
+					err := envtests.K8sClient.Create(ctx, aeroCluster)
 					Expect(err).To(HaveOccurred())
 
 					envtests.NewStatusErrorMatcher().
@@ -1016,7 +1155,7 @@ var _ = Describe("AerospikeCluster validation", func() {
 					cName := test.GetNamespacedName(clusterNamespacedName.Name, "default ns")
 					aeroCluster := testCluster.CreateDummyAerospikeCluster(cName, 1)
 
-					err := testCluster.DeployCluster(envtests.K8sClient, ctx, aeroCluster)
+					err := envtests.K8sClient.Create(ctx, aeroCluster)
 					Expect(err).To(HaveOccurred())
 
 					envtests.NewStatusErrorMatcher().
@@ -1057,7 +1196,7 @@ var _ = Describe("AerospikeCluster validation", func() {
 					// Ensure PDB is not disabled so MaxUnavailable is validated
 					aeroCluster.Spec.DisablePDB = nil
 
-					err := testCluster.DeployCluster(envtests.K8sClient, ctx, aeroCluster)
+					err := envtests.K8sClient.Create(ctx, aeroCluster)
 					Expect(err).To(HaveOccurred())
 
 					envtests.NewStatusErrorMatcher().
@@ -1077,7 +1216,7 @@ var _ = Describe("AerospikeCluster validation", func() {
 					delete(aeroCluster.Spec.AerospikeConfig.Value, asdbv1.ConfKeySecurity)
 					// AerospikeAccessControl is already set on the dummy cluster; keep it set
 
-					err := testCluster.DeployCluster(envtests.K8sClient, ctx, aeroCluster)
+					err := envtests.K8sClient.Create(ctx, aeroCluster)
 					Expect(err).To(HaveOccurred())
 
 					envtests.NewStatusErrorMatcher().
@@ -1101,7 +1240,7 @@ var _ = Describe("AerospikeCluster validation", func() {
 						},
 					}
 
-					err := testCluster.DeployCluster(envtests.K8sClient, ctx, aeroCluster)
+					err := envtests.K8sClient.Create(ctx, aeroCluster)
 					Expect(err).To(HaveOccurred())
 
 					// Webhook response validation
@@ -1118,7 +1257,7 @@ var _ = Describe("AerospikeCluster validation", func() {
 					negVal := intstr.FromInt32(-1)
 					aeroCluster.Spec.RackConfig.RollingUpdateBatchSize = &negVal
 
-					err := testCluster.DeployCluster(envtests.K8sClient, ctx, aeroCluster)
+					err := envtests.K8sClient.Create(ctx, aeroCluster)
 					Expect(err).To(HaveOccurred())
 
 					envtests.NewStatusErrorMatcher().
@@ -1133,7 +1272,7 @@ var _ = Describe("AerospikeCluster validation", func() {
 					negVal := intstr.FromInt32(-1)
 					aeroCluster.Spec.RackConfig.ScaleDownBatchSize = &negVal
 
-					err := testCluster.DeployCluster(envtests.K8sClient, ctx, aeroCluster)
+					err := envtests.K8sClient.Create(ctx, aeroCluster)
 					Expect(err).To(HaveOccurred())
 
 					envtests.NewStatusErrorMatcher().
@@ -1150,7 +1289,7 @@ var _ = Describe("AerospikeCluster validation", func() {
 						Racks:      []asdbv1.Rack{{ID: 1}},
 					}
 
-					err := testCluster.DeployCluster(envtests.K8sClient, ctx, aeroCluster)
+					err := envtests.K8sClient.Create(ctx, aeroCluster)
 					Expect(err).To(HaveOccurred())
 
 					envtests.NewStatusErrorMatcher().
