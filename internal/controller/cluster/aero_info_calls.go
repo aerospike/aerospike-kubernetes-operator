@@ -15,7 +15,6 @@ package cluster
 
 import (
 	"context"
-	stder
 	"fmt"
 	"time"
 
@@ -45,18 +44,6 @@ func (r *SingleClusterReconciler) waitForMultipleNodesSafeStopReady(
 ) common.ReconcileResult {
 	if len(pods) == 0 {
 		return common.ReconcileSuccess()
-	}
-
-	// Only require the Aerospike server container to be Running on each pod —
-	// sidecar-failed pods still have reachable servers and must not block
-	// scale-down. Server-failed pods (ignorablePods.ServerFailedPodNames) are
-	// skipped because they have no running server to query.
-	if err := r.waitForAllAerospikeServersRunning(ignorablePods); err != nil {
-		if stderrors.Is(err, ErrPodFailed) {
-			return common.ReconcileError(fmt.Errorf("failed to wait for cluster server containers to be running: %v", err))
-		}
-
-		return common.ReconcileRequeueAfter(1)
 	}
 
 	// For cluster-operation calls (host connections, migration, quiesce, roster) we
