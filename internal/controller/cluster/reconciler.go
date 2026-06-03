@@ -791,7 +791,48 @@ func (r *SingleClusterReconciler) recoverFailedCreate() error {
 		}
 	}
 
+	// Clear ACL status so that the next reconcile applies credentials fresh
+	// against the default admin account. When STSes and PVCs are deleted above,
+	// all user/credential data on the Aerospike nodes is wiped. If the stale
+	// ACL status is left intact, the operator would attempt to authenticate with
+	// those old credentials on the newly recreated nodes, causing info commands
+	// to fail.
+	if err := r.clearAerospikeAccessControlStatus(); err != nil {
+		return fmt.Errorf("failed to clear access control status during cluster recovery: %v", err)
+	}
+
 	return fmt.Errorf("forcing recreate of the cluster as status is nil")
+}
+
+// clearAerospikeAccessControlStatus sets AerospikeAccessControl to nil in the
+// CR status. This is called during recoverFailedCreate so that the operator
+// does not attempt to authenticate with stale credentials against freshly
+// recreated Aerospike nodes that have no user data.
+func (r *SingleClusterReconciler) clearAerospikeAccessControlStatus() error {
+	if r.aeroCluster.Status.AerospikeAccessControl == nil {
+		return nil
+	}
+
+	newAeroCluster := &asdbv1.AerospikeCluster{}
+	if err := r.Get(
+		context.TODO(), types.NamespacedName{
+			Name: r.aeroCluster.Name, Namespace: r.aeroCluster.Namespace,
+		}, newAeroCluster,
+	); err != nil {
+		return err
+	}
+
+	newAeroCluster.Status.AerospikeAccessControl = nil
+
+	if err := r.patchStatus(newAeroCluster); err != nil {
+		return fmt.Errorf("error clearing access control status: %w", err)
+	}
+
+	r.aeroCluster.Status.AerospikeAccessControl = nil
+
+	r.Log.Info("Cleared access control status for cluster recovery")
+
+	return nil
 }
 
 func (r *SingleClusterReconciler) addFinalizer(finalizerName string) error {
