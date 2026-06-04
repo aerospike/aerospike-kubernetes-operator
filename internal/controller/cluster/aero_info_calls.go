@@ -35,12 +35,12 @@ import (
 // ------------------------------------------------------------------------------------
 
 // waitForMultipleNodesSafeStopReady waits until the input pods are safe to stop.
-// ignorablePods.ServerFailedPodNames are pods whose Aerospike server is unreachable and are
+// ignorableServerFailedPodNames are pods whose Aerospike server is unreachable and are
 // skipped for cluster-operation queries (host connections, roster, quiesce).
 // ignorablePods.SidecarFailedPodNames are pods whose server is running but whose sidecar
 // is failing; they are included in all cluster-operation calls since their servers are reachable.
 func (r *SingleClusterReconciler) waitForMultipleNodesSafeStopReady(
-	pods []*corev1.Pod, ignorablePods IgnorablePods,
+	pods []*corev1.Pod, ignorableServerFailedPodNames sets.Set[string],
 ) common.ReconcileResult {
 	if len(pods) == 0 {
 		return common.ReconcileSuccess()
@@ -50,7 +50,7 @@ func (r *SingleClusterReconciler) waitForMultipleNodesSafeStopReady(
 	// only skip server-failed pods. Sidecar-failed pods have a running Aerospike server
 	// that must participate in these checks (plan items 3 and 5).
 	// This doesn't make actual connection, only objects having connection info are created
-	allHostConns, err := r.newAllHostConnWithOption(ignorablePods.ServerFailedPodNames)
+	allHostConns, err := r.newAllHostConnWithOption(ignorableServerFailedPodNames)
 	if err != nil {
 		return common.ReconcileError(fmt.Errorf("failed to get hostConn for aerospike cluster nodes: %v", err))
 	}
@@ -68,12 +68,12 @@ func (r *SingleClusterReconciler) waitForMultipleNodesSafeStopReady(
 	}
 
 	// Setup roster after migration.
-	if err = r.getAndSetRoster(policy, r.aeroCluster.Spec.RosterNodeBlockList, ignorablePods.ServerFailedPodNames); err != nil {
+	if err = r.getAndSetRoster(policy, r.aeroCluster.Spec.RosterNodeBlockList, ignorableServerFailedPodNames); err != nil {
 		r.Log.Error(err, "Failed to set roster for cluster")
 		return common.ReconcileRequeueAfter(1)
 	}
 
-	if err := r.quiescePods(policy, allHostConns, pods, ignorablePods.ServerFailedPodNames); err != nil {
+	if err := r.quiescePods(policy, allHostConns, pods, ignorableServerFailedPodNames); err != nil {
 		return common.ReconcileError(err)
 	}
 

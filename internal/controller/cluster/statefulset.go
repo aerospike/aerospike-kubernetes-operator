@@ -247,6 +247,80 @@ func (r *SingleClusterReconciler) deleteSTS(st *appsv1.StatefulSet) error {
 	return r.Delete(context.TODO(), st)
 }
 
+func (r *SingleClusterReconciler) waitForServerContainersRunning(
+	st *appsv1.StatefulSet, ignorablePodNames sets.Set[string],
+) error {
+	const (
+		podStatusMaxRetry      = 18
+		podStatusRetryInterval = time.Second * 10
+	)
+
+	r.Log.Info(
+		"Waiting for server containers to be running",
+		"WaitTimePerPod", podStatusRetryInterval*time.Duration(podStatusMaxRetry),
+	)
+
+	for podIndex := int32(0); podIndex < *st.Spec.Replicas; podIndex++ {
+		podName := getSTSPodName(st.Name, podIndex)
+
+		if ignorablePodNames.Has(podName) {
+			continue
+		}
+
+		pod := &corev1.Pod{}
+
+		// Wait up to 10s for the pod object to appear.
+		for i := 0; i < 5; i++ {
+			if err := r.Get(
+				context.TODO(),
+				types.NamespacedName{Name: podName, Namespace: st.Namespace},
+				pod,
+			); err == nil {
+				break
+			}
+
+			time.Sleep(time.Second * 2)
+		}
+
+		var isRunning bool
+
+		for i := 0; i < podStatusMaxRetry; i++ {
+			r.Log.V(1).Info("Check server container running", "pod", podName)
+
+			if err := r.Get(
+				context.TODO(),
+				types.NamespacedName{Name: podName, Namespace: st.Namespace},
+				pod,
+			); err != nil {
+				return fmt.Errorf("failed to get pod %s: %v", podName, err)
+			}
+
+			if podState := utils.CheckServerFailedWithGrace(pod, false); podState.State == utils.PodFailed {
+				return fmt.Errorf("server container in pod %s failed: %s", podName, podState.Reason)
+			}
+
+			if utils.IsAerospikeServerRunning(pod) {
+				isRunning = true
+
+				r.Log.Info("Server container is running", "pod", podName)
+
+				break
+			}
+
+			time.Sleep(podStatusRetryInterval)
+		}
+
+		if !isRunning {
+			return fmt.Errorf(
+				"server container in pod %s did not start. Status: %v",
+				podName, pod.Status.ContainerStatuses,
+			)
+		}
+	}
+
+	return nil
+}
+
 func (r *SingleClusterReconciler) waitForSTSToBeReady(
 	st *appsv1.StatefulSet, ignorablePodNames sets.Set[string],
 ) error {

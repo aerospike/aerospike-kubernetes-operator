@@ -97,7 +97,7 @@ func mergeRestartType(current, incoming RestartType) RestartType {
 }
 
 // Fetching RestartType of all pods, based on the operation being performed.
-func (r *SingleClusterReconciler) getRollingRestartTypeMap(rackState *RackState, ignorablePodNames sets.Set[string]) (
+func (r *SingleClusterReconciler) getRollingRestartTypeMap(rackState *RackState, ignorablePodNames, serverFailedPodNames sets.Set[string]) (
 	restartTypeMap map[string]RestartType, dynamicConfDiffPerPod map[string]asconfig.DynamicConfigMap, err error) {
 	var addedNSDevices []string
 
@@ -201,7 +201,11 @@ func (r *SingleClusterReconciler) getRollingRestartTypeMap(rackState *RackState,
 			return nil, nil, err
 		}
 
-		restartTypeMap[pods[idx].Name] = restartType
+		if restartType == quickRestart && serverFailedPodNames.Has(pods[idx].Name) {
+			restartTypeMap[pods[idx].Name] = podRestart
+		} else {
+			restartTypeMap[pods[idx].Name] = restartType
+		}
 	}
 
 	return restartTypeMap, dynamicConfDiffPerPod, nil
@@ -347,7 +351,7 @@ func (r *SingleClusterReconciler) getRollingRestartTypePod(
 }
 
 func (r *SingleClusterReconciler) rollingRestartPods(
-	rackState *RackState, podsToRestart []*corev1.Pod, ignorablePods IgnorablePods,
+	rackState *RackState, podsToRestart []*corev1.Pod, ignorableServerFailedPodNames sets.Set[string],
 	restartTypeMap map[string]RestartType,
 ) common.ReconcileResult {
 	failedPods, failedWithinGracePeriodPods, activePods := getServerFailedAndActivePods(podsToRestart, true)
@@ -361,10 +365,13 @@ func (r *SingleClusterReconciler) rollingRestartPods(
 		}
 	}
 
+	// Here activePods should be those pods where server pod is running, irrespective of sidecars status.
+	// ignorableServerFailedPodNames should only have those pods where server container is failing
+
 	if len(activePods) != 0 {
 		r.Log.Info("Restart active pods", "pods", getPodNames(activePods))
 
-		if res := r.waitForMultipleNodesSafeStopReady(activePods, ignorablePods); !res.IsSuccess {
+		if res := r.waitForMultipleNodesSafeStopReady(activePods, ignorableServerFailedPodNames); !res.IsSuccess {
 			return res
 		}
 
@@ -382,7 +389,7 @@ func (r *SingleClusterReconciler) rollingRestartPods(
 			clientPolicy = r.getClientPolicy()
 
 			if res := r.setMigrateFillDelay(clientPolicy, &rackState.Rack.AerospikeConfig, false,
-				ignorablePods.ServerFailedPodNames,
+				ignorableServerFailedPodNames,
 			); !res.IsSuccess {
 				r.Log.Error(res.Err,
 					"Failed to set migrate-fill-delay to original value before restarting the running pods")
@@ -399,7 +406,7 @@ func (r *SingleClusterReconciler) rollingRestartPods(
 		// in the next reconcile.
 		if setMigrateFillDelay {
 			if res := r.setMigrateFillDelay(clientPolicy, &rackState.Rack.AerospikeConfig, true,
-				ignorablePods.ServerFailedPodNames,
+				ignorableServerFailedPodNames,
 			); !res.IsSuccess {
 				r.Log.Error(res.Err, "Failed to set migrate-fill-delay to `0` after restarting the running pods")
 				return res
@@ -735,7 +742,7 @@ func getNonIgnorablePods(pods []*corev1.Pod, ignorablePodNames sets.Set[string],
 }
 
 func (r *SingleClusterReconciler) safelyDeletePodsAndEnsureImageUpdated(
-	rackState *RackState, podsToUpdate []*corev1.Pod, ignorablePods IgnorablePods,
+	rackState *RackState, podsToUpdate []*corev1.Pod, ignorableServerFailedPodNames sets.Set[string],
 ) common.ReconcileResult {
 	failedPods, failedWithinGracePeriodPods, activePods := getServerFailedAndActivePods(podsToUpdate, true)
 
@@ -751,7 +758,7 @@ func (r *SingleClusterReconciler) safelyDeletePodsAndEnsureImageUpdated(
 	if len(activePods) != 0 {
 		r.Log.Info("Restart active pods with updated container image", "pods", getPodNames(activePods))
 
-		if res := r.waitForMultipleNodesSafeStopReady(activePods, ignorablePods); !res.IsSuccess {
+		if res := r.waitForMultipleNodesSafeStopReady(activePods, ignorableServerFailedPodNames); !res.IsSuccess {
 			return res
 		}
 
@@ -768,7 +775,7 @@ func (r *SingleClusterReconciler) safelyDeletePodsAndEnsureImageUpdated(
 			clientPolicy = r.getClientPolicy()
 
 			if res := r.setMigrateFillDelay(clientPolicy, &rackState.Rack.AerospikeConfig, false,
-				ignorablePods.ServerFailedPodNames,
+				ignorableServerFailedPodNames,
 			); !res.IsSuccess {
 				r.Log.Error(res.Err,
 					"Failed to set migrate-fill-delay to original value before upgrading the running pods")
@@ -785,7 +792,7 @@ func (r *SingleClusterReconciler) safelyDeletePodsAndEnsureImageUpdated(
 		// in the next reconcile.
 		if setMigrateFillDelay {
 			if res := r.setMigrateFillDelay(clientPolicy, &rackState.Rack.AerospikeConfig, true,
-				ignorablePods.ServerFailedPodNames,
+				ignorableServerFailedPodNames,
 			); !res.IsSuccess {
 				r.Log.Error(res.Err, "Failed to set migrate-fill-delay to `0` after upgrading the running pods")
 				return res
