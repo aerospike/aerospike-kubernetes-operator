@@ -192,6 +192,39 @@ func (r *SingleClusterReconciler) waitForPVCTermination(deletedPVCs []corev1.Per
 	return nil
 }
 
+// deleteAllClusterPVCsForce deletes every PVC belonging to the cluster
+// regardless of the cascadeDelete flag on individual volumes. It is used during
+// recoverFailedCreate where all storage must be wiped so the cluster can be
+// cleanly recreated.
+func (r *SingleClusterReconciler) deleteAllClusterPVCsForce() error {
+	pvcItems, err := r.getClusterPVCList()
+	if err != nil {
+		return fmt.Errorf("could not list cluster PVCs: %v", err)
+	}
+
+	var deletedPVCs []corev1.PersistentVolumeClaim
+
+	for idx := range pvcItems {
+		pvc := &pvcItems[idx]
+		if utils.IsPVCTerminating(pvc) {
+			deletedPVCs = append(deletedPVCs, *pvc)
+			continue
+		}
+
+		if err := r.Delete(context.TODO(), pvc); err != nil {
+			if !errors.IsNotFound(err) {
+				return fmt.Errorf("could not delete PVC %s: %v", pvc.Name, err)
+			}
+		}
+
+		r.Log.Info("PVC force-deleted during cluster recovery", "PVC", pvc.Name)
+
+		deletedPVCs = append(deletedPVCs, *pvc)
+	}
+
+	return r.waitForPVCTermination(deletedPVCs)
+}
+
 func (r *SingleClusterReconciler) getClusterPVCList() (
 	[]corev1.PersistentVolumeClaim, error,
 ) {

@@ -769,9 +769,15 @@ func (r *SingleClusterReconciler) recoverFailedCreate() error {
 		}
 	}
 
-	// Clear pod status as well in status since we want to be re-initializing or cascade deleting devices if any.
-	// This is not necessary since scale-up would clean dangling pod status. However, done here for general
-	// cleanliness.
+	// Delete all PVCs for the cluster unconditionally, regardless of the cascadeDelete flag on
+	// individual volumes. During a failed-create recovery the cluster must start completely fresh.
+	if err := r.deleteAllClusterPVCsForce(); err != nil {
+		return fmt.Errorf("failed to delete cluster PVCs during recover: %v", err)
+	}
+
+	// Clear pod status, mesh references, and per-pod services.
+	// This is not necessary since scale-up would clean dangling pod status. However, done here for
+	// general cleanliness.
 	rackStateList := getConfiguredRackStateList(r.aeroCluster)
 	for rackIdx := range rackStateList {
 		state := rackStateList[rackIdx]
@@ -786,7 +792,7 @@ func (r *SingleClusterReconciler) recoverFailedCreate() error {
 			newPodNames = append(newPodNames, pods.Items[podIdx].Name)
 		}
 
-		if err := r.cleanupPods(newPodNames, &state); err != nil {
+		if err := r.cleanupPodMeshAndStatus(newPodNames); err != nil {
 			return fmt.Errorf("failed recover failed cluster: %v", err)
 		}
 	}
