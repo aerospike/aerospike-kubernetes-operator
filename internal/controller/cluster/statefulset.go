@@ -207,6 +207,7 @@ func (r *SingleClusterReconciler) createSTS(
 		"StatefulSet.Name", st.Name,
 	)
 
+	// TODO tanmay if no grace period, then how to mark error state
 	if err := r.waitForSTSToBeReady(st, nil); err != nil {
 		return st, fmt.Errorf(
 			"failed to wait for statefulset to be ready: %v", err,
@@ -374,6 +375,7 @@ func (r *SingleClusterReconciler) waitForSTSToBeReady(
 				)
 			}
 
+			// TODO tanmay if no grace period, then how to mark error state
 			if err := utils.CheckPodFailed(pod); err != nil {
 				return fmt.Errorf("statefulSet pod %s failed: %v", podName, err)
 			}

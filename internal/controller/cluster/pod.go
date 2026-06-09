@@ -622,6 +622,7 @@ func (r *SingleClusterReconciler) ensurePodsRunningAndReady(podsToCheck []*corev
 				return common.ReconcileError(err)
 			}
 
+			// TODO tanmay if no grace period, then how to mark error state
 			if err := utils.CheckPodFailed(updatedPod); err != nil {
 				return common.ReconcileError(err)
 			}
@@ -657,27 +658,6 @@ func (r *SingleClusterReconciler) ensurePodsRunningAndReady(podsToCheck []*corev
 	)
 
 	return common.ReconcileRequeueAfter(asdbv1.RequeueIntervalSeconds10)
-}
-
-func getFailedAndActivePods(
-	pods []*corev1.Pod, withGracePeriod bool) (failedPods, failedWithinGracePeriodPods, activePods []*corev1.Pod,
-) {
-	for idx := range pods {
-		pod := pods[idx]
-
-		podState := utils.CheckPodFailedWithGrace(pod, withGracePeriod)
-
-		switch podState.State {
-		case utils.PodHealthy:
-			activePods = append(activePods, pod)
-		case utils.PodFailedInGrace:
-			failedWithinGracePeriodPods = append(failedWithinGracePeriodPods, pod)
-		case utils.PodFailed:
-			failedPods = append(failedPods, pod)
-		}
-	}
-
-	return failedPods, failedWithinGracePeriodPods, activePods
 }
 
 // getServerFailedAndActivePods is like getFailedAndActivePods but only
@@ -900,6 +880,7 @@ func (r *SingleClusterReconciler) ensurePodsImageUpdated(podsToCheck []*corev1.P
 			}
 
 			// For existing cluster operations, no grace period for immediate responsiveness
+			// TODO tanmay if no grace period, then how to mark error state
 			if err := utils.CheckPodFailed(updatedPod); err != nil {
 				return common.ReconcileError(err)
 			}

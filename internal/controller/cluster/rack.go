@@ -169,6 +169,7 @@ func (r *SingleClusterReconciler) reconcileRacks() common.ReconcileResult {
 		}
 
 		// Wait for pods to be ready.
+		// TODO tanmay if no grace period, then how to mark error state
 		if err := r.waitForSTSToBeReady(found, ignorablePods.AllPodNames()); err != nil {
 			// If the wait times out try again.
 			// The wait is required in cases where scale up waits for a pod to
@@ -2121,6 +2122,7 @@ func (r *SingleClusterReconciler) reconcileRevisionChangedRacks(
 
 	// todo tanmay why??
 	// can we just check servercontainer health?
+	// TODO tanmay if no grace period, then how to mark error state
 	if err := r.waitForAllSTSToBeReady(ignorablePodNames); err != nil {
 		return common.ReconcileError(err)
 	}

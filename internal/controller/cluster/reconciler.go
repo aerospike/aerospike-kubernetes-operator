@@ -313,7 +313,7 @@ func (r *SingleClusterReconciler) recoverIgnorablePods(ignorablePodNames sets.Se
 	// Try to recover failed/pending pods by deleting them if grace period is over.
 	for idx := range podList.Items {
 		if ignorablePodNames.Has(podList.Items[idx].Name) {
-			podState := utils.CheckPodFailedWithGrace(&podList.Items[idx], true)
+			podState := utils.CheckServerFailedWithGrace(&podList.Items[idx], true)
 
 			if podState.State != utils.PodHealthy {
 				anyPodFailed = true
