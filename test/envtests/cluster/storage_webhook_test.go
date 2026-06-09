@@ -23,12 +23,31 @@ import (
 	. "github.com/onsi/ginkgo/v2"
 	. "github.com/onsi/gomega"
 	"k8s.io/apimachinery/pkg/types"
+	"k8s.io/apimachinery/pkg/util/intstr"
 	"k8s.io/utils/ptr"
 
 	asdbv1 "github.com/aerospike/aerospike-kubernetes-operator/v4/api/v1"
 	testCluster "github.com/aerospike/aerospike-kubernetes-operator/v4/test/cluster"
 	"github.com/aerospike/aerospike-kubernetes-operator/v4/test/envtests"
 )
+
+// twoRackClusterForStorageWebhook returns a size-2 cluster with per-rack InputStorage, used for
+// deploy/update cases where maxIgnorablePods must not combine with forceBlockFromRoster on a rack.
+func twoRackClusterForStorageWebhook(ns types.NamespacedName) *asdbv1.AerospikeCluster {
+	aeroCluster := testCluster.CreateDummyAerospikeCluster(ns, 2)
+	r1 := getStorageSpecForDevice("/test/dev/xvdf")
+	r2 := getStorageSpecForDevice("/rack2/xvdb")
+	aeroCluster.Spec.Storage = asdbv1.AerospikeStorageSpec{}
+	aeroCluster.Spec.RackConfig = asdbv1.RackConfig{
+		Namespaces: []string{"test"},
+		Racks: []asdbv1.Rack{
+			{ID: 1, Revision: "v1", InputStorage: &r1, InputAerospikeConfig: rackNSOverride("/test/dev/xvdf")},
+			{ID: 2, Revision: "v1", InputStorage: &r2, InputAerospikeConfig: rackNSOverride("/rack2/xvdb")},
+		},
+	}
+
+	return aeroCluster
+}
 
 var _ = Describe("Storage webhook validation", func() {
 	ctx := context.TODO()
@@ -133,7 +152,8 @@ var _ = Describe("Storage webhook validation", func() {
 			})
 
 			Context("positive", func() {
-				It("allows deploy when deleteLocalStorageOnPodRecovery is true "+
+				// Allow create: delete-local recovery true with localStorageClasses set at spec level.
+				It("allows deploy when deleteLocalStorageOnPodFailureRecovery is true "+
 					"and localStorageClasses is set", func() {
 					aeroCluster := testCluster.CreateDummyAerospikeCluster(nsName, 2)
 					aeroCluster.Spec.Storage.DeleteLocalStorageOnPodRecovery = ptr.To(true)
@@ -142,7 +162,16 @@ var _ = Describe("Storage webhook validation", func() {
 					Expect(envtests.K8sClient.Create(ctx, aeroCluster)).To(Succeed())
 				})
 
-				It("allows deploy when deleteLocalStorageOnPodRecovery is false "+
+				// Allow create: delete-local recovery false with localStorageClasses set (no conflict).
+				It("allows deploy when deleteLocalStorageOnPodRecovery is false with localStorageClasses set", func() {
+					aeroCluster := testCluster.CreateDummyAerospikeCluster(nsName, 2)
+					aeroCluster.Spec.Storage.DeleteLocalStorageOnPodRecovery = ptr.To(false)
+					aeroCluster.Spec.Storage.LocalStorageClasses = []string{testutil.StorageClass}
+
+					Expect(envtests.K8sClient.Create(ctx, aeroCluster)).To(Succeed())
+				})
+
+				It("allows deploy when deleteLocalStorageOnPodFailureRecovery is false "+
 					"without localStorageClasses", func() {
 					aeroCluster := testCluster.CreateDummyAerospikeCluster(nsName, 2)
 					aeroCluster.Spec.Storage.DeleteLocalStorageOnPodRecovery = ptr.To(false)
@@ -326,7 +355,33 @@ var _ = Describe("Storage webhook validation", func() {
 			})
 		})
 
-		Context("spec.storage deleteLocalStorageOnPodRecovery validation", func() {
+		Context("spec.rackConfig maxIgnorablePods and forceBlockFromRoster (update)", func() {
+			Context("negative", func() {
+				// Reject update: add maxIgnorablePods after create with forceBlockFromRoster already true on a rack.
+				It("rejects update that sets maxIgnorablePods when forceBlockFromRoster is already enabled", func() {
+					aeroCluster := twoRackClusterForStorageWebhook(nsName)
+					aeroCluster.Spec.RackConfig.Racks[0].ForceBlockFromRoster = ptr.To(true)
+					Expect(envtests.K8sClient.Create(ctx, aeroCluster)).To(Succeed())
+
+					current, err := testCluster.GetCluster(envtests.K8sClient, ctx, nsName)
+					Expect(err).ToNot(HaveOccurred())
+
+					v := intstr.FromInt32(1)
+					current.Spec.RackConfig.MaxIgnorablePods = &v
+
+					err = envtests.K8sClient.Update(ctx, current)
+					Expect(err).To(HaveOccurred())
+					envtests.NewStatusErrorMatcher().
+						WithMessageSubstrings(
+							testutil.WebhookErrorPrefix,
+							"forceBlockFromRoster cannot be used together with maxIgnorablePods",
+						).
+						Validate(err)
+				})
+			})
+		})
+
+		Context("spec.storage deleteLocalStorageOnPodFailureRecovery validation", func() {
 			Context("negative", func() {
 				It("rejects update that enables deleteLocalStorageOnPodRecovery "+
 					"without localStorageClasses", func() {
@@ -337,14 +392,14 @@ var _ = Describe("Storage webhook validation", func() {
 					Expect(err).ToNot(HaveOccurred())
 
 					current.Spec.Storage.DeleteLocalStorageOnPodRecovery = ptr.To(true)
-					aeroCluster.Spec.Storage.LocalStorageClasses = nil
+					current.Spec.Storage.LocalStorageClasses = nil
 
 					err = envtests.K8sClient.Update(ctx, current)
 					Expect(err).To(HaveOccurred())
 
 					envtests.NewStatusErrorMatcher().
 						WithMessageSubstrings(
-							"\"vaerospikecluster.kb.io\"",
+							testutil.WebhookErrorPrefix,
 							"localStorageClasses cannot be empty if deleteLocalStorageOnPodRecovery is set",
 						).
 						Validate(err)
@@ -352,7 +407,8 @@ var _ = Describe("Storage webhook validation", func() {
 			})
 
 			Context("positive", func() {
-				It("allows disabling deleteLocalStorageOnPodRecovery via update"+
+				// Allow update: turn delete-local recovery off and clear localStorageClasses.
+				It("allows disabling deleteLocalStorageOnPodFailureRecovery via update"+
 					" without localStorageClasses", func() {
 					aeroCluster := testCluster.CreateDummyAerospikeCluster(nsName, 2)
 					aeroCluster.Spec.Storage.DeleteLocalStorageOnPodRecovery = ptr.To(true)
@@ -364,6 +420,22 @@ var _ = Describe("Storage webhook validation", func() {
 
 					current.Spec.Storage.DeleteLocalStorageOnPodRecovery = ptr.To(false)
 					current.Spec.Storage.LocalStorageClasses = nil
+
+					Expect(envtests.K8sClient.Update(ctx, current)).To(Succeed())
+				})
+
+				// Allow update: enable delete-local recovery from false to true while keeping localStorageClasses.
+				It("allows update enabling deleteLocalStorageOnPodRecovery from false to true with localStorageClasses", func() {
+					aeroCluster := testCluster.CreateDummyAerospikeCluster(nsName, 2)
+					aeroCluster.Spec.Storage.DeleteLocalStorageOnPodRecovery = ptr.To(false)
+					aeroCluster.Spec.Storage.LocalStorageClasses = []string{testutil.StorageClass}
+					Expect(envtests.K8sClient.Create(ctx, aeroCluster)).To(Succeed())
+
+					current, err := testCluster.GetCluster(envtests.K8sClient, ctx, nsName)
+					Expect(err).ToNot(HaveOccurred())
+
+					current.Spec.Storage.DeleteLocalStorageOnPodRecovery = ptr.To(true)
+					current.Spec.Storage.LocalStorageClasses = []string{testutil.StorageClass}
 
 					Expect(envtests.K8sClient.Update(ctx, current)).To(Succeed())
 				})
