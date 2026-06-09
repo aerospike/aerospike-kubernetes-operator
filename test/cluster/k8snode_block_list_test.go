@@ -7,6 +7,7 @@ import (
 	. "github.com/onsi/ginkgo/v2"
 	. "github.com/onsi/gomega"
 	corev1 "k8s.io/api/core/v1"
+	apierrors "k8s.io/apimachinery/pkg/api/errors"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/types"
 	"k8s.io/apimachinery/pkg/util/intstr"
@@ -217,6 +218,10 @@ func validatePVCDeletion(ctx context.Context, pvcUIDMap map[string]types.UID, sh
 		)
 
 		if err := k8sClient.Get(ctx, pvcNamespacesName, pvc); err != nil {
+			if shouldDeletePVC && apierrors.IsNotFound(err) {
+				continue
+			}
+
 			return err
 		}
 

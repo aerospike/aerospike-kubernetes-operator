@@ -14,11 +14,13 @@ import (
 	"k8s.io/apimachinery/pkg/labels"
 	"k8s.io/apimachinery/pkg/types"
 	"k8s.io/apimachinery/pkg/util/intstr"
+	"k8s.io/utils/ptr"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 
 	asdbv1 "github.com/aerospike/aerospike-kubernetes-operator/v4/api/v1"
 	"github.com/aerospike/aerospike-kubernetes-operator/v4/pkg/utils"
 	"github.com/aerospike/aerospike-kubernetes-operator/v4/test"
+	lib "github.com/aerospike/aerospike-management-lib"
 )
 
 var _ = Describe(
@@ -243,6 +245,76 @@ var _ = Describe(
 								err = validateRackRevisionCleanup(k8sClient, ctx, aeroCluster, []int{1}, versionV1)
 								Expect(err).ToNot(HaveOccurred())
 							},
+						)
+
+						// rack revision with per-rack InputStorage and failed-pod PVC retention.
+						DescribeTable("failed pod local PVCs during rack revision with per-rack InputStorage",
+							func(deleteOnRecovery bool, createBy string, expectPVCDeleted bool) {
+								By(createBy)
+
+								aeroCluster := createDummyClusterWithRackRevision(clusterNamespacedName, versionV1, 6)
+								for idx := range aeroCluster.Spec.RackConfig.Racks {
+									st := lib.DeepCopy(&aeroCluster.Spec.Storage).(*asdbv1.AerospikeStorageSpec)
+									st.DeleteLocalStorageOnPodRecovery = ptr.To(deleteOnRecovery)
+									st.LocalStorageClasses = []string{storageClass}
+									// Rack-revision scale-down removes PVCs via cascadeDelete on volumes/policies;
+									// deleteLocalStorageOnPodRecovery is not consulted on that path. Enable cascade
+									// for the row that expects PVCs to disappear after old-revision teardown.
+									if deleteOnRecovery {
+										st.BlockVolumePolicy.InputCascadeDelete = &cascadeDeleteTrue
+										st.FileSystemVolumePolicy.InputCascadeDelete = &cascadeDeleteTrue
+									}
+
+									aeroCluster.Spec.RackConfig.Racks[idx].InputStorage = st
+								}
+
+								maxIgnorable := intstr.FromInt32(2)
+								aeroCluster.Spec.RackConfig.MaxIgnorablePods = &maxIgnorable
+
+								Expect(DeployCluster(k8sClient, ctx, aeroCluster)).ToNot(HaveOccurred())
+
+								podName := clusterName + "-1-v1-0"
+								oldPVC, err := pvcClaimUIDsForPod(ctx, k8sClient, podName, clusterNamespacedName.Namespace)
+								Expect(err).ToNot(HaveOccurred())
+								Expect(oldPVC).ToNot(BeEmpty())
+
+								Expect(markPodAsFailed(ctx, k8sClient, podName, clusterNamespacedName.Namespace)).ToNot(HaveOccurred())
+
+								By("Changing rack revision to v2")
+
+								aeroCluster = changeRackRevision(k8sClient, ctx, clusterNamespacedName)
+
+								err = waitForAerospikeCluster(
+									k8sClient, ctx, aeroCluster, int(aeroCluster.Spec.Size), retryInterval,
+									getTimeout(aeroCluster.Spec.Size),
+									[]asdbv1.AerospikeClusterPhase{asdbv1.AerospikeClusterCompleted},
+								)
+								Expect(err).ToNot(HaveOccurred())
+
+								err = validateRackEnabledCluster(k8sClient, ctx, clusterNamespacedName)
+								Expect(err).ToNot(HaveOccurred())
+
+								err = validateRackRevisionCleanup(k8sClient, ctx, aeroCluster, []int{1}, versionV1)
+								Expect(err).ToNot(HaveOccurred())
+
+								Expect(validatePVCDeletion(ctx, oldPVC, expectPVCDeleted)).ToNot(HaveOccurred())
+							},
+							Entry(
+								"Should keep failed pod PVCs during rack revision when rack InputStorage sets "+
+									"deleteLocalStorageOnPodRecovery false",
+								false,
+								"Creating cluster with per-rack InputStorage (safe failure recovery)",
+								false,
+							),
+							Entry(
+								"Should delete failed pod local PVCs during rack revision when rack InputStorage sets "+
+									"deleteLocalStorageOnPodRecovery true and per-rack cascade delete is enabled "+
+									"(PVC removal on old-revision teardown follows cascadeDelete policy)",
+								true,
+								"Creating cluster with per-rack InputStorage (delete on failure recovery + cascade delete)",
+								true,
+							),
+							Serial,
 						)
 					},
 				)
