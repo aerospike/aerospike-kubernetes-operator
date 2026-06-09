@@ -435,7 +435,6 @@ var _ = Describe("Storage webhook validation", func() {
 					Expect(err).ToNot(HaveOccurred())
 
 					current.Spec.Storage.DeleteLocalStorageOnPodRecovery = ptr.To(true)
-					current.Spec.Storage.LocalStorageClasses = []string{testutil.StorageClass}
 
 					Expect(envtests.K8sClient.Update(ctx, current)).To(Succeed())
 				})
