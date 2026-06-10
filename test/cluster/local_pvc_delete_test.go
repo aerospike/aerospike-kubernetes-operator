@@ -11,6 +11,7 @@ import (
 	corev1 "k8s.io/api/core/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/types"
+	"k8s.io/apimachinery/pkg/util/intstr"
 	"k8s.io/utils/ptr"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 
@@ -191,6 +192,58 @@ var _ = Describe(
 					validateClusterPVCDeletion(ctx, oldPvcInfoPerPod, clusterName+"-2-0")
 				})
 			})
+		})
+
+		Context("Scale-down local PVC policy", func() {
+			DescribeTable("PVC outcome follows cascadeDelete, not deleteLocalStorageOnPodRecovery",
+				func(cascadeDelete bool, expectPVCsDeleted bool) {
+					aeroCluster := createNonSCDummyAerospikeCluster(clusterNamespacedName, 4)
+					st := aeroCluster.Spec.Storage
+
+					if cascadeDelete {
+						st.BlockVolumePolicy.InputCascadeDelete = &cascadeDeleteTrue
+						st.FileSystemVolumePolicy.InputCascadeDelete = &cascadeDeleteTrue
+					} else {
+						st.BlockVolumePolicy.InputCascadeDelete = &cascadeDeleteFalse
+						st.FileSystemVolumePolicy.InputCascadeDelete = &cascadeDeleteFalse
+					}
+
+					st.DeleteLocalStorageOnPodRecovery = ptr.To(true)
+					st.LocalStorageClasses = []string{storageClass}
+					aeroCluster.Spec.Storage = st
+
+					Expect(DeployCluster(k8sClient, ctx, aeroCluster)).ToNot(HaveOccurred())
+
+					failedPodName := clusterName + "-0-3"
+					pvcBefore, err := pvcClaimUIDsForPod(ctx, k8sClient, failedPodName, namespace)
+					Expect(err).ToNot(HaveOccurred())
+					Expect(pvcBefore).ToNot(BeEmpty())
+
+					Expect(markPodAsFailed(ctx, k8sClient, failedPodName, namespace)).ToNot(HaveOccurred())
+
+					aeroCluster, err = getCluster(k8sClient, ctx, clusterNamespacedName)
+					Expect(err).ToNot(HaveOccurred())
+
+					maxIgnorable := intstr.FromInt32(1)
+					aeroCluster.Spec.RackConfig.MaxIgnorablePods = &maxIgnorable
+					aeroCluster.Spec.Size--
+
+					Expect(updateCluster(k8sClient, ctx, aeroCluster)).ToNot(HaveOccurred())
+
+					if expectPVCsDeleted {
+						Expect(pvcClaimsEventuallyNotFound(ctx, k8sClient, pvcBefore, namespace)).To(Succeed())
+					} else {
+						Expect(pvcClaimsKeepStableUIDs(ctx, k8sClient, pvcBefore, namespace)).To(Succeed())
+					}
+				},
+				Entry("deletes removed pod PVCs on scale-down when cascadeDelete=true even if "+
+					"deleteLocalStorageOnPodRecovery=true",
+					true, true),
+				Entry(
+					"preserves removed pod PVCs on scale-down when cascadeDelete=false even if "+
+						"deleteLocalStorageOnPodRecovery=true",
+					false, false),
+			)
 		})
 
 		Context("When a pod is failed (failure recovery path)", func() {
@@ -491,6 +544,87 @@ var _ = Describe(
 				})
 		})
 
+		Context("Data integrity after failed pod recovery", func() {
+			// size 2 + RF=1 + maxIgnorablePods; Aerospike read may lag after rollout — Eventually.
+			It("Should keep previously written Aerospike records when deleteLocalStorageOnPodRecovery is false", func() {
+				aeroCluster := createDummyAerospikeClusterWithRF(clusterNamespacedName, 2, 1)
+				aeroCluster.Spec.Storage.DeleteLocalStorageOnPodRecovery = ptr.To(false)
+				aeroCluster.Spec.Storage.LocalStorageClasses = []string{storageClass}
+				Expect(DeployCluster(k8sClient, ctx, aeroCluster)).ToNot(HaveOccurred())
+
+				var err error
+
+				aeroCluster, err = getCluster(k8sClient, ctx, clusterNamespacedName)
+				Expect(err).ToNot(HaveOccurred())
+
+				Expect(WriteDataToCluster(aeroCluster, k8sClient, []string{"test"})).ToNot(HaveOccurred())
+
+				failedPodName := clusterName + "-0-0"
+				Expect(markPodAsFailed(ctx, k8sClient, failedPodName, namespace)).ToNot(HaveOccurred())
+
+				aeroCluster, err = getCluster(k8sClient, ctx, clusterNamespacedName)
+				Expect(err).ToNot(HaveOccurred())
+
+				maxIgnorable := intstr.FromInt32(1)
+				aeroCluster.Spec.RackConfig.MaxIgnorablePods = &maxIgnorable
+
+				aeroCluster.Spec.PodSpec.AerospikeObjectMeta = asdbv1.AerospikeObjectMeta{
+					Labels: map[string]string{"test-label": "int-fph-037-data"},
+				}
+				Expect(updateClusterWithTO(k8sClient, ctx, aeroCluster, 20*time.Minute)).ToNot(HaveOccurred())
+
+				Eventually(func() bool {
+					ac, gerr := getCluster(k8sClient, ctx, clusterNamespacedName)
+					if gerr != nil {
+						return false
+					}
+
+					data, derr := CheckDataInCluster(ac, k8sClient, []string{"test"})
+					if derr != nil || data == nil {
+						return false
+					}
+
+					return data["test"]
+				}).WithTimeout(5*time.Minute).WithPolling(retryInterval).Should(BeTrue(),
+					"written bin should remain readable after failed-pod recovery with deleteLocalStorageOnPodRecovery=false")
+			})
+
+			// size 3 + RF=2, no maxIgnorablePods (ignorable failed pods are skipped from rolling restart, so
+			// deleteLocalStorageOnPodRecovery would not delete their PVCs). Assert failed pod PVCs go away.
+			It("Should delete failed pod local PVCs when deleteLocalStorageOnPodRecovery is true during rolling restart",
+				func() {
+					aeroCluster := createDummyAerospikeClusterWithRF(clusterNamespacedName, 3, 2)
+					aeroCluster.Spec.Storage.DeleteLocalStorageOnPodRecovery = ptr.To(true)
+					aeroCluster.Spec.Storage.LocalStorageClasses = []string{storageClass}
+					Expect(DeployCluster(k8sClient, ctx, aeroCluster)).ToNot(HaveOccurred())
+
+					var err error
+
+					aeroCluster, err = getCluster(k8sClient, ctx, clusterNamespacedName)
+					Expect(err).ToNot(HaveOccurred())
+
+					Expect(WriteDataToCluster(aeroCluster, k8sClient, []string{"test"})).ToNot(HaveOccurred())
+
+					failedPodName := clusterName + "-0-0"
+					Expect(markPodAsFailed(ctx, k8sClient, failedPodName, namespace)).ToNot(HaveOccurred())
+
+					aeroCluster, err = getCluster(k8sClient, ctx, clusterNamespacedName)
+					Expect(err).ToNot(HaveOccurred())
+
+					aeroCluster.Spec.PodSpec.AerospikeObjectMeta = asdbv1.AerospikeObjectMeta{
+						Labels: map[string]string{"test-label": "int-fph-038-pvc-delete"},
+					}
+
+					oldPVC, err := pvcClaimUIDsForPod(ctx, k8sClient, failedPodName, namespace)
+					Expect(err).ToNot(HaveOccurred())
+					Expect(oldPVC).ToNot(BeEmpty())
+
+					Expect(updateClusterWithTO(k8sClient, ctx, aeroCluster, 20*time.Minute)).ToNot(HaveOccurred())
+
+					Expect(validatePVCDeletion(ctx, oldPVC, true)).To(Succeed())
+				})
+		})
+
 		Context("When doing invalid operations", func() {
 			It("Should fail when deleteLocalStorageOnRestart is set but localStorageClasses is not set", func() {
 				aeroCluster := createDummyAerospikeCluster(
@@ -526,7 +660,7 @@ func extractClusterPVC(ctx goctx.Context, k8sClient client.Client, aeroCluster *
 	oldPvcInfoPerPod := make(map[string]map[string]types.UID)
 
 	for idx := range podList.Items {
-		pvcMap, err := extractPodPVC(&podList.Items[idx])
+		pvcMap, err := extractPodPVC(ctx, k8sClient, &podList.Items[idx])
 		if err != nil {
 			return nil, err
 		}
