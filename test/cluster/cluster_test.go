@@ -964,8 +964,8 @@ func clusterWithMaxIgnorablePod(ctx goctx.Context) {
 
 					By("Set MaxIgnorablePod and Rolling restart by removing namespace")
 
-					aeroCluster, err := getCluster(k8sClient, ctx, clusterNamespacedName)
-					Expect(err).ToNot(HaveOccurred())
+					aeroCluster, lerr := getCluster(k8sClient, ctx, clusterNamespacedName)
+					Expect(lerr).ToNot(HaveOccurred())
 
 					val := intstr.FromInt32(1)
 					aeroCluster.Spec.RackConfig.MaxIgnorablePods = &val
@@ -988,6 +988,115 @@ func clusterWithMaxIgnorablePod(ctx goctx.Context) {
 					Expect(err).ToNot(HaveOccurred())
 				},
 			)
+		},
+	)
+
+	Context(
+		"Pending pod consumes maxIgnorablePods=1 so scale-down blocks with a separate failed pod",
+		func() {
+			It("blocks scale-down when a pending pod consumes maxIgnorablePods=1 and another pod is failed", func() {
+				nodeList, lerr := test.GetNodeList(ctx, k8sClient)
+				Expect(lerr).ToNot(HaveOccurred())
+
+				n := utils.Len32(nodeList.Items)
+				if n < 2 {
+					Skip("requires at least 2 nodes for pending+failed budget test")
+				}
+
+				aeroCluster := createNonSCDummyAerospikeCluster(clusterNamespacedName, n)
+				Expect(DeployCluster(k8sClient, ctx, aeroCluster)).ToNot(HaveOccurred())
+
+				aeroCluster, err = getCluster(k8sClient, ctx, clusterNamespacedName)
+				Expect(err).ToNot(HaveOccurred())
+
+				aeroCluster.Spec.Size++
+				Expect(k8sClient.Update(ctx, aeroCluster)).ToNot(HaveOccurred())
+
+				Eventually(func() int {
+					podList, plerr := getPodList(aeroCluster, k8sClient)
+					if plerr != nil {
+						return 0
+					}
+
+					pending := 0
+
+					for i := range podList.Items {
+						if podList.Items[i].Status.Phase == v1.PodPending {
+							pending++
+						}
+					}
+
+					return pending
+				}, 5*time.Minute, 5*time.Second).Should(BeNumerically(">=", 1),
+					"expected at least one Pending pod after scale-up")
+
+				podList, plerr := getPodList(aeroCluster, k8sClient)
+				Expect(plerr).ToNot(HaveOccurred())
+
+				var victim string
+
+				for i := range podList.Items {
+					p := &podList.Items[i]
+					if p.Status.Phase == v1.PodRunning && utils.IsPodRunningAndReady(p) {
+						victim = p.Name
+
+						break
+					}
+				}
+
+				Expect(victim).ToNot(BeEmpty(), "expected a running pod to mark failed")
+
+				Expect(markPodAsFailed(ctx, k8sClient, victim, clusterNamespacedName.Namespace)).ToNot(HaveOccurred())
+
+				aeroCluster, err = getCluster(k8sClient, ctx, clusterNamespacedName)
+				Expect(err).ToNot(HaveOccurred())
+
+				maxIgnorable := intstr.FromInt32(1)
+				aeroCluster.Spec.RackConfig.MaxIgnorablePods = &maxIgnorable
+				aeroCluster.Spec.Size--
+
+				Expect(k8sClient.Update(ctx, aeroCluster)).ToNot(HaveOccurred())
+
+				err = waitForAerospikeCluster(
+					k8sClient, ctx, aeroCluster, int(aeroCluster.Spec.Size),
+					retryInterval, 2*time.Minute,
+					[]asdbv1.AerospikeClusterPhase{asdbv1.AerospikeClusterInProgress, asdbv1.AerospikeClusterError},
+				)
+				Expect(err).To(HaveOccurred())
+			})
+		},
+	)
+
+	Context(
+		"Two failed pods on same rack block scale-down when maxIgnorablePods=1",
+		func() {
+			It("blocks scale-down when two pods are failed on the same rack with maxIgnorablePods=1", func() {
+				aeroCluster := createNonSCDummyAerospikeCluster(clusterNamespacedName, 6)
+				aeroCluster.Spec.RackConfig.Racks = getDummyRackConf(1, 2)
+				aeroCluster.Spec.RackConfig.Namespaces = []string{"test"}
+
+				maxIgnorable := intstr.FromInt32(1)
+				aeroCluster.Spec.RackConfig.MaxIgnorablePods = &maxIgnorable
+
+				Expect(DeployCluster(k8sClient, ctx, aeroCluster)).ToNot(HaveOccurred())
+
+				Expect(markPodAsFailed(ctx, k8sClient, clusterName+"-1-0", clusterNamespacedName.Namespace)).ToNot(HaveOccurred())
+				Expect(markPodAsFailed(ctx, k8sClient, clusterName+"-1-1", clusterNamespacedName.Namespace)).ToNot(HaveOccurred())
+
+				aeroCluster, err = getCluster(k8sClient, ctx, clusterNamespacedName)
+				Expect(err).ToNot(HaveOccurred())
+
+				aeroCluster.Spec.Size--
+
+				Expect(k8sClient.Update(ctx, aeroCluster)).ToNot(HaveOccurred())
+
+				err = waitForAerospikeCluster(
+					k8sClient, ctx, aeroCluster, int(aeroCluster.Spec.Size),
+					retryInterval, 2*time.Minute,
+					[]asdbv1.AerospikeClusterPhase{asdbv1.AerospikeClusterInProgress, asdbv1.AerospikeClusterError},
+				)
+				Expect(err).To(HaveOccurred())
+			})
 		},
 	)
 }
