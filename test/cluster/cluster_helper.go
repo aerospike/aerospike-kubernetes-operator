@@ -63,7 +63,10 @@ const (
 	binValue = "binValue"
 )
 
-var aerospikeVolumeInitMethodDeleteFiles = asdbv1.AerospikeVolumeMethodDeleteFiles
+var (
+	aerospikeVolumeInitMethodDeleteFiles = asdbv1.AerospikeVolumeMethodDeleteFiles
+	aerospikeVolumeInitMethodDD          = asdbv1.AerospikeVolumeMethodDD
+)
 
 var (
 	retryInterval      = time.Second * 30
@@ -1558,6 +1561,7 @@ func aerospikeClusterCreateUpdate(
 func getBasicStorageSpecObject() asdbv1.AerospikeStorageSpec {
 	storage := asdbv1.AerospikeStorageSpec{
 		BlockVolumePolicy: asdbv1.AerospikePersistentVolumePolicySpec{
+			InputInitMethod:    &aerospikeVolumeInitMethodDD,
 			InputCascadeDelete: &cascadeDeleteFalse,
 		},
 		FileSystemVolumePolicy: asdbv1.AerospikePersistentVolumePolicySpec{
@@ -1877,6 +1881,89 @@ func markPodAsFailed(ctx goctx.Context, k8sClient client.Client, name, namespace
 	pod.Spec.Containers[0].Image = wrongImage
 
 	return k8sClient.Update(ctx, pod)
+}
+
+// extractPodPVC returns a map of PVC claim name to UID for volumes attached to the pod.
+func extractPodPVC(ctx goctx.Context, k8sClient client.Client, pod *corev1.Pod) (map[string]types.UID, error) {
+	pvcUIDMap := make(map[string]types.UID)
+
+	for idx := range pod.Spec.Volumes {
+		if pod.Spec.Volumes[idx].PersistentVolumeClaim != nil {
+			pvcUIDMap[pod.Spec.Volumes[idx].PersistentVolumeClaim.ClaimName] = ""
+		}
+	}
+
+	for p := range pvcUIDMap {
+		pvc := &corev1.PersistentVolumeClaim{}
+		if err := k8sClient.Get(ctx, test.GetNamespacedName(p, pod.Namespace), pvc); err != nil {
+			return nil, err
+		}
+
+		pvcUIDMap[p] = pvc.UID
+	}
+
+	return pvcUIDMap, nil
+}
+
+// pvcClaimUIDsForPod returns PVC claim names and UIDs for local volumes on the named pod.
+func pvcClaimUIDsForPod(
+	ctx goctx.Context, k8sClient client.Client, podName, ns string,
+) (map[string]types.UID, error) {
+	pod := &corev1.Pod{}
+	if err := k8sClient.Get(ctx, types.NamespacedName{Name: podName, Namespace: ns}, pod); err != nil {
+		return nil, err
+	}
+
+	return extractPodPVC(ctx, k8sClient, pod)
+}
+
+// pvcClaimsEventuallyNotFound waits until each PVC in claims is absent from the API (deleted).
+func pvcClaimsEventuallyNotFound(
+	ctx goctx.Context, k8sClient client.Client, claims map[string]types.UID, ns string,
+) error {
+	for claimName := range claims {
+		n := claimName
+
+		err := wait.PollUntilContextTimeout(ctx, retryInterval, getTimeout(4), true,
+			func(ctx goctx.Context) (done bool, err error) {
+				pvc := &corev1.PersistentVolumeClaim{}
+
+				getErr := k8sClient.Get(ctx, test.GetNamespacedName(n, ns), pvc)
+				if getErr != nil {
+					if k8serrors.IsNotFound(getErr) {
+						return true, nil
+					}
+
+					return false, getErr
+				}
+
+				return false, nil
+			},
+		)
+		if err != nil {
+			return fmt.Errorf("PVC %s should be deleted after scale-down: %w", n, err)
+		}
+	}
+
+	return nil
+}
+
+// pvcClaimsKeepStableUIDs asserts each PVC still exists with the same UID as before.
+func pvcClaimsKeepStableUIDs(
+	ctx goctx.Context, k8sClient client.Client, claims map[string]types.UID, ns string,
+) error {
+	for claimName, wantUID := range claims {
+		pvc := &corev1.PersistentVolumeClaim{}
+		if err := k8sClient.Get(ctx, test.GetNamespacedName(claimName, ns), pvc); err != nil {
+			return fmt.Errorf("get PVC %s: %w", claimName, err)
+		}
+
+		if pvc.UID != wantUID {
+			return fmt.Errorf("PVC %s UID changed (%s -> %s)", claimName, wantUID, pvc.UID)
+		}
+	}
+
+	return nil
 }
 
 func checkClientConnection(

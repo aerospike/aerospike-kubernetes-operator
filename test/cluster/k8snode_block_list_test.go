@@ -71,7 +71,7 @@ var _ = Describe(
 						Expect(err).ToNot(HaveOccurred())
 
 						oldK8sNode = pod.Spec.NodeName
-						oldPvcInfo, err = extractPodPVC(pod)
+						oldPvcInfo, err = extractPodPVC(ctx, k8sClient, pod)
 						Expect(err).ToNot(HaveOccurred())
 					},
 				)
@@ -187,27 +187,6 @@ var _ = Describe(
 		)
 	},
 )
-
-func extractPodPVC(pod *corev1.Pod) (map[string]types.UID, error) {
-	pvcUIDMap := make(map[string]types.UID)
-
-	for idx := range pod.Spec.Volumes {
-		if pod.Spec.Volumes[idx].PersistentVolumeClaim != nil {
-			pvcUIDMap[pod.Spec.Volumes[idx].PersistentVolumeClaim.ClaimName] = ""
-		}
-	}
-
-	for p := range pvcUIDMap {
-		pvc := &corev1.PersistentVolumeClaim{}
-		if err := k8sClient.Get(context.TODO(), test.GetNamespacedName(p, pod.Namespace), pvc); err != nil {
-			return nil, err
-		}
-
-		pvcUIDMap[p] = pvc.UID
-	}
-
-	return pvcUIDMap, nil
-}
 
 func validatePVCDeletion(ctx context.Context, pvcUIDMap map[string]types.UID, shouldDeletePVC bool) error {
 	pvc := &corev1.PersistentVolumeClaim{}
