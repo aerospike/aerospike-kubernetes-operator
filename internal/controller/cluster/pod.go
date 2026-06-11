@@ -18,6 +18,7 @@ import (
 	"k8s.io/apimachinery/pkg/util/sets"
 	"k8s.io/client-go/util/retry"
 	"sigs.k8s.io/controller-runtime/pkg/client"
+	"sigs.k8s.io/controller-runtime/pkg/reconcile"
 
 	as "github.com/aerospike/aerospike-client-go/v8"
 	asdbv1 "github.com/aerospike/aerospike-kubernetes-operator/v4/api/v1"
@@ -67,19 +68,23 @@ func mergeRestartType(current, incoming RestartType) RestartType {
 }
 
 // Fetching RestartType of all pods, based on the operation being performed.
-func (r *SingleClusterReconciler) getRollingRestartTypeMap(rackState *RackState, ignorablePodNames sets.Set[string]) (
+func (r *SingleClusterReconciler) getRollingRestartTypeMap(
+	ctx context.Context, rackState *RackState, ignorablePodNames sets.Set[string]) (
 	restartTypeMap map[string]RestartType, dynamicConfDiffPerPod map[string]asconfig.DynamicConfigMap, err error) {
 	var addedNSDevices []string
 
 	restartTypeMap = make(map[string]RestartType)
 	dynamicConfDiffPerPod = make(map[string]asconfig.DynamicConfigMap)
 
-	pods, err := r.getOrderedRackPodList(rackState.Rack.ID, rackState.Rack.Revision)
+	pods, err := r.getOrderedRackPodList(ctx, rackState.Rack.ID, rackState.Rack.Revision)
 	if err != nil {
-		return nil, nil, fmt.Errorf("failed to list pods: %v", err)
+		return nil, nil, fmt.Errorf(
+			"listing pods for rack %d in cluster %s: %w",
+			rackState.Rack.ID, utils.ClusterNamespacedName(r.aeroCluster), err,
+		)
 	}
 
-	confMap, err := r.getConfigMap(utils.GetRackIdentifier(rackState.Rack.ID, rackState.Rack.Revision))
+	confMap, err := r.getConfigMap(ctx, utils.GetRackIdentifier(rackState.Rack.ID, rackState.Rack.Revision))
 	if err != nil {
 		return nil, nil, err
 	}
@@ -88,7 +93,7 @@ func (r *SingleClusterReconciler) getRollingRestartTypeMap(rackState *RackState,
 	requiredConfHash := confMap.Data[aerospikeConfHashFileName]
 
 	// Fetching all pods requested for on-demand operations.
-	onDemandQuickRestarts, onDemandPodRestarts, err := r.podsToRestart()
+	onDemandQuickRestarts, onDemandPodRestarts, err := r.podsToRestart(ctx)
 	if err != nil {
 		return nil, nil, err
 	}
@@ -158,14 +163,14 @@ func (r *SingleClusterReconciler) getRollingRestartTypeMap(rackState *RackState,
 
 			if addedNSDevices == nil {
 				// Fetching all block devices that have been added in namespaces.
-				addedNSDevices, err = r.getNSAddedDevices(rackState)
+				addedNSDevices, err = r.getNSAddedDevices(ctx, rackState)
 				if err != nil {
 					return nil, nil, err
 				}
 			}
 		}
 
-		restartType, err := r.getRollingRestartTypePod(rackState, pods[idx], confMap, addedNSDevices,
+		restartType, err := r.getRollingRestartTypePod(ctx, rackState, pods[idx], confMap, addedNSDevices,
 			len(dynamicConfDiffPerPod[pods[idx].Name]) > 0, onDemandQuickRestarts, onDemandPodRestarts)
 		if err != nil {
 			return nil, nil, err
@@ -178,7 +183,7 @@ func (r *SingleClusterReconciler) getRollingRestartTypeMap(rackState *RackState,
 }
 
 func (r *SingleClusterReconciler) getRollingRestartTypePod(
-	rackState *RackState, pod *corev1.Pod, confMap *corev1.ConfigMap,
+	ctx context.Context, rackState *RackState, pod *corev1.Pod, confMap *corev1.ConfigMap,
 	addedNSDevices []string, onlyDynamicConfigChange bool,
 	onDemandQuickRestarts, onDemandPodRestarts sets.Set[string],
 ) (RestartType, error) {
@@ -238,9 +243,9 @@ func (r *SingleClusterReconciler) getRollingRestartTypePod(
 		)
 	}
 
-	podSpecUpdated, err := r.isAnyPodSpecUpdated(rackState, pod)
+	podSpecUpdated, err := r.isAnyPodSpecUpdated(ctx, rackState, pod)
 	if err != nil {
-		return restartType, fmt.Errorf("failed to check if pod spec is updated: %v", err)
+		return restartType, fmt.Errorf("checking whether pod %s spec is updated: %w", utils.GetNamespacedNameString(pod), err)
 	}
 
 	if podSpecUpdated {
@@ -316,6 +321,7 @@ func (r *SingleClusterReconciler) getRollingRestartTypePod(
 }
 
 func (r *SingleClusterReconciler) rollingRestartPods(
+	ctx context.Context,
 	rackState *RackState, podsToRestart []*corev1.Pod, ignorablePodNames sets.Set[string],
 	restartTypeMap map[string]RestartType,
 ) common.ReconcileResult {
@@ -325,7 +331,7 @@ func (r *SingleClusterReconciler) rollingRestartPods(
 	if len(failedPods) != 0 {
 		r.Log.Info("Restart failed pods", "pods", getPodNames(failedPods))
 
-		if res := r.restartPods(rackState, failedPods, restartTypeMap); !res.IsSuccess {
+		if res := r.restartPods(ctx, rackState, failedPods, restartTypeMap); !res.IsSuccess {
 			return res
 		}
 	}
@@ -333,7 +339,7 @@ func (r *SingleClusterReconciler) rollingRestartPods(
 	if len(activePods) != 0 {
 		r.Log.Info("Restart active pods", "pods", getPodNames(activePods))
 
-		if res := r.waitForMultipleNodesSafeStopReady(activePods, ignorablePodNames); !res.IsSuccess {
+		if res := r.waitForMultipleNodesSafeStopReady(ctx, activePods, ignorablePodNames); !res.IsSuccess {
 			return res
 		}
 
@@ -348,29 +354,25 @@ func (r *SingleClusterReconciler) rollingRestartPods(
 		// Revert migrate-fill-delay to the original value before restarting active pods.
 		// This will be a no-op in the first reconcile
 		if setMigrateFillDelay {
-			clientPolicy = r.getClientPolicy()
+			clientPolicy = r.getClientPolicy(ctx)
 
-			if res := r.setMigrateFillDelay(clientPolicy, &rackState.Rack.AerospikeConfig, false,
+			if res := r.setMigrateFillDelay(ctx, clientPolicy, &rackState.Rack.AerospikeConfig, false,
 				ignorablePodNames,
 			); !res.IsSuccess {
-				r.Log.Error(res.Err,
-					"Failed to set migrate-fill-delay to original value before restarting the running pods")
-
 				return res
 			}
 		}
 
-		if res := r.restartPods(rackState, activePods, restartTypeMap); !res.IsSuccess {
+		if res := r.restartPods(ctx, rackState, activePods, restartTypeMap); !res.IsSuccess {
 			return res
 		}
 
 		// Set migrate-fill-delay O to immediately start the migration. Will be reverted back to the original value
 		// in the next reconcile.
 		if setMigrateFillDelay {
-			if res := r.setMigrateFillDelay(clientPolicy, &rackState.Rack.AerospikeConfig, true,
+			if res := r.setMigrateFillDelay(ctx, clientPolicy, &rackState.Rack.AerospikeConfig, true,
 				ignorablePodNames,
 			); !res.IsSuccess {
-				r.Log.Error(res.Err, "Failed to set migrate-fill-delay to `0` after restarting the running pods")
 				return res
 			}
 		}
@@ -393,7 +395,7 @@ func (r *SingleClusterReconciler) restartASDOrUpdateAerospikeConf(podName string
 	rackID, rackRevision, err := utils.GetRackIDAndRevisionFromPodName(r.aeroCluster.Name, podName)
 	if err != nil {
 		return fmt.Errorf(
-			"failed to get rackID for the pod %s", podName,
+			"parsing rackID from pod name %s: %w", utils.NamespacedName(r.aeroCluster.Namespace, podName), err,
 		)
 	}
 
@@ -409,7 +411,7 @@ func (r *SingleClusterReconciler) restartASDOrUpdateAerospikeConf(podName string
 
 	switch operation {
 	case noRestart, podRestart:
-		return fmt.Errorf("invalid operation for akoinit")
+		return reconcile.TerminalError(fmt.Errorf("invalid operation %d for akoinit", operation))
 	case quickRestart:
 		subCommand = "quick-restart"
 	case noRestartUpdateConf:
@@ -482,11 +484,12 @@ func (r *SingleClusterReconciler) restartASDOrUpdateAerospikeConf(podName string
 }
 
 func (r *SingleClusterReconciler) restartPods(
+	ctx context.Context,
 	rackState *RackState, podsToRestart []*corev1.Pod, restartTypeMap map[string]RestartType,
 ) common.ReconcileResult {
 	// For each block volume removed from a namespace, pod status dirtyVolumes is appended with that volume name.
 	// For each file removed from a namespace, it is deleted right away.
-	if err := r.handleNSOrDeviceRemoval(rackState, podsToRestart); err != nil {
+	if err := r.handleNSOrDeviceRemoval(ctx, rackState, podsToRestart); err != nil {
 		return common.ReconcileError(err)
 	}
 
@@ -503,20 +506,18 @@ func (r *SingleClusterReconciler) restartPods(
 		case quickRestart:
 			// We assume that the pod server image supports pod warm restart.
 			if err := r.restartASDOrUpdateAerospikeConf(pod.Name, quickRestart); err != nil {
-				r.Log.Error(err, "Failed to warm restart pod", "podName", pod.Name)
 				return common.ReconcileError(err)
 			}
 
 			restartedASDPodNames = append(restartedASDPodNames, pod.Name)
 		case podRestart:
 			if r.isLocalPVCDeletionRequired(rackState, pod) {
-				if err := r.deleteLocalPVCs(rackState, pod); err != nil {
+				if err := r.deleteLocalPVCs(ctx, rackState, pod); err != nil {
 					return common.ReconcileError(err)
 				}
 			}
 
-			if err := r.Delete(context.TODO(), pod); err != nil {
-				r.Log.Error(err, "Failed to delete pod")
+			if err := r.Delete(ctx, pod); err != nil {
 				return common.ReconcileError(err)
 			}
 
@@ -529,12 +530,12 @@ func (r *SingleClusterReconciler) restartPods(
 		}
 	}
 
-	if err := r.updateOperationStatus(restartedASDPodNames, restartedPodNames); err != nil {
+	if err := r.updateOperationStatus(ctx, restartedASDPodNames, restartedPodNames); err != nil {
 		return common.ReconcileError(err)
 	}
 
 	if len(restartedPods) > 0 {
-		if result := r.ensurePodsRunningAndReady(restartedPods); !result.IsSuccess {
+		if result := r.ensurePodsRunningAndReady(ctx, restartedPods); !result.IsSuccess {
 			return result
 		}
 	}
@@ -554,7 +555,8 @@ func (r *SingleClusterReconciler) updateAerospikeConfInPod(podName string) error
 	return nil
 }
 
-func (r *SingleClusterReconciler) ensurePodsRunningAndReady(podsToCheck []*corev1.Pod) common.ReconcileResult {
+func (r *SingleClusterReconciler) ensurePodsRunningAndReady(
+	ctx context.Context, podsToCheck []*corev1.Pod) common.ReconcileResult {
 	podNames := getPodNames(podsToCheck)
 	readyPods := map[string]bool{}
 
@@ -580,7 +582,7 @@ func (r *SingleClusterReconciler) ensurePodsRunningAndReady(podsToCheck []*corev
 			updatedPod := &corev1.Pod{}
 			podName := types.NamespacedName{Name: pod.Name, Namespace: pod.Namespace}
 
-			if err := r.Get(context.TODO(), podName, updatedPod); err != nil {
+			if err := r.Get(ctx, podName, updatedPod); err != nil {
 				return common.ReconcileError(err)
 			}
 
@@ -659,6 +661,7 @@ func getNonIgnorablePods(pods []*corev1.Pod, ignorablePodNames sets.Set[string],
 }
 
 func (r *SingleClusterReconciler) safelyDeletePodsAndEnsureImageUpdated(
+	ctx context.Context,
 	rackState *RackState, podsToUpdate []*corev1.Pod, ignorablePodNames sets.Set[string],
 ) common.ReconcileResult {
 	failedPods, failedWithinGracePeriodPods, activePods := getFailedAndActivePods(podsToUpdate, true)
@@ -667,7 +670,7 @@ func (r *SingleClusterReconciler) safelyDeletePodsAndEnsureImageUpdated(
 	if len(failedPods) != 0 {
 		r.Log.Info("Restart failed pods with updated container image", "pods", getPodNames(failedPods))
 
-		if res := r.deletePodAndEnsureImageUpdated(rackState, failedPods); !res.IsSuccess {
+		if res := r.deletePodAndEnsureImageUpdated(ctx, rackState, failedPods); !res.IsSuccess {
 			return res
 		}
 	}
@@ -675,7 +678,7 @@ func (r *SingleClusterReconciler) safelyDeletePodsAndEnsureImageUpdated(
 	if len(activePods) != 0 {
 		r.Log.Info("Restart active pods with updated container image", "pods", getPodNames(activePods))
 
-		if res := r.waitForMultipleNodesSafeStopReady(activePods, ignorablePodNames); !res.IsSuccess {
+		if res := r.waitForMultipleNodesSafeStopReady(ctx, activePods, ignorablePodNames); !res.IsSuccess {
 			return res
 		}
 
@@ -689,29 +692,25 @@ func (r *SingleClusterReconciler) safelyDeletePodsAndEnsureImageUpdated(
 		// Revert migrate-fill-delay to the original value before restarting active pods.
 		// This will be a no-op in the first reconcile
 		if setMigrateFillDelay {
-			clientPolicy = r.getClientPolicy()
+			clientPolicy = r.getClientPolicy(ctx)
 
-			if res := r.setMigrateFillDelay(clientPolicy, &rackState.Rack.AerospikeConfig, false,
+			if res := r.setMigrateFillDelay(ctx, clientPolicy, &rackState.Rack.AerospikeConfig, false,
 				ignorablePodNames,
 			); !res.IsSuccess {
-				r.Log.Error(res.Err,
-					"Failed to set migrate-fill-delay to original value before upgrading the running pods")
-
 				return res
 			}
 		}
 
-		if res := r.deletePodAndEnsureImageUpdated(rackState, activePods); !res.IsSuccess {
+		if res := r.deletePodAndEnsureImageUpdated(ctx, rackState, activePods); !res.IsSuccess {
 			return res
 		}
 
 		// Set migrate-fill-delay O to immediately start the migration. Will be reverted back to the original value
 		// in the next reconcile.
 		if setMigrateFillDelay {
-			if res := r.setMigrateFillDelay(clientPolicy, &rackState.Rack.AerospikeConfig, true,
+			if res := r.setMigrateFillDelay(ctx, clientPolicy, &rackState.Rack.AerospikeConfig, true,
 				ignorablePodNames,
 			); !res.IsSuccess {
-				r.Log.Error(res.Err, "Failed to set migrate-fill-delay to `0` after upgrading the running pods")
 				return res
 			}
 		}
@@ -730,23 +729,24 @@ func (r *SingleClusterReconciler) safelyDeletePodsAndEnsureImageUpdated(
 }
 
 func (r *SingleClusterReconciler) deletePodAndEnsureImageUpdated(
+	ctx context.Context,
 	rackState *RackState, podsToUpdate []*corev1.Pod,
 ) common.ReconcileResult {
 	// For each block volume removed from a namespace, pod status dirtyVolumes is appended with that volume name.
 	// For each file removed from a namespace, it is deleted right away.
-	if err := r.handleNSOrDeviceRemoval(rackState, podsToUpdate); err != nil {
+	if err := r.handleNSOrDeviceRemoval(ctx, rackState, podsToUpdate); err != nil {
 		return common.ReconcileError(err)
 	}
 
 	// Delete pods
 	for _, pod := range podsToUpdate {
 		if r.isLocalPVCDeletionRequired(rackState, pod) {
-			if err := r.deleteLocalPVCs(rackState, pod); err != nil {
+			if err := r.deleteLocalPVCs(ctx, rackState, pod); err != nil {
 				return common.ReconcileError(err)
 			}
 		}
 
-		if err := r.Delete(context.TODO(), pod); err != nil {
+		if err := r.Delete(ctx, pod); err != nil {
 			return common.ReconcileError(err)
 		}
 
@@ -757,7 +757,7 @@ func (r *SingleClusterReconciler) deletePodAndEnsureImageUpdated(
 		)
 	}
 
-	return r.ensurePodsImageUpdated(podsToUpdate)
+	return r.ensurePodsImageUpdated(ctx, podsToUpdate)
 }
 
 func (r *SingleClusterReconciler) isLocalPVCDeletionRequired(rackState *RackState, pod *corev1.Pod) bool {
@@ -786,7 +786,8 @@ func (r *SingleClusterReconciler) isLocalPVCDeletionRequired(rackState *RackStat
 	return false
 }
 
-func (r *SingleClusterReconciler) ensurePodsImageUpdated(podsToCheck []*corev1.Pod) common.ReconcileResult {
+func (r *SingleClusterReconciler) ensurePodsImageUpdated(
+	ctx context.Context, podsToCheck []*corev1.Pod) common.ReconcileResult {
 	podNames := getPodNames(podsToCheck)
 	updatedPods := sets.Set[string]{}
 
@@ -812,7 +813,7 @@ func (r *SingleClusterReconciler) ensurePodsImageUpdated(podsToCheck []*corev1.P
 			updatedPod := &corev1.Pod{}
 			podName := types.NamespacedName{Name: pod.Name, Namespace: pod.Namespace}
 
-			if err := r.Get(context.TODO(), podName, updatedPod); err != nil {
+			if err := r.Get(ctx, podName, updatedPod); err != nil {
 				return common.ReconcileError(err)
 			}
 
@@ -849,7 +850,7 @@ func (r *SingleClusterReconciler) ensurePodsImageUpdated(podsToCheck []*corev1.P
 // cleanupPods checks pods and status before scale-up to detect and fix any
 // status anomalies.
 func (r *SingleClusterReconciler) cleanupPods(
-	podNames []string, rackState *RackState,
+	ctx context.Context, podNames []string, rackState *RackState,
 ) error {
 	if len(podNames) == 0 {
 		return nil
@@ -858,21 +859,21 @@ func (r *SingleClusterReconciler) cleanupPods(
 	r.Log.Info("Removing pvc for removed pods", "pods", podNames)
 
 	// Delete PVCs if cascadeDelete
-	pvcItems, err := r.getPodsPVCList(podNames, rackState.Rack.ID, rackState.Rack.Revision)
+	pvcItems, err := r.getPodsPVCList(ctx, podNames, rackState.Rack.ID, rackState.Rack.Revision)
 	if err != nil {
-		return fmt.Errorf("could not find pvc for pods %v: %v", podNames, err)
+		return fmt.Errorf("listing pvcs for pods %s: %w", strings.Join(utils.NamespacedNames(r.aeroCluster.Namespace, podNames), ", "), err)
 	}
 
 	storage := rackState.Rack.Storage
-	if err = r.removePVCs(&storage, pvcItems); err != nil {
-		return fmt.Errorf("could not cleanup pod PVCs: %v", err)
+	if err = r.removePVCs(ctx, &storage, pvcItems); err != nil {
+		return fmt.Errorf("removing pvcs for pods %s: %w", strings.Join(utils.NamespacedNames(r.aeroCluster.Namespace, podNames), ", "), err)
 	}
 
 	var needStatusCleanup []string
 
-	clusterPodList, err := r.getClusterPodList()
+	clusterPodList, err := r.getClusterPodList(ctx)
 	if err != nil {
-		return fmt.Errorf("could not cleanup pod PVCs: %v", err)
+		return fmt.Errorf("listing pods for cluster %s: %w", utils.ClusterNamespacedName(r.aeroCluster), err)
 	}
 
 	podNameSet := sets.NewString(podNames...)
@@ -908,11 +909,11 @@ func (r *SingleClusterReconciler) cleanupPods(
 				"pod to remove", podName, "remove and reset on pod", np.Name,
 			)
 
-			if err := r.tipClearHostname(np, podName); err != nil {
+			if err := r.tipClearHostname(ctx, np, podName); err != nil {
 				r.Log.V(2).Info("Failed to tipClear", "hostName", podName, "from the pod", np.Name)
 			}
 
-			if err := r.alumniReset(np); err != nil {
+			if err := r.alumniReset(ctx, np); err != nil {
 				r.Log.V(2).Info(fmt.Sprintf("Failed to reset alumni for the pod %s", np.Name))
 			}
 		}
@@ -922,7 +923,7 @@ func (r *SingleClusterReconciler) cleanupPods(
 			// Remove service for pod
 			// TODO: make it more robust, what if it fails
 			if err := r.deletePodService(
-				podName, r.aeroCluster.Namespace,
+				ctx, podName, r.aeroCluster.Namespace,
 			); err != nil {
 				return err
 			}
@@ -936,8 +937,8 @@ func (r *SingleClusterReconciler) cleanupPods(
 	if len(needStatusCleanup) > 0 {
 		r.Log.Info("Removing pod status for dangling pods", "pods", podNames)
 
-		if err := r.removePodStatus(needStatusCleanup); err != nil {
-			return fmt.Errorf("could not cleanup pod status: %v", err)
+		if err := r.removePodStatus(ctx, needStatusCleanup); err != nil {
+			return fmt.Errorf("removing pod status for pods %s: %w", strings.Join(utils.NamespacedNames(r.aeroCluster.Namespace, needStatusCleanup), ", "), err)
 		}
 	}
 
@@ -946,7 +947,7 @@ func (r *SingleClusterReconciler) cleanupPods(
 
 // removePodStatus removes podNames from the cluster's pod status.
 // Assumes the pods are not running so that the no concurrent update to this pod status is possible.
-func (r *SingleClusterReconciler) removePodStatus(podNames []string) error {
+func (r *SingleClusterReconciler) removePodStatus(ctx context.Context, podNames []string) error {
 	if len(podNames) == 0 {
 		return nil
 	}
@@ -961,10 +962,11 @@ func (r *SingleClusterReconciler) removePodStatus(podNames []string) error {
 		patches = append(patches, patch)
 	}
 
-	return r.patchPodStatus(context.TODO(), patches)
+	return r.patchPodStatus(ctx, patches)
 }
 
-func (r *SingleClusterReconciler) cleanupDanglingPodsRack(sts *appsv1.StatefulSet, rackState *RackState) error {
+func (r *SingleClusterReconciler) cleanupDanglingPodsRack(
+	ctx context.Context, sts *appsv1.StatefulSet, rackState *RackState) error {
 	// Clean up any dangling resources associated with the new pods.
 	// This implements a safety net to protect scale up against failed cleanup operations when cluster
 	// is scaled down.
@@ -975,7 +977,7 @@ func (r *SingleClusterReconciler) cleanupDanglingPodsRack(sts *appsv1.StatefulSe
 		rackID, rackRevision, err := utils.GetRackIDAndRevisionFromPodName(r.aeroCluster.Name, podName)
 		if err != nil {
 			return fmt.Errorf(
-				"failed to get rackID for the pod %s", podName,
+				"parsing rackID from pod name %s: %w", utils.NamespacedName(r.aeroCluster.Namespace, podName), err,
 			)
 		}
 
@@ -986,7 +988,7 @@ func (r *SingleClusterReconciler) cleanupDanglingPodsRack(sts *appsv1.StatefulSe
 
 		ordinal, err := getSTSPodOrdinal(podName)
 		if err != nil {
-			return fmt.Errorf("invalid pod name: %s", podName)
+			return fmt.Errorf("parsing ordinal from pod name %s: %w", utils.NamespacedName(r.aeroCluster.Namespace, podName), err)
 		}
 
 		if *ordinal >= *sts.Spec.Replicas {
@@ -995,8 +997,12 @@ func (r *SingleClusterReconciler) cleanupDanglingPodsRack(sts *appsv1.StatefulSe
 	}
 
 	if len(danglingPods) > 0 {
-		if err := r.cleanupPods(danglingPods, rackState); err != nil {
-			return fmt.Errorf("failed dangling pod cleanup: %v", err)
+		if err := r.cleanupPods(ctx, danglingPods, rackState); err != nil {
+			return fmt.Errorf(
+				"cleaning up dangling pods %s for rack %d in cluster %s: %w",
+				strings.Join(utils.NamespacedNames(r.aeroCluster.Namespace, danglingPods), ", "),
+				rackState.Rack.ID, utils.ClusterNamespacedName(r.aeroCluster), err,
+			)
 		}
 	}
 
@@ -1009,7 +1015,8 @@ func (r *SingleClusterReconciler) cleanupDanglingPodsRack(sts *appsv1.StatefulSe
 // 3. Failed pods from old revisions of revision-changed racks that will be replaced anyway can be
 // ignored from stability checks.
 func (r *SingleClusterReconciler) getIgnorablePods(
-	racksToDelete []asdbv1.Rack, configuredRacks []RackState, revisionChangedRacks map[int]revisionChangedRack,
+	ctx context.Context, racksToDelete []asdbv1.Rack, configuredRacks []RackState,
+	revisionChangedRacks map[int]revisionChangedRack,
 ) (sets.Set[string], error) {
 	ignorablePodNames := sets.Set[string]{}
 	ignorableRackIDs := sets.Set[int]{}
@@ -1018,7 +1025,7 @@ func (r *SingleClusterReconciler) getIgnorablePods(
 	ignorableRacks = append(ignorableRacks, getRacksToBeBlockedFromRoster(r.Log, configuredRacks)...)
 
 	for rackIdx := range ignorableRacks {
-		rackPods, err := r.getRackPodList(ignorableRacks[rackIdx].ID, ignorableRacks[rackIdx].Revision)
+		rackPods, err := r.getRackPodList(ctx, ignorableRacks[rackIdx].ID, ignorableRacks[rackIdx].Revision)
 		if err != nil {
 			return nil, err
 		}
@@ -1039,7 +1046,7 @@ func (r *SingleClusterReconciler) getIgnorablePods(
 		r.Log.Info("Checking old revision failed pods for revision-changed rack",
 			"rackID", rackID, "oldRevision", oldRackState.Rack.Revision)
 
-		oldPodList, err := r.getRackPodList(oldRackState.Rack.ID, oldRackState.Rack.Revision)
+		oldPodList, err := r.getRackPodList(ctx, oldRackState.Rack.ID, oldRackState.Rack.Revision)
 		if err != nil {
 			return nil, err
 		}
@@ -1072,7 +1079,7 @@ func (r *SingleClusterReconciler) getIgnorablePods(
 			r.aeroCluster.Spec.RackConfig.MaxIgnorablePods, int(rackState.Size), false,
 		)
 
-		podList, err := r.getRackPodList(rackState.Rack.ID, rackState.Rack.Revision)
+		podList, err := r.getRackPodList(ctx, rackState.Rack.ID, rackState.Rack.Revision)
 		if err != nil {
 			return nil, err
 		}
@@ -1110,9 +1117,9 @@ func (r *SingleClusterReconciler) getIgnorablePods(
 }
 
 func (r *SingleClusterReconciler) getPodsPVCList(
-	podNames []string, rackID int, rackRevision string,
+	ctx context.Context, podNames []string, rackID int, rackRevision string,
 ) ([]corev1.PersistentVolumeClaim, error) {
-	pvcListItems, err := r.getRackPVCList(rackID, rackRevision)
+	pvcListItems, err := r.getRackPVCList(ctx, rackID, rackRevision)
 	if err != nil {
 		return nil, err
 	}
@@ -1135,7 +1142,7 @@ func (r *SingleClusterReconciler) getPodsPVCList(
 	return podPVCs, nil
 }
 
-func (r *SingleClusterReconciler) getClusterPodList() (
+func (r *SingleClusterReconciler) getClusterPodList(ctx context.Context) (
 	*corev1.PodList, error,
 ) {
 	// List the pods for this aeroCluster's statefulset
@@ -1146,7 +1153,7 @@ func (r *SingleClusterReconciler) getClusterPodList() (
 	}
 
 	// TODO: Should we add check to get only non-terminating pod? What if it is rolling restart
-	if err := r.List(context.TODO(), podList, listOps); err != nil {
+	if err := r.List(ctx, podList, listOps); err != nil {
 		return nil, err
 	}
 
@@ -1231,7 +1238,8 @@ func getPodNames(pods []*corev1.Pod) []string {
 }
 
 //nolint:gocyclo // for readability
-func (r *SingleClusterReconciler) handleNSOrDeviceRemoval(rackState *RackState, podsToRestart []*corev1.Pod) error {
+func (r *SingleClusterReconciler) handleNSOrDeviceRemoval(
+	ctx context.Context, rackState *RackState, podsToRestart []*corev1.Pod) error {
 	var (
 		rackStatus     asdbv1.Rack
 		removedDevices []string
@@ -1396,7 +1404,7 @@ func (r *SingleClusterReconciler) handleNSOrDeviceRemoval(rackState *RackState, 
 	}
 
 	for _, pod := range podsToRestart {
-		err := r.handleNSOrDeviceRemovalPerPod(removedDevices, removedFiles, pod.Name)
+		err := r.handleNSOrDeviceRemovalPerPod(ctx, removedDevices, removedFiles, pod.Name)
 		if err != nil {
 			return err
 		}
@@ -1406,7 +1414,7 @@ func (r *SingleClusterReconciler) handleNSOrDeviceRemoval(rackState *RackState, 
 }
 
 func (r *SingleClusterReconciler) handleNSOrDeviceRemovalPerPod(
-	removedDevices, removedFiles []string, podName string,
+	ctx context.Context, removedDevices, removedFiles []string, podName string,
 ) error {
 	podStatus := r.aeroCluster.Status.Pods[podName]
 
@@ -1431,7 +1439,7 @@ func (r *SingleClusterReconciler) handleNSOrDeviceRemovalPerPod(
 		}
 		patches = append(patches, patch1)
 
-		if err := r.patchPodStatus(context.TODO(), patches); err != nil {
+		if err := r.patchPodStatus(ctx, patches); err != nil {
 			return err
 		}
 	}
@@ -1439,7 +1447,7 @@ func (r *SingleClusterReconciler) handleNSOrDeviceRemovalPerPod(
 	return nil
 }
 
-func (r *SingleClusterReconciler) getNSAddedDevices(rackState *RackState) ([]string, error) {
+func (r *SingleClusterReconciler) getNSAddedDevices(ctx context.Context, rackState *RackState) ([]string, error) {
 	var (
 		rackStatus asdbv1.Rack
 		volumes    []string
@@ -1447,7 +1455,7 @@ func (r *SingleClusterReconciler) getNSAddedDevices(rackState *RackState) ([]str
 
 	newAeroCluster := &asdbv1.AerospikeCluster{}
 	if err := r.Get(
-		context.TODO(), types.NamespacedName{
+		ctx, types.NamespacedName{
 			Name: r.aeroCluster.Name, Namespace: r.aeroCluster.Namespace,
 		}, newAeroCluster,
 	); err != nil {
@@ -1582,17 +1590,17 @@ func (r *SingleClusterReconciler) deleteFileStorage(podName, fileName string) er
 			stdout, "stderr", stderr,
 		)
 
-		return fmt.Errorf("error deleting file %v", err)
+		return fmt.Errorf("deleting file %s on pod %s: %w", fileName, utils.NamespacedName(r.aeroCluster.Namespace, podName), err)
 	}
 
 	return nil
 }
 
-func (r *SingleClusterReconciler) getConfigMap(rackIdentifier string) (*corev1.ConfigMap, error) {
+func (r *SingleClusterReconciler) getConfigMap(ctx context.Context, rackIdentifier string) (*corev1.ConfigMap, error) {
 	cmName := utils.GetNamespacedNameForSTSOrConfigMap(r.aeroCluster, rackIdentifier)
 	confMap := &corev1.ConfigMap{}
 
-	if err := r.Get(context.TODO(), cmName, confMap); err != nil {
+	if err := r.Get(ctx, cmName, confMap); err != nil {
 		return nil, err
 	}
 
@@ -1618,7 +1626,7 @@ func isAllDynamicConfig(log logger, specToStatusDiffs asconfig.DynamicConfigMap,
 func getFlatConfig(log logger, confStr string) (*asconfig.Conf, error) {
 	asConf, err := asconfig.NewASConfigFromBytes(log, []byte(confStr), asconfig.AeroConfig)
 	if err != nil {
-		return nil, fmt.Errorf("failed to load config map by lib: %v", err)
+		return nil, fmt.Errorf("parsing aerospike config: %w", err)
 	}
 
 	return asConf.GetFlatMap(), nil
@@ -1635,12 +1643,12 @@ func getConfDiff(log logger, specConfig map[string]interface{}, podAnnotations m
 
 	asConfStatus, err := getFlatConfig(log, statusFromAnnotation)
 	if err != nil {
-		return nil, fmt.Errorf("failed to load config map by lib: %v", err)
+		return nil, fmt.Errorf("parsing status aerospike config: %w", err)
 	}
 
 	asConf, err := asconfig.NewMapAsConfig(log, specConfig)
 	if err != nil {
-		return nil, fmt.Errorf("failed to load config map by lib: %v", err)
+		return nil, fmt.Errorf("loading spec aerospike config: %w", err)
 	}
 
 	// special handling for DNE in ldap configurations
@@ -1650,7 +1658,7 @@ func getConfDiff(log logger, specConfig map[string]interface{}, podAnnotations m
 
 	asConfSpec, err := getFlatConfig(log, specConfFile)
 	if err != nil {
-		return nil, fmt.Errorf("failed to load config map by lib: %v", err)
+		return nil, fmt.Errorf("parsing spec aerospike config: %w", err)
 	}
 
 	specToStatusDiffs, err := asconfig.ConfDiff(log, *asConfSpec, *asConfStatus,
@@ -1692,7 +1700,7 @@ func (r *SingleClusterReconciler) patchPodStatus(ctx context.Context, patches []
 		if err := r.Client.Status().Patch(
 			ctx, patchedAerospikeCluster, constantPatch, client.FieldOwner("pod"),
 		); err != nil {
-			return fmt.Errorf("error updating status: %v", err)
+			return fmt.Errorf("patching pod status for cluster %s: %w", utils.ClusterNamespacedName(r.aeroCluster), err)
 		}
 
 		r.Log.Info("Pod status patched successfully")
@@ -1719,7 +1727,8 @@ func (r *SingleClusterReconciler) onDemandOperationType(podName string, onDemand
 	return noRestart
 }
 
-func (r *SingleClusterReconciler) updateOperationStatus(restartedASDPodNames, restartedPodNames []string) error {
+func (r *SingleClusterReconciler) updateOperationStatus(
+	ctx context.Context, restartedASDPodNames, restartedPodNames []string) error {
 	if len(restartedASDPodNames)+len(restartedPodNames) == 0 || len(r.aeroCluster.Spec.Operations) == 0 {
 		return nil
 	}
@@ -1802,7 +1811,7 @@ func (r *SingleClusterReconciler) updateOperationStatus(restartedASDPodNames, re
 	// Get the old object, it may have been updated in between.
 	newAeroCluster := &asdbv1.AerospikeCluster{}
 	if err := r.Get(
-		context.TODO(), types.NamespacedName{
+		ctx, types.NamespacedName{
 			Name: r.aeroCluster.Name, Namespace: r.aeroCluster.Namespace,
 		}, newAeroCluster,
 	); err != nil {
@@ -1811,15 +1820,16 @@ func (r *SingleClusterReconciler) updateOperationStatus(restartedASDPodNames, re
 
 	newAeroCluster.Status.Operations = statusOps
 
-	if err := r.patchStatus(newAeroCluster); err != nil {
-		return fmt.Errorf("error updating status: %w", err)
+	if err := r.patchStatus(ctx, newAeroCluster); err != nil {
+		return fmt.Errorf("updating operation status for cluster %s: %w", utils.ClusterNamespacedName(r.aeroCluster), err)
 	}
 
 	return nil
 }
 
 // podsToRestart returns the pods that need to be restarted(quick/pod restart) based on the on-demand operations.
-func (r *SingleClusterReconciler) podsToRestart() (quickRestarts, podRestarts sets.Set[string], err error) {
+func (r *SingleClusterReconciler) podsToRestart(
+	ctx context.Context) (quickRestarts, podRestarts sets.Set[string], err error) {
 	quickRestarts = make(sets.Set[string])
 	podRestarts = make(sets.Set[string])
 
@@ -1828,7 +1838,7 @@ func (r *SingleClusterReconciler) podsToRestart() (quickRestarts, podRestarts se
 	allPodNames := asdbv1.GetAllPodNames(r.aeroCluster.Status.Pods)
 
 	// Check for pods with eviction-blocked annotation that need restart
-	evictionBlockedPods, err := r.getEvictionBlockedPods()
+	evictionBlockedPods, err := r.getEvictionBlockedPods(ctx)
 	if err != nil {
 		return quickRestarts, podRestarts, err
 	}
@@ -1898,13 +1908,12 @@ func (r *SingleClusterReconciler) podsToRestart() (quickRestarts, podRestarts se
 }
 
 // getEvictionBlockedPods returns pods that have eviction-blocked annotation and need restart
-func (r *SingleClusterReconciler) getEvictionBlockedPods() (sets.Set[string], error) {
+func (r *SingleClusterReconciler) getEvictionBlockedPods(ctx context.Context) (sets.Set[string], error) {
 	evictionBlockedPods := make(sets.Set[string])
 
 	// List all pods in the cluster namespace
-	pods, err := r.getClusterPodList()
+	pods, err := r.getClusterPodList(ctx)
 	if err != nil {
-		r.Log.Error(err, "Failed to list pods for eviction-blocked check")
 		return evictionBlockedPods, err
 	}
 
@@ -1969,10 +1978,10 @@ func (r *SingleClusterReconciler) shouldSetMigrateFillDelay(rackState *RackState
 
 // isAnyPodSpecUpdated checks if any pod spec has been updated indirectly based on
 // aerospikeConfig or aerospikeNetworkPolicy change
-func (r *SingleClusterReconciler) isAnyPodSpecUpdated(rackState *RackState,
+func (r *SingleClusterReconciler) isAnyPodSpecUpdated(ctx context.Context, rackState *RackState,
 	pod *corev1.Pod) (bool, error) {
 	// Creating a local copy of the statefulset to avoid modifying the original object
-	sts, err := r.getSTS(rackState)
+	sts, err := r.getSTS(ctx, rackState)
 	if err != nil {
 		return false, err
 	}
@@ -1989,7 +1998,10 @@ func (r *SingleClusterReconciler) checkForPortsUpdate(sts *appsv1.StatefulSet, p
 	serverContainer := getContainer(pod.Spec.Containers, asdbv1.AerospikeServerContainerName)
 
 	if serverContainer == nil || stsServerContainer == nil {
-		return false, fmt.Errorf("server container not found in pod or statefulset")
+		return false, reconcile.TerminalError(fmt.Errorf(
+			"server container not found in pod %s or statefulset %s",
+			utils.GetNamespacedNameString(pod), utils.GetNamespacedNameString(sts),
+		))
 	}
 
 	desiredContainerPortsMap := make(map[string]corev1.ContainerPort, len(stsServerContainer.Ports))

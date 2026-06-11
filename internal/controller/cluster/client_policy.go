@@ -13,9 +13,11 @@ import (
 	corev1 "k8s.io/api/core/v1"
 	"k8s.io/apimachinery/pkg/types"
 	"sigs.k8s.io/controller-runtime/pkg/client"
+	"sigs.k8s.io/controller-runtime/pkg/reconcile"
 
 	as "github.com/aerospike/aerospike-client-go/v8"
 	asdbv1 "github.com/aerospike/aerospike-kubernetes-operator/v4/api/v1"
+	"github.com/aerospike/aerospike-kubernetes-operator/v4/pkg/utils"
 )
 
 // fromSecretPasswordProvider provides user password from the secret provided in AerospikeUserSpec.
@@ -29,32 +31,32 @@ type fromSecretPasswordProvider struct {
 
 // Get returns the password for the username using userSpec.
 func (pp fromSecretPasswordProvider) Get(
-	_ string, userSpec *asdbv1.AerospikeUserSpec,
+	ctx context.Context, _ string, userSpec *asdbv1.AerospikeUserSpec,
 ) (string, error) {
 	secret := &corev1.Secret{}
 	secretName := userSpec.SecretName
 	// Assuming secret is in same namespace
 	err := (*pp.k8sClient).Get(
-		context.TODO(),
+		ctx,
 		types.NamespacedName{Name: secretName, Namespace: pp.namespace}, secret,
 	)
 	if err != nil {
-		return "", fmt.Errorf("failed to get secret %s: %v", secretName, err)
+		return "", fmt.Errorf("getting secret %s: %w", utils.NamespacedName(pp.namespace, secretName), err)
 	}
 
 	passBytes, ok := secret.Data["password"]
 	if !ok {
-		return "", fmt.Errorf(
-			"failed to get password from secret. Please check your secret %s",
-			secretName,
-		)
+		return "", reconcile.TerminalError(fmt.Errorf(
+			"missing %q key in secret %s",
+			"password", utils.NamespacedName(pp.namespace, secretName),
+		))
 	}
 
 	return string(passBytes), nil
 }
 
 // GetDefaultPassword returns the default password for cluster using AerospikeClusterSpec.
-func (pp fromSecretPasswordProvider) GetDefaultPassword(spec *asdbv1.AerospikeClusterSpec) string {
+func (pp fromSecretPasswordProvider) GetDefaultPassword(ctx context.Context, spec *asdbv1.AerospikeClusterSpec) string {
 	defaultPasswordFilePath := asdbv1.GetDefaultPasswordFilePath(spec.AerospikeConfig)
 
 	// No default password file specified. Give default password.
@@ -69,7 +71,7 @@ func (pp fromSecretPasswordProvider) GetDefaultPassword(spec *asdbv1.AerospikeCl
 	// Get the password from the secret.
 	passwordFileName := filepath.Base(*defaultPasswordFilePath)
 
-	password, err := pp.getPasswordFromSecret(secretName, passwordFileName)
+	password, err := pp.getPasswordFromSecret(ctx, secretName, passwordFileName)
 	if err != nil {
 		pkgLog.Error(err, "Failed to get password from secret")
 
@@ -81,22 +83,22 @@ func (pp fromSecretPasswordProvider) GetDefaultPassword(spec *asdbv1.AerospikeCl
 
 // GetPasswordFromSecret returns the password from the secret.
 func (pp fromSecretPasswordProvider) getPasswordFromSecret(
-	secretName string, passFileName string,
+	ctx context.Context, secretName string, passFileName string,
 ) (string, error) {
 	secretNamespcedName := types.NamespacedName{Name: secretName, Namespace: pp.namespace}
 	secret := &corev1.Secret{}
 
-	err := (*pp.k8sClient).Get(context.TODO(), secretNamespcedName, secret)
+	err := (*pp.k8sClient).Get(ctx, secretNamespcedName, secret)
 	if err != nil {
-		return "", fmt.Errorf("failed to get secret %s: %v", secretNamespcedName, err)
+		return "", fmt.Errorf("getting secret %s: %w", secretNamespcedName, err)
 	}
 
 	passBytes, ok := secret.Data[passFileName]
 	if !ok {
-		return "", fmt.Errorf(
-			"failed to get password file in secret %s, fileName %s",
-			secretNamespcedName, passFileName,
-		)
+		return "", reconcile.TerminalError(fmt.Errorf(
+			"missing password file %q in secret %s",
+			passFileName, secretNamespcedName,
+		))
 	}
 
 	return string(passBytes), nil
@@ -108,7 +110,7 @@ func (r *SingleClusterReconciler) getPasswordProvider() fromSecretPasswordProvid
 	}
 }
 
-func (r *SingleClusterReconciler) getClientPolicy() *as.ClientPolicy {
+func (r *SingleClusterReconciler) getClientPolicy(ctx context.Context) *as.ClientPolicy {
 	policy := as.NewClientPolicy()
 
 	policy.SeedOnlyCluster = true
@@ -123,7 +125,7 @@ func (r *SingleClusterReconciler) getClientPolicy() *as.ClientPolicy {
 
 		tlsConf := tls.Config{
 			RootCAs: r.getClusterServerCAPool(
-				clientCertSpec, r.aeroCluster.Namespace,
+				ctx, clientCertSpec, r.aeroCluster.Namespace,
 			),
 			Certificates: []tls.Certificate{},
 			// used only in testing
@@ -137,7 +139,7 @@ func (r *SingleClusterReconciler) getClientPolicy() *as.ClientPolicy {
 				"clientCertSpec", clientCertSpec,
 			)
 		} else if cert, err := r.getClientCertificate(
-			clientCertSpec, r.aeroCluster.Namespace,
+			ctx, clientCertSpec, r.aeroCluster.Namespace,
 		); err == nil {
 			tlsConf.Certificates = append(tlsConf.Certificates, *cert)
 		} else {
@@ -161,14 +163,14 @@ func (r *SingleClusterReconciler) getClientPolicy() *as.ClientPolicy {
 
 	statusToSpec, err := asdbv1.CopyStatusToSpec(&r.aeroCluster.Status.AerospikeClusterStatusSpec)
 	if err != nil {
-		r.Log.Error(err, "Failed to copy status in spec", "err", err)
+		r.Log.Error(err, "Failed to copy status in spec")
 	}
 
 	user, pass, err := AerospikeAdminCredentials(
-		&r.aeroCluster.Spec, statusToSpec, r.getPasswordProvider(),
+		ctx, &r.aeroCluster.Spec, statusToSpec, r.getPasswordProvider(),
 	)
 	if err != nil {
-		r.Log.Error(err, "Failed to get cluster auth info", "err", err)
+		r.Log.Error(err, "Failed to get cluster auth info")
 	}
 	// TODO: What should be the timeout, should make it configurable or just keep it default
 	policy.Timeout = time.Minute * 1
@@ -190,6 +192,7 @@ func (r *SingleClusterReconciler) getClientPolicy() *as.ClientPolicy {
 }
 
 func (r *SingleClusterReconciler) getClusterServerCAPool(
+	ctx context.Context,
 	clientCertSpec *asdbv1.AerospikeOperatorClientCertSpec,
 	clusterNamespace string,
 ) *x509.CertPool {
@@ -215,7 +218,7 @@ func (r *SingleClusterReconciler) getClusterServerCAPool(
 		)
 	case clientCertSpec.SecretCertSource != nil:
 		return r.appendCACertFromSecret(
-			clientCertSpec.SecretCertSource, clusterNamespace, serverPool,
+			ctx, clientCertSpec.SecretCertSource, clusterNamespace, serverPool,
 		)
 	default:
 		r.Log.Error(
@@ -267,6 +270,7 @@ func (r *SingleClusterReconciler) appendCACertFromFileOrPath(
 }
 
 func (r *SingleClusterReconciler) appendCACertFromSecret(
+	ctx context.Context,
 	secretSource *asdbv1.AerospikeSecretCertSource,
 	defaultNamespace string, serverPool *x509.CertPool,
 ) *x509.CertPool {
@@ -290,7 +294,7 @@ func (r *SingleClusterReconciler) appendCACertFromSecret(
 		//nolint:staticcheck // SA1019: must read deprecated SecretNamespace to resolve secret until field is removed
 		secretName := namespacedSecret(secretSource.CaCertsSource.SecretNamespace,
 			secretSource.CaCertsSource.SecretName, defaultNamespace)
-		if err := r.Get(context.TODO(), secretName, found); err != nil {
+		if err := r.Get(ctx, secretName, found); err != nil {
 			r.Log.Error(
 				err,
 				"Failed to get CA certificates secret, returning empty certPool",
@@ -310,7 +314,7 @@ func (r *SingleClusterReconciler) appendCACertFromSecret(
 	} else {
 		//nolint:staticcheck // SA1019: must read deprecated SecretNamespace to resolve secret until field is removed
 		secretName := namespacedSecret(secretSource.SecretNamespace, secretSource.SecretName, defaultNamespace)
-		if err := r.Get(context.TODO(), secretName, found); err != nil {
+		if err := r.Get(ctx, secretName, found); err != nil {
 			r.Log.Error(
 				err,
 				"Failed to get secret certificates to the pool, returning empty certPool",
@@ -338,6 +342,7 @@ func (r *SingleClusterReconciler) appendCACertFromSecret(
 }
 
 func (r *SingleClusterReconciler) getClientCertificate(
+	ctx context.Context,
 	clientCertSpec *asdbv1.AerospikeOperatorClientCertSpec,
 	clusterNamespace string,
 ) (*tls.Certificate, error) {
@@ -349,14 +354,17 @@ func (r *SingleClusterReconciler) getClientCertificate(
 		)
 	case clientCertSpec.SecretCertSource != nil:
 		return r.loadCertAndKeyFromSecret(
-			clientCertSpec.SecretCertSource, clusterNamespace,
+			ctx, clientCertSpec.SecretCertSource, clusterNamespace,
 		)
 	default:
-		return nil, fmt.Errorf("both `secretName` and `certPathInOperator` are not set")
+		return nil, reconcile.TerminalError(fmt.Errorf(
+			"invalid aerospike operator client cert spec: neither secretName nor certPathInOperator is set",
+		))
 	}
 }
 
 func (r *SingleClusterReconciler) loadCertAndKeyFromSecret(
+	ctx context.Context,
 	secretSource *asdbv1.AerospikeSecretCertSource,
 	defaultNamespace string,
 ) (*tls.Certificate, error) {
@@ -365,34 +373,34 @@ func (r *SingleClusterReconciler) loadCertAndKeyFromSecret(
 
 	//nolint:staticcheck // SA1019: must read deprecated SecretNamespace to resolve secret until field is removed
 	secretName := namespacedSecret(secretSource.SecretNamespace, secretSource.SecretName, defaultNamespace)
-	if err := r.Get(context.TODO(), secretName, found); err != nil {
+	if err := r.Get(ctx, secretName, found); err != nil {
 		r.Log.Info(
 			"Warn: Failed to get secret certificates to the pool", "err", err,
 		)
 
-		return nil, err
+		return nil, fmt.Errorf("getting secret %s: %w", secretName, err)
 	}
 
 	crtData, crtExists := found.Data[secretSource.ClientCertFilename]
 	if !crtExists {
-		return nil, fmt.Errorf(
-			"can't find certificate `%s` in secret %+v",
+		return nil, reconcile.TerminalError(fmt.Errorf(
+			"certificate %q not found in secret %s",
 			secretSource.ClientCertFilename, secretName,
-		)
+		))
 	}
 
 	keyData, keyExists := found.Data[secretSource.ClientKeyFilename]
 	if !keyExists {
-		return nil, fmt.Errorf(
-			"can't find client key `%s` in secret %+v",
+		return nil, reconcile.TerminalError(fmt.Errorf(
+			"client key %q not found in secret %s",
 			secretSource.ClientKeyFilename, secretName,
-		)
+		))
 	}
 
 	cert, err := tls.X509KeyPair(crtData, keyData)
 	if err != nil {
 		return nil, fmt.Errorf(
-			"failed to load X509 key pair for cluster from secret %+v: %w",
+			"loading X509 key pair from secret %s: %w",
 			secretName, err,
 		)
 	}
@@ -426,18 +434,18 @@ func (r *SingleClusterReconciler) loadCertAndKeyFromFiles(
 ) (*tls.Certificate, error) {
 	certData, certErr := os.ReadFile(certPath)
 	if certErr != nil {
-		return nil, certErr
+		return nil, fmt.Errorf("reading certificate file %s: %w", certPath, certErr)
 	}
 
 	keyData, keyErr := os.ReadFile(keyPath)
 	if keyErr != nil {
-		return nil, keyErr
+		return nil, fmt.Errorf("reading client key file %s: %w", keyPath, keyErr)
 	}
 
 	cert, err := tls.X509KeyPair(certData, keyData)
 	if err != nil {
 		return nil, fmt.Errorf(
-			"failed to load X509 key pair for cluster (cert=%s,key=%s): %w",
+			"loading X509 key pair (cert=%s, key=%s): %w",
 			certPath, keyPath, err,
 		)
 	}

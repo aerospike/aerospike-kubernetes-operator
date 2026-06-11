@@ -32,7 +32,7 @@ type revisionChangedRack struct {
 	newRack *RackState
 }
 
-func (r *SingleClusterReconciler) reconcileRacks() common.ReconcileResult {
+func (r *SingleClusterReconciler) reconcileRacks(ctx context.Context) common.ReconcileResult {
 	r.Log.Info("Reconciling rack for AerospikeCluster")
 
 	var (
@@ -40,12 +40,12 @@ func (r *SingleClusterReconciler) reconcileRacks() common.ReconcileResult {
 		res                common.ReconcileResult
 	)
 
-	configuredRacks, revisionChangedRacks, racksToDelete, err := r.categoriseRacks()
+	configuredRacks, revisionChangedRacks, racksToDelete, err := r.categoriseRacks(ctx)
 	if err != nil {
 		return common.ReconcileError(err)
 	}
 
-	ignorablePodNames, err := r.getIgnorablePods(racksToDelete, configuredRacks, revisionChangedRacks)
+	ignorablePodNames, err := r.getIgnorablePods(ctx, racksToDelete, configuredRacks, revisionChangedRacks)
 	if err != nil {
 		return common.ReconcileError(err)
 	}
@@ -62,7 +62,7 @@ func (r *SingleClusterReconciler) reconcileRacks() common.ReconcileResult {
 		stsName := utils.GetNamespacedNameForSTSOrConfigMap(r.aeroCluster,
 			utils.GetRackIdentifier(state.Rack.ID, state.Rack.Revision))
 
-		if err = r.Get(context.TODO(), stsName, found); err != nil {
+		if err = r.Get(ctx, stsName, found); err != nil {
 			if !errors.IsNotFound(err) {
 				return common.ReconcileError(err)
 			}
@@ -71,7 +71,7 @@ func (r *SingleClusterReconciler) reconcileRacks() common.ReconcileResult {
 		}
 
 		// Handle failed pods for this rack (two-pass: reconcile then restart if not recovered)
-		if res = r.handleFailedPodsInRack(found, state, ignorablePodNames); !res.IsSuccess {
+		if res = r.handleFailedPodsInRack(ctx, found, state, ignorablePodNames); !res.IsSuccess {
 			return res
 		}
 	}
@@ -80,7 +80,7 @@ func (r *SingleClusterReconciler) reconcileRacks() common.ReconcileResult {
 		state := &configuredRacks[idx]
 
 		if revisionChangedRackInfo, ok := revisionChangedRacks[state.Rack.ID]; ok {
-			if res = r.reconcileRevisionChangedRacks(revisionChangedRackInfo, ignorablePodNames); !res.IsSuccess {
+			if res = r.reconcileRevisionChangedRacks(ctx, revisionChangedRackInfo, ignorablePodNames); !res.IsSuccess {
 				return res
 			}
 
@@ -91,7 +91,7 @@ func (r *SingleClusterReconciler) reconcileRacks() common.ReconcileResult {
 		stsName := utils.GetNamespacedNameForSTSOrConfigMap(r.aeroCluster,
 			utils.GetRackIdentifier(state.Rack.ID, state.Rack.Revision))
 
-		if err = r.Get(context.TODO(), stsName, found); err != nil {
+		if err = r.Get(ctx, stsName, found); err != nil {
 			if !errors.IsNotFound(err) {
 				return common.ReconcileError(err)
 			}
@@ -99,7 +99,7 @@ func (r *SingleClusterReconciler) reconcileRacks() common.ReconcileResult {
 			// Create statefulset with 0 size rack and then scaleUp later in Reconcile
 			zeroSizedRack := &RackState{Rack: state.Rack, Size: 0}
 
-			found, res = r.createEmptyRack(zeroSizedRack)
+			found, res = r.createEmptyRack(ctx, zeroSizedRack)
 			if !res.IsSuccess {
 				return res
 			}
@@ -111,7 +111,7 @@ func (r *SingleClusterReconciler) reconcileRacks() common.ReconcileResult {
 		} else {
 			// Reconcile other statefulset
 			if res = r.reconcileRack(
-				found, state, ignorablePodNames, nil,
+				ctx, found, state, ignorablePodNames, nil,
 			); !res.IsSuccess {
 				return res
 			}
@@ -123,21 +123,14 @@ func (r *SingleClusterReconciler) reconcileRacks() common.ReconcileResult {
 		state := scaledDownRackList[idx].rackState
 		sts := scaledDownRackList[idx].rackSTS
 
-		if res = r.reconcileRack(sts, state, ignorablePodNames, nil); !res.IsSuccess {
+		if res = r.reconcileRack(ctx, sts, state, ignorablePodNames, nil); !res.IsSuccess {
 			return res
 		}
 	}
 
 	if len(r.aeroCluster.Status.RackConfig.Racks) != 0 {
 		// Remove removed racks
-		if res = r.deleteRacks(racksToDelete, ignorablePodNames); !res.IsSuccess {
-			if res.Err != nil {
-				r.Log.Error(
-					err, "Failed to remove statefulset for removed racks",
-					"err", res.Err,
-				)
-			}
-
+		if res = r.deleteRacks(ctx, racksToDelete, ignorablePodNames); !res.IsSuccess {
 			return res
 		}
 	}
@@ -152,14 +145,14 @@ func (r *SingleClusterReconciler) reconcileRacks() common.ReconcileResult {
 		stsName := utils.GetNamespacedNameForSTSOrConfigMap(r.aeroCluster,
 			utils.GetRackIdentifier(state.Rack.ID, state.Rack.Revision))
 
-		if err := r.Get(context.TODO(), stsName, found); err != nil {
+		if err := r.Get(ctx, stsName, found); err != nil {
 			if !errors.IsNotFound(err) {
 				return common.ReconcileError(err)
 			}
 
 			// Create statefulset with 0 size rack and then scaleUp later in Reconcile
 			zeroSizedRack := &RackState{Rack: state.Rack, Size: 0}
-			found, res = r.createEmptyRack(zeroSizedRack)
+			found, res = r.createEmptyRack(ctx, zeroSizedRack)
 
 			if !res.IsSuccess {
 				return res
@@ -167,7 +160,7 @@ func (r *SingleClusterReconciler) reconcileRacks() common.ReconcileResult {
 		}
 
 		// Wait for pods to be ready.
-		if err := r.waitForSTSToBeReady(found, ignorablePodNames); err != nil {
+		if err := r.waitForSTSToBeReady(ctx, found, ignorablePodNames); err != nil {
 			// If the wait times out try again.
 			// The wait is required in cases where scale up waits for a pod to
 			// terminate times out and event is re-queued.
@@ -187,7 +180,7 @@ func (r *SingleClusterReconciler) reconcileRacks() common.ReconcileResult {
 	return common.ReconcileSuccess()
 }
 
-func (r *SingleClusterReconciler) createEmptyRack(rackState *RackState) (
+func (r *SingleClusterReconciler) createEmptyRack(ctx context.Context, rackState *RackState) (
 	*appsv1.StatefulSet, common.ReconcileResult,
 ) {
 	r.Log.Info("Create new Aerospike cluster rack if needed")
@@ -198,23 +191,17 @@ func (r *SingleClusterReconciler) createEmptyRack(rackState *RackState) (
 	// Bad config should not come here. It should be validated in validation hook
 	cmName := utils.GetNamespacedNameForSTSOrConfigMap(r.aeroCluster,
 		utils.GetRackIdentifier(rackState.Rack.ID, rackState.Rack.Revision))
-	if err := r.createSTSConfigMap(cmName, rackState.Rack); err != nil {
-		r.Log.Error(err, "Failed to create configMap from AerospikeConfig")
+	if err := r.createSTSConfigMap(ctx, cmName, rackState.Rack); err != nil {
 		return nil, common.ReconcileError(err)
 	}
 
 	stsName := utils.GetNamespacedNameForSTSOrConfigMap(r.aeroCluster,
 		utils.GetRackIdentifier(rackState.Rack.ID, rackState.Rack.Revision))
 
-	found, err := r.createSTS(stsName, rackState)
+	found, err := r.createSTS(ctx, stsName, rackState)
 	if err != nil {
-		r.Log.Error(
-			err, "Statefulset setup failed. Deleting statefulset", "name",
-			stsName, "err", err,
-		)
-
 		// Delete statefulset and everything related so that it can be properly created and updated in next run
-		_ = r.deleteSTS(found)
+		_ = r.deleteSTS(ctx, found)
 
 		return nil, common.ReconcileError(err)
 	}
@@ -244,10 +231,10 @@ func getRacksToBeBlockedFromRoster(log logger, rackStateList []RackState) []asdb
 	return racksToBlock
 }
 
-func (r *SingleClusterReconciler) getRacksToDelete(rackStateList []RackState) (
+func (r *SingleClusterReconciler) getRacksToDelete(ctx context.Context, rackStateList []RackState) (
 	[]asdbv1.Rack, error,
 ) {
-	oldRacks, err := r.getCurrentRackList()
+	oldRacks, err := r.getCurrentRackList(ctx)
 	if err != nil {
 		return nil, err
 	}
@@ -273,7 +260,7 @@ func (r *SingleClusterReconciler) getRacksToDelete(rackStateList []RackState) (
 }
 
 func (r *SingleClusterReconciler) deleteRacks(
-	racksToDelete []asdbv1.Rack, ignorablePodNames sets.Set[string],
+	ctx context.Context, racksToDelete []asdbv1.Rack, ignorablePodNames sets.Set[string],
 ) common.ReconcileResult {
 	for idx := range racksToDelete {
 		rack := &racksToDelete[idx]
@@ -282,7 +269,7 @@ func (r *SingleClusterReconciler) deleteRacks(
 			r.aeroCluster, utils.GetRackIdentifier(rack.ID, rack.Revision),
 		)
 
-		err := r.Get(context.TODO(), stsName, found)
+		err := r.Get(ctx, stsName, found)
 		if err != nil {
 			// If not found, then go to the next
 			if errors.IsNotFound(err) {
@@ -295,13 +282,13 @@ func (r *SingleClusterReconciler) deleteRacks(
 		// TODO: Add option for quick delete of rack. DefaultRackID should always be removed gracefully
 		rackState := &RackState{Size: 0, Rack: rack}
 
-		found, res := r.scaleDownRack(found, rackState, ignorablePodNames, nil)
+		found, res := r.scaleDownRack(ctx, found, rackState, ignorablePodNames, nil)
 		if !res.IsSuccess {
 			return res
 		}
 
 		// Delete sts
-		if err = r.deleteSTS(found); err != nil {
+		if err = r.deleteSTS(ctx, found); err != nil {
 			r.Recorder.Eventf(
 				r.aeroCluster, corev1.EventTypeWarning, "STSDeleteFailed",
 				"[rack-%d] Failed to delete {STS: %s/%s}", rack.ID,
@@ -314,13 +301,13 @@ func (r *SingleClusterReconciler) deleteRacks(
 		// Delete configMap
 		cmName := utils.GetNamespacedNameForSTSOrConfigMap(r.aeroCluster,
 			utils.GetRackIdentifier(rackState.Rack.ID, rackState.Rack.Revision))
-		if err = r.deleteRackConfigMap(cmName); err != nil {
+		if err = r.deleteRackConfigMap(ctx, cmName); err != nil {
 			return common.ReconcileError(err)
 		}
 
 		// Rack cleanup is done. Take time and cleanup dangling nodes and related resources that may not have been
 		// cleaned up previously due to errors.
-		if err = r.cleanupDanglingPodsRack(found, rackState); err != nil {
+		if err = r.cleanupDanglingPodsRack(ctx, found, rackState); err != nil {
 			return common.ReconcileError(err)
 		}
 
@@ -334,7 +321,7 @@ func (r *SingleClusterReconciler) deleteRacks(
 }
 
 func (r *SingleClusterReconciler) upgradeOrRollingRestartRack(
-	found *appsv1.StatefulSet, rackState *RackState,
+	ctx context.Context, found *appsv1.StatefulSet, rackState *RackState,
 	ignorablePodNames sets.Set[string], failedPods []*corev1.Pod,
 ) (*appsv1.StatefulSet, common.ReconcileResult) {
 	var res common.ReconcileResult
@@ -345,15 +332,11 @@ func (r *SingleClusterReconciler) upgradeOrRollingRestartRack(
 	// So a check based on spec and status will skip configMap update.
 	// Hence, a rolling restart of pod will never bring pod to desired config
 	if err := r.updateSTSConfigMap(
+		ctx,
 		utils.GetNamespacedNameForSTSOrConfigMap(
 			r.aeroCluster, utils.GetRackIdentifier(rackState.Rack.ID, rackState.Rack.Revision),
 		), rackState.Rack,
 	); err != nil {
-		r.Log.Error(
-			err, "Failed to update configMap from AerospikeConfig", "stsName",
-			found.Name,
-		)
-
 		return found, common.ReconcileError(err)
 	}
 
@@ -361,25 +344,20 @@ func (r *SingleClusterReconciler) upgradeOrRollingRestartRack(
 	// This code will run only when security is being enabled in an existing cluster
 	// Update for security is verified by checking the config hash of the pod with the
 	// config hash present in config map
-	if err := r.handleEnableSecurity(rackState, ignorablePodNames); err != nil {
+	if err := r.handleEnableSecurity(ctx, rackState, ignorablePodNames); err != nil {
 		return found, common.ReconcileError(err)
 	}
 
 	// Upgrade
-	upgradeNeeded, err := r.isRackUpgradeNeeded(rackState.Rack.ID, rackState.Rack.Revision, ignorablePodNames)
+	upgradeNeeded, err := r.isRackUpgradeNeeded(ctx, rackState.Rack.ID, rackState.Rack.Revision, ignorablePodNames)
 	if err != nil {
 		return found, common.ReconcileError(err)
 	}
 
 	if upgradeNeeded {
-		found, res = r.upgradeRack(found, rackState, ignorablePodNames, failedPods)
+		found, res = r.upgradeRack(ctx, found, rackState, ignorablePodNames, failedPods)
 		if !res.IsSuccess {
 			if res.Err != nil {
-				r.Log.Error(
-					res.Err, "Failed to update StatefulSet image", "stsName",
-					found.Name,
-				)
-
 				r.Recorder.Eventf(
 					r.aeroCluster, corev1.EventTypeWarning,
 					"RackImageUpdateFailed",
@@ -391,22 +369,17 @@ func (r *SingleClusterReconciler) upgradeOrRollingRestartRack(
 			return found, res
 		}
 	} else {
-		var rollingRestartInfo, nErr = r.getRollingRestartInfo(rackState, ignorablePodNames)
+		var rollingRestartInfo, nErr = r.getRollingRestartInfo(ctx, rackState, ignorablePodNames)
 		if nErr != nil {
 			return found, common.ReconcileError(nErr)
 		}
 
 		if rollingRestartInfo.needRestart {
 			found, res = r.rollingRestartRack(
-				found, rackState, ignorablePodNames, rollingRestartInfo.restartTypeMap, failedPods,
+				ctx, found, rackState, ignorablePodNames, rollingRestartInfo.restartTypeMap, failedPods,
 			)
 			if !res.IsSuccess {
 				if res.Err != nil {
-					r.Log.Error(
-						res.Err, "Failed to do rolling restart", "stsName",
-						found.Name,
-					)
-
 					r.Recorder.Eventf(
 						r.aeroCluster, corev1.EventTypeWarning,
 						"RackRollingRestartFailed",
@@ -421,16 +394,11 @@ func (r *SingleClusterReconciler) upgradeOrRollingRestartRack(
 
 		if len(failedPods) == 0 && rollingRestartInfo.needUpdateConf {
 			res = r.updateDynamicConfig(
-				rackState, ignorablePodNames,
+				ctx, rackState, ignorablePodNames,
 				rollingRestartInfo.restartTypeMap, rollingRestartInfo.dynamicConfDiffPerPod,
 			)
 			if !res.IsSuccess {
 				if res.Err != nil {
-					r.Log.Error(
-						res.Err, "Failed to do dynamic update", "stsName",
-						found.Name,
-					)
-
 					r.Recorder.Eventf(
 						r.aeroCluster, corev1.EventTypeWarning,
 						"RackDynamicConfigUpdateFailed",
@@ -445,14 +413,14 @@ func (r *SingleClusterReconciler) upgradeOrRollingRestartRack(
 	}
 
 	if r.aeroCluster.Spec.RackConfig.MaxIgnorablePods != nil {
-		if res = r.handleNSOrDeviceRemovalForIgnorablePods(rackState, ignorablePodNames); !res.IsSuccess {
+		if res = r.handleNSOrDeviceRemovalForIgnorablePods(ctx, rackState, ignorablePodNames); !res.IsSuccess {
 			return found, res
 		}
 	}
 
 	// handle k8sNodeBlockList pods only if it is changed
 	if !reflect.DeepEqual(r.aeroCluster.Spec.K8sNodeBlockList, r.aeroCluster.Status.K8sNodeBlockList) {
-		found, res = r.handleK8sNodeBlockListPods(found, rackState, ignorablePodNames, failedPods)
+		found, res = r.handleK8sNodeBlockListPods(ctx, found, rackState, ignorablePodNames, failedPods)
 		if !res.IsSuccess {
 			return found, res
 		}
@@ -462,7 +430,7 @@ func (r *SingleClusterReconciler) upgradeOrRollingRestartRack(
 }
 
 func (r *SingleClusterReconciler) updateDynamicConfig(
-	rackState *RackState,
+	ctx context.Context, rackState *RackState,
 	ignorablePodNames sets.Set[string], restartTypeMap map[string]RestartType,
 	dynamicConfDiffPerPod map[string]asconfig.DynamicConfigMap,
 ) common.ReconcileResult {
@@ -479,9 +447,12 @@ func (r *SingleClusterReconciler) updateDynamicConfig(
 	)
 
 	// List the pods for this aeroCluster's statefulset
-	podList, err = r.getOrderedRackPodList(rackState.Rack.ID, rackState.Rack.Revision)
+	podList, err = r.getOrderedRackPodList(ctx, rackState.Rack.ID, rackState.Rack.Revision)
 	if err != nil {
-		return common.ReconcileError(fmt.Errorf("failed to list pods: %v", err))
+		return common.ReconcileError(fmt.Errorf(
+			"listing pods for rack %d in cluster %s: %w",
+			rackState.Rack.ID, utils.ClusterNamespacedName(r.aeroCluster), err,
+		))
 	}
 
 	// Find pods which needs restart
@@ -499,7 +470,7 @@ func (r *SingleClusterReconciler) updateDynamicConfig(
 		podsToUpdate = append(podsToUpdate, pod)
 	}
 
-	if res := r.setDynamicConfig(dynamicConfDiffPerPod, podsToUpdate, ignorablePodNames); !res.IsSuccess {
+	if res := r.setDynamicConfig(ctx, dynamicConfDiffPerPod, podsToUpdate, ignorablePodNames); !res.IsSuccess {
 		return res
 	}
 
@@ -512,11 +483,14 @@ func (r *SingleClusterReconciler) updateDynamicConfig(
 }
 
 func (r *SingleClusterReconciler) handleNSOrDeviceRemovalForIgnorablePods(
-	rackState *RackState, ignorablePodNames sets.Set[string],
+	ctx context.Context, rackState *RackState, ignorablePodNames sets.Set[string],
 ) common.ReconcileResult {
-	podList, err := r.getOrderedRackPodList(rackState.Rack.ID, rackState.Rack.Revision)
+	podList, err := r.getOrderedRackPodList(ctx, rackState.Rack.ID, rackState.Rack.Revision)
 	if err != nil {
-		return common.ReconcileError(fmt.Errorf("failed to list pods: %v", err))
+		return common.ReconcileError(fmt.Errorf(
+			"listing pods for rack %d in cluster %s: %w",
+			rackState.Rack.ID, utils.ClusterNamespacedName(r.aeroCluster), err,
+		))
 	}
 	// Filter ignoredPods to update their dirtyVolumes in the status.
 	// IgnoredPods are skipped from upgrade/rolling restart, and as a result in case of device removal, dirtyVolumes
@@ -535,7 +509,7 @@ func (r *SingleClusterReconciler) handleNSOrDeviceRemovalForIgnorablePods(
 	}
 
 	if len(ignoredPod) > 0 {
-		if err := r.handleNSOrDeviceRemoval(rackState, ignoredPod); err != nil {
+		if err := r.handleNSOrDeviceRemoval(ctx, rackState, ignoredPod); err != nil {
 			return common.ReconcileError(err)
 		}
 	}
@@ -544,7 +518,8 @@ func (r *SingleClusterReconciler) handleNSOrDeviceRemovalForIgnorablePods(
 }
 
 func (r *SingleClusterReconciler) reconcileRack(
-	found *appsv1.StatefulSet, rackState *RackState, ignorablePodNames sets.Set[string], failedPods []*corev1.Pod,
+	ctx context.Context, found *appsv1.StatefulSet, rackState *RackState,
+	ignorablePodNames sets.Set[string], failedPods []*corev1.Pod,
 ) common.ReconcileResult {
 	r.Log.Info(
 		"Reconcile existing Aerospike cluster statefulset", "stsName",
@@ -563,14 +538,9 @@ func (r *SingleClusterReconciler) reconcileRack(
 
 	// Scale down
 	if currentSize > desiredSize {
-		found, res = r.scaleDownRack(found, rackState, ignorablePodNames, nil)
+		found, res = r.scaleDownRack(ctx, found, rackState, ignorablePodNames, nil)
 		if !res.IsSuccess {
 			if res.Err != nil {
-				r.Log.Error(
-					res.Err, "Failed to scaleDown StatefulSet pods", "stsName",
-					found.Name,
-				)
-
 				r.Recorder.Eventf(
 					r.aeroCluster, corev1.EventTypeWarning,
 					"RackScaleDownFailed",
@@ -592,25 +562,19 @@ func (r *SingleClusterReconciler) reconcileRack(
 		if (r.aeroCluster.Status.Size > r.aeroCluster.Spec.Size) ||
 			(!r.IsStatusEmpty() && len(r.aeroCluster.Status.RackConfig.Racks) != len(r.aeroCluster.Spec.RackConfig.Racks)) {
 			if res = r.setMigrateFillDelay(
-				r.getClientPolicy(), &rackState.Rack.AerospikeConfig, false,
+				ctx, r.getClientPolicy(ctx), &rackState.Rack.AerospikeConfig, false,
 				nil,
 			); !res.IsSuccess {
-				r.Log.Error(res.Err, "Failed to revert migrate-fill-delay after scale down")
 				return res
 			}
 		}
 	}
 
-	if err := r.updateAerospikeInitContainerImage(found); err != nil {
-		r.Log.Error(
-			err, "Failed to update Aerospike Init container", "stsName",
-			found.Name,
-		)
-
+	if err := r.updateAerospikeInitContainerImage(ctx, found); err != nil {
 		return common.ReconcileError(err)
 	}
 
-	found, res = r.upgradeOrRollingRestartRack(found, rackState, ignorablePodNames, failedPods)
+	found, res = r.upgradeOrRollingRestartRack(ctx, found, rackState, ignorablePodNames, failedPods)
 	if !res.IsSuccess {
 		return res
 	}
@@ -618,13 +582,8 @@ func (r *SingleClusterReconciler) reconcileRack(
 	// Scale up after upgrading, so that new pods come up with new image
 	currentSize = *found.Spec.Replicas
 	if currentSize < desiredSize {
-		found, res = r.scaleUpRack(found, rackState, ignorablePodNames)
+		found, res = r.scaleUpRack(ctx, found, rackState, ignorablePodNames)
 		if !res.IsSuccess {
-			r.Log.Error(
-				res.Err, "Failed to scaleUp StatefulSet pods", "stsName",
-				found.Name,
-			)
-
 			r.Recorder.Eventf(
 				r.aeroCluster, corev1.EventTypeWarning, "RackScaleUpFailed",
 				"[rack-%d] Failed to scale-up {STS %s/%s, currentSize: %d desiredSize: %d}: %s",
@@ -638,11 +597,11 @@ func (r *SingleClusterReconciler) reconcileRack(
 
 	// All regular operations are complete. Take time and cleanup dangling nodes that have not been cleaned up
 	// previously due to errors.
-	if err := r.cleanupDanglingPodsRack(found, rackState); err != nil {
+	if err := r.cleanupDanglingPodsRack(ctx, found, rackState); err != nil {
 		return common.ReconcileError(err)
 	}
 
-	if err := r.reconcilePodService(rackState); err != nil {
+	if err := r.reconcilePodService(ctx, rackState); err != nil {
 		return common.ReconcileError(err)
 	}
 
@@ -650,7 +609,7 @@ func (r *SingleClusterReconciler) reconcileRack(
 }
 
 func (r *SingleClusterReconciler) scaleUpRack(
-	found *appsv1.StatefulSet, rackState *RackState, ignorablePodNames sets.Set[string],
+	ctx context.Context, found *appsv1.StatefulSet, rackState *RackState, ignorablePodNames sets.Set[string],
 ) (
 	*appsv1.StatefulSet, common.ReconcileResult,
 ) {
@@ -667,13 +626,18 @@ func (r *SingleClusterReconciler) scaleUpRack(
 
 	// No need for this? But if the image is bad, then new pod will also come up
 	// with bad node.
-	podList, err := r.getOrderedRackPodList(rackState.Rack.ID, rackState.Rack.Revision)
+	podList, err := r.getOrderedRackPodList(ctx, rackState.Rack.ID, rackState.Rack.Revision)
 	if err != nil {
-		return found, common.ReconcileError(fmt.Errorf("failed to list pods: %v", err))
+		return found, common.ReconcileError(fmt.Errorf(
+			"listing pods for rack %d in cluster %s: %w",
+			rackState.Rack.ID, utils.ClusterNamespacedName(r.aeroCluster), err,
+		))
 	}
 
 	if r.isAnyPodInImageFailedState(podList, ignorablePodNames) {
-		return found, common.ReconcileError(fmt.Errorf("cannot scale up AerospikeCluster. A pod is already in failed state"))
+		return found, common.ReconcileError(fmt.Errorf(
+			"scaling up cluster %s rack %d is blocked: a pod is not healthy",
+			utils.ClusterNamespacedName(r.aeroCluster), rackState.Rack.ID))
 	}
 
 	var newPodNames []string
@@ -688,23 +652,24 @@ func (r *SingleClusterReconciler) scaleUpRack(
 				return found, common.ReconcileError(
 					fmt.Errorf(
 						"pod %s yet to be launched is still present",
-						newPodName,
+						utils.NamespacedName(r.aeroCluster.Namespace, newPodName),
 					),
 				)
 			}
 		}
 	}
 
-	if err = r.cleanupDanglingPodsRack(found, rackState); err != nil {
+	if err = r.cleanupDanglingPodsRack(ctx, found, rackState); err != nil {
 		return found, common.ReconcileError(
 			fmt.Errorf(
-				"failed scale up pre-check: %v", err,
+				"running scale up pre-check for rack %d in cluster %s: %w",
+				rackState.Rack.ID, utils.ClusterNamespacedName(r.aeroCluster), err,
 			),
 		)
 	}
 
 	// Create pod service for the scaled up pod when node network is used in network policy
-	if err = r.createOrUpdatePodServiceIfNeeded(newPodNames); err != nil {
+	if err = r.createOrUpdatePodServiceIfNeeded(ctx, newPodNames); err != nil {
 		return nil, common.ReconcileError(err)
 	}
 
@@ -712,16 +677,16 @@ func (r *SingleClusterReconciler) scaleUpRack(
 	found.Spec.Replicas = &desiredSize
 
 	// Scale up the statefulset
-	if err = r.Update(context.TODO(), found, common.UpdateOption); err != nil {
+	if err = r.Update(ctx, found, common.UpdateOption); err != nil {
 		return found, common.ReconcileError(
 			fmt.Errorf(
-				"failed to update StatefulSet pods: %v", err,
+				"scaling up statefulset %s: %w", utils.GetNamespacedNameString(found), err,
 			),
 		)
 	}
 
 	// return a fresh copy
-	found, err = r.getSTS(rackState)
+	found, err = r.getSTS(ctx, rackState)
 	if err != nil {
 		return found, common.ReconcileError(err)
 	}
@@ -737,7 +702,7 @@ func (r *SingleClusterReconciler) scaleUpRack(
 }
 
 func (r *SingleClusterReconciler) upgradeRack(
-	statefulSet *appsv1.StatefulSet, rackState *RackState,
+	ctx context.Context, statefulSet *appsv1.StatefulSet, rackState *RackState,
 	ignorablePodNames sets.Set[string], failedPods []*corev1.Pod,
 ) (*appsv1.StatefulSet, common.ReconcileResult) {
 	var (
@@ -749,11 +714,12 @@ func (r *SingleClusterReconciler) upgradeRack(
 		podList = failedPods
 	} else {
 		// List the pods for this aeroCluster's statefulset
-		podList, err = r.getOrderedRackPodList(rackState.Rack.ID, rackState.Rack.Revision)
+		podList, err = r.getOrderedRackPodList(ctx, rackState.Rack.ID, rackState.Rack.Revision)
 		if err != nil {
 			return statefulSet, common.ReconcileError(
 				fmt.Errorf(
-					"failed to list pods: %v", err,
+					"listing pods for rack %d in cluster %s: %w",
+					rackState.Rack.ID, utils.ClusterNamespacedName(r.aeroCluster), err,
 				),
 			)
 		}
@@ -767,10 +733,10 @@ func (r *SingleClusterReconciler) upgradeRack(
 	// So first update image in STS and then delete a pod.
 	// Pod will come up with new image.
 	// Repeat the above process.
-	err = r.updateSTS(statefulSet, rackState)
+	err = r.updateSTS(ctx, statefulSet, rackState)
 	if err != nil {
 		return statefulSet, common.ReconcileError(
-			fmt.Errorf("upgrade rack : %v", err),
+			fmt.Errorf("upgrading rack %d in cluster %s: %w", rackState.Rack.ID, utils.ClusterNamespacedName(r.aeroCluster), err),
 		)
 	}
 
@@ -822,7 +788,7 @@ func (r *SingleClusterReconciler) upgradeRack(
 		)
 
 		podNames := getPodNames(podsBatch)
-		if err = r.createOrUpdatePodServiceIfNeeded(podNames); err != nil {
+		if err = r.createOrUpdatePodServiceIfNeeded(ctx, podNames); err != nil {
 			return nil, common.ReconcileError(err)
 		}
 
@@ -831,7 +797,7 @@ func (r *SingleClusterReconciler) upgradeRack(
 			"[rack-%d] Updating Containers on Pods %v", rackState.Rack.ID, podNames,
 		)
 
-		res := r.safelyDeletePodsAndEnsureImageUpdated(rackState, podsBatch, ignorablePodNames)
+		res := r.safelyDeletePodsAndEnsureImageUpdated(ctx, rackState, podsBatch, ignorablePodNames)
 		if !res.IsSuccess {
 			return statefulSet, res
 		}
@@ -848,7 +814,7 @@ func (r *SingleClusterReconciler) upgradeRack(
 	}
 
 	// If it was last batch then go ahead return a fresh copy
-	statefulSet, err = r.getSTS(rackState)
+	statefulSet, err = r.getSTS(ctx, rackState)
 	if err != nil {
 		return statefulSet, common.ReconcileError(err)
 	}
@@ -862,7 +828,7 @@ func (r *SingleClusterReconciler) upgradeRack(
 }
 
 func (r *SingleClusterReconciler) scaleDownRack(
-	found *appsv1.StatefulSet, rackState *RackState,
+	ctx context.Context, found *appsv1.StatefulSet, rackState *RackState,
 	ignorablePodNames sets.Set[string], customBatchSize *intstr.IntOrString,
 ) (*appsv1.StatefulSet, common.ReconcileResult) {
 	desiredSize := rackState.Size
@@ -883,20 +849,24 @@ func (r *SingleClusterReconciler) scaleDownRack(
 		desiredSize,
 	)
 
-	oldPodList, err := r.getOrderedRackPodList(rackState.Rack.ID, rackState.Rack.Revision)
+	oldPodList, err := r.getOrderedRackPodList(ctx, rackState.Rack.ID, rackState.Rack.Revision)
 	if err != nil {
-		return found, common.ReconcileError(fmt.Errorf("failed to list pods: %v", err))
+		return found, common.ReconcileError(fmt.Errorf(
+			"listing pods for rack %d in cluster %s: %w",
+			rackState.Rack.ID, utils.ClusterNamespacedName(r.aeroCluster), err,
+		))
 	}
 
 	if r.isAnyPodInImageFailedState(oldPodList, ignorablePodNames) {
 		return found, common.ReconcileError(
-			fmt.Errorf("cannot scale down AerospikeCluster. A pod is already in failed state"))
+			fmt.Errorf("scaling down cluster %s rack %d is blocked: a pod is not healthy",
+				utils.ClusterNamespacedName(r.aeroCluster), rackState.Rack.ID))
 	}
 
 	// Code flow will reach this stage only when found.Spec.Replicas > desiredSize
 	// Maintain a list of removed pods. It will be used for alumni-reset and tip-clear
 
-	policy := r.getClientPolicy()
+	policy := r.getClientPolicy(ctx)
 	diffPods := *found.Spec.Replicas - desiredSize
 
 	// Use custom batch size if provided, otherwise use ScaleDownBatchSize
@@ -938,7 +908,7 @@ func (r *SingleClusterReconciler) scaleDownRack(
 	// Ignore safe stop check if all pods in the batch are not running.
 	// Ignore migrate-fill-delay if pod is not running. Deleting this pod will not lead to any migration.
 	if isAnyPodRunningAndReady {
-		if res := r.waitForMultipleNodesSafeStopReady(runningPods, ignorablePodNames); !res.IsSuccess {
+		if res := r.waitForMultipleNodesSafeStopReady(ctx, runningPods, ignorablePodNames); !res.IsSuccess {
 			// The pod is running and is unsafe to terminate.
 			return found, res
 		}
@@ -948,20 +918,15 @@ func (r *SingleClusterReconciler) scaleDownRack(
 		// This check ensures that migrate-fill-delay is not set while processing failed racks.
 		// setting migrate-fill-delay will fail if there are any failed pod
 		if res := r.setMigrateFillDelay(
-			policy, &rackState.Rack.AerospikeConfig, true, ignorablePodNames,
+			ctx, policy, &rackState.Rack.AerospikeConfig, true, ignorablePodNames,
 		); !res.IsSuccess {
 			return found, res
 		}
 
 		// Wait for migration to complete before deleting the pods.
-		if res := r.waitForMigrationToComplete(policy,
+		if res := r.waitForMigrationToComplete(ctx, policy,
 			ignorablePodNames,
 		); !res.IsSuccess {
-			r.Log.Error(
-				res.Err, "Failed to wait for migration to complete before deleting pods",
-				"rackID", rackState.Rack.ID,
-			)
-
 			return found, res
 		}
 	}
@@ -971,12 +936,12 @@ func (r *SingleClusterReconciler) scaleDownRack(
 	found.Spec.Replicas = &newSize
 
 	if err = r.Update(
-		context.TODO(), found, common.UpdateOption,
+		ctx, found, common.UpdateOption,
 	); err != nil {
 		return found, common.ReconcileError(
 			fmt.Errorf(
-				"failed to update pod size %d StatefulSet pods: %v",
-				newSize, err,
+				"scaling statefulset %s to %d replicas: %w",
+				utils.GetNamespacedNameString(found), newSize, err,
 			),
 		)
 	}
@@ -986,7 +951,7 @@ func (r *SingleClusterReconciler) scaleDownRack(
 	// These checks will fail if there is any other pod in failed state outside the batch.
 	if isAnyPodRunningAndReady {
 		// Wait for pods to get terminated
-		if err = r.waitForSTSToBeReady(found, ignorablePodNames); err != nil {
+		if err = r.waitForSTSToBeReady(ctx, found, ignorablePodNames); err != nil {
 			r.Log.Error(err, "Failed to wait for statefulset to be ready")
 			return found, common.ReconcileRequeueAfter(1)
 		}
@@ -996,7 +961,7 @@ func (r *SingleClusterReconciler) scaleDownRack(
 		// This can be left to the user but if we would do it here on our own then we can reuse
 		// objects like pvc and service. These objects would have been removed if scaleup is left for the user.
 		// In case of rolling restart, no pod cleanup happens, therefore rolling config back is left to the user.
-		if err = r.validateSCClusterState(policy, ignorablePodNames); err != nil {
+		if err = r.validateSCClusterState(ctx, policy, ignorablePodNames); err != nil {
 			// reset cluster size
 			newSize := *found.Spec.Replicas + utils.Len32(podsBatch)
 			found.Spec.Replicas = &newSize
@@ -1007,17 +972,17 @@ func (r *SingleClusterReconciler) scaleDownRack(
 			)
 
 			if err = r.Update(
-				context.TODO(), found, common.UpdateOption,
+				ctx, found, common.UpdateOption,
 			); err != nil {
 				return found, common.ReconcileError(
 					fmt.Errorf(
-						"failed to update pod size %d StatefulSet pods: %v",
-						newSize, err,
+						"scaling statefulset %s to %d replicas: %w",
+						utils.GetNamespacedNameString(found), newSize, err,
 					),
 				)
 			}
 
-			if err = r.waitForSTSToBeReady(found, ignorablePodNames); err != nil {
+			if err = r.waitForSTSToBeReady(ctx, found, ignorablePodNames); err != nil {
 				r.Log.Error(err, "Failed to wait for statefulset to be ready")
 			}
 
@@ -1026,11 +991,12 @@ func (r *SingleClusterReconciler) scaleDownRack(
 	}
 
 	// Fetch new object
-	nFound, err := r.getSTS(rackState)
+	nFound, err := r.getSTS(ctx, rackState)
 	if err != nil {
 		return found, common.ReconcileError(
 			fmt.Errorf(
-				"failed to get StatefulSet pods: %v", err,
+				"getting statefulset for rack %d in cluster %s: %w",
+				rackState.Rack.ID, utils.ClusterNamespacedName(r.aeroCluster), err,
 			),
 		)
 	}
@@ -1039,10 +1005,11 @@ func (r *SingleClusterReconciler) scaleDownRack(
 
 	podNames := getPodNames(podsBatch)
 
-	if err := r.cleanupPods(podNames, rackState); err != nil {
+	if err := r.cleanupPods(ctx, podNames, rackState); err != nil {
 		return nFound, common.ReconcileError(
 			fmt.Errorf(
-				"failed to cleanup pod %s: %v", podNames, err,
+				"cleaning up pods %s: %w",
+				strings.Join(utils.NamespacedNames(r.aeroCluster.Namespace, podNames), ", "), err,
 			),
 		)
 	}
@@ -1064,7 +1031,7 @@ func (r *SingleClusterReconciler) scaleDownRack(
 }
 
 func (r *SingleClusterReconciler) rollingRestartRack(
-	found *appsv1.StatefulSet, rackState *RackState,
+	ctx context.Context, found *appsv1.StatefulSet, rackState *RackState,
 	ignorablePodNames sets.Set[string], restartTypeMap map[string]RestartType,
 	failedPods []*corev1.Pod,
 ) (*appsv1.StatefulSet, common.ReconcileResult) {
@@ -1089,16 +1056,22 @@ func (r *SingleClusterReconciler) rollingRestartRack(
 		}
 	} else {
 		// List the pods for this aeroCluster's statefulset
-		podList, err = r.getOrderedRackPodList(rackState.Rack.ID, rackState.Rack.Revision)
+		podList, err = r.getOrderedRackPodList(ctx, rackState.Rack.ID, rackState.Rack.Revision)
 		if err != nil {
-			return found, common.ReconcileError(fmt.Errorf("failed to list pods: %v", err))
+			return found, common.ReconcileError(fmt.Errorf(
+				"listing pods for rack %d in cluster %s: %w",
+				rackState.Rack.ID, utils.ClusterNamespacedName(r.aeroCluster), err,
+			))
 		}
 	}
 
-	err = r.updateSTS(found, rackState)
+	err = r.updateSTS(ctx, found, rackState)
 	if err != nil {
 		return found, common.ReconcileError(
-			fmt.Errorf("rolling restart failed: %v", err),
+			fmt.Errorf(
+				"updating statefulset for rolling restart of rack %d in cluster %s: %w",
+				rackState.Rack.ID, utils.ClusterNamespacedName(r.aeroCluster), err,
+			),
 		)
 	}
 
@@ -1155,11 +1128,11 @@ func (r *SingleClusterReconciler) rollingRestartRack(
 		)
 
 		podNames := getPodNames(podsBatch)
-		if err = r.createOrUpdatePodServiceIfNeeded(podNames); err != nil {
+		if err = r.createOrUpdatePodServiceIfNeeded(ctx, podNames); err != nil {
 			return nil, common.ReconcileError(err)
 		}
 
-		if res := r.rollingRestartPods(rackState, podsBatch, ignorablePodNames, restartTypeMap); !res.IsSuccess {
+		if res := r.rollingRestartPods(ctx, rackState, podsBatch, ignorablePodNames, restartTypeMap); !res.IsSuccess {
 			return found, res
 		}
 
@@ -1171,7 +1144,7 @@ func (r *SingleClusterReconciler) rollingRestartRack(
 	// It's last batch, go ahead
 
 	// Return a fresh copy
-	found, err = r.getSTS(rackState)
+	found, err = r.getSTS(ctx, rackState)
 	if err != nil {
 		return found, common.ReconcileError(err)
 	}
@@ -1185,12 +1158,15 @@ func (r *SingleClusterReconciler) rollingRestartRack(
 }
 
 func (r *SingleClusterReconciler) handleK8sNodeBlockListPods(
-	statefulSet *appsv1.StatefulSet, rackState *RackState,
+	ctx context.Context, statefulSet *appsv1.StatefulSet, rackState *RackState,
 	ignorablePodNames sets.Set[string], failedPods []*corev1.Pod,
 ) (*appsv1.StatefulSet, common.ReconcileResult) {
-	if err := r.updateSTS(statefulSet, rackState); err != nil {
+	if err := r.updateSTS(ctx, statefulSet, rackState); err != nil {
 		return statefulSet, common.ReconcileError(
-			fmt.Errorf("k8s node block list processing failed: %v", err),
+			fmt.Errorf(
+				"processing k8s node block list for rack %d in cluster %s: %w",
+				rackState.Rack.ID, utils.ClusterNamespacedName(r.aeroCluster), err,
+			),
 		)
 	}
 
@@ -1203,9 +1179,12 @@ func (r *SingleClusterReconciler) handleK8sNodeBlockListPods(
 		podList = failedPods
 	} else {
 		// List the pods for this aeroCluster's statefulset
-		podList, err = r.getOrderedRackPodList(rackState.Rack.ID, rackState.Rack.Revision)
+		podList, err = r.getOrderedRackPodList(ctx, rackState.Rack.ID, rackState.Rack.Revision)
 		if err != nil {
-			return statefulSet, common.ReconcileError(fmt.Errorf("failed to list pods: %v", err))
+			return statefulSet, common.ReconcileError(fmt.Errorf(
+				"listing pods for rack %d in cluster %s: %w",
+				rackState.Rack.ID, utils.ClusterNamespacedName(r.aeroCluster), err,
+			))
 		}
 	}
 
@@ -1247,7 +1226,7 @@ func (r *SingleClusterReconciler) handleK8sNodeBlockListPods(
 			"rollingUpdateBatchSize", r.aeroCluster.Spec.RackConfig.RollingUpdateBatchSize,
 		)
 
-		if res := r.rollingRestartPods(rackState, podsBatch, ignorablePodNames, restartTypeMap); !res.IsSuccess {
+		if res := r.rollingRestartPods(ctx, rackState, podsBatch, ignorablePodNames, restartTypeMap); !res.IsSuccess {
 			return statefulSet, res
 		}
 
@@ -1266,10 +1245,11 @@ type rollingRestartInfo struct {
 	needRestart, needUpdateConf bool
 }
 
-func (r *SingleClusterReconciler) getRollingRestartInfo(rackState *RackState, ignorablePodNames sets.Set[string]) (
+func (r *SingleClusterReconciler) getRollingRestartInfo(
+	ctx context.Context, rackState *RackState, ignorablePodNames sets.Set[string]) (
 	info *rollingRestartInfo, err error,
 ) {
-	restartTypeMap, dynamicConfDiffPerPod, err := r.getRollingRestartTypeMap(rackState, ignorablePodNames)
+	restartTypeMap, dynamicConfDiffPerPod, err := r.getRollingRestartTypeMap(ctx, rackState, ignorablePodNames)
 	if err != nil {
 		return nil, err
 	}
@@ -1298,12 +1278,12 @@ func (r *SingleClusterReconciler) getRollingRestartInfo(rackState *RackState, ig
 }
 
 func (r *SingleClusterReconciler) isRackUpgradeNeeded(
-	rackID int, rackRevision string, ignorablePodNames sets.Set[string]) (
+	ctx context.Context, rackID int, rackRevision string, ignorablePodNames sets.Set[string]) (
 	bool, error,
 ) {
-	podList, err := r.getRackPodList(rackID, rackRevision)
+	podList, err := r.getRackPodList(ctx, rackID, rackRevision)
 	if err != nil {
-		return true, fmt.Errorf("failed to list pods: %v", err)
+		return true, fmt.Errorf("listing pods for rack %d in cluster %s: %w", rackID, utils.ClusterNamespacedName(r.aeroCluster), err)
 	}
 
 	for idx := range podList.Items {
@@ -1705,7 +1685,7 @@ func (r *SingleClusterReconciler) isContainerVolumeInStorageStatus(
 	return true
 }
 
-func (r *SingleClusterReconciler) getRackPodList(rackID int, rackRevision string) (
+func (r *SingleClusterReconciler) getRackPodList(ctx context.Context, rackID int, rackRevision string) (
 	*corev1.PodList, error,
 ) {
 	// List the pods for this aeroCluster's statefulset
@@ -1716,7 +1696,7 @@ func (r *SingleClusterReconciler) getRackPodList(rackID int, rackRevision string
 	}
 
 	// TODO: Should we add check to get only non-terminating pod? What if it is rolling restart
-	if err := r.List(context.TODO(), podList, listOps); err != nil {
+	if err := r.List(ctx, podList, listOps); err != nil {
 		return nil, err
 	}
 
@@ -1736,10 +1716,10 @@ func (r *SingleClusterReconciler) getRackPodNames(rackState *RackState) []string
 	return podNames
 }
 
-func (r *SingleClusterReconciler) getOrderedRackPodList(rackID int, rackRevision string) (
+func (r *SingleClusterReconciler) getOrderedRackPodList(ctx context.Context, rackID int, rackRevision string) (
 	[]*corev1.Pod, error,
 ) {
-	podList, err := r.getRackPodList(rackID, rackRevision)
+	podList, err := r.getRackPodList(ctx, rackID, rackRevision)
 	if err != nil {
 		return nil, err
 	}
@@ -1753,7 +1733,10 @@ func (r *SingleClusterReconciler) getOrderedRackPodList(rackID int, rackRevision
 
 		if indexInt >= len(podList.Items) {
 			// Happens if we do not get full list of pods due to a crash,
-			return nil, fmt.Errorf("error get pod list for rack:%v, rackRevision:%v", rackID, rackRevision)
+			return nil, fmt.Errorf(
+				"getting ordered pod list for rack %d (revision %q) in cluster %s: incomplete pod list",
+				rackID, rackRevision, utils.ClusterNamespacedName(r.aeroCluster),
+			)
 		}
 
 		sortedList[(len(podList.Items)-1)-indexInt] = &podList.Items[idx]
@@ -1762,7 +1745,7 @@ func (r *SingleClusterReconciler) getOrderedRackPodList(rackID int, rackRevision
 	return sortedList, nil
 }
 
-func (r *SingleClusterReconciler) getCurrentRackList() (
+func (r *SingleClusterReconciler) getCurrentRackList(ctx context.Context) (
 	[]asdbv1.Rack, error,
 ) {
 	var rackList []asdbv1.Rack
@@ -1771,7 +1754,7 @@ func (r *SingleClusterReconciler) getCurrentRackList() (
 
 	// Create dummy rack structures for dangling racks that have stateful sets but were deleted later because rack
 	// before status was updated.
-	statefulSetList, err := r.getClusterSTSList()
+	statefulSetList, err := r.getClusterSTSList(ctx)
 	if err != nil {
 		return nil, err
 	}
@@ -1811,14 +1794,15 @@ func (r *SingleClusterReconciler) getCurrentRackList() (
 	return rackList, nil
 }
 
-func (r *SingleClusterReconciler) handleEnableSecurity(rackState *RackState, ignorablePodNames sets.Set[string]) error {
+func (r *SingleClusterReconciler) handleEnableSecurity(
+	ctx context.Context, rackState *RackState, ignorablePodNames sets.Set[string]) error {
 	if !r.enablingSecurity() {
 		// No need to proceed if security is not to be enabling
 		return nil
 	}
 
 	// Get pods where security-enabled config is applied
-	securityEnabledPods, err := r.getPodsWithUpdatedConfigForRack(rackState)
+	securityEnabledPods, err := r.getPodsWithUpdatedConfigForRack(ctx, rackState)
 	if err != nil {
 		return err
 	}
@@ -1829,8 +1813,7 @@ func (r *SingleClusterReconciler) handleEnableSecurity(rackState *RackState, ign
 	}
 
 	// Setup access control.
-	if err := r.validateAndReconcileAccessControl(securityEnabledPods, ignorablePodNames); err != nil {
-		r.Log.Error(err, "Failed to Reconcile access control")
+	if err := r.validateAndReconcileAccessControl(ctx, securityEnabledPods, ignorablePodNames); err != nil {
 		r.Recorder.Eventf(
 			r.aeroCluster, corev1.EventTypeWarning, "ACLUpdateFailed",
 			"Failed to setup Access Control %s/%s", r.aeroCluster.Namespace,
@@ -1847,10 +1830,11 @@ func (r *SingleClusterReconciler) enablingSecurity() bool {
 	return r.aeroCluster.Spec.AerospikeAccessControl != nil && r.aeroCluster.Status.AerospikeAccessControl == nil
 }
 
-func (r *SingleClusterReconciler) getPodsWithUpdatedConfigForRack(rackState *RackState) ([]corev1.Pod, error) {
-	pods, err := r.getOrderedRackPodList(rackState.Rack.ID, rackState.Rack.Revision)
+func (r *SingleClusterReconciler) getPodsWithUpdatedConfigForRack(
+	ctx context.Context, rackState *RackState) ([]corev1.Pod, error) {
+	pods, err := r.getOrderedRackPodList(ctx, rackState.Rack.ID, rackState.Rack.Revision)
 	if err != nil {
-		return nil, fmt.Errorf("failed to list pods: %v", err)
+		return nil, fmt.Errorf("listing pods for rack %d in cluster %s: %w", rackState.Rack.ID, utils.ClusterNamespacedName(r.aeroCluster), err)
 	}
 
 	if len(pods) == 0 {
@@ -1858,7 +1842,7 @@ func (r *SingleClusterReconciler) getPodsWithUpdatedConfigForRack(rackState *Rac
 		return nil, nil
 	}
 
-	confMap, err := r.getConfigMap(utils.GetRackIdentifier(rackState.Rack.ID, rackState.Rack.Revision))
+	confMap, err := r.getConfigMap(ctx, utils.GetRackIdentifier(rackState.Rack.ID, rackState.Rack.Revision))
 	if err != nil {
 		return nil, err
 	}
@@ -2018,7 +2002,7 @@ func chunkBy[T any](items []*T, chunkSize int) (chunks [][]*T) {
 }
 
 func (r *SingleClusterReconciler) reconcileRevisionChangedRacks(
-	revisionChangedRackInfo revisionChangedRack, ignorablePodNames sets.Set[string],
+	ctx context.Context, revisionChangedRackInfo revisionChangedRack, ignorablePodNames sets.Set[string],
 ) common.ReconcileResult {
 	oldRack := revisionChangedRackInfo.oldRack
 	newRack := revisionChangedRackInfo.newRack
@@ -2030,13 +2014,13 @@ func (r *SingleClusterReconciler) reconcileRevisionChangedRacks(
 		"targetSize", targetSize,
 	)
 
-	newSts, err := r.getSTS(newRack)
+	newSts, err := r.getSTS(ctx, newRack)
 	if err != nil {
 		if !errors.IsNotFound(err) {
 			return common.ReconcileError(err)
 		}
 		// Create new STS
-		found, res := r.createEmptyRack(&RackState{Rack: newRack.Rack, Size: 0})
+		found, res := r.createEmptyRack(ctx, &RackState{Rack: newRack.Rack, Size: 0})
 		if !res.IsSuccess {
 			return res
 		}
@@ -2044,7 +2028,7 @@ func (r *SingleClusterReconciler) reconcileRevisionChangedRacks(
 		newSts = found
 	}
 
-	oldSts, err := r.getSTS(oldRack)
+	oldSts, err := r.getSTS(ctx, oldRack)
 	if err != nil {
 		if !errors.IsNotFound(err) {
 			return common.ReconcileError(err)
@@ -2061,7 +2045,7 @@ func (r *SingleClusterReconciler) reconcileRevisionChangedRacks(
 
 		// Use reconcileRack to bring the new rack to its desired state.
 		// This will handle the scale-up logic.
-		return r.reconcileRack(newSts, newRack, ignorablePodNames, nil)
+		return r.reconcileRack(ctx, newSts, newRack, ignorablePodNames, nil)
 	}
 
 	oldReplicas := *oldSts.Spec.Replicas
@@ -2072,7 +2056,7 @@ func (r *SingleClusterReconciler) reconcileRevisionChangedRacks(
 		r.Log.Info("Rack migration to new revision completed, deleting old revision",
 			"revision", newRack.Rack.Revision)
 
-		return r.deleteRacks([]asdbv1.Rack{*oldRack.Rack}, ignorablePodNames)
+		return r.deleteRacks(ctx, []asdbv1.Rack{*oldRack.Rack}, ignorablePodNames)
 	}
 
 	// Handle oversized new rack
@@ -2083,12 +2067,12 @@ func (r *SingleClusterReconciler) reconcileRevisionChangedRacks(
 		)
 
 		tempState := &RackState{Rack: newRack.Rack, Size: targetSize}
-		_, res := r.scaleDownRack(newSts, tempState, ignorablePodNames, nil)
+		_, res := r.scaleDownRack(ctx, newSts, tempState, ignorablePodNames, nil)
 
 		return res
 	}
 
-	if err := r.waitForAllSTSToBeReady(ignorablePodNames); err != nil {
+	if err := r.waitForAllSTSToBeReady(ctx, ignorablePodNames); err != nil {
 		return common.ReconcileError(err)
 	}
 
@@ -2110,7 +2094,7 @@ func (r *SingleClusterReconciler) reconcileRevisionChangedRacks(
 		podsToScaleUp := min(batchSizeInt32, targetSize-totalCurrentPods)
 		tempState := &RackState{Rack: newRack.Rack, Size: newReplicas + podsToScaleUp}
 
-		if res := r.reconcileRack(newSts, tempState, ignorablePodNames, nil); !res.IsSuccess {
+		if res := r.reconcileRack(ctx, newSts, tempState, ignorablePodNames, nil); !res.IsSuccess {
 			return res
 		}
 
@@ -2126,7 +2110,7 @@ func (r *SingleClusterReconciler) reconcileRevisionChangedRacks(
 		)
 
 		tempState := &RackState{Rack: oldRack.Rack, Size: oldReplicas - podsToScaleDown}
-		_, res := r.scaleDownRack(oldSts, tempState, ignorablePodNames, r.aeroCluster.Spec.RackConfig.RollingUpdateBatchSize)
+		_, res := r.scaleDownRack(ctx, oldSts, tempState, ignorablePodNames, r.aeroCluster.Spec.RackConfig.RollingUpdateBatchSize)
 
 		return res
 	}
@@ -2135,14 +2119,14 @@ func (r *SingleClusterReconciler) reconcileRevisionChangedRacks(
 }
 
 func (r *SingleClusterReconciler) handleFailedPodsInRack(
-	found *appsv1.StatefulSet, rackState *RackState, ignorablePodNames sets.Set[string],
+	ctx context.Context, found *appsv1.StatefulSet, rackState *RackState, ignorablePodNames sets.Set[string],
 ) common.ReconcileResult {
 	// 1. Fetch the pods for the rack and if there are failed pods, then reconcile the rack
-	podList, err := r.getOrderedRackPodList(rackState.Rack.ID, rackState.Rack.Revision)
+	podList, err := r.getOrderedRackPodList(ctx, rackState.Rack.ID, rackState.Rack.Revision)
 	if err != nil {
 		return common.ReconcileError(
-			fmt.Errorf("failed to list pods for rack %d-%s: %v",
-				rackState.Rack.ID, rackState.Rack.Revision, err),
+			fmt.Errorf("listing pods for rack %d-%s in cluster %s: %w",
+				rackState.Rack.ID, rackState.Rack.Revision, utils.ClusterNamespacedName(r.aeroCluster), err),
 		)
 	}
 
@@ -2156,7 +2140,7 @@ func (r *SingleClusterReconciler) handleFailedPodsInRack(
 			"failedPods", getPodNames(failedPods))
 
 		if res := r.reconcileRack(
-			found, rackState, ignorablePodNames, failedPods,
+			ctx, found, rackState, ignorablePodNames, failedPods,
 		); !res.IsSuccess {
 			return res
 		}
@@ -2170,11 +2154,11 @@ func (r *SingleClusterReconciler) handleFailedPodsInRack(
 	// This is needed in cases where hash values generated from CR spec are same as hash values in pods.
 	// But, pods are in failed state due to their bad spec.
 	// e.g. configuring unschedulable resources in CR podSpec and reverting them to old value.
-	podList, err = r.getOrderedRackPodList(rackState.Rack.ID, rackState.Rack.Revision)
+	podList, err = r.getOrderedRackPodList(ctx, rackState.Rack.ID, rackState.Rack.Revision)
 	if err != nil {
 		return common.ReconcileError(
-			fmt.Errorf("failed to re-fetch pods for restart check on rack %d-%s: %v",
-				rackState.Rack.ID, rackState.Rack.Revision, err),
+			fmt.Errorf("re-fetching pods for restart check on rack %d-%s in cluster %s: %w",
+				rackState.Rack.ID, rackState.Rack.Revision, utils.ClusterNamespacedName(r.aeroCluster), err),
 		)
 	}
 
@@ -2188,7 +2172,7 @@ func (r *SingleClusterReconciler) handleFailedPodsInRack(
 			"failedPods", getPodNames(failedPods))
 
 		if _, res := r.rollingRestartRack(
-			found, rackState, ignorablePodNames, nil,
+			ctx, found, rackState, ignorablePodNames, nil,
 			failedPods,
 		); !res.IsSuccess {
 			return res
@@ -2204,17 +2188,17 @@ func (r *SingleClusterReconciler) handleFailedPodsInRack(
 	return common.ReconcileSuccess()
 }
 
-func (r *SingleClusterReconciler) categoriseRacks() (configuredRacks []RackState,
+func (r *SingleClusterReconciler) categoriseRacks(ctx context.Context) (configuredRacks []RackState,
 	revisionChangedRacks map[int]revisionChangedRack, racksToDelete []asdbv1.Rack, err error) {
 	configuredRacks = getConfiguredRackStateList(r.aeroCluster)
 
 	// Revision-changed racks are not considered in the racks to delete.
-	racksToDelete, err = r.getRacksToDelete(configuredRacks)
+	racksToDelete, err = r.getRacksToDelete(ctx, configuredRacks)
 	if err != nil {
 		return configuredRacks, revisionChangedRacks, racksToDelete, err
 	}
 
-	oldRacks, err := r.getCurrentRackList()
+	oldRacks, err := r.getCurrentRackList(ctx)
 	if err != nil {
 		return configuredRacks, revisionChangedRacks, racksToDelete, err
 	}

@@ -25,7 +25,7 @@ func ReconcileRequeueAfter(secs int) ReconcileResult {
 
 	return ReconcileResult{
 		Result: reconcile.Result{
-			Requeue: true, RequeueAfter: t,
+			RequeueAfter: t,
 		},
 	}
 }
