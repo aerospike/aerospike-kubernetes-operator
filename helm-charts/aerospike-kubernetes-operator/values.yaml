@@ -39,9 +39,9 @@ logging:
   # encoder: console
 
 ## Operator manager /metrics (--metrics-secure)
-## Uncomment metrics.secure to emit --metrics-secure in the Deployment.
+## Always passed in the Deployment args for clarity; defaults to TLS on (`true`).
 metrics:
-  # secure: true
+  secure: true
 
 ##  Operator configurations
 watchNamespaces: "default,aerospike"

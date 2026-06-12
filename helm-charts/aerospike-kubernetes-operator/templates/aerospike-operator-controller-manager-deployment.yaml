@@ -54,24 +54,13 @@ spec:
           - --metrics-cert-path=/tmp/k8s-metrics-server/metrics-certs
           {{- end }}
           - --zap-devel={{ .Values.logging.development }}
-          {{- if and .Values.logging (hasKey .Values.logging "level") }}
-          {{- $lvl := index .Values.logging "level" }}
-          {{- if ne (trim (toString $lvl)) "" }}
-          - --zap-log-level={{ $lvl }}
+          {{- if and .Values.logging .Values.logging.level }}
+          - --zap-log-level={{ .Values.logging.level }}
           {{- end }}
+          {{- if and .Values.logging .Values.logging.encoder }}
+          - --zap-encoder={{ .Values.logging.encoder }}
           {{- end }}
-          {{- if and .Values.logging (hasKey .Values.logging "encoder") }}
-          {{- $enc := index .Values.logging "encoder" }}
-          {{- if ne (trim (toString $enc)) "" }}
-          - --zap-encoder={{ $enc }}
-          {{- end }}
-          {{- end }}
-          {{- if and .Values.metrics (hasKey .Values.metrics "secure") }}
-          {{- $secure := index .Values.metrics "secure" }}
-          {{- if ne (trim (toString $secure)) "" }}
-          - --metrics-secure={{ $secure }}
-          {{- end }}
-          {{- end }}
+          - --metrics-secure={{ .Values.metrics.secure }}
         imagePullPolicy: {{ .Values.operatorImage.pullPolicy }}
         ports:
         - name: webhook-server
