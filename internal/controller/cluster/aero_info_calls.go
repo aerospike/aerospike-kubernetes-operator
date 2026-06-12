@@ -63,7 +63,7 @@ func (r *SingleClusterReconciler) waitForMultipleNodesSafeStopReady(
 	policy := r.getClientPolicy(ctx)
 
 	r.Recorder.Eventf(
-		r.aeroCluster, corev1.EventTypeNormal, "WaitMigration",
+		r.aeroCluster, corev1.EventTypeNormal, EventReasonWaitMigration,
 		"[rack-%s] Waiting for migrations to complete", pods[0].Labels[asdbv1.AerospikeRackIDLabel],
 	)
 

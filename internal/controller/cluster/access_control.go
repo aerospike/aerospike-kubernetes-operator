@@ -490,8 +490,8 @@ func (roleCreate aerospikeRoleCreateUpdate) execute(
 		var errorCreate error
 		if errorCreate = roleCreate.createRole(client, adminPolicy, logger, recorder, aeroCluster); errorCreate != nil {
 			recorder.Eventf(
-				aeroCluster, corev1.EventTypeWarning, "RoleCreateFailed",
-				"Failed to Create Role %s", roleCreate.name,
+				aeroCluster, corev1.EventTypeWarning, EventReasonRoleCreateFailed,
+				"Failed to create Aerospike role %s", roleCreate.name,
 			)
 		}
 
@@ -502,8 +502,8 @@ func (roleCreate aerospikeRoleCreateUpdate) execute(
 		client, adminPolicy, role, logger, recorder, aeroCluster,
 	); errorUpdate != nil {
 		recorder.Eventf(
-			aeroCluster, corev1.EventTypeWarning, "RoleUpdateFailed",
-			"Failed to Update Role %s", roleCreate.name,
+			aeroCluster, corev1.EventTypeWarning, EventReasonRoleUpdateFailed,
+			"Failed to update Aerospike role %s", roleCreate.name,
 		)
 
 		return errorUpdate
@@ -533,8 +533,8 @@ func (roleCreate aerospikeRoleCreateUpdate) createRole(
 
 	logger.Info("Created role", "role name", roleCreate.name)
 	recorder.Eventf(
-		aeroCluster, corev1.EventTypeNormal, "RoleCreated",
-		"Created Role %s", roleCreate.name,
+		aeroCluster, corev1.EventTypeNormal, EventReasonRoleCreated,
+		"Created Aerospike role %s", roleCreate.name,
 	)
 
 	return nil
@@ -628,8 +628,8 @@ func (roleCreate aerospikeRoleCreateUpdate) updateRole(
 
 	logger.Info("Updated role", "role name", roleCreate.name)
 	recorder.Eventf(
-		aeroCluster, corev1.EventTypeNormal, "RoleUpdated",
-		"Updated Role %s", roleCreate.name,
+		aeroCluster, corev1.EventTypeNormal, EventReasonRoleUpdated,
+		"Updated Aerospike role %s", roleCreate.name,
 	)
 
 	return nil
@@ -670,8 +670,8 @@ func (userCreate aerospikeUserCreateUpdate) execute(
 		err := userCreate.createUser(client, adminPolicy, logger, recorder, aeroCluster)
 		if err != nil {
 			recorder.Eventf(
-				aeroCluster, corev1.EventTypeWarning, "UserCreateFailed",
-				"Failed to Create User %s", userCreate.name,
+				aeroCluster, corev1.EventTypeWarning, EventReasonUserCreateFailed,
+				"Failed to create Aerospike user %s", userCreate.name,
 			)
 		}
 
@@ -682,8 +682,8 @@ func (userCreate aerospikeUserCreateUpdate) execute(
 		client, adminPolicy, user, logger, recorder, aeroCluster,
 	); errorUpdate != nil {
 		recorder.Eventf(
-			aeroCluster, corev1.EventTypeWarning, "UserUpdateFailed",
-			"Failed to Update User %s", userCreate.name,
+			aeroCluster, corev1.EventTypeWarning, EventReasonUserUpdateFailed,
+			"Failed to update Aerospike user %s", userCreate.name,
 		)
 
 		return errorUpdate
@@ -713,8 +713,8 @@ func (userCreate aerospikeUserCreateUpdate) createUser(
 
 	logger.Info("Created user", "username", userCreate.name)
 	recorder.Eventf(
-		aeroCluster, corev1.EventTypeNormal, "UserCreated",
-		"Created User %s", userCreate.name,
+		aeroCluster, corev1.EventTypeNormal, EventReasonUserCreated,
+		"Created Aerospike user %s", userCreate.name,
 	)
 
 	return nil
@@ -776,8 +776,8 @@ func (userCreate aerospikeUserCreateUpdate) updateUser(
 
 	logger.Info("Updated user", "username", userCreate.name)
 	recorder.Eventf(
-		aeroCluster, corev1.EventTypeNormal, "UserUpdated",
-		"Updated User %s", userCreate.name,
+		aeroCluster, corev1.EventTypeNormal, EventReasonUserUpdated,
+		"Updated Aerospike user %s", userCreate.name,
 	)
 
 	return nil
@@ -805,8 +805,8 @@ func (userDrop aerospikeUserDrop) execute(
 
 	logger.Info("Dropped user", "username", userDrop.name)
 	recorder.Eventf(
-		aeroCluster, corev1.EventTypeNormal, "UserDeleted",
-		"Dropped User %s", userDrop.name,
+		aeroCluster, corev1.EventTypeNormal, EventReasonUserDeleted,
+		"Deleted Aerospike user %s", userDrop.name,
 	)
 
 	return nil
@@ -834,8 +834,8 @@ func (roleDrop aerospikeRoleDrop) execute(
 
 	logger.Info("Dropped role", "role", roleDrop.name)
 	recorder.Eventf(
-		aeroCluster, corev1.EventTypeNormal, "RoleDeleted",
-		"Dropped Role %s", roleDrop.name,
+		aeroCluster, corev1.EventTypeNormal, EventReasonRoleDeleted,
+		"Deleted Aerospike role %s", roleDrop.name,
 	)
 
 	return nil
