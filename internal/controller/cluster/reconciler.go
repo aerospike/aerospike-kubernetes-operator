@@ -75,9 +75,9 @@ func (r *SingleClusterReconciler) Reconcile(ctx context.Context) (result ctrl.Re
 		// The cluster is being deleted
 		if err := r.handleClusterDeletion(ctx, finalizerName); err != nil {
 			r.Recorder.Eventf(
-				r.aeroCluster, corev1.EventTypeWarning, "DeleteFailed",
-				"Unable to handle AerospikeCluster delete operations %s/%s",
-				r.aeroCluster.Namespace, r.aeroCluster.Name,
+				r.aeroCluster, corev1.EventTypeWarning, EventReasonDeleteFailed,
+				"Failed to delete AerospikeCluster %s",
+				utils.GetNamespacedNameString(r.aeroCluster),
 			)
 
 			recErr = err
@@ -88,9 +88,8 @@ func (r *SingleClusterReconciler) Reconcile(ctx context.Context) (result ctrl.Re
 		r.removeClusterPhaseMetric()
 
 		r.Recorder.Eventf(
-			r.aeroCluster, corev1.EventTypeNormal, "Deleted",
-			"Deleted AerospikeCluster %s/%s", r.aeroCluster.Namespace,
-			r.aeroCluster.Name,
+			r.aeroCluster, corev1.EventTypeNormal, EventReasonDeleted,
+			"Deleted AerospikeCluster %s", utils.GetNamespacedNameString(r.aeroCluster),
 		)
 
 		// Stop reconciliation as the cluster is being deleted
@@ -138,9 +137,9 @@ func (r *SingleClusterReconciler) Reconcile(ctx context.Context) (result ctrl.Re
 
 	if err := r.createOrUpdateSTSHeadlessSvc(ctx); err != nil {
 		r.Recorder.Eventf(
-			r.aeroCluster, corev1.EventTypeWarning, "ServiceCreateFailed",
-			"Failed to create Service(Headless) %s/%s",
-			r.aeroCluster.Namespace, r.aeroCluster.Name,
+			r.aeroCluster, corev1.EventTypeWarning, EventReasonServiceCreateFailed,
+			"Failed to create headless Service for AerospikeCluster %s",
+			utils.GetNamespacedNameString(r.aeroCluster),
 		)
 
 		recErr = err
@@ -152,9 +151,9 @@ func (r *SingleClusterReconciler) Reconcile(ctx context.Context) (result ctrl.Re
 	if res := r.reconcileRacks(ctx); !res.IsSuccess {
 		if res.Err != nil {
 			r.Recorder.Eventf(
-				r.aeroCluster, corev1.EventTypeWarning, "UpdateFailed",
-				"Failed to reconcile Racks for cluster %s/%s",
-				r.aeroCluster.Namespace, r.aeroCluster.Name,
+				r.aeroCluster, corev1.EventTypeWarning, EventReasonRackReconcileFailed,
+				"Failed to reconcile racks for AerospikeCluster %s",
+				utils.GetNamespacedNameString(r.aeroCluster),
 			)
 
 			recErr = res.Err
@@ -165,9 +164,9 @@ func (r *SingleClusterReconciler) Reconcile(ctx context.Context) (result ctrl.Re
 
 	if err := r.reconcilePDB(ctx); err != nil {
 		r.Recorder.Eventf(
-			r.aeroCluster, corev1.EventTypeWarning, "PodDisruptionBudgetReconcileFailed",
-			"Failed to reconcile PodDisruptionBudget %s/%s",
-			r.aeroCluster.Namespace, r.aeroCluster.Name,
+			r.aeroCluster, corev1.EventTypeWarning, EventReasonPodDisruptionBudgetReconcileFailed,
+			"Failed to reconcile PodDisruptionBudget for AerospikeCluster %s",
+			utils.GetNamespacedNameString(r.aeroCluster),
 		)
 
 		recErr = err
@@ -177,9 +176,9 @@ func (r *SingleClusterReconciler) Reconcile(ctx context.Context) (result ctrl.Re
 
 	if err := r.reconcileSTSLoadBalancerSvc(ctx); err != nil {
 		r.Recorder.Eventf(
-			r.aeroCluster, corev1.EventTypeWarning, "ServiceCreateFailed",
-			"Failed to create Service(LoadBalancer) %s/%s",
-			r.aeroCluster.Namespace, r.aeroCluster.Name,
+			r.aeroCluster, corev1.EventTypeWarning, EventReasonServiceCreateFailed,
+			"Failed to create LoadBalancer Service for AerospikeCluster %s",
+			utils.GetNamespacedNameString(r.aeroCluster),
 		)
 
 		recErr = err
@@ -220,9 +219,9 @@ func (r *SingleClusterReconciler) Reconcile(ctx context.Context) (result ctrl.Re
 	// Assuming all pods must be security enabled or disabled.
 	if err = r.validateAndReconcileAccessControl(ctx, nil, ignorablePodNames); err != nil {
 		r.Recorder.Eventf(
-			r.aeroCluster, corev1.EventTypeWarning, "ACLUpdateFailed",
-			"Failed to setup Access Control %s/%s", r.aeroCluster.Namespace,
-			r.aeroCluster.Name,
+			r.aeroCluster, corev1.EventTypeWarning, EventReasonAccessControlUpdateFailed,
+			"Failed to set up access control for AerospikeCluster %s",
+			utils.GetNamespacedNameString(r.aeroCluster),
 		)
 
 		recErr = err
@@ -277,9 +276,9 @@ func (r *SingleClusterReconciler) Reconcile(ctx context.Context) (result ctrl.Re
 	// Update the AerospikeCluster status.
 	if err = r.updateStatus(ctx); err != nil {
 		r.Recorder.Eventf(
-			r.aeroCluster, corev1.EventTypeWarning, "StatusUpdateFailed",
-			"Failed to update AerospikeCluster status %s/%s",
-			r.aeroCluster.Namespace, r.aeroCluster.Name,
+			r.aeroCluster, corev1.EventTypeWarning, EventReasonStatusUpdateFailed,
+			"Failed to update status for AerospikeCluster %s",
+			utils.GetNamespacedNameString(r.aeroCluster),
 		)
 
 		recErr = err
@@ -434,17 +433,17 @@ func (r *SingleClusterReconciler) validateAndReconcileAccessControl(
 	}
 
 	r.Recorder.Eventf(
-		r.aeroCluster, corev1.EventTypeNormal, "ACLUpdated",
-		"Updated Access Control %s/%s", r.aeroCluster.Namespace,
-		r.aeroCluster.Name,
+		r.aeroCluster, corev1.EventTypeNormal, EventReasonAccessControlUpdated,
+		"Updated access control for AerospikeCluster %s",
+		utils.GetNamespacedNameString(r.aeroCluster),
 	)
 
 	// Update the AerospikeCluster status.
 	if err := r.updateAccessControlStatus(ctx); err != nil {
 		r.Recorder.Eventf(
-			r.aeroCluster, corev1.EventTypeWarning, "StatusUpdateFailed",
-			"Failed to update AerospikeCluster access control status %s/%s",
-			r.aeroCluster.Namespace, r.aeroCluster.Name,
+			r.aeroCluster, corev1.EventTypeWarning, EventReasonStatusUpdateFailed,
+			"Failed to update access control status for AerospikeCluster %s",
+			utils.GetNamespacedNameString(r.aeroCluster),
 		)
 
 		return err
