@@ -78,7 +78,7 @@ func (r *SingleClusterReconciler) getRollingRestartTypeMap(
 	pods, err := r.getOrderedRackPodList(ctx, rackState.Rack.ID, rackState.Rack.Revision)
 	if err != nil {
 		return nil, nil, fmt.Errorf(
-			"listing pods for rack %d in cluster %s: %w",
+			"could not list pods for rack %d in cluster %s: %w",
 			rackState.Rack.ID, utils.ClusterNamespacedName(r.aeroCluster), err,
 		)
 	}
@@ -244,7 +244,7 @@ func (r *SingleClusterReconciler) getRollingRestartTypePod(
 
 	podSpecUpdated, err := r.isAnyPodSpecUpdated(ctx, rackState, pod)
 	if err != nil {
-		return restartType, fmt.Errorf("checking whether pod %s spec is updated: %w", utils.GetNamespacedNameString(pod), err)
+		return restartType, fmt.Errorf("could not check whether pod %s spec is up to date: %w", utils.GetNamespacedNameString(pod), err)
 	}
 
 	if podSpecUpdated {
@@ -359,7 +359,7 @@ func (r *SingleClusterReconciler) rollingRestartPods(
 				ignorablePodNames,
 			); !res.IsSuccess {
 				if res.Err != nil {
-					res.Err = fmt.Errorf("revert migrate-fill-delay for rack %d: %w", rackState.Rack.ID, res.Err)
+					res.Err = fmt.Errorf("could not revert migrate-fill-delay for rack %d: %w", rackState.Rack.ID, res.Err)
 				}
 
 				return res
@@ -377,7 +377,7 @@ func (r *SingleClusterReconciler) rollingRestartPods(
 				ignorablePodNames,
 			); !res.IsSuccess {
 				if res.Err != nil {
-					res.Err = fmt.Errorf("set migrate-fill-delay to 0 for rack %d: %w", rackState.Rack.ID, res.Err)
+					res.Err = fmt.Errorf("could not set migrate-fill-delay to 0 for rack %d: %w", rackState.Rack.ID, res.Err)
 				}
 
 				return res
@@ -516,7 +516,7 @@ func (r *SingleClusterReconciler) restartPods(
 			// We assume that the pod server image supports pod warm restart.
 			if err := r.restartASDOrUpdateAerospikeConf(pod.Name, quickRestart); err != nil {
 				return common.ReconcileError(fmt.Errorf(
-					"warm restart pod %s: %w",
+					"could not warm restart pod %s: %w",
 					utils.NamespacedName(r.aeroCluster.Namespace, pod.Name), err,
 				))
 			}
@@ -530,7 +530,7 @@ func (r *SingleClusterReconciler) restartPods(
 			}
 
 			if err := r.Delete(ctx, pod); err != nil {
-				return common.ReconcileError(fmt.Errorf("delete pod %s: %w", utils.GetNamespacedNameString(pod), err))
+				return common.ReconcileError(fmt.Errorf("could not delete pod %s: %w", utils.GetNamespacedNameString(pod), err))
 			}
 
 			restartedPods = append(restartedPods, pod)
@@ -711,7 +711,7 @@ func (r *SingleClusterReconciler) safelyDeletePodsAndEnsureImageUpdated(
 				ignorablePodNames,
 			); !res.IsSuccess {
 				if res.Err != nil {
-					res.Err = fmt.Errorf("revert migrate-fill-delay for rack %d: %w", rackState.Rack.ID, res.Err)
+					res.Err = fmt.Errorf("could not revert migrate-fill-delay for rack %d: %w", rackState.Rack.ID, res.Err)
 				}
 
 				return res
@@ -729,7 +729,7 @@ func (r *SingleClusterReconciler) safelyDeletePodsAndEnsureImageUpdated(
 				ignorablePodNames,
 			); !res.IsSuccess {
 				if res.Err != nil {
-					res.Err = fmt.Errorf("set migrate-fill-delay to 0 for rack %d: %w", rackState.Rack.ID, res.Err)
+					res.Err = fmt.Errorf("could not set migrate-fill-delay to 0 for rack %d: %w", rackState.Rack.ID, res.Err)
 				}
 
 				return res
@@ -1032,7 +1032,7 @@ func (r *SingleClusterReconciler) cleanupDanglingPodsRack(
 	if len(danglingPods) > 0 {
 		if err := r.cleanupPods(ctx, danglingPods, rackState); err != nil {
 			return fmt.Errorf(
-				"failed dangling pod cleanup for pods %s in rack %d for cluster %s: %w",
+				"could not complete dangling pod cleanup for pods %s in rack %d for cluster %s: %w",
 				strings.Join(utils.NamespacedNames(r.aeroCluster.Namespace, danglingPods), ", "),
 				rackState.Rack.ID, utils.ClusterNamespacedName(r.aeroCluster), err,
 			)
@@ -1659,7 +1659,7 @@ func isAllDynamicConfig(log logger, specToStatusDiffs asconfig.DynamicConfigMap,
 func getFlatConfig(log logger, confStr string) (*asconfig.Conf, error) {
 	asConf, err := asconfig.NewASConfigFromBytes(log, []byte(confStr), asconfig.AeroConfig)
 	if err != nil {
-		return nil, fmt.Errorf("loading config map by lib: %w", err)
+		return nil, fmt.Errorf("could not parse Aerospike configuration from text with management library: %w", err)
 	}
 
 	return asConf.GetFlatMap(), nil
@@ -1676,12 +1676,12 @@ func getConfDiff(log logger, specConfig map[string]interface{}, podAnnotations m
 
 	asConfStatus, err := getFlatConfig(log, statusFromAnnotation)
 	if err != nil {
-		return nil, fmt.Errorf("loading config map by lib: %w", err)
+		return nil, fmt.Errorf("could not flatten Aerospike configuration from pod status annotation: %w", err)
 	}
 
 	asConf, err := asconfig.NewMapAsConfig(log, specConfig)
 	if err != nil {
-		return nil, fmt.Errorf("loading config map by lib: %w", err)
+		return nil, fmt.Errorf("could not build Aerospike configuration from spec map with management library: %w", err)
 	}
 
 	// special handling for DNE in ldap configurations
@@ -1691,7 +1691,7 @@ func getConfDiff(log logger, specConfig map[string]interface{}, podAnnotations m
 
 	asConfSpec, err := getFlatConfig(log, specConfFile)
 	if err != nil {
-		return nil, fmt.Errorf("loading config map by lib: %w", err)
+		return nil, fmt.Errorf("could not normalize Aerospike configuration from spec for diff with management library: %w", err)
 	}
 
 	specToStatusDiffs, err := asconfig.ConfDiff(log, *asConfSpec, *asConfStatus,
@@ -1947,7 +1947,7 @@ func (r *SingleClusterReconciler) getEvictionBlockedPods(ctx context.Context) (s
 	// List all pods in the cluster namespace
 	pods, err := r.getClusterPodList(ctx)
 	if err != nil {
-		return evictionBlockedPods, fmt.Errorf("list pods for cluster %s: %w", utils.ClusterNamespacedName(r.aeroCluster), err)
+		return evictionBlockedPods, fmt.Errorf("could not list pods for cluster %s: %w", utils.ClusterNamespacedName(r.aeroCluster), err)
 	}
 
 	for idx := range pods.Items {

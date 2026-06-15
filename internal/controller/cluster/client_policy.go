@@ -40,7 +40,7 @@ func (pp fromSecretPasswordProvider) Get(
 		types.NamespacedName{Name: secretName, Namespace: pp.namespace}, secret,
 	)
 	if err != nil {
-		return "", fmt.Errorf("getting secret %s: %w", utils.NamespacedName(pp.namespace, secretName), err)
+		return "", fmt.Errorf("could not get secret %s: %w", utils.NamespacedName(pp.namespace, secretName), err)
 	}
 
 	passBytes, ok := secret.Data["password"]
@@ -86,7 +86,7 @@ func (pp fromSecretPasswordProvider) getPasswordFromSecret(
 
 	err := (*pp.k8sClient).Get(ctx, secretNamespcedName, secret)
 	if err != nil {
-		return "", fmt.Errorf("getting secret %s: %w", secretNamespcedName, err)
+		return "", fmt.Errorf("could not get secret %s: %w", secretNamespcedName, err)
 	}
 
 	passBytes, ok := secret.Data[passFileName]
@@ -369,7 +369,7 @@ func (r *SingleClusterReconciler) loadCertAndKeyFromSecret(
 			"Warn: Failed to get secret certificates to the pool", "err", err,
 		)
 
-		return nil, fmt.Errorf("getting secret %s: %w", secretName, err)
+		return nil, fmt.Errorf("could not get secret %s: %w", secretName, err)
 	}
 
 	crtData, crtExists := found.Data[secretSource.ClientCertFilename]
@@ -385,7 +385,7 @@ func (r *SingleClusterReconciler) loadCertAndKeyFromSecret(
 	cert, err := tls.X509KeyPair(crtData, keyData)
 	if err != nil {
 		return nil, fmt.Errorf(
-			"loading X509 key pair from secret %s: %w",
+			"could not load X509 key pair from secret %s: %w",
 			secretName, err,
 		)
 	}
@@ -419,18 +419,18 @@ func (r *SingleClusterReconciler) loadCertAndKeyFromFiles(
 ) (*tls.Certificate, error) {
 	certData, certErr := os.ReadFile(certPath)
 	if certErr != nil {
-		return nil, fmt.Errorf("reading certificate file %s: %w", certPath, certErr)
+		return nil, fmt.Errorf("could not read certificate file %s: %w", certPath, certErr)
 	}
 
 	keyData, keyErr := os.ReadFile(keyPath)
 	if keyErr != nil {
-		return nil, fmt.Errorf("reading client key file %s: %w", keyPath, keyErr)
+		return nil, fmt.Errorf("could not read client key file %s: %w", keyPath, keyErr)
 	}
 
 	cert, err := tls.X509KeyPair(certData, keyData)
 	if err != nil {
 		return nil, fmt.Errorf(
-			"loading X509 key pair (cert=%s, key=%s): %w",
+			"could not load X509 key pair (cert=%s, key=%s): %w",
 			certPath, keyPath, err,
 		)
 	}

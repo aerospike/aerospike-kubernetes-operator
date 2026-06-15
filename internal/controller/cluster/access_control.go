@@ -87,7 +87,7 @@ func (r *SingleClusterReconciler) reconcileAccessControl(
 
 	currentState, err := asdbv1.CopyStatusToSpec(&r.aeroCluster.Status.AerospikeClusterStatusSpec)
 	if err != nil {
-		return fmt.Errorf("copy cluster status to spec: %w", err)
+		return fmt.Errorf("could not copy cluster status to spec: %w", err)
 	}
 
 	// Get admin policy based in desired state so that new timeout updates can be applied. It is safe.

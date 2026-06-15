@@ -198,7 +198,7 @@ func (r *SingleClusterReconciler) Reconcile(ctx context.Context) (result ctrl.Re
 	allHostConns, err := r.newAllHostConnWithOption(ctx, ignorablePodNames)
 	if err != nil {
 		e := fmt.Errorf(
-			"getting host connections for cluster %s nodes: %w", utils.ClusterNamespacedName(r.aeroCluster), err,
+			"could not get host connections for cluster %s nodes: %w", utils.ClusterNamespacedName(r.aeroCluster), err,
 		)
 
 		recErr = e
@@ -317,7 +317,7 @@ func (r *SingleClusterReconciler) recoverIgnorablePods(
 	ctx context.Context, ignorablePodNames sets.Set[string]) common.ReconcileResult {
 	podList, gErr := r.getClusterPodList(ctx)
 	if gErr != nil {
-		return common.ReconcileError(fmt.Errorf("list pods for cluster %s: %w", utils.ClusterNamespacedName(r.aeroCluster), gErr))
+		return common.ReconcileError(fmt.Errorf("could not list pods for cluster %s: %w", utils.ClusterNamespacedName(r.aeroCluster), gErr))
 	}
 
 	r.Log.Info("Try to recover failed/pending pods if any")
@@ -352,7 +352,7 @@ func (r *SingleClusterReconciler) recoverIgnorablePods(
 				}
 
 				if err := r.Delete(ctx, &podList.Items[idx]); err != nil {
-					return common.ReconcileError(fmt.Errorf("delete pod %s: %w", utils.GetNamespacedNameString(&podList.Items[idx]), err))
+					return common.ReconcileError(fmt.Errorf("could not delete pod %s: %w", utils.GetNamespacedNameString(&podList.Items[idx]), err))
 				}
 
 				r.Log.Info("Deleted pod", "pod", podList.Items[idx].Name)
@@ -376,7 +376,7 @@ func (r *SingleClusterReconciler) validateAndReconcileAccessControl(
 ) error {
 	enabled, err := asdbv1.IsSecurityEnabled(r.aeroCluster.Spec.AerospikeConfig.Value)
 	if err != nil {
-		return fmt.Errorf("getting cluster security status: %w", err)
+		return fmt.Errorf("could not get cluster security status: %w", err)
 	}
 
 	if !enabled {
@@ -390,13 +390,13 @@ func (r *SingleClusterReconciler) validateAndReconcileAccessControl(
 	if selectedPods == nil {
 		conns, err = r.newAllHostConnWithOption(ctx, ignorablePodNames)
 		if err != nil {
-			return fmt.Errorf("getting host connections for cluster %s nodes: %w",
+			return fmt.Errorf("could not get host connections for cluster %s nodes: %w",
 				utils.ClusterNamespacedName(r.aeroCluster), err)
 		}
 	} else {
 		conns, err = r.newPodsHostConnWithOption(selectedPods, ignorablePodNames)
 		if err != nil {
-			return fmt.Errorf("getting host connections for selected pods of cluster %s: %w",
+			return fmt.Errorf("could not get host connections for selected pods of cluster %s: %w",
 				utils.ClusterNamespacedName(r.aeroCluster), err)
 		}
 	}
@@ -418,7 +418,7 @@ func (r *SingleClusterReconciler) validateAndReconcileAccessControl(
 
 	aeroClient, err := as.NewClientWithPolicyAndHost(clientPolicy, hosts...)
 	if err != nil {
-		return fmt.Errorf("creating aerospike client for cluster %s: %w", utils.ClusterNamespacedName(r.aeroCluster), err)
+		return fmt.Errorf("could not create Aerospike client for cluster %s: %w", utils.ClusterNamespacedName(r.aeroCluster), err)
 	}
 
 	defer aeroClient.Close()
@@ -429,7 +429,7 @@ func (r *SingleClusterReconciler) validateAndReconcileAccessControl(
 		ctx, aeroClient, pp,
 	)
 	if err != nil {
-		return fmt.Errorf("reconciling access control for cluster %s: %w", utils.ClusterNamespacedName(r.aeroCluster), err)
+		return fmt.Errorf("could not reconcile access control for cluster %s: %w", utils.ClusterNamespacedName(r.aeroCluster), err)
 	}
 
 	r.Recorder.Eventf(
@@ -486,7 +486,7 @@ func (r *SingleClusterReconciler) updateStatus(ctx context.Context) error {
 	if !newAeroCluster.Status.IsReadinessProbeEnabled {
 		clusterReadinessEnable, gErr := r.getClusterReadinessStatus(ctx)
 		if gErr != nil {
-			return fmt.Errorf("getting cluster readiness status: %w", gErr)
+			return fmt.Errorf("could not get cluster readiness status: %w", gErr)
 		}
 
 		newAeroCluster.Status.IsReadinessProbeEnabled = clusterReadinessEnable
@@ -522,7 +522,7 @@ func (r *SingleClusterReconciler) setStatusPhase(ctx context.Context, phase asdb
 			// detached: status update must complete even if the reconcile context is cancelled
 			return r.Client.Status().Update(context.Background(), r.aeroCluster)
 		}); err != nil {
-			return fmt.Errorf("set status to %s for cluster %s: %w", phase, utils.ClusterNamespacedName(r.aeroCluster), err)
+			return fmt.Errorf("could not set cluster status phase to %s for cluster %s: %w", phase, utils.ClusterNamespacedName(r.aeroCluster), err)
 		}
 
 		r.addClusterPhaseMetric()
@@ -879,7 +879,7 @@ func (r *SingleClusterReconciler) deleteExternalResources(ctx context.Context) e
 
 		storage := rack.Storage
 		if _, err := r.removePVCsAsync(ctx, &storage, rackPVCItems); err != nil {
-			return fmt.Errorf("removing pvcs for rack %d in cluster %s: %w", rack.ID, utils.ClusterNamespacedName(r.aeroCluster), err)
+			return fmt.Errorf("could not remove PVCs for rack %d in cluster %s: %w", rack.ID, utils.ClusterNamespacedName(r.aeroCluster), err)
 		}
 	}
 
@@ -919,7 +919,7 @@ func (r *SingleClusterReconciler) deleteExternalResources(ctx context.Context) e
 	if _, err := r.removePVCsAsync(
 		ctx, &r.aeroCluster.Spec.Storage, filteredPVCItems,
 	); err != nil {
-		return fmt.Errorf("removing pvcs for cluster %s: %w", utils.ClusterNamespacedName(r.aeroCluster), err)
+		return fmt.Errorf("could not remove PVCs for cluster %s: %w", utils.ClusterNamespacedName(r.aeroCluster), err)
 	}
 
 	return nil
@@ -930,7 +930,7 @@ func (r *SingleClusterReconciler) handleClusterDeletion(ctx context.Context, fin
 
 	// The cluster is being deleted
 	if err := r.cleanUpAndRemoveFinalizer(ctx, finalizerName); err != nil {
-		return fmt.Errorf("clean up and remove finalizer for cluster %s: %w", utils.ClusterNamespacedName(r.aeroCluster), err)
+		return fmt.Errorf("could not finish cluster deletion (remove finalizer) for cluster %s: %w", utils.ClusterNamespacedName(r.aeroCluster), err)
 	}
 
 	return nil

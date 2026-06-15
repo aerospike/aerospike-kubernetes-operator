@@ -49,14 +49,14 @@ func (r *SingleClusterReconciler) waitForMultipleNodesSafeStopReady(
 	// Remove a node only if the cluster is stable
 	if err := r.waitForAllSTSToBeReady(ctx, ignorablePodNames); err != nil {
 		return common.ReconcileError(fmt.Errorf(
-			"waiting for cluster %s statefulsets to be ready: %w", utils.ClusterNamespacedName(r.aeroCluster), err))
+			"could not wait until cluster %s StatefulSets are ready: %w", utils.ClusterNamespacedName(r.aeroCluster), err))
 	}
 
 	// This doesn't make actual connection, only objects having connection info are created
 	allHostConns, err := r.newAllHostConnWithOption(ctx, ignorablePodNames)
 	if err != nil {
 		return common.ReconcileError(fmt.Errorf(
-			"getting host connections for cluster %s nodes: %w", utils.ClusterNamespacedName(r.aeroCluster), err))
+			"could not get host connections for cluster %s nodes: %w", utils.ClusterNamespacedName(r.aeroCluster), err))
 	}
 
 	policy := r.getClientPolicy(ctx)
@@ -92,7 +92,7 @@ func (r *SingleClusterReconciler) waitForMigrationToComplete(ctx context.Context
 	allHostConns, err := r.newAllHostConnWithOption(ctx, ignorablePodNames)
 	if err != nil {
 		return common.ReconcileError(fmt.Errorf(
-			"getting host connections for cluster %s nodes: %w", utils.ClusterNamespacedName(r.aeroCluster), err))
+			"could not get host connections for cluster %s nodes: %w", utils.ClusterNamespacedName(r.aeroCluster), err))
 	}
 
 	r.Log.Info("Waiting for migration to complete")
@@ -309,7 +309,7 @@ func (r *SingleClusterReconciler) setMigrateFillDelay(
 	if err != nil {
 		return common.ReconcileError(
 			fmt.Errorf(
-				"getting host connections for cluster %s nodes: %w", utils.ClusterNamespacedName(r.aeroCluster), err,
+				"could not get host connections for cluster %s nodes: %w", utils.ClusterNamespacedName(r.aeroCluster), err,
 			),
 		)
 	}
@@ -332,7 +332,7 @@ func (r *SingleClusterReconciler) setDynamicConfig(
 	if err != nil {
 		return common.ReconcileError(
 			fmt.Errorf(
-				"getting host connections for cluster %s nodes: %w", utils.ClusterNamespacedName(r.aeroCluster), err,
+				"could not get host connections for cluster %s nodes: %w", utils.ClusterNamespacedName(r.aeroCluster), err,
 			),
 		)
 	}
@@ -349,7 +349,7 @@ func (r *SingleClusterReconciler) setDynamicConfig(
 	if err != nil {
 		return common.ReconcileError(
 			fmt.Errorf(
-				"getting host connections for cluster %s nodes: %w", utils.ClusterNamespacedName(r.aeroCluster), err,
+				"could not get host connections for cluster %s nodes: %w", utils.ClusterNamespacedName(r.aeroCluster), err,
 			),
 		)
 	}
