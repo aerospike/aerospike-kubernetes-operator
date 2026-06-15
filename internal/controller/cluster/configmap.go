@@ -99,7 +99,7 @@ func (r *SingleClusterReconciler) createConfigMapData(ctx context.Context, rack 
 	confTemp, err := r.buildConfigTemplate(rack)
 	if err != nil {
 		return nil, fmt.Errorf(
-			"building config template for rack %d in cluster %s: %w",
+			"could not build config template for rack %d in cluster %s: %w",
 			rack.ID, utils.ClusterNamespacedName(r.aeroCluster), err,
 		)
 	}
@@ -108,7 +108,7 @@ func (r *SingleClusterReconciler) createConfigMapData(ctx context.Context, rack 
 	confData, err := r.getBaseConfData(ctx, rack)
 	if err != nil {
 		return nil, fmt.Errorf(
-			"building base config data for rack %d in cluster %s: %w",
+			"could not build base config data for rack %d in cluster %s: %w",
 			rack.ID, utils.ClusterNamespacedName(r.aeroCluster), err,
 		)
 	}
@@ -227,7 +227,7 @@ func (r *SingleClusterReconciler) buildConfigTemplate(rack *asdbv1.Rack) (
 	asConf, err := asconfig.NewMapAsConfig(r.Log, configMap)
 	if err != nil {
 		return "", fmt.Errorf(
-			"loading aerospike config via management lib for rack %d in cluster %s: %w",
+			"could not load Aerospike configuration via management library for rack %d in cluster %s: %w",
 			rack.ID, utils.ClusterNamespacedName(r.aeroCluster), err,
 		)
 	}
@@ -376,7 +376,7 @@ func (r *SingleClusterReconciler) deleteRackConfigMap(ctx context.Context, names
 			return nil
 		}
 
-		return fmt.Errorf("deleting rack configmap %s: %w", namespacedName, err)
+		return fmt.Errorf("could not delete rack ConfigMap %s: %w", namespacedName, err)
 	}
 
 	return nil

@@ -84,7 +84,7 @@ func (r *SingleClusterReconciler) createOrUpdateSTSHeadlessSvc(ctx context.Conte
 			ctx, service, common.CreateOption,
 		); err != nil {
 			return fmt.Errorf(
-				"creating headless service for cluster %s: %w",
+				"could not create headless Service for cluster %s: %w",
 				utils.ClusterNamespacedName(r.aeroCluster), err,
 			)
 		}
@@ -252,7 +252,7 @@ func (r *SingleClusterReconciler) updateLBService(ctx context.Context, service *
 			ctx, service, common.UpdateOption,
 		); err != nil {
 			return fmt.Errorf(
-				"updating loadbalancer service %s: %w",
+				"could not update LoadBalancer Service %s: %w",
 				utils.NamespacedName(service.Namespace, service.Name), err,
 			)
 		}
@@ -330,7 +330,7 @@ func (r *SingleClusterReconciler) createOrUpdatePodService(ctx context.Context, 
 			ctx, service, common.CreateOption,
 		); err != nil {
 			return fmt.Errorf(
-				"creating service for pod %s: %w", utils.NamespacedName(pNamespace, pName), err,
+				"could not create Service for pod %s: %w", utils.NamespacedName(pNamespace, pName), err,
 			)
 		}
 
@@ -368,7 +368,7 @@ func (r *SingleClusterReconciler) deletePodService(ctx context.Context, pName, p
 			return nil
 		}
 
-		return fmt.Errorf("deleting service for pod %s: %w", serviceName, err)
+		return fmt.Errorf("could not delete Service for pod %s: %w", serviceName, err)
 	}
 
 	return nil
@@ -592,7 +592,7 @@ func (r *SingleClusterReconciler) updateService(
 			ctx, service, common.UpdateOption,
 		); err != nil {
 			return fmt.Errorf(
-				"updating service %s: %w",
+				"could not update Service %s: %w",
 				utils.NamespacedName(service.Namespace, service.Name), err,
 			)
 		}

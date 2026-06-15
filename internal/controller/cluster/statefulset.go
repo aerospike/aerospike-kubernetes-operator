@@ -199,7 +199,7 @@ func (r *SingleClusterReconciler) createSTS(
 	}
 
 	if err := r.Create(ctx, st, common.CreateOption); err != nil {
-		return nil, fmt.Errorf("creating statefulset %s: %w", utils.GetNamespacedNameString(st), err)
+		return nil, fmt.Errorf("could not create StatefulSet %s: %w", utils.GetNamespacedNameString(st), err)
 	}
 
 	r.Log.Info(
@@ -209,7 +209,7 @@ func (r *SingleClusterReconciler) createSTS(
 
 	if err := r.waitForSTSToBeReady(ctx, st, nil); err != nil {
 		return st, fmt.Errorf(
-			"waiting for statefulset %s to be ready: %w", utils.GetNamespacedNameString(st), err,
+			"could not wait until StatefulSet %s is ready: %w", utils.GetNamespacedNameString(st), err,
 		)
 	}
 
@@ -296,7 +296,7 @@ func (r *SingleClusterReconciler) waitForSTSToBeReady(
 				pod,
 			); err != nil {
 				return fmt.Errorf(
-					"getting statefulset pod %s: %w", utils.NamespacedName(st.Namespace, podName), err,
+					"could not get StatefulSet pod %s: %w", utils.NamespacedName(st.Namespace, podName), err,
 				)
 			}
 
@@ -428,7 +428,7 @@ func (r *SingleClusterReconciler) createSTSConfigMap(
 				ctx, confMap, common.CreateOption,
 			); err != nil {
 				return fmt.Errorf(
-					"creating configmap %s: %w", namespacedName, err,
+					"could not create ConfigMap %s: %w", namespacedName, err,
 				)
 			}
 
@@ -469,7 +469,7 @@ func (r *SingleClusterReconciler) createSTSConfigMap(
 	if err := r.Update(
 		ctx, confMap, common.UpdateOption,
 	); err != nil {
-		return fmt.Errorf("updating configmap %s: %w", utils.NamespacedName(confMap.Namespace, confMap.Name), err)
+		return fmt.Errorf("could not update ConfigMap %s: %w", utils.NamespacedName(confMap.Namespace, confMap.Name), err)
 	}
 
 	return nil
@@ -489,7 +489,7 @@ func (r *SingleClusterReconciler) updateSTSConfigMap(
 	configMapData, err := r.createConfigMapData(ctx, rack)
 	if err != nil {
 		return fmt.Errorf(
-			"building config map data for rack %d in cluster %s: %w",
+			"could not build ConfigMap data for rack %d in cluster %s: %w",
 			rack.ID, utils.ClusterNamespacedName(r.aeroCluster), err,
 		)
 	}
@@ -502,7 +502,7 @@ func (r *SingleClusterReconciler) updateSTSConfigMap(
 	if err := r.Update(
 		ctx, confMap, common.UpdateOption,
 	); err != nil {
-		return fmt.Errorf("updating configmap %s: %w", namespacedName, err)
+		return fmt.Errorf("could not update ConfigMap %s: %w", namespacedName, err)
 	}
 
 	return nil
@@ -661,7 +661,7 @@ func (r *SingleClusterReconciler) updateSTS(
 		return r.Update(ctx, found, common.UpdateOption)
 	}); err != nil {
 		return fmt.Errorf(
-			"updating statefulset %s: %w",
+			"could not update StatefulSet %s: %w",
 			utils.GetNamespacedNameString(statefulSet),
 			err,
 		)
@@ -1211,7 +1211,7 @@ func (r *SingleClusterReconciler) updateAerospikeInitContainerImage(
 
 			if err := r.Update(ctx, statefulSet, common.UpdateOption); err != nil {
 				return fmt.Errorf(
-					"updating statefulset %s: %w",
+					"could not update StatefulSet %s: %w",
 					utils.GetNamespacedNameString(statefulSet),
 					err,
 				)

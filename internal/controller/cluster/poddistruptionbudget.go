@@ -70,7 +70,7 @@ func (r *SingleClusterReconciler) createOrUpdatePDB(ctx context.Context) error {
 		clusterReadinessEnabled, err := r.getClusterReadinessStatus(ctx)
 		if err != nil {
 			return fmt.Errorf(
-				"getting readiness status for cluster %s: %w",
+				"could not get cluster readiness status for cluster %s: %w",
 				utils.ClusterNamespacedName(r.aeroCluster), err,
 			)
 		}
@@ -117,7 +117,7 @@ func (r *SingleClusterReconciler) createOrUpdatePDB(ctx context.Context) error {
 			ctx, pdb, common.CreateOption,
 		); err != nil {
 			return fmt.Errorf(
-				"creating poddisruptionbudget %s: %w",
+				"could not create PodDisruptionBudget %s: %w",
 				getPDBNamespacedName(r.aeroCluster), err,
 			)
 		}
@@ -148,7 +148,7 @@ func (r *SingleClusterReconciler) createOrUpdatePDB(ctx context.Context) error {
 			ctx, pdb, common.UpdateOption,
 		); err != nil {
 			return fmt.Errorf(
-				"updating poddisruptionbudget %s: %w",
+				"could not update PodDisruptionBudget %s: %w",
 				getPDBNamespacedName(r.aeroCluster), err,
 			)
 		}
