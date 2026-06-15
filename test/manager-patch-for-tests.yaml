@@ -11,6 +11,7 @@ spec:
           args:
             - --leader-elect
             - --zap-log-level=debug
+            - --zap-devel=true
           env:
             - name: WATCH_NAMESPACE
               value: aerospike,test,test1,test2
