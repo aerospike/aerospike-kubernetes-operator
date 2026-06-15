@@ -87,7 +87,7 @@ func (r *SingleClusterReconciler) reconcileAccessControl(
 
 	currentState, err := asdbv1.CopyStatusToSpec(&r.aeroCluster.Status.AerospikeClusterStatusSpec)
 	if err != nil {
-		return err
+		return fmt.Errorf("copy cluster status to spec: %w", err)
 	}
 
 	// Get admin policy based in desired state so that new timeout updates can be applied. It is safe.
@@ -404,9 +404,9 @@ func AerospikePrivilegeToPrivilegeString(aerospikePrivileges []as.Privilege) (
 			buffer.WriteString("write-masked")
 
 		default:
-		return nil, fmt.Errorf(
-			"unknown privilege code %v", aerospikePrivilege.Code,
-		)
+			return nil, fmt.Errorf(
+				"unknown privilege code %v", aerospikePrivilege.Code,
+			)
 		}
 
 		if aerospikePrivilege.Namespace != "" {

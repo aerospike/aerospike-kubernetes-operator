@@ -317,7 +317,7 @@ func (r *SingleClusterReconciler) recoverIgnorablePods(
 	ctx context.Context, ignorablePodNames sets.Set[string]) common.ReconcileResult {
 	podList, gErr := r.getClusterPodList(ctx)
 	if gErr != nil {
-		return common.ReconcileError(gErr)
+		return common.ReconcileError(fmt.Errorf("list pods for cluster %s: %w", utils.ClusterNamespacedName(r.aeroCluster), gErr))
 	}
 
 	r.Log.Info("Try to recover failed/pending pods if any")
@@ -351,11 +351,11 @@ func (r *SingleClusterReconciler) recoverIgnorablePods(
 					return common.ReconcileError(err)
 				}
 
-				if err := r.Delete(ctx, &podList.Items[idx]); err != nil {
-					return common.ReconcileError(err)
-				}
+			if err := r.Delete(ctx, &podList.Items[idx]); err != nil {
+				return common.ReconcileError(fmt.Errorf("delete pod %s: %w", utils.GetNamespacedNameString(&podList.Items[idx]), err))
+			}
 
-				r.Log.Info("Deleted pod", "pod", podList.Items[idx].Name)
+			r.Log.Info("Deleted pod", "pod", podList.Items[idx].Name)
 			}
 		}
 	}
@@ -522,7 +522,7 @@ func (r *SingleClusterReconciler) setStatusPhase(ctx context.Context, phase asdb
 			// detached: status update must complete even if the reconcile context is cancelled
 			return r.Client.Status().Update(context.Background(), r.aeroCluster)
 		}); err != nil {
-			return err
+			return fmt.Errorf("set status to %s for cluster %s: %w", phase, utils.ClusterNamespacedName(r.aeroCluster), err)
 		}
 
 		r.addClusterPhaseMetric()
@@ -936,7 +936,7 @@ func (r *SingleClusterReconciler) handleClusterDeletion(ctx context.Context, fin
 
 	// The cluster is being deleted
 	if err := r.cleanUpAndRemoveFinalizer(ctx, finalizerName); err != nil {
-		return err
+		return fmt.Errorf("clean up and remove finalizer for cluster %s: %w", utils.ClusterNamespacedName(r.aeroCluster), err)
 	}
 
 	return nil
