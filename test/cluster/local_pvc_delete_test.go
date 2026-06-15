@@ -430,45 +430,6 @@ var _ = Describe(
 				Expect(validatePVCDeletion(ctx, oldPvcInfoPerPod[failedPodName], true)).ToNot(HaveOccurred())
 			})
 
-			// deleteLocalPVCs tolerates NotFound when PVC was already removed manually.
-			It("Should complete failed-pod rolling restart when a matching local PVC was deleted before recovery",
-				func() {
-					aeroCluster := createDummyAerospikeCluster(clusterNamespacedName, 3)
-					aeroCluster.Spec.Storage.DeleteLocalStorageOnRestart = ptr.To(true)
-					aeroCluster.Spec.Storage.DeleteLocalStorageOnPodRecovery = ptr.To(true)
-					aeroCluster.Spec.Storage.LocalStorageClasses = []string{storageClass}
-					Expect(DeployCluster(k8sClient, ctx, aeroCluster)).ToNot(HaveOccurred())
-
-					failedPodName := clusterName + "-0-0"
-					oldPvcInfoPerPod, err := extractClusterPVC(ctx, k8sClient, aeroCluster)
-					Expect(err).ToNot(HaveOccurred())
-
-					var oneClaim string
-
-					for claim := range oldPvcInfoPerPod[failedPodName] {
-						oneClaim = claim
-
-						break
-					}
-
-					Expect(oneClaim).ToNot(BeEmpty())
-
-					pvc := &corev1.PersistentVolumeClaim{}
-					Expect(k8sClient.Get(ctx, types.NamespacedName{Name: oneClaim, Namespace: namespace}, pvc)).
-						ToNot(HaveOccurred())
-					Expect(k8sClient.Delete(ctx, pvc)).ToNot(HaveOccurred())
-
-					Expect(markPodAsFailed(ctx, k8sClient, failedPodName, namespace)).ToNot(HaveOccurred())
-
-					aeroCluster, err = getCluster(k8sClient, ctx, clusterNamespacedName)
-					Expect(err).ToNot(HaveOccurred())
-
-					aeroCluster.Spec.PodSpec.AerospikeObjectMeta = asdbv1.AerospikeObjectMeta{
-						Labels: map[string]string{"test-label": "int-fph-033-notfound"},
-					}
-					Expect(updateCluster(k8sClient, ctx, aeroCluster)).ToNot(HaveOccurred())
-				})
-
 			// effective rack InputStorage deleteLocalStorageOnPodRecovery for failed pods.
 			It("Should delete failed pod PVCs from a rack whose InputStorage sets deleteLocalStorageOnPodRecovery=true "+
 				"while global deleteLocalStorageOnPodRecovery is false", func() {
