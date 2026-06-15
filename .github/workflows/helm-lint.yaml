@@ -1,0 +1,46 @@
+name: helm-lint
+
+on:
+  push:
+    branches:
+      - master
+    paths:
+      - 'helm-charts/**'
+      - '.github/workflows/helm-lint.yaml'
+  pull_request:
+    branches:
+      - master
+    paths:
+      - 'helm-charts/**'
+      - '.github/workflows/helm-lint.yaml'
+
+jobs:
+  helm-lint:
+    name: helm-lint
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        chart:
+          - aerospike-backup
+          - aerospike-backup-service
+          - aerospike-cluster
+          - aerospike-kubernetes-operator
+          - aerospike-restore
+    steps:
+      - name: Harden the runner (Audit all outbound calls)
+        uses: step-security/harden-runner@9af89fc71515a100421586dfdb3dc9c984fbf411 # v2.19.4
+        with:
+          egress-policy: audit
+
+      - name: Checkout code
+        uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
+
+      - name: Set up Helm
+        uses: azure/setup-helm@dda3372f752e03dde6b3237bc9431cdc2f7a02a2 # v5.0.0
+
+      - name: Run helm lint on ${{ matrix.chart }}
+        run: helm lint helm-charts/${{ matrix.chart }}
+
+      - name: Run helm template on ${{ matrix.chart }}
+        run: helm template test-release helm-charts/${{ matrix.chart }} > /dev/null

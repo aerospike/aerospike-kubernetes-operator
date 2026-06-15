@@ -524,3 +524,8 @@ func getDummyRackConf(rackIDs ...int) []asdbv1.Rack {
 
 	return racks
 }
+
+// GetDummyRackConf is the exported variant of getDummyRackConf for envtests.
+func GetDummyRackConf(rackIDs ...int) []asdbv1.Rack {
+	return getDummyRackConf(rackIDs...)
+}

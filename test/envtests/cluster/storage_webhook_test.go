@@ -27,6 +27,7 @@ import (
 	asdbv1 "github.com/aerospike/aerospike-kubernetes-operator/v4/api/v1"
 	testCluster "github.com/aerospike/aerospike-kubernetes-operator/v4/test/cluster"
 	"github.com/aerospike/aerospike-kubernetes-operator/v4/test/envtests"
+	"github.com/aerospike/aerospike-kubernetes-operator/v4/test/testutil"
 )
 
 var _ = Describe("Storage webhook validation", func() {
@@ -35,7 +36,7 @@ var _ = Describe("Storage webhook validation", func() {
 	var nsName types.NamespacedName
 
 	BeforeEach(func() {
-		nsName = uniqueNamespacedName("storage-webhook")
+		nsName = uniqueNamespacedName("storage-cluster")
 	})
 
 	AfterEach(func() {
@@ -45,6 +46,20 @@ var _ = Describe("Storage webhook validation", func() {
 	Context("Deploy validation", func() {
 		Context("spec.storage", func() {
 			Context("negative", func() {
+				It("rejects negative cleanupThreads", func() {
+					aeroCluster := testCluster.CreateDummyAerospikeCluster(nsName, 2)
+					aeroCluster.Spec.Storage.CleanupThreads = -1
+
+					err := envtests.K8sClient.Create(ctx, aeroCluster)
+					Expect(err).To(HaveOccurred())
+
+					envtests.NewStatusErrorMatcher().
+						WithMessageSubstrings(testutil.CRDSchemaErrorPrefix,
+							"Invalid value: -1:",
+							"cleanupThreads in body should be greater than or equal to 0").
+						Validate(err)
+				})
+
 				It("rejects when global namespace device is not on rack InputStorage (spec vs rack mismatch)", func() {
 					aeroCluster := testCluster.CreateDummyAerospikeCluster(nsName, 2)
 					wrongRack := getStorageSpecForDevice("/other/wrong/device")
@@ -59,10 +74,23 @@ var _ = Describe("Storage webhook validation", func() {
 					Expect(err).To(HaveOccurred())
 					envtests.NewStatusErrorMatcher().
 						WithMessageSubstrings(
-							"\"vaerospikecluster.kb.io\"",
+							testutil.WebhookErrorPrefix,
 							"namespace storage device related devicePath /test/dev/xvdf not found in Storage config",
 						).
 						Validate(err)
+				})
+			})
+
+			Context("defaults", func() {
+				It("defaults cleanupThreads to 1 when not set", func() {
+					aeroCluster := testCluster.CreateDummyAerospikeCluster(nsName, 2)
+					Expect(aeroCluster.Spec.Storage.CleanupThreads).To(Equal(0))
+
+					Expect(envtests.K8sClient.Create(ctx, aeroCluster)).To(Succeed())
+
+					fetched, err := testCluster.GetCluster(envtests.K8sClient, ctx, nsName)
+					Expect(err).ToNot(HaveOccurred())
+					Expect(fetched.Spec.Storage.CleanupThreads).To(Equal(1))
 				})
 			})
 
@@ -102,7 +130,7 @@ var _ = Describe("Storage webhook validation", func() {
 
 					// Webhook response validation
 					envtests.NewStatusErrorMatcher().
-						WithMessageSubstrings("\"vaerospikecluster.kb.io\"",
+						WithMessageSubstrings(testutil.WebhookErrorPrefix,
 							"rack storage config cannot be updated",
 							"cannot change volumes old").
 						Validate(err)
@@ -123,7 +151,7 @@ var _ = Describe("Storage webhook validation", func() {
 					Expect(err).To(HaveOccurred())
 					envtests.NewStatusErrorMatcher().
 						WithMessageSubstrings(
-							"\"vaerospikecluster.kb.io\"",
+							testutil.WebhookErrorPrefix,
 							"cannot update MultiPodPerHost setting",
 						).
 						Validate(err)
@@ -157,7 +185,7 @@ var _ = Describe("Storage webhook validation", func() {
 					Expect(err).To(HaveOccurred())
 					envtests.NewStatusErrorMatcher().
 						WithMessageSubstrings(
-							"\"vaerospikecluster.kb.io\"",
+							testutil.WebhookErrorPrefix,
 							"namespace storage device related devicePath /test/dev/xvdf not found in Storage config",
 						).
 						Validate(err)
