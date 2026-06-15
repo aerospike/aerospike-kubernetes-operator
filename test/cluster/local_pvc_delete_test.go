@@ -47,12 +47,13 @@ var _ = Describe(
 
 		Context("When doing valid operations", func() {
 			Context("When doing rolling restart", func() {
-				It("Should delete the local PVCs when deleteLocalStorageOnRestart is set and set MFD dynamically",
+				It("Should delete the local PVCs when deleteLocalStorageOnRestart is set and set migrate-fill-delay dynamically",
 					func() {
 						aeroCluster := createDummyAerospikeCluster(
 							clusterNamespacedName, 3,
 						)
 						aeroCluster.Spec.Storage.DeleteLocalStorageOnRestart = ptr.To(true)
+						aeroCluster.Spec.Storage.DeleteLocalStorageOnPodRecovery = ptr.To(false)
 						aeroCluster.Spec.Storage.LocalStorageClasses = []string{storageClass}
 						Expect(DeployCluster(k8sClient, ctx, aeroCluster)).ToNot(HaveOccurred())
 
@@ -74,7 +75,7 @@ var _ = Describe(
 					})
 
 				It("Should delete the local PVCs of only 1 rack when deleteLocalStorageOnRestart is set "+
-					"at the rack level and set MFD dynamically", func() {
+					"at the rack level and set migrate-fill-delay dynamically", func() {
 					aeroCluster := createDummyAerospikeCluster(
 						clusterNamespacedName, 3,
 					)
@@ -112,6 +113,7 @@ var _ = Describe(
 							clusterNamespacedName, 3,
 						)
 						aeroCluster.Spec.Storage.DeleteLocalStorageOnRestart = ptr.To(false)
+						aeroCluster.Spec.Storage.DeleteLocalStorageOnPodRecovery = ptr.To(true)
 						aeroCluster.Spec.Storage.LocalStorageClasses = []string{storageClass}
 						Expect(DeployCluster(k8sClient, ctx, aeroCluster)).ToNot(HaveOccurred())
 
@@ -134,7 +136,7 @@ var _ = Describe(
 			})
 
 			Context("When doing upgrade", func() {
-				It("Should delete the local PVCs when deleteLocalStorageOnRestart is set and set MFD dynamically",
+				It("Should delete the local PVCs when deleteLocalStorageOnRestart is set and set migrate-fill-delay dynamically",
 					func() {
 						aeroCluster := createDummyAerospikeCluster(
 							clusterNamespacedName, 3,
@@ -170,7 +172,7 @@ var _ = Describe(
 					})
 
 				It("Should delete the local PVCs of only 1 rack when deleteLocalStorageOnRestart is set "+
-					"at the rack level and set MFD dynamically", func() {
+					"at the rack level and set migrate-fill-delay dynamically", func() {
 					aeroCluster := createDummyAerospikeCluster(
 						clusterNamespacedName, 3,
 					)
