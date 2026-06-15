@@ -9,7 +9,6 @@ import (
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/types"
 	"sigs.k8s.io/controller-runtime/pkg/controller/controllerutil"
-	"sigs.k8s.io/controller-runtime/pkg/reconcile"
 
 	asdbv1 "github.com/aerospike/aerospike-kubernetes-operator/v4/api/v1"
 	"github.com/aerospike/aerospike-kubernetes-operator/v4/internal/controller/common"
@@ -136,10 +135,10 @@ func (r *SingleClusterReconciler) createOrUpdatePDB(ctx context.Context) error {
 	// This will ensure that the cluster is not deployed with PDB created by the user.
 	// If PDB is not created by operator then no need to even match the spec
 	if !utils.IsOwnedBy(pdb, r.aeroCluster) {
-		return reconcile.TerminalError(fmt.Errorf(
+		return fmt.Errorf(
 			"poddisruptionbudget %s exists but is not created/owned by the operator",
 			getPDBNamespacedName(r.aeroCluster),
-		))
+		)
 	}
 
 	if pdb.Spec.MaxUnavailable.String() != r.aeroCluster.Spec.MaxUnavailable.String() {

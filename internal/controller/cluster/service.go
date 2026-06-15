@@ -13,7 +13,6 @@ import (
 	"k8s.io/apimachinery/pkg/util/intstr"
 	"k8s.io/apimachinery/pkg/util/sets"
 	"sigs.k8s.io/controller-runtime/pkg/controller/controllerutil"
-	"sigs.k8s.io/controller-runtime/pkg/reconcile"
 
 	asdbv1 "github.com/aerospike/aerospike-kubernetes-operator/v4/api/v1"
 	"github.com/aerospike/aerospike-kubernetes-operator/v4/internal/controller/common"
@@ -178,10 +177,10 @@ func (r *SingleClusterReconciler) reconcileSTSLoadBalancerSvc(ctx context.Contex
 		"name", utils.NamespacedName(service.Namespace, service.Name))
 
 	if !utils.IsOwnedBy(service, r.aeroCluster) {
-		return reconcile.TerminalError(fmt.Errorf(
+		return fmt.Errorf(
 			"loadbalancer service %s exists but is not created/owned by the operator",
 			utils.NamespacedName(service.Namespace, service.Name),
-		))
+		)
 	}
 
 	return r.updateLBService(ctx, service, &servicePort, loadBalancer)
