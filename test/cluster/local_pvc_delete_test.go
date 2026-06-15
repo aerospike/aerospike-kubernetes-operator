@@ -3,15 +3,19 @@ package cluster
 import (
 	goctx "context"
 	"fmt"
+	"os"
 	"strconv"
 	"time"
 
 	. "github.com/onsi/ginkgo/v2"
 	. "github.com/onsi/gomega"
 	corev1 "k8s.io/api/core/v1"
+	apierrors "k8s.io/apimachinery/pkg/api/errors"
+	"k8s.io/apimachinery/pkg/api/resource"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/types"
 	"k8s.io/apimachinery/pkg/util/intstr"
+	"k8s.io/apimachinery/pkg/util/sets"
 	"k8s.io/utils/ptr"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 
@@ -430,17 +434,28 @@ var _ = Describe(
 				Expect(validatePVCDeletion(ctx, oldPvcInfoPerPod[failedPodName], true)).ToNot(HaveOccurred())
 			})
 
-			// effective rack InputStorage deleteLocalStorageOnPodRecovery for failed pods.
-			It("Should delete failed pod PVCs from a rack whose InputStorage sets deleteLocalStorageOnPodRecovery=true "+
-				"while global deleteLocalStorageOnPodRecovery is false", func() {
+			// rack overrides deleteLocalStorageOnPodRecovery while global is false;
+			// only PVCs whose storage class is listed on that rack's localStorageClasses are deleted on recovery.
+			It("Should delete only rack-local-class PVCs on failed-pod recovery when rack overrides "+
+				"deleteLocalStorageOnPodRecovery and global deleteLocalStorageOnPodRecovery is false", func() {
 				aeroCluster := createDummyAerospikeCluster(clusterNamespacedName, 4)
 				aeroCluster.Spec.Storage.DeleteLocalStorageOnRestart = ptr.To(true)
 				aeroCluster.Spec.Storage.DeleteLocalStorageOnPodRecovery = ptr.To(false)
 				aeroCluster.Spec.Storage.LocalStorageClasses = []string{storageClass}
 
+				altSC := os.Getenv("AEROSPIKE_CLUSTER_TEST_ALT_STORAGE_CLASS")
+				rackNamespaces := []string{"test"}
+
+				if altSC != "" {
+					By("Adding bar device volume with alt storage class")
+					appendBarBlockVolumeForAltStorageClass(aeroCluster, altSC)
+
+					rackNamespaces = []string{"test", "bar"}
+				}
+
 				rackConfig := asdbv1.RackConfig{
 					Racks:      getDummyRackConf(1, 2),
-					Namespaces: []string{"test"},
+					Namespaces: rackNamespaces,
 				}
 				rackSt := lib.DeepCopy(&aeroCluster.Spec.Storage).(*asdbv1.AerospikeStorageSpec)
 				rackSt.DeleteLocalStorageOnPodRecovery = ptr.To(true)
@@ -450,7 +465,7 @@ var _ = Describe(
 
 				Expect(DeployCluster(k8sClient, ctx, aeroCluster)).ToNot(HaveOccurred())
 
-				oldPvcInfoPerPod, err := extractClusterPVC(ctx, k8sClient, aeroCluster)
+				oldPvcMetaPerPod, err := extractClusterPVCMeta(ctx, k8sClient, aeroCluster)
 				Expect(err).ToNot(HaveOccurred())
 
 				failedPodName := clusterName + "-1-0"
@@ -460,11 +475,12 @@ var _ = Describe(
 				Expect(err).ToNot(HaveOccurred())
 
 				aeroCluster.Spec.PodSpec.AerospikeObjectMeta = asdbv1.AerospikeObjectMeta{
-					Labels: map[string]string{"test-label": "int-fph-039-rack-override"},
+					Labels: map[string]string{"test-label": "int-fph-039-040-rack-local-select"},
 				}
 				Expect(updateCluster(k8sClient, ctx, aeroCluster)).ToNot(HaveOccurred())
 
-				validateClusterPVCDeletion(ctx, oldPvcInfoPerPod)
+				localSCs := sets.New(storageClass)
+				Expect(validateClusterPVCMetaAfterRollingRestart(ctx, oldPvcMetaPerPod, localSCs)).To(Succeed())
 			})
 
 			// per-rack mixed override — rack-1 deletes failed pod PVCs, rack-2 keeps them.
@@ -596,6 +612,132 @@ var _ = Describe(
 			})
 		})
 	})
+
+// pvcClaimMeta captures PVC identity at test start for selective local-PVC assertions (INT-FPH-040).
+type pvcClaimMeta struct {
+	UID          types.UID
+	StorageClass string // empty if StorageClassName was nil on the PVC
+}
+
+// appendBarBlockVolumeForAltStorageClass adds a second block device + namespace "bar" using altStorageClass.
+// Rack LocalStorageClasses must omit altStorageClass so operator preserves those PVCs during local wipe.
+func appendBarBlockVolumeForAltStorageClass(aeroCluster *asdbv1.AerospikeCluster, altStorageClass string) {
+	nsList := aeroCluster.Spec.AerospikeConfig.Value[asdbv1.ConfKeyNamespace].([]interface{})
+	nsList = append(nsList, getNonSCNamespaceConfig("bar", "/test/dev/xvdf1"))
+	aeroCluster.Spec.AerospikeConfig.Value[asdbv1.ConfKeyNamespace] = nsList
+
+	aeroCluster.Spec.Storage.Volumes = append(
+		aeroCluster.Spec.Storage.Volumes,
+		asdbv1.VolumeSpec{
+			Name: "bar",
+			Source: asdbv1.VolumeSource{
+				PersistentVolume: &asdbv1.PersistentVolumeSpec{
+					Size:         resource.MustParse("1Gi"),
+					StorageClass: altStorageClass,
+					VolumeMode:   corev1.PersistentVolumeBlock,
+				},
+			},
+			Aerospike: &asdbv1.AerospikeServerVolumeAttachment{
+				Path: "/test/dev/xvdf1",
+			},
+		},
+	)
+}
+
+func extractPodPVCMeta(
+	ctx goctx.Context, k8sClient client.Client, pod *corev1.Pod,
+) (map[string]pvcClaimMeta, error) {
+	meta := make(map[string]pvcClaimMeta)
+
+	for idx := range pod.Spec.Volumes {
+		vol := &pod.Spec.Volumes[idx]
+		if vol.PersistentVolumeClaim == nil {
+			continue
+		}
+
+		claimName := vol.PersistentVolumeClaim.ClaimName
+		pvc := &corev1.PersistentVolumeClaim{}
+
+		if err := k8sClient.Get(ctx, test.GetNamespacedName(claimName, pod.Namespace), pvc); err != nil {
+			return nil, err
+		}
+
+		sc := ""
+		if pvc.Spec.StorageClassName != nil {
+			sc = *pvc.Spec.StorageClassName
+		}
+
+		meta[claimName] = pvcClaimMeta{UID: pvc.UID, StorageClass: sc}
+	}
+
+	return meta, nil
+}
+
+func extractClusterPVCMeta(
+	ctx goctx.Context, k8sClient client.Client, aeroCluster *asdbv1.AerospikeCluster,
+) (map[string]map[string]pvcClaimMeta, error) {
+	podList, err := getClusterPodList(k8sClient, ctx, aeroCluster)
+	if err != nil {
+		return nil, err
+	}
+
+	out := make(map[string]map[string]pvcClaimMeta)
+
+	for idx := range podList.Items {
+		podMeta, err := extractPodPVCMeta(ctx, k8sClient, &podList.Items[idx])
+		if err != nil {
+			return nil, err
+		}
+
+		out[podList.Items[idx].Name] = podMeta
+	}
+
+	return out, nil
+}
+
+// validateClusterPVCMetaAfterRollingRestart expects PVCs whose storage class is in localStorageClasses
+// to be deleted or recreated (UID change); other PVCs must keep the same UID.
+func validateClusterPVCMetaAfterRollingRestart(
+	ctx goctx.Context,
+	oldMetaPerPod map[string]map[string]pvcClaimMeta,
+	localStorageClasses sets.Set[string],
+) error {
+	for podName, claims := range oldMetaPerPod {
+		for claimName, meta := range claims {
+			pvc := &corev1.PersistentVolumeClaim{}
+			pvcKey := test.GetNamespacedName(claimName, namespace)
+
+			err := k8sClient.Get(ctx, pvcKey, pvc)
+			if localStorageClasses.Has(meta.StorageClass) {
+				if err != nil {
+					if apierrors.IsNotFound(err) {
+						continue
+					}
+
+					return fmt.Errorf("pod %s get PVC %s: %w", podName, claimName, err)
+				}
+
+				if pvc.UID == meta.UID {
+					return fmt.Errorf("pod %s PVC %s (storageClass=%q) expected deletion or UID churn", podName,
+						claimName, meta.StorageClass)
+				}
+
+				continue
+			}
+
+			if err != nil {
+				return fmt.Errorf("pod %s get PVC %s: %w", podName, claimName, err)
+			}
+
+			if pvc.UID != meta.UID {
+				return fmt.Errorf("pod %s PVC %s (storageClass=%q) should be preserved; UID changed %s -> %s",
+					podName, claimName, meta.StorageClass, meta.UID, pvc.UID)
+			}
+		}
+	}
+
+	return nil
+}
 
 func validateClusterPVCDeletion(ctx goctx.Context, oldPvcInfoPerPod map[string]map[string]types.UID,
 	podsToSkipFromPVCDeletion ...string) {
