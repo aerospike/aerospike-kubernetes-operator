@@ -301,7 +301,9 @@ func (r *SingleClusterReconciler) waitForSTSToBeReady(
 			}
 
 			if err := utils.CheckPodFailed(pod); err != nil {
-				return fmt.Errorf("checking statefulset pod %s health: %w", utils.NamespacedName(st.Namespace, podName), err)
+				return fmt.Errorf(
+					"statefulset pod %s failed: %w", utils.NamespacedName(st.Namespace, podName), err,
+				)
 			}
 
 			if utils.IsPodRunningAndReady(pod) {
@@ -317,8 +319,8 @@ func (r *SingleClusterReconciler) waitForSTSToBeReady(
 
 		if !isReady {
 			statusErr := fmt.Errorf(
-				"statefulset pod %s is not ready, status conditions: %s",
-				utils.NamespacedName(st.Namespace, podName), formatPodConditionStatuses(pod.Status.Conditions),
+				"statefulSet pod is not ready. Status: %v",
+				pod.Status.Conditions,
 			)
 
 			return statusErr
@@ -358,28 +360,12 @@ func (r *SingleClusterReconciler) waitForSTSToBeReady(
 	}
 
 	if !updated {
-		return fmt.Errorf("statefulset %s status not updated to desired replicas", utils.GetNamespacedNameString(st))
+		return fmt.Errorf("statefulset status is not updated")
 	}
 
 	r.Log.Info("StatefulSet is ready")
 
 	return nil
-}
-
-func formatPodConditionStatuses(conditions []corev1.PodCondition) string {
-	if len(conditions) == 0 {
-		return "none"
-	}
-
-	parts := make([]string, 0, len(conditions))
-	for _, condition := range conditions {
-		parts = append(parts, fmt.Sprintf(
-			"%s=%s(reason=%s)",
-			condition.Type, condition.Status, condition.Reason,
-		))
-	}
-
-	return strings.Join(parts, ", ")
 }
 
 func (r *SingleClusterReconciler) getSTS(ctx context.Context, rackState *RackState) (*appsv1.StatefulSet, error) {
@@ -415,10 +401,7 @@ func (r *SingleClusterReconciler) createSTSConfigMap(
 
 			configMapData, err = r.createConfigMapData(ctx, rack)
 			if err != nil {
-				return fmt.Errorf(
-					"building config map data for rack %d in cluster %s: %w",
-					rack.ID, utils.ClusterNamespacedName(r.aeroCluster), err,
-				)
+				return fmt.Errorf("failed to build dotConfig from map: %w", err)
 			}
 
 			ls := utils.LabelsForAerospikeCluster(r.aeroCluster.Name)
@@ -468,10 +451,7 @@ func (r *SingleClusterReconciler) createSTSConfigMap(
 	// Update existing configmap as it might not be current.
 	configMapData, err := r.createConfigMapData(ctx, rack)
 	if err != nil {
-		return fmt.Errorf(
-			"building config map data for rack %d in cluster %s: %w",
-			rack.ID, utils.ClusterNamespacedName(r.aeroCluster), err,
-		)
+		return fmt.Errorf("failed to build dotConfig from map: %w", err)
 	}
 
 	// Replace config map data if differs since we are supposed to create a new config map.

@@ -480,7 +480,7 @@ func (roleCreate aerospikeRoleCreateUpdate) execute(
 		} else {
 			// Failure to query for the role.
 			return fmt.Errorf(
-				"querying role %q: %w", roleCreate.name, err,
+				"error querying role %s: %w", roleCreate.name, err,
 			)
 		}
 	}
@@ -520,14 +520,14 @@ func (roleCreate aerospikeRoleCreateUpdate) createRole(
 
 	aerospikePrivileges, err := privilegeStringToAerospikePrivilege(roleCreate.privileges)
 	if err != nil {
-		return fmt.Errorf("converting privileges for role %q: %w", roleCreate.name, err)
+		return fmt.Errorf("could not create role %s: %w", roleCreate.name, err)
 	}
 
 	if err = client.CreateRole(
 		adminPolicy, roleCreate.name, aerospikePrivileges, roleCreate.whitelist,
 		roleCreate.readQuota, roleCreate.writeQuota,
 	); err != nil {
-		return fmt.Errorf("creating role %q: %w", roleCreate.name, err)
+		return fmt.Errorf("could not create role %s: %w", roleCreate.name, err)
 	}
 
 	logger.Info("Created role", "role name", roleCreate.name)
@@ -551,7 +551,7 @@ func (roleCreate aerospikeRoleCreateUpdate) updateRole(
 	// Find the privileges to drop.
 	currentPrivileges, err := AerospikePrivilegeToPrivilegeString(role.Privileges)
 	if err != nil {
-		return fmt.Errorf("converting current privileges for role %q: %w", roleCreate.name, err)
+		return fmt.Errorf("could not update role %s: %w", roleCreate.name, err)
 	}
 
 	desiredPrivileges := roleCreate.privileges
@@ -561,16 +561,14 @@ func (roleCreate aerospikeRoleCreateUpdate) updateRole(
 	if len(privilegesToRevoke) > 0 {
 		aerospikePrivileges, err := privilegeStringToAerospikePrivilege(privilegesToRevoke)
 		if err != nil {
-			return fmt.Errorf(
-				"converting privileges to revoke for role %q: %w", roleCreate.name, err,
-			)
+			return fmt.Errorf("could not update role %s: %w", roleCreate.name, err)
 		}
 
 		if err := client.RevokePrivileges(
 			adminPolicy, roleCreate.name, aerospikePrivileges,
 		); err != nil {
 			return fmt.Errorf(
-				"revoking privileges for role %q: %w", roleCreate.name,
+				"error revoking privileges for role %s: %w", roleCreate.name,
 				err,
 			)
 		}
@@ -584,16 +582,14 @@ func (roleCreate aerospikeRoleCreateUpdate) updateRole(
 	if len(privilegesToGrant) > 0 {
 		aerospikePrivileges, err := privilegeStringToAerospikePrivilege(privilegesToGrant)
 		if err != nil {
-			return fmt.Errorf(
-				"converting privileges to grant for role %q: %w", roleCreate.name, err,
-			)
+			return fmt.Errorf("could not update role %s: %w", roleCreate.name, err)
 		}
 
 		if err := client.GrantPrivileges(
 			adminPolicy, roleCreate.name, aerospikePrivileges,
 		); err != nil {
 			return fmt.Errorf(
-				"granting privileges for role %q: %w", roleCreate.name,
+				"error granting privileges for role %s: %w", roleCreate.name,
 				err,
 			)
 		}
@@ -610,7 +606,7 @@ func (roleCreate aerospikeRoleCreateUpdate) updateRole(
 			adminPolicy, roleCreate.name, roleCreate.whitelist,
 		); err != nil {
 			return fmt.Errorf(
-				"setting whitelist for role %q: %w", roleCreate.name, err,
+				"error setting whitelist for role %s: %w", roleCreate.name, err,
 			)
 		}
 	}
@@ -620,7 +616,7 @@ func (roleCreate aerospikeRoleCreateUpdate) updateRole(
 			adminPolicy, roleCreate.name, roleCreate.readQuota, roleCreate.writeQuota,
 		); err != nil {
 			return fmt.Errorf(
-				"setting quotas for role %q: %w", roleCreate.name, err,
+				"error setting quotas for role %s: %w", roleCreate.name, err,
 			)
 		}
 	}
@@ -660,7 +656,7 @@ func (userCreate aerospikeUserCreateUpdate) execute(
 		} else {
 			// Failure to query for the user.
 			return fmt.Errorf(
-				"querying user %q: %w", userCreate.name, err,
+				"error querying user %s: %w", userCreate.name, err,
 			)
 		}
 	}
@@ -699,13 +695,15 @@ func (userCreate aerospikeUserCreateUpdate) createUser(
 	logger.Info("Creating user", "username", userCreate.name)
 
 	if userCreate.password == nil {
-	return fmt.Errorf("creating user %q: password not specified", userCreate.name)
+		return fmt.Errorf(
+			"error creating user %s. Password not specified", userCreate.name,
+		)
 	}
 
 	if err := client.CreateUser(
 		adminPolicy, userCreate.name, *userCreate.password, userCreate.roles,
 	); err != nil {
-		return fmt.Errorf("creating user %q: %w", userCreate.name, err)
+		return fmt.Errorf("could not create user %s: %w", userCreate.name, err)
 	}
 
 	logger.Info("Created user", "username", userCreate.name)
@@ -732,7 +730,7 @@ func (userCreate aerospikeUserCreateUpdate) updateUser(
 			adminPolicy, userCreate.name, *userCreate.password,
 		); err != nil {
 			return fmt.Errorf(
-				"updating password for user %q: %w", userCreate.name, err,
+				"error updating password for user %s: %w", userCreate.name, err,
 			)
 		}
 
@@ -748,7 +746,7 @@ func (userCreate aerospikeUserCreateUpdate) updateUser(
 	if len(rolesToRevoke) > 0 {
 		if err := client.RevokeRoles(adminPolicy, userCreate.name, rolesToRevoke); err != nil {
 			return fmt.Errorf(
-				"revoking roles for user %q: %w", userCreate.name, err,
+				"error revoking roles for user %s: %w", userCreate.name, err,
 			)
 		}
 
@@ -761,7 +759,7 @@ func (userCreate aerospikeUserCreateUpdate) updateUser(
 	if len(rolesToGrant) > 0 {
 		if err := client.GrantRoles(adminPolicy, userCreate.name, rolesToGrant); err != nil {
 			return fmt.Errorf(
-				"granting roles for user %q: %w", userCreate.name, err,
+				"error granting roles for user %s: %w", userCreate.name, err,
 			)
 		}
 
@@ -796,7 +794,7 @@ func (userDrop aerospikeUserDrop) execute(
 	if err := client.DropUser(adminPolicy, userDrop.name); err != nil {
 		if !strings.Contains(err.Error(), userNotFoundErr) {
 			// Failure to drop for the user.
-			return fmt.Errorf("dropping user %q: %w", userDrop.name, err)
+			return fmt.Errorf("error dropping user %s: %w", userDrop.name, err)
 		}
 	}
 
@@ -825,7 +823,7 @@ func (roleDrop aerospikeRoleDrop) execute(
 	if err := client.DropRole(adminPolicy, roleDrop.name); err != nil {
 		if !strings.Contains(err.Error(), roleNotFoundErr) {
 			// Failure to drop for the role.
-			return fmt.Errorf("dropping role %q: %w", roleDrop.name, err)
+			return fmt.Errorf("error dropping role %s: %w", roleDrop.name, err)
 		}
 	}
 
