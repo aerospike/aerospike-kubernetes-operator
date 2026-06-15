@@ -13,7 +13,6 @@ import (
 	corev1 "k8s.io/api/core/v1"
 	"k8s.io/apimachinery/pkg/types"
 	"sigs.k8s.io/controller-runtime/pkg/client"
-	"sigs.k8s.io/controller-runtime/pkg/reconcile"
 
 	as "github.com/aerospike/aerospike-client-go/v8"
 	asdbv1 "github.com/aerospike/aerospike-kubernetes-operator/v4/api/v1"
@@ -46,10 +45,7 @@ func (pp fromSecretPasswordProvider) Get(
 
 	passBytes, ok := secret.Data["password"]
 	if !ok {
-		return "", reconcile.TerminalError(fmt.Errorf(
-			"missing %q key in secret %s",
-			"password", utils.NamespacedName(pp.namespace, secretName),
-		))
+		return "", fmt.Errorf("missing %q key in secret %s", "password", utils.NamespacedName(pp.namespace, secretName))
 	}
 
 	return string(passBytes), nil
@@ -95,10 +91,7 @@ func (pp fromSecretPasswordProvider) getPasswordFromSecret(
 
 	passBytes, ok := secret.Data[passFileName]
 	if !ok {
-		return "", reconcile.TerminalError(fmt.Errorf(
-			"missing password file %q in secret %s",
-			passFileName, secretNamespcedName,
-		))
+		return "", fmt.Errorf("missing password file %q in secret %s", passFileName, secretNamespcedName)
 	}
 
 	return string(passBytes), nil
@@ -357,9 +350,7 @@ func (r *SingleClusterReconciler) getClientCertificate(
 			ctx, clientCertSpec.SecretCertSource, clusterNamespace,
 		)
 	default:
-		return nil, reconcile.TerminalError(fmt.Errorf(
-			"invalid aerospike operator client cert spec: neither secretName nor certPathInOperator is set",
-		))
+		return nil, fmt.Errorf("neither secretName nor certPathInOperator is set in operatorClientCertSpec")
 	}
 }
 
@@ -383,18 +374,12 @@ func (r *SingleClusterReconciler) loadCertAndKeyFromSecret(
 
 	crtData, crtExists := found.Data[secretSource.ClientCertFilename]
 	if !crtExists {
-		return nil, reconcile.TerminalError(fmt.Errorf(
-			"certificate %q not found in secret %s",
-			secretSource.ClientCertFilename, secretName,
-		))
+		return nil, fmt.Errorf("certificate %q not found in secret %s", secretSource.ClientCertFilename, secretName)
 	}
 
 	keyData, keyExists := found.Data[secretSource.ClientKeyFilename]
 	if !keyExists {
-		return nil, reconcile.TerminalError(fmt.Errorf(
-			"client key %q not found in secret %s",
-			secretSource.ClientKeyFilename, secretName,
-		))
+		return nil, fmt.Errorf("client key %q not found in secret %s", secretSource.ClientKeyFilename, secretName)
 	}
 
 	cert, err := tls.X509KeyPair(crtData, keyData)

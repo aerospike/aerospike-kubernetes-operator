@@ -18,7 +18,6 @@ import (
 	"k8s.io/apimachinery/pkg/util/sets"
 	"k8s.io/client-go/util/retry"
 	"sigs.k8s.io/controller-runtime/pkg/client"
-	"sigs.k8s.io/controller-runtime/pkg/reconcile"
 
 	as "github.com/aerospike/aerospike-client-go/v8"
 	asdbv1 "github.com/aerospike/aerospike-kubernetes-operator/v4/api/v1"
@@ -411,7 +410,7 @@ func (r *SingleClusterReconciler) restartASDOrUpdateAerospikeConf(podName string
 
 	switch operation {
 	case noRestart, podRestart:
-		return reconcile.TerminalError(fmt.Errorf("invalid operation %d for akoinit", operation))
+		return fmt.Errorf("invalid akoinit operation %d", operation)
 	case quickRestart:
 		subCommand = "quick-restart"
 	case noRestartUpdateConf:
@@ -2002,10 +2001,10 @@ func (r *SingleClusterReconciler) checkForPortsUpdate(sts *appsv1.StatefulSet, p
 	serverContainer := getContainer(pod.Spec.Containers, asdbv1.AerospikeServerContainerName)
 
 	if serverContainer == nil || stsServerContainer == nil {
-		return false, reconcile.TerminalError(fmt.Errorf(
-			"server container not found in pod %s or statefulset %s",
-			utils.GetNamespacedNameString(pod), utils.GetNamespacedNameString(sts),
-		))
+		return false, fmt.Errorf(
+		"server container not found in pod %s or statefulset %s",
+		utils.GetNamespacedNameString(pod), utils.GetNamespacedNameString(sts),
+	)
 	}
 
 	desiredContainerPortsMap := make(map[string]corev1.ContainerPort, len(stsServerContainer.Ports))

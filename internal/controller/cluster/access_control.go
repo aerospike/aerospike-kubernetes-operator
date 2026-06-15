@@ -13,7 +13,6 @@ import (
 	"github.com/go-logr/logr"
 	corev1 "k8s.io/api/core/v1"
 	"k8s.io/client-go/tools/record"
-	"sigs.k8s.io/controller-runtime/pkg/reconcile"
 
 	as "github.com/aerospike/aerospike-client-go/v8"
 	asdbv1 "github.com/aerospike/aerospike-kubernetes-operator/v4/api/v1"
@@ -58,9 +57,9 @@ func AerospikeAdminCredentials(
 	adminUserSpec, ok := asdbv1.GetUsersFromSpec(currentState)[asdbv1.AdminUsername]
 	if !ok {
 		// Should not happen on a validated spec.
-		return "", "", reconcile.TerminalError(fmt.Errorf(
+		return "", "", fmt.Errorf(
 			"%s user missing in access control", asdbv1.AdminUsername,
-		))
+		)
 	}
 
 	// If authMode PKIOnly is set for admin user in status, return empty user and empty password.
@@ -283,7 +282,7 @@ func privilegeStringToAerospikePrivilege(privilegeStrings []string) (
 		parts := strings.Split(privilege, ".")
 		if _, ok := asdbv1.Privileges[parts[0]]; !ok {
 			// First part of the privilege is not part of defined privileges.
-			return nil, reconcile.TerminalError(fmt.Errorf("invalid privilege %q", privilege))
+			return nil, fmt.Errorf("invalid privilege %s", privilege)
 		}
 
 		privilegeCode := parts[0]
@@ -343,7 +342,7 @@ func privilegeStringToAerospikePrivilege(privilegeStrings []string) (
 			code = as.WriteMasked
 
 		default:
-			return nil, reconcile.TerminalError(fmt.Errorf("unknown privilege %q", privilegeCode))
+			return nil, fmt.Errorf("unknown privilege %s", privilegeCode)
 		}
 
 		aerospikePrivilege := as.Privilege{
@@ -405,9 +404,9 @@ func AerospikePrivilegeToPrivilegeString(aerospikePrivileges []as.Privilege) (
 			buffer.WriteString("write-masked")
 
 		default:
-			return nil, reconcile.TerminalError(fmt.Errorf(
-				"unknown privilege code %s", fmt.Sprint(aerospikePrivilege.Code),
-			))
+		return nil, fmt.Errorf(
+			"unknown privilege code %v", aerospikePrivilege.Code,
+		)
 		}
 
 		if aerospikePrivilege.Namespace != "" {
@@ -700,9 +699,7 @@ func (userCreate aerospikeUserCreateUpdate) createUser(
 	logger.Info("Creating user", "username", userCreate.name)
 
 	if userCreate.password == nil {
-		return reconcile.TerminalError(fmt.Errorf(
-			"creating user %q: password not specified", userCreate.name,
-		))
+	return fmt.Errorf("creating user %q: password not specified", userCreate.name)
 	}
 
 	if err := client.CreateUser(
