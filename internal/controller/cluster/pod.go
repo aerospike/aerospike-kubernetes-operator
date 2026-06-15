@@ -360,6 +360,10 @@ func (r *SingleClusterReconciler) rollingRestartPods(
 			if res := r.setMigrateFillDelay(ctx, clientPolicy, &rackState.Rack.AerospikeConfig, false,
 				ignorablePodNames,
 			); !res.IsSuccess {
+				if res.Err != nil {
+					res.Err = fmt.Errorf("revert migrate-fill-delay for rack %d: %w", rackState.Rack.ID, res.Err)
+				}
+
 				return res
 			}
 		}
@@ -375,6 +379,10 @@ func (r *SingleClusterReconciler) rollingRestartPods(
 			if res := r.setMigrateFillDelay(ctx, clientPolicy, &rackState.Rack.AerospikeConfig, true,
 				ignorablePodNames,
 			); !res.IsSuccess {
+				if res.Err != nil {
+					res.Err = fmt.Errorf("set migrate-fill-delay to 0 for rack %d: %w", rackState.Rack.ID, res.Err)
+				}
+
 				return res
 			}
 		}
@@ -511,7 +519,10 @@ func (r *SingleClusterReconciler) restartPods(
 		case quickRestart:
 			// We assume that the pod server image supports pod warm restart.
 			if err := r.restartASDOrUpdateAerospikeConf(pod.Name, quickRestart); err != nil {
-				return common.ReconcileError(err)
+				return common.ReconcileError(fmt.Errorf(
+					"warm restart pod %s: %w",
+					utils.NamespacedName(r.aeroCluster.Namespace, pod.Name), err,
+				))
 			}
 
 			restartedASDPodNames = append(restartedASDPodNames, pod.Name)
@@ -523,7 +534,7 @@ func (r *SingleClusterReconciler) restartPods(
 			}
 
 			if err := r.Delete(ctx, pod); err != nil {
-				return common.ReconcileError(err)
+				return common.ReconcileError(fmt.Errorf("delete pod %s: %w", utils.GetNamespacedNameString(pod), err))
 			}
 
 			restartedPods = append(restartedPods, pod)
@@ -703,6 +714,10 @@ func (r *SingleClusterReconciler) safelyDeletePodsAndEnsureImageUpdated(
 			if res := r.setMigrateFillDelay(ctx, clientPolicy, &rackState.Rack.AerospikeConfig, false,
 				ignorablePodNames,
 			); !res.IsSuccess {
+				if res.Err != nil {
+					res.Err = fmt.Errorf("revert migrate-fill-delay for rack %d: %w", rackState.Rack.ID, res.Err)
+				}
+
 				return res
 			}
 		}
@@ -717,6 +732,10 @@ func (r *SingleClusterReconciler) safelyDeletePodsAndEnsureImageUpdated(
 			if res := r.setMigrateFillDelay(ctx, clientPolicy, &rackState.Rack.AerospikeConfig, true,
 				ignorablePodNames,
 			); !res.IsSuccess {
+				if res.Err != nil {
+					res.Err = fmt.Errorf("set migrate-fill-delay to 0 for rack %d: %w", rackState.Rack.ID, res.Err)
+				}
+
 				return res
 			}
 		}
@@ -1967,7 +1986,7 @@ func (r *SingleClusterReconciler) getEvictionBlockedPods(ctx context.Context) (s
 	// List all pods in the cluster namespace
 	pods, err := r.getClusterPodList(ctx)
 	if err != nil {
-		return evictionBlockedPods, err
+		return evictionBlockedPods, fmt.Errorf("list pods for cluster %s: %w", utils.ClusterNamespacedName(r.aeroCluster), err)
 	}
 
 	for idx := range pods.Items {
