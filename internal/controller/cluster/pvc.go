@@ -88,7 +88,7 @@ func (r *SingleClusterReconciler) removePVCsAsync(
 
 			if err := r.Delete(ctx, &pvc); err != nil {
 				return nil, fmt.Errorf(
-					"deleting pvc %s: %w", utils.NamespacedName(pvc.Namespace, pvc.Name), err,
+					"could not delete pvc %s: %w", utils.NamespacedName(pvc.Namespace, pvc.Name), err,
 				)
 			}
 
@@ -112,7 +112,7 @@ func (r *SingleClusterReconciler) removePVCsAsync(
 func (r *SingleClusterReconciler) deleteLocalPVCs(ctx context.Context, rackState *RackState, pod *corev1.Pod) error {
 	pvcItems, err := r.getPodsPVCList(ctx, []string{pod.Name}, rackState.Rack.ID, rackState.Rack.Revision)
 	if err != nil {
-		return fmt.Errorf("listing pvcs for pod %s: %w", utils.GetNamespacedNameString(pod), err)
+		return fmt.Errorf("could not find pvc for pod %s: %w", utils.GetNamespacedNameString(pod), err)
 	}
 
 	for idx := range pvcItems {
@@ -127,7 +127,7 @@ func (r *SingleClusterReconciler) deleteLocalPVCs(ctx context.Context, rackState
 			if err := r.Delete(ctx, &pvcItems[idx]); err != nil {
 				if !errors.IsNotFound(err) {
 					return fmt.Errorf(
-						"deleting pvc %s: %w",
+						"could not delete pvc %s: %w",
 						utils.NamespacedName(pvcItems[idx].Namespace, pvcItems[idx].Name), err,
 					)
 				}

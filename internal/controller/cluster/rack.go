@@ -647,7 +647,7 @@ func (r *SingleClusterReconciler) scaleUpRack(
 
 	if r.isAnyPodInImageFailedState(podList, ignorablePodNames) {
 		return found, common.ReconcileError(fmt.Errorf(
-			"scaling up cluster %s rack %d is blocked: a pod is not healthy",
+			"cannot scale up cluster %s rack %d: a pod is already in failed state",
 			utils.ClusterNamespacedName(r.aeroCluster), rackState.Rack.ID))
 	}
 
@@ -875,7 +875,7 @@ func (r *SingleClusterReconciler) scaleDownRack(
 
 	if r.isAnyPodInImageFailedState(oldPodList, ignorablePodNames) {
 		return found, common.ReconcileError(
-			fmt.Errorf("scaling down cluster %s rack %d is blocked: a pod is not healthy",
+			fmt.Errorf("cannot scale down cluster %s rack %d: a pod is already in failed state",
 				utils.ClusterNamespacedName(r.aeroCluster), rackState.Rack.ID))
 	}
 
@@ -1094,10 +1094,7 @@ func (r *SingleClusterReconciler) rollingRestartRack(
 	err = r.updateSTS(ctx, found, rackState)
 	if err != nil {
 		return found, common.ReconcileError(
-			fmt.Errorf(
-				"updating statefulset for rolling restart of rack %d in cluster %s: %w",
-				rackState.Rack.ID, utils.ClusterNamespacedName(r.aeroCluster), err,
-			),
+			fmt.Errorf("rolling restart failed: %w", err),
 		)
 	}
 
@@ -1189,10 +1186,7 @@ func (r *SingleClusterReconciler) handleK8sNodeBlockListPods(
 ) (*appsv1.StatefulSet, common.ReconcileResult) {
 	if err := r.updateSTS(ctx, statefulSet, rackState); err != nil {
 		return statefulSet, common.ReconcileError(
-			fmt.Errorf(
-				"processing k8s node block list for rack %d in cluster %s: %w",
-				rackState.Rack.ID, utils.ClusterNamespacedName(r.aeroCluster), err,
-			),
+			fmt.Errorf("k8s node block list processing failed: %w", err),
 		)
 	}
 
@@ -1759,10 +1753,7 @@ func (r *SingleClusterReconciler) getOrderedRackPodList(ctx context.Context, rac
 
 		if indexInt >= len(podList.Items) {
 			// Happens if we do not get full list of pods due to a crash,
-			return nil, fmt.Errorf(
-				"getting ordered pod list for rack %d (revision %q) in cluster %s: incomplete pod list",
-				rackID, rackRevision, utils.ClusterNamespacedName(r.aeroCluster),
-			)
+			return nil, fmt.Errorf("error get pod list for rack:%v, rackRevision:%v", rackID, rackRevision)
 		}
 
 		sortedList[(len(podList.Items)-1)-indexInt] = &podList.Items[idx]

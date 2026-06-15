@@ -351,11 +351,11 @@ func (r *SingleClusterReconciler) recoverIgnorablePods(
 					return common.ReconcileError(err)
 				}
 
-			if err := r.Delete(ctx, &podList.Items[idx]); err != nil {
-				return common.ReconcileError(fmt.Errorf("delete pod %s: %w", utils.GetNamespacedNameString(&podList.Items[idx]), err))
-			}
+				if err := r.Delete(ctx, &podList.Items[idx]); err != nil {
+					return common.ReconcileError(fmt.Errorf("delete pod %s: %w", utils.GetNamespacedNameString(&podList.Items[idx]), err))
+				}
 
-			r.Log.Info("Deleted pod", "pod", podList.Items[idx].Name)
+				r.Log.Info("Deleted pod", "pod", podList.Items[idx].Name)
 			}
 		}
 	}
@@ -497,7 +497,7 @@ func (r *SingleClusterReconciler) updateStatus(ctx context.Context) error {
 
 	err = r.patchStatus(ctx, newAeroCluster)
 	if err != nil {
-		return fmt.Errorf("updating status for cluster %s: %w", utils.ClusterNamespacedName(r.aeroCluster), err)
+		return fmt.Errorf("error updating status: %w", err)
 	}
 
 	r.aeroCluster = newAeroCluster
@@ -582,7 +582,7 @@ func (r *SingleClusterReconciler) updateAccessControlStatus(ctx context.Context)
 	newAeroCluster.Status.AerospikeAccessControl = statusAerospikeAccessControl
 
 	if err := r.patchStatus(ctx, newAeroCluster); err != nil {
-		return fmt.Errorf("updating access control status for cluster %s: %w", utils.ClusterNamespacedName(r.aeroCluster), err)
+		return fmt.Errorf("error updating status: %w", err)
 	}
 
 	r.Log.Info("Updated access control status", "status", newAeroCluster.Status)
@@ -610,7 +610,7 @@ func (r *SingleClusterReconciler) createStatus(ctx context.Context) error {
 	if err := r.Client.Status().Update(
 		ctx, newAeroCluster,
 	); err != nil {
-		return fmt.Errorf("creating status for cluster %s: %w", utils.ClusterNamespacedName(r.aeroCluster), err)
+		return fmt.Errorf("error creating status: %w", err)
 	}
 
 	return nil
@@ -691,17 +691,17 @@ func (r *SingleClusterReconciler) patchStatus(ctx context.Context, newAeroCluste
 
 	oldJSON, err := json.Marshal(oldAeroCluster)
 	if err != nil {
-		return fmt.Errorf("marshalling old status for cluster %s: %w", utils.ClusterNamespacedName(r.aeroCluster), err)
+		return fmt.Errorf("error marshalling old status: %w", err)
 	}
 
 	newJSON, err := json.Marshal(newAeroCluster)
 	if err != nil {
-		return fmt.Errorf("marshalling new status for cluster %s: %w", utils.ClusterNamespacedName(r.aeroCluster), err)
+		return fmt.Errorf("error marshalling new status: %w", err)
 	}
 
 	jsonPatchPatch, err := jsonpatch.CreatePatch(oldJSON, newJSON)
 	if err != nil {
-		return fmt.Errorf("creating json patch for status of cluster %s: %w", utils.ClusterNamespacedName(r.aeroCluster), err)
+		return fmt.Errorf("error creating json patch: %w", err)
 	}
 
 	// Pick changes to the status object only.
@@ -731,7 +731,7 @@ func (r *SingleClusterReconciler) patchStatus(ctx context.Context, newAeroCluste
 
 	jsonPatchJSON, err := json.Marshal(filteredPatch)
 	if err != nil {
-		return fmt.Errorf("marshalling json patch for status of cluster %s: %w", utils.ClusterNamespacedName(r.aeroCluster), err)
+		return fmt.Errorf("error marshalling json patch: %w", err)
 	}
 
 	patch := client.RawPatch(types.JSONPatchType, jsonPatchJSON)
@@ -743,7 +743,7 @@ func (r *SingleClusterReconciler) patchStatus(ctx context.Context, newAeroCluste
 		}}, patch,
 		client.FieldOwner(patchFieldOwner),
 	); err != nil {
-		return fmt.Errorf("patching status for cluster %s: %w", utils.ClusterNamespacedName(r.aeroCluster), err)
+		return fmt.Errorf("error patching status: %w", err)
 	}
 
 	// FIXME: Json unmarshal used by above client.Status(),
@@ -774,8 +774,8 @@ func (r *SingleClusterReconciler) recoverFailedCreate(ctx context.Context) error
 	statefulSetList, err := r.getClusterSTSList(ctx)
 	if err != nil {
 		return fmt.Errorf(
-			"listing statefulsets while forcing recreate of cluster %s: %w",
-			utils.ClusterNamespacedName(r.aeroCluster), err,
+			"error getting statefulsets while forcing recreate of the cluster as status is nil: %w",
+			err,
 		)
 	}
 
@@ -788,8 +788,8 @@ func (r *SingleClusterReconciler) recoverFailedCreate(ctx context.Context) error
 		statefulset := &statefulSetList.Items[idx]
 		if err := r.deleteSTS(ctx, statefulset); err != nil {
 			return fmt.Errorf(
-				"deleting statefulset %s while forcing recreate of cluster: %w",
-				utils.GetNamespacedNameString(statefulset), err,
+				"error deleting statefulset while forcing recreate of the cluster as status is nil: %w",
+				err,
 			)
 		}
 	}
@@ -803,10 +803,7 @@ func (r *SingleClusterReconciler) recoverFailedCreate(ctx context.Context) error
 
 		pods, err := r.getRackPodList(ctx, state.Rack.ID, state.Rack.Revision)
 		if err != nil {
-			return fmt.Errorf(
-				"listing pods for rack %d while recovering cluster %s after create failure: %w",
-				state.Rack.ID, utils.ClusterNamespacedName(r.aeroCluster), err,
-			)
+			return fmt.Errorf("failed recover failed cluster: %w", err)
 		}
 
 		newPodNames := make([]string, 0)
@@ -815,14 +812,11 @@ func (r *SingleClusterReconciler) recoverFailedCreate(ctx context.Context) error
 		}
 
 		if err := r.cleanupPods(ctx, newPodNames, &state); err != nil {
-			return fmt.Errorf(
-				"cleaning up pods for rack %d while recovering cluster %s after create failure: %w",
-				state.Rack.ID, utils.ClusterNamespacedName(r.aeroCluster), err,
-			)
+			return fmt.Errorf("failed recover failed cluster: %w", err)
 		}
 	}
 
-	return fmt.Errorf("forcing recreate of cluster %s: status is nil", utils.ClusterNamespacedName(r.aeroCluster))
+	return fmt.Errorf("forcing recreate of the cluster as status is nil")
 }
 
 func (r *SingleClusterReconciler) addFinalizer(ctx context.Context, finalizerName string) error {
@@ -880,7 +874,7 @@ func (r *SingleClusterReconciler) deleteExternalResources(ctx context.Context) e
 
 		rackPVCItems, err := r.getRackPVCList(ctx, rack.ID, rack.Revision)
 		if err != nil {
-			return fmt.Errorf("listing pvcs for rack %d in cluster %s: %w", rack.ID, utils.ClusterNamespacedName(r.aeroCluster), err)
+			return fmt.Errorf("could not find pvc for rack %d in cluster %s: %w", rack.ID, utils.ClusterNamespacedName(r.aeroCluster), err)
 		}
 
 		storage := rack.Storage
@@ -892,7 +886,7 @@ func (r *SingleClusterReconciler) deleteExternalResources(ctx context.Context) e
 	// Delete PVCs for any remaining old removed racks
 	pvcItems, err := r.getClusterPVCList(ctx)
 	if err != nil {
-		return fmt.Errorf("listing pvcs for cluster %s: %w", utils.ClusterNamespacedName(r.aeroCluster), err)
+		return fmt.Errorf("could not find pvc for cluster %s: %w", utils.ClusterNamespacedName(r.aeroCluster), err)
 	}
 
 	// removePVCs should be passed only filtered pvc otherwise rack pvc may be removed using global storage
@@ -945,7 +939,7 @@ func (r *SingleClusterReconciler) handleClusterDeletion(ctx context.Context, fin
 func (r *SingleClusterReconciler) checkPreviouslyFailedCluster(ctx context.Context) (bool, common.ReconcileResult) {
 	isNew, err := r.isNewCluster(ctx)
 	if err != nil {
-		return false, common.ReconcileError(fmt.Errorf("determining if cluster %s is new: %w", utils.ClusterNamespacedName(r.aeroCluster), err))
+		return false, common.ReconcileError(fmt.Errorf("error determining if cluster is new: %w", err))
 	}
 
 	if isNew {
@@ -962,7 +956,7 @@ func (r *SingleClusterReconciler) checkPreviouslyFailedCluster(ctx context.Conte
 
 		hasFailed, inGracePeriod, err := r.hasClusterFailed(ctx)
 		if err != nil {
-			return false, common.ReconcileError(fmt.Errorf("checking cluster %s failure state: %w", utils.ClusterNamespacedName(r.aeroCluster), err))
+			return false, common.ReconcileError(fmt.Errorf("error determining if cluster has failed: %w", err))
 		}
 
 		if hasFailed {
@@ -1009,16 +1003,16 @@ func (r *SingleClusterReconciler) IsStatusEmpty() bool {
 func (r *SingleClusterReconciler) migrateAerospikeCluster(ctx context.Context, hasFailed bool) error {
 	if !hasFailed {
 		if int(r.aeroCluster.Spec.Size) > len(r.aeroCluster.Status.Pods) {
-			return fmt.Errorf("cluster %s is not ready for migration: pod status is not populated", utils.ClusterNamespacedName(r.aeroCluster))
+			return fmt.Errorf("cluster is not ready for migration, pod status is not populated")
 		}
 
 		if err := r.migrateInitialisedVolumeNames(ctx); err != nil {
-			return fmt.Errorf("migrating initialized volume names for cluster %s: %w", utils.ClusterNamespacedName(r.aeroCluster), err)
+			return err
 		}
 	}
 
 	if err := r.AddAPIVersionLabel(ctx); err != nil {
-		return fmt.Errorf("adding api version label to cluster %s: %w", utils.ClusterNamespacedName(r.aeroCluster), err)
+		return err
 	}
 
 	return nil
@@ -1043,7 +1037,7 @@ func (r *SingleClusterReconciler) migrateInitialisedVolumeNames(ctx context.Cont
 		pod := &podList.Items[podIdx]
 
 		if _, ok := r.aeroCluster.Status.Pods[pod.Name]; !ok {
-			return fmt.Errorf("empty status found in cluster %s for pod %s", utils.ClusterNamespacedName(r.aeroCluster), utils.GetNamespacedNameString(pod))
+			return fmt.Errorf("empty status found in CR for pod %s", pod.Name)
 		}
 
 		initializedVolumes := r.aeroCluster.Status.Pods[pod.Name].InitializedVolumes
@@ -1067,11 +1061,7 @@ func (r *SingleClusterReconciler) migrateInitialisedVolumeNames(ctx context.Cont
 				}
 
 				if pvcUID == "" {
-					return fmt.Errorf(
-						"empty pvcUID found for volume %q on pod %s in cluster %s",
-						oldFormatInitVolNames[oldVolIdx], utils.GetNamespacedNameString(pod),
-						utils.ClusterNamespacedName(r.aeroCluster),
-					)
+					return fmt.Errorf("found empty pvcUID for the volume %s", oldFormatInitVolNames[oldVolIdx])
 				}
 
 				// Appending volume name as <vol_name>@<pvcUID> in initializedVolumes list

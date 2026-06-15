@@ -15,7 +15,6 @@ package cluster
 
 import (
 	"context"
-	"errors"
 	"fmt"
 	"time"
 
@@ -210,7 +209,7 @@ func (r *SingleClusterReconciler) newAllHostConnWithOption(ctx context.Context, 
 	}
 
 	if len(podList.Items) == 0 {
-		return nil, fmt.Errorf("no pods found for cluster %s", utils.ClusterNamespacedName(r.aeroCluster))
+		return nil, fmt.Errorf("pod list empty")
 	}
 
 	return r.newPodsHostConnWithOption(podList.Items, ignorablePodNames)
@@ -395,8 +394,8 @@ func (r *SingleClusterReconciler) setDynamicConfig(
 				ctx, patches,
 			); patchErr != nil {
 				return common.ReconcileError(
-					fmt.Errorf("patching status for pod %s after dynamic config command error: %w",
-						utils.NamespacedName(r.aeroCluster.Namespace, podName), errors.Join(patchErr, err)))
+					fmt.Errorf("error updating status: %v, dynamic config command error: %v", patchErr, err),
+				)
 			}
 
 			return common.ReconcileError(err)

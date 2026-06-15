@@ -350,7 +350,7 @@ func (r *SingleClusterReconciler) getClientCertificate(
 			ctx, clientCertSpec.SecretCertSource, clusterNamespace,
 		)
 	default:
-		return nil, fmt.Errorf("neither secretName nor certPathInOperator is set in operatorClientCertSpec")
+		return nil, fmt.Errorf("both secretName and certPathInOperator are not set in operatorClientCertSpec")
 	}
 }
 

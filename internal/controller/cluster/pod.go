@@ -418,7 +418,7 @@ func (r *SingleClusterReconciler) restartASDOrUpdateAerospikeConf(podName string
 
 	switch operation {
 	case noRestart, podRestart:
-		return fmt.Errorf("invalid akoinit operation %d", operation)
+		return fmt.Errorf("invalid operation for akoinit")
 	case quickRestart:
 		subCommand = "quick-restart"
 	case noRestartUpdateConf:
@@ -883,19 +883,25 @@ func (r *SingleClusterReconciler) cleanupPods(
 	// Delete PVCs if cascadeDelete
 	pvcItems, err := r.getPodsPVCList(ctx, podNames, rackState.Rack.ID, rackState.Rack.Revision)
 	if err != nil {
-		return fmt.Errorf("listing pvcs for pods %s: %w", strings.Join(utils.NamespacedNames(r.aeroCluster.Namespace, podNames), ", "), err)
+		return fmt.Errorf(
+			"could not find pvc for pods %s: %w",
+			strings.Join(utils.NamespacedNames(r.aeroCluster.Namespace, podNames), ", "), err,
+		)
 	}
 
 	storage := rackState.Rack.Storage
 	if err = r.removePVCs(ctx, &storage, pvcItems); err != nil {
-		return fmt.Errorf("removing pvcs for pods %s: %w", strings.Join(utils.NamespacedNames(r.aeroCluster.Namespace, podNames), ", "), err)
+		return fmt.Errorf(
+			"could not cleanup pvcs for pods %s: %w",
+			strings.Join(utils.NamespacedNames(r.aeroCluster.Namespace, podNames), ", "), err,
+		)
 	}
 
 	var needStatusCleanup []string
 
 	clusterPodList, err := r.getClusterPodList(ctx)
 	if err != nil {
-		return fmt.Errorf("listing pods for cluster %s: %w", utils.ClusterNamespacedName(r.aeroCluster), err)
+		return fmt.Errorf("could not get pod list for cluster %s: %w", utils.ClusterNamespacedName(r.aeroCluster), err)
 	}
 
 	podNameSet := sets.NewString(podNames...)
@@ -960,7 +966,10 @@ func (r *SingleClusterReconciler) cleanupPods(
 		r.Log.Info("Removing pod status for dangling pods", "pods", podNames)
 
 		if err := r.removePodStatus(ctx, needStatusCleanup); err != nil {
-			return fmt.Errorf("removing pod status for pods %s: %w", strings.Join(utils.NamespacedNames(r.aeroCluster.Namespace, needStatusCleanup), ", "), err)
+			return fmt.Errorf(
+				"could not cleanup pod status for pods %s: %w",
+				strings.Join(utils.NamespacedNames(r.aeroCluster.Namespace, needStatusCleanup), ", "), err,
+			)
 		}
 	}
 
@@ -1010,7 +1019,9 @@ func (r *SingleClusterReconciler) cleanupDanglingPodsRack(
 
 		ordinal, err := getSTSPodOrdinal(podName)
 		if err != nil {
-			return fmt.Errorf("parsing ordinal from pod name %s: %w", utils.NamespacedName(r.aeroCluster.Namespace, podName), err)
+			return fmt.Errorf(
+				"invalid pod name %s: %w", utils.NamespacedName(r.aeroCluster.Namespace, podName), err,
+			)
 		}
 
 		if *ordinal >= *sts.Spec.Replicas {
@@ -1021,7 +1032,7 @@ func (r *SingleClusterReconciler) cleanupDanglingPodsRack(
 	if len(danglingPods) > 0 {
 		if err := r.cleanupPods(ctx, danglingPods, rackState); err != nil {
 			return fmt.Errorf(
-				"cleaning up dangling pods %s for rack %d in cluster %s: %w",
+				"failed dangling pod cleanup for pods %s in rack %d for cluster %s: %w",
 				strings.Join(utils.NamespacedNames(r.aeroCluster.Namespace, danglingPods), ", "),
 				rackState.Rack.ID, utils.ClusterNamespacedName(r.aeroCluster), err,
 			)
@@ -1612,7 +1623,7 @@ func (r *SingleClusterReconciler) deleteFileStorage(podName, fileName string) er
 			stdout, "stderr", stderr,
 		)
 
-		return fmt.Errorf("deleting file %s on pod %s: %w", fileName, utils.NamespacedName(r.aeroCluster.Namespace, podName), err)
+		return fmt.Errorf("error deleting file %w", err)
 	}
 
 	return nil
@@ -1648,7 +1659,7 @@ func isAllDynamicConfig(log logger, specToStatusDiffs asconfig.DynamicConfigMap,
 func getFlatConfig(log logger, confStr string) (*asconfig.Conf, error) {
 	asConf, err := asconfig.NewASConfigFromBytes(log, []byte(confStr), asconfig.AeroConfig)
 	if err != nil {
-		return nil, fmt.Errorf("parsing aerospike config: %w", err)
+		return nil, fmt.Errorf("loading config map by lib: %w", err)
 	}
 
 	return asConf.GetFlatMap(), nil
@@ -1665,12 +1676,12 @@ func getConfDiff(log logger, specConfig map[string]interface{}, podAnnotations m
 
 	asConfStatus, err := getFlatConfig(log, statusFromAnnotation)
 	if err != nil {
-		return nil, fmt.Errorf("parsing status aerospike config: %w", err)
+		return nil, fmt.Errorf("loading config map by lib: %w", err)
 	}
 
 	asConf, err := asconfig.NewMapAsConfig(log, specConfig)
 	if err != nil {
-		return nil, fmt.Errorf("loading spec aerospike config: %w", err)
+		return nil, fmt.Errorf("loading config map by lib: %w", err)
 	}
 
 	// special handling for DNE in ldap configurations
@@ -1680,7 +1691,7 @@ func getConfDiff(log logger, specConfig map[string]interface{}, podAnnotations m
 
 	asConfSpec, err := getFlatConfig(log, specConfFile)
 	if err != nil {
-		return nil, fmt.Errorf("parsing spec aerospike config: %w", err)
+		return nil, fmt.Errorf("loading config map by lib: %w", err)
 	}
 
 	specToStatusDiffs, err := asconfig.ConfDiff(log, *asConfSpec, *asConfStatus,
@@ -1722,7 +1733,7 @@ func (r *SingleClusterReconciler) patchPodStatus(ctx context.Context, patches []
 		if err := r.Client.Status().Patch(
 			ctx, patchedAerospikeCluster, constantPatch, client.FieldOwner("pod"),
 		); err != nil {
-			return fmt.Errorf("patching pod status for cluster %s: %w", utils.ClusterNamespacedName(r.aeroCluster), err)
+			return fmt.Errorf("error updating status: %w", err)
 		}
 
 		r.Log.Info("Pod status patched successfully")
@@ -1843,7 +1854,7 @@ func (r *SingleClusterReconciler) updateOperationStatus(
 	newAeroCluster.Status.Operations = statusOps
 
 	if err := r.patchStatus(ctx, newAeroCluster); err != nil {
-		return fmt.Errorf("updating operation status for cluster %s: %w", utils.ClusterNamespacedName(r.aeroCluster), err)
+		return fmt.Errorf("error updating status: %w", err)
 	}
 
 	return nil
@@ -2021,9 +2032,9 @@ func (r *SingleClusterReconciler) checkForPortsUpdate(sts *appsv1.StatefulSet, p
 
 	if serverContainer == nil || stsServerContainer == nil {
 		return false, fmt.Errorf(
-		"server container not found in pod %s or statefulset %s",
-		utils.GetNamespacedNameString(pod), utils.GetNamespacedNameString(sts),
-	)
+			"server container not found in pod %s or statefulset %s",
+			utils.GetNamespacedNameString(pod), utils.GetNamespacedNameString(sts),
+		)
 	}
 
 	desiredContainerPortsMap := make(map[string]corev1.ContainerPort, len(stsServerContainer.Ports))
