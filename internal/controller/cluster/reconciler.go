@@ -52,21 +52,8 @@ func (r *SingleClusterReconciler) Reconcile(ctx context.Context) (result ctrl.Re
 	// Set the status phase to Error if the recErr is not nil
 	// recErr is only set when reconcile failure should result in Error phase of the cluster
 	defer func() {
-		logValues := reconcileExitLogValues(result, recErr)
-		if recErr != nil {
-			if err := r.setStatusPhase(ctx, asdbv1.AerospikeClusterError); err != nil {
-				recErr = fmt.Errorf(
-					"%w; setting error phase for cluster %s: %w",
-					recErr, utils.ClusterNamespacedName(r.aeroCluster), err,
-				)
-			}
-
-			r.Log.Error(recErr, "Reconcile failed", logValues...)
-
-			return
-		}
-
-		r.Log.Info("Reconcile completed", logValues...)
+		// finishReconcile returns the error to assign here so we avoid *error params; recErr is Reconcile's named return.
+		recErr = r.finishReconcile(ctx, result, recErr)
 	}()
 
 	// Check DeletionTimestamp to see if the cluster is being deleted
@@ -112,7 +99,10 @@ func (r *SingleClusterReconciler) Reconcile(ctx context.Context) (result ctrl.Re
 
 	// The cluster is not being deleted, add finalizer if not added already
 	if err := r.addFinalizer(ctx, finalizerName); err != nil {
-		recErr = err
+		recErr = fmt.Errorf(
+			"could not add finalizer for cluster %s: %w",
+			utils.ClusterNamespacedName(r.aeroCluster), err,
+		)
 
 		return reconcile.Result{}, recErr
 	}
@@ -142,7 +132,10 @@ func (r *SingleClusterReconciler) Reconcile(ctx context.Context) (result ctrl.Re
 			utils.GetNamespacedNameString(r.aeroCluster),
 		)
 
-		recErr = err
+		recErr = fmt.Errorf(
+			"could not create or update headless Service for cluster %s: %w",
+			utils.ClusterNamespacedName(r.aeroCluster), err,
+		)
 
 		return reconcile.Result{}, recErr
 	}
@@ -169,7 +162,10 @@ func (r *SingleClusterReconciler) Reconcile(ctx context.Context) (result ctrl.Re
 			utils.GetNamespacedNameString(r.aeroCluster),
 		)
 
-		recErr = err
+		recErr = fmt.Errorf(
+			"could not reconcile PodDisruptionBudget for cluster %s: %w",
+			utils.ClusterNamespacedName(r.aeroCluster), err,
+		)
 
 		return reconcile.Result{}, recErr
 	}
@@ -181,14 +177,20 @@ func (r *SingleClusterReconciler) Reconcile(ctx context.Context) (result ctrl.Re
 			utils.GetNamespacedNameString(r.aeroCluster),
 		)
 
-		recErr = err
+		recErr = fmt.Errorf(
+			"could not reconcile LoadBalancer Service for cluster %s: %w",
+			utils.ClusterNamespacedName(r.aeroCluster), err,
+		)
 
 		return reconcile.Result{}, recErr
 	}
 
 	ignorablePodNames, err := r.getIgnorablePods(ctx, nil, getConfiguredRackStateList(r.aeroCluster), nil)
 	if err != nil {
-		recErr = err
+		recErr = fmt.Errorf(
+			"could not determine pods to be ignored for cluster %s: %w",
+			utils.ClusterNamespacedName(r.aeroCluster), err,
+		)
 
 		return reconcile.Result{}, recErr
 	}
@@ -210,7 +212,10 @@ func (r *SingleClusterReconciler) Reconcile(ctx context.Context) (result ctrl.Re
 		r.Log,
 		r.getClientPolicy(ctx), allHostConns,
 	); err != nil {
-		recErr = err
+		recErr = fmt.Errorf(
+			"could not undo quiesce state for cluster %s: %w",
+			utils.ClusterNamespacedName(r.aeroCluster), err,
+		)
 
 		return reconcile.Result{}, recErr
 	}
@@ -224,7 +229,10 @@ func (r *SingleClusterReconciler) Reconcile(ctx context.Context) (result ctrl.Re
 			utils.GetNamespacedNameString(r.aeroCluster),
 		)
 
-		recErr = err
+		recErr = fmt.Errorf(
+			"could not reconcile access control for cluster %s: %w",
+			utils.ClusterNamespacedName(r.aeroCluster), err,
+		)
 
 		return reconcile.Result{}, recErr
 	}
@@ -239,7 +247,12 @@ func (r *SingleClusterReconciler) Reconcile(ctx context.Context) (result ctrl.Re
 		ctx, policy, &r.aeroCluster.Spec.RackConfig.Racks[0].AerospikeConfig,
 		false, ignorablePodNames,
 	); !res.IsSuccess {
-		recErr = res.Err
+		if res.Err != nil {
+			recErr = fmt.Errorf(
+				"could not revert migrate-fill-delay for cluster %s: %w",
+				utils.ClusterNamespacedName(r.aeroCluster), res.Err,
+			)
+		}
 
 		return reconcile.Result{}, recErr
 	}
@@ -250,7 +263,10 @@ func (r *SingleClusterReconciler) Reconcile(ctx context.Context) (result ctrl.Re
 			r.Log,
 			policy, allHostConns,
 		); err != nil {
-			recErr = err
+			recErr = fmt.Errorf(
+				"could not run recluster for cluster %s: %w",
+				utils.ClusterNamespacedName(r.aeroCluster), err,
+			)
 
 			return reconcile.Result{}, recErr
 		}
@@ -267,7 +283,10 @@ func (r *SingleClusterReconciler) Reconcile(ctx context.Context) (result ctrl.Re
 
 		// Setup roster
 		if err = r.getAndSetRoster(ctx, policy, r.aeroCluster.Spec.RosterNodeBlockList, ignorablePodNames); err != nil {
-			recErr = err
+			recErr = fmt.Errorf(
+				"could not set roster for cluster %s: %w",
+				utils.ClusterNamespacedName(r.aeroCluster), err,
+			)
 
 			return reconcile.Result{}, recErr
 		}
@@ -281,7 +300,10 @@ func (r *SingleClusterReconciler) Reconcile(ctx context.Context) (result ctrl.Re
 			utils.GetNamespacedNameString(r.aeroCluster),
 		)
 
-		recErr = err
+		recErr = fmt.Errorf(
+			"could not update AerospikeCluster status for cluster %s: %w",
+			utils.ClusterNamespacedName(r.aeroCluster), err,
+		)
 
 		return reconcile.Result{}, recErr
 	}
@@ -298,16 +320,37 @@ func (r *SingleClusterReconciler) Reconcile(ctx context.Context) (result ctrl.Re
 	return reconcile.Result{}, nil
 }
 
+// finishReconcile runs at end of Reconcile; return value is assigned to Reconcile's named recErr in defer.
+func (r *SingleClusterReconciler) finishReconcile(ctx context.Context, result ctrl.Result, recErr error) error {
+	logValues := reconcileExitLogValues(result, recErr)
+	if recErr != nil {
+		if err := r.setStatusPhase(ctx, asdbv1.AerospikeClusterError); err != nil {
+			recErr = fmt.Errorf(
+				"%w; setting error phase for cluster %s: %w",
+				recErr, utils.ClusterNamespacedName(r.aeroCluster), err,
+			)
+		}
+
+		r.Log.Error(recErr, "Reconcile failed", logValues...)
+
+		return recErr
+	}
+
+	r.Log.Info("Reconcile completed", logValues...)
+
+	return nil
+}
+
 func reconcileExitLogValues(result ctrl.Result, recErr error) []interface{} {
 	if recErr != nil {
 		return []interface{}{"result", "error"}
 	}
 
 	if result.RequeueAfter > 0 {
-		values := []interface{}{"result", "requeue"}
-		values = append(values, "requeueAfter", result.RequeueAfter.String())
-
-		return values
+		return []interface{}{
+			"result", "requeue",
+			"requeueAfter", result.RequeueAfter.String(),
+		}
 	}
 
 	return []interface{}{"result", "success"}
@@ -317,7 +360,10 @@ func (r *SingleClusterReconciler) recoverIgnorablePods(
 	ctx context.Context, ignorablePodNames sets.Set[string]) common.ReconcileResult {
 	podList, gErr := r.getClusterPodList(ctx)
 	if gErr != nil {
-		return common.ReconcileError(fmt.Errorf("could not list pods for cluster %s: %w", utils.ClusterNamespacedName(r.aeroCluster), gErr))
+		return common.ReconcileError(fmt.Errorf(
+			"could not list pods for cluster %s: %w",
+			utils.ClusterNamespacedName(r.aeroCluster), gErr,
+		))
 	}
 
 	r.Log.Info("Try to recover failed/pending pods if any")
@@ -352,7 +398,10 @@ func (r *SingleClusterReconciler) recoverIgnorablePods(
 				}
 
 				if err := r.Delete(ctx, &podList.Items[idx]); err != nil {
-					return common.ReconcileError(fmt.Errorf("could not delete pod %s: %w", utils.GetNamespacedNameString(&podList.Items[idx]), err))
+					return common.ReconcileError(fmt.Errorf(
+						"could not delete pod %s: %w",
+						utils.GetNamespacedNameString(&podList.Items[idx]), err,
+					))
 				}
 
 				r.Log.Info("Deleted pod", "pod", podList.Items[idx].Name)
@@ -418,7 +467,10 @@ func (r *SingleClusterReconciler) validateAndReconcileAccessControl(
 
 	aeroClient, err := as.NewClientWithPolicyAndHost(clientPolicy, hosts...)
 	if err != nil {
-		return fmt.Errorf("could not create Aerospike client for cluster %s: %w", utils.ClusterNamespacedName(r.aeroCluster), err)
+		return fmt.Errorf(
+			"could not create Aerospike client for cluster %s: %w",
+			utils.ClusterNamespacedName(r.aeroCluster), err,
+		)
 	}
 
 	defer aeroClient.Close()
@@ -429,7 +481,10 @@ func (r *SingleClusterReconciler) validateAndReconcileAccessControl(
 		ctx, aeroClient, pp,
 	)
 	if err != nil {
-		return fmt.Errorf("could not reconcile access control for cluster %s: %w", utils.ClusterNamespacedName(r.aeroCluster), err)
+		return fmt.Errorf(
+			"could not reconcile access control for cluster %s: %w",
+			utils.ClusterNamespacedName(r.aeroCluster), err,
+		)
 	}
 
 	r.Recorder.Eventf(
@@ -522,7 +577,10 @@ func (r *SingleClusterReconciler) setStatusPhase(ctx context.Context, phase asdb
 			// detached: status update must complete even if the reconcile context is cancelled
 			return r.Client.Status().Update(context.Background(), r.aeroCluster)
 		}); err != nil {
-			return fmt.Errorf("could not set cluster status phase to %s for cluster %s: %w", phase, utils.ClusterNamespacedName(r.aeroCluster), err)
+			return fmt.Errorf(
+				"could not set cluster status phase to %s for cluster %s: %w",
+				phase, utils.ClusterNamespacedName(r.aeroCluster), err,
+			)
 		}
 
 		r.addClusterPhaseMetric()
@@ -874,12 +932,18 @@ func (r *SingleClusterReconciler) deleteExternalResources(ctx context.Context) e
 
 		rackPVCItems, err := r.getRackPVCList(ctx, rack.ID, rack.Revision)
 		if err != nil {
-			return fmt.Errorf("could not find pvc for rack %d in cluster %s: %w", rack.ID, utils.ClusterNamespacedName(r.aeroCluster), err)
+			return fmt.Errorf(
+				"could not find pvc for rack %d in cluster %s: %w",
+				rack.ID, utils.ClusterNamespacedName(r.aeroCluster), err,
+			)
 		}
 
 		storage := rack.Storage
 		if _, err := r.removePVCsAsync(ctx, &storage, rackPVCItems); err != nil {
-			return fmt.Errorf("could not remove PVCs for rack %d in cluster %s: %w", rack.ID, utils.ClusterNamespacedName(r.aeroCluster), err)
+			return fmt.Errorf(
+				"could not remove PVCs for rack %d in cluster %s: %w",
+				rack.ID, utils.ClusterNamespacedName(r.aeroCluster), err,
+			)
 		}
 	}
 
@@ -930,7 +994,10 @@ func (r *SingleClusterReconciler) handleClusterDeletion(ctx context.Context, fin
 
 	// The cluster is being deleted
 	if err := r.cleanUpAndRemoveFinalizer(ctx, finalizerName); err != nil {
-		return fmt.Errorf("could not finish cluster deletion (remove finalizer) for cluster %s: %w", utils.ClusterNamespacedName(r.aeroCluster), err)
+		return fmt.Errorf(
+			"could not finish cluster deletion (remove finalizer) for cluster %s: %w",
+			utils.ClusterNamespacedName(r.aeroCluster), err,
+		)
 	}
 
 	return nil
@@ -1007,12 +1074,18 @@ func (r *SingleClusterReconciler) migrateAerospikeCluster(ctx context.Context, h
 		}
 
 		if err := r.migrateInitialisedVolumeNames(ctx); err != nil {
-			return err
+			return fmt.Errorf(
+				"could not patch initialised volumes for cluster %s: %w",
+				utils.ClusterNamespacedName(r.aeroCluster), err,
+			)
 		}
 	}
 
 	if err := r.AddAPIVersionLabel(ctx); err != nil {
-		return err
+		return fmt.Errorf(
+			"could not patch API version label for cluster %s: %w",
+			utils.ClusterNamespacedName(r.aeroCluster), err,
+		)
 	}
 
 	return nil

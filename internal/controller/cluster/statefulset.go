@@ -451,7 +451,7 @@ func (r *SingleClusterReconciler) createSTSConfigMap(
 	// Update existing configmap as it might not be current.
 	configMapData, err := r.createConfigMapData(ctx, rack)
 	if err != nil {
-		return fmt.Errorf("failed to build dotConfig from map: %w", err)
+		return fmt.Errorf("unable to build config map data: %w", err)
 	}
 
 	// Replace config map data if differs since we are supposed to create a new config map.
@@ -489,7 +489,7 @@ func (r *SingleClusterReconciler) updateSTSConfigMap(
 	configMapData, err := r.createConfigMapData(ctx, rack)
 	if err != nil {
 		return fmt.Errorf(
-			"could not build ConfigMap data for rack %d in cluster %s: %w",
+			"unable to build dotConfig from map for rack %d in cluster %s: %w",
 			rack.ID, utils.ClusterNamespacedName(r.aeroCluster), err,
 		)
 	}

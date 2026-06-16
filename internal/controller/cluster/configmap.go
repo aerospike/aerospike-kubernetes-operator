@@ -227,7 +227,7 @@ func (r *SingleClusterReconciler) buildConfigTemplate(rack *asdbv1.Rack) (
 	asConf, err := asconfig.NewMapAsConfig(r.Log, configMap)
 	if err != nil {
 		return "", fmt.Errorf(
-			"could not load Aerospike configuration via management library for rack %d in cluster %s: %w",
+			"could not load Aerospike config map via management library for rack %d in cluster %s: %w",
 			rack.ID, utils.ClusterNamespacedName(r.aeroCluster), err,
 		)
 	}

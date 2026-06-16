@@ -84,7 +84,7 @@ func (r *SingleClusterReconciler) createOrUpdateSTSHeadlessSvc(ctx context.Conte
 			ctx, service, common.CreateOption,
 		); err != nil {
 			return fmt.Errorf(
-				"could not create headless Service for cluster %s: %w",
+				"could not create headless Service for statefulset %s: %w",
 				utils.ClusterNamespacedName(r.aeroCluster), err,
 			)
 		}
@@ -178,7 +178,7 @@ func (r *SingleClusterReconciler) reconcileSTSLoadBalancerSvc(ctx context.Contex
 
 	if !utils.IsOwnedBy(service, r.aeroCluster) {
 		return fmt.Errorf(
-			"loadbalancer service %s exists but is not created/owned by the operator",
+			"could not update LoadBalancer service: service is not created/owned by operator, name: %s",
 			utils.NamespacedName(service.Namespace, service.Name),
 		)
 	}
