@@ -17,6 +17,7 @@ import (
 	"k8s.io/apimachinery/pkg/util/intstr"
 	"k8s.io/apimachinery/pkg/util/sets"
 	"k8s.io/client-go/util/retry"
+	"k8s.io/klog/v2"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 
 	as "github.com/aerospike/aerospike-client-go/v8"
@@ -104,7 +105,7 @@ func (r *SingleClusterReconciler) getRollingRestartTypeMap(
 
 		if blockedK8sNodes.Has(pods[idx].Spec.NodeName) {
 			r.Log.Info("Pod found in blocked nodes list, will be migrated to a different node",
-				"podName", pods[idx].Name)
+				"pod", klog.KObj(pods[idx]))
 
 			restartTypeMap[pods[idx].Name] = podRestart
 
@@ -313,7 +314,7 @@ func (r *SingleClusterReconciler) getRollingRestartTypePod(
 
 		r.Log.Info(
 			"DynamicConfigUpdateStatus is PartiallyFailed. Need quick restart",
-			"pod", pod.Name,
+			"pod", klog.KObj(pod),
 		)
 	}
 
@@ -463,20 +464,20 @@ func (r *SingleClusterReconciler) restartASDOrUpdateAerospikeConf(podName string
 				r.KubeConfig,
 			)
 			if err != nil {
-				r.Log.V(1).Info(
-					"Failed warm restart", "err", err, "podName", podNamespacedName.Name, "stdout",
-					stdout, "stderr", stderr,
+				return fmt.Errorf(
+					"pod %s: warm restart via /etc/aerospike/refresh-cmap-restart-asd.sh failed "+
+						"stdout=%q stderr=%q: %w",
+					utils.NamespacedName(podNamespacedName.Namespace, podNamespacedName.Name),
+					stdout, stderr, err,
 				)
-
-				return err
 			}
 		} else {
-			r.Log.V(1).Info(
-				"Failed to perform", "operation", subCommand, "err", err, "podName", podNamespacedName.Name, "stdout",
-				stdout, "stderr", stderr,
+			return fmt.Errorf(
+				"pod %s: %s %s failed: stdout=%q stderr=%q: %w",
+				utils.NamespacedName(podNamespacedName.Namespace, podNamespacedName.Name),
+				initBinary, subCommand,
+				stdout, stderr, err,
 			)
-
-			return err
 		}
 	}
 
@@ -486,14 +487,14 @@ func (r *SingleClusterReconciler) restartASDOrUpdateAerospikeConf(podName string
 			"[rack-%d] Warm restarted Pod %s",
 			rackID, podNamespacedName.String(),
 		)
-		r.Log.V(1).Info("Pod warm restarted", "podName", podNamespacedName.Name)
+		r.Log.V(1).Info("Pod warm restarted", "pod", klog.KRef(podNamespacedName.Namespace, podNamespacedName.Name))
 	} else {
 		r.Recorder.Eventf(
 			r.aeroCluster, corev1.EventTypeNormal, EventReasonPodConfUpdated,
 			"[rack-%d] Updated config for Pod %s",
 			rackID, podNamespacedName.String(),
 		)
-		r.Log.V(1).Info("Pod conf updated", "podName", podNamespacedName.Name)
+		r.Log.V(1).Info("Pod conf updated", "pod", klog.KRef(podNamespacedName.Namespace, podNamespacedName.Name))
 	}
 
 	return nil
@@ -544,7 +545,7 @@ func (r *SingleClusterReconciler) restartPods(
 			restartedPods = append(restartedPods, pod)
 			restartedPodNames = append(restartedPodNames, pod.Name)
 
-			r.Log.V(1).Info("Pod deleted", "podName", pod.Name)
+			r.Log.V(1).Info("Pod deleted", "pod", klog.KObj(pod))
 		case noRestart, noRestartUpdateConf:
 			// No action needed for these restart types
 		}
@@ -564,13 +565,13 @@ func (r *SingleClusterReconciler) restartPods(
 }
 
 func (r *SingleClusterReconciler) updateAerospikeConfInPod(podName string) error {
-	r.Log.Info("Updating aerospike config file in pod", "pod", podName)
+	r.Log.Info("Updating aerospike config file in pod", "pod", klog.KRef(r.aeroCluster.Namespace, podName))
 
 	if err := r.restartASDOrUpdateAerospikeConf(podName, noRestartUpdateConf); err != nil {
 		return err
 	}
 
-	r.Log.V(1).Info("Updated aerospike config file in pod", "podName", podName)
+	r.Log.V(1).Info("Updated aerospike config file in pod", "pod", klog.KRef(r.aeroCluster.Namespace, podName))
 
 	return nil
 }
@@ -594,7 +595,7 @@ func (r *SingleClusterReconciler) ensurePodsRunningAndReady(
 			}
 
 			r.Log.V(1).Info(
-				"Waiting for pod to be ready", "podName", pod.Name,
+				"Waiting for pod to be ready", "pod", klog.KObj(pod),
 				"status", pod.Status.Phase, "DeletionTimestamp",
 				pod.DeletionTimestamp,
 			)
@@ -616,7 +617,7 @@ func (r *SingleClusterReconciler) ensurePodsRunningAndReady(
 
 			readyPods[pod.Name] = true
 
-			r.Log.Info("Pod is restarted", "podName", updatedPod.Name)
+			r.Log.Info("Pod is restarted", "pod", klog.KObj(updatedPod))
 			r.Recorder.Eventf(
 				r.aeroCluster, corev1.EventTypeNormal, EventReasonPodRestarted,
 				"[rack-%s] Restarted Pod %s",
@@ -779,7 +780,7 @@ func (r *SingleClusterReconciler) deletePodAndEnsureImageUpdated(
 			return common.ReconcileError(err)
 		}
 
-		r.Log.V(1).Info("Pod deleted", "podName", pod.Name)
+		r.Log.V(1).Info("Pod deleted", "pod", klog.KObj(pod))
 		r.Recorder.Eventf(
 			r.aeroCluster, corev1.EventTypeNormal, EventReasonPodWaitUpdate,
 			"[rack-%d] Waiting to update Pod %s",
@@ -816,21 +817,21 @@ func (r *SingleClusterReconciler) isLocalPVCDeletionRequired(
 	// Planned restart path — existing logic unchanged.
 	if _, hasEvictionBlocked := pod.Annotations[asdbv1.EvictionBlockedAnnotation]; hasEvictionBlocked {
 		r.Log.Info("Pod has eviction-blocked annotation, deleting corresponding local PVCs if any",
-			"podName", pod.Name)
+			"pod", klog.KObj(pod))
 
 		return true
 	}
 
 	if utils.ContainsString(r.aeroCluster.Spec.K8sNodeBlockList, pod.Spec.NodeName) {
 		r.Log.Info("Pod found in blocked nodes list, deleting corresponding local PVCs if any",
-			"podName", pod.Name)
+			"pod", klog.KObj(pod))
 
 		return true
 	}
 
 	if asdbv1.GetBool(rackState.Rack.Storage.DeleteLocalStorageOnRestart) {
 		r.Log.Info("deleteLocalStorageOnRestart flag is enabled, deleting corresponding local PVCs if any",
-			"podName", pod.Name)
+			"pod", klog.KObj(pod))
 
 		return true
 	}
@@ -859,7 +860,7 @@ func (r *SingleClusterReconciler) ensurePodsImageUpdated(
 			}
 
 			r.Log.V(1).Info(
-				"Waiting for pod to be ready", "podName", pod.Name,
+				"Waiting for pod to be ready", "pod", klog.KObj(pod),
 			)
 
 			updatedPod := &corev1.Pod{}
@@ -880,11 +881,11 @@ func (r *SingleClusterReconciler) ensurePodsImageUpdated(
 
 			updatedPods.Insert(pod.Name)
 
-			r.Log.Info("Pod is upgraded/downgraded", "podName", pod.Name)
+			r.Log.Info("Pod is upgraded/downgraded", "pod", klog.KObj(updatedPod))
 		}
 
 		if len(updatedPods) == len(podsToCheck) {
-			r.Log.Info("Pods are upgraded/downgraded", "pod", podNames)
+			r.Log.Info("Pods are upgraded/downgraded", "pods", podNames)
 			return common.ReconcileSuccess()
 		}
 
@@ -951,7 +952,7 @@ func (r *SingleClusterReconciler) cleanupPodMeshAndStatus(ctx context.Context, p
 			if !utils.IsPodRunningAndReady(np) {
 				r.Log.Info(
 					"Pod is not running and ready. Skip clearing from tipHostnames.",
-					"pod", np.Name, "host to clear", podNames,
+					"pod", klog.KObj(np), "hostsToRemove", podNames,
 				)
 
 				continue
@@ -980,7 +981,7 @@ func (r *SingleClusterReconciler) cleanupPodMeshAndStatus(ctx context.Context, p
 			}
 
 			if err := r.alumniReset(ctx, np); err != nil {
-				r.Log.V(2).Info(fmt.Sprintf("Failed to reset alumni for the pod %s", np.Name))
+				r.Log.V(2).Info("Failed to reset alumni for pod", "pod", klog.KObj(np))
 			}
 		}
 
@@ -1260,7 +1261,7 @@ func (r *SingleClusterReconciler) isAnyPodInImageFailedState(podList []*corev1.P
 		// If node was crashed due to wrong config then only rollingRestart can bring it back.
 		if err := utils.CheckPodImageFailed(pod); err != nil {
 			r.Log.Info(
-				"AerospikeCluster Pod is in failed state", "podName", pod.Name, "err", err,
+				"AerospikeCluster Pod is in failed state", "pod", klog.KObj(pod), "err", err,
 			)
 
 			return true
@@ -1673,8 +1674,8 @@ func (r *SingleClusterReconciler) deleteFileStorage(podName, fileName string) er
 		cmd, r.KubeClient, r.KubeConfig)
 	if err != nil {
 		r.Log.V(1).Info(
-			"File deletion failed", "err", err, "podName", podName, "stdout",
-			stdout, "stderr", stderr,
+			"File deletion failed", "pod", klog.KRef(r.aeroCluster.Namespace, podName),
+			"stdout", stdout, "stderr", stderr,
 		)
 
 		return fmt.Errorf("error deleting file %w", err)
@@ -2116,7 +2117,7 @@ func (r *SingleClusterReconciler) checkForPortsUpdate(sts *appsv1.StatefulSet, p
 			(desiredPort.HostPort != 0 && currentPort.HostPort == 0) {
 			r.Log.Info(
 				"Pod spec is updated, container port changed",
-				"podName", pod.Name, "desiredPort", desiredPort, "currentPort", currentPort,
+				"pod", klog.KObj(pod), "desiredPort", desiredPort, "currentPort", currentPort,
 			)
 
 			return true, nil

@@ -12,6 +12,7 @@ import (
 	"k8s.io/apimachinery/pkg/types"
 	"k8s.io/apimachinery/pkg/util/intstr"
 	"k8s.io/apimachinery/pkg/util/sets"
+	"k8s.io/klog/v2"
 	"sigs.k8s.io/controller-runtime/pkg/controller/controllerutil"
 
 	asdbv1 "github.com/aerospike/aerospike-kubernetes-operator/v4/api/v1"
@@ -42,7 +43,8 @@ func (r *SingleClusterReconciler) createOrUpdateSTSHeadlessSvc(ctx context.Conte
 			return err
 		}
 
-		r.Log.Info("Creating headless service for statefulSet")
+		r.Log.Info("Creating headless service for statefulSet",
+			"service", klog.KRef(r.aeroCluster.Namespace, serviceName))
 
 		if specHeadlessSvc.Metadata.Annotations != nil {
 			if defaultMetadata.Annotations == nil {
@@ -90,13 +92,13 @@ func (r *SingleClusterReconciler) createOrUpdateSTSHeadlessSvc(ctx context.Conte
 		}
 
 		r.Log.Info("Created new headless service",
-			"name", utils.NamespacedName(service.Namespace, service.Name))
+			"service", klog.KObj(service))
 
 		return nil
 	}
 
 	r.Log.Info("Headless service already exist, checking for update",
-		"name", utils.NamespacedName(service.Namespace, service.Name))
+		"service", klog.KObj(service))
 
 	return r.updateService(
 		ctx,
@@ -124,7 +126,8 @@ func (r *SingleClusterReconciler) reconcileSTSLoadBalancerSvc(ctx context.Contex
 		}, service,
 	); err != nil {
 		if errors.IsNotFound(err) {
-			r.Log.Info("Creating LoadBalancer service for cluster")
+			r.Log.Info("Creating LoadBalancer service for cluster",
+				"service", klog.KRef(r.aeroCluster.Namespace, serviceName))
 			ls := utils.LabelsForAerospikeCluster(r.aeroCluster.Name)
 
 			service = &corev1.Service{
@@ -165,7 +168,7 @@ func (r *SingleClusterReconciler) reconcileSTSLoadBalancerSvc(ctx context.Contex
 			}
 
 			r.Log.Info("Created new LoadBalancer service",
-				"name", service.GetName())
+				"service", klog.KObj(service))
 
 			return nil
 		}
@@ -174,7 +177,7 @@ func (r *SingleClusterReconciler) reconcileSTSLoadBalancerSvc(ctx context.Contex
 	}
 
 	r.Log.Info("LoadBalancer service already exist for cluster, checking for update",
-		"name", utils.NamespacedName(service.Namespace, service.Name))
+		"service", klog.KObj(service))
 
 	if !utils.IsOwnedBy(service, r.aeroCluster) {
 		return fmt.Errorf(
@@ -208,7 +211,7 @@ func (r *SingleClusterReconciler) deleteLBServiceIfPresent(ctx context.Context, 
 	if !utils.IsOwnedBy(service, r.aeroCluster) {
 		r.Log.Info(
 			"LoadBalancer service is not created/owned by operator. Skipping delete",
-			"name", utils.NamespacedName(service.Namespace, service.Name),
+			"service", klog.KObj(service),
 		)
 
 		return nil
@@ -258,13 +261,13 @@ func (r *SingleClusterReconciler) updateLBService(ctx context.Context, service *
 		}
 	} else {
 		r.Log.Info("LoadBalancer service update not required, skipping",
-			"name", utils.NamespacedName(service.Namespace, service.Name))
+			"service", klog.KObj(service))
 
 		return nil
 	}
 
 	r.Log.Info("LoadBalancer service updated",
-		"name", utils.NamespacedName(service.Namespace, service.Name))
+		"service", klog.KObj(service))
 
 	return nil
 }
@@ -297,7 +300,8 @@ func (r *SingleClusterReconciler) createOrUpdatePodService(ctx context.Context, 
 			return err
 		}
 
-		r.Log.Info("Creating new service for pod")
+		r.Log.Info("Creating new service for pod",
+			"pod", klog.KRef(pNamespace, pName))
 		// NodePort will be allocated automatically
 		service = &corev1.Service{
 			ObjectMeta: metav1.ObjectMeta{
@@ -335,13 +339,14 @@ func (r *SingleClusterReconciler) createOrUpdatePodService(ctx context.Context, 
 		}
 
 		r.Log.Info("Created new service for pod",
-			"name", utils.NamespacedName(service.Namespace, service.Name))
+			"service", klog.KObj(service),
+			"pod", klog.KRef(pNamespace, pName))
 
 		return nil
 	}
 
 	r.Log.Info("Service already exist, checking for update",
-		"name", utils.NamespacedName(service.Namespace, service.Name))
+		"service", klog.KObj(service))
 
 	return r.updateService(
 		ctx,
@@ -362,7 +367,7 @@ func (r *SingleClusterReconciler) deletePodService(ctx context.Context, pName, p
 		if errors.IsNotFound(err) {
 			r.Log.Info(
 				"Pod service not found for deletion. Skipping...",
-				"service", serviceName,
+				"service", klog.KRef(serviceName.Namespace, serviceName.Name),
 			)
 
 			return nil
@@ -598,13 +603,13 @@ func (r *SingleClusterReconciler) updateService(
 		}
 
 		r.Log.Info("Service updated",
-			"name", utils.NamespacedName(service.Namespace, service.Name))
+			"service", klog.KObj(service))
 
 		return nil
 	}
 
 	r.Log.Info("Service update not required, skipping",
-		"name", utils.NamespacedName(service.Namespace, service.Name))
+		"service", klog.KObj(service))
 
 	return nil
 }

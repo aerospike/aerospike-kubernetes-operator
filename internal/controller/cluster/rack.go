@@ -14,6 +14,7 @@ import (
 	ls "k8s.io/apimachinery/pkg/labels"
 	"k8s.io/apimachinery/pkg/util/intstr"
 	"k8s.io/apimachinery/pkg/util/sets"
+	"k8s.io/klog/v2"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 
 	asdbv1 "github.com/aerospike/aerospike-kubernetes-operator/v4/api/v1"
@@ -176,9 +177,9 @@ func (r *SingleClusterReconciler) reconcileRacks(ctx context.Context) common.Rec
 			// fall through,
 			// and might run reconcile steps common to all racks before the racks
 			// have scaled up.
-			r.Log.Error(
-				err, "Failed to wait for statefulset to be ready",
-				"STS", stsName,
+			r.Log.V(1).Info(
+				"StatefulSet not ready, will requeue", "statefulSet", klog.KObj(found),
+				"err", err,
 			)
 
 			return common.ReconcileRequeueAfter(1)
@@ -194,7 +195,7 @@ func (r *SingleClusterReconciler) createEmptyRack(ctx context.Context, rackState
 	r.Log.Info("Create new Aerospike cluster rack if needed")
 
 	// NoOp if already exist
-	r.Log.Info("AerospikeCluster", "Spec", r.aeroCluster.Spec)
+	r.Log.V(2).Info("AerospikeCluster", "Spec", r.aeroCluster.Spec)
 
 	// Bad config should not come here. It should be validated in validation hook
 	cmName := utils.GetNamespacedNameForSTSOrConfigMap(r.aeroCluster,
@@ -211,7 +212,7 @@ func (r *SingleClusterReconciler) createEmptyRack(ctx context.Context, rackState
 	if err != nil {
 		r.Log.V(1).Info(
 			"Statefulset setup failed. Deleting statefulset", "name",
-			stsName, "err", err,
+			stsName,
 		)
 		// Delete statefulset and everything related so that it can be properly created and updated in next run
 		if found != nil {
@@ -490,7 +491,7 @@ func (r *SingleClusterReconciler) updateDynamicConfig(
 
 		restartType := restartTypeMap[pod.Name]
 		if restartType != noRestartUpdateConf {
-			r.Log.Info("This Pod doesn't need any update, Skip this", "pod", pod.Name)
+			r.Log.Info("This Pod doesn't need any update, Skip this", "pod", klog.KObj(pod))
 			continue
 		}
 
@@ -549,15 +550,15 @@ func (r *SingleClusterReconciler) reconcileRack(
 	ignorablePodNames sets.Set[string], failedPods []*corev1.Pod,
 ) common.ReconcileResult {
 	r.Log.Info(
-		"Reconcile existing Aerospike cluster statefulset", "stsName",
-		found.Name,
+		"Reconcile existing Aerospike cluster statefulset", "statefulSet",
+		klog.KObj(found),
 	)
 
 	var res common.ReconcileResult
 
 	r.Log.Info(
-		"Ensure rack StatefulSet size is the same as the spec", "stsName",
-		found.Name,
+		"Ensure rack StatefulSet size is the same as the spec", "statefulSet",
+		klog.KObj(found),
 	)
 
 	desiredSize := rackState.Size
@@ -795,15 +796,15 @@ func (r *SingleClusterReconciler) upgradeRack(
 
 	for idx := range podList {
 		pod := podList[idx]
-		r.Log.Info("Check if pod needs upgrade or not", "podName", pod.Name)
+		r.Log.Info("Check if pod needs upgrade or not", "pod", klog.KObj(pod))
 
 		if ignorablePodNames.Has(pod.Name) {
-			r.Log.Info("Pod found in ignore pod list, skipping", "podName", pod.Name)
+			r.Log.Info("Pod found in ignore pod list, skipping", "pod", klog.KObj(pod))
 			continue
 		}
 
 		if r.isPodUpgraded(pod) {
-			r.Log.Info("Pod doesn't need upgrade", "podName", pod.Name)
+			r.Log.Info("Pod doesn't need upgrade", "pod", klog.KObj(pod))
 			continue
 		}
 
@@ -1041,7 +1042,7 @@ func (r *SingleClusterReconciler) scaleDownRack(
 	if isAnyPodRunningAndReady {
 		// Wait for pods to get terminated
 		if err = r.waitForSTSToBeReady(ctx, found, ignorablePodNames); err != nil {
-			r.Log.Error(err, "Failed to wait for statefulset to be ready")
+			r.Log.V(1).Info("StatefulSet not ready, will requeue", "statefulSet", klog.KObj(found), "err", err)
 			return found, common.ReconcileRequeueAfter(1)
 		}
 
@@ -1055,9 +1056,9 @@ func (r *SingleClusterReconciler) scaleDownRack(
 			newSize := *found.Spec.Replicas + utils.Len32(podsBatch)
 			found.Spec.Replicas = &newSize
 
-			r.Log.Error(
-				err, "Cluster validation failed, re-setting AerospikeCluster statefulset to previous size",
-				"size", newSize,
+			r.Log.V(1).Info(
+				"Cluster validation failed, re-setting AerospikeCluster statefulset to previous size",
+				"statefulSet", klog.KObj(found), "size", newSize, "err", err,
 			)
 
 			if err = r.Update(
@@ -1072,7 +1073,7 @@ func (r *SingleClusterReconciler) scaleDownRack(
 			}
 
 			if err = r.waitForSTSToBeReady(ctx, found, ignorablePodNames); err != nil {
-				r.Log.Error(err, "Failed to wait for statefulset to be ready")
+				r.Log.V(1).Info("StatefulSet not ready after reset, will requeue", "statefulSet", klog.KObj(found), "err", err)
 			}
 
 			return found, common.ReconcileRequeueAfter(1)
@@ -1126,7 +1127,7 @@ func (r *SingleClusterReconciler) rollingRestartRack(
 	ignorablePodNames sets.Set[string], restartTypeMap map[string]RestartType,
 	failedPods []*corev1.Pod,
 ) (*appsv1.StatefulSet, common.ReconcileResult) {
-	r.Log.Info("Rolling restart AerospikeCluster statefulset pods", "stsName", found.Name)
+	r.Log.Info("Rolling restart AerospikeCluster statefulset pods", "statefulSet", klog.KObj(found))
 
 	r.Recorder.Eventf(
 		r.aeroCluster, corev1.EventTypeNormal, EventReasonRackRollingRestart,
@@ -1174,13 +1175,13 @@ func (r *SingleClusterReconciler) rollingRestartRack(
 		pod := podList[idx]
 
 		if ignorablePodNames.Has(pod.Name) {
-			r.Log.Info("Pod found in ignore pod list, skipping", "podName", pod.Name)
+			r.Log.Info("Pod found in ignore pod list, skipping", "pod", klog.KObj(pod))
 			continue
 		}
 
 		restartType := restartTypeMap[pod.Name]
 		if restartType == noRestart || restartType == noRestartUpdateConf {
-			r.Log.Info("This Pod doesn't need rolling restart, Skip this", "pod", pod.Name)
+			r.Log.Info("This Pod doesn't need rolling restart, Skip this", "pod", klog.KObj(pod))
 			continue
 		}
 
@@ -1285,7 +1286,7 @@ func (r *SingleClusterReconciler) handleK8sNodeBlockListPods(
 		if blockedK8sNodes.Has(pod.Spec.NodeName) {
 			r.Log.Info(
 				"Pod found in blocked nodes list, migrating to a different node",
-				"podName", pod.Name,
+				"pod", klog.KObj(pod),
 			)
 
 			podsToRestart = append(podsToRestart, pod)
@@ -1382,7 +1383,7 @@ func (r *SingleClusterReconciler) isRackUpgradeNeeded(
 		}
 
 		if !r.isPodOnDesiredImage(pod, true) {
-			r.Log.Info("Pod needs upgrade/downgrade", "podName", pod.Name)
+			r.Log.Info("Pod needs upgrade/downgrade", "pod", klog.KObj(pod))
 			return true, nil
 		}
 	}
@@ -2169,7 +2170,7 @@ func (r *SingleClusterReconciler) reconcileRevisionChangedRacks(
 	if newReplicas > targetSize {
 		r.Log.Info(
 			"Migrating rack to new revisions: reconciling new revision STS to scale down",
-			"stsName", newSts.Name,
+			"statefulSet", klog.KObj(newSts),
 		)
 
 		tempState := &RackState{Rack: newRack.Rack, Size: targetSize}
@@ -2211,7 +2212,7 @@ func (r *SingleClusterReconciler) reconcileRevisionChangedRacks(
 		// Scale down old rack
 		podsToScaleDown := min(batchSizeInt32, oldReplicas)
 		r.Log.Info(
-			"Migrating rack: scaling down old revision STS by a batch", "stsName", oldSts.Name,
+			"Migrating rack: scaling down old revision STS by a batch", "statefulSet", klog.KObj(oldSts),
 			"batchSize", podsToScaleDown,
 		)
 

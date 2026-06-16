@@ -8,6 +8,7 @@ import (
 	"k8s.io/apimachinery/pkg/api/errors"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/types"
+	"k8s.io/klog/v2"
 	"sigs.k8s.io/controller-runtime/pkg/controller/controllerutil"
 
 	asdbv1 "github.com/aerospike/aerospike-kubernetes-operator/v4/api/v1"
@@ -53,7 +54,7 @@ func (r *SingleClusterReconciler) deletePDB(ctx context.Context) error {
 	if !utils.IsOwnedBy(pdb, r.aeroCluster) {
 		r.Log.Info(
 			"PodDisruptionBudget is not created/owned by operator. Skipping delete",
-			"name", getPDBNamespacedName(r.aeroCluster),
+			"podDisruptionBudget", klog.KRef(r.aeroCluster.Namespace, r.aeroCluster.Name),
 		)
 
 		return nil
@@ -95,7 +96,8 @@ func (r *SingleClusterReconciler) createOrUpdatePDB(ctx context.Context) error {
 			return err
 		}
 
-		r.Log.Info("Create PodDisruptionBudget", "name", getPDBNamespacedName(r.aeroCluster))
+		r.Log.Info("Create PodDisruptionBudget",
+			"podDisruptionBudget", klog.KRef(r.aeroCluster.Namespace, r.aeroCluster.Name))
 
 		pdb.SetName(r.aeroCluster.Name)
 		pdb.SetNamespace(r.aeroCluster.Namespace)
@@ -122,14 +124,15 @@ func (r *SingleClusterReconciler) createOrUpdatePDB(ctx context.Context) error {
 			)
 		}
 
-		r.Log.Info("Created new PodDisruptionBudget", "name", getPDBNamespacedName(r.aeroCluster))
+		r.Log.Info("Created new PodDisruptionBudget",
+			"podDisruptionBudget", klog.KRef(r.aeroCluster.Namespace, r.aeroCluster.Name))
 
 		return nil
 	}
 
 	r.Log.Info(
 		"PodDisruptionBudget already exist. Updating existing PodDisruptionBudget if required",
-		"name", getPDBNamespacedName(r.aeroCluster),
+		"podDisruptionBudget", klog.KRef(r.aeroCluster.Namespace, r.aeroCluster.Name),
 	)
 
 	// This will ensure that the cluster is not deployed with PDB created by the user.
@@ -153,7 +156,8 @@ func (r *SingleClusterReconciler) createOrUpdatePDB(ctx context.Context) error {
 			)
 		}
 
-		r.Log.Info("Updated PodDisruptionBudget", "name", getPDBNamespacedName(r.aeroCluster))
+		r.Log.Info("Updated PodDisruptionBudget",
+			"podDisruptionBudget", klog.KRef(r.aeroCluster.Namespace, r.aeroCluster.Name))
 	}
 
 	return nil
