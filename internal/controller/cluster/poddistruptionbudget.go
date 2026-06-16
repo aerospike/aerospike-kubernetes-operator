@@ -136,8 +136,8 @@ func (r *SingleClusterReconciler) createOrUpdatePDB(ctx context.Context) error {
 	// If PDB is not created by operator then no need to even match the spec
 	if !utils.IsOwnedBy(pdb, r.aeroCluster) {
 		return fmt.Errorf(
-			"poddisruptionbudget %s exists but is not created/owned by the operator",
-			getPDBNamespacedName(r.aeroCluster),
+			"could not update PodDisruptionBudget: PodDisruptionBudget is not "+
+				"created/owned by operator. name: %s", getPDBNamespacedName(r.aeroCluster).String(),
 		)
 	}
 

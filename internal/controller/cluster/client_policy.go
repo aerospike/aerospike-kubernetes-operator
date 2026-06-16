@@ -350,7 +350,7 @@ func (r *SingleClusterReconciler) getClientCertificate(
 			ctx, clientCertSpec.SecretCertSource, clusterNamespace,
 		)
 	default:
-		return nil, fmt.Errorf("both secretName and certPathInOperator are not set in operatorClientCertSpec")
+		return nil, fmt.Errorf("both `secretName` and `certPathInOperator` are not set")
 	}
 }
 
@@ -369,23 +369,29 @@ func (r *SingleClusterReconciler) loadCertAndKeyFromSecret(
 			"Warn: Failed to get secret certificates to the pool", "err", err,
 		)
 
-		return nil, fmt.Errorf("could not get secret %s: %w", secretName, err)
+		return nil, fmt.Errorf("could not get secret %+v: %w", secretName, err)
 	}
 
 	crtData, crtExists := found.Data[secretSource.ClientCertFilename]
 	if !crtExists {
-		return nil, fmt.Errorf("certificate %q not found in secret %s", secretSource.ClientCertFilename, secretName)
+		return nil, fmt.Errorf(
+			"can't find certificate `%q` in secret %+v",
+			secretSource.ClientCertFilename, secretName,
+		)
 	}
 
 	keyData, keyExists := found.Data[secretSource.ClientKeyFilename]
 	if !keyExists {
-		return nil, fmt.Errorf("client key %q not found in secret %s", secretSource.ClientKeyFilename, secretName)
+		return nil, fmt.Errorf(
+			"can't find client key `%q` in secret %+v",
+			secretSource.ClientKeyFilename, secretName,
+		)
 	}
 
 	cert, err := tls.X509KeyPair(crtData, keyData)
 	if err != nil {
 		return nil, fmt.Errorf(
-			"could not load X509 key pair from secret %s: %w",
+			"could not load X509 key pair for cluster from secret %+v: %w",
 			secretName, err,
 		)
 	}
@@ -430,7 +436,7 @@ func (r *SingleClusterReconciler) loadCertAndKeyFromFiles(
 	cert, err := tls.X509KeyPair(certData, keyData)
 	if err != nil {
 		return nil, fmt.Errorf(
-			"could not load X509 key pair (cert=%s, key=%s): %w",
+			"could not load X509 key pair for cluster (cert=%s, key=%s): %w",
 			certPath, keyPath, err,
 		)
 	}
