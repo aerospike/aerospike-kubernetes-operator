@@ -19,6 +19,7 @@ import (
 	"k8s.io/client-go/rest"
 	"k8s.io/client-go/tools/record"
 	"k8s.io/client-go/util/retry"
+	"k8s.io/klog/v2"
 	ctrl "sigs.k8s.io/controller-runtime"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 	"sigs.k8s.io/controller-runtime/pkg/reconcile"
@@ -384,7 +385,7 @@ func (r *SingleClusterReconciler) recoverIgnorablePods(
 				if podState.State == utils.PodFailedInGrace {
 					r.Log.Info(
 						"Pod is in failed state but within grace period, will not delete",
-						"pod", podList.Items[idx].Name,
+						"pod", klog.KObj(&podList.Items[idx]),
 					)
 
 					requeueInterval = asdbv1.RequeueIntervalSeconds10
@@ -404,7 +405,7 @@ func (r *SingleClusterReconciler) recoverIgnorablePods(
 					))
 				}
 
-				r.Log.Info("Deleted pod", "pod", podList.Items[idx].Name)
+				r.Log.Info("Deleted pod", "pod", klog.KObj(&podList.Items[idx]))
 			}
 		}
 	}
@@ -560,7 +561,7 @@ func (r *SingleClusterReconciler) updateStatus(ctx context.Context) error {
 	// Add the cluster phase metric
 	r.addClusterPhaseMetric()
 
-	r.Log.Info("Updated status", "status", newAeroCluster.Status)
+	r.Log.V(2).Info("Updated status", "status", newAeroCluster.Status)
 
 	return nil
 }
@@ -643,7 +644,7 @@ func (r *SingleClusterReconciler) updateAccessControlStatus(ctx context.Context)
 		return fmt.Errorf("error updating status: %w", err)
 	}
 
-	r.Log.Info("Updated access control status", "status", newAeroCluster.Status)
+	r.Log.V(2).Info("Updated access control status", "status", newAeroCluster.Status)
 
 	return nil
 }
@@ -1145,7 +1146,7 @@ func (r *SingleClusterReconciler) migrateInitialisedVolumeNames(ctx context.Cont
 		}
 
 		if len(initializedVolumes) > len(r.aeroCluster.Status.Pods[pod.Name].InitializedVolumes) {
-			r.Log.Info("Got updated initialised volumes list", "initVolumes", initializedVolumes, "podName", pod.Name)
+			r.Log.Info("Got updated initialised volumes list", "initVolumes", initializedVolumes, "pod", klog.KObj(pod))
 
 			patch1 := jsonpatch.PatchOperation{
 				Operation: "replace",

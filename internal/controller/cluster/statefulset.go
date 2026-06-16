@@ -18,6 +18,7 @@ import (
 	"k8s.io/apimachinery/pkg/util/intstr"
 	"k8s.io/apimachinery/pkg/util/sets"
 	"k8s.io/client-go/util/retry"
+	"k8s.io/klog/v2"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 	"sigs.k8s.io/controller-runtime/pkg/controller/controllerutil"
 
@@ -287,7 +288,7 @@ func (r *SingleClusterReconciler) waitForSTSToBeReady(
 		// Wait for pod to get ready
 		for i := 0; i < podStatusMaxRetry; i++ {
 			r.Log.V(1).Info(
-				"Check statefulSet pod running and ready", "pod", podName,
+				"Check statefulSet pod running and ready", "pod", klog.KRef(st.Namespace, podName),
 			)
 
 			if err := r.Get(
@@ -309,7 +310,7 @@ func (r *SingleClusterReconciler) waitForSTSToBeReady(
 			if utils.IsPodRunningAndReady(pod) {
 				isReady = true
 
-				r.Log.Info("Pod is running and ready", "pod", podName)
+				r.Log.Info("Pod is running and ready", "pod", klog.KObj(pod))
 
 				break
 			}
@@ -668,7 +669,7 @@ func (r *SingleClusterReconciler) updateSTS(
 	}
 
 	r.Log.V(1).Info(
-		"Saved StatefulSet", "statefulSet", *statefulSet,
+		"Saved StatefulSet", "statefulSet", klog.KObj(statefulSet),
 	)
 
 	return nil
@@ -1218,7 +1219,7 @@ func (r *SingleClusterReconciler) updateAerospikeInitContainerImage(
 			}
 
 			r.Log.V(1).Info(
-				"Saved StatefulSet", "statefulSet", *statefulSet,
+				"Saved StatefulSet", "statefulSet", klog.KObj(statefulSet),
 			)
 		}
 

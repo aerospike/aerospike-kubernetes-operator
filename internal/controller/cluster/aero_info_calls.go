@@ -20,6 +20,7 @@ import (
 
 	corev1 "k8s.io/api/core/v1"
 	"k8s.io/apimachinery/pkg/util/sets"
+	"k8s.io/klog/v2"
 
 	as "github.com/aerospike/aerospike-client-go/v8"
 	asdbv1 "github.com/aerospike/aerospike-kubernetes-operator/v4/api/v1"
@@ -73,7 +74,7 @@ func (r *SingleClusterReconciler) waitForMultipleNodesSafeStopReady(
 
 	// Setup roster after migration.
 	if err = r.getAndSetRoster(ctx, policy, r.aeroCluster.Spec.RosterNodeBlockList, ignorablePodNames); err != nil {
-		r.Log.Error(err, "Failed to set roster for cluster")
+		r.Log.V(1).Info("Failed to set roster for cluster, will requeue", "err", err)
 		return common.ReconcileRequeueAfter(1)
 	}
 
@@ -233,7 +234,7 @@ func (r *SingleClusterReconciler) newPodsHostConnWithOption(pods []corev1.Pod, i
 			if ignorablePodNames.Has(pod.Name) {
 				// This pod is not running and ignorable.
 				r.Log.Info(
-					"Ignoring info call on non-running pod ", "pod", pod.Name,
+					"Ignoring info call on non-running pod", "pod", klog.KObj(pod),
 				)
 
 				continue
@@ -265,7 +266,7 @@ func (r *SingleClusterReconciler) newAsConn(pod *corev1.Pod) *deployment.ASConn 
 		AerospikeHostName: host,
 		AerospikePort:     int(*port),
 		AerospikeTLSName:  tlsName,
-		Log:               r.Log.WithValues("host", pod.Name),
+		Log:               r.Log.WithValues("pod", klog.KObj(pod)),
 	}
 
 	return asConn
@@ -370,7 +371,8 @@ func (r *SingleClusterReconciler) setDynamicConfig(
 			return common.ReconcileError(err)
 		}
 
-		r.Log.Info("Generated dynamic config commands", "commands", fmt.Sprintf("%v", asConfCmds), "pod", podName)
+		r.Log.V(2).Info("Generated dynamic config commands",
+			"commands", asConfCmds, "pod", klog.KRef(r.aeroCluster.Namespace, podName))
 
 		if succeededCmds, err := deployment.SetConfigCommandsOnHosts(r.Log, r.getClientPolicy(ctx), allHostConns,
 			[]*deployment.HostConn{host}, asConfCmds); err != nil {

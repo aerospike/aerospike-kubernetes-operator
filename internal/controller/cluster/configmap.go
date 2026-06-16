@@ -17,6 +17,7 @@ import (
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/types"
 	"k8s.io/apimachinery/pkg/util/sets"
+	"k8s.io/klog/v2"
 	ctrl "sigs.k8s.io/controller-runtime"
 
 	asdbv1 "github.com/aerospike/aerospike-kubernetes-operator/v4/api/v1"
@@ -215,7 +216,7 @@ func (r *SingleClusterReconciler) buildConfigTemplate(rack *asdbv1.Rack) (
 	string, error,
 ) {
 	log := pkgLog.WithValues(
-		"aerospikecluster", utils.ClusterNamespacedName(r.aeroCluster),
+		"aerospikeCluster", klog.KRef(r.aeroCluster.Namespace, r.aeroCluster.Name),
 	)
 
 	configMap := rack.AerospikeConfig.Value
