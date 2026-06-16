@@ -173,21 +173,16 @@ func (r *SingleClusterReconciler) Reconcile() (result ctrl.Result, recErr error)
 		return reconcile.Result{}, recErr
 	}
 
-	ignorablePods, err := r.getIgnorablePods(nil, getConfiguredRackStateList(r.aeroCluster), nil)
+	ignorablePodNames, err := r.getIgnorablePods(nil, getConfiguredRackStateList(r.aeroCluster), nil)
 	if err != nil {
 		r.Log.Error(err, "Failed to determine pods to be ignored")
 
 		return reconcile.Result{}, err
 	}
 
-	// For info calls, host connections, ACL, migrate-fill-delay, and roster we
-	// only skip server-failed pods. Sidecar-failed pods have a running Aerospike
-	// server so they are reachable and must participate in those operations.
-	serverIgnorablePodNames := ignorablePods.ServerFailedPodNames
-
 	// Check if there is any node with quiesce status. We need to undo that
 	// It may have been left from previous steps
-	allHostConns, err := r.newAllHostConnWithOption(serverIgnorablePodNames)
+	allHostConns, err := r.newAllHostConnWithOption(ignorablePodNames)
 	if err != nil {
 		e := fmt.Errorf(
 			"failed to get hostConn for aerospike cluster nodes: %v", err,
@@ -211,7 +206,7 @@ func (r *SingleClusterReconciler) Reconcile() (result ctrl.Result, recErr error)
 
 	// Setup access control.
 	// Assuming all pods must be security enabled or disabled.
-	if err = r.validateAndReconcileAccessControl(nil, serverIgnorablePodNames); err != nil {
+	if err = r.validateAndReconcileAccessControl(nil, ignorablePodNames); err != nil {
 		r.Log.Error(err, "Failed to Reconcile access control")
 		r.Recorder.Eventf(
 			r.aeroCluster, corev1.EventTypeWarning, "ACLUpdateFailed",
@@ -232,7 +227,7 @@ func (r *SingleClusterReconciler) Reconcile() (result ctrl.Result, recErr error)
 	// Redundant safe check to revert migrate-fill-delay if the previous revert operation missed/skipped somehow
 	if res := r.setMigrateFillDelay(
 		policy, &r.aeroCluster.Spec.RackConfig.Racks[0].AerospikeConfig,
-		false, serverIgnorablePodNames,
+		false, ignorablePodNames,
 	); !res.IsSuccess {
 		r.Log.Error(res.Err, "Failed to revert migrate-fill-delay")
 
@@ -262,7 +257,7 @@ func (r *SingleClusterReconciler) Reconcile() (result ctrl.Result, recErr error)
 		}
 
 		// Setup roster
-		if err = r.getAndSetRoster(policy, r.aeroCluster.Spec.RosterNodeBlockList, serverIgnorablePodNames); err != nil {
+		if err = r.getAndSetRoster(policy, r.aeroCluster.Spec.RosterNodeBlockList, ignorablePodNames); err != nil {
 			r.Log.Error(err, "Failed to set roster for cluster")
 			recErr = err
 
@@ -282,11 +277,8 @@ func (r *SingleClusterReconciler) Reconcile() (result ctrl.Result, recErr error)
 		return reconcile.Result{}, err
 	}
 
-	// Try to recover pods only if there are any server-failed ignorable pods.
-	// Sidecar-failed pods are excluded: their Aerospike server is still running
-	// and they are handled by the config-change-driven path in handleFailedPodsInRack.
-	if ignorablePods.ServerFailedPodNames.Len() > 0 {
-		if res := r.recoverIgnorablePods(ignorablePods.ServerFailedPodNames); !res.IsSuccess {
+	if ignorablePodNames.Len() > 0 {
+		if res := r.recoverIgnorablePods(ignorablePodNames); !res.IsSuccess {
 			return res.GetResult()
 		}
 	}
@@ -986,11 +978,9 @@ func (r *SingleClusterReconciler) checkPreviouslyFailedCluster() (bool, common.R
 		}
 
 		if hasFailed {
-			if err = r.recoverFailedCreate(); err != nil {
-				return hasFailed, common.ReconcileError(err)
-			}
+			err = r.recoverFailedCreate()
 
-			return hasFailed, common.ReconcileSuccess()
+			return hasFailed, common.ReconcileError(err)
 		}
 
 		if inGracePeriod {

@@ -37,8 +37,8 @@ import (
 // waitForMultipleNodesSafeStopReady waits until the input pods are safe to stop.
 // ignorableServerFailedPodNames are pods whose Aerospike server is unreachable and are
 // skipped for cluster-operation queries (host connections, roster, quiesce).
-// ignorablePods.SidecarFailedPodNames are pods whose server is running but whose sidecar
-// is failing; they are included in all cluster-operation calls since their servers are reachable.
+// Pods with a running server but a failing sidecar are not in this set; they are
+// included in all cluster-operation calls since their servers are still reachable.
 func (r *SingleClusterReconciler) waitForMultipleNodesSafeStopReady(
 	pods []*corev1.Pod, ignorableServerFailedPodNames sets.Set[string],
 ) common.ReconcileResult {

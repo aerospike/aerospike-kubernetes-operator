@@ -1154,51 +1154,12 @@ func updateSTSContainers(
 	return finalContainers
 }
 
-func (r *SingleClusterReconciler) waitForAllSTSToBeReady(ignorablePodNames sets.Set[string]) error {
-	r.Log.Info("Waiting for all cluster STSs to be ready")
-
-	allRackIdentifiers := sets.NewString()
-
-	statusRacks := r.aeroCluster.Status.RackConfig.Racks
-	for idx := range statusRacks {
-		allRackIdentifiers.Insert(utils.GetRackIdentifier(statusRacks[idx].ID, statusRacks[idx].Revision))
-	}
-
-	// Check for newly added racks also because we do not check for these racks just after they are added
-	specRacks := r.aeroCluster.Spec.RackConfig.Racks
-	for idx := range specRacks {
-		allRackIdentifiers.Insert(utils.GetRackIdentifier(specRacks[idx].ID, specRacks[idx].Revision))
-	}
-
-	for rackIdentifier := range allRackIdentifiers {
-		st := &appsv1.StatefulSet{}
-		stsName := utils.GetNamespacedNameForSTSOrConfigMap(r.aeroCluster, rackIdentifier)
-
-		if err := r.Get(context.TODO(), stsName, st); err != nil {
-			if !errors.IsNotFound(err) {
-				return err
-			}
-
-			// Skip if a sts not found. It may have be deleted and status may not have been updated yet
-			continue
-		}
-
-		if err := r.waitForSTSToBeReady(st, ignorablePodNames); err != nil {
-			return err
-		}
-	}
-
-	return nil
-}
-
 // waitForAllAerospikeServersRunning waits for the Aerospike server container to
 // be in Running state on every non-ignorable pod across all cluster StatefulSets.
-//
-// Unlike waitForAllSTSToBeReady it does NOT require sidecars or other containers
-// to be ready — only the server container must be Running. Pods whose names are
-// in ignorablePods.ServerFailedPodNames are skipped entirely; sidecar-failed
-// pods are NOT skipped because their server containers are still reachable.
-func (r *SingleClusterReconciler) waitForAllAerospikeServersRunning(ignorablePods IgnorablePods) error {
+// It does NOT require sidecars or other containers to be ready. Pods whose names
+// are in ignorablePodNames are skipped entirely; sidecar-failed pods are NOT
+// skipped because their server containers are still reachable.
+func (r *SingleClusterReconciler) waitForAllAerospikeServersRunning(ignorablePodNames sets.Set[string]) error {
 	r.Log.Info("Waiting for all Aerospike server containers to be running")
 
 	allRackIdentifiers := sets.NewString()
@@ -1225,73 +1186,8 @@ func (r *SingleClusterReconciler) waitForAllAerospikeServersRunning(ignorablePod
 			continue
 		}
 
-		if err := r.waitForSTSAerospikeServersRunning(st, ignorablePods); err != nil {
+		if err := r.waitForServerContainersRunning(st, ignorablePodNames); err != nil {
 			return err
-		}
-	}
-
-	return nil
-}
-
-// waitForSTSAerospikeServersRunning polls each pod in the StatefulSet until the
-// Aerospike server container reports Running state.
-// Only pods in ignorablePods.ServerFailedPodNames are skipped; sidecar-failed
-// pods are included because their server containers are still reachable.
-// Returns ErrPodFailed if the server container enters an irrecoverable state, or
-// ErrSTSReadinessTimeout if it does not start within the allotted window.
-func (r *SingleClusterReconciler) waitForSTSAerospikeServersRunning(
-	st *appsv1.StatefulSet, ignorablePods IgnorablePods,
-) error {
-	const (
-		podStatusMaxRetry      = 18
-		podStatusRetryInterval = time.Second * 10
-	)
-
-	// Sidecar-failed pods are intentionally not skipped: their Aerospike server
-	// containers are still running and reachable for cluster operations.
-	ignorableNames := ignorablePods.ServerFailedPodNames
-
-	for podIndex := int32(0); podIndex < *st.Spec.Replicas; podIndex++ {
-		podName := getSTSPodName(st.Name, podIndex)
-		if ignorableNames.Has(podName) {
-			continue
-		}
-
-		pod := &corev1.Pod{}
-
-		var serverRunning bool
-
-		for i := 0; i < podStatusMaxRetry; i++ {
-			if err := r.Get(
-				context.TODO(),
-				types.NamespacedName{Name: podName, Namespace: st.Namespace},
-				pod,
-			); err != nil {
-				return fmt.Errorf("failed to get pod %s: %v", podName, err)
-			}
-
-			// Fail fast if the server container itself enters an irrecoverable state.
-			// Sidecar failures are intentionally not checked here — a broken sidecar
-			// does not prevent the server from running.
-			if podState := utils.CheckServerFailedWithGrace(pod, false); podState.State == utils.PodFailed {
-				return fmt.Errorf("%w: pod %s: %v", ErrPodFailed, podName, podState.Reason)
-			}
-
-			if utils.IsAerospikeServerRunning(pod) {
-				serverRunning = true
-				r.Log.Info("Aerospike server container is running", "pod", podName)
-
-				break
-			}
-
-			time.Sleep(podStatusRetryInterval)
-		}
-
-		if !serverRunning {
-			return fmt.Errorf(
-				"%w: Aerospike server container on pod %s did not start within the allotted time",
-				ErrSTSReadinessTimeout, podName,
-			)
 		}
 	}
 
