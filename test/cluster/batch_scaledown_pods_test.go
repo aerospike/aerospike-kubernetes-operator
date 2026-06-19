@@ -173,24 +173,22 @@ var _ = Describe("BatchScaleDown", func() {
 			Expect(err).To(HaveOccurred())
 		})
 
-		Context("maxIgnorablePods as percentage on scale-down with a failed pod", func() {
-			It("allows scale-down with a failed pod when maxIgnorablePods is a percentage covering one pod", func() {
-				aeroCluster, err := getCluster(k8sClient, ctx, clusterNamespacedName)
-				Expect(err).ToNot(HaveOccurred())
+		It("Should allow scale-down with a failed pod when maxIgnorablePods is a percentage covering one pod", func() {
+			aeroCluster, err := getCluster(k8sClient, ctx, clusterNamespacedName)
+			Expect(err).ToNot(HaveOccurred())
 
-				failedPodName := clusterName + "-0-3"
+			failedPodName := clusterName + "-0-3"
 
-				By("Marking the pod as failed")
-				Expect(markPodAsFailed(ctx, k8sClient, failedPodName, namespace)).ToNot(HaveOccurred())
+			By("Marking the pod as failed")
+			Expect(markPodAsFailed(ctx, k8sClient, failedPodName, namespace)).ToNot(HaveOccurred())
 
-				By("Setting maxIgnorablePods=34% and triggering scale-down")
+			By("Setting maxIgnorablePods=34% and triggering scale-down")
 
-				maxIgnorable := intstr.FromString("34%")
-				aeroCluster.Spec.RackConfig.MaxIgnorablePods = &maxIgnorable
-				aeroCluster.Spec.Size--
+			maxIgnorable := intstr.FromString("34%")
+			aeroCluster.Spec.RackConfig.MaxIgnorablePods = &maxIgnorable
+			aeroCluster.Spec.Size--
 
-				Expect(updateCluster(k8sClient, ctx, aeroCluster)).ToNot(HaveOccurred())
-			})
+			Expect(updateCluster(k8sClient, ctx, aeroCluster)).ToNot(HaveOccurred())
 		})
 	})
 
