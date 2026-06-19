@@ -247,20 +247,20 @@ var _ = Describe(
 							},
 						)
 
-						// rack revision with per-rack InputStorage and failed-pod PVC retention.
-						DescribeTable("failed pod local PVCs during rack revision with per-rack InputStorage",
-							func(deleteOnRecovery bool, createBy string, expectPVCDeleted bool) {
+						// Rack-revision teardown of the old revision removes PVCs based on per-rack InputStorage
+						// cascade-delete policy, not DeleteLocalStorageOnPodRecovery (failed-pod recovery path).
+						DescribeTable(
+							"failed pod PVCs after rack revision: per-rack InputStorage InputCascadeDelete policy",
+							func(inputCascadeDelete bool, createBy string, expectPVCDeleted bool) {
 								By(createBy)
 
 								aeroCluster := createDummyClusterWithRackRevision(clusterNamespacedName, versionV1, 6)
 								for idx := range aeroCluster.Spec.RackConfig.Racks {
 									st := lib.DeepCopy(&aeroCluster.Spec.Storage).(*asdbv1.AerospikeStorageSpec)
-									st.DeleteLocalStorageOnPodRecovery = ptr.To(deleteOnRecovery)
+									// Fixed: rack revision does not consult this flag for old-revision PVC teardown.
+									st.DeleteLocalStorageOnPodRecovery = ptr.To(false)
 									st.LocalStorageClasses = []string{storageClass}
-									// Rack-revision scale-down removes PVCs via cascadeDelete on volumes/policies;
-									// deleteLocalStorageOnPodRecovery is not consulted on that path. Enable cascade
-									// for the row that expects PVCs to disappear after old-revision teardown.
-									if deleteOnRecovery {
+									if inputCascadeDelete {
 										st.BlockVolumePolicy.InputCascadeDelete = &cascadeDeleteTrue
 										st.FileSystemVolumePolicy.InputCascadeDelete = &cascadeDeleteTrue
 									}
@@ -300,18 +300,18 @@ var _ = Describe(
 								Expect(validatePVCDeletion(ctx, oldPVC, expectPVCDeleted)).ToNot(HaveOccurred())
 							},
 							Entry(
-								"Should keep failed pod PVCs during rack revision when rack InputStorage sets "+
-									"deleteLocalStorageOnPodRecovery false",
+								"Should keep failed pod PVCs after rack revision when per-rack InputStorage "+
+									"InputCascadeDelete is disabled (default)",
 								false,
-								"Creating cluster with per-rack InputStorage (safe failure recovery)",
+								"Creating cluster with per-rack InputStorage (no InputCascadeDelete on volume policies)",
 								false,
 							),
 							Entry(
-								"Should delete failed pod local PVCs during rack revision when rack InputStorage sets "+
-									"deleteLocalStorageOnPodRecovery true and per-rack cascade delete is enabled "+
-									"(PVC removal on old-revision teardown follows cascadeDelete policy)",
+								"Should delete failed pod PVCs after rack revision when per-rack InputStorage "+
+									"enables InputCascadeDelete on block and filesystem volume policies "+
+									"(old-revision teardown removes PVCs per cascade policy)",
 								true,
-								"Creating cluster with per-rack InputStorage (delete on failure recovery + cascade delete)",
+								"Creating cluster with per-rack InputStorage (InputCascadeDelete enabled)",
 								true,
 							),
 							Serial,
