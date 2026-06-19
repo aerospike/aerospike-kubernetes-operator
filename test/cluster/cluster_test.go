@@ -1003,7 +1003,13 @@ func clusterWithMaxIgnorablePod(ctx goctx.Context) {
 					Skip("requires at least 2 nodes for pending+failed budget test")
 				}
 
+				// Use non-SC dummy sized to node count so one extra replica stays Pending (MultiPodPerHost
+				// must be false). deployClusterForMaxIgnorablePods deploys 2 racks which lets scale-down reconcile
+				// past this wait's criteria, so this case keeps the slimmer topology.
 				aeroCluster := createNonSCDummyAerospikeCluster(clusterNamespacedName, n)
+				aeroCluster.Spec.PodSpec.MultiPodPerHost = ptr.To(false)
+				randomizeServicePorts(aeroCluster, false, GinkgoParallelProcess())
+
 				Expect(DeployCluster(k8sClient, ctx, aeroCluster)).ToNot(HaveOccurred())
 
 				aeroCluster, err = getCluster(k8sClient, ctx, clusterNamespacedName)
@@ -1030,21 +1036,7 @@ func clusterWithMaxIgnorablePod(ctx goctx.Context) {
 				}, 5*time.Minute, 5*time.Second).Should(BeNumerically(">=", 1),
 					"expected at least one Pending pod after scale-up")
 
-				podList, plerr := getPodList(aeroCluster, k8sClient)
-				Expect(plerr).ToNot(HaveOccurred())
-
-				var victim string
-
-				for i := range podList.Items {
-					p := &podList.Items[i]
-					if p.Status.Phase == v1.PodRunning && utils.IsPodRunningAndReady(p) {
-						victim = p.Name
-
-						break
-					}
-				}
-
-				Expect(victim).ToNot(BeEmpty(), "expected a running pod to mark failed")
+				victim := fmt.Sprintf("%s-%d-0", clusterNamespacedName.Name, asdbv1.DefaultRackID)
 
 				Expect(markPodAsFailed(ctx, k8sClient, victim, clusterNamespacedName.Namespace)).ToNot(HaveOccurred())
 
@@ -1086,7 +1078,8 @@ func clusterWithMaxIgnorablePod(ctx goctx.Context) {
 				aeroCluster, err = getCluster(k8sClient, ctx, clusterNamespacedName)
 				Expect(err).ToNot(HaveOccurred())
 
-				aeroCluster.Spec.Size--
+				// Decrease by 2 so rack 1 scale-down is attempted (single decrement can leave rack-1 untouched).
+				aeroCluster.Spec.Size -= 2
 
 				Expect(k8sClient.Update(ctx, aeroCluster)).ToNot(HaveOccurred())
 
