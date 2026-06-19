@@ -245,7 +245,7 @@ func (r *SingleClusterReconciler) getRollingRestartTypePod(
 
 	podSpecUpdated, err := r.isAnyPodSpecUpdated(ctx, rackState, pod)
 	if err != nil {
-		return restartType, fmt.Errorf("could not check whether pod %s spec is updated: %w",
+		return restartType, fmt.Errorf("check pod %s spec update state: %w",
 			utils.GetNamespacedNameString(pod), err)
 	}
 
@@ -382,7 +382,7 @@ func (r *SingleClusterReconciler) rollingRestartPods(
 				ignorablePodNames,
 			); !res.IsSuccess {
 				if res.Err != nil {
-					res.Err = fmt.Errorf("could not set migrate-fill-delay to `0` for rack %d: %w", rackState.Rack.ID, res.Err)
+					res.Err = fmt.Errorf("set migrate-fill-delay to `0` for rack %d: %w", rackState.Rack.ID, res.Err)
 				}
 
 				return res
@@ -535,7 +535,7 @@ func (r *SingleClusterReconciler) restartPods(
 			}
 
 			if err := r.Delete(ctx, pod); err != nil {
-				return common.ReconcileError(fmt.Errorf("could not delete pod %s: %w", utils.GetNamespacedNameString(pod), err))
+				return common.ReconcileError(fmt.Errorf("delete pod %s: %w", utils.GetNamespacedNameString(pod), err))
 			}
 
 			restartedPods = append(restartedPods, pod)
@@ -716,7 +716,7 @@ func (r *SingleClusterReconciler) safelyDeletePodsAndEnsureImageUpdated(
 				ignorablePodNames,
 			); !res.IsSuccess {
 				if res.Err != nil {
-					res.Err = fmt.Errorf("could not revert migrate-fill-delay for rack %d: %w", rackState.Rack.ID, res.Err)
+					res.Err = fmt.Errorf("revert migrate-fill-delay for rack %d: %w", rackState.Rack.ID, res.Err)
 				}
 
 				return res
@@ -734,7 +734,7 @@ func (r *SingleClusterReconciler) safelyDeletePodsAndEnsureImageUpdated(
 				ignorablePodNames,
 			); !res.IsSuccess {
 				if res.Err != nil {
-					res.Err = fmt.Errorf("could not set migrate-fill-delay to `0` for rack %d: %w", rackState.Rack.ID, res.Err)
+					res.Err = fmt.Errorf("set migrate-fill-delay to `0` for rack %d: %w", rackState.Rack.ID, res.Err)
 				}
 
 				return res
@@ -906,7 +906,7 @@ func (r *SingleClusterReconciler) cleanupPods(
 
 	clusterPodList, err := r.getClusterPodList(ctx)
 	if err != nil {
-		return fmt.Errorf("could not cleanup pod PVCs %s: %w", utils.ClusterNamespacedName(r.aeroCluster), err)
+		return fmt.Errorf("clean up pod PVCs for cluster %s: %w", utils.ClusterNamespacedName(r.aeroCluster), err)
 	}
 
 	podNameSet := sets.NewString(podNames...)
@@ -1664,7 +1664,7 @@ func isAllDynamicConfig(log logger, specToStatusDiffs asconfig.DynamicConfigMap,
 func getFlatConfig(log logger, confStr string) (*asconfig.Conf, error) {
 	asConf, err := asconfig.NewASConfigFromBytes(log, []byte(confStr), asconfig.AeroConfig)
 	if err != nil {
-		return nil, fmt.Errorf("unable to load config map by lib: %w", err)
+		return nil, fmt.Errorf("load ConfigMap via management lib: %w", err)
 	}
 
 	return asConf.GetFlatMap(), nil
@@ -1681,12 +1681,12 @@ func getConfDiff(log logger, specConfig map[string]interface{}, podAnnotations m
 
 	asConfStatus, err := getFlatConfig(log, statusFromAnnotation)
 	if err != nil {
-		return nil, fmt.Errorf("unable to load config map by lib: %w", err)
+		return nil, fmt.Errorf("load ConfigMap via management lib: %w", err)
 	}
 
 	asConf, err := asconfig.NewMapAsConfig(log, specConfig)
 	if err != nil {
-		return nil, fmt.Errorf("unable to load config map by lib: %w", err)
+		return nil, fmt.Errorf("load ConfigMap via management lib: %w", err)
 	}
 
 	// special handling for DNE in ldap configurations
@@ -1696,7 +1696,7 @@ func getConfDiff(log logger, specConfig map[string]interface{}, podAnnotations m
 
 	asConfSpec, err := getFlatConfig(log, specConfFile)
 	if err != nil {
-		return nil, fmt.Errorf("unable to load config map by lib: %w", err)
+		return nil, fmt.Errorf("load ConfigMap via management lib: %w", err)
 	}
 
 	specToStatusDiffs, err := asconfig.ConfDiff(log, *asConfSpec, *asConfStatus,
@@ -1952,7 +1952,7 @@ func (r *SingleClusterReconciler) getEvictionBlockedPods(ctx context.Context) (s
 	// List all pods in the cluster namespace
 	pods, err := r.getClusterPodList(ctx)
 	if err != nil {
-		return evictionBlockedPods, fmt.Errorf("could not list pods for cluster %s: %w",
+		return evictionBlockedPods, fmt.Errorf("list pods for cluster %s: %w",
 			utils.ClusterNamespacedName(r.aeroCluster), err)
 	}
 

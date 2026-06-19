@@ -377,7 +377,7 @@ func (r *SingleClusterReconciler) deleteRackConfigMap(ctx context.Context, names
 			return nil
 		}
 
-		return fmt.Errorf("could not delete rack ConfigMap %s: %w", namespacedName, err)
+		return fmt.Errorf("delete rack ConfigMap %s: %w", namespacedName, err)
 	}
 
 	return nil

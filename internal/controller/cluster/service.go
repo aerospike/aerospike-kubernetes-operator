@@ -373,7 +373,7 @@ func (r *SingleClusterReconciler) deletePodService(ctx context.Context, pName, p
 			return nil
 		}
 
-		return fmt.Errorf("could not delete Service for pod %s: %w", serviceName, err)
+		return fmt.Errorf("delete Service for pod %s: %w", serviceName, err)
 	}
 
 	return nil

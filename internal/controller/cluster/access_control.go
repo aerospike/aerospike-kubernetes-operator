@@ -87,7 +87,7 @@ func (r *SingleClusterReconciler) reconcileAccessControl(
 
 	currentState, err := asdbv1.CopyStatusToSpec(&r.aeroCluster.Status.AerospikeClusterStatusSpec)
 	if err != nil {
-		return fmt.Errorf("could not copy cluster status to spec: %w", err)
+		return fmt.Errorf("copy cluster status to spec: %w", err)
 	}
 
 	// Get admin policy based in desired state so that new timeout updates can be applied. It is safe.
@@ -520,14 +520,14 @@ func (roleCreate aerospikeRoleCreateUpdate) createRole(
 
 	aerospikePrivileges, err := privilegeStringToAerospikePrivilege(roleCreate.privileges)
 	if err != nil {
-		return fmt.Errorf("could not create role %s: %w", roleCreate.name, err)
+		return fmt.Errorf("create role %s: %w", roleCreate.name, err)
 	}
 
 	if err = client.CreateRole(
 		adminPolicy, roleCreate.name, aerospikePrivileges, roleCreate.whitelist,
 		roleCreate.readQuota, roleCreate.writeQuota,
 	); err != nil {
-		return fmt.Errorf("could not create role %s: %w", roleCreate.name, err)
+		return fmt.Errorf("create role %s: %w", roleCreate.name, err)
 	}
 
 	logger.Info("Created role", "role name", roleCreate.name)
@@ -551,7 +551,7 @@ func (roleCreate aerospikeRoleCreateUpdate) updateRole(
 	// Find the privileges to drop.
 	currentPrivileges, err := AerospikePrivilegeToPrivilegeString(role.Privileges)
 	if err != nil {
-		return fmt.Errorf("could not update role %s: %w", roleCreate.name, err)
+		return fmt.Errorf("update role %s: %w", roleCreate.name, err)
 	}
 
 	desiredPrivileges := roleCreate.privileges
@@ -561,7 +561,7 @@ func (roleCreate aerospikeRoleCreateUpdate) updateRole(
 	if len(privilegesToRevoke) > 0 {
 		aerospikePrivileges, err := privilegeStringToAerospikePrivilege(privilegesToRevoke)
 		if err != nil {
-			return fmt.Errorf("could not update role %s: %w", roleCreate.name, err)
+			return fmt.Errorf("update role %s: %w", roleCreate.name, err)
 		}
 
 		if err := client.RevokePrivileges(
@@ -582,7 +582,7 @@ func (roleCreate aerospikeRoleCreateUpdate) updateRole(
 	if len(privilegesToGrant) > 0 {
 		aerospikePrivileges, err := privilegeStringToAerospikePrivilege(privilegesToGrant)
 		if err != nil {
-			return fmt.Errorf("could not update role %s: %w", roleCreate.name, err)
+			return fmt.Errorf("update role %s: %w", roleCreate.name, err)
 		}
 
 		if err := client.GrantPrivileges(
@@ -703,7 +703,7 @@ func (userCreate aerospikeUserCreateUpdate) createUser(
 	if err := client.CreateUser(
 		adminPolicy, userCreate.name, *userCreate.password, userCreate.roles,
 	); err != nil {
-		return fmt.Errorf("could not create user %s: %w", userCreate.name, err)
+		return fmt.Errorf("create user %s: %w", userCreate.name, err)
 	}
 
 	logger.Info("Created user", "username", userCreate.name)

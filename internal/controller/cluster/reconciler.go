@@ -426,7 +426,7 @@ func (r *SingleClusterReconciler) validateAndReconcileAccessControl(
 ) error {
 	enabled, err := asdbv1.IsSecurityEnabled(r.aeroCluster.Spec.AerospikeConfig.Value)
 	if err != nil {
-		return fmt.Errorf("could not get cluster security status: %w", err)
+		return fmt.Errorf("get cluster security status: %w", err)
 	}
 
 	if !enabled {
@@ -440,13 +440,13 @@ func (r *SingleClusterReconciler) validateAndReconcileAccessControl(
 	if selectedPods == nil {
 		conns, err = r.newAllHostConnWithOption(ctx, ignorablePodNames)
 		if err != nil {
-			return fmt.Errorf("could not get host connections for cluster %s nodes: %w",
+			return fmt.Errorf("get host connections for cluster %s nodes: %w",
 				utils.ClusterNamespacedName(r.aeroCluster), err)
 		}
 	} else {
 		conns, err = r.newPodsHostConnWithOption(selectedPods, ignorablePodNames)
 		if err != nil {
-			return fmt.Errorf("could not get host connections for selected pods of cluster %s: %w",
+			return fmt.Errorf("get host connections for selected pods of cluster %s: %w",
 				utils.ClusterNamespacedName(r.aeroCluster), err)
 		}
 	}
@@ -542,7 +542,7 @@ func (r *SingleClusterReconciler) updateStatus(ctx context.Context) error {
 	if !newAeroCluster.Status.IsReadinessProbeEnabled {
 		clusterReadinessEnable, gErr := r.getClusterReadinessStatus(ctx)
 		if gErr != nil {
-			return fmt.Errorf("could not get cluster readiness status: %w", gErr)
+			return fmt.Errorf("get cluster readiness status: %w", gErr)
 		}
 
 		newAeroCluster.Status.IsReadinessProbeEnabled = clusterReadinessEnable
@@ -951,7 +951,7 @@ func (r *SingleClusterReconciler) deleteExternalResources(ctx context.Context) e
 	// Delete PVCs for any remaining old removed racks
 	pvcItems, err := r.getClusterPVCList(ctx)
 	if err != nil {
-		return fmt.Errorf("could not find pvc for cluster %s: %w", utils.ClusterNamespacedName(r.aeroCluster), err)
+		return fmt.Errorf("find PVC for cluster %s: %w", utils.ClusterNamespacedName(r.aeroCluster), err)
 	}
 
 	// removePVCs should be passed only filtered pvc otherwise rack pvc may be removed using global storage
@@ -984,7 +984,7 @@ func (r *SingleClusterReconciler) deleteExternalResources(ctx context.Context) e
 	if _, err := r.removePVCsAsync(
 		ctx, &r.aeroCluster.Spec.Storage, filteredPVCItems,
 	); err != nil {
-		return fmt.Errorf("could not remove PVCs for cluster %s: %w", utils.ClusterNamespacedName(r.aeroCluster), err)
+		return fmt.Errorf("remove PVCs for cluster %s: %w", utils.ClusterNamespacedName(r.aeroCluster), err)
 	}
 
 	return nil
