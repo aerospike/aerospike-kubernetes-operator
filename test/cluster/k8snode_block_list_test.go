@@ -197,6 +197,7 @@ func validatePVCDeletion(ctx context.Context, pvcUIDMap map[string]types.UID, sh
 		)
 
 		if err := k8sClient.Get(ctx, pvcNamespacesName, pvc); err != nil {
+			// when expecting local PVC deletion, NotFound means the old PVC was removed; treat as success
 			if shouldDeletePVC && apierrors.IsNotFound(err) {
 				continue
 			}
