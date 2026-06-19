@@ -42,11 +42,27 @@ func NamespacedName(namespace, name string) string {
 	return fmt.Sprintf("%s/%s", namespace, name)
 }
 
+// NamespacedNames returns namespace/name identities for all names in namespace.
+func NamespacedNames(namespace string, names []string) []string {
+	namespacedNames := make([]string, 0, len(names))
+	for _, name := range names {
+		namespacedNames = append(namespacedNames, NamespacedName(namespace, name))
+	}
+
+	return namespacedNames
+}
+
 func GetNamespacedName(obj meta.Object) types.NamespacedName {
 	return types.NamespacedName{
 		Namespace: obj.GetNamespace(),
 		Name:      obj.GetName(),
 	}
+}
+
+// GetNamespacedNameString returns the namespace/name identity of obj as a string,
+// for use in free-form error and event text.
+func GetNamespacedNameString(obj meta.Object) string {
+	return NamespacedName(obj.GetNamespace(), obj.GetName())
 }
 
 func GetNamespacedNameForSTSOrConfigMap(

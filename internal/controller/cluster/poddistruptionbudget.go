@@ -8,6 +8,7 @@ import (
 	"k8s.io/apimachinery/pkg/api/errors"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/types"
+	"k8s.io/klog/v2"
 	"sigs.k8s.io/controller-runtime/pkg/controller/controllerutil"
 
 	asdbv1 "github.com/aerospike/aerospike-kubernetes-operator/v4/api/v1"
@@ -15,13 +16,13 @@ import (
 	"github.com/aerospike/aerospike-kubernetes-operator/v4/pkg/utils"
 )
 
-func (r *SingleClusterReconciler) reconcilePDB() error {
+func (r *SingleClusterReconciler) reconcilePDB(ctx context.Context) error {
 	// If spec.DisablePDB is set to true, then we don't need to create PDB
 	// If it exists then delete it
 	if asdbv1.GetBool(r.aeroCluster.Spec.DisablePDB) {
 		if !asdbv1.GetBool(r.aeroCluster.Status.DisablePDB) {
 			r.Log.Info("PodDisruptionBudget is disabled. Deleting old PodDisruptionBudget")
-			return r.deletePDB()
+			return r.deletePDB(ctx)
 		}
 
 		r.Log.Info("PodDisruptionBudget is disabled, skipping PodDisruptionBudget creation")
@@ -30,15 +31,15 @@ func (r *SingleClusterReconciler) reconcilePDB() error {
 	}
 
 	// Create or update PodDisruptionBudget
-	return r.createOrUpdatePDB()
+	return r.createOrUpdatePDB(ctx)
 }
 
-func (r *SingleClusterReconciler) deletePDB() error {
+func (r *SingleClusterReconciler) deletePDB(ctx context.Context) error {
 	pdb := &v1.PodDisruptionBudget{}
 
 	// Get the PodDisruptionBudget
 	if err := r.Get(
-		context.TODO(), types.NamespacedName{
+		ctx, types.NamespacedName{
 			Name: r.aeroCluster.Name, Namespace: r.aeroCluster.Namespace,
 		}, pdb,
 	); err != nil {
@@ -53,23 +54,26 @@ func (r *SingleClusterReconciler) deletePDB() error {
 	if !utils.IsOwnedBy(pdb, r.aeroCluster) {
 		r.Log.Info(
 			"PodDisruptionBudget is not created/owned by operator. Skipping delete",
-			"name", getPDBNamespacedName(r.aeroCluster),
+			"podDisruptionBudget", klog.KRef(r.aeroCluster.Namespace, r.aeroCluster.Name),
 		)
 
 		return nil
 	}
 
 	// Delete the PodDisruptionBudget
-	return r.Delete(context.TODO(), pdb)
+	return r.Delete(ctx, pdb)
 }
 
-func (r *SingleClusterReconciler) createOrUpdatePDB() error {
+func (r *SingleClusterReconciler) createOrUpdatePDB(ctx context.Context) error {
 	// Check for cluster readiness status only when it's false.
 	// Once enabled it won't be disabled.
 	if !r.IsStatusEmpty() && !r.aeroCluster.Status.IsReadinessProbeEnabled {
-		clusterReadinessEnabled, err := r.getClusterReadinessStatus()
+		clusterReadinessEnabled, err := r.getClusterReadinessStatus(ctx)
 		if err != nil {
-			return fmt.Errorf("failed to get cluster readiness status: %v", err)
+			return fmt.Errorf(
+				"could not get cluster readiness status for cluster %s: %w",
+				utils.ClusterNamespacedName(r.aeroCluster), err,
+			)
 		}
 
 		if !clusterReadinessEnabled {
@@ -84,7 +88,7 @@ func (r *SingleClusterReconciler) createOrUpdatePDB() error {
 	pdb := &v1.PodDisruptionBudget{}
 
 	if err := r.Get(
-		context.TODO(), types.NamespacedName{
+		ctx, types.NamespacedName{
 			Name: r.aeroCluster.Name, Namespace: r.aeroCluster.Namespace,
 		}, pdb,
 	); err != nil {
@@ -92,7 +96,8 @@ func (r *SingleClusterReconciler) createOrUpdatePDB() error {
 			return err
 		}
 
-		r.Log.Info("Create PodDisruptionBudget", "name", getPDBNamespacedName(r.aeroCluster))
+		r.Log.Info("Create PodDisruptionBudget",
+			"podDisruptionBudget", klog.KRef(r.aeroCluster.Namespace, r.aeroCluster.Name))
 
 		pdb.SetName(r.aeroCluster.Name)
 		pdb.SetNamespace(r.aeroCluster.Namespace)
@@ -111,30 +116,31 @@ func (r *SingleClusterReconciler) createOrUpdatePDB() error {
 		}
 
 		if err = r.Create(
-			context.TODO(), pdb, common.CreateOption,
+			ctx, pdb, common.CreateOption,
 		); err != nil {
 			return fmt.Errorf(
-				"failed to create PodDisruptionBudget: %v",
-				err,
+				"could not create PodDisruptionBudget %s: %w",
+				getPDBNamespacedName(r.aeroCluster), err,
 			)
 		}
 
-		r.Log.Info("Created new PodDisruptionBudget", "name", getPDBNamespacedName(r.aeroCluster))
+		r.Log.Info("Created new PodDisruptionBudget",
+			"podDisruptionBudget", klog.KRef(r.aeroCluster.Namespace, r.aeroCluster.Name))
 
 		return nil
 	}
 
 	r.Log.Info(
 		"PodDisruptionBudget already exist. Updating existing PodDisruptionBudget if required",
-		"name", getPDBNamespacedName(r.aeroCluster),
+		"podDisruptionBudget", klog.KRef(r.aeroCluster.Namespace, r.aeroCluster.Name),
 	)
 
 	// This will ensure that the cluster is not deployed with PDB created by the user.
 	// If PDB is not created by operator then no need to even match the spec
 	if !utils.IsOwnedBy(pdb, r.aeroCluster) {
 		return fmt.Errorf(
-			"failed to update PodDisruptionBudget, PodDisruptionBudget is not "+
-				"created/owned by operator. name: %s", getPDBNamespacedName(r.aeroCluster),
+			"could not update PodDisruptionBudget: PodDisruptionBudget is not "+
+				"created/owned by operator. name: %s", getPDBNamespacedName(r.aeroCluster).String(),
 		)
 	}
 
@@ -142,15 +148,16 @@ func (r *SingleClusterReconciler) createOrUpdatePDB() error {
 		pdb.Spec.MaxUnavailable = r.aeroCluster.Spec.MaxUnavailable
 
 		if err := r.Update(
-			context.TODO(), pdb, common.UpdateOption,
+			ctx, pdb, common.UpdateOption,
 		); err != nil {
 			return fmt.Errorf(
-				"failed to update PodDisruptionBudget: %v",
-				err,
+				"could not update PodDisruptionBudget %s: %w",
+				getPDBNamespacedName(r.aeroCluster), err,
 			)
 		}
 
-		r.Log.Info("Updated PodDisruptionBudget", "name", getPDBNamespacedName(r.aeroCluster))
+		r.Log.Info("Updated PodDisruptionBudget",
+			"podDisruptionBudget", klog.KRef(r.aeroCluster.Namespace, r.aeroCluster.Name))
 	}
 
 	return nil

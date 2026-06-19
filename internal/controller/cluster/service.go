@@ -12,6 +12,7 @@ import (
 	"k8s.io/apimachinery/pkg/types"
 	"k8s.io/apimachinery/pkg/util/intstr"
 	"k8s.io/apimachinery/pkg/util/sets"
+	"k8s.io/klog/v2"
 	"sigs.k8s.io/controller-runtime/pkg/controller/controllerutil"
 
 	asdbv1 "github.com/aerospike/aerospike-kubernetes-operator/v4/api/v1"
@@ -23,7 +24,7 @@ func getSTSHeadLessSvcName(aeroCluster *asdbv1.AerospikeCluster) string {
 	return aeroCluster.Name
 }
 
-func (r *SingleClusterReconciler) createOrUpdateSTSHeadlessSvc() error {
+func (r *SingleClusterReconciler) createOrUpdateSTSHeadlessSvc(ctx context.Context) error {
 	specHeadlessSvc := &r.aeroCluster.Spec.HeadlessService
 	serviceName := getSTSHeadLessSvcName(r.aeroCluster)
 	service := &corev1.Service{}
@@ -33,7 +34,7 @@ func (r *SingleClusterReconciler) createOrUpdateSTSHeadlessSvc() error {
 	}
 
 	err := r.Get(
-		context.TODO(), types.NamespacedName{
+		ctx, types.NamespacedName{
 			Name: serviceName, Namespace: r.aeroCluster.Namespace,
 		}, service,
 	)
@@ -42,7 +43,8 @@ func (r *SingleClusterReconciler) createOrUpdateSTSHeadlessSvc() error {
 			return err
 		}
 
-		r.Log.Info("Creating headless service for statefulSet")
+		r.Log.Info("Creating headless service for statefulSet",
+			"service", klog.KRef(r.aeroCluster.Namespace, serviceName))
 
 		if specHeadlessSvc.Metadata.Annotations != nil {
 			if defaultMetadata.Annotations == nil {
@@ -81,24 +83,25 @@ func (r *SingleClusterReconciler) createOrUpdateSTSHeadlessSvc() error {
 		}
 
 		if err = r.Create(
-			context.TODO(), service, common.CreateOption,
+			ctx, service, common.CreateOption,
 		); err != nil {
 			return fmt.Errorf(
-				"failed to create headless service for statefulset: %v",
-				err,
+				"could not create headless Service for statefulset %s: %w",
+				utils.ClusterNamespacedName(r.aeroCluster), err,
 			)
 		}
 
 		r.Log.Info("Created new headless service",
-			"name", utils.NamespacedName(service.Namespace, service.Name))
+			"service", klog.KObj(service))
 
 		return nil
 	}
 
 	r.Log.Info("Headless service already exist, checking for update",
-		"name", utils.NamespacedName(service.Namespace, service.Name))
+		"service", klog.KObj(service))
 
 	return r.updateService(
+		ctx,
 		service,
 		r.aeroCluster.Status.HeadlessService.Metadata,
 		specHeadlessSvc.Metadata,
@@ -106,24 +109,25 @@ func (r *SingleClusterReconciler) createOrUpdateSTSHeadlessSvc() error {
 	)
 }
 
-func (r *SingleClusterReconciler) reconcileSTSLoadBalancerSvc() error {
+func (r *SingleClusterReconciler) reconcileSTSLoadBalancerSvc(ctx context.Context) error {
 	loadBalancer := r.aeroCluster.Spec.SeedsFinderServices.LoadBalancer
 	serviceName := r.aeroCluster.Name + "-lb"
 
 	if loadBalancer == nil {
-		return r.deleteLBServiceIfPresent(serviceName, r.aeroCluster.Namespace)
+		return r.deleteLBServiceIfPresent(ctx, serviceName, r.aeroCluster.Namespace)
 	}
 
 	service := &corev1.Service{}
 	servicePort := r.getLBServicePort(loadBalancer)
 
 	if err := r.Get(
-		context.TODO(), types.NamespacedName{
+		ctx, types.NamespacedName{
 			Name: serviceName, Namespace: r.aeroCluster.Namespace,
 		}, service,
 	); err != nil {
 		if errors.IsNotFound(err) {
-			r.Log.Info("Creating LoadBalancer service for cluster")
+			r.Log.Info("Creating LoadBalancer service for cluster",
+				"service", klog.KRef(r.aeroCluster.Namespace, serviceName))
 			ls := utils.LabelsForAerospikeCluster(r.aeroCluster.Name)
 
 			service = &corev1.Service{
@@ -158,13 +162,13 @@ func (r *SingleClusterReconciler) reconcileSTSLoadBalancerSvc() error {
 			}
 
 			if nErr := r.Create(
-				context.TODO(), service, common.CreateOption,
+				ctx, service, common.CreateOption,
 			); nErr != nil {
 				return nErr
 			}
 
 			r.Log.Info("Created new LoadBalancer service",
-				"name", service.GetName())
+				"service", klog.KObj(service))
 
 			return nil
 		}
@@ -173,26 +177,26 @@ func (r *SingleClusterReconciler) reconcileSTSLoadBalancerSvc() error {
 	}
 
 	r.Log.Info("LoadBalancer service already exist for cluster, checking for update",
-		"name", utils.NamespacedName(service.Namespace, service.Name))
+		"service", klog.KObj(service))
 
 	if !utils.IsOwnedBy(service, r.aeroCluster) {
 		return fmt.Errorf(
-			"failed to update LoadBalancer service, service is not "+
-				"created/owned by operator. name: %s", utils.NamespacedName(service.Namespace, service.Name),
+			"could not update LoadBalancer service: service is not created/owned by operator, name: %s",
+			utils.NamespacedName(service.Namespace, service.Name),
 		)
 	}
 
-	return r.updateLBService(service, &servicePort, loadBalancer)
+	return r.updateLBService(ctx, service, &servicePort, loadBalancer)
 }
 
-func (r *SingleClusterReconciler) deleteLBServiceIfPresent(svcName, svcNamespace string) error {
+func (r *SingleClusterReconciler) deleteLBServiceIfPresent(ctx context.Context, svcName, svcNamespace string) error {
 	service := &corev1.Service{}
 	service.Name = svcName
 	service.Namespace = svcNamespace
 
 	// Get the LB service
 	if err := r.Get(
-		context.TODO(), types.NamespacedName{
+		ctx, types.NamespacedName{
 			Name: svcName, Namespace: svcNamespace,
 		}, service,
 	); err != nil {
@@ -207,17 +211,18 @@ func (r *SingleClusterReconciler) deleteLBServiceIfPresent(svcName, svcNamespace
 	if !utils.IsOwnedBy(service, r.aeroCluster) {
 		r.Log.Info(
 			"LoadBalancer service is not created/owned by operator. Skipping delete",
-			"name", utils.NamespacedName(service.Namespace, service.Name),
+			"service", klog.KObj(service),
 		)
 
 		return nil
 	}
 
 	// Delete the LB service
-	return r.Delete(context.TODO(), service)
+	return r.Delete(ctx, service)
 }
 
-func (r *SingleClusterReconciler) updateLBService(service *corev1.Service, servicePort *corev1.ServicePort,
+func (r *SingleClusterReconciler) updateLBService(ctx context.Context, service *corev1.Service,
+	servicePort *corev1.ServicePort,
 	loadBalancer *asdbv1.LoadBalancerSpec) error {
 	updateLBService := false
 
@@ -247,26 +252,27 @@ func (r *SingleClusterReconciler) updateLBService(service *corev1.Service, servi
 
 	if updateLBService {
 		if err := r.Update(
-			context.TODO(), service, common.UpdateOption,
+			ctx, service, common.UpdateOption,
 		); err != nil {
 			return fmt.Errorf(
-				"failed to update service %s: %v", service.Name, err,
+				"could not update LoadBalancer Service %s: %w",
+				utils.NamespacedName(service.Namespace, service.Name), err,
 			)
 		}
 	} else {
 		r.Log.Info("LoadBalancer service update not required, skipping",
-			"name", utils.NamespacedName(service.Namespace, service.Name))
+			"service", klog.KObj(service))
 
 		return nil
 	}
 
 	r.Log.Info("LoadBalancer service updated",
-		"name", utils.NamespacedName(service.Namespace, service.Name))
+		"service", klog.KObj(service))
 
 	return nil
 }
 
-func (r *SingleClusterReconciler) reconcilePodService(rackState *RackState) error {
+func (r *SingleClusterReconciler) reconcilePodService(ctx context.Context, rackState *RackState) error {
 	// PodService is only created if MultiPodPerHost is enabled
 	if !asdbv1.GetBool(r.aeroCluster.Spec.PodSpec.MultiPodPerHost) {
 		return nil
@@ -274,18 +280,18 @@ func (r *SingleClusterReconciler) reconcilePodService(rackState *RackState) erro
 
 	// Safe check to delete all dangling pod services which are no longer required
 	if !podServiceNeeded(r.aeroCluster.Spec.PodSpec.MultiPodPerHost, &r.aeroCluster.Spec.AerospikeNetworkPolicy) {
-		return r.cleanupDanglingPodServices(rackState)
+		return r.cleanupDanglingPodServices(ctx, rackState)
 	}
 
-	return r.createOrUpdatePodServiceIfNeeded(r.getRackPodNames(rackState))
+	return r.createOrUpdatePodServiceIfNeeded(ctx, r.getRackPodNames(rackState))
 }
 
-func (r *SingleClusterReconciler) createOrUpdatePodService(pName, pNamespace string) error {
+func (r *SingleClusterReconciler) createOrUpdatePodService(ctx context.Context, pName, pNamespace string) error {
 	podService := &r.aeroCluster.Spec.PodService
 	service := &corev1.Service{}
 
 	err := r.Get(
-		context.TODO(), types.NamespacedName{
+		ctx, types.NamespacedName{
 			Name: pName, Namespace: pNamespace,
 		}, service,
 	)
@@ -294,7 +300,8 @@ func (r *SingleClusterReconciler) createOrUpdatePodService(pName, pNamespace str
 			return err
 		}
 
-		r.Log.Info("Creating new service for pod")
+		r.Log.Info("Creating new service for pod",
+			"pod", klog.KRef(pNamespace, pName))
 		// NodePort will be allocated automatically
 		service = &corev1.Service{
 			ObjectMeta: metav1.ObjectMeta{
@@ -324,23 +331,25 @@ func (r *SingleClusterReconciler) createOrUpdatePodService(pName, pNamespace str
 		}
 
 		if err := r.Create(
-			context.TODO(), service, common.CreateOption,
+			ctx, service, common.CreateOption,
 		); err != nil {
 			return fmt.Errorf(
-				"failed to create new service for pod %s: %v", pName, err,
+				"could not create Service for pod %s: %w", utils.NamespacedName(pNamespace, pName), err,
 			)
 		}
 
 		r.Log.Info("Created new service for pod",
-			"name", utils.NamespacedName(service.Namespace, service.Name))
+			"service", klog.KObj(service),
+			"pod", klog.KRef(pNamespace, pName))
 
 		return nil
 	}
 
 	r.Log.Info("Service already exist, checking for update",
-		"name", utils.NamespacedName(service.Namespace, service.Name))
+		"service", klog.KObj(service))
 
 	return r.updateService(
+		ctx,
 		service,
 		r.aeroCluster.Status.PodService.Metadata,
 		podService.Metadata,
@@ -348,23 +357,23 @@ func (r *SingleClusterReconciler) createOrUpdatePodService(pName, pNamespace str
 	)
 }
 
-func (r *SingleClusterReconciler) deletePodService(pName, pNamespace string) error {
+func (r *SingleClusterReconciler) deletePodService(ctx context.Context, pName, pNamespace string) error {
 	service := &corev1.Service{}
 	service.Name = pName
 	service.Namespace = pNamespace
 	serviceName := types.NamespacedName{Name: pName, Namespace: pNamespace}
 
-	if err := r.Delete(context.TODO(), service); err != nil {
+	if err := r.Delete(ctx, service); err != nil {
 		if errors.IsNotFound(err) {
 			r.Log.Info(
 				"Pod service not found for deletion. Skipping...",
-				"service", serviceName,
+				"service", klog.KRef(serviceName.Namespace, serviceName.Name),
 			)
 
 			return nil
 		}
 
-		return fmt.Errorf("failed to delete service for pod %s: %v", pName, err)
+		return fmt.Errorf("delete Service for pod %s: %w", serviceName, err)
 	}
 
 	return nil
@@ -472,14 +481,14 @@ func (r *SingleClusterReconciler) getLBServicePort(loadBalancer *asdbv1.LoadBala
 	}
 }
 
-func (r *SingleClusterReconciler) cleanupDanglingPodServices(rackState *RackState) error {
-	podList, err := r.getRackPodList(rackState.Rack.ID, rackState.Rack.Revision)
+func (r *SingleClusterReconciler) cleanupDanglingPodServices(ctx context.Context, rackState *RackState) error {
+	podList, err := r.getRackPodList(ctx, rackState.Rack.ID, rackState.Rack.Revision)
 	if err != nil {
 		return err
 	}
 
 	for idx := range podList.Items {
-		if err := r.deletePodService(podList.Items[idx].Name, podList.Items[idx].Namespace); err != nil {
+		if err := r.deletePodService(ctx, podList.Items[idx].Name, podList.Items[idx].Namespace); err != nil {
 			return err
 		}
 	}
@@ -506,14 +515,14 @@ func podServiceNeeded(multiPodPerHost *bool, networkPolicy *asdbv1.AerospikeNetw
 	return networkSet.Len() > 2
 }
 
-func (r *SingleClusterReconciler) createOrUpdatePodServiceIfNeeded(pods []string) error {
+func (r *SingleClusterReconciler) createOrUpdatePodServiceIfNeeded(ctx context.Context, pods []string) error {
 	if !podServiceNeeded(r.aeroCluster.Spec.PodSpec.MultiPodPerHost, &r.aeroCluster.Spec.AerospikeNetworkPolicy) {
 		return nil
 	}
 	// Create services for all pods if the network policy is changed and rely on nodePort service
 	for idx := range pods {
 		if err := r.createOrUpdatePodService(
-			pods[idx], r.aeroCluster.Namespace,
+			ctx, pods[idx], r.aeroCluster.Namespace,
 		); err != nil {
 			return err
 		}
@@ -567,6 +576,7 @@ func (r *SingleClusterReconciler) isServiceMetadataUpdated(
 }
 
 func (r *SingleClusterReconciler) updateService(
+	ctx context.Context,
 	service *corev1.Service,
 	statusMetadata,
 	specMetadata,
@@ -584,21 +594,22 @@ func (r *SingleClusterReconciler) updateService(
 
 	if needsUpdate {
 		if err := r.Update(
-			context.TODO(), service, common.UpdateOption,
+			ctx, service, common.UpdateOption,
 		); err != nil {
 			return fmt.Errorf(
-				"failed to update service %s: %v", service.Name, err,
+				"could not update Service %s: %w",
+				utils.NamespacedName(service.Namespace, service.Name), err,
 			)
 		}
 
 		r.Log.Info("Service updated",
-			"name", utils.NamespacedName(service.Namespace, service.Name))
+			"service", klog.KObj(service))
 
 		return nil
 	}
 
 	r.Log.Info("Service update not required, skipping",
-		"name", utils.NamespacedName(service.Namespace, service.Name))
+		"service", klog.KObj(service))
 
 	return nil
 }
