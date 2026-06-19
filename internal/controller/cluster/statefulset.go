@@ -200,7 +200,7 @@ func (r *SingleClusterReconciler) createSTS(
 	}
 
 	if err := r.Create(ctx, st, common.CreateOption); err != nil {
-		return nil, fmt.Errorf("could not create StatefulSet %s: %w", utils.GetNamespacedNameString(st), err)
+		return nil, fmt.Errorf("create StatefulSet %s: %w", utils.GetNamespacedNameString(st), err)
 	}
 
 	r.Log.Info(
@@ -452,7 +452,7 @@ func (r *SingleClusterReconciler) createSTSConfigMap(
 	// Update existing configmap as it might not be current.
 	configMapData, err := r.createConfigMapData(ctx, rack)
 	if err != nil {
-		return fmt.Errorf("unable to build config map data: %w", err)
+		return fmt.Errorf("build ConfigMap data: %w", err)
 	}
 
 	// Replace config map data if differs since we are supposed to create a new config map.
@@ -470,7 +470,7 @@ func (r *SingleClusterReconciler) createSTSConfigMap(
 	if err := r.Update(
 		ctx, confMap, common.UpdateOption,
 	); err != nil {
-		return fmt.Errorf("could not update ConfigMap %s: %w", utils.NamespacedName(confMap.Namespace, confMap.Name), err)
+		return fmt.Errorf("update ConfigMap %s: %w", utils.NamespacedName(confMap.Namespace, confMap.Name), err)
 	}
 
 	return nil
@@ -503,7 +503,7 @@ func (r *SingleClusterReconciler) updateSTSConfigMap(
 	if err := r.Update(
 		ctx, confMap, common.UpdateOption,
 	); err != nil {
-		return fmt.Errorf("could not update ConfigMap %s: %w", namespacedName, err)
+		return fmt.Errorf("update ConfigMap %s: %w", namespacedName, err)
 	}
 
 	return nil

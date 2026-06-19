@@ -116,7 +116,7 @@ func (r *SingleClusterReconciler) removePVCsAsync(
 func (r *SingleClusterReconciler) deleteLocalPVCs(ctx context.Context, rackState *RackState, pod *corev1.Pod) error {
 	pvcItems, err := r.getPodsPVCList(ctx, []string{pod.Name}, rackState.Rack.ID, rackState.Rack.Revision)
 	if err != nil {
-		return fmt.Errorf("could not find pvc for pod %s: %w", utils.GetNamespacedNameString(pod), err)
+		return fmt.Errorf("find PVC for pod %s: %w", utils.GetNamespacedNameString(pod), err)
 	}
 
 	for idx := range pvcItems {
