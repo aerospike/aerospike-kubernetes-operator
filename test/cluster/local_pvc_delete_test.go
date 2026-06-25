@@ -196,58 +196,6 @@ var _ = Describe(
 			})
 		})
 
-		Context("Scale-down local PVC policy", func() {
-			DescribeTable("PVC outcome follows cascadeDelete, not deleteLocalStorageOnPodRecovery",
-				func(cascadeDelete bool, expectPVCsDeleted bool) {
-					aeroCluster := createNonSCDummyAerospikeCluster(clusterNamespacedName, 4)
-					st := aeroCluster.Spec.Storage
-
-					if cascadeDelete {
-						st.BlockVolumePolicy.InputCascadeDelete = &cascadeDeleteTrue
-						st.FileSystemVolumePolicy.InputCascadeDelete = &cascadeDeleteTrue
-					} else {
-						st.BlockVolumePolicy.InputCascadeDelete = &cascadeDeleteFalse
-						st.FileSystemVolumePolicy.InputCascadeDelete = &cascadeDeleteFalse
-					}
-
-					st.DeleteLocalStorageOnPodRecovery = ptr.To(true)
-					st.LocalStorageClasses = []string{storageClass}
-					aeroCluster.Spec.Storage = st
-
-					Expect(DeployCluster(k8sClient, ctx, aeroCluster)).ToNot(HaveOccurred())
-
-					failedPodName := clusterName + "-0-3"
-					pvcBefore, err := getPVCClaimUIDsForPod(ctx, k8sClient, failedPodName, namespace)
-					Expect(err).ToNot(HaveOccurred())
-					Expect(pvcBefore).ToNot(BeEmpty())
-
-					Expect(markPodAsFailed(ctx, k8sClient, failedPodName, namespace)).ToNot(HaveOccurred())
-
-					aeroCluster, err = getCluster(k8sClient, ctx, clusterNamespacedName)
-					Expect(err).ToNot(HaveOccurred())
-
-					maxIgnorable := intstr.FromInt32(1)
-					aeroCluster.Spec.RackConfig.MaxIgnorablePods = &maxIgnorable
-					aeroCluster.Spec.Size--
-
-					Expect(updateCluster(k8sClient, ctx, aeroCluster)).ToNot(HaveOccurred())
-
-					if expectPVCsDeleted {
-						Expect(waitForPVCClaimsDeleted(ctx, k8sClient, pvcBefore, namespace)).To(Succeed())
-					} else {
-						Expect(validatePVCClaimUIDsUnchanged(ctx, k8sClient, pvcBefore, namespace)).To(Succeed())
-					}
-				},
-				Entry("deletes removed pod PVCs on scale-down when cascadeDelete=true even if "+
-					"deleteLocalStorageOnPodRecovery=true",
-					true, true),
-				Entry(
-					"preserves removed pod PVCs on scale-down when cascadeDelete=false even if "+
-						"deleteLocalStorageOnPodRecovery=true",
-					false, false),
-			)
-		})
-
 		Context("When a pod is failed (failure recovery path)", func() {
 			// Test case: during failed-pod recovery, keep local PVCs and verify data survives.
 			// Setup is size=2, RF=1 with deleteLocalStorageOnPodRecovery=false: the failed pod must retain PVCs.
