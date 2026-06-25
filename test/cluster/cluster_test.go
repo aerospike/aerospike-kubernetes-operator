@@ -899,6 +899,7 @@ func clusterWithMaxIgnorablePod(ctx goctx.Context) {
 		"UpdateClusterWithMaxIgnorablePodAndFailedPod", func() {
 			BeforeEach(
 				func() {
+					validateMinNodeCountOrSkip(ctx, 6, "maxIgnorablePods rack operations with failed pod in another rack")
 					deployClusterForMaxIgnorablePods(ctx, clusterNamespacedName, 4)
 				},
 			)
@@ -911,7 +912,6 @@ func clusterWithMaxIgnorablePod(ctx goctx.Context) {
 					err = markPodAsFailed(ctx, k8sClient, ignorePodName, clusterNamespacedName.Namespace)
 					Expect(err).ToNot(HaveOccurred())
 
-					// Underlying kubernetes cluster should have atleast 6 nodes to run this test successfully.
 					By("Delete rack with id 2")
 
 					aeroCluster, gErr := getCluster(k8sClient, ctx, clusterNamespacedName)
@@ -995,13 +995,7 @@ func clusterWithMaxIgnorablePod(ctx goctx.Context) {
 		"Pending pod consumes maxIgnorablePods=1 so scale-down blocks with a separate failed pod",
 		func() {
 			It("blocks scale-down when a pending pod consumes maxIgnorablePods=1 and another pod is failed", func() {
-				nodeList, lerr := test.GetNodeList(ctx, k8sClient)
-				Expect(lerr).ToNot(HaveOccurred())
-
-				n := utils.Len32(nodeList.Items)
-				if n < 2 {
-					Skip("requires at least 2 nodes for pending+failed budget test")
-				}
+				n := validateMinNodeCountOrSkip(ctx, 2, "pending+failed maxIgnorablePods scale-down block scenario")
 
 				// Use non-SC dummy sized to node count so one extra replica stays Pending (MultiPodPerHost
 				// must be false). deployClusterForMaxIgnorablePods deploys 2 racks which lets scale-down reconcile
@@ -1019,15 +1013,30 @@ func clusterWithMaxIgnorablePod(ctx goctx.Context) {
 				Expect(k8sClient.Update(ctx, aeroCluster)).ToNot(HaveOccurred())
 
 				Eventually(func() int {
-					podList, plerr := getPodList(aeroCluster, k8sClient)
+					ac, gerr := getCluster(k8sClient, ctx, clusterNamespacedName)
+					if gerr != nil {
+						return 0
+					}
+
+					pods, plerr := getPodList(ac, k8sClient)
+					if plerr != nil {
+						return 0
+					}
+
+					return len(pods.Items)
+				}, 5*time.Minute, 5*time.Second).Should(Equal(int(aeroCluster.Spec.Size)),
+					"expected pod count to match spec after scale-up")
+
+				Eventually(func() int {
+					pods, plerr := getPodList(aeroCluster, k8sClient)
 					if plerr != nil {
 						return 0
 					}
 
 					pending := 0
 
-					for i := range podList.Items {
-						if podList.Items[i].Status.Phase == v1.PodPending {
+					for i := range pods.Items {
+						if pods.Items[i].Status.Phase == v1.PodPending {
 							pending++
 						}
 					}
@@ -1043,11 +1052,21 @@ func clusterWithMaxIgnorablePod(ctx goctx.Context) {
 				aeroCluster, err = getCluster(k8sClient, ctx, clusterNamespacedName)
 				Expect(err).ToNot(HaveOccurred())
 
+				podList, err = getPodList(aeroCluster, k8sClient)
+				Expect(err).ToNot(HaveOccurred())
+
+				specSizeBeforeScaleDown := aeroCluster.Spec.Size
+				statusSizeBeforeScaleDown := aeroCluster.Status.Size
+				podCountBeforeScaleDown := len(podList.Items)
+
 				maxIgnorable := intstr.FromInt32(1)
 				aeroCluster.Spec.RackConfig.MaxIgnorablePods = &maxIgnorable
 				aeroCluster.Spec.Size--
 
 				Expect(k8sClient.Update(ctx, aeroCluster)).ToNot(HaveOccurred())
+
+				assertScaleDownBlocked(ctx, clusterNamespacedName, specSizeBeforeScaleDown, statusSizeBeforeScaleDown,
+					podCountBeforeScaleDown, 2*time.Minute, 1, victim)
 
 				err = waitForAerospikeCluster(
 					k8sClient, ctx, aeroCluster, int(aeroCluster.Spec.Size),
@@ -1078,10 +1097,20 @@ func clusterWithMaxIgnorablePod(ctx goctx.Context) {
 				aeroCluster, err = getCluster(k8sClient, ctx, clusterNamespacedName)
 				Expect(err).ToNot(HaveOccurred())
 
+				podList, err = getPodList(aeroCluster, k8sClient)
+				Expect(err).ToNot(HaveOccurred())
+
+				specSizeBeforeScaleDown := aeroCluster.Spec.Size
+				statusSizeBeforeScaleDown := aeroCluster.Status.Size
+				podCountBeforeScaleDown := len(podList.Items)
+
 				// Decrease by 2 so rack 1 scale-down is attempted (single decrement can leave rack-1 untouched).
 				aeroCluster.Spec.Size -= 2
 
 				Expect(k8sClient.Update(ctx, aeroCluster)).ToNot(HaveOccurred())
+
+				assertScaleDownBlocked(ctx, clusterNamespacedName, specSizeBeforeScaleDown, statusSizeBeforeScaleDown,
+					podCountBeforeScaleDown, 2*time.Minute, 0, clusterName+"-1-0", clusterName+"-1-1")
 
 				err = waitForAerospikeCluster(
 					k8sClient, ctx, aeroCluster, int(aeroCluster.Spec.Size),
@@ -1092,6 +1121,87 @@ func clusterWithMaxIgnorablePod(ctx goctx.Context) {
 			})
 		},
 	)
+}
+
+// assertScaleDownBlocked verifies scale-down did not complete: status size and pod count stay at their
+// pre-request baselines while spec is lowered. When minPendingPods > 0, at least that many Pending pods
+// must remain (pending+failed budget scenarios).
+func assertScaleDownBlocked(
+	ctx goctx.Context, clusterNamespacedName types.NamespacedName,
+	specSizeBefore, statusSizeBefore int32, podCountBefore int,
+	timeout time.Duration, minPendingPods int, podsToRemain ...string,
+) {
+	By("Asserting scale-down did not complete (status and pod count unchanged)")
+
+	Consistently(func() int {
+		ac, err := getCluster(k8sClient, ctx, clusterNamespacedName)
+		if err != nil {
+			return -1
+		}
+
+		return int(ac.Status.Size)
+	}, timeout, 10*time.Second).Should(Equal(int(statusSizeBefore)),
+		"status size should remain unchanged while scale-down is blocked")
+
+	Consistently(func() int {
+		ac, err := getCluster(k8sClient, ctx, clusterNamespacedName)
+		if err != nil {
+			return -1
+		}
+
+		podList, err := getPodList(ac, k8sClient)
+		if err != nil {
+			return -1
+		}
+
+		return len(podList.Items)
+	}, timeout, 10*time.Second).Should(Equal(podCountBefore),
+		"pod count should remain unchanged while scale-down is blocked")
+
+	Eventually(func(g Gomega) {
+		ac, err := getCluster(k8sClient, ctx, clusterNamespacedName)
+		g.Expect(err).ToNot(HaveOccurred())
+		g.Expect(int(ac.Spec.Size)).To(BeNumerically("<", int(specSizeBefore)),
+			"spec should be lower than pre-scale-down spec while scale-down is blocked")
+
+		podList, err := getPodList(ac, k8sClient)
+		g.Expect(err).ToNot(HaveOccurred())
+		g.Expect(podList.Items).To(HaveLen(podCountBefore), "pod count should remain unchanged while scale-down is blocked")
+
+		if minPendingPods > 0 {
+			pending := 0
+
+			for i := range podList.Items {
+				if podList.Items[i].Status.Phase == v1.PodPending {
+					pending++
+				}
+			}
+
+			g.Expect(pending).To(BeNumerically(">=", minPendingPods),
+				"expected pending pods to remain while scale-down is blocked")
+		}
+
+		for _, podName := range podsToRemain {
+			pod := &v1.Pod{}
+			g.Expect(k8sClient.Get(ctx, types.NamespacedName{
+				Name: podName, Namespace: clusterNamespacedName.Namespace,
+			}, pod)).To(Succeed(), "pod %s should still exist while scale-down is blocked", podName)
+		}
+	}, timeout, retryInterval).Should(Succeed())
+}
+
+// validateMinNodeCountOrSkip returns the Kubernetes node count or skips when the cluster is too small for
+// topology-dependent integration scenarios (explicit precondition, not a product failure).
+func validateMinNodeCountOrSkip(ctx goctx.Context, minNodes int, reason string) int32 {
+	nodeList, err := test.GetNodeList(ctx, k8sClient)
+	Expect(err).ToNot(HaveOccurred())
+
+	n := utils.Len32(nodeList.Items)
+	if int(n) < minNodes {
+		Skip(fmt.Sprintf("requires at least %d nodes: %s", minNodes, reason))
+	}
+
+	return n
 }
 
 func deployClusterForMaxIgnorablePods(ctx goctx.Context, clusterNamespacedName types.NamespacedName, size int32) {

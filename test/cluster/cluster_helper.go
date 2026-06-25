@@ -1888,25 +1888,29 @@ func extractPodPVC(ctx goctx.Context, k8sClient client.Client, pod *corev1.Pod) 
 	pvcUIDMap := make(map[string]types.UID)
 
 	for idx := range pod.Spec.Volumes {
-		if pod.Spec.Volumes[idx].PersistentVolumeClaim != nil {
-			pvcUIDMap[pod.Spec.Volumes[idx].PersistentVolumeClaim.ClaimName] = ""
+		claim := pod.Spec.Volumes[idx].PersistentVolumeClaim
+		if claim == nil {
+			continue
 		}
-	}
 
-	for p := range pvcUIDMap {
+		claimName := claim.ClaimName
+		if _, seen := pvcUIDMap[claimName]; seen {
+			continue
+		}
+
 		pvc := &corev1.PersistentVolumeClaim{}
-		if err := k8sClient.Get(ctx, test.GetNamespacedName(p, pod.Namespace), pvc); err != nil {
+		if err := k8sClient.Get(ctx, test.GetNamespacedName(claimName, pod.Namespace), pvc); err != nil {
 			return nil, err
 		}
 
-		pvcUIDMap[p] = pvc.UID
+		pvcUIDMap[claimName] = pvc.UID
 	}
 
 	return pvcUIDMap, nil
 }
 
-// pvcClaimUIDsForPod returns PVC claim names and UIDs for local volumes on the named pod.
-func pvcClaimUIDsForPod(
+// getPVCClaimUIDsForPod returns PVC claim names and UIDs for local volumes on the named pod.
+func getPVCClaimUIDsForPod(
 	ctx goctx.Context, k8sClient client.Client, podName, ns string,
 ) (map[string]types.UID, error) {
 	pod := &corev1.Pod{}
@@ -1917,8 +1921,8 @@ func pvcClaimUIDsForPod(
 	return extractPodPVC(ctx, k8sClient, pod)
 }
 
-// pvcClaimsEventuallyNotFound waits until each PVC in claims is absent from the API (deleted).
-func pvcClaimsEventuallyNotFound(
+// waitForPVCClaimsDeleted waits until each PVC in claims is absent from the API (deleted).
+func waitForPVCClaimsDeleted(
 	ctx goctx.Context, k8sClient client.Client, claims map[string]types.UID, ns string,
 ) error {
 	for claimName := range claims {
@@ -1948,8 +1952,8 @@ func pvcClaimsEventuallyNotFound(
 	return nil
 }
 
-// pvcClaimsKeepStableUIDs asserts each PVC still exists with the same UID as before.
-func pvcClaimsKeepStableUIDs(
+// validatePVCClaimUIDsUnchanged asserts each PVC still exists with the same UID as before.
+func validatePVCClaimUIDsUnchanged(
 	ctx goctx.Context, k8sClient client.Client, claims map[string]types.UID, ns string,
 ) error {
 	for claimName, wantUID := range claims {

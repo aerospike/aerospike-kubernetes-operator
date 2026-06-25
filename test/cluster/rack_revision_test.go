@@ -259,6 +259,7 @@ var _ = Describe(
 									st := lib.DeepCopy(&aeroCluster.Spec.Storage).(*asdbv1.AerospikeStorageSpec)
 									// Fixed: rack revision does not consult this flag for old-revision PVC teardown.
 									st.DeleteLocalStorageOnPodRecovery = ptr.To(false)
+
 									st.LocalStorageClasses = []string{storageClass}
 									if inputCascadeDelete {
 										st.BlockVolumePolicy.InputCascadeDelete = &cascadeDeleteTrue
@@ -274,7 +275,7 @@ var _ = Describe(
 								Expect(DeployCluster(k8sClient, ctx, aeroCluster)).ToNot(HaveOccurred())
 
 								podName := clusterName + "-1-v1-0"
-								oldPVC, err := pvcClaimUIDsForPod(ctx, k8sClient, podName, clusterNamespacedName.Namespace)
+								oldPVC, err := getPVCClaimUIDsForPod(ctx, k8sClient, podName, clusterNamespacedName.Namespace)
 								Expect(err).ToNot(HaveOccurred())
 								Expect(oldPVC).ToNot(BeEmpty())
 

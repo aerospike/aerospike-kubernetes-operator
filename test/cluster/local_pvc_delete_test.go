@@ -217,7 +217,7 @@ var _ = Describe(
 					Expect(DeployCluster(k8sClient, ctx, aeroCluster)).ToNot(HaveOccurred())
 
 					failedPodName := clusterName + "-0-3"
-					pvcBefore, err := pvcClaimUIDsForPod(ctx, k8sClient, failedPodName, namespace)
+					pvcBefore, err := getPVCClaimUIDsForPod(ctx, k8sClient, failedPodName, namespace)
 					Expect(err).ToNot(HaveOccurred())
 					Expect(pvcBefore).ToNot(BeEmpty())
 
@@ -233,9 +233,9 @@ var _ = Describe(
 					Expect(updateCluster(k8sClient, ctx, aeroCluster)).ToNot(HaveOccurred())
 
 					if expectPVCsDeleted {
-						Expect(pvcClaimsEventuallyNotFound(ctx, k8sClient, pvcBefore, namespace)).To(Succeed())
+						Expect(waitForPVCClaimsDeleted(ctx, k8sClient, pvcBefore, namespace)).To(Succeed())
 					} else {
-						Expect(pvcClaimsKeepStableUIDs(ctx, k8sClient, pvcBefore, namespace)).To(Succeed())
+						Expect(validatePVCClaimUIDsUnchanged(ctx, k8sClient, pvcBefore, namespace)).To(Succeed())
 					}
 				},
 				Entry("deletes removed pod PVCs on scale-down when cascadeDelete=true even if "+
@@ -340,7 +340,7 @@ var _ = Describe(
 
 				By("Capturing failed-pod local PVC UIDs before rolling restart")
 
-				oldPVC, err := pvcClaimUIDsForPod(ctx, k8sClient, failedPodName, namespace)
+				oldPVC, err := getPVCClaimUIDsForPod(ctx, k8sClient, failedPodName, namespace)
 				Expect(err).ToNot(HaveOccurred())
 				Expect(oldPVC).ToNot(BeEmpty())
 
