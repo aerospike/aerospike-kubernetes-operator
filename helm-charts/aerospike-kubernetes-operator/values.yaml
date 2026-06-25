@@ -31,6 +31,18 @@ certs:
     create: false
     metricsServerCertSecretName: "metrics-server-cert"
 
+## Operator manager logging (controller-runtime / Zap)
+## development must stay set; level/encoder are optional (uncomment or use --set).
+logging:
+  development: true
+  # level: debug
+  # encoder: console
+
+## Operator manager /metrics (--metrics-secure)
+## Always passed in the Deployment args for clarity; defaults to TLS on (`true`).
+metrics:
+  secure: true
+
 ##  Operator configurations
 watchNamespaces: "default,aerospike"
 
