@@ -57,6 +57,22 @@ func (r *SingleClusterReconciler) waitForMultipleNodesSafeStopReady(
 		return common.ReconcileError(fmt.Errorf("failed to get hostConn for aerospike cluster nodes: %v", err))
 	}
 
+	// Safety guard: if the cluster is degraded (some pods are failed/ignorable) and
+	// fewer than 2 reachable nodes remain, every downstream check produces a false
+	// positive on a degraded view:
+	//   - IsClusterAndStable → true  (Aerospike reforms as a 1-node cluster)
+	//   - waitForMigrationToComplete → true  (0 pending migrations on 1 node)
+	//   - InfoQuiesce → silent skip  (len(hostIDs) < 2 in management lib)
+	// None of those signals is safe to act on when the cluster is degraded.
+	// Genuine size-1 clusters are not affected: ignorablePodNames is empty there.
+	if len(allHostConns) < 2 && ignorablePodNames.Len() > 0 {
+		return common.ReconcileError(fmt.Errorf(
+			"cluster is degraded: %d failed/ignorable pod(s) excluded, only %d reachable node(s) remain; "+
+				"refusing to proceed to prevent data loss — recover the failed pods first",
+			ignorablePodNames.Len(), len(allHostConns),
+		))
+	}
+
 	policy := r.getClientPolicy()
 
 	r.Recorder.Eventf(
@@ -109,6 +125,18 @@ func (r *SingleClusterReconciler) quiescePods(
 	selectedHostConns, err := r.newPodsHostConnWithOption(podList, ignorablePodNames)
 	if err != nil {
 		return err
+	}
+
+	// Belt-and-suspenders: the caller (waitForMultipleNodesSafeStopReady) already
+	// guards against this, but if quiescePods is ever reached via another path,
+	// ensure InfoQuiesce never silently skips on a degraded cluster.
+	// Genuine size-1 clusters are not affected: ignorablePodNames is empty there.
+	if len(allHostConns) < 2 && ignorablePodNames.Len() > 0 {
+		return fmt.Errorf(
+			"cluster is degraded: %d failed/ignorable pod(s) excluded, only %d reachable node(s); "+
+				"refusing quiesce to prevent data loss",
+			ignorablePodNames.Len(), len(allHostConns),
+		)
 	}
 
 	nodesNamespaces, err := deployment.GetClusterNamespaces(r.Log, r.getClientPolicy(), allHostConns)
