@@ -172,6 +172,7 @@ func (r *SingleClusterReconciler) getRollingRestartTypeMap(rackState *RackState,
 			return nil, nil, err
 		}
 
+		// for server failed pods, if restartType is computed as no restart, then there will be no restart for that pod
 		if restartType == quickRestart && serverFailedPodNames.Has(pods[idx].Name) {
 			restartTypeMap[pods[idx].Name] = podRestart
 		} else {
@@ -1146,6 +1147,10 @@ func (r *SingleClusterReconciler) getIgnorablePods(
 			r.aeroCluster.Spec.RackConfig.MaxIgnorablePods, int(rackState.Size), false,
 		)
 
+		if failedAllowed == 0 {
+			return ignorablePodNames, nil
+		}
+
 		podList, err := r.getRackPodList(rackState.Rack.ID, rackState.Rack.Revision)
 		if err != nil {
 			return nil, err
@@ -1228,29 +1233,6 @@ func (r *SingleClusterReconciler) getClusterPodList() (
 
 	return podList, nil
 }
-
-// func (r *SingleClusterReconciler) isAnyPodInImageFailedState(podList []*corev1.Pod, ignorablePodNames sets.Set[string],
-//) bool {
-//	for idx := range podList {
-//		pod := podList[idx]
-//		if ignorablePodNames.Has(pod.Name) {
-//			continue
-//		}
-//
-//		// TODO: Should we use checkPodFailed or CheckPodImageFailed?
-//		// scaleDown, rollingRestart should work even if node is crashed
-//		// If node was crashed due to wrong config then only rollingRestart can bring it back.
-//		if err := utils.CheckPodImageFailed(pod); err != nil {
-//			r.Log.Info(
-//				"AerospikeCluster Pod is in failed state", "podName", pod.Name, "err", err,
-//			)
-//
-//			return true
-//		}
-//	}
-//
-//	return false
-//}
 
 func getFQDNForPod(aeroCluster *asdbv1.AerospikeCluster, host string) string {
 	return fmt.Sprintf("%s.%s.%s", host, aeroCluster.Name, aeroCluster.Namespace)

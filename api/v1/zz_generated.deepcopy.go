@@ -299,6 +299,11 @@ func (in *AerospikeClusterStatusSpec) DeepCopyInto(out *AerospikeClusterStatusSp
 		*out = new(bool)
 		**out = **in
 	}
+	if in.IgnoreSidecarFailure != nil {
+		in, out := &in.IgnoreSidecarFailure, &out.IgnoreSidecarFailure
+		*out = new(bool)
+		**out = **in
+	}
 	if in.Resources != nil {
 		in, out := &in.Resources, &out.Resources
 		*out = new(corev1.ResourceRequirements)

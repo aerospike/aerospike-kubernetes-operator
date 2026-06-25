@@ -697,10 +697,6 @@ func (r *SingleClusterReconciler) scaleUpRack(
 		return found, common.ReconcileError(fmt.Errorf("failed to list pods: %v", err))
 	}
 
-	// if r.isAnyPodInImageFailedState(podList, ignorablePodNames) {
-	//	return found, common.ReconcileError(fmt.Errorf("cannot scale up AerospikeCluster. A pod is already in failed state"))
-	//}
-
 	var newPodNames []string
 	for i := oldSz; i < desiredSize; i++ {
 		newPodNames = append(newPodNames, getSTSPodName(found.Name, i))
@@ -811,7 +807,7 @@ func (r *SingleClusterReconciler) upgradeRack(
 			continue
 		}
 
-		if r.isPodUpgraded(pod) {
+		if r.isPodOnDesiredImage(pod, false) {
 			r.Log.Info("Pod doesn't need upgrade", "podName", pod.Name)
 			continue
 		}
@@ -908,7 +904,7 @@ func (r *SingleClusterReconciler) scaleDownRack(
 	// if r.isAnyPodInImageFailedState(oldPodList, ignorableServerFailedPodNames) {
 	//	return found, common.ReconcileError(
 	//		fmt.Errorf("cannot scale down AerospikeCluster. A pod is already in failed state"))
-	//}
+	// }
 
 	// Code flow will reach this stage only when found.Spec.Replicas > desiredSize
 	// Maintain a list of removed pods. It will be used for alumni-reset and tip-clear
@@ -2206,8 +2202,13 @@ func (r *SingleClusterReconciler) handleFailedPodsInRack(
 				"rackID", rackState.Rack.ID, "rackRevision", rackState.Rack.Revision,
 				"serverFailedPods", getPodNames(serverFailedPods))
 
+			restartTypeMap := map[string]RestartType{}
+			for _, pod := range serverFailedPods {
+				restartTypeMap[pod.Name] = podRestart
+			}
+
 			if _, res := r.rollingRestartRack(
-				found, rackState, ignorablePodNames, nil, serverFailedPods,
+				found, rackState, ignorablePodNames, restartTypeMap, serverFailedPods,
 			); !res.IsSuccess {
 				return res
 			}

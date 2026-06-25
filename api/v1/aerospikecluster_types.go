@@ -992,6 +992,12 @@ type AerospikeClusterStatusSpec struct { //nolint:govet // for readability
 	// +optional
 	EnableRackIDOverride *bool `json:"enableRackIDOverride,omitempty"`
 
+	// IgnoreSidecarFailure controls whether the reconciler is blocked when a
+	// sidecar container is failing but the Aerospike server container is still
+	// running.
+	// +optional
+	IgnoreSidecarFailure *bool `json:"ignoreSidecarFailure,omitempty"`
+
 	// IsReadinessProbeEnabled tells whether the readiness probe is present in all pods or not.
 	// Moreover, PodDisruptionBudget should be created for the Aerospike cluster only when this field is enabled.
 	// +optional
@@ -1444,6 +1450,11 @@ func CopySpecToStatus(spec *AerospikeClusterSpec) (*AerospikeClusterStatusSpec, 
 		status.DisablePDB = &disablePDB
 	}
 
+	if spec.IgnoreSidecarFailure != nil {
+		ignoreSidecarFailure := *spec.IgnoreSidecarFailure
+		status.IgnoreSidecarFailure = &ignoreSidecarFailure
+	}
+
 	// Storage
 	statusPodSpec := lib.DeepCopy(&spec.PodSpec).(*AerospikePodSpec)
 	status.PodSpec = *statusPodSpec
@@ -1565,6 +1576,11 @@ func CopyStatusToSpec(status *AerospikeClusterStatusSpec) (*AerospikeClusterSpec
 	if status.DisablePDB != nil {
 		disablePDB := *status.DisablePDB
 		spec.DisablePDB = &disablePDB
+	}
+
+	if status.IgnoreSidecarFailure != nil {
+		ignoreSidecarFailure := *status.IgnoreSidecarFailure
+		spec.IgnoreSidecarFailure = &ignoreSidecarFailure
 	}
 
 	// Storage

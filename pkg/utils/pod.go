@@ -183,17 +183,24 @@ func checkContainerFailures(pod *corev1.Pod, includeSidecarFailures bool) string
 	return ""
 }
 
-// IsAerospikeServerRunning returns true if the aerospike server container is currently
-// in the Running state. A true result indicates the aerospike node is reachable for
-// cluster operations even if other containers in the pod (e.g. sidecars) are failing.
+// IsAerospikeServerRunning returns true if the aerospike server container is
+// ready — i.e. the process is running and the TCP readiness probe has passed.
+// Checking Ready (rather than just State.Running) ensures the Aerospike node
+// is actually accepting connections before it is considered healthy. Sidecar
+// containers are deliberately skipped so a crashing sidecar never influences
+// this result.
 func IsAerospikeServerRunning(pod *corev1.Pod) bool {
+	if IsPodTerminating(pod) || pod.Status.Phase != corev1.PodRunning {
+		return false
+	}
+
 	for idx := range pod.Status.ContainerStatuses {
 		cs := &pod.Status.ContainerStatuses[idx]
 		if cs.Name != asdbv1.AerospikeServerContainerName {
 			continue
 		}
 
-		return cs.State.Running != nil
+		return cs.Ready
 	}
 
 	return false

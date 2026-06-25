@@ -9721,6 +9721,12 @@ spec:
                         type: object
                     type: object
                 type: object
+              ignoreSidecarFailure:
+                description: |-
+                  IgnoreSidecarFailure controls whether the reconciler is blocked when a
+                  sidecar container is failing but the Aerospike server container is still
+                  running.
+                type: boolean
               image:
                 description: Aerospike server image
                 type: string

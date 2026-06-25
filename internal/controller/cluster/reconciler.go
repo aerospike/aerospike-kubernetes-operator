@@ -590,76 +590,6 @@ func (r *SingleClusterReconciler) createStatus() error {
 	return nil
 }
 
-func (r *SingleClusterReconciler) isNewCluster() (bool, error) {
-	if !r.IsStatusEmpty() {
-		// We have valid status, cluster cannot be new.
-		return false, nil
-	}
-
-	statefulSetList, err := r.getClusterSTSList()
-	if err != nil {
-		return false, err
-	}
-
-	// Cluster can have status nil and still have pods on failures.
-	// For cluster to be new there should be no pods in the cluster.
-	return len(statefulSetList.Items) == 0, nil
-}
-
-// hasClusterFailed returns (failed, inGracePeriod, error)
-// failed: true if cluster has truly failed and needs recovery
-// inGracePeriod: true if cluster has failed pods but within grace period
-// error: any error during the check
-func (r *SingleClusterReconciler) hasClusterFailed() (failed, inGracePeriod bool, err error) {
-	isNew, err := r.isNewCluster()
-	if err != nil {
-		// Checking cluster status failed.
-		return failed, inGracePeriod, err
-	}
-
-	if isNew {
-		// New clusters should not be considered failed.
-		return failed, inGracePeriod, nil
-	}
-
-	// Check if there are any pods running
-	pods, err := r.getClusterPodList()
-	if err != nil {
-		return failed, inGracePeriod, err
-	}
-
-	for idx := range pods.Items {
-		pod := &pods.Items[idx]
-
-		podState := utils.CheckPodFailedWithGrace(pod, true)
-		if podState.State == utils.PodHealthy {
-			// There is at least one pod that has not yet failed.
-			// It's possible that the containers are stuck doing a long disk
-			// initialization.
-			// Don't consider this cluster as failed and needing recovery
-			// as long as there is at least one running pod.
-			return false, false, nil
-		}
-
-		// Pod is failed, check if it's in grace period
-		if podState.State == utils.PodFailedInGrace {
-			inGracePeriod = true
-		}
-	}
-
-	// If we reach here, all pods are failed
-	if inGracePeriod {
-		// Return grace period state
-		return failed, inGracePeriod, nil
-	}
-
-	if r.IsStatusEmpty() {
-		return true, inGracePeriod, nil
-	}
-
-	return failed, inGracePeriod, nil
-}
-
 func (r *SingleClusterReconciler) patchStatus(newAeroCluster *asdbv1.AerospikeCluster) error {
 	oldAeroCluster := r.aeroCluster
 
@@ -955,41 +885,62 @@ func (r *SingleClusterReconciler) handleClusterDeletion(finalizerName string) er
 }
 
 func (r *SingleClusterReconciler) checkPreviouslyFailedCluster() (bool, common.ReconcileResult) {
-	isNew, err := r.isNewCluster()
-	if err != nil {
-		return false, common.ReconcileError(fmt.Errorf("error determining if cluster is new: %v", err))
+	// Fast path: non-empty status means the cluster was previously initialized.
+	if !r.IsStatusEmpty() {
+		return false, common.ReconcileSuccess()
 	}
 
-	if isNew {
-		r.Log.V(1).Info("It's a new cluster, create empty status object")
+	// Status is empty — distinguish a new cluster from a failed create via STS presence.
+	stsList, err := r.getClusterSTSList()
+	if err != nil {
+		return false, common.ReconcileError(fmt.Errorf("error checking cluster state: %v", err))
+	}
 
-		if err := r.createStatus(); err != nil {
+	if len(stsList.Items) == 0 {
+		r.Log.V(1).Info("New cluster, creating empty status object")
+
+		if err = r.createStatus(); err != nil {
 			return false, common.ReconcileError(err)
 		}
-	} else {
-		r.Log.V(1).Info(
-			"It's not a new cluster, " +
-				"checking if it is failed and needs recovery",
-		)
 
-		hasFailed, inGracePeriod, err := r.hasClusterFailed()
-		if err != nil {
-			return false, common.ReconcileError(fmt.Errorf("error determining if cluster has failed: %v", err))
-		}
+		return false, common.ReconcileSuccess()
+	}
 
-		if hasFailed {
-			err = r.recoverFailedCreate()
+	// StatefulSets exist but status is empty: either the cluster is still being
+	// created or it failed during its initial create. Inspect pod states to
+	// decide whether to recover, requeue, or proceed normally.
+	r.Log.V(1).Info("Cluster status is empty with existing StatefulSets, checking pod states")
 
-			return hasFailed, common.ReconcileError(err)
-		}
+	pods, err := r.getClusterPodList()
+	if err != nil {
+		return false, common.ReconcileError(fmt.Errorf("error getting pod list: %v", err))
+	}
 
-		if inGracePeriod {
-			r.Log.Info("Pods are failed but within grace period, requeueing...")
-			return false, common.ReconcileRequeueAfter(asdbv1.RequeueIntervalSeconds10)
+	inGracePeriod := false
+
+	for idx := range pods.Items {
+		podState := utils.CheckPodFailedWithGrace(&pods.Items[idx], true)
+
+		switch podState.State {
+		case utils.PodHealthy:
+			// At least one pod has not yet failed — the cluster is still coming
+			// up or recovering on its own. Don't trigger recreate.
+			return false, common.ReconcileSuccess()
+		case utils.PodFailedInGrace:
+			inGracePeriod = true
+		case utils.PodFailed:
+			// Hard-failed — keep iterating; grace-period pods take precedence.
 		}
 	}
 
-	return false, common.ReconcileSuccess()
+	if inGracePeriod {
+		r.Log.Info("Pods are failed but within grace period, requeueing...")
+		return false, common.ReconcileRequeueAfter(asdbv1.RequeueIntervalSeconds10)
+	}
+
+	// All pods have hard-failed and status is empty — the cluster failed during
+	// its initial create and needs to be recovered.
+	return true, common.ReconcileError(r.recoverFailedCreate())
 }
 
 func (r *SingleClusterReconciler) removedNamespaces(nodesNamespaces map[string][]string) []string {
