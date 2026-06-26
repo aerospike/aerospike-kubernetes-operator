@@ -1887,40 +1887,14 @@ func checkClientConnection(
 	aeroCluster *asdbv1.AerospikeCluster,
 	k8sClient client.Client, policy *as.ClientPolicy,
 ) error {
-	// getClientPolicy sets FailIfNotConnected=false so NewClient can return before background
-	// handshakes finish. If we then read GetNodeNames() and immediately Close(), we often abort
-	// those handshakes and see spurious "not connected" (especially under Eventually with a new
-	// client each attempt). Use a copy with FailIfNotConnected=true so NewClient blocks until
-	// connected or policy.Timeout.
-	blocking := *policy
-	blocking.FailIfNotConnected = true
-	// waitTillStabilized in the Aerospike client uses ClientPolicy.Timeout; default test policy
-	// uses 3m which is often too tight on cloud clusters after recovery.
-	const minBlockingTimeout = 5 * time.Minute
-	if blocking.Timeout < minBlockingTimeout {
-		blocking.Timeout = minBlockingTimeout
-	}
-
-	cl, err := getClientWithPolicy(pkgLog, aeroCluster, k8sClient, &blocking)
+	cl, err := getClientWithPolicy(pkgLog, aeroCluster, k8sClient, policy)
 	if err != nil {
 		return err
 	}
 	defer cl.Close()
 
-	// Recommended by aerospike-client-go after connect; also helps populate pools before checks.
-	if _, werr := cl.WarmUp(0); werr != nil && !cl.IsConnected() {
-		return fmt.Errorf("aerospike warmup: %v", werr)
-	}
-
-	// Prefer IsConnected (same notion the client uses with FailIfNotConnected); give clusterBoss
-	// a short window after NewClient returns.
-	deadline := time.Now().Add(90 * time.Second)
-	for !cl.IsConnected() {
-		if time.Now().After(deadline) {
-			return fmt.Errorf("not connected")
-		}
-
-		time.Sleep(200 * time.Millisecond)
+	if len(cl.GetNodeNames()) == 0 {
+		return fmt.Errorf("not connected")
 	}
 
 	return nil

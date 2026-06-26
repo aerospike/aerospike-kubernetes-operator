@@ -9,13 +9,10 @@ import (
 	"io"
 	"reflect"
 	"strings"
-	"sync"
 	"time"
 
 	set "github.com/deckarep/golang-set/v2"
 	"github.com/go-logr/logr"
-	"github.com/google/go-cmp/cmp"
-	"github.com/google/go-cmp/cmp/cmpopts"
 	appsv1 "k8s.io/api/apps/v1"
 	corev1 "k8s.io/api/core/v1"
 	"k8s.io/apimachinery/pkg/api/errors"
@@ -51,61 +48,7 @@ const (
 const zoneKey = "topology.kubernetes.io/zone"
 const regionKey = "topology.kubernetes.io/region"
 
-// maxSpecStatusDiffLog limits spec-vs-status cmp.Diff size in logs (each poll when mismatched).
-const maxSpecStatusDiffLog = 16000
-
-// lastSpecMismatchDiff avoids spamming identical diffs every retryInterval while polling.
-var lastSpecMismatchDiff sync.Map // key: "namespace/name" -> last logged diff string
-
 var cloudProvider CloudProvider
-
-// normalizeAerospikeConfigViaJSON round-trips aerospike config through JSON so numeric types in
-// map[string]interface{} (e.g. int vs float64) match what the API server / status updates produce.
-// This avoids false negatives in reflect.DeepEqual between CopyStatusToSpec(status) and spec.
-func normalizeAerospikeConfigViaJSON(cfg *asdbv1.AerospikeConfigSpec) *asdbv1.AerospikeConfigSpec {
-	if cfg == nil {
-		return nil
-	}
-
-	out := lib.DeepCopy(cfg).(*asdbv1.AerospikeConfigSpec)
-	if out.Value == nil {
-		return out
-	}
-
-	raw, err := json.Marshal(out.Value)
-	if err != nil {
-		return out
-	}
-
-	var normalized map[string]interface{}
-	if err := json.Unmarshal(raw, &normalized); err != nil {
-		return out
-	}
-
-	out.Value = normalized
-
-	return out
-}
-
-func normalizeClusterSpecForReadinessCompare(spec *asdbv1.AerospikeClusterSpec) *asdbv1.AerospikeClusterSpec {
-	if spec == nil {
-		return nil
-	}
-
-	out := lib.DeepCopy(spec).(*asdbv1.AerospikeClusterSpec)
-
-	out.AerospikeConfig = normalizeAerospikeConfigViaJSON(out.AerospikeConfig)
-	for i := range out.RackConfig.Racks {
-		r := &out.RackConfig.Racks[i]
-		if r.InputAerospikeConfig != nil {
-			r.InputAerospikeConfig = normalizeAerospikeConfigViaJSON(r.InputAerospikeConfig)
-		}
-
-		r.AerospikeConfig = *normalizeAerospikeConfigViaJSON(&r.AerospikeConfig)
-	}
-
-	return out
-}
 
 func waitForAerospikeCluster(
 	k8sClient client.Client, ctx goctx.Context,
@@ -171,31 +114,10 @@ func isClusterStateValid(
 			return false
 		}
 
-		key := newCluster.Namespace + "/" + newCluster.Name
-		left := normalizeClusterSpecForReadinessCompare(statusToSpec)
-
-		right := normalizeClusterSpecForReadinessCompare(&newCluster.Spec)
-		if !reflect.DeepEqual(left, right) {
-			diff := cmp.Diff(left, right, cmpopts.EquateEmpty())
-			if len(diff) > maxSpecStatusDiffLog {
-				diff = diff[:maxSpecStatusDiffLog] + "\n...(truncated)"
-			}
-
-			if prev, ok := lastSpecMismatchDiff.Load(key); !ok || prev.(string) != diff {
-				lastSpecMismatchDiff.Store(key, diff)
-				pkgLog.Info(
-					"Cluster status is not matching the spec (CopyStatusToSpec vs spec, after JSON config normalize)",
-					"name", newCluster.Name,
-					"namespace", newCluster.Namespace,
-					"phase", newCluster.Status.Phase,
-					"specStatusDiff", diff,
-				)
-			}
-
+		if !reflect.DeepEqual(statusToSpec, &newCluster.Spec) {
+			pkgLog.Info("Cluster status is not matching the spec", "name", aeroCluster.Name)
 			return false
 		}
-
-		lastSpecMismatchDiff.Delete(key)
 	}
 
 	// TODO: This is not valid for tests where maxUnavailablePods flag is used.
