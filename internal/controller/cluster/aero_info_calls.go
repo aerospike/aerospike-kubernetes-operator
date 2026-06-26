@@ -35,22 +35,19 @@ import (
 // ------------------------------------------------------------------------------------
 
 // waitForMultipleNodesSafeStopReady waits until the input pods are safe to stop.
-// ignorableServerFailedPodNames are pods whose Aerospike server is unreachable and are
+// ignorablePodNames are pods whose Aerospike server is unreachable and are
 // skipped for cluster-operation queries (host connections, roster, quiesce).
 // Pods with a running server but a failing sidecar are not in this set; they are
 // included in all cluster-operation calls since their servers are still reachable.
 func (r *SingleClusterReconciler) waitForMultipleNodesSafeStopReady(
-	pods []*corev1.Pod, ignorableServerFailedPodNames sets.Set[string],
+	pods []*corev1.Pod, ignorablePodNames sets.Set[string],
 ) common.ReconcileResult {
 	if len(pods) == 0 {
 		return common.ReconcileSuccess()
 	}
 
-	// For cluster-operation calls (host connections, migration, quiesce, roster) we
-	// only skip server-failed pods. Sidecar-failed pods have a running Aerospike server
-	// that must participate in these checks (plan items 3 and 5).
 	// This doesn't make actual connection, only objects having connection info are created
-	allHostConns, err := r.newAllHostConnWithOption(ignorableServerFailedPodNames)
+	allHostConns, err := r.newAllHostConnWithOption(ignorablePodNames)
 	if err != nil {
 		return common.ReconcileError(fmt.Errorf("failed to get hostConn for aerospike cluster nodes: %v", err))
 	}
@@ -68,12 +65,12 @@ func (r *SingleClusterReconciler) waitForMultipleNodesSafeStopReady(
 	}
 
 	// Setup roster after migration.
-	if err = r.getAndSetRoster(policy, r.aeroCluster.Spec.RosterNodeBlockList, ignorableServerFailedPodNames); err != nil {
+	if err = r.getAndSetRoster(policy, r.aeroCluster.Spec.RosterNodeBlockList, ignorablePodNames); err != nil {
 		r.Log.Error(err, "Failed to set roster for cluster")
 		return common.ReconcileRequeueAfter(1)
 	}
 
-	if err := r.quiescePods(policy, allHostConns, pods, ignorableServerFailedPodNames); err != nil {
+	if err := r.quiescePods(policy, allHostConns, pods, ignorablePodNames); err != nil {
 		return common.ReconcileError(err)
 	}
 
@@ -223,11 +220,10 @@ func (r *SingleClusterReconciler) newPodsHostConnWithOption(pods []corev1.Pod, i
 		}
 
 		// Only the Aerospike server container needs to be running to accept info calls.
-		// Sidecar failures do not prevent the server from being reachable, so we only
-		// skip / error when the server container itself is not yet running.
+		// Sidecar failures do not prevent the server from being reachable.
 		if !utils.IsAerospikeServerRunning(pod) {
 			if ignorablePodNames.Has(pod.Name) {
-				// This pod's server is not running and it is marked ignorable.
+				// This pod's aerospike server is not running and it is marked ignorable.
 				r.Log.Info(
 					"Ignoring info call on pod with non-running server container", "pod", pod.Name,
 				)

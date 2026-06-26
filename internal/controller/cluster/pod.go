@@ -172,12 +172,13 @@ func (r *SingleClusterReconciler) getRollingRestartTypeMap(rackState *RackState,
 			return nil, nil, err
 		}
 
-		// for server failed pods, if restartType is computed as no restart, then there will be no restart for that pod
+		// A quick restart only rolls config dynamically; a server-failed pod
+		// needs a full pod restart to recover the crashed server process.
 		if restartType == quickRestart && serverFailedPodNames.Has(pods[idx].Name) {
-			restartTypeMap[pods[idx].Name] = podRestart
-		} else {
-			restartTypeMap[pods[idx].Name] = restartType
+			restartType = podRestart
 		}
+
+		restartTypeMap[pods[idx].Name] = restartType
 	}
 
 	return restartTypeMap, dynamicConfDiffPerPod, nil
@@ -323,7 +324,7 @@ func (r *SingleClusterReconciler) getRollingRestartTypePod(
 }
 
 func (r *SingleClusterReconciler) rollingRestartPods(
-	rackState *RackState, podsToRestart []*corev1.Pod, ignorableServerFailedPodNames sets.Set[string],
+	rackState *RackState, podsToRestart []*corev1.Pod, ignorablePodNames sets.Set[string],
 	restartTypeMap map[string]RestartType,
 ) common.ReconcileResult {
 	failedPods, failedWithinGracePeriodPods, activePods := getServerFailedAndActivePods(podsToRestart, true)
@@ -338,12 +339,12 @@ func (r *SingleClusterReconciler) rollingRestartPods(
 	}
 
 	// Here activePods should be those pods where server pod is running, irrespective of sidecars status.
-	// ignorableServerFailedPodNames should only have those pods where server container is failing
+	// ignorablePodNames should only have those pods where server container is failing
 
 	if len(activePods) != 0 {
 		r.Log.Info("Restart active pods", "pods", getPodNames(activePods))
 
-		if res := r.waitForMultipleNodesSafeStopReady(activePods, ignorableServerFailedPodNames); !res.IsSuccess {
+		if res := r.waitForMultipleNodesSafeStopReady(activePods, ignorablePodNames); !res.IsSuccess {
 			return res
 		}
 
@@ -361,7 +362,7 @@ func (r *SingleClusterReconciler) rollingRestartPods(
 			clientPolicy = r.getClientPolicy()
 
 			if res := r.setMigrateFillDelay(clientPolicy, &rackState.Rack.AerospikeConfig, false,
-				ignorableServerFailedPodNames,
+				ignorablePodNames,
 			); !res.IsSuccess {
 				r.Log.Error(res.Err,
 					"Failed to set migrate-fill-delay to original value before restarting the running pods")
@@ -378,7 +379,7 @@ func (r *SingleClusterReconciler) rollingRestartPods(
 		// in the next reconcile.
 		if setMigrateFillDelay {
 			if res := r.setMigrateFillDelay(clientPolicy, &rackState.Rack.AerospikeConfig, true,
-				ignorableServerFailedPodNames,
+				ignorablePodNames,
 			); !res.IsSuccess {
 				r.Log.Error(res.Err, "Failed to set migrate-fill-delay to `0` after restarting the running pods")
 				return res
@@ -595,7 +596,6 @@ func (r *SingleClusterReconciler) ensurePodsRunningAndReady(podsToCheck []*corev
 				return common.ReconcileError(err)
 			}
 
-			// TODO tanmay if no grace period, then how to mark error state
 			if err := utils.CheckPodFailed(updatedPod); err != nil {
 				// When IgnoreSidecarFailure is set and the Aerospike server
 				// container is still running, the failure is sidecar-only — skip it.
@@ -645,13 +645,11 @@ func (r *SingleClusterReconciler) ensurePodsRunningAndReady(podsToCheck []*corev
 	return common.ReconcileRequeueAfter(asdbv1.RequeueIntervalSeconds10)
 }
 
-// getServerFailedAndActivePods is like getFailedAndActivePods but only
-// considers the Aerospike server container (and blocking init containers) when
-// determining failure. Sidecar failures are ignored, so a pod whose server is
-// running but a sidecar is crashing is classified as active, not failed.
-// Use this wherever the "failed" branch must skip safety checks or bypass batch
-// size (e.g. rolling-restart and upgrade loops), so that sidecar-failed pods
-// are not incorrectly treated as server-down pods.
+// getServerFailedAndActivePods classifies pods by the health of the Aerospike
+// server container only. Sidecar failures are intentionally ignored: a pod
+// whose server is running but has a crashing sidecar is classified as active.
+// This ensures sidecar-failed pods are not incorrectly skipped during safety
+// checks or treated as server-down pods in rolling-restart and upgrade loops.
 func getServerFailedAndActivePods(
 	pods []*corev1.Pod, withGracePeriod bool) (failedPods, failedWithinGracePeriodPods, activePods []*corev1.Pod,
 ) {
@@ -707,7 +705,7 @@ func getNonIgnorablePods(pods []*corev1.Pod, ignorablePodNames sets.Set[string],
 }
 
 func (r *SingleClusterReconciler) safelyDeletePodsAndEnsureImageUpdated(
-	rackState *RackState, podsToUpdate []*corev1.Pod, ignorableServerFailedPodNames sets.Set[string],
+	rackState *RackState, podsToUpdate []*corev1.Pod, ignorablePodNames sets.Set[string],
 ) common.ReconcileResult {
 	failedPods, failedWithinGracePeriodPods, activePods := getServerFailedAndActivePods(podsToUpdate, true)
 
@@ -723,7 +721,7 @@ func (r *SingleClusterReconciler) safelyDeletePodsAndEnsureImageUpdated(
 	if len(activePods) != 0 {
 		r.Log.Info("Restart active pods with updated container image", "pods", getPodNames(activePods))
 
-		if res := r.waitForMultipleNodesSafeStopReady(activePods, ignorableServerFailedPodNames); !res.IsSuccess {
+		if res := r.waitForMultipleNodesSafeStopReady(activePods, ignorablePodNames); !res.IsSuccess {
 			return res
 		}
 
@@ -740,7 +738,7 @@ func (r *SingleClusterReconciler) safelyDeletePodsAndEnsureImageUpdated(
 			clientPolicy = r.getClientPolicy()
 
 			if res := r.setMigrateFillDelay(clientPolicy, &rackState.Rack.AerospikeConfig, false,
-				ignorableServerFailedPodNames,
+				ignorablePodNames,
 			); !res.IsSuccess {
 				r.Log.Error(res.Err,
 					"Failed to set migrate-fill-delay to original value before upgrading the running pods")
@@ -757,7 +755,7 @@ func (r *SingleClusterReconciler) safelyDeletePodsAndEnsureImageUpdated(
 		// in the next reconcile.
 		if setMigrateFillDelay {
 			if res := r.setMigrateFillDelay(clientPolicy, &rackState.Rack.AerospikeConfig, true,
-				ignorableServerFailedPodNames,
+				ignorablePodNames,
 			); !res.IsSuccess {
 				r.Log.Error(res.Err, "Failed to set migrate-fill-delay to `0` after upgrading the running pods")
 				return res
@@ -866,7 +864,6 @@ func (r *SingleClusterReconciler) ensurePodsImageUpdated(podsToCheck []*corev1.P
 			}
 
 			// For existing cluster operations, no grace period for immediate responsiveness
-			// TODO tanmay if no grace period, then how to mark error state
 			if err := utils.CheckPodFailed(updatedPod); err != nil {
 				// When IgnoreSidecarFailure is set and the Aerospike server
 				// container is still running, the failure is sidecar-only — skip it.

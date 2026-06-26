@@ -206,49 +206,6 @@ func IsAerospikeServerRunning(pod *corev1.Pod) bool {
 	return false
 }
 
-// CheckPodImageFailed checks if pod has failed or has terminated or is in an irrecoverable waiting state due to an
-// image related error.
-func CheckPodImageFailed(pod *corev1.Pod) error {
-	if IsPodTerminating(pod) {
-		return nil
-	}
-
-	// if the value of ".status.phase" is "Failed", the pod is trivially in a failure state
-	if pod.Status.Phase == corev1.PodFailed {
-		return fmt.Errorf("pod %s has failed status with reason: %s and message: %s",
-			pod.Name, pod.Status.Reason, pod.Status.Message)
-	}
-
-	// grab the status of every container in the pod (including its init containers)
-	containerStatus := make(
-		[]corev1.ContainerStatus, 0,
-		len(pod.Status.InitContainerStatuses)+len(pod.Status.ContainerStatuses),
-	)
-
-	containerStatus = append(containerStatus, pod.Status.InitContainerStatuses...)
-	containerStatus = append(containerStatus, pod.Status.ContainerStatuses...)
-
-	// inspect the status of each individual container for common failure states
-	for idx := range containerStatus {
-		container := &containerStatus[idx]
-		// if the container is marked as "Terminated", check if its exit code is non-zero since this may still represent
-		// a container that has terminated successfully (such as an init container)
-		// if terminated := container.State.Terminated; terminated != nil && terminated.ExitCode != 0 {
-		// 	return fmt.Errorf("pod has terminated status")
-		// }
-		// if the container is marked as "Waiting", check for common image-related errors
-		if waiting := container.State.Waiting; waiting != nil && isPodImageError(waiting.Reason) {
-			return fmt.Errorf(
-				"pod image pull failed with given container message: %s",
-				waiting.Message,
-			)
-		}
-	}
-
-	// no failure state was found
-	return nil
-}
-
 // IsPodReady returns true if all containers in the pod are in the ready state.
 func IsPodReady(pod *corev1.Pod) bool {
 	statuses := pod.Status.ContainerStatuses

@@ -829,8 +829,6 @@ func (r *SingleClusterReconciler) deleteExternalResources() error {
 	}
 
 	// Delete PVCs for any remaining old removed racks
-	// todo tanmay why can't we just loop over this instead of doing rack level and global separately
-	// we can
 	pvcItems, err := r.getClusterPVCList()
 	if err != nil {
 		return fmt.Errorf("could not find pvc for cluster: %v", err)

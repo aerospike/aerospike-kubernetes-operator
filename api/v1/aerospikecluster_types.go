@@ -190,17 +190,8 @@ type AerospikeClusterSpec struct { //nolint:govet // for readability
 	// +optional
 	Paused *bool `json:"paused,omitempty"`
 
-	// IgnoreSidecarFailure controls whether the reconciler is blocked when a
-	// sidecar container is failing while the Aerospike server container is still
-	// running. When set to true the reconciler proceeds normally even if one or
-	// more pods have a not-ready sidecar; those pods are skipped during the
-	// final pod-readiness wait and no requeue is triggered for them. When false
-	// (the default) a sidecar failure causes the reconciler to keep requeuing
-	// until the pod becomes fully ready, so it blocks reconciliation of
-	// subsequent steps.
-	// Note: regardless of this flag, sidecar-failed pods are never exempt from
-	// Aerospike cluster operations (host connections, roster, ACL) because
-	// their server container is still reachable.
+	// IgnoreSidecarFailure controls whether reconciliation is blocked when a sidecar
+	// container is failing but the Aerospike server container is still running.
 	// +operator-sdk:csv:customresourcedefinitions:type=spec,displayName="Ignore Sidecar Failure"
 	// +optional
 	IgnoreSidecarFailure *bool `json:"ignoreSidecarFailure,omitempty"`
