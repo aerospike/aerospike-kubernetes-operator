@@ -933,19 +933,33 @@ func (r *SingleClusterReconciler) scaleDownRack(
 			continue
 		}
 
+		if ignorablePodNames.Has(podsBatch[idx].Name) {
+			continue
+		}
+
+		// If the pod has no status entry in the CR it never completed initialization,
+		// meaning Aerospike never started on it and it was never a cluster member.
+		// It is safe to scale it down without migration safety checks.
+		if _, hasStatus := r.aeroCluster.Status.Pods[podsBatch[idx].Name]; !hasStatus {
+			r.Log.Info("Pod has no CR status entry; it never joined the cluster, proceeding with scale-down",
+				"pod", podsBatch[idx].Name)
+
+			ignorablePodNames.Insert(podsBatch[idx].Name)
+
+			continue
+		}
+
 		// If the pod is not already in the ignorable set (i.e. not covered
 		// by maxIgnorablePods), block the scale-down and wait for recovery.
 		// Scaling down a failed pod skips migration safety checks and can delete
 		// PVCs (cascadeDelete=true), causing data loss on any storage type.
 		// The user can override this by raising maxIgnorablePods.
-		if !ignorablePodNames.Has(podsBatch[idx].Name) {
-			return found, common.ReconcileError(
-				fmt.Errorf(
-					"pod %s is not ready; waiting for recovery before scale-down to prevent data loss",
-					podsBatch[idx].Name,
-				),
-			)
-		}
+		return found, common.ReconcileError(
+			fmt.Errorf(
+				"pod %s is not ready; waiting for recovery before scale-down to prevent data loss",
+				podsBatch[idx].Name,
+			),
+		)
 	}
 
 	// Ignore safe stop check if all pods in the batch are not running.
