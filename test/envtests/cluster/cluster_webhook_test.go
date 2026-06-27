@@ -907,9 +907,8 @@ var _ = Describe("AerospikeCluster validation", func() {
 
 					// Webhook response validation
 					envtests.NewStatusErrorMatcher().
-						WithMessageSubstrings(testutil.CRDSchemaErrorPrefix,
-							"spec.podSpec.dnsPolicy: Unsupported value: \"Default\": supported values: "+
-								"\"ClusterFirstWithHostNet\", \"ClusterFirst\", \"None\"").
+						WithMessageSubstrings(testutil.WebhookErrorPrefix,
+							"dnsPolicy: Default is not supported").
 						Validate(err)
 				})
 

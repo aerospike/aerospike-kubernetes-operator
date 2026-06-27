@@ -408,7 +408,6 @@ type AerospikePodSpec struct { //nolint:govet // for readability
 
 	// DnsPolicy same as https://kubernetes.io/docs/concepts/services-networking/dns-pod-service/#pod-s-dns-policy.
 	// If hostNetwork is true and policy is not specified, it defaults to ClusterFirstWithHostNet
-	// +kubebuilder:validation:Enum=ClusterFirstWithHostNet;ClusterFirst;None
 	// +optional
 	InputDNSPolicy *corev1.DNSPolicy `json:"dnsPolicy,omitempty"`
 

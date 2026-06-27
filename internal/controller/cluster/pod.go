@@ -517,8 +517,6 @@ func (r *SingleClusterReconciler) restartPods(
 				if err := r.deleteLocalPVCs(rackState, pod); err != nil {
 					return common.ReconcileError(err)
 				}
-			} else if isFailureRecovery && len(rackState.Rack.Storage.LocalStorageClasses) != 0 {
-				r.Log.Info("Skipping local PVC deletion for failed pod", "podName", pod.Name)
 			}
 
 			if err := r.Delete(context.TODO(), pod); err != nil {
@@ -779,6 +777,11 @@ func (r *SingleClusterReconciler) isLocalPVCDeletionRequired(
 				"podName", pod.Name)
 
 			return true
+		}
+
+		// Only log if local storage classes are configured
+		if len(rackState.Rack.Storage.LocalStorageClasses) != 0 {
+			r.Log.Info("Skipping local PVC deletion for failed pod", "pod", pod.Name)
 		}
 
 		return false

@@ -1986,10 +1986,6 @@ spec:
                     description: |-
                       DnsPolicy same as https://kubernetes.io/docs/concepts/services-networking/dns-pod-service/#pod-s-dns-policy.
                       If hostNetwork is true and policy is not specified, it defaults to ClusterFirstWithHostNet
-                    enum:
-                    - ClusterFirstWithHostNet
-                    - ClusterFirst
-                    - None
                     type: string
                   effectiveDNSPolicy:
                     description: Effective value of the DNSPolicy
@@ -11393,10 +11389,6 @@ spec:
                     description: |-
                       DnsPolicy same as https://kubernetes.io/docs/concepts/services-networking/dns-pod-service/#pod-s-dns-policy.
                       If hostNetwork is true and policy is not specified, it defaults to ClusterFirstWithHostNet
-                    enum:
-                    - ClusterFirstWithHostNet
-                    - ClusterFirst
-                    - None
                     type: string
                   effectiveDNSPolicy:
                     description: Effective value of the DNSPolicy

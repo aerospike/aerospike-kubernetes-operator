@@ -127,18 +127,6 @@ func (r *SingleClusterReconciler) quiescePods(
 		return err
 	}
 
-	// Belt-and-suspenders: the caller (waitForMultipleNodesSafeStopReady) already
-	// guards against this, but if quiescePods is ever reached via another path,
-	// ensure InfoQuiesce never silently skips on a degraded cluster.
-	// Genuine size-1 clusters are not affected: ignorablePodNames is empty there.
-	if len(allHostConns) < 2 && ignorablePodNames.Len() > 0 {
-		return fmt.Errorf(
-			"cluster is degraded: %d failed/ignorable pod(s) excluded, only %d reachable node(s); "+
-				"refusing quiesce to prevent data loss",
-			ignorablePodNames.Len(), len(allHostConns),
-		)
-	}
-
 	nodesNamespaces, err := deployment.GetClusterNamespaces(r.Log, r.getClientPolicy(), allHostConns)
 	if err != nil {
 		return err
