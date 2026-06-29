@@ -130,24 +130,6 @@ var _ = Describe("BatchScaleDown", func() {
 			Expect(err).To(HaveOccurred())
 		})
 
-		It("Should allow scale-down when the failed pod is covered by maxIgnorablePods", func() {
-			aeroCluster, err := getCluster(k8sClient, ctx, clusterNamespacedName)
-			Expect(err).ToNot(HaveOccurred())
-
-			failedPodName := clusterName + "-0-3"
-
-			By("Marking the pod as failed")
-			Expect(markPodAsFailed(ctx, k8sClient, failedPodName, namespace)).ToNot(HaveOccurred())
-
-			By("Setting maxIgnorablePods=1 and triggering scale-down")
-
-			maxIgnorable := intstr.FromInt32(1)
-			aeroCluster.Spec.RackConfig.MaxIgnorablePods = &maxIgnorable
-			aeroCluster.Spec.Size--
-
-			Expect(updateCluster(k8sClient, ctx, aeroCluster)).ToNot(HaveOccurred())
-		})
-
 		It("Should block scale-down when pod other than the pod to be scaled down is in failed and "+
 			"maxIgnorablePods is not set", func() {
 			aeroCluster, err := getCluster(k8sClient, ctx, clusterNamespacedName)
@@ -172,6 +154,85 @@ var _ = Describe("BatchScaleDown", func() {
 			)
 			Expect(err).To(HaveOccurred())
 		})
+
+		It("Should allow scale-down with a failed pod when maxIgnorablePods is a percentage covering one pod", func() {
+			aeroCluster, err := getCluster(k8sClient, ctx, clusterNamespacedName)
+			Expect(err).ToNot(HaveOccurred())
+
+			failedPodName := clusterName + "-0-3"
+
+			By("Marking the pod as failed")
+			Expect(markPodAsFailed(ctx, k8sClient, failedPodName, namespace)).ToNot(HaveOccurred())
+
+			By("Setting maxIgnorablePods=34% and triggering scale-down")
+
+			maxIgnorable := intstr.FromString("34%")
+			aeroCluster.Spec.RackConfig.MaxIgnorablePods = &maxIgnorable
+			aeroCluster.Spec.Size--
+
+			Expect(updateCluster(k8sClient, ctx, aeroCluster)).ToNot(HaveOccurred())
+		})
+	})
+
+	Context("PVC outcome on failed-pod scale-down follows cascadeDelete", func() {
+		DescribeTable("",
+			func(cascadeDelete bool, expectPVCsDeleted bool) {
+				aeroCluster := createNonSCDummyAerospikeCluster(clusterNamespacedName, 4)
+				if cascadeDelete {
+					aeroCluster.Spec.Storage.BlockVolumePolicy.InputCascadeDelete = &cascadeDeleteTrue
+					aeroCluster.Spec.Storage.FileSystemVolumePolicy.InputCascadeDelete = &cascadeDeleteTrue
+				}
+
+				Expect(DeployCluster(k8sClient, ctx, aeroCluster)).ToNot(HaveOccurred())
+
+				failedPodName := clusterName + "-0-3"
+
+				By("Capturing scaled-down pod PVCs before failure")
+
+				pvcBefore, err := getPVCClaimUIDsForPod(ctx, k8sClient, failedPodName, namespace)
+				Expect(err).ToNot(HaveOccurred())
+				Expect(pvcBefore).ToNot(BeEmpty())
+
+				By("Marking the pod as failed")
+				Expect(markPodAsFailed(ctx, k8sClient, failedPodName, namespace)).ToNot(HaveOccurred())
+
+				aeroCluster, err = getCluster(k8sClient, ctx, clusterNamespacedName)
+				Expect(err).ToNot(HaveOccurred())
+
+				By("Setting maxIgnorablePods=1 and triggering scale-down")
+
+				maxIgnorable := intstr.FromInt32(1)
+				aeroCluster.Spec.RackConfig.MaxIgnorablePods = &maxIgnorable
+				aeroCluster.Spec.Size--
+
+				Expect(updateCluster(k8sClient, ctx, aeroCluster)).ToNot(HaveOccurred())
+
+				By("Waiting for scale-down to complete")
+
+				err = waitForAerospikeCluster(
+					k8sClient, ctx, aeroCluster, int(aeroCluster.Spec.Size),
+					retryInterval, getTimeout(aeroCluster.Spec.Size),
+					[]asdbv1.AerospikeClusterPhase{asdbv1.AerospikeClusterCompleted},
+				)
+				Expect(err).ToNot(HaveOccurred())
+
+				By("Asserting scaled-down failed pod PVC outcome")
+
+				if expectPVCsDeleted {
+					Expect(waitForPVCClaimsDeleted(ctx, k8sClient, pvcBefore, namespace)).To(Succeed())
+				} else {
+					Expect(validatePVCClaimUIDsUnchanged(ctx, k8sClient, pvcBefore, namespace)).To(Succeed())
+				}
+			},
+			Entry(
+				"Should allow scale-down and preserve scaled-down failed pod PVCs when cascadeDelete=false",
+				false, false,
+			),
+			Entry(
+				"Should allow scale-down and delete scaled-down failed pod PVCs when cascadeDelete=true",
+				true, true,
+			),
+		)
 	})
 
 	// TODO: Do we need to add all the invalid operation test-cases here?
