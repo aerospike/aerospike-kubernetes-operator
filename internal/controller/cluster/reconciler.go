@@ -834,8 +834,6 @@ func (r *SingleClusterReconciler) clearAerospikeAccessControlStatus() error {
 		return fmt.Errorf("error clearing access control status: %w", err)
 	}
 
-	r.aeroCluster.Status.AerospikeAccessControl = nil
-
 	r.Log.Info("Cleared access control status for cluster recovery")
 
 	return nil
