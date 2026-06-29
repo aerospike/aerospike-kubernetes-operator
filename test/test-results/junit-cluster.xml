@@ -1,0 +1,1066 @@
+<?xml version="1.0" encoding="UTF-8"?>
+  <testsuites tests="346" disabled="331" errors="0" failures="0" time="528.845840041">
+      <testsuite name="Cluster Suite" package="/Users/adwivedi/go/src/github.com/aerospike/ako-3/test/cluster" tests="346" disabled="0" skipped="331" errors="0" failures="0" time="528.845840041" timestamp="2026-05-26T14:44:02">
+          <properties>
+              <property name="SuiteSucceeded" value="true"></property>
+              <property name="SuiteHasProgrammaticFocus" value="true"></property>
+              <property name="SpecialSuiteFailureReason" value=""></property>
+              <property name="SuiteLabels" value="[]"></property>
+              <property name="SuiteSemVerConstraints" value="[]"></property>
+              <property name="SuiteComponentSemVerConstraints" value="[]"></property>
+              <property name="RandomSeed" value="1779786838"></property>
+              <property name="RandomizeAllSpecs" value="false"></property>
+              <property name="LabelFilter" value=""></property>
+              <property name="SemVerFilter" value=""></property>
+              <property name="FocusStrings" value=""></property>
+              <property name="SkipStrings" value=""></property>
+              <property name="FocusFiles" value=""></property>
+              <property name="SkipFiles" value=""></property>
+              <property name="FailOnPending" value="false"></property>
+              <property name="FailOnEmpty" value="false"></property>
+              <property name="FailFast" value="false"></property>
+              <property name="FlakeAttempts" value="0"></property>
+              <property name="DryRun" value="false"></property>
+              <property name="ParallelTotal" value="1"></property>
+              <property name="OutputInterceptorMode" value=""></property>
+          </properties>
+          <testcase name="[SynchronizedBeforeSuite]" classname="Cluster Suite" status="passed" time="13.065446958">
+              <system-err>&gt; Enter [SynchronizedBeforeSuite] TOP-LEVEL - /Users/adwivedi/go/src/github.com/aerospike/ako-3/test/cluster/suite_test.go:84 @ 05/26/26 14:44:02.267&#xA;&lt; Exit [SynchronizedBeforeSuite] TOP-LEVEL - /Users/adwivedi/go/src/github.com/aerospike/ako-3/test/cluster/suite_test.go:84 @ 05/26/26 14:44:14.465 (12.198s)&#xA;&gt; Enter [SynchronizedBeforeSuite] TOP-LEVEL - /Users/adwivedi/go/src/github.com/aerospike/ako-3/test/cluster/suite_test.go:84 @ 05/26/26 14:44:14.465&#xA;STEP: Bootstrapping test environment - /Users/adwivedi/go/src/github.com/aerospike/ako-3/test/cluster/suite_test.go:119 @ 05/26/26 14:44:14.466&#xA;2026-05-26T14:44:14+05:30&#x9;INFO&#x9;aerospikecluster&#x9;Client will connect through &#39;hostExternal&#39; network to Aerospike Clusters.&#xA;&lt; Exit [SynchronizedBeforeSuite] TOP-LEVEL - /Users/adwivedi/go/src/github.com/aerospike/ako-3/test/cluster/suite_test.go:84 @ 05/26/26 14:44:15.333 (868ms)&#xA;</system-err>
+          </testcase>
+          <testcase name="[It] WarmRestart WarmRestart Should work with tini" classname="Cluster Suite" status="skipped" time="0">
+              <skipped message="skipped"></skipped>
+          </testcase>
+          <testcase name="[It] DynamicConfig When doing valid operations Should update config dynamically" classname="Cluster Suite" status="skipped" time="0">
+              <skipped message="skipped"></skipped>
+          </testcase>
+          <testcase name="[It] DynamicConfig When doing valid operations Should update config statically" classname="Cluster Suite" status="skipped" time="0">
+              <skipped message="skipped"></skipped>
+          </testcase>
+          <testcase name="[It] DynamicConfig When doing valid operations Should update config statically by disabling dynamic update feature" classname="Cluster Suite" status="skipped" time="0">
+              <skipped message="skipped"></skipped>
+          </testcase>
+          <testcase name="[It] DynamicConfig When doing invalid operations Should fail dynamic config update fully for invalid config" classname="Cluster Suite" status="skipped" time="0">
+              <skipped message="skipped"></skipped>
+          </testcase>
+          <testcase name="[It] DynamicConfig When doing invalid operations Should fail dynamic config update partially for invalid config" classname="Cluster Suite" status="skipped" time="0">
+              <skipped message="skipped"></skipped>
+          </testcase>
+          <testcase name="[It] DynamicConfig When doing complete dynamic config change Should update config dynamically" classname="Cluster Suite" status="skipped" time="0">
+              <skipped message="skipped"></skipped>
+          </testcase>
+          <testcase name="[It] DynamicConfig When changing fields those need recluster Should update active-rack dynamically" classname="Cluster Suite" status="skipped" time="0">
+              <skipped message="skipped"></skipped>
+          </testcase>
+          <testcase name="[It] DynamicConfig When changing fields those need recluster Should update replication-factor dynamically" classname="Cluster Suite" status="skipped" time="0">
+              <skipped message="skipped"></skipped>
+          </testcase>
+          <testcase name="[It] SecurityContext Check for aerospike-server container securityContext Validate SecurityContext applied" classname="Cluster Suite" status="skipped" time="0">
+              <skipped message="skipped"></skipped>
+          </testcase>
+          <testcase name="[It] SecurityContext Check for aerospike-server container securityContext Validate SecurityContext updated" classname="Cluster Suite" status="skipped" time="0">
+              <skipped message="skipped"></skipped>
+          </testcase>
+          <testcase name="[It] SecurityContext Check for aerospike-init securityContext Validate SecurityContext applied" classname="Cluster Suite" status="skipped" time="0">
+              <skipped message="skipped"></skipped>
+          </testcase>
+          <testcase name="[It] SecurityContext Check for aerospike-init securityContext Validate SecurityContext updated" classname="Cluster Suite" status="skipped" time="0">
+              <skipped message="skipped"></skipped>
+          </testcase>
+          <testcase name="[It] LargeReconcile When doing valid operations Should try large reconcile operations" classname="Cluster Suite" status="skipped" time="0">
+              <skipped message="skipped"></skipped>
+          </testcase>
+          <testcase name="[It] LargeReconcile WaitingForStableCluster LargeMigration" classname="Cluster Suite" status="skipped" time="0">
+              <skipped message="skipped"></skipped>
+          </testcase>
+          <testcase name="[It] LargeReconcile WaitingForStableCluster ColdStart" classname="Cluster Suite" status="skipped" time="0">
+              <skipped message="skipped"></skipped>
+          </testcase>
+          <testcase name="[It] SCMode When doing valid operation Should test combination of sc and non-sc namespace cluster lifecycle in a rack enabled cluster" classname="Cluster Suite" status="skipped" time="0">
+              <skipped message="skipped"></skipped>
+          </testcase>
+          <testcase name="[It] SCMode When doing valid operation Should test sc cluster lifecycle in a no rack cluster" classname="Cluster Suite" status="skipped" time="0">
+              <skipped message="skipped"></skipped>
+          </testcase>
+          <testcase name="[It] SCMode When doing valid operation Should test single sc namespace cluster" classname="Cluster Suite" status="skipped" time="0">
+              <skipped message="skipped"></skipped>
+          </testcase>
+          <testcase name="[It] SCMode When doing valid operation Should test blocking rack from roster" classname="Cluster Suite" status="skipped" time="0">
+              <skipped message="skipped"></skipped>
+          </testcase>
+          <testcase name="[It] SCMode When doing valid operation Should allow adding and removing SC namespace" classname="Cluster Suite" status="skipped" time="0">
+              <skipped message="skipped"></skipped>
+          </testcase>
+          <testcase name="[It] SCMode When doing valid operation Should allow batch restart in the SC setup" classname="Cluster Suite" status="skipped" time="0">
+              <skipped message="skipped"></skipped>
+          </testcase>
+          <testcase name="[It] SCMode When doing valid operation Should allow MRT fields in SC namespace" classname="Cluster Suite" status="skipped" time="0">
+              <skipped message="skipped"></skipped>
+          </testcase>
+          <testcase name="[It] SCMode When doing invalid operation Should not allow updating strong-consistency config" classname="Cluster Suite" status="skipped" time="0">
+              <skipped message="skipped"></skipped>
+          </testcase>
+          <testcase name="[It] SCMode When doing invalid operation Should not allow different sc namespaces in different racks" classname="Cluster Suite" status="skipped" time="0">
+              <skipped message="skipped"></skipped>
+          </testcase>
+          <testcase name="[It] SCMode When doing invalid operation Should not allow cluster size &lt; replication factor for sc namespace" classname="Cluster Suite" status="skipped" time="0">
+              <skipped message="skipped"></skipped>
+          </testcase>
+          <testcase name="[It] SCMode When doing invalid operation Should not allow in-memory sc namespace" classname="Cluster Suite" status="skipped" time="0">
+              <skipped message="skipped"></skipped>
+          </testcase>
+          <testcase name="[It] SCMode When doing invalid operation Should not allow MRT fields in non-SC namespace" classname="Cluster Suite" status="skipped" time="0">
+              <skipped message="skipped"></skipped>
+          </testcase>
+          <testcase name="[It] SCMode When doing invalid operation Should not allow ForceBlockFromRoster enable in more than 1 rack at once" classname="Cluster Suite" status="skipped" time="0">
+              <skipped message="skipped"></skipped>
+          </testcase>
+          <testcase name="[It] SCMode When doing invalid operation Should not allow rack aware features with ForceBlockFromRoster" classname="Cluster Suite" status="skipped" time="0">
+              <skipped message="skipped"></skipped>
+          </testcase>
+          <testcase name="[It] RackUsingLocalStorage When doing valid operations UseForAerospikeConfig" classname="Cluster Suite" status="skipped" time="0">
+              <skipped message="skipped"></skipped>
+          </testcase>
+          <testcase name="[It] RackUsingLocalStorage When doing valid operations UseForCascadeDelete" classname="Cluster Suite" status="skipped" time="0">
+              <skipped message="skipped"></skipped>
+          </testcase>
+          <testcase name="[It] RackUsingLocalStorage When doing invalid operations Deploy should fail for not having aerospikeConfig namespace Storage device in rack storage" classname="Cluster Suite" status="skipped" time="0">
+              <skipped message="skipped"></skipped>
+          </testcase>
+          <testcase name="[It] RackUsingLocalStorage When doing invalid operations Deploy CommonConfigLocalStorage: should fail for deploying with wrong Storage. Storage doesn&#39;t have namespace related volumes" classname="Cluster Suite" status="skipped" time="0">
+              <skipped message="skipped"></skipped>
+          </testcase>
+          <testcase name="[It] RackUsingLocalStorage When doing invalid operations Update NilToValue: should fail for updating Storage. Cannot be updated" classname="Cluster Suite" status="skipped" time="0">
+              <skipped message="skipped"></skipped>
+          </testcase>
+          <testcase name="[It] RackUsingLocalStorage When doing invalid operations Update ValueToNil: should fail for updating Storage. Cannot be updated" classname="Cluster Suite" status="skipped" time="0">
+              <skipped message="skipped"></skipped>
+          </testcase>
+          <testcase name="[It] RackUsingLocalStorage When doing invalid operations Update ValueToValue: should fail for updating Storage. Cannot be updated" classname="Cluster Suite" status="skipped" time="0">
+              <skipped message="skipped"></skipped>
+          </testcase>
+          <testcase name="[It] HostNetwork HostNetwork Should not work with MultiPodPerHost enabled" classname="Cluster Suite" status="skipped" time="0">
+              <skipped message="skipped"></skipped>
+          </testcase>
+          <testcase name="[It] HostNetwork HostNetwork Should verify hostNetwork flag updates" classname="Cluster Suite" status="skipped" time="0">
+              <skipped message="skipped"></skipped>
+          </testcase>
+          <testcase name="[It] STSStorage When doing valid operations Should allow external volume mount on aerospike nodes" classname="Cluster Suite" status="skipped" time="0">
+              <skipped message="skipped"></skipped>
+          </testcase>
+          <testcase name="[It] STSStorage When doing valid operations Should not affect external volume mount when adding or deleting aerospike volumes" classname="Cluster Suite" status="skipped" time="0">
+              <skipped message="skipped"></skipped>
+          </testcase>
+          <testcase name="[It] STSStorage When doing valid operations Should not affect external volume mount in sidecars when adding aerospike volumes" classname="Cluster Suite" status="skipped" time="0">
+              <skipped message="skipped"></skipped>
+          </testcase>
+          <testcase name="[It] BatchRestart When doing valid operations BatchRollingRestart Should restart one pod at a time" classname="Cluster Suite" status="skipped" time="0">
+              <skipped message="skipped"></skipped>
+          </testcase>
+          <testcase name="[It] BatchRestart When doing valid operations BatchRollingRestart Should restart full rack in one go" classname="Cluster Suite" status="skipped" time="0">
+              <skipped message="skipped"></skipped>
+          </testcase>
+          <testcase name="[It] BatchRestart When doing valid operations BatchRollingRestart Should do BatchRollingRestart" classname="Cluster Suite" status="skipped" time="0">
+              <skipped message="skipped"></skipped>
+          </testcase>
+          <testcase name="[It] BatchRestart When doing valid operations BatchRollingRestart Should allow multiple changes in RollingUpdateBatchSize PCT/RollingUpdateBatchSize Count" classname="Cluster Suite" status="skipped" time="0">
+              <skipped message="skipped"></skipped>
+          </testcase>
+          <testcase name="[It] BatchRestart When doing valid operations BatchUpgrade Should upgrade one pod at a time" classname="Cluster Suite" status="skipped" time="0">
+              <skipped message="skipped"></skipped>
+          </testcase>
+          <testcase name="[It] BatchRestart When doing valid operations BatchUpgrade Should upgrade full rack in one go" classname="Cluster Suite" status="skipped" time="0">
+              <skipped message="skipped"></skipped>
+          </testcase>
+          <testcase name="[It] BatchRestart When doing valid operations BatchUpgrade Should do BatchUpgrade" classname="Cluster Suite" status="skipped" time="0">
+              <skipped message="skipped"></skipped>
+          </testcase>
+          <testcase name="[It] BatchRestart When doing valid operations BatchUpgrade Should allow multiple changes in RollingUpdateBatchSize PCT/RollingUpdateBatchSize Count" classname="Cluster Suite" status="skipped" time="0">
+              <skipped message="skipped"></skipped>
+          </testcase>
+          <testcase name="[It] BatchRestart When doing invalid operations Should fail if number of racks is less than 2 and RollingUpdateBatchSize PCT or RollingUpdateBatchSize Count is given" classname="Cluster Suite" status="skipped" time="0">
+              <skipped message="skipped"></skipped>
+          </testcase>
+          <testcase name="[It] BatchRestart When doing invalid operations Should fail if there are any non rack-enabled namespaces" classname="Cluster Suite" status="skipped" time="0">
+              <skipped message="skipped"></skipped>
+          </testcase>
+          <testcase name="[It] BatchRestart When doing invalid operations Should fail update when spec is valid and status is invalid for RollingUpdateBatchSize" classname="Cluster Suite" status="skipped" time="0">
+              <skipped message="skipped"></skipped>
+          </testcase>
+          <testcase name="[It] BatchRestart When doing namespace related operations Should fail if replication-factor is 1" classname="Cluster Suite" status="skipped" time="0">
+              <skipped message="skipped"></skipped>
+          </testcase>
+          <testcase name="[It] BatchRestart When doing namespace related operations Should fail if namespace is configured in single rack" classname="Cluster Suite" status="skipped" time="0">
+              <skipped message="skipped"></skipped>
+          </testcase>
+          <testcase name="[It] BatchRestart When doing namespace related operations Should pass if namespace is configured in 1+ racks" classname="Cluster Suite" status="skipped" time="0">
+              <skipped message="skipped"></skipped>
+          </testcase>
+          <testcase name="[It] DeployMultiCluster When DeployMultiClusterMultiNs multiClusterGenChangeTest multiClusterGenChangeTest" classname="Cluster Suite" status="skipped" time="0">
+              <skipped message="skipped"></skipped>
+          </testcase>
+          <testcase name="[It] DeployMultiCluster When DeployMultiClusterMultiNs multiClusterPVCTest multiClusterPVCTest" classname="Cluster Suite" status="skipped" time="0">
+              <skipped message="skipped"></skipped>
+          </testcase>
+          <testcase name="[It] DeployMultiCluster When DeployMultiClusterSingleNsTest multiClusterGenChangeTest multiClusterGenChangeTest" classname="Cluster Suite" status="skipped" time="0">
+              <skipped message="skipped"></skipped>
+          </testcase>
+          <testcase name="[It] DeployMultiCluster When DeployMultiClusterSingleNsTest multiClusterPVCTest multiClusterPVCTest" classname="Cluster Suite" status="skipped" time="0">
+              <skipped message="skipped"></skipped>
+          </testcase>
+          <testcase name="[It] ClusterResource When doing valid operations Try ClusterWithResourceLifecycle" classname="Cluster Suite" status="skipped" time="0">
+              <skipped message="skipped"></skipped>
+          </testcase>
+          <testcase name="[It] ClusterResource When doing invalid operations Deploy DeployClusterWithResource: should fail for request exceeding limit" classname="Cluster Suite" status="skipped" time="0">
+              <skipped message="skipped"></skipped>
+          </testcase>
+          <testcase name="[It] ClusterResource When doing invalid operations Deploy DeployClusterWithResource: should fail for request exceeding limit" classname="Cluster Suite" status="skipped" time="0">
+              <skipped message="skipped"></skipped>
+          </testcase>
+          <testcase name="[It] ClusterResource When doing invalid operations Update UpdateClusterWithResource: should fail for request exceeding limit" classname="Cluster Suite" status="skipped" time="0">
+              <skipped message="skipped"></skipped>
+          </testcase>
+          <testcase name="[It] ClusterResource When doing invalid operations Update UpdateClusterWithResource: should fail for request exceeding limit" classname="Cluster Suite" status="skipped" time="0">
+              <skipped message="skipped"></skipped>
+          </testcase>
+          <testcase name="[It] AccessControl AccessControl When cluster is deployed SecurityEnable: should enable security in running cluster" classname="Cluster Suite" status="skipped" time="0">
+              <skipped message="skipped"></skipped>
+          </testcase>
+          <testcase name="[It] AccessControl AccessControl When cluster is deployed SecurityDisable: should disable security in running cluster" classname="Cluster Suite" status="skipped" time="0">
+              <skipped message="skipped"></skipped>
+          </testcase>
+          <testcase name="[It] AccessControl AccessControl When cluster is deployed SecurityDisable: should disable security in partially security enabled cluster" classname="Cluster Suite" status="skipped" time="0">
+              <skipped message="skipped"></skipped>
+          </testcase>
+          <testcase name="[It] AccessControl AccessControl When cluster is deployed AccessControlLifeCycle" classname="Cluster Suite" status="skipped" time="0">
+              <skipped message="skipped"></skipped>
+          </testcase>
+          <testcase name="[It] AccessControl AccessControl PKIOnly AuthMode when doing valid operations Should allow PKIOnly authMode with EE 8.1.0.0 or later" classname="Cluster Suite" status="skipped" time="0">
+              <skipped message="skipped"></skipped>
+          </testcase>
+          <testcase name="[It] AccessControl AccessControl PKIOnly AuthMode when doing valid operations Should allow updating users from Internal to PKIOnly authMode" classname="Cluster Suite" status="skipped" time="0">
+              <skipped message="skipped"></skipped>
+          </testcase>
+          <testcase name="[It] AccessControl AccessControl PKIOnly AuthMode when doing valid operations Should allow only PKI login and reject password based login" classname="Cluster Suite" status="skipped" time="0">
+              <skipped message="skipped"></skipped>
+          </testcase>
+          <testcase name="[It] AccessControl AccessControl PKIOnly AuthMode when doing valid operations Should allow users with PKIOnly auth mode for federal image" classname="Cluster Suite" status="skipped" time="0">
+              <skipped message="skipped"></skipped>
+          </testcase>
+          <testcase name="[It] AccessControl AccessControl PKIOnly AuthMode when doing valid operations Should allow EE security enable/disable with mTLS cluster" classname="Cluster Suite" status="skipped" time="0">
+              <skipped message="skipped"></skipped>
+          </testcase>
+          <testcase name="[It] AccessControl AccessControl PKIOnly AuthMode when doing valid operations Should allow FE security enable/disable with mTLS cluster" classname="Cluster Suite" status="skipped" time="0">
+              <skipped message="skipped"></skipped>
+          </testcase>
+          <testcase name="[It] AccessControl Using default-password-file Should use default-password-file when configured" classname="Cluster Suite" status="skipped" time="0">
+              <skipped message="skipped"></skipped>
+          </testcase>
+          <testcase name="[It] K8sNodeBlockList Migrate pods from K8s blocked nodes Should migrate the pods from blocked nodes to other nodes" classname="Cluster Suite" status="skipped" time="0">
+              <skipped message="skipped"></skipped>
+          </testcase>
+          <testcase name="[It] K8sNodeBlockList Migrate pods from K8s blocked nodes Should migrate the pods from blocked nodes to other nodes along with rolling restart" classname="Cluster Suite" status="skipped" time="0">
+              <skipped message="skipped"></skipped>
+          </testcase>
+          <testcase name="[It] K8sNodeBlockList Migrate pods from K8s blocked nodes Should migrate the pods from blocked nodes to other nodes along with upgrade" classname="Cluster Suite" status="skipped" time="0">
+              <skipped message="skipped"></skipped>
+          </testcase>
+          <testcase name="[It] K8sNodeBlockList Migrate pods from K8s blocked nodes Should migrate the pods from blocked nodes to other nodes and delete correspondinglocal PVCs" classname="Cluster Suite" status="skipped" time="0">
+              <skipped message="skipped"></skipped>
+          </testcase>
+          <testcase name="[It] K8sNodeBlockList Migrate pods from K8s blocked nodes Should migrate the failed pods from blocked nodes to other nodes with maxIgnorablePod" classname="Cluster Suite" status="skipped" time="0">
+              <skipped message="skipped"></skipped>
+          </testcase>
+          <testcase name="[It] BatchScaleDown When doing valid operations Should scale-down one pod at a time" classname="Cluster Suite" status="skipped" time="0">
+              <skipped message="skipped"></skipped>
+          </testcase>
+          <testcase name="[It] BatchScaleDown When doing valid operations Should do ScaleDownBatch when ScaleDownBatchSize is greater than the actual numbers of pods per rack to be scaled down" classname="Cluster Suite" status="skipped" time="0">
+              <skipped message="skipped"></skipped>
+          </testcase>
+          <testcase name="[It] BatchScaleDown When doing valid operations Should do ScaleDownBatch when ScaleDownBatchSize is less than the actual number of pods per rack to be scaled down" classname="Cluster Suite" status="skipped" time="0">
+              <skipped message="skipped"></skipped>
+          </testcase>
+          <testcase name="[It] BatchScaleDown When doing valid operations Should remove pods of deleted rack in ScaleDownBatch size" classname="Cluster Suite" status="skipped" time="0">
+              <skipped message="skipped"></skipped>
+          </testcase>
+          <testcase name="[It] BatchScaleDown When doing invalid operations Should fail batch scale-down if SC namespace is present" classname="Cluster Suite" status="skipped" time="0">
+              <skipped message="skipped"></skipped>
+          </testcase>
+          <testcase name="[It] AutoScaler When doing scale operations Should trigger scale up/down via scale subresource" classname="Cluster Suite" status="skipped" time="0">
+              <skipped message="skipped"></skipped>
+          </testcase>
+          <testcase name="[It] TlsAuthenticateClient When using tls-authenticate-client: Any TlsAuthenticateClientAny" classname="Cluster Suite" status="skipped" time="0">
+              <skipped message="skipped"></skipped>
+          </testcase>
+          <testcase name="[It] TlsAuthenticateClient When using tls-authenticate-client with capath: Any TlsAuthenticateClientAny with capath" classname="Cluster Suite" status="skipped" time="0">
+              <skipped message="skipped"></skipped>
+          </testcase>
+          <testcase name="[It] TlsAuthenticateClient When using tls-authenticate-client: Empty String TlsAuthenticateClientEmptyString" classname="Cluster Suite" status="skipped" time="0">
+              <skipped message="skipped"></skipped>
+          </testcase>
+          <testcase name="[It] TlsAuthenticateClient When using tls-authenticate-client: TLS name missing TLSNameMissing" classname="Cluster Suite" status="skipped" time="0">
+              <skipped message="skipped"></skipped>
+          </testcase>
+          <testcase name="[It] TlsAuthenticateClient When using tls-authenticate-client: TLS port missing TLSPortMissing" classname="Cluster Suite" status="skipped" time="0">
+              <skipped message="skipped"></skipped>
+          </testcase>
+          <testcase name="[It] TlsAuthenticateClient When using tls-authenticate-client: TLS config missing TLSMissing" classname="Cluster Suite" status="skipped" time="0">
+              <skipped message="skipped"></skipped>
+          </testcase>
+          <testcase name="[It] TlsAuthenticateClient When using tls-authenticate-client: OperatorClientCertSpec missing OperatorClientCertSpecMissing" classname="Cluster Suite" status="skipped" time="0">
+              <skipped message="skipped"></skipped>
+          </testcase>
+          <testcase name="[It] TlsAuthenticateClient When using tls-authenticate-client: specified random string TLSAuthenticateClientRandomString" classname="Cluster Suite" status="skipped" time="0">
+              <skipped message="skipped"></skipped>
+          </testcase>
+          <testcase name="[It] TlsAuthenticateClient When using tls-authenticate-client: Domain List TlsAuthenticateClientDomainList" classname="Cluster Suite" status="skipped" time="0">
+              <skipped message="skipped"></skipped>
+          </testcase>
+          <testcase name="[It] TlsAuthenticateClient When using tls-authenticate-client: Client Name Missing TlsClientNameMissing" classname="Cluster Suite" status="skipped" time="0">
+              <skipped message="skipped"></skipped>
+          </testcase>
+          <testcase name="[It] TlsAuthenticateClient When using tls-authenticate-client: False TlsAuthenticateClientFalse" classname="Cluster Suite" status="skipped" time="0">
+              <skipped message="skipped"></skipped>
+          </testcase>
+          <testcase name="[It] NetworkPolicy When using TLS When using MultiPodPerHost DefaultNetworkPolicy" classname="Cluster Suite" status="skipped" time="0">
+              <skipped message="skipped"></skipped>
+          </testcase>
+          <testcase name="[It] NetworkPolicy When using TLS When using MultiPodPerHost PodAndExternal" classname="Cluster Suite" status="skipped" time="0">
+              <skipped message="skipped"></skipped>
+          </testcase>
+          <testcase name="[It] NetworkPolicy When using TLS When using MultiPodPerHost PodOnlyNetwork: Should not set the hostPort" classname="Cluster Suite" status="skipped" time="0">
+              <skipped message="skipped"></skipped>
+          </testcase>
+          <testcase name="[It] NetworkPolicy When using TLS When using MultiPodPerHost PodOnlyNetwork: should create cluster without nodePort service" classname="Cluster Suite" status="skipped" time="0">
+              <skipped message="skipped"></skipped>
+          </testcase>
+          <testcase name="[It] NetworkPolicy When using TLS When using MultiPodPerHost When using configuredIP setting configured access-address [Serial]" classname="Cluster Suite" status="skipped" time="0">
+              <skipped message="skipped"></skipped>
+          </testcase>
+          <testcase name="[It] NetworkPolicy When using TLS When using MultiPodPerHost When using configuredIP setting configured alternate-access-address [Serial]" classname="Cluster Suite" status="skipped" time="0">
+              <skipped message="skipped"></skipped>
+          </testcase>
+          <testcase name="[It] NetworkPolicy When using TLS When using MultiPodPerHost When using configuredIP setting configured access-address and alternate-access-address [Serial]" classname="Cluster Suite" status="skipped" time="0">
+              <skipped message="skipped"></skipped>
+          </testcase>
+          <testcase name="[It] NetworkPolicy When using TLS When using MultiPodPerHost customInterface Should recover when correct custom network names are updated" classname="Cluster Suite" status="skipped" time="0">
+              <skipped message="skipped"></skipped>
+          </testcase>
+          <testcase name="[It] NetworkPolicy When using TLS When using SinglePodPerHost DefaultNetworkPolicy" classname="Cluster Suite" status="skipped" time="0">
+              <skipped message="skipped"></skipped>
+          </testcase>
+          <testcase name="[It] NetworkPolicy When using TLS When using SinglePodPerHost PodAndExternal" classname="Cluster Suite" status="skipped" time="0">
+              <skipped message="skipped"></skipped>
+          </testcase>
+          <testcase name="[It] NetworkPolicy When using TLS When using SinglePodPerHost PodOnlyNetwork: Should not set the hostPort" classname="Cluster Suite" status="skipped" time="0">
+              <skipped message="skipped"></skipped>
+          </testcase>
+          <testcase name="[It] NetworkPolicy When using TLS When using SinglePodPerHost When using configuredIP setting configured access-address [Serial]" classname="Cluster Suite" status="skipped" time="0">
+              <skipped message="skipped"></skipped>
+          </testcase>
+          <testcase name="[It] NetworkPolicy When using TLS When using SinglePodPerHost When using configuredIP setting configured alternate-access-address [Serial]" classname="Cluster Suite" status="skipped" time="0">
+              <skipped message="skipped"></skipped>
+          </testcase>
+          <testcase name="[It] NetworkPolicy When using TLS When using SinglePodPerHost When using configuredIP setting configured access-address and alternate-access-address [Serial]" classname="Cluster Suite" status="skipped" time="0">
+              <skipped message="skipped"></skipped>
+          </testcase>
+          <testcase name="[It] NetworkPolicy When using TLS When using SinglePodPerHost customInterface Should add all custom interface IPs in aerospike.conf file" classname="Cluster Suite" status="skipped" time="0">
+              <skipped message="skipped"></skipped>
+          </testcase>
+          <testcase name="[It] NetworkPolicy When using TLS When using SinglePodPerHost customInterface Should recover when correct custom network names are updated" classname="Cluster Suite" status="skipped" time="0">
+              <skipped message="skipped"></skipped>
+          </testcase>
+          <testcase name="[It] NetworkPolicy When using NonTLS When using MultiPodPerHost DefaultNetworkPolicy" classname="Cluster Suite" status="skipped" time="0">
+              <skipped message="skipped"></skipped>
+          </testcase>
+          <testcase name="[It] NetworkPolicy When using NonTLS When using MultiPodPerHost PodAndExternal" classname="Cluster Suite" status="skipped" time="0">
+              <skipped message="skipped"></skipped>
+          </testcase>
+          <testcase name="[It] NetworkPolicy When using NonTLS When using MultiPodPerHost PodOnlyNetwork: Should not set the hostPort" classname="Cluster Suite" status="skipped" time="0">
+              <skipped message="skipped"></skipped>
+          </testcase>
+          <testcase name="[It] NetworkPolicy When using NonTLS When using MultiPodPerHost PodOnlyNetwork: should create cluster without nodePort service" classname="Cluster Suite" status="skipped" time="0">
+              <skipped message="skipped"></skipped>
+          </testcase>
+          <testcase name="[It] NetworkPolicy When using NonTLS When using MultiPodPerHost When using configuredIP setting configured access-address [Serial]" classname="Cluster Suite" status="skipped" time="0">
+              <skipped message="skipped"></skipped>
+          </testcase>
+          <testcase name="[It] NetworkPolicy When using NonTLS When using MultiPodPerHost When using configuredIP setting configured alternate-access-address [Serial]" classname="Cluster Suite" status="skipped" time="0">
+              <skipped message="skipped"></skipped>
+          </testcase>
+          <testcase name="[It] NetworkPolicy When using NonTLS When using MultiPodPerHost When using configuredIP setting configured access-address and alternate-access-address [Serial]" classname="Cluster Suite" status="skipped" time="0">
+              <skipped message="skipped"></skipped>
+          </testcase>
+          <testcase name="[It] NetworkPolicy When using NonTLS When using MultiPodPerHost customInterface Should add all custom interface IPs in aerospike.conf file" classname="Cluster Suite" status="skipped" time="0">
+              <skipped message="skipped"></skipped>
+          </testcase>
+          <testcase name="[It] NetworkPolicy When using NonTLS When using MultiPodPerHost customInterface Should recover when correct custom network names are updated" classname="Cluster Suite" status="skipped" time="0">
+              <skipped message="skipped"></skipped>
+          </testcase>
+          <testcase name="[It] NetworkPolicy When using NonTLS When using SinglePodPerHost DefaultNetworkPolicy" classname="Cluster Suite" status="skipped" time="0">
+              <skipped message="skipped"></skipped>
+          </testcase>
+          <testcase name="[It] NetworkPolicy When using NonTLS When using SinglePodPerHost PodAndExternal" classname="Cluster Suite" status="skipped" time="0">
+              <skipped message="skipped"></skipped>
+          </testcase>
+          <testcase name="[It] NetworkPolicy When using NonTLS When using SinglePodPerHost PodOnlyNetwork: Should not set the hostPort" classname="Cluster Suite" status="skipped" time="0">
+              <skipped message="skipped"></skipped>
+          </testcase>
+          <testcase name="[It] NetworkPolicy When using NonTLS When using SinglePodPerHost When using configuredIP setting configured access-address [Serial]" classname="Cluster Suite" status="skipped" time="0">
+              <skipped message="skipped"></skipped>
+          </testcase>
+          <testcase name="[It] NetworkPolicy When using NonTLS When using SinglePodPerHost When using configuredIP setting configured alternate-access-address [Serial]" classname="Cluster Suite" status="skipped" time="0">
+              <skipped message="skipped"></skipped>
+          </testcase>
+          <testcase name="[It] NetworkPolicy When using NonTLS When using SinglePodPerHost When using configuredIP setting configured access-address and alternate-access-address [Serial]" classname="Cluster Suite" status="skipped" time="0">
+              <skipped message="skipped"></skipped>
+          </testcase>
+          <testcase name="[It] NetworkPolicy When using NonTLS When using SinglePodPerHost customInterface Should add all custom interface IPs in aerospike.conf file" classname="Cluster Suite" status="skipped" time="0">
+              <skipped message="skipped"></skipped>
+          </testcase>
+          <testcase name="[It] NetworkPolicy When using NonTLS When using SinglePodPerHost customInterface Should recover when correct custom network names are updated" classname="Cluster Suite" status="skipped" time="0">
+              <skipped message="skipped"></skipped>
+          </testcase>
+          <testcase name="[It] NetworkPolicy Negative cases for the NetworkPolicy NegativeDeployNetworkPolicyTest Negative cases for customInterface MissingCustomAccessNetworkNames: should fail when access is set to &#39;customInterface&#39; and customAccessNetworkNames is not given" classname="Cluster Suite" status="skipped" time="0">
+              <skipped message="skipped"></skipped>
+          </testcase>
+          <testcase name="[It] NetworkPolicy Negative cases for the NetworkPolicy NegativeDeployNetworkPolicyTest Negative cases for customInterface MissingCustomAlternateAccessNetworkNames: should fail when alternateAccess is set to &#39;customInterface&#39; and customAlternateAccessNetworkNames is not given" classname="Cluster Suite" status="skipped" time="0">
+              <skipped message="skipped"></skipped>
+          </testcase>
+          <testcase name="[It] NetworkPolicy Negative cases for the NetworkPolicy NegativeDeployNetworkPolicyTest Negative cases for customInterface MissingCustomTLSAccessNetworkNames: should fail when tlsAccess is set to &#39;customInterface&#39; and customTLSAccessNetworkNames is not given" classname="Cluster Suite" status="skipped" time="0">
+              <skipped message="skipped"></skipped>
+          </testcase>
+          <testcase name="[It] NetworkPolicy Negative cases for the NetworkPolicy NegativeDeployNetworkPolicyTest Negative cases for customInterface MissingCustomTLSAlternateAccessNetworkNames: should fail when tlsAlternateAccess is set to &#39;customInterface&#39; and customTLSAlternateAccessNetworkNames is not given" classname="Cluster Suite" status="skipped" time="0">
+              <skipped message="skipped"></skipped>
+          </testcase>
+          <testcase name="[It] NetworkPolicy Negative cases for the NetworkPolicy NegativeDeployNetworkPolicyTest Negative cases for customInterface MissingCustomFabricNetworkNames: should fail when fabric is set to &#39;customInterface&#39; and customFabricNetworkNames is not given" classname="Cluster Suite" status="skipped" time="0">
+              <skipped message="skipped"></skipped>
+          </testcase>
+          <testcase name="[It] NetworkPolicy Negative cases for the NetworkPolicy NegativeDeployNetworkPolicyTest Negative cases for customInterface MissingCustomTLSFabricNetworkNames: should fail when tlsFabric is set to &#39;customInterface&#39; and customTLSFabricNetworkNames is not given" classname="Cluster Suite" status="skipped" time="0">
+              <skipped message="skipped"></skipped>
+          </testcase>
+          <testcase name="[It] NetworkPolicy Negative cases for the NetworkPolicy NegativeDeployNetworkPolicyTest Negative cases for customInterface InvalidFabricType: should fail when fabric is set to value other than &#39;customInterface&#39;" classname="Cluster Suite" status="skipped" time="0">
+              <skipped message="skipped"></skipped>
+          </testcase>
+          <testcase name="[It] NetworkPolicy Negative cases for the NetworkPolicy NegativeDeployNetworkPolicyTest Negative cases for customInterface MissingNetworkNameInPodAnnotations: should fail when access is set to &#39;customInterface&#39; and customAccessNetworkNames is not present in pod annotations" classname="Cluster Suite" status="skipped" time="0">
+              <skipped message="skipped"></skipped>
+          </testcase>
+          <testcase name="[It] NetworkPolicy Negative cases for the NetworkPolicy NegativeDeployNetworkPolicyTest Negative cases for customInterface UsingHostNetworkAndCustomInterface: should fail when access is set to &#39;customInterface&#39; and Host network is used" classname="Cluster Suite" status="skipped" time="0">
+              <skipped message="skipped"></skipped>
+          </testcase>
+          <testcase name="[It] NetworkPolicy Negative cases for the NetworkPolicy NegativeDeployNetworkPolicyTest Negative cases for customInterface NetworkNameOfDifferentNamespace: should fail when access is set to &#39;customInterface&#39; and customAccessNetworkNames present in pod annotations is of different namespace" classname="Cluster Suite" status="skipped" time="0">
+              <skipped message="skipped"></skipped>
+          </testcase>
+          <testcase name="[It] NetworkPolicy Negative cases for the NetworkPolicy NegativeDeployNetworkPolicyTest Negative cases for customInterface InvalidCustomAccessNetworkNames: should fail when access is set to &#39;customInterface&#39; and customAccessNetworkNames is given and CNI not working (network-status annotation missing)" classname="Cluster Suite" status="skipped" time="0">
+              <skipped message="skipped"></skipped>
+          </testcase>
+          <testcase name="[It] NetworkPolicy Negative cases for the NetworkPolicy NegativeDeployNetworkPolicyTest Negative cases for customInterface EmptyCustomAccessNetworkNames: should fail when access is set to &#39;customInterface&#39; and customAccessNetworkNames is set to empty slice" classname="Cluster Suite" status="skipped" time="0">
+              <skipped message="skipped"></skipped>
+          </testcase>
+          <testcase name="[It] NetworkPolicy Negative cases for the NetworkPolicy NegativeDeployNetworkPolicyTest Negative cases for configuredIP setting configured access-address without right label [Serial]" classname="Cluster Suite" status="skipped" time="0">
+              <skipped message="skipped"></skipped>
+          </testcase>
+          <testcase name="[It] NetworkPolicy Negative cases for the NetworkPolicy NegativeDeployNetworkPolicyTest Negative cases for configuredIP setting configured alternate-access-address without right label [Serial]" classname="Cluster Suite" status="skipped" time="0">
+              <skipped message="skipped"></skipped>
+          </testcase>
+          <testcase name="[It] NetworkPolicy Negative cases for the NetworkPolicy NegativeDeployNetworkPolicyTest Negative cases for configuredIP setting configured access-address and alternate-access-address without label [Serial]" classname="Cluster Suite" status="skipped" time="0">
+              <skipped message="skipped"></skipped>
+          </testcase>
+          <testcase name="[It] NetworkPolicy Negative cases for the NetworkPolicy NegativeUpdateNetworkPolicyTest Negative cases for customInterface InvalidAerospikeCustomInterface MissingCustomAccessNetworkNames: should fail when access is set to &#39;customInterface&#39; and customAccessNetworkNames is not given" classname="Cluster Suite" status="skipped" time="0">
+              <skipped message="skipped"></skipped>
+          </testcase>
+          <testcase name="[It] NetworkPolicy Negative cases for the NetworkPolicy NegativeUpdateNetworkPolicyTest Negative cases for customInterface InvalidAerospikeCustomInterface MissingCustomAlternateAccessNetworkNames: should fail when alternateAccess is set to &#39;customInterface&#39; and customAlternateAccessNetworkNames is not given" classname="Cluster Suite" status="skipped" time="0">
+              <skipped message="skipped"></skipped>
+          </testcase>
+          <testcase name="[It] NetworkPolicy Negative cases for the NetworkPolicy NegativeUpdateNetworkPolicyTest Negative cases for customInterface InvalidAerospikeCustomInterface MissingCustomTLSAccessNetworkNames: should fail when tlsAccess is set to &#39;customInterface&#39; and customTLSAccessNetworkNames is not given" classname="Cluster Suite" status="skipped" time="0">
+              <skipped message="skipped"></skipped>
+          </testcase>
+          <testcase name="[It] NetworkPolicy Negative cases for the NetworkPolicy NegativeUpdateNetworkPolicyTest Negative cases for customInterface InvalidAerospikeCustomInterface MissingCustomTLSAlternateAccessNetworkNames: should fail when tlsAlternateAccess is set to &#39;customInterface&#39; and customTLSAlternateAccessNetworkNames is not given" classname="Cluster Suite" status="skipped" time="0">
+              <skipped message="skipped"></skipped>
+          </testcase>
+          <testcase name="[It] NetworkPolicy Negative cases for the NetworkPolicy NegativeUpdateNetworkPolicyTest Negative cases for customInterface InvalidAerospikeCustomInterface UpdatingFabricTypeInNetworkPolicy: should fail when fabric type is changed" classname="Cluster Suite" status="skipped" time="0">
+              <skipped message="skipped"></skipped>
+          </testcase>
+          <testcase name="[It] NetworkPolicy Negative cases for the NetworkPolicy NegativeUpdateNetworkPolicyTest Negative cases for customInterface InvalidAerospikeCustomInterface UpdatingTLSFabricTypeInNetworkPolicy: should fail when TLS fabric type is changed" classname="Cluster Suite" status="skipped" time="0">
+              <skipped message="skipped"></skipped>
+          </testcase>
+          <testcase name="[It] NetworkPolicy Negative cases for the NetworkPolicy NegativeUpdateNetworkPolicyTest Negative cases for customInterface InvalidAerospikeCustomInterface MissingNetworkNameInPodAnnotations: should fail when access is set to &#39;customInterface&#39; and customAccessNetworkNames is not present in pod annotations" classname="Cluster Suite" status="skipped" time="0">
+              <skipped message="skipped"></skipped>
+          </testcase>
+          <testcase name="[It] NetworkPolicy Negative cases for the NetworkPolicy NegativeUpdateNetworkPolicyTest Negative cases for customInterface InvalidAerospikeCustomInterface UsingHostNetworkAndCustomInterface: should fail when access is set to &#39;customInterface&#39; and Host network is used" classname="Cluster Suite" status="skipped" time="0">
+              <skipped message="skipped"></skipped>
+          </testcase>
+          <testcase name="[It] NetworkPolicy Negative cases for the NetworkPolicy NegativeUpdateNetworkPolicyTest Negative cases for customInterface InvalidAerospikeCustomInterface NetworkNameOfDifferentNamespace: should fail when access is set to &#39;customInterface&#39; and customAccessNetworkNames present in pod annotations is of different namespace" classname="Cluster Suite" status="skipped" time="0">
+              <skipped message="skipped"></skipped>
+          </testcase>
+          <testcase name="[It] NetworkPolicy Negative cases for the NetworkPolicy NegativeUpdateNetworkPolicyTest Negative cases for customInterface InvalidFabricNetworkNamesUpdate UpdateCustomFabricNetworkNames: should fail when fabric is set to &#39;customInterface&#39; and customFabricNetworkNames list is updated" classname="Cluster Suite" status="skipped" time="0">
+              <skipped message="skipped"></skipped>
+          </testcase>
+          <testcase name="[It] NetworkPolicy Negative cases for the NetworkPolicy NegativeUpdateNetworkPolicyTest Negative cases for customInterface InvalidFabricNetworkNamesUpdate UpdateCustomTLSFabricNetworkNames: should fail when tlsFabric is set to &#39;customInterface&#39; and customTLSFabricNetworkNames list is updated" classname="Cluster Suite" status="skipped" time="0">
+              <skipped message="skipped"></skipped>
+          </testcase>
+          <testcase name="[It] OnDemandOperations When doing valid operations Should execute quickRestart operations on all pods" classname="Cluster Suite" status="skipped" time="0">
+              <skipped message="skipped"></skipped>
+          </testcase>
+          <testcase name="[It] OnDemandOperations When doing valid operations Should execute podRestart operation on all pods" classname="Cluster Suite" status="skipped" time="0">
+              <skipped message="skipped"></skipped>
+          </testcase>
+          <testcase name="[It] OnDemandOperations When doing valid operations Should be able to replace/remove the running operations" classname="Cluster Suite" status="skipped" time="0">
+              <skipped message="skipped"></skipped>
+          </testcase>
+          <testcase name="[It] OnDemandOperations When doing valid operations Should execute operations on selected pods with dynamic config change" classname="Cluster Suite" status="skipped" time="0">
+              <skipped message="skipped"></skipped>
+          </testcase>
+          <testcase name="[It] OnDemandOperations When doing valid operations Should execute on-demand podRestart operations on all pods along with scale down" classname="Cluster Suite" status="skipped" time="0">
+              <skipped message="skipped"></skipped>
+          </testcase>
+          <testcase name="[It] OnDemandOperations When doing valid operations Should execute podRestart if podSpec is changed with on-demand warm restart" classname="Cluster Suite" status="skipped" time="0">
+              <skipped message="skipped"></skipped>
+          </testcase>
+          <testcase name="[It] OnDemandOperations When doing invalid operations Should fail if there are more than 1 operations" classname="Cluster Suite" status="skipped" time="0">
+              <skipped message="skipped"></skipped>
+          </testcase>
+          <testcase name="[It] OnDemandOperations When doing invalid operations should fail if invalid pod name is mentioned in the pod list" classname="Cluster Suite" status="skipped" time="0">
+              <skipped message="skipped"></skipped>
+          </testcase>
+          <testcase name="[It] OnDemandOperations When doing invalid operations should fail if operationType is modified" classname="Cluster Suite" status="skipped" time="0">
+              <skipped message="skipped"></skipped>
+          </testcase>
+          <testcase name="[It] OnDemandOperations When doing invalid operations should fail if podList is modified" classname="Cluster Suite" status="skipped" time="0">
+              <skipped message="skipped"></skipped>
+          </testcase>
+          <testcase name="[It] OnDemandOperations When doing invalid operations should fail any operation along with cluster scale-up" classname="Cluster Suite" status="skipped" time="0">
+              <skipped message="skipped"></skipped>
+          </testcase>
+          <testcase name="[It] OnDemandOperations When doing invalid operations should fail any operation along with cluster upgrade" classname="Cluster Suite" status="skipped" time="0">
+              <skipped message="skipped"></skipped>
+          </testcase>
+          <testcase name="[It] LocalPVCDelete When doing valid operations When doing rolling restart Should delete the local PVCs when deleteLocalStorageOnRestart is set and set MFD dynamically" classname="Cluster Suite" status="skipped" time="0">
+              <skipped message="skipped"></skipped>
+          </testcase>
+          <testcase name="[It] LocalPVCDelete When doing valid operations When doing rolling restart Should delete the local PVCs of only 1 rack when deleteLocalStorageOnRestart is set at the rack level and set MFD dynamically" classname="Cluster Suite" status="skipped" time="0">
+              <skipped message="skipped"></skipped>
+          </testcase>
+          <testcase name="[It] LocalPVCDelete When doing valid operations When doing upgrade Should delete the local PVCs when deleteLocalStorageOnRestart is set and set MFD dynamically" classname="Cluster Suite" status="skipped" time="0">
+              <skipped message="skipped"></skipped>
+          </testcase>
+          <testcase name="[It] LocalPVCDelete When doing valid operations When doing upgrade Should delete the local PVCs of only 1 rack when deleteLocalStorageOnRestart is set at the rack level and set MFD dynamically" classname="Cluster Suite" status="skipped" time="0">
+              <skipped message="skipped"></skipped>
+          </testcase>
+          <testcase name="[It] LocalPVCDelete When doing invalid operations Should fail when deleteLocalStorageOnRestart is set but localStorageClasses is not set" classname="Cluster Suite" status="skipped" time="0">
+              <skipped message="skipped"></skipped>
+          </testcase>
+          <testcase name="[It] OverrideRackID When doing invalid operations around EnableRackIDOverride feature Deploy: Should reject EnableRackIDOverride when multiple racks are configured" classname="Cluster Suite" status="skipped" time="0">
+              <skipped message="skipped"></skipped>
+          </testcase>
+          <testcase name="[It] OverrideRackID When doing invalid operations around EnableRackIDOverride feature Update: Should reject EnableRackIDOverride when multiple racks are configured" classname="Cluster Suite" status="skipped" time="0">
+              <skipped message="skipped"></skipped>
+          </testcase>
+          <testcase name="[It] OverrideRackID When doing invalid operations around EnableRackIDOverride feature Update: Should fail if EnableRackIDOverride is set but annotation is missing" classname="Cluster Suite" status="skipped" time="0">
+              <skipped message="skipped"></skipped>
+          </testcase>
+          <testcase name="[It] OverrideRackID When doing valid operations around EnableRackIDOverride feature When EnableRackIDOverride is enabled Should trigger reconciliation when override-rack-id annotation changes" classname="Cluster Suite" status="skipped" time="0">
+              <skipped message="skipped"></skipped>
+          </testcase>
+          <testcase name="[It] OverrideRackID When doing valid operations around EnableRackIDOverride feature When EnableRackIDOverride is disabled Should not trigger restart when annotation changes if feature is disabled" classname="Cluster Suite" status="skipped" time="0">
+              <skipped message="skipped"></skipped>
+          </testcase>
+          <testcase name="[It] OverrideRackID When doing valid operations around EnableRackIDOverride feature When EnableRackIDOverride is disabled Should allow enabling/disabling EnableRackIDOverride after cluster is running" classname="Cluster Suite" status="skipped" time="0">
+              <skipped message="skipped"></skipped>
+          </testcase>
+          <testcase name="[It] OverrideRackID When doing valid operations around EnableRackIDOverride feature When updating cluster with EnableRackIDOverride disabled Should do pod restart if enabling EnableRackIDOverride with old init container" classname="Cluster Suite" status="skipped" time="0">
+              <skipped message="skipped"></skipped>
+          </testcase>
+          <testcase name="[It] ClusterService Validate create LB" classname="Cluster Suite" status="skipped" time="0">
+              <skipped message="skipped"></skipped>
+          </testcase>
+          <testcase name="[It] ClusterService Validate update LB" classname="Cluster Suite" status="skipped" time="0">
+              <skipped message="skipped"></skipped>
+          </testcase>
+          <testcase name="[It] ClusterService Validate create LB in an existing cluster" classname="Cluster Suite" status="skipped" time="0">
+              <skipped message="skipped"></skipped>
+          </testcase>
+          <testcase name="[It] ClusterService Validate delete LB" classname="Cluster Suite" status="skipped" time="0">
+              <skipped message="skipped"></skipped>
+          </testcase>
+          <testcase name="[It] ClusterService Validate LB service skip deletion when created from outside" classname="Cluster Suite" status="skipped" time="0">
+              <skipped message="skipped"></skipped>
+          </testcase>
+          <testcase name="[It] ClusterService Validate create LB service failure when LB service already created from outside" classname="Cluster Suite" status="skipped" time="0">
+              <skipped message="skipped"></skipped>
+          </testcase>
+          <testcase name="[It] ClusterService Validate create headless service with default metadata" classname="Cluster Suite" status="skipped" time="0">
+              <skipped message="skipped"></skipped>
+          </testcase>
+          <testcase name="[It] ClusterService Validate create and update headless service with correct metadata" classname="Cluster Suite" status="skipped" time="0">
+              <skipped message="skipped"></skipped>
+          </testcase>
+          <testcase name="[It] ClusterService Validate create and update pod service with correct metadata" classname="Cluster Suite" status="skipped" time="0">
+              <skipped message="skipped"></skipped>
+          </testcase>
+          <testcase name="[It] StorageVolumes When adding cluster When using volume Should not allow same name volumes" classname="Cluster Suite" status="skipped" time="0">
+              <skipped message="skipped"></skipped>
+          </testcase>
+          <testcase name="[It] StorageVolumes When adding cluster When using volume source Should not specify multiple source" classname="Cluster Suite" status="skipped" time="0">
+              <skipped message="skipped"></skipped>
+          </testcase>
+          <testcase name="[It] StorageVolumes When adding cluster When using volume source Should specify one source" classname="Cluster Suite" status="skipped" time="0">
+              <skipped message="skipped"></skipped>
+          </testcase>
+          <testcase name="[It] StorageVolumes When adding cluster When using volume source Should specify valid volumeMode for PV source" classname="Cluster Suite" status="skipped" time="0">
+              <skipped message="skipped"></skipped>
+          </testcase>
+          <testcase name="[It] StorageVolumes When adding cluster When using volume source Should specify valid accessMode for PV source" classname="Cluster Suite" status="skipped" time="0">
+              <skipped message="skipped"></skipped>
+          </testcase>
+          <testcase name="[It] StorageVolumes When adding cluster When using volume source Should allow setting labels and annotation in PVC" classname="Cluster Suite" status="skipped" time="0">
+              <skipped message="skipped"></skipped>
+          </testcase>
+          <testcase name="[It] StorageVolumes When adding cluster When using volume attachment Should not use invalid container name" classname="Cluster Suite" status="skipped" time="0">
+              <skipped message="skipped"></skipped>
+          </testcase>
+          <testcase name="[It] StorageVolumes When adding cluster When using volume attachment Should give at least one of the following -&gt; sidecar, initcontainer, aerospike" classname="Cluster Suite" status="skipped" time="0">
+              <skipped message="skipped"></skipped>
+          </testcase>
+          <testcase name="[It] StorageVolumes When adding cluster When using volume attachment Should not allow mounting same volume at multiple path in a container" classname="Cluster Suite" status="skipped" time="0">
+              <skipped message="skipped"></skipped>
+          </testcase>
+          <testcase name="[It] StorageVolumes When adding cluster When using volume attachment Should not allow mounting multiple volumes at same path in a container" classname="Cluster Suite" status="skipped" time="0">
+              <skipped message="skipped"></skipped>
+          </testcase>
+          <testcase name="[It] StorageVolumes When adding cluster When using volume attachment Should not use aerospike-server container name in sidecars" classname="Cluster Suite" status="skipped" time="0">
+              <skipped message="skipped"></skipped>
+          </testcase>
+          <testcase name="[It] StorageVolumes When adding cluster When using volume attachment Should not use aerospike-init container name in initcontainers" classname="Cluster Suite" status="skipped" time="0">
+              <skipped message="skipped"></skipped>
+          </testcase>
+          <testcase name="[It] StorageVolumes When adding cluster When configuring workdir With PV workdir Should validate workdir subPath mounts" classname="Cluster Suite" status="skipped" time="0">
+              <skipped message="skipped"></skipped>
+          </testcase>
+          <testcase name="[It] StorageVolumes When adding cluster When configuring workdir With Non PV workdir Should allow emptydir volume for default workdir" classname="Cluster Suite" status="skipped" time="0">
+              <skipped message="skipped"></skipped>
+          </testcase>
+          <testcase name="[It] StorageVolumes When adding cluster When configuring workdir With Non PV workdir Should allow emptydir volume for any workdir" classname="Cluster Suite" status="skipped" time="0">
+              <skipped message="skipped"></skipped>
+          </testcase>
+          <testcase name="[It] StorageVolumes When adding cluster When configuring workdir With Non PV workdir Should allow default workdir without any configured volume" classname="Cluster Suite" status="skipped" time="0">
+              <skipped message="skipped"></skipped>
+          </testcase>
+          <testcase name="[It] StorageVolumes When adding cluster When configuring workdir With Non PV workdir Should fail if workdir configured but volume is not" classname="Cluster Suite" status="skipped" time="0">
+              <skipped message="skipped"></skipped>
+          </testcase>
+          <testcase name="[It] StorageVolumes When adding cluster When testing mount options for hostPath volumes Should validate all mount options in all containers for hostPath volume" classname="Cluster Suite" status="skipped" time="0">
+              <skipped message="skipped"></skipped>
+          </testcase>
+          <testcase name="[It] StorageVolumes When adding cluster When testing mount options for hostPath volumes Should not reflect mount options in aerospike containers for non-hostPath volumes" classname="Cluster Suite" status="skipped" time="0">
+              <skipped message="skipped"></skipped>
+          </testcase>
+          <testcase name="[It] StorageVolumes When cluster is already deployed When using volume Should not allow adding PV volume" classname="Cluster Suite" status="skipped" time="0">
+              <skipped message="skipped"></skipped>
+          </testcase>
+          <testcase name="[It] StorageVolumes When cluster is already deployed When using volume Should not allow deleting PV volume" classname="Cluster Suite" status="skipped" time="0">
+              <skipped message="skipped"></skipped>
+          </testcase>
+          <testcase name="[It] StorageVolumes When cluster is already deployed When using volume Should allow adding/deleting Non PV volume" classname="Cluster Suite" status="skipped" time="0">
+              <skipped message="skipped"></skipped>
+          </testcase>
+          <testcase name="[It] StorageVolumes When cluster is already deployed When using volume source Should not allow update of PV source" classname="Cluster Suite" status="skipped" time="0">
+              <skipped message="skipped"></skipped>
+          </testcase>
+          <testcase name="[It] StorageVolumes When cluster is already deployed When using volume source Should not allow updating PVC" classname="Cluster Suite" status="skipped" time="0">
+              <skipped message="skipped"></skipped>
+          </testcase>
+          <testcase name="[It] StorageVolumes When cluster is already deployed When using volume source Should allow update of Non-PV source" classname="Cluster Suite" status="skipped" time="0">
+              <skipped message="skipped"></skipped>
+          </testcase>
+          <testcase name="[It] StorageVolumes When cluster is already deployed When using volume attachment Should allow adding/deleting volume attachments" classname="Cluster Suite" status="skipped" time="0">
+              <skipped message="skipped"></skipped>
+          </testcase>
+          <testcase name="[It] PodSpec When doing valid operation Should validate annotations and labels addition" classname="Cluster Suite" status="skipped" time="0">
+              <skipped message="skipped"></skipped>
+          </testcase>
+          <testcase name="[It] PodSpec When doing valid operation Should validate added annotations and labels flow" classname="Cluster Suite" status="skipped" time="0">
+              <skipped message="skipped"></skipped>
+          </testcase>
+          <testcase name="[It] PodSpec When doing valid operation Should validate the sidecar workflow" classname="Cluster Suite" status="skipped" time="0">
+              <skipped message="skipped"></skipped>
+          </testcase>
+          <testcase name="[It] PodSpec When doing valid operation When doing custom initcontainer operation Should validate the initcontainer workflow" classname="Cluster Suite" status="skipped" time="0">
+              <skipped message="skipped"></skipped>
+          </testcase>
+          <testcase name="[It] PodSpec When doing valid operation When doing custom initcontainer operation Should place aerospike-init at placeholder position" classname="Cluster Suite" status="skipped" time="0">
+              <skipped message="skipped"></skipped>
+          </testcase>
+          <testcase name="[It] PodSpec When doing valid operation When doing custom initcontainer operation Should maintain aerospike-init configuration when using placeholder" classname="Cluster Suite" status="skipped" time="0">
+              <skipped message="skipped"></skipped>
+          </testcase>
+          <testcase name="[It] PodSpec When doing valid operation When doing custom initcontainer operation Should handle adding init containers dynamically" classname="Cluster Suite" status="skipped" time="0">
+              <skipped message="skipped"></skipped>
+          </testcase>
+          <testcase name="[It] PodSpec When doing valid operation Should validate affinity" classname="Cluster Suite" status="skipped" time="0">
+              <skipped message="skipped"></skipped>
+          </testcase>
+          <testcase name="[It] PodSpec When doing valid operation Should be able to update container image and other fields together" classname="Cluster Suite" status="skipped" time="0">
+              <skipped message="skipped"></skipped>
+          </testcase>
+          <testcase name="[It] PodSpec When doing valid operation Should be able to set/update aerospike-init custom registry, namespace and name" classname="Cluster Suite" status="skipped" time="0">
+              <skipped message="skipped"></skipped>
+          </testcase>
+          <testcase name="[It] PodSpec When doing valid operation Should be able to recover cluster after setting correct aerospike-init custom registry/namespace" classname="Cluster Suite" status="skipped" time="0">
+              <skipped message="skipped"></skipped>
+          </testcase>
+          <testcase name="[It] PodSpec When doing invalid operation Should fail adding reserved label" classname="Cluster Suite" status="skipped" time="0">
+              <skipped message="skipped"></skipped>
+          </testcase>
+          <testcase name="[It] PodSpec When doing invalid operation Should fail adding reserved annotations" classname="Cluster Suite" status="skipped" time="0">
+              <skipped message="skipped"></skipped>
+          </testcase>
+          <testcase name="[It] PodSpec When doing invalid operation Should fail for adding sidecar container with same name" classname="Cluster Suite" status="skipped" time="0">
+              <skipped message="skipped"></skipped>
+          </testcase>
+          <testcase name="[It] PodSpec When doing invalid operation Should fail for adding initcontainer container with same name" classname="Cluster Suite" status="skipped" time="0">
+              <skipped message="skipped"></skipped>
+          </testcase>
+          <testcase name="[It] StorageInit When doing valid operations Should work for large device with long init and multithreading" classname="Cluster Suite" status="skipped" time="0">
+              <skipped message="skipped"></skipped>
+          </testcase>
+          <testcase name="[It] StorageInit When doing valid operations Should validate all storage-init policies" classname="Cluster Suite" status="skipped" time="0">
+              <skipped message="skipped"></skipped>
+          </testcase>
+          <testcase name="[It] StorageInit When doing valid operations Should work for large device with long init" classname="Cluster Suite" status="skipped" time="0">
+              <skipped message="skipped"></skipped>
+          </testcase>
+          <testcase name="[It] StorageInit When doing invalid operations Should fail multithreading in init container if resource limit is not set" classname="Cluster Suite" status="skipped" time="0">
+              <skipped message="skipped"></skipped>
+          </testcase>
+          <testcase name="[It] StorageInit When doing PVC change Should change the pvcUID in initialisedVolumes" classname="Cluster Suite" status="skipped" time="0">
+              <skipped message="skipped"></skipped>
+          </testcase>
+          <testcase name="[It] StorageInit When doing PVC change Should remove old formatted initialisedVolumes names" classname="Cluster Suite" status="skipped" time="0">
+              <skipped message="skipped"></skipped>
+          </testcase>
+          <testcase name="[It] PodDisruptionBudget Valid Operations Validate create PDB with default maxUnavailable" classname="Cluster Suite" status="skipped" time="0">
+              <skipped message="skipped"></skipped>
+          </testcase>
+          <testcase name="[It] PodDisruptionBudget Valid Operations Validate create PDB with specified maxUnavailable" classname="Cluster Suite" status="skipped" time="0">
+              <skipped message="skipped"></skipped>
+          </testcase>
+          <testcase name="[It] PodDisruptionBudget Valid Operations Validate update PDB" classname="Cluster Suite" status="skipped" time="0">
+              <skipped message="skipped"></skipped>
+          </testcase>
+          <testcase name="[It] PodDisruptionBudget Valid Operations Validate disablePDB, the Operator will not create PDB" classname="Cluster Suite" status="skipped" time="0">
+              <skipped message="skipped"></skipped>
+          </testcase>
+          <testcase name="[It] PodDisruptionBudget Valid Operations Validate update disablePDB, the Operator will delete and recreate PDB" classname="Cluster Suite" status="skipped" time="0">
+              <skipped message="skipped"></skipped>
+          </testcase>
+          <testcase name="[It] PodDisruptionBudget Valid Operations Validate that non-operator created PDB is not created" classname="Cluster Suite" status="skipped" time="0">
+              <skipped message="skipped"></skipped>
+          </testcase>
+          <testcase name="[It] PodDisruptionBudget Valid Operations Validate that cluster is deployed with disabledPDB even if non-operator created PDB is present" classname="Cluster Suite" status="skipped" time="0">
+              <skipped message="skipped"></skipped>
+          </testcase>
+          <testcase name="[It] PodDisruptionBudget Invalid Operations Should fail if maxUnavailable is greater than size" classname="Cluster Suite" status="skipped" time="0">
+              <skipped message="skipped"></skipped>
+          </testcase>
+          <testcase name="[It] PodDisruptionBudget Invalid Operations Should fail if maxUnavailable is greater than RF" classname="Cluster Suite" status="skipped" time="0">
+              <skipped message="skipped"></skipped>
+          </testcase>
+          <testcase name="[It] PodEviction When doing valid operations Aerospike pods Should handle pod eviction and validate cold restart with annotation tracking" classname="Cluster Suite" status="skipped" time="0">
+              <skipped message="skipped"></skipped>
+          </testcase>
+          <testcase name="[It] PodEviction When doing valid operations Non-Aerospike pods Should successfully evict nginx pod without admission webhook blocking" classname="Cluster Suite" status="skipped" time="0">
+              <skipped message="skipped"></skipped>
+          </testcase>
+          <testcase name="[It] Sample files validation Sample files validation Testing sample file - /Users/adwivedi/go/src/github.com/aerospike/ako-3/config/samples/all_flash_cluster_cr.yaml" classname="Cluster Suite" status="skipped" time="0">
+              <skipped message="skipped"></skipped>
+          </testcase>
+          <testcase name="[It] Sample files validation Sample files validation Testing sample file - /Users/adwivedi/go/src/github.com/aerospike/ako-3/config/samples/dim_nostorage_cluster_cr.yaml" classname="Cluster Suite" status="skipped" time="0">
+              <skipped message="skipped"></skipped>
+          </testcase>
+          <testcase name="[It] Sample files validation Sample files validation Testing sample file - /Users/adwivedi/go/src/github.com/aerospike/ako-3/config/samples/dim_nostorage_cluster_skip_validation_cr.yaml" classname="Cluster Suite" status="skipped" time="0">
+              <skipped message="skipped"></skipped>
+          </testcase>
+          <testcase name="[It] Sample files validation Sample files validation Testing sample file - /Users/adwivedi/go/src/github.com/aerospike/ako-3/config/samples/federal_cluster_cr.yaml" classname="Cluster Suite" status="skipped" time="0">
+              <skipped message="skipped"></skipped>
+          </testcase>
+          <testcase name="[It] Sample files validation Sample files validation Testing sample file - /Users/adwivedi/go/src/github.com/aerospike/ako-3/config/samples/hdd_dim_storage_cluster_cr.yaml" classname="Cluster Suite" status="skipped" time="0">
+              <skipped message="skipped"></skipped>
+          </testcase>
+          <testcase name="[It] Sample files validation Sample files validation Testing sample file - /Users/adwivedi/go/src/github.com/aerospike/ako-3/config/samples/host_network_cluster_cr.yaml" classname="Cluster Suite" status="skipped" time="0">
+              <skipped message="skipped"></skipped>
+          </testcase>
+          <testcase name="[It] Sample files validation Sample files validation Testing sample file - /Users/adwivedi/go/src/github.com/aerospike/ako-3/config/samples/ldap_cluster_cr.yaml" classname="Cluster Suite" status="skipped" time="0">
+              <skipped message="skipped"></skipped>
+          </testcase>
+          <testcase name="[It] Sample files validation Sample files validation Testing sample file - /Users/adwivedi/go/src/github.com/aerospike/ako-3/config/samples/podspec_cr.yaml" classname="Cluster Suite" status="skipped" time="0">
+              <skipped message="skipped"></skipped>
+          </testcase>
+          <testcase name="[It] Sample files validation Sample files validation Testing sample file - /Users/adwivedi/go/src/github.com/aerospike/ako-3/config/samples/rack_enabled_cluster_cr.yaml" classname="Cluster Suite" status="skipped" time="0">
+              <skipped message="skipped"></skipped>
+          </testcase>
+          <testcase name="[It] Sample files validation Sample files validation Testing sample file - /Users/adwivedi/go/src/github.com/aerospike/ako-3/config/samples/sc_mode_cluster_cr.yaml" classname="Cluster Suite" status="skipped" time="0">
+              <skipped message="skipped"></skipped>
+          </testcase>
+          <testcase name="[It] Sample files validation Sample files validation Testing sample file - /Users/adwivedi/go/src/github.com/aerospike/ako-3/config/samples/shadow_device_cluster_cr.yaml" classname="Cluster Suite" status="skipped" time="0">
+              <skipped message="skipped"></skipped>
+          </testcase>
+          <testcase name="[It] Sample files validation Sample files validation Testing sample file - /Users/adwivedi/go/src/github.com/aerospike/ako-3/config/samples/shadow_file_cluster_cr.yaml" classname="Cluster Suite" status="skipped" time="0">
+              <skipped message="skipped"></skipped>
+          </testcase>
+          <testcase name="[It] Sample files validation Sample files validation Testing sample file - /Users/adwivedi/go/src/github.com/aerospike/ako-3/config/samples/ssd_storage_cluster_cr.yaml" classname="Cluster Suite" status="skipped" time="0">
+              <skipped message="skipped"></skipped>
+          </testcase>
+          <testcase name="[It] Sample files validation Sample files validation Testing sample file - /Users/adwivedi/go/src/github.com/aerospike/ako-3/config/samples/tls_cluster_cr.yaml" classname="Cluster Suite" status="skipped" time="0">
+              <skipped message="skipped"></skipped>
+          </testcase>
+          <testcase name="[It] Sample files validation Sample files validation Testing sample file - /Users/adwivedi/go/src/github.com/aerospike/ako-3/config/samples/tls_cluster_pki_auth_cr.yaml" classname="Cluster Suite" status="skipped" time="0">
+              <skipped message="skipped"></skipped>
+          </testcase>
+          <testcase name="[It] Sample files validation XDR sample files validation XDR sample files validation" classname="Cluster Suite" status="skipped" time="0">
+              <skipped message="skipped"></skipped>
+          </testcase>
+          <testcase name="[It] RackManagement When doing valid operations Should validate rack management flow" classname="Cluster Suite" status="skipped" time="0">
+              <skipped message="skipped"></skipped>
+          </testcase>
+          <testcase name="[It] RackManagement When doing valid operations should allow Cluster sz less than number of racks" classname="Cluster Suite" status="skipped" time="0">
+              <skipped message="skipped"></skipped>
+          </testcase>
+          <testcase name="[It] RackManagement When doing valid operations When using valid rack aerospike config Should validate whole flow of rack.AerospikeConfig use" classname="Cluster Suite" status="skipped" time="0">
+              <skipped message="skipped"></skipped>
+          </testcase>
+          <testcase name="[It] RackManagement When doing valid operations When using valid rack storage config Should validate empty common storage if per rack storage is provided" classname="Cluster Suite" status="skipped" time="0">
+              <skipped message="skipped"></skipped>
+          </testcase>
+          <testcase name="[It] RackManagement When doing invalid operations when deploy cluster with invalid rack  InvalidRackID should fail for DuplicateRackID" classname="Cluster Suite" status="skipped" time="0">
+              <skipped message="skipped"></skipped>
+          </testcase>
+          <testcase name="[It] RackManagement When doing invalid operations when deploy cluster with invalid rack  InvalidRackID should fail for OutOfRangeRackID" classname="Cluster Suite" status="skipped" time="0">
+              <skipped message="skipped"></skipped>
+          </testcase>
+          <testcase name="[It] RackManagement When doing invalid operations when deploy cluster with invalid rack  InvalidRackID should fail for using defaultRackID" classname="Cluster Suite" status="skipped" time="0">
+              <skipped message="skipped"></skipped>
+          </testcase>
+          <testcase name="[It] RackManagement When doing invalid operations when deploy cluster with invalid rack  When using invalid rack storage config Should fail for empty common storage if per rack storage is not provided" classname="Cluster Suite" status="skipped" time="0">
+              <skipped message="skipped"></skipped>
+          </testcase>
+          <testcase name="[It] RackManagement When doing invalid operations when deploy cluster with invalid rack  When using invalid rack aerospikeConfig to deploy cluster should fail for invalid aerospikeConfig" classname="Cluster Suite" status="skipped" time="0">
+              <skipped message="skipped"></skipped>
+          </testcase>
+          <testcase name="[It] RackManagement When doing invalid operations when deploy cluster with invalid rack  When using invalid rack aerospikeConfig to deploy cluster should fail for different aerospikeConfig.service.migrate-fill-delay value across racks" classname="Cluster Suite" status="skipped" time="0">
+              <skipped message="skipped"></skipped>
+          </testcase>
+          <testcase name="[It] RackManagement When doing invalid operations when deploy cluster with invalid rack  When using invalid rack aerospikeConfig to deploy cluster When using invalid rack.AerospikeConfig.namespace config When using invalid rack.AerospikeConfig.namespace.storage config should fail for invalid storage-engine.device, cannot have 3 devices in single device string" classname="Cluster Suite" status="skipped" time="0">
+              <skipped message="skipped"></skipped>
+          </testcase>
+          <testcase name="[It] RackManagement When doing invalid operations when deploy cluster with invalid rack  When using invalid rack aerospikeConfig to deploy cluster When using invalid rack.AerospikeConfig.namespace config When using invalid rack.AerospikeConfig.namespace.storage config should fail for invalid storage-engine.device, cannot a device which doesn&#39;t exist in BlockStorage" classname="Cluster Suite" status="skipped" time="0">
+              <skipped message="skipped"></skipped>
+          </testcase>
+          <testcase name="[It] RackManagement When doing invalid operations when update cluster with invalid rack should fail for updating existing rack" classname="Cluster Suite" status="skipped" time="0">
+              <skipped message="skipped"></skipped>
+          </testcase>
+          <testcase name="[It] RackManagement When doing invalid operations when update cluster with invalid rack InvalidRackID should fail for DuplicateRackID" classname="Cluster Suite" status="skipped" time="0">
+              <skipped message="skipped"></skipped>
+          </testcase>
+          <testcase name="[It] RackManagement When doing invalid operations when update cluster with invalid rack InvalidRackID should fail for OutOfRangeRackID" classname="Cluster Suite" status="skipped" time="0">
+              <skipped message="skipped"></skipped>
+          </testcase>
+          <testcase name="[It] RackManagement When testing failed rack recovery by scale down Should recover after scaling down failed rack" classname="Cluster Suite" status="skipped" time="0">
+              <skipped message="skipped"></skipped>
+          </testcase>
+          <testcase name="[It] RackManagement When testing failed rack recovery by rolling restart UpdateClusterWithResource: should recover after reverting back to schedulable resources" classname="Cluster Suite" status="skipped" time="0">
+              <skipped message="skipped"></skipped>
+          </testcase>
+          <testcase name="[It] RackManagement When testing failed rack recovery by rolling restart UpdateClusterWithResource: should recover failed pods first after reverting back to schedulable resources" classname="Cluster Suite" status="skipped" time="0">
+              <skipped message="skipped"></skipped>
+          </testcase>
+          <testcase name="[It] StorageWipe When doing valid operations Should validate all storage-wipe policies" classname="Cluster Suite" status="skipped" time="0">
+              <skipped message="skipped"></skipped>
+          </testcase>
+          <testcase name="[It] RackRevision When doing valid operations When using rack revision for storage updates Should successfully migrate rack from no revision to v1 along with storage update" classname="Cluster Suite" status="skipped" time="0">
+              <skipped message="skipped"></skipped>
+          </testcase>
+          <testcase name="[It] RackRevision When doing valid operations When using rack revision for storage updates Should successfully migrate rack from v1 to v2 revision with storage update" classname="Cluster Suite" status="skipped" time="0">
+              <skipped message="skipped"></skipped>
+          </testcase>
+          <testcase name="[It] RackRevision When doing valid operations When using rack revision for storage updates Should handle rack revision batching correctly" classname="Cluster Suite" status="skipped" time="0">
+              <skipped message="skipped"></skipped>
+          </testcase>
+          <testcase name="[It] RackRevision When doing valid operations When using rack revision for storage updates Should handle external StatefulSet deletion gracefully" classname="Cluster Suite" status="skipped" time="0">
+              <skipped message="skipped"></skipped>
+          </testcase>
+          <testcase name="[It] RackRevision When doing valid operations When using rack revision for storage updates Should handle cluster size reduction during migration" classname="Cluster Suite" status="skipped" time="0">
+              <skipped message="skipped"></skipped>
+          </testcase>
+          <testcase name="[It] RackRevision When doing valid operations When using rack revision for storage updates Should handle failed pods during rack revision migration" classname="Cluster Suite" status="skipped" time="0">
+              <skipped message="skipped"></skipped>
+          </testcase>
+          <testcase name="[It] RackRevision When doing invalid operations Should reject more than 2 concurrent rack revisions" classname="Cluster Suite" status="skipped" time="0">
+              <skipped message="skipped"></skipped>
+          </testcase>
+          <testcase name="[It] LDAP External Auth test Validate LDAP user transactions" classname="Cluster Suite" status="skipped" time="0">
+              <skipped message="skipped"></skipped>
+          </testcase>
+          <testcase name="[It] RackLifeCycleOp When doing valid operations Should validate rack enabled cluster flow" classname="Cluster Suite" status="skipped" time="0">
+              <skipped message="skipped"></skipped>
+          </testcase>
+          <testcase name="[It] RackLifeCycleOp When doing valid operations Should validate affinity" classname="Cluster Suite" status="skipped" time="0">
+              <skipped message="skipped"></skipped>
+          </testcase>
+          <testcase name="[It] AerospikeCluster DeployClusterPost570 Deploy-6.0.0.16" classname="Cluster Suite" status="passed" time="34.575489542">
+              <system-err>&gt; Enter [It] Deploy-6.0.0.16 - /Users/adwivedi/go/src/github.com/aerospike/ako-3/test/cluster/cluster_test.go:1186 @ 05/26/26 14:44:15.341&#xA;2026-05-26T14:44:16+05:30&#x9;INFO&#x9;aerospikecluster&#x9;Cluster size is not correct&#x9;{&#34;name&#34;: &#34;deploy-cluster-1&#34;}&#xA;2026-05-26T14:44:46+05:30&#x9;INFO&#x9;aerospikecluster&#x9;Cluster state is validated successfully&#x9;{&#34;name&#34;: &#34;deploy-cluster-1&#34;}&#xA;2026-05-26T14:44:46+05:30&#x9;INFO&#x9;aerospikecluster&#x9;AerospikeCluster available&#xA;&#xA;STEP: Validating Readiness probe - /Users/adwivedi/go/src/github.com/aerospike/ako-3/test/cluster/cluster_test.go:1208 @ 05/26/26 14:44:46.401&#xA;&lt; Exit [It] Deploy-6.0.0.16 - /Users/adwivedi/go/src/github.com/aerospike/ako-3/test/cluster/cluster_test.go:1186 @ 05/26/26 14:44:46.95 (31.609s)&#xA;&gt; Enter [AfterEach] DeployClusterPost570 - /Users/adwivedi/go/src/github.com/aerospike/ako-3/test/cluster/cluster_test.go:1178 @ 05/26/26 14:44:46.95&#xA;&lt; Exit [AfterEach] DeployClusterPost570 - /Users/adwivedi/go/src/github.com/aerospike/ako-3/test/cluster/cluster_test.go:1178 @ 05/26/26 14:44:49.916 (2.966s)&#xA;</system-err>
+          </testcase>
+          <testcase name="[It] AerospikeCluster DeployClusterPost570 Deploy-6.1.0.14" classname="Cluster Suite" status="passed" time="34.350897917">
+              <system-err>&gt; Enter [It] Deploy-6.1.0.14 - /Users/adwivedi/go/src/github.com/aerospike/ako-3/test/cluster/cluster_test.go:1186 @ 05/26/26 14:44:49.916&#xA;2026-05-26T14:44:50+05:30&#x9;INFO&#x9;aerospikecluster&#x9;Cluster size is not correct&#x9;{&#34;name&#34;: &#34;deploy-cluster-1&#34;}&#xA;2026-05-26T14:45:20+05:30&#x9;INFO&#x9;aerospikecluster&#x9;Cluster state is validated successfully&#x9;{&#34;name&#34;: &#34;deploy-cluster-1&#34;}&#xA;2026-05-26T14:45:20+05:30&#x9;INFO&#x9;aerospikecluster&#x9;AerospikeCluster available&#xA;&#xA;STEP: Validating Readiness probe - /Users/adwivedi/go/src/github.com/aerospike/ako-3/test/cluster/cluster_test.go:1208 @ 05/26/26 14:45:20.798&#xA;&lt; Exit [It] Deploy-6.1.0.14 - /Users/adwivedi/go/src/github.com/aerospike/ako-3/test/cluster/cluster_test.go:1186 @ 05/26/26 14:45:21.337 (31.421s)&#xA;&gt; Enter [AfterEach] DeployClusterPost570 - /Users/adwivedi/go/src/github.com/aerospike/ako-3/test/cluster/cluster_test.go:1178 @ 05/26/26 14:45:21.337&#xA;&lt; Exit [AfterEach] DeployClusterPost570 - /Users/adwivedi/go/src/github.com/aerospike/ako-3/test/cluster/cluster_test.go:1178 @ 05/26/26 14:45:24.267 (2.93s)&#xA;</system-err>
+          </testcase>
+          <testcase name="[It] AerospikeCluster DeployClusterPost570 Deploy-6.2.0.9" classname="Cluster Suite" status="passed" time="66.497862417">
+              <system-err>&gt; Enter [It] Deploy-6.2.0.9 - /Users/adwivedi/go/src/github.com/aerospike/ako-3/test/cluster/cluster_test.go:1186 @ 05/26/26 14:45:24.268&#xA;2026-05-26T14:45:24+05:30&#x9;INFO&#x9;aerospikecluster&#x9;Cluster size is not correct&#x9;{&#34;name&#34;: &#34;deploy-cluster-1&#34;}&#xA;2026-05-26T14:45:54+05:30&#x9;INFO&#x9;aerospikecluster&#x9;Cluster size is not correct&#x9;{&#34;name&#34;: &#34;deploy-cluster-1&#34;}&#xA;2026-05-26T14:46:24+05:30&#x9;INFO&#x9;aerospikecluster&#x9;Cluster state is validated successfully&#x9;{&#34;name&#34;: &#34;deploy-cluster-1&#34;}&#xA;2026-05-26T14:46:24+05:30&#x9;INFO&#x9;aerospikecluster&#x9;AerospikeCluster available&#xA;&#xA;STEP: Validating Readiness probe - /Users/adwivedi/go/src/github.com/aerospike/ako-3/test/cluster/cluster_test.go:1208 @ 05/26/26 14:46:25.2&#xA;&lt; Exit [It] Deploy-6.2.0.9 - /Users/adwivedi/go/src/github.com/aerospike/ako-3/test/cluster/cluster_test.go:1186 @ 05/26/26 14:46:25.802 (1m1.534s)&#xA;&gt; Enter [AfterEach] DeployClusterPost570 - /Users/adwivedi/go/src/github.com/aerospike/ako-3/test/cluster/cluster_test.go:1178 @ 05/26/26 14:46:25.803&#xA;&lt; Exit [AfterEach] DeployClusterPost570 - /Users/adwivedi/go/src/github.com/aerospike/ako-3/test/cluster/cluster_test.go:1178 @ 05/26/26 14:46:30.766 (4.963s)&#xA;</system-err>
+          </testcase>
+          <testcase name="[It] AerospikeCluster DeployClusterPost570 Deploy-6.3.0.13" classname="Cluster Suite" status="passed" time="34.375627">
+              <system-err>&gt; Enter [It] Deploy-6.3.0.13 - /Users/adwivedi/go/src/github.com/aerospike/ako-3/test/cluster/cluster_test.go:1186 @ 05/26/26 14:46:30.766&#xA;2026-05-26T14:46:31+05:30&#x9;INFO&#x9;aerospikecluster&#x9;Cluster size is not correct&#x9;{&#34;name&#34;: &#34;deploy-cluster-1&#34;}&#xA;2026-05-26T14:47:01+05:30&#x9;INFO&#x9;aerospikecluster&#x9;Cluster state is validated successfully&#x9;{&#34;name&#34;: &#34;deploy-cluster-1&#34;}&#xA;2026-05-26T14:47:01+05:30&#x9;INFO&#x9;aerospikecluster&#x9;AerospikeCluster available&#xA;&#xA;STEP: Validating Readiness probe - /Users/adwivedi/go/src/github.com/aerospike/ako-3/test/cluster/cluster_test.go:1208 @ 05/26/26 14:47:01.641&#xA;&lt; Exit [It] Deploy-6.3.0.13 - /Users/adwivedi/go/src/github.com/aerospike/ako-3/test/cluster/cluster_test.go:1186 @ 05/26/26 14:47:02.181 (31.415s)&#xA;&gt; Enter [AfterEach] DeployClusterPost570 - /Users/adwivedi/go/src/github.com/aerospike/ako-3/test/cluster/cluster_test.go:1178 @ 05/26/26 14:47:02.181&#xA;&lt; Exit [AfterEach] DeployClusterPost570 - /Users/adwivedi/go/src/github.com/aerospike/ako-3/test/cluster/cluster_test.go:1178 @ 05/26/26 14:47:05.142 (2.961s)&#xA;</system-err>
+          </testcase>
+          <testcase name="[It] AerospikeCluster DeployClusterPost570 Deploy-6.4.0.7" classname="Cluster Suite" status="passed" time="34.823071708">
+              <system-err>&gt; Enter [It] Deploy-6.4.0.7 - /Users/adwivedi/go/src/github.com/aerospike/ako-3/test/cluster/cluster_test.go:1186 @ 05/26/26 14:47:05.142&#xA;2026-05-26T14:47:05+05:30&#x9;INFO&#x9;aerospikecluster&#x9;Cluster size is not correct&#x9;{&#34;name&#34;: &#34;deploy-cluster-1&#34;}&#xA;2026-05-26T14:47:35+05:30&#x9;INFO&#x9;aerospikecluster&#x9;Cluster state is validated successfully&#x9;{&#34;name&#34;: &#34;deploy-cluster-1&#34;}&#xA;2026-05-26T14:47:35+05:30&#x9;INFO&#x9;aerospikecluster&#x9;AerospikeCluster available&#xA;&#xA;STEP: Validating Readiness probe - /Users/adwivedi/go/src/github.com/aerospike/ako-3/test/cluster/cluster_test.go:1208 @ 05/26/26 14:47:36.009&#xA;&lt; Exit [It] Deploy-6.4.0.7 - /Users/adwivedi/go/src/github.com/aerospike/ako-3/test/cluster/cluster_test.go:1186 @ 05/26/26 14:47:36.554 (31.412s)&#xA;&gt; Enter [AfterEach] DeployClusterPost570 - /Users/adwivedi/go/src/github.com/aerospike/ako-3/test/cluster/cluster_test.go:1178 @ 05/26/26 14:47:36.554&#xA;&lt; Exit [AfterEach] DeployClusterPost570 - /Users/adwivedi/go/src/github.com/aerospike/ako-3/test/cluster/cluster_test.go:1178 @ 05/26/26 14:47:39.965 (3.411s)&#xA;</system-err>
+          </testcase>
+          <testcase name="[It] AerospikeCluster DeployClusterPost570 Deploy-7.0.0.20" classname="Cluster Suite" status="passed" time="34.370106375">
+              <system-err>&gt; Enter [It] Deploy-7.0.0.20 - /Users/adwivedi/go/src/github.com/aerospike/ako-3/test/cluster/cluster_test.go:1186 @ 05/26/26 14:47:39.965&#xA;2026-05-26T14:47:40+05:30&#x9;INFO&#x9;aerospikecluster&#x9;Cluster size is not correct&#x9;{&#34;name&#34;: &#34;deploy-cluster-1&#34;}&#xA;2026-05-26T14:48:10+05:30&#x9;INFO&#x9;aerospikecluster&#x9;Cluster state is validated successfully&#x9;{&#34;name&#34;: &#34;deploy-cluster-1&#34;}&#xA;2026-05-26T14:48:10+05:30&#x9;INFO&#x9;aerospikecluster&#x9;AerospikeCluster available&#xA;&#xA;STEP: Validating Readiness probe - /Users/adwivedi/go/src/github.com/aerospike/ako-3/test/cluster/cluster_test.go:1208 @ 05/26/26 14:48:10.836&#xA;&lt; Exit [It] Deploy-7.0.0.20 - /Users/adwivedi/go/src/github.com/aerospike/ako-3/test/cluster/cluster_test.go:1186 @ 05/26/26 14:48:11.384 (31.419s)&#xA;&gt; Enter [AfterEach] DeployClusterPost570 - /Users/adwivedi/go/src/github.com/aerospike/ako-3/test/cluster/cluster_test.go:1178 @ 05/26/26 14:48:11.384&#xA;&lt; Exit [AfterEach] DeployClusterPost570 - /Users/adwivedi/go/src/github.com/aerospike/ako-3/test/cluster/cluster_test.go:1178 @ 05/26/26 14:48:14.335 (2.951s)&#xA;</system-err>
+          </testcase>
+          <testcase name="[It] AerospikeCluster DeployClusterPost570 Deploy-7.1.0.12" classname="Cluster Suite" status="passed" time="35.938387542">
+              <system-err>&gt; Enter [It] Deploy-7.1.0.12 - /Users/adwivedi/go/src/github.com/aerospike/ako-3/test/cluster/cluster_test.go:1186 @ 05/26/26 14:48:14.336&#xA;2026-05-26T14:48:14+05:30&#x9;INFO&#x9;aerospikecluster&#x9;Cluster size is not correct&#x9;{&#34;name&#34;: &#34;deploy-cluster-1&#34;}&#xA;2026-05-26T14:48:44+05:30&#x9;INFO&#x9;aerospikecluster&#x9;Cluster state is validated successfully&#x9;{&#34;name&#34;: &#34;deploy-cluster-1&#34;}&#xA;2026-05-26T14:48:44+05:30&#x9;INFO&#x9;aerospikecluster&#x9;AerospikeCluster available&#xA;&#xA;STEP: Validating Readiness probe - /Users/adwivedi/go/src/github.com/aerospike/ako-3/test/cluster/cluster_test.go:1208 @ 05/26/26 14:48:45.24&#xA;&lt; Exit [It] Deploy-7.1.0.12 - /Users/adwivedi/go/src/github.com/aerospike/ako-3/test/cluster/cluster_test.go:1186 @ 05/26/26 14:48:45.782 (31.446s)&#xA;&gt; Enter [AfterEach] DeployClusterPost570 - /Users/adwivedi/go/src/github.com/aerospike/ako-3/test/cluster/cluster_test.go:1178 @ 05/26/26 14:48:45.782&#xA;&lt; Exit [AfterEach] DeployClusterPost570 - /Users/adwivedi/go/src/github.com/aerospike/ako-3/test/cluster/cluster_test.go:1178 @ 05/26/26 14:48:50.274 (4.493s)&#xA;</system-err>
+          </testcase>
+          <testcase name="[It] AerospikeCluster DeployClusterPost570 Deploy-7.2.0.6" classname="Cluster Suite" status="passed" time="64.360458167">
+              <system-err>&gt; Enter [It] Deploy-7.2.0.6 - /Users/adwivedi/go/src/github.com/aerospike/ako-3/test/cluster/cluster_test.go:1186 @ 05/26/26 14:48:50.275&#xA;2026-05-26T14:48:50+05:30&#x9;INFO&#x9;aerospikecluster&#x9;Cluster size is not correct&#x9;{&#34;name&#34;: &#34;deploy-cluster-1&#34;}&#xA;2026-05-26T14:49:20+05:30&#x9;INFO&#x9;aerospikecluster&#x9;Cluster size is not correct&#x9;{&#34;name&#34;: &#34;deploy-cluster-1&#34;}&#xA;2026-05-26T14:49:50+05:30&#x9;INFO&#x9;aerospikecluster&#x9;Cluster state is validated successfully&#x9;{&#34;name&#34;: &#34;deploy-cluster-1&#34;}&#xA;2026-05-26T14:49:50+05:30&#x9;INFO&#x9;aerospikecluster&#x9;AerospikeCluster available&#xA;&#xA;STEP: Validating Readiness probe - /Users/adwivedi/go/src/github.com/aerospike/ako-3/test/cluster/cluster_test.go:1208 @ 05/26/26 14:49:51.14&#xA;&lt; Exit [It] Deploy-7.2.0.6 - /Users/adwivedi/go/src/github.com/aerospike/ako-3/test/cluster/cluster_test.go:1186 @ 05/26/26 14:49:51.682 (1m1.407s)&#xA;&gt; Enter [AfterEach] DeployClusterPost570 - /Users/adwivedi/go/src/github.com/aerospike/ako-3/test/cluster/cluster_test.go:1178 @ 05/26/26 14:49:51.682&#xA;&lt; Exit [AfterEach] DeployClusterPost570 - /Users/adwivedi/go/src/github.com/aerospike/ako-3/test/cluster/cluster_test.go:1178 @ 05/26/26 14:49:54.635 (2.953s)&#xA;</system-err>
+          </testcase>
+          <testcase name="[It] AerospikeCluster DeployClusterPost570 Deploy-8.0.0.2" classname="Cluster Suite" status="passed" time="35.89777825">
+              <system-err>&gt; Enter [It] Deploy-8.0.0.2 - /Users/adwivedi/go/src/github.com/aerospike/ako-3/test/cluster/cluster_test.go:1186 @ 05/26/26 14:49:54.635&#xA;2026-05-26T14:49:55+05:30&#x9;INFO&#x9;aerospikecluster&#x9;Cluster size is not correct&#x9;{&#34;name&#34;: &#34;deploy-cluster-1&#34;}&#xA;2026-05-26T14:50:25+05:30&#x9;INFO&#x9;aerospikecluster&#x9;Cluster state is validated successfully&#x9;{&#34;name&#34;: &#34;deploy-cluster-1&#34;}&#xA;2026-05-26T14:50:25+05:30&#x9;INFO&#x9;aerospikecluster&#x9;AerospikeCluster available&#xA;&#xA;STEP: Validating Readiness probe - /Users/adwivedi/go/src/github.com/aerospike/ako-3/test/cluster/cluster_test.go:1208 @ 05/26/26 14:50:25.5&#xA;&lt; Exit [It] Deploy-8.0.0.2 - /Users/adwivedi/go/src/github.com/aerospike/ako-3/test/cluster/cluster_test.go:1186 @ 05/26/26 14:50:26.038 (31.402s)&#xA;&gt; Enter [AfterEach] DeployClusterPost570 - /Users/adwivedi/go/src/github.com/aerospike/ako-3/test/cluster/cluster_test.go:1178 @ 05/26/26 14:50:26.038&#xA;&lt; Exit [AfterEach] DeployClusterPost570 - /Users/adwivedi/go/src/github.com/aerospike/ako-3/test/cluster/cluster_test.go:1178 @ 05/26/26 14:50:30.533 (4.495s)&#xA;</system-err>
+          </testcase>
+          <testcase name="[It] AerospikeCluster DeployClusterPost570 Deploy-8.1.0.0" classname="Cluster Suite" status="passed" time="36.191775291">
+              <system-err>&gt; Enter [It] Deploy-8.1.0.0 - /Users/adwivedi/go/src/github.com/aerospike/ako-3/test/cluster/cluster_test.go:1186 @ 05/26/26 14:50:30.534&#xA;2026-05-26T14:50:31+05:30&#x9;INFO&#x9;aerospikecluster&#x9;Cluster size is not correct&#x9;{&#34;name&#34;: &#34;deploy-cluster-1&#34;}&#xA;2026-05-26T14:51:01+05:30&#x9;INFO&#x9;aerospikecluster&#x9;Cluster state is validated successfully&#x9;{&#34;name&#34;: &#34;deploy-cluster-1&#34;}&#xA;2026-05-26T14:51:01+05:30&#x9;INFO&#x9;aerospikecluster&#x9;AerospikeCluster available&#xA;&#xA;STEP: Validating Readiness probe - /Users/adwivedi/go/src/github.com/aerospike/ako-3/test/cluster/cluster_test.go:1208 @ 05/26/26 14:51:01.445&#xA;&lt; Exit [It] Deploy-8.1.0.0 - /Users/adwivedi/go/src/github.com/aerospike/ako-3/test/cluster/cluster_test.go:1186 @ 05/26/26 14:51:01.993 (31.459s)&#xA;&gt; Enter [AfterEach] DeployClusterPost570 - /Users/adwivedi/go/src/github.com/aerospike/ako-3/test/cluster/cluster_test.go:1178 @ 05/26/26 14:51:01.993&#xA;&lt; Exit [AfterEach] DeployClusterPost570 - /Users/adwivedi/go/src/github.com/aerospike/ako-3/test/cluster/cluster_test.go:1178 @ 05/26/26 14:51:06.726 (4.732s)&#xA;</system-err>
+          </testcase>
+          <testcase name="[It] AerospikeCluster DeployClusterDiffStorageMultiPodPerHost Positive SSDStorageCluster" classname="Cluster Suite" status="passed" time="33.557259625">
+              <system-err>&gt; Enter [It] SSDStorageCluster - /Users/adwivedi/go/src/github.com/aerospike/ako-3/test/cluster/cluster_test.go:1245 @ 05/26/26 14:51:06.726&#xA;2026-05-26T14:51:07+05:30&#x9;INFO&#x9;aerospikecluster&#x9;Cluster size is not correct&#x9;{&#34;name&#34;: &#34;ssdstoragecluster-1&#34;}&#xA;2026-05-26T14:51:37+05:30&#x9;INFO&#x9;aerospikecluster&#x9;Cluster state is validated successfully&#x9;{&#34;name&#34;: &#34;ssdstoragecluster-1&#34;}&#xA;2026-05-26T14:51:37+05:30&#x9;INFO&#x9;aerospikecluster&#x9;AerospikeCluster available&#xA;&#xA;&lt; Exit [It] SSDStorageCluster - /Users/adwivedi/go/src/github.com/aerospike/ako-3/test/cluster/cluster_test.go:1245 @ 05/26/26 14:51:37.314 (30.588s)&#xA;&gt; Enter [AfterEach] Positive - /Users/adwivedi/go/src/github.com/aerospike/ako-3/test/cluster/cluster_test.go:1232 @ 05/26/26 14:51:37.314&#xA;&lt; Exit [AfterEach] Positive - /Users/adwivedi/go/src/github.com/aerospike/ako-3/test/cluster/cluster_test.go:1232 @ 05/26/26 14:51:40.283 (2.969s)&#xA;</system-err>
+          </testcase>
+          <testcase name="[It] AerospikeCluster DeployClusterDiffStorageMultiPodPerHost Positive HDDAndDataInMemStorageCluster" classname="Cluster Suite" status="passed" time="35.084351875">
+              <system-err>&gt; Enter [It] HDDAndDataInMemStorageCluster - /Users/adwivedi/go/src/github.com/aerospike/ako-3/test/cluster/cluster_test.go:1265 @ 05/26/26 14:51:40.283&#xA;2026-05-26T14:51:40+05:30&#x9;INFO&#x9;aerospikecluster&#x9;Cluster size is not correct&#x9;{&#34;name&#34;: &#34;inmemstoragecluster-1&#34;}&#xA;2026-05-26T14:52:10+05:30&#x9;INFO&#x9;aerospikecluster&#x9;Cluster state is validated successfully&#x9;{&#34;name&#34;: &#34;inmemstoragecluster-1&#34;}&#xA;2026-05-26T14:52:10+05:30&#x9;INFO&#x9;aerospikecluster&#x9;AerospikeCluster available&#xA;&#xA;&lt; Exit [It] HDDAndDataInMemStorageCluster - /Users/adwivedi/go/src/github.com/aerospike/ako-3/test/cluster/cluster_test.go:1265 @ 05/26/26 14:52:10.87 (30.587s)&#xA;&gt; Enter [AfterEach] Positive - /Users/adwivedi/go/src/github.com/aerospike/ako-3/test/cluster/cluster_test.go:1232 @ 05/26/26 14:52:10.87&#xA;&lt; Exit [AfterEach] Positive - /Users/adwivedi/go/src/github.com/aerospike/ako-3/test/cluster/cluster_test.go:1232 @ 05/26/26 14:52:15.368 (4.498s)&#xA;</system-err>
+          </testcase>
+          <testcase name="[It] AerospikeCluster DeployClusterDiffStorageMultiPodPerHost Positive DataInMemWithoutPersistentStorageCluster" classname="Cluster Suite" status="passed" time="33.537301458">
+              <system-err>&gt; Enter [It] DataInMemWithoutPersistentStorageCluster - /Users/adwivedi/go/src/github.com/aerospike/ako-3/test/cluster/cluster_test.go:1285 @ 05/26/26 14:52:15.368&#xA;2026-05-26T14:52:15+05:30&#x9;INFO&#x9;aerospikecluster&#x9;Cluster size is not correct&#x9;{&#34;name&#34;: &#34;nopersistentcluster-1&#34;}&#xA;2026-05-26T14:52:45+05:30&#x9;INFO&#x9;aerospikecluster&#x9;Cluster state is validated successfully&#x9;{&#34;name&#34;: &#34;nopersistentcluster-1&#34;}&#xA;2026-05-26T14:52:45+05:30&#x9;INFO&#x9;aerospikecluster&#x9;AerospikeCluster available&#xA;&#xA;&lt; Exit [It] DataInMemWithoutPersistentStorageCluster - /Users/adwivedi/go/src/github.com/aerospike/ako-3/test/cluster/cluster_test.go:1285 @ 05/26/26 14:52:45.951 (30.583s)&#xA;&gt; Enter [AfterEach] Positive - /Users/adwivedi/go/src/github.com/aerospike/ako-3/test/cluster/cluster_test.go:1232 @ 05/26/26 14:52:45.951&#xA;&lt; Exit [AfterEach] Positive - /Users/adwivedi/go/src/github.com/aerospike/ako-3/test/cluster/cluster_test.go:1232 @ 05/26/26 14:52:48.905 (2.955s)&#xA;</system-err>
+          </testcase>
+          <testcase name="[It] AerospikeCluster DeployClusterDiffStorageSinglePodPerHost Positive SSDStorageCluster" classname="Cluster Suite" status="skipped" time="0">
+              <skipped message="skipped"></skipped>
+          </testcase>
+          <testcase name="[It] AerospikeCluster DeployClusterDiffStorageSinglePodPerHost Positive HDDAndDataInMemStorageCluster" classname="Cluster Suite" status="skipped" time="0">
+              <skipped message="skipped"></skipped>
+          </testcase>
+          <testcase name="[It] AerospikeCluster DeployClusterDiffStorageSinglePodPerHost Positive DataInMemWithoutPersistentStorageCluster" classname="Cluster Suite" status="skipped" time="0">
+              <skipped message="skipped"></skipped>
+          </testcase>
+          <testcase name="[It] AerospikeCluster DeployClusterWithDNSConfiguration deploy with dnsPolicy &#39;None&#39; and dnsConfig given" classname="Cluster Suite" status="skipped" time="0">
+              <skipped message="skipped"></skipped>
+          </testcase>
+          <testcase name="[It] AerospikeCluster DeployClusterWithCharLimit Deploy cluster with CR name of 40 chars + revision of 3 chars" classname="Cluster Suite" status="skipped" time="0">
+              <skipped message="skipped"></skipped>
+          </testcase>
+          <testcase name="[It] AerospikeCluster DeployClusterWithMaxIgnorablePod UpdateClusterWithMaxIgnorablePodAndPendingPod Should allow cluster operations with pending pod" classname="Cluster Suite" status="skipped" time="0">
+              <skipped message="skipped"></skipped>
+          </testcase>
+          <testcase name="[It] AerospikeCluster DeployClusterWithMaxIgnorablePod UpdateClusterWithMaxIgnorablePodAndFailedPod Should allow rack deletion with failed pods in different rack" classname="Cluster Suite" status="skipped" time="0">
+              <skipped message="skipped"></skipped>
+          </testcase>
+          <testcase name="[It] AerospikeCluster DeployClusterWithMaxIgnorablePod UpdateClusterWithMaxIgnorablePodAndFailedPod Should allow namespace addition and removal with failed pod" classname="Cluster Suite" status="skipped" time="0">
+              <skipped message="skipped"></skipped>
+          </testcase>
+          <testcase name="[It] AerospikeCluster CommonNegativeClusterValidationTest NegativeUpdateClusterValidationTest FailedPodGracePeriodConfiguration Should wait for grace period before recreating pods in fresh cluster deployment" classname="Cluster Suite" status="skipped" time="0">
+              <skipped message="skipped"></skipped>
+          </testcase>
+          <testcase name="[It] AerospikeCluster CommonNegativeClusterValidationTest NegativeUpdateClusterValidationTest FailedPodGracePeriodConfiguration Should wait for grace period before recreating pods in an existing cluster" classname="Cluster Suite" status="skipped" time="0">
+              <skipped message="skipped"></skipped>
+          </testcase>
+          <testcase name="[It] AerospikeCluster CommonNegativeClusterValidationTest NegativeUpdateClusterValidationTest InvalidServerEditionChange Should fail if server edition is updated from enterprise to federal" classname="Cluster Suite" status="skipped" time="0">
+              <skipped message="skipped"></skipped>
+          </testcase>
+          <testcase name="[It] AerospikeCluster CommonNegativeClusterValidationTest NegativeUpdateClusterValidationTest InvalidServerEditionChange Should fail if server image updated from federal to enterprise" classname="Cluster Suite" status="skipped" time="0">
+              <skipped message="skipped"></skipped>
+          </testcase>
+          <testcase name="[It] AerospikeCluster UpdateAerospikeCluster When doing valid operations Try update operations" classname="Cluster Suite" status="skipped" time="0">
+              <skipped message="skipped"></skipped>
+          </testcase>
+          <testcase name="[It] AerospikeCluster UpdateAerospikeCluster When doing invalid operations ValidateUpdate MultiPodPerHost: should fail for updating MultiPodPerHost. Cannot be updated" classname="Cluster Suite" status="skipped" time="0">
+              <skipped message="skipped"></skipped>
+          </testcase>
+          <testcase name="[It] AerospikeCluster UpdateAerospikeCluster When doing invalid operations ValidateUpdate Should fail for Re-using Namespace Storage Dynamically" classname="Cluster Suite" status="skipped" time="0">
+              <skipped message="skipped"></skipped>
+          </testcase>
+          <testcase name="[It] AerospikeCluster UpdateAerospikeCluster When doing invalid operations ValidateUpdate StorageValidation: should fail for updating Storage. Cannot be updated" classname="Cluster Suite" status="skipped" time="0">
+              <skipped message="skipped"></skipped>
+          </testcase>
+          <testcase name="[It] AerospikeCluster UpdateAerospikeCluster When doing invalid operations ValidateUpdate namespaces UpdateReplicationFactor: should fail for updating namespacereplication-factor on SC namespace. Cannot be updated" classname="Cluster Suite" status="skipped" time="0">
+              <skipped message="skipped"></skipped>
+          </testcase>
+          <testcase name="[It] AerospikeCluster UpdateAerospikeCluster When doing invalid operations ValidateUpdate namespaces UpdateReplicationFactor: should fail for updating namespacereplication-factor on non-SC namespace. Cannot be updated" classname="Cluster Suite" status="skipped" time="0">
+              <skipped message="skipped"></skipped>
+          </testcase>
+          <testcase name="[It] AerospikeCluster RunScaleDownWithMigrateFillDelay ScaleDownWithMigrateFillDelay Should ignore migrate-fill-delay while scaling down" classname="Cluster Suite" status="skipped" time="0">
+              <skipped message="skipped"></skipped>
+          </testcase>
+          <testcase name="[It] AerospikeCluster ValidateScaleDownWaitForMigrations ValidateScaleDownWaitForMigrations Should wait for migrations to complete before pod deletion" classname="Cluster Suite" status="skipped" time="0">
+              <skipped message="skipped"></skipped>
+          </testcase>
+          <testcase name="[It] AerospikeCluster PauseReconcile Should pause reconcile" classname="Cluster Suite" status="skipped" time="0">
+              <skipped message="skipped"></skipped>
+          </testcase>
+          <testcase name="[It] AerospikeCluster ValidateAerospikeBenchmarkConfigs ValidateAerospikeBenchmarkConfigs benchmarking should work in all aerospike server version" classname="Cluster Suite" status="skipped" time="0">
+              <skipped message="skipped"></skipped>
+          </testcase>
+          <testcase name="[It] AerospikeCluster network UpdateTLSCluster When doing valid operations Try update operations" classname="Cluster Suite" status="skipped" time="0">
+              <skipped message="skipped"></skipped>
+          </testcase>
+          <testcase name="[It] AerospikeCluster network UpdateTLSCluster When doing invalid operations Try update operations" classname="Cluster Suite" status="skipped" time="0">
+              <skipped message="skipped"></skipped>
+          </testcase>
+          <testcase name="[It] AerospikeCluster network NetworkValidation DeployValidation Validation NetworkConf: should fail for setting network conf/tls network conf" classname="Cluster Suite" status="skipped" time="0">
+              <skipped message="skipped"></skipped>
+          </testcase>
+          <testcase name="[It] AerospikeCluster network NetworkValidation DeployValidation Validation WhenTLSExist: should fail for no tls path in storage volume" classname="Cluster Suite" status="skipped" time="0">
+              <skipped message="skipped"></skipped>
+          </testcase>
+          <testcase name="[It] AerospikeCluster network NetworkValidation DeployValidation Validation WhenTLSExist: should fail for both ca-file and ca-path in tls" classname="Cluster Suite" status="skipped" time="0">
+              <skipped message="skipped"></skipped>
+          </testcase>
+          <testcase name="[It] AerospikeCluster network NetworkValidation DeployValidation Validation WhenTLSExist: should fail for ca-file path pointing to Secret Manager" classname="Cluster Suite" status="skipped" time="0">
+              <skipped message="skipped"></skipped>
+          </testcase>
+          <testcase name="[It] AerospikeCluster network NetworkValidation DeployValidation Validation WhenTLSExist: should fail for ca-path pointing to Secret Manager" classname="Cluster Suite" status="skipped" time="0">
+              <skipped message="skipped"></skipped>
+          </testcase>
+          <testcase name="[It] AerospikeCluster network NetworkValidation UpdateValidation Validation UpdateService: should fail for updating non-tls to tls in single step. Cannot be updated" classname="Cluster Suite" status="skipped" time="0">
+              <skipped message="skipped"></skipped>
+          </testcase>
+          <testcase name="[It] AerospikeCluster network NetworkValidation UpdateValidation Validation NetworkConf: should fail for setting network conf, should fail for setting tls network conf" classname="Cluster Suite" status="skipped" time="0">
+              <skipped message="skipped"></skipped>
+          </testcase>
+          <testcase name="[It] AerospikeCluster network NetworkValidation UpdateValidation Validation WhenTLSExist: should fail for no tls path in storage volumes" classname="Cluster Suite" status="skipped" time="0">
+              <skipped message="skipped"></skipped>
+          </testcase>
+          <testcase name="[It] AerospikeCluster network AdminPort Should create cluster with admin port and connect successfully" classname="Cluster Suite" status="skipped" time="0">
+              <skipped message="skipped"></skipped>
+          </testcase>
+          <testcase name="[It] AerospikeCluster network AdminPort Should update cluster by adding admin connection" classname="Cluster Suite" status="skipped" time="0">
+              <skipped message="skipped"></skipped>
+          </testcase>
+          <testcase name="[It] AerospikeCluster network AdminPort Should update cluster by removing admin connection" classname="Cluster Suite" status="skipped" time="0">
+              <skipped message="skipped"></skipped>
+          </testcase>
+          <testcase name="[It] ClusterStorageCleanUp When doing valid operations Try Defaults" classname="Cluster Suite" status="skipped" time="0">
+              <skipped message="skipped"></skipped>
+          </testcase>
+          <testcase name="[It] ClusterStorageCleanUp When doing valid operations Try CleanupAllVolumes" classname="Cluster Suite" status="skipped" time="0">
+              <skipped message="skipped"></skipped>
+          </testcase>
+          <testcase name="[It] ClusterStorageCleanUp When doing valid operations Try CleanupSelectedVolumes" classname="Cluster Suite" status="skipped" time="0">
+              <skipped message="skipped"></skipped>
+          </testcase>
+          <testcase name="[SynchronizedAfterSuite]" classname="Cluster Suite" status="passed" time="2.210214208">
+              <system-err>&gt; Enter [SynchronizedAfterSuite] TOP-LEVEL - /Users/adwivedi/go/src/github.com/aerospike/ako-3/test/cluster/suite_test.go:134 @ 05/26/26 14:52:48.906&#xA;&lt; Exit [SynchronizedAfterSuite] TOP-LEVEL - /Users/adwivedi/go/src/github.com/aerospike/ako-3/test/cluster/suite_test.go:134 @ 05/26/26 14:52:48.906 (0s)&#xA;&gt; Enter [SynchronizedAfterSuite] TOP-LEVEL - /Users/adwivedi/go/src/github.com/aerospike/ako-3/test/cluster/suite_test.go:134 @ 05/26/26 14:52:48.906&#xA;STEP: Cleaning up all clusters and pvcs - /Users/adwivedi/go/src/github.com/aerospike/ako-3/test/cluster/suite_test.go:138 @ 05/26/26 14:52:48.906&#xA;STEP: tearing down the test environment - /Users/adwivedi/go/src/github.com/aerospike/ako-3/test/cluster/suite_test.go:145 @ 05/26/26 14:52:51.115&#xA;&lt; Exit [SynchronizedAfterSuite] TOP-LEVEL - /Users/adwivedi/go/src/github.com/aerospike/ako-3/test/cluster/suite_test.go:134 @ 05/26/26 14:52:51.116 (2.21s)&#xA;</system-err>
+          </testcase>
+      </testsuite>
+  </testsuites>

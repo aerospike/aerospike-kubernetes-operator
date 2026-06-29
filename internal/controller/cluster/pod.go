@@ -894,11 +894,19 @@ func (r *SingleClusterReconciler) cleanupPods(
 		return fmt.Errorf("could not cleanup pod PVCs: %v", err)
 	}
 
+	return r.cleanupPodMeshAndStatus(podNames)
+}
+
+// cleanupPodMeshAndStatus clears mesh references (tip-hostnames, alumni) on
+// peer pods, removes per-pod services (MultiPodPerHost), and purges pod status
+// entries. It does not touch PVCs — callers that need PVC cleanup should handle
+// that separately.
+func (r *SingleClusterReconciler) cleanupPodMeshAndStatus(podNames []string) error {
 	var needStatusCleanup []string
 
 	clusterPodList, err := r.getClusterPodList()
 	if err != nil {
-		return fmt.Errorf("could not cleanup pod PVCs: %v", err)
+		return err
 	}
 
 	podNameSet := sets.NewString(podNames...)
