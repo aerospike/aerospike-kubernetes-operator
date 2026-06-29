@@ -24,6 +24,7 @@ import (
 	"k8s.io/apimachinery/pkg/api/errors"
 	k8sruntime "k8s.io/apimachinery/pkg/runtime"
 	"k8s.io/client-go/tools/record"
+	"k8s.io/klog/v2"
 	ctrl "sigs.k8s.io/controller-runtime"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 	"sigs.k8s.io/controller-runtime/pkg/controller"
@@ -32,6 +33,7 @@ import (
 
 	asdbv1beta1 "github.com/aerospike/aerospike-kubernetes-operator/v4/api/v1beta1"
 	"github.com/aerospike/aerospike-kubernetes-operator/v4/internal/controller/common"
+	"github.com/aerospike/aerospike-kubernetes-operator/v4/pkg/utils"
 )
 
 // AerospikeBackupServiceReconciler reconciles a AerospikeBackupService object
@@ -50,23 +52,22 @@ type AerospikeBackupServiceReconciler struct {
 
 // Reconcile is part of the main kubernetes reconciliation loop which aims to
 // move the current state of the cluster closer to the desired state.
-func (r *AerospikeBackupServiceReconciler) Reconcile(_ context.Context, request ctrl.Request) (ctrl.Result, error) {
-	log := r.Log.WithValues("aerospikebackupservice", request.NamespacedName)
+func (r *AerospikeBackupServiceReconciler) Reconcile(ctx context.Context, request ctrl.Request) (ctrl.Result, error) {
+	log := r.Log.WithValues("aerospikeBackupService", klog.KRef(request.Namespace, request.Name))
 
 	log.Info("Reconciling AerospikeBackupService")
 
 	// Fetch the AerospikeBackupService instance
 	aeroBackupService := &asdbv1beta1.AerospikeBackupService{}
-	if err := r.Get(context.TODO(), request.NamespacedName, aeroBackupService); err != nil {
+	if err := r.Get(ctx, request.NamespacedName, aeroBackupService); err != nil {
 		if errors.IsNotFound(err) {
 			log.Info("Deleted AerospikeBackupService")
 
 			aeroBackupService.Namespace = request.Namespace
 			aeroBackupService.Name = request.Name
 			r.Recorder.Eventf(
-				aeroBackupService, corev1.EventTypeNormal, "Deleted",
-				"Deleted AerospikeBackupService %s/%s", aeroBackupService.Namespace,
-				aeroBackupService.Name,
+				aeroBackupService, corev1.EventTypeNormal, EventReasonDeleted,
+				"Deleted AerospikeBackupService %s", utils.GetNamespacedName(aeroBackupService),
 			)
 
 			// Request object not found, could have been deleted after Reconcile request.
@@ -84,7 +85,7 @@ func (r *AerospikeBackupServiceReconciler) Reconcile(_ context.Context, request 
 		Recorder:          r.Recorder,
 	}
 
-	return cr.Reconcile()
+	return cr.Reconcile(ctx)
 }
 
 // SetupWithManager sets up the controller with the Manager.
