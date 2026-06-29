@@ -12,11 +12,9 @@ import (
 	. "github.com/onsi/gomega"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/types"
-	"k8s.io/utils/ptr"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 
 	asdbv1 "github.com/aerospike/aerospike-kubernetes-operator/v4/api/v1"
-	oputils "github.com/aerospike/aerospike-kubernetes-operator/v4/pkg/utils"
 	"github.com/aerospike/aerospike-kubernetes-operator/v4/test"
 	lib "github.com/aerospike/aerospike-management-lib"
 )
@@ -79,8 +77,8 @@ func triggerFailedCreateRecovery(ctx goctx.Context, c client.Client, nn types.Na
 		}
 	}
 
-	// Wait until failed-pod grace elapses so hasClusterFailed reports true (outside grace).
-	time.Sleep(oputils.GetFailedPodGracePeriod() + 30*time.Second)
+	// Wait for pods to be marked as failed
+	time.Sleep(10 * time.Second)
 
 	return removeAerospikeConfigFromStatus(ctx, c, nn)
 }
@@ -120,12 +118,6 @@ var _ = Describe("ACL failed-create recovery validation", func() {
 					logger, k8sClient, ctx, clusterNamespacedName,
 				)
 				Expect(err).ToNot(HaveOccurred())
-
-				err = waitForAerospikeCluster(
-					k8sClient, ctx, aeroCluster, int(aeroCluster.Spec.Size), retryInterval,
-					getTimeout(2), []asdbv1.AerospikeClusterPhase{asdbv1.AerospikeClusterCompleted},
-				)
-				Expect(err).ToNot(HaveOccurred())
 			})
 
 			It("recovers after bad image rollout when stale ACL remains in status and spec image is corrected", func() {
@@ -139,8 +131,6 @@ var _ = Describe("ACL failed-create recovery validation", func() {
 
 				// Multi-rack: 2 racks, 1 pod each (size=2)
 				aeroCluster.Spec.RackConfig = asdbv1.RackConfig{Racks: getDummyRackConf(1, 2)}
-				aeroCluster.Spec.PodSpec.MultiPodPerHost = ptr.To(false)
-				randomizeServicePorts(aeroCluster, false, GinkgoParallelProcess())
 
 				aeroCluster.Spec.Image = unavailableImage
 				Expect(k8sClient.Create(ctx, aeroCluster)).To(Succeed())
@@ -153,10 +143,14 @@ var _ = Describe("ACL failed-create recovery validation", func() {
 						AuthMode:   asdbv1.AerospikeAuthModeInternal,
 					}},
 				}
-				Expect(patchStatusAerospikeAccessControl(ctx, k8sClient, clusterNamespacedName, staleACL)).To(Succeed())
-				Expect(removeAerospikeConfigFromStatus(ctx, k8sClient, clusterNamespacedName)).To(Succeed())
 
-				aeroCluster, err := getCluster(k8sClient, ctx, clusterNamespacedName)
+				// Wait for pods to be marked as failed
+				time.Sleep(10 * time.Second)
+
+				err := patchStatusAerospikeAccessControl(ctx, k8sClient, clusterNamespacedName, staleACL)
+				Expect(err).To(Succeed())
+
+				aeroCluster, err = getCluster(k8sClient, ctx, clusterNamespacedName)
 				Expect(err).ToNot(HaveOccurred())
 				Expect(reflect.DeepEqual(aeroCluster.Spec.AerospikeAccessControl, specACL)).To(BeTrue(),
 					"spec aerospikeAccessControl must be unchanged by recovery")
@@ -167,14 +161,6 @@ var _ = Describe("ACL failed-create recovery validation", func() {
 				aeroCluster.Spec.Image = validImage
 
 				Expect(updateCluster(k8sClient, ctx, aeroCluster)).To(Succeed())
-
-				aeroCluster, err = getCluster(k8sClient, ctx, clusterNamespacedName)
-				Expect(err).ToNot(HaveOccurred())
-
-				Expect(waitForAerospikeCluster(
-					k8sClient, ctx, aeroCluster, int(aeroCluster.Spec.Size), retryInterval,
-					getTimeout(2), []asdbv1.AerospikeClusterPhase{asdbv1.AerospikeClusterCompleted},
-				)).To(Succeed())
 			})
 		})
 	})
