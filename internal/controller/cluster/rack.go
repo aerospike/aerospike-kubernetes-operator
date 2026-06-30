@@ -11,6 +11,7 @@ import (
 	appsv1 "k8s.io/api/apps/v1"
 	corev1 "k8s.io/api/core/v1"
 	"k8s.io/apimachinery/pkg/api/errors"
+	ls "k8s.io/apimachinery/pkg/labels"
 	"k8s.io/apimachinery/pkg/util/intstr"
 	"k8s.io/apimachinery/pkg/util/sets"
 	"sigs.k8s.io/controller-runtime/pkg/client"
@@ -45,7 +46,7 @@ func (r *SingleClusterReconciler) reconcileRacks() common.ReconcileResult {
 		return common.ReconcileError(err)
 	}
 
-	ignorablePodNames, err := r.getIgnorablePods(racksToDelete, configuredRacks, revisionChangedRacks)
+	ignorablePodNames, err := r.getIgnorablePods(racksToDelete, configuredRacks)
 	if err != nil {
 		return common.ReconcileError(err)
 	}
@@ -932,7 +933,33 @@ func (r *SingleClusterReconciler) scaleDownRack(
 			continue
 		}
 
-		ignorablePodNames.Insert(podsBatch[idx].Name)
+		if ignorablePodNames.Has(podsBatch[idx].Name) {
+			continue
+		}
+
+		// If the pod has no status entry in the CR it never completed initialization,
+		// meaning Aerospike never started on it and it was never a cluster member.
+		// It is safe to scale it down without migration safety checks.
+		if _, hasStatus := r.aeroCluster.Status.Pods[podsBatch[idx].Name]; !hasStatus {
+			r.Log.Info("Pod has no CR status entry; it never joined the cluster, proceeding with scale-down",
+				"pod", podsBatch[idx].Name)
+
+			ignorablePodNames.Insert(podsBatch[idx].Name)
+
+			continue
+		}
+
+		// If the pod is not already in the ignorable set (i.e. not covered
+		// by maxIgnorablePods), block the scale-down and wait for recovery.
+		// Scaling down a failed pod skips migration safety checks and can delete
+		// PVCs (cascadeDelete=true), causing data loss on any storage type.
+		// The user can override this by raising maxIgnorablePods.
+		return found, common.ReconcileError(
+			fmt.Errorf(
+				"pod %s is not ready; waiting for recovery before scale-down to prevent data loss",
+				podsBatch[idx].Name,
+			),
+		)
 	}
 
 	// Ignore safe stop check if all pods in the batch are not running.
@@ -952,18 +979,18 @@ func (r *SingleClusterReconciler) scaleDownRack(
 		); !res.IsSuccess {
 			return found, res
 		}
+	}
 
-		// Wait for migration to complete before deleting the pods.
-		if res := r.waitForMigrationToComplete(policy,
-			ignorablePodNames,
-		); !res.IsSuccess {
-			r.Log.Error(
-				res.Err, "Failed to wait for migration to complete before deleting pods",
-				"rackID", rackState.Rack.ID,
-			)
+	// Wait for migration to complete before deleting the pods.
+	if res := r.waitForMigrationToComplete(policy,
+		ignorablePodNames,
+	); !res.IsSuccess {
+		r.Log.Error(
+			res.Err, "Failed to wait for migration to complete before deleting pods",
+			"rackID", rackState.Rack.ID,
+		)
 
-			return found, res
-		}
+		return found, res
 	}
 
 	// Update new object with new size
@@ -1716,6 +1743,24 @@ func (r *SingleClusterReconciler) getRackPodList(rackID int, rackRevision string
 	}
 
 	// TODO: Should we add check to get only non-terminating pod? What if it is rolling restart
+	if err := r.List(context.TODO(), podList, listOps); err != nil {
+		return nil, err
+	}
+
+	return podList, nil
+}
+
+func (r *SingleClusterReconciler) getAllRevisionRackPodList(rackID int) (
+	*corev1.PodList, error,
+) {
+	// List the pods for this aeroCluster's statefulset
+	podList := &corev1.PodList{}
+	listOps := &client.ListOptions{
+		Namespace: r.aeroCluster.Namespace,
+		LabelSelector: ls.SelectorFromSet(
+			utils.LabelsForAerospikeClusterRack(r.aeroCluster.Name, rackID, "")),
+	}
+
 	if err := r.List(context.TODO(), podList, listOps); err != nil {
 		return nil, err
 	}

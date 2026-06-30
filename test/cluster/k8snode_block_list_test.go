@@ -7,6 +7,7 @@ import (
 	. "github.com/onsi/ginkgo/v2"
 	. "github.com/onsi/gomega"
 	corev1 "k8s.io/api/core/v1"
+	apierrors "k8s.io/apimachinery/pkg/api/errors"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/types"
 	"k8s.io/apimachinery/pkg/util/intstr"
@@ -70,7 +71,7 @@ var _ = Describe(
 						Expect(err).ToNot(HaveOccurred())
 
 						oldK8sNode = pod.Spec.NodeName
-						oldPvcInfo, err = extractPodPVC(pod)
+						oldPvcInfo, err = extractPodPVC(ctx, k8sClient, pod)
 						Expect(err).ToNot(HaveOccurred())
 					},
 				)
@@ -187,27 +188,6 @@ var _ = Describe(
 	},
 )
 
-func extractPodPVC(pod *corev1.Pod) (map[string]types.UID, error) {
-	pvcUIDMap := make(map[string]types.UID)
-
-	for idx := range pod.Spec.Volumes {
-		if pod.Spec.Volumes[idx].PersistentVolumeClaim != nil {
-			pvcUIDMap[pod.Spec.Volumes[idx].PersistentVolumeClaim.ClaimName] = ""
-		}
-	}
-
-	for p := range pvcUIDMap {
-		pvc := &corev1.PersistentVolumeClaim{}
-		if err := k8sClient.Get(context.TODO(), test.GetNamespacedName(p, pod.Namespace), pvc); err != nil {
-			return nil, err
-		}
-
-		pvcUIDMap[p] = pvc.UID
-	}
-
-	return pvcUIDMap, nil
-}
-
 func validatePVCDeletion(ctx context.Context, pvcUIDMap map[string]types.UID, shouldDeletePVC bool) error {
 	pvc := &corev1.PersistentVolumeClaim{}
 
@@ -217,6 +197,11 @@ func validatePVCDeletion(ctx context.Context, pvcUIDMap map[string]types.UID, sh
 		)
 
 		if err := k8sClient.Get(ctx, pvcNamespacesName, pvc); err != nil {
+			// when expecting local PVC deletion, NotFound means the old PVC was removed; treat as success
+			if shouldDeletePVC && apierrors.IsNotFound(err) {
+				continue
+			}
+
 			return err
 		}
 

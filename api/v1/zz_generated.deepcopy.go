@@ -749,6 +749,11 @@ func (in *AerospikeStorageSpec) DeepCopyInto(out *AerospikeStorageSpec) {
 		*out = new(bool)
 		**out = **in
 	}
+	if in.DeleteLocalStorageOnPodRecovery != nil {
+		in, out := &in.DeleteLocalStorageOnPodRecovery, &out.DeleteLocalStorageOnPodRecovery
+		*out = new(bool)
+		**out = **in
+	}
 	if in.Volumes != nil {
 		in, out := &in.Volumes, &out.Volumes
 		*out = make([]VolumeSpec, len(*in))

@@ -159,9 +159,7 @@ var _ = Describe("AerospikeCluster validation", func() {
 					// Webhook response validation
 					envtests.NewStatusErrorMatcher().
 						WithMessageSubstrings(testutil.WebhookErrorPrefix,
-							"namespace storage device related devicePath /test/dev/xvdf not found in Storage config",
-							"<nil>", "deleteFiles deleteFiles false}",
-							"{<nil> <nil>", "none dd false} 1 [] <nil> []}").
+							"namespace storage device related devicePath /test/dev/xvdf not found in Storage config").
 						Validate(err)
 				})
 
@@ -909,9 +907,8 @@ var _ = Describe("AerospikeCluster validation", func() {
 
 					// Webhook response validation
 					envtests.NewStatusErrorMatcher().
-						WithMessageSubstrings(testutil.CRDSchemaErrorPrefix,
-							"spec.podSpec.dnsPolicy: Unsupported value: \"Default\": supported values: "+
-								"\"ClusterFirstWithHostNet\", \"ClusterFirst\", \"None\"").
+						WithMessageSubstrings(testutil.WebhookErrorPrefix,
+							"dnsPolicy: Default is not supported").
 						Validate(err)
 				})
 

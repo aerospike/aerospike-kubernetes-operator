@@ -14,6 +14,7 @@ import (
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/types"
 	"k8s.io/apimachinery/pkg/util/wait"
+	"k8s.io/utils/ptr"
 
 	asdbv1 "github.com/aerospike/aerospike-kubernetes-operator/v4/api/v1"
 	"github.com/aerospike/aerospike-kubernetes-operator/v4/pkg/utils"
@@ -117,6 +118,98 @@ var _ = Describe(
 							validateClusterPVCDeletion(ctx, oldPvcInfoPerPod)
 						},
 					)
+
+					It("Should NOT delete local PVCs when an eviction-blocked annotation is set on a failed pod ",
+						func() {
+							aeroCluster, err := getCluster(k8sClient, ctx, clusterNamespacedName)
+							Expect(err).ToNot(HaveOccurred())
+
+							podList, err := getClusterPodList(k8sClient, ctx, aeroCluster)
+							Expect(err).ToNot(HaveOccurred())
+
+							oldPvcInfoPerPod, err := extractClusterPVC(ctx, k8sClient, aeroCluster)
+							Expect(err).ToNot(HaveOccurred())
+
+							targetPod := &podList.Items[0]
+
+							By("Marking the target pod as failed")
+							Expect(markPodAsFailed(ctx, k8sClient, targetPod.Name, namespace)).ToNot(HaveOccurred())
+
+							By("Evicting the failed pod — webhook blocks it and sets the eviction-blocked annotation")
+
+							err = evictPod(ctx, targetPod)
+							Expect(err).To(HaveOccurred())
+							Expect(err.Error()).To(ContainSubstring(
+								"Eviction of Aerospike pod %s/%s is blocked by admission webhook",
+								targetPod.Namespace, targetPod.Name))
+
+							By("Verifying the eviction-blocked annotation was set on the failed pod")
+							Eventually(func() string {
+								pod := &corev1.Pod{}
+								if err = k8sClient.Get(ctx, types.NamespacedName{
+									Name: targetPod.Name, Namespace: namespace,
+								}, pod); err != nil {
+									return ""
+								}
+
+								return pod.Annotations[asdbv1.EvictionBlockedAnnotation]
+							}, time.Minute, retryInterval).ShouldNot(BeEmpty())
+
+							By("Waiting for AKO to recover the failed pod")
+
+							err = waitForAerospikeCluster(
+								k8sClient, ctx, aeroCluster, int(aeroCluster.Spec.Size),
+								retryInterval, getTimeout(aeroCluster.Spec.Size),
+								[]asdbv1.AerospikeClusterPhase{asdbv1.AerospikeClusterCompleted},
+							)
+							Expect(err).ToNot(HaveOccurred())
+
+							By("Asserting PVC for the failed pod is preserved (eviction annotation ignored for isFailureRecovery=true)")
+							Expect(validatePVCDeletion(ctx, oldPvcInfoPerPod[targetPod.Name], false)).ToNot(HaveOccurred())
+						})
+
+					It("Should delete local PVCs when an eviction-blocked annotation is set on a failed pod "+
+						"and deleteLocalStorageOnPodRecovery is enabled", func() {
+						aeroCluster, err := getCluster(k8sClient, ctx, clusterNamespacedName)
+						Expect(err).ToNot(HaveOccurred())
+
+						aeroCluster.Spec.Storage.DeleteLocalStorageOnPodRecovery = ptr.To(true)
+						Expect(updateCluster(k8sClient, ctx, aeroCluster)).ToNot(HaveOccurred())
+
+						aeroCluster, err = getCluster(k8sClient, ctx, clusterNamespacedName)
+						Expect(err).ToNot(HaveOccurred())
+
+						podList, err := getClusterPodList(k8sClient, ctx, aeroCluster)
+						Expect(err).ToNot(HaveOccurred())
+
+						oldPvcInfoPerPod, err := extractClusterPVC(ctx, k8sClient, aeroCluster)
+						Expect(err).ToNot(HaveOccurred())
+
+						targetPod := &podList.Items[0]
+
+						By("Marking the target pod as failed")
+						Expect(markPodAsFailed(ctx, k8sClient, targetPod.Name, namespace)).ToNot(HaveOccurred())
+
+						By("Evicting the failed pod — webhook blocks it and sets the eviction-blocked annotation")
+
+						err = evictPod(ctx, targetPod)
+						Expect(err).To(HaveOccurred())
+						Expect(err.Error()).To(ContainSubstring(
+							"Eviction of Aerospike pod %s/%s is blocked by admission webhook",
+							targetPod.Namespace, targetPod.Name))
+
+						By("Waiting for AKO to recover the failed pod (with PVC deletion)")
+
+						err = waitForAerospikeCluster(
+							k8sClient, ctx, aeroCluster, int(aeroCluster.Spec.Size),
+							retryInterval, getTimeout(aeroCluster.Spec.Size),
+							[]asdbv1.AerospikeClusterPhase{asdbv1.AerospikeClusterCompleted},
+						)
+						Expect(err).ToNot(HaveOccurred())
+
+						By("Asserting PVC for the failed pod is deleted")
+						Expect(validatePVCDeletion(ctx, oldPvcInfoPerPod[targetPod.Name], true)).ToNot(HaveOccurred())
+					})
 				})
 
 				Context("Non-Aerospike pods", func() {
