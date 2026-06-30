@@ -2,6 +2,22 @@ apiVersion: v1
 entries:
   aerospike-backup:
   - apiVersion: v2
+    appVersion: 4.5.0
+    created: "2026-06-30T18:25:50.07575+05:30"
+    description: A Helm chart for Aerospike Backup Custom Resource
+    digest: 600b131d8aa25550ae59bbabf0143fc518ad29eca54ea8311a63904fcb93f181
+    icon: https://avatars0.githubusercontent.com/u/2214313?s=200&v=4
+    maintainers:
+    - email: developers@aerospike.com
+      name: Aerospike
+    name: aerospike-backup
+    sources:
+    - https://github.com/aerospike/aerospike-kubernetes-operator
+    type: application
+    urls:
+    - https://aerospike.github.io/aerospike-kubernetes-operator/aerospike-backup-4.5.0.tgz
+    version: 4.5.0
+  - apiVersion: v2
     appVersion: 4.4.1
     created: "2026-05-26T18:00:16.136246+05:30"
     description: A Helm chart for Aerospike Backup Custom Resource
@@ -195,6 +211,22 @@ entries:
     version: 3.4.0
   aerospike-backup-service:
   - apiVersion: v2
+    appVersion: 4.5.0
+    created: "2026-06-30T18:25:50.075903+05:30"
+    description: A Helm chart for Aerospike Backup Service Custom Resource
+    digest: bda7b8559f906a302bebe7921f64278ab5e65999a1ae6e9d8ad05d3bbe41be2c
+    icon: https://avatars0.githubusercontent.com/u/2214313?s=200&v=4
+    maintainers:
+    - email: developers@aerospike.com
+      name: Aerospike
+    name: aerospike-backup-service
+    sources:
+    - https://github.com/aerospike/aerospike-kubernetes-operator
+    type: application
+    urls:
+    - https://aerospike.github.io/aerospike-kubernetes-operator/aerospike-backup-service-4.5.0.tgz
+    version: 4.5.0
+  - apiVersion: v2
     appVersion: 4.4.1
     created: "2026-05-26T18:00:16.136472+05:30"
     description: A Helm chart for Aerospike Backup Service Custom Resource
@@ -387,6 +419,22 @@ entries:
     - https://aerospike.github.io/aerospike-kubernetes-operator/aerospike-backup-service-3.4.0.tgz
     version: 3.4.0
   aerospike-cluster:
+  - apiVersion: v2
+    appVersion: 4.5.0
+    created: "2026-06-30T18:25:50.076556+05:30"
+    description: A Helm chart for Aerospike Cluster Custom Resource
+    digest: 479094ac62d7b1a0d1a0a181ade8c408a69c5b6c14af2b7da031f3b3fffcb8d2
+    icon: https://avatars0.githubusercontent.com/u/2214313?s=200&v=4
+    maintainers:
+    - email: developers@aerospike.com
+      name: Aerospike
+    name: aerospike-cluster
+    sources:
+    - https://github.com/aerospike/aerospike-kubernetes-operator
+    type: application
+    urls:
+    - https://aerospike.github.io/aerospike-kubernetes-operator/aerospike-cluster-4.5.0.tgz
+    version: 4.5.0
   - apiVersion: v2
     appVersion: 4.4.1
     created: "2026-05-26T18:00:16.137857+05:30"
@@ -836,6 +884,22 @@ entries:
     - https://aerospike.github.io/aerospike-kubernetes-operator/aerospike-cluster-1.0.0.tgz
     version: 1.0.0
   aerospike-kubernetes-operator:
+  - apiVersion: v2
+    appVersion: 4.5.0
+    created: "2026-06-30T18:25:50.079364+05:30"
+    description: A Helm chart for Aerospike Kubernetes Operator
+    digest: 394d618bd6cbd767495519f9b8af08e062967e2a47c91f8eafe1de540dfc6e4e
+    icon: https://avatars0.githubusercontent.com/u/2214313?s=200&v=4
+    maintainers:
+    - email: developers@aerospike.com
+      name: Aerospike
+    name: aerospike-kubernetes-operator
+    sources:
+    - https://github.com/aerospike/aerospike-kubernetes-operator
+    type: application
+    urls:
+    - https://aerospike.github.io/aerospike-kubernetes-operator/aerospike-kubernetes-operator-4.5.0.tgz
+    version: 4.5.0
   - apiVersion: v2
     appVersion: 4.4.1
     created: "2026-05-26T18:00:16.141174+05:30"
@@ -1302,6 +1366,22 @@ entries:
     version: 1.0.0
   aerospike-restore:
   - apiVersion: v2
+    appVersion: 4.5.0
+    created: "2026-06-30T18:25:50.079508+05:30"
+    description: A Helm chart for Aerospike Restore Custom Resource
+    digest: 3b0e8066456cc82a69cdb38b7b333d3ba1f5fdb364b2675cf06caecad6474658
+    icon: https://avatars0.githubusercontent.com/u/2214313?s=200&v=4
+    maintainers:
+    - email: developers@aerospike.com
+      name: Aerospike
+    name: aerospike-restore
+    sources:
+    - https://github.com/aerospike/aerospike-kubernetes-operator
+    type: application
+    urls:
+    - https://aerospike.github.io/aerospike-kubernetes-operator/aerospike-restore-4.5.0.tgz
+    version: 4.5.0
+  - apiVersion: v2
     appVersion: 4.4.1
     created: "2026-05-26T18:00:16.141388+05:30"
     description: A Helm chart for Aerospike Restore Custom Resource
@@ -1493,4 +1573,4 @@ entries:
     urls:
     - https://aerospike.github.io/aerospike-kubernetes-operator/aerospike-restore-3.4.0.tgz
     version: 3.4.0
-generated: "2026-05-26T18:00:16.135857+05:30"
+generated: "2026-06-30T18:25:50.075554+05:30"
