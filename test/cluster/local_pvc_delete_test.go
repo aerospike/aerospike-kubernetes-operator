@@ -206,7 +206,7 @@ var _ = Describe(
 			It("Should NOT delete local PVCs for a failed pod during rolling restart"+
 				"when deleteLocalStorageOnPodRecovery is false and keep Aerospike data (RF=1)",
 				func() {
-					aeroCluster := createDummyAerospikeClusterWithRF(clusterNamespacedName, 2, 1)
+					aeroCluster := createDummyAerospikeClusterWithRF(clusterNamespacedName, 3, 1)
 					aeroCluster.Spec.Storage.DeleteLocalStorageOnPodRecovery = ptr.To(false)
 					aeroCluster.Spec.Storage.LocalStorageClasses = []string{storageClass}
 					Expect(DeployCluster(k8sClient, ctx, aeroCluster)).ToNot(HaveOccurred())
@@ -231,18 +231,10 @@ var _ = Describe(
 
 					maxIgnorable := intstr.FromInt32(1)
 					aeroCluster.Spec.RackConfig.MaxIgnorablePods = &maxIgnorable
-					Expect(updateCluster(k8sClient, ctx, aeroCluster)).ToNot(HaveOccurred())
-
-					By("Triggering rolling restart via pod metadata update")
-
-					aeroCluster, err = getCluster(k8sClient, ctx, clusterNamespacedName)
-					Expect(err).ToNot(HaveOccurred())
-
 					aeroCluster.Spec.PodSpec.AerospikeObjectMeta = asdbv1.AerospikeObjectMeta{
 						Labels: map[string]string{"test-label": "failure-recovery"},
 					}
-					rolloutWait := getTimeout(aeroCluster.Spec.Size) * 3
-					Expect(updateClusterWithTO(k8sClient, ctx, aeroCluster, rolloutWait)).ToNot(HaveOccurred())
+					Expect(updateCluster(k8sClient, ctx, aeroCluster)).ToNot(HaveOccurred())
 
 					By("Validating no local PVC UIDs change (failed pod: recovery path; healthy pod: no deleteLocalStorageOnRestart)")
 
