@@ -127,6 +127,11 @@ spec:
           Aerospike Cluster nodes
         displayName: Headless Service
         path: headlessService
+      - description: |-
+          IgnoreSidecarFailure controls whether reconciliation is blocked when a sidecar
+          container is failing but the Aerospike server container is still running.
+        displayName: Ignore Sidecar Failure
+        path: ignoreSidecarFailure
       - description: Aerospike server image
         displayName: Server Image
         path: image

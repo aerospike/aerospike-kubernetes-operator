@@ -304,7 +304,8 @@ func (r *SingleClusterReconciler) createOrUpdatePodService(pName, pNamespace str
 				Labels:      podService.Metadata.Labels,
 			},
 			Spec: corev1.ServiceSpec{
-				Type: corev1.ServiceTypeNodePort,
+				PublishNotReadyAddresses: true,
+				Type:                     corev1.ServiceTypeNodePort,
 				Selector: map[string]string{
 					"statefulset.kubernetes.io/pod-name": pName,
 				},
