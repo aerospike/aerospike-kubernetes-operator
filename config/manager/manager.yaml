@@ -30,6 +30,10 @@ spec:
         args:
         - --health-probe-bind-address=:8081
         - --leader-elect
+        - --zap-log-level=$(AKO_LOG_LEVEL)
+        - --zap-encoder=$(AKO_LOG_ENCODER)
+        - --zap-devel=$(AKO_LOG_DEVELOPMENT)
+        - --metrics-secure=$(AKO_METRICS_SECURE)
         image: controller:latest
         name: manager
         ports: []
@@ -75,7 +79,15 @@ spec:
           value: aerospike
         - name: AEROSPIKE_KUBERNETES_INIT_NAME_TAG
           # this is the name and tag of aerospike-init image
-          value: aerospike-kubernetes-init:2.5.2
+          value: aerospike-kubernetes-init:2.5.3
+        - name: AKO_LOG_LEVEL
+          value: "debug"
+        - name: AKO_LOG_ENCODER
+          value: "console"
+        - name: AKO_LOG_DEVELOPMENT
+          value: "true"
+        - name: AKO_METRICS_SECURE
+          value: "true"
       volumes: []
       serviceAccountName: controller-manager
 

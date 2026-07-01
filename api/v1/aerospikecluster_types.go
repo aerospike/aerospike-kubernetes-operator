@@ -414,7 +414,6 @@ type AerospikePodSpec struct { //nolint:govet // for readability
 
 	// DnsPolicy same as https://kubernetes.io/docs/concepts/services-networking/dns-pod-service/#pod-s-dns-policy.
 	// If hostNetwork is true and policy is not specified, it defaults to ClusterFirstWithHostNet
-	// +kubebuilder:validation:Enum=ClusterFirstWithHostNet;ClusterFirst;None
 	// +optional
 	InputDNSPolicy *corev1.DNSPolicy `json:"dnsPolicy,omitempty"`
 
@@ -903,9 +902,18 @@ type AerospikeStorageSpec struct { //nolint:govet // for readability
 	LocalStorageClasses []string `json:"localStorageClasses,omitempty"`
 
 	// DeleteLocalStorageOnRestart enables the deletion of local storage PVCs when a pod is restarted or rescheduled
-	// by AKO. It only considers local storage classes given in the localStorageClasses field.
+	// by AKO as part of a planned operation (rolling restart, image upgrade).
+	// It only considers local storage classes given in the localStorageClasses field.
 	// +optional
 	DeleteLocalStorageOnRestart *bool `json:"deleteLocalStorageOnRestart,omitempty"`
+
+	// DeleteLocalStorageOnPodRecovery enables the deletion of local storage PVCs when AKO recovers a failed pod.
+	// Defaults to false.
+	// WARNING: enabling this will cause permanent data loss for local volumes on the failed pod.
+	// Only enable this when the data on the local disk is known to be corrupted or unrecoverable.
+	// Requires localStorageClasses to be non-empty.
+	// +optional
+	DeleteLocalStorageOnPodRecovery *bool `json:"deleteLocalStorageOnPodRecovery,omitempty"`
 
 	// Volumes list to attach to created pods.
 	// +patchMergeKey=name
@@ -1341,7 +1349,7 @@ type AerospikePodStatus struct { //nolint:govet // for readability
 
 // AerospikeCluster is the schema for the AerospikeCluster API
 // +operator-sdk:csv:customresourcedefinitions:displayName="Aerospike Cluster",resources={{Service, v1},{Pod,v1},{StatefulSet,v1}}
-// +kubebuilder:metadata:annotations="aerospike-kubernetes-operator/version=4.4.1"
+// +kubebuilder:metadata:annotations="aerospike-kubernetes-operator/version=4.5.0"
 //
 //nolint:lll // for readability
 type AerospikeCluster struct { //nolint:govet // for readability
