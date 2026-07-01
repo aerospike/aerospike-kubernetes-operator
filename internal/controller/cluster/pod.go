@@ -67,7 +67,8 @@ func mergeRestartType(current, incoming RestartType) RestartType {
 }
 
 // Fetching RestartType of all pods, based on the operation being performed.
-func (r *SingleClusterReconciler) getRollingRestartTypeMap(rackState *RackState, ignorablePodNames sets.Set[string]) (
+func (r *SingleClusterReconciler) getRollingRestartTypeMap(rackState *RackState,
+	ignorablePodNames, serverFailedPodNames sets.Set[string]) (
 	restartTypeMap map[string]RestartType, dynamicConfDiffPerPod map[string]asconfig.DynamicConfigMap, err error) {
 	var addedNSDevices []string
 
@@ -171,6 +172,12 @@ func (r *SingleClusterReconciler) getRollingRestartTypeMap(rackState *RackState,
 			return nil, nil, err
 		}
 
+		// A quick restart only rolls config dynamically; a server-failed pod
+		// needs a full pod restart to recover the crashed server process.
+		if restartType == quickRestart && serverFailedPodNames.Has(pods[idx].Name) {
+			restartType = podRestart
+		}
+
 		restartTypeMap[pods[idx].Name] = restartType
 	}
 
@@ -184,16 +191,17 @@ func (r *SingleClusterReconciler) getRollingRestartTypePod(
 ) (RestartType, error) {
 	restartType := noRestart
 
-	// AerospikeConfig nil means status not updated yet
-	if r.IsStatusEmpty() {
+	// If this pod has no status entry yet it was just created with the current
+	// config — no restart is needed and the hash fields would all be empty
+	// strings, which would incorrectly trigger every comparison below.
+	podStatus, exists := r.aeroCluster.Status.Pods[pod.Name]
+	if !exists {
 		return restartType, nil
 	}
 
 	requiredConfHash := confMap.Data[aerospikeConfHashFileName]
 	requiredNetworkPolicyHash := confMap.Data[networkPolicyHashFileName]
 	requiredPodSpecHash := confMap.Data[podSpecHashFileName]
-
-	podStatus := r.aeroCluster.Status.Pods[pod.Name]
 
 	// Check if aerospikeConfig is updated
 	if podStatus.AerospikeConfigHash != requiredConfHash {
@@ -319,7 +327,7 @@ func (r *SingleClusterReconciler) rollingRestartPods(
 	rackState *RackState, podsToRestart []*corev1.Pod, ignorablePodNames sets.Set[string],
 	restartTypeMap map[string]RestartType,
 ) common.ReconcileResult {
-	failedPods, failedWithinGracePeriodPods, activePods := getFailedAndActivePods(podsToRestart, true)
+	failedPods, failedWithinGracePeriodPods, activePods := getServerFailedAndActivePods(podsToRestart, true)
 
 	// Failed pods are always restarted as failure recovery regardless of the outer operation
 	// (upgrade, k8sNodeBlockList, planned rolling restart) — they failed for an unknown reason
@@ -331,6 +339,9 @@ func (r *SingleClusterReconciler) rollingRestartPods(
 			return res
 		}
 	}
+
+	// Here activePods should be those pods where server pod is running, irrespective of sidecars status.
+	// ignorablePodNames should only have those pods where server container is failing
 
 	if len(activePods) != 0 {
 		r.Log.Info("Restart active pods", "pods", getPodNames(activePods))
@@ -561,6 +572,7 @@ func (r *SingleClusterReconciler) updateAerospikeConfInPod(podName string) error
 func (r *SingleClusterReconciler) ensurePodsRunningAndReady(podsToCheck []*corev1.Pod) common.ReconcileResult {
 	podNames := getPodNames(podsToCheck)
 	readyPods := map[string]bool{}
+	ignoreSidecar := asdbv1.GetBool(r.aeroCluster.Spec.IgnoreSidecarFailure)
 
 	const (
 		maxRetries    = 6
@@ -589,10 +601,22 @@ func (r *SingleClusterReconciler) ensurePodsRunningAndReady(podsToCheck []*corev
 			}
 
 			if err := utils.CheckPodFailed(updatedPod); err != nil {
-				return common.ReconcileError(err)
+				// When IgnoreSidecarFailure is set and the Aerospike server
+				// container is still running, the failure is sidecar-only — skip it.
+				if ignoreSidecar && utils.IsAerospikeServerRunning(updatedPod) {
+					r.Log.Info("Pod has sidecar failure, ignoring per IgnoreSidecarFailure",
+						"podName", updatedPod.Name, "err", err)
+				} else {
+					return common.ReconcileError(err)
+				}
 			}
 
-			if !utils.IsPodRunningAndReady(updatedPod) {
+			// Consider a pod "ready" when it is fully ready, or — if
+			// IgnoreSidecarFailure is set — when just the server container is running.
+			podReady := utils.IsPodRunningAndReady(updatedPod) ||
+				(ignoreSidecar && utils.IsAerospikeServerRunning(updatedPod))
+
+			if !podReady {
 				break
 			}
 
@@ -625,13 +649,18 @@ func (r *SingleClusterReconciler) ensurePodsRunningAndReady(podsToCheck []*corev
 	return common.ReconcileRequeueAfter(asdbv1.RequeueIntervalSeconds10)
 }
 
-func getFailedAndActivePods(
+// getServerFailedAndActivePods classifies pods by the health of the Aerospike
+// server container only. Sidecar failures are intentionally ignored: a pod
+// whose server is running but has a crashing sidecar is classified as active.
+// This ensures sidecar-failed pods are not incorrectly skipped during safety
+// checks or treated as server-down pods in rolling-restart and upgrade loops.
+func getServerFailedAndActivePods(
 	pods []*corev1.Pod, withGracePeriod bool) (failedPods, failedWithinGracePeriodPods, activePods []*corev1.Pod,
 ) {
 	for idx := range pods {
 		pod := pods[idx]
 
-		podState := utils.CheckPodFailedWithGrace(pod, withGracePeriod)
+		podState := utils.CheckServerFailedWithGrace(pod, withGracePeriod)
 
 		switch podState.State {
 		case utils.PodHealthy:
@@ -644,6 +673,23 @@ func getFailedAndActivePods(
 	}
 
 	return failedPods, failedWithinGracePeriodPods, activePods
+}
+
+// getSidecarFailedPods returns pods whose Aerospike server container is Running
+// but the overall pod is not ready, meaning a sidecar container is failing.
+// These pods are distinct from server-failed pods: their Aerospike node is
+// reachable and should not skip safety checks or batching during rolling restart.
+func getSidecarFailedPods(pods []*corev1.Pod) []*corev1.Pod {
+	var sidecarFailed []*corev1.Pod
+
+	for idx := range pods {
+		pod := pods[idx]
+		if !utils.IsPodTerminating(pod) && utils.IsAerospikeServerRunning(pod) && !utils.IsPodReady(pod) {
+			sidecarFailed = append(sidecarFailed, pod)
+		}
+	}
+
+	return sidecarFailed
 }
 
 func getNonIgnorablePods(pods []*corev1.Pod, ignorablePodNames sets.Set[string],
@@ -665,7 +711,7 @@ func getNonIgnorablePods(pods []*corev1.Pod, ignorablePodNames sets.Set[string],
 func (r *SingleClusterReconciler) safelyDeletePodsAndEnsureImageUpdated(
 	rackState *RackState, podsToUpdate []*corev1.Pod, ignorablePodNames sets.Set[string],
 ) common.ReconcileResult {
-	failedPods, failedWithinGracePeriodPods, activePods := getFailedAndActivePods(podsToUpdate, true)
+	failedPods, failedWithinGracePeriodPods, activePods := getServerFailedAndActivePods(podsToUpdate, true)
 
 	// If already dead node (failed pod) then no need to check node safety, migration
 	if len(failedPods) != 0 {
@@ -815,6 +861,7 @@ func (r *SingleClusterReconciler) isLocalPVCDeletionRequired(
 func (r *SingleClusterReconciler) ensurePodsImageUpdated(podsToCheck []*corev1.Pod) common.ReconcileResult {
 	podNames := getPodNames(podsToCheck)
 	updatedPods := sets.Set[string]{}
+	ignoreSidecar := asdbv1.GetBool(r.aeroCluster.Spec.IgnoreSidecarFailure)
 
 	const (
 		maxRetries    = 6
@@ -844,10 +891,23 @@ func (r *SingleClusterReconciler) ensurePodsImageUpdated(podsToCheck []*corev1.P
 
 			// For existing cluster operations, no grace period for immediate responsiveness
 			if err := utils.CheckPodFailed(updatedPod); err != nil {
-				return common.ReconcileError(err)
+				// When IgnoreSidecarFailure is set and the Aerospike server
+				// container is still running, the failure is sidecar-only — skip it.
+				if ignoreSidecar && utils.IsAerospikeServerRunning(updatedPod) {
+					r.Log.Info("Pod has sidecar failure, ignoring per IgnoreSidecarFailure",
+						"podName", updatedPod.Name, "err", err)
+				} else {
+					return common.ReconcileError(err)
+				}
 			}
 
-			if !r.isPodUpgraded(updatedPod) {
+			// isPodUpgraded requires full pod readiness, which fails for sidecar-failed
+			// pods. When IgnoreSidecarFailure is set and the server is running, fall back
+			// to checking only whether the container images are on the desired versions.
+			podUpgraded := r.isPodUpgraded(updatedPod) ||
+				(ignoreSidecar && utils.IsAerospikeServerRunning(updatedPod) && r.isPodOnDesiredImage(updatedPod, false))
+
+			if !podUpgraded {
 				break
 			}
 
@@ -1037,10 +1097,16 @@ func (r *SingleClusterReconciler) cleanupDanglingPodsRack(sts *appsv1.StatefulSe
 	return nil
 }
 
-// getIgnorablePods returns pods:
-// 1. From racksToDelete that are currently not running and can be ignored in stability checks.
-// 2. Failed/pending pods including old revisions pods from the configuredRacks identified using maxIgnorablePods field
-// are ignored from stability checks.
+// getIgnorablePods returns the set of pod names whose Aerospike server container
+// is not running and that can be safely skipped during cluster stability checks:
+//  1. Not-ready pods from racksToDelete or force-blocked-from-roster racks whose
+//     server container is not running.
+//  2. Server-failed pods including old revisions pods from configured racks within the MaxIgnorablePods budget.
+//
+// Only pods whose Aerospike server container is not running are considered
+// ignorable. Pods with a running server but a failing sidecar are never added
+// here; they remain full participants in cluster operations (host connections,
+// roster, etc.) and are handled separately via getSidecarFailedPods.
 func (r *SingleClusterReconciler) getIgnorablePods(
 	racksToDelete []asdbv1.Rack, configuredRacks []RackState,
 ) (sets.Set[string], error) {
@@ -1057,8 +1123,11 @@ func (r *SingleClusterReconciler) getIgnorablePods(
 		}
 
 		for podIdx := range rackPods.Items {
-			pod := rackPods.Items[podIdx]
-			if !utils.IsPodRunningAndReady(&pod) {
+			pod := &rackPods.Items[podIdx]
+			// Only ignore pods whose server container is not running.
+			// Pods with a running server but a failing sidecar are still reachable
+			// and must participate in cluster operations.
+			if !utils.IsAerospikeServerRunning(pod) {
 				ignorablePodNames.Insert(pod.Name)
 			}
 		}
@@ -1076,6 +1145,10 @@ func (r *SingleClusterReconciler) getIgnorablePods(
 		failedAllowed, _ := intstr.GetScaledValueFromIntOrPercent(
 			r.aeroCluster.Spec.RackConfig.MaxIgnorablePods, int(rackState.Size), false,
 		)
+
+		if failedAllowed == 0 {
+			return ignorablePodNames, nil
+		}
 
 		podList, err := r.getAllRevisionRackPodList(rackState.Rack.ID)
 		if err != nil {
@@ -1095,14 +1168,16 @@ func (r *SingleClusterReconciler) getIgnorablePods(
 					continue
 				}
 
-				// Old-revision pods belong to an STS that is being replaced and cannot
-				// recover on their own. Prioritise them so they always consume the
-				// maxIgnorablePods budget first, leaving leftover capacity for
-				// current-revision pods which may still recover.
-				if pod.Labels[asdbv1.AerospikeRackRevisionLabel] != currentRevision {
-					oldRevisionFailed = append(oldRevisionFailed, pod.Name)
-				} else {
-					currentRevisionFailed = append(currentRevisionFailed, pod.Name)
+				if !utils.IsAerospikeServerRunning(pod) {
+					// Old-revision pods belong to an STS that is being replaced and cannot
+					// recover on their own. Prioritise them so they always consume the
+					// maxIgnorablePods budget first, leaving leftover capacity for
+					// current-revision pods which may still recover.
+					if pod.Labels[asdbv1.AerospikeRackRevisionLabel] != currentRevision {
+						oldRevisionFailed = append(oldRevisionFailed, pod.Name)
+					} else {
+						currentRevisionFailed = append(currentRevisionFailed, pod.Name)
+					}
 				}
 			}
 		}
@@ -1173,29 +1248,6 @@ func (r *SingleClusterReconciler) getClusterPodList() (
 	}
 
 	return podList, nil
-}
-
-func (r *SingleClusterReconciler) isAnyPodInImageFailedState(podList []*corev1.Pod, ignorablePodNames sets.Set[string],
-) bool {
-	for idx := range podList {
-		pod := podList[idx]
-		if ignorablePodNames.Has(pod.Name) {
-			continue
-		}
-
-		// TODO: Should we use checkPodFailed or CheckPodImageFailed?
-		// scaleDown, rollingRestart should work even if node is crashed
-		// If node was crashed due to wrong config then only rollingRestart can bring it back.
-		if err := utils.CheckPodImageFailed(pod); err != nil {
-			r.Log.Info(
-				"AerospikeCluster Pod is in failed state", "podName", pod.Name, "err", err,
-			)
-
-			return true
-		}
-	}
-
-	return false
 }
 
 func getFQDNForPod(aeroCluster *asdbv1.AerospikeCluster, host string) string {

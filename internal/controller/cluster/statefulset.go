@@ -247,6 +247,80 @@ func (r *SingleClusterReconciler) deleteSTS(st *appsv1.StatefulSet) error {
 	return r.Delete(context.TODO(), st)
 }
 
+func (r *SingleClusterReconciler) waitForServerContainersRunning(
+	st *appsv1.StatefulSet, ignorablePodNames sets.Set[string],
+) error {
+	const (
+		podStatusMaxRetry      = 18
+		podStatusRetryInterval = time.Second * 10
+	)
+
+	r.Log.Info(
+		"Waiting for server containers to be running",
+		"WaitTimePerPod", podStatusRetryInterval*time.Duration(podStatusMaxRetry),
+	)
+
+	for podIndex := int32(0); podIndex < *st.Spec.Replicas; podIndex++ {
+		podName := getSTSPodName(st.Name, podIndex)
+
+		if ignorablePodNames.Has(podName) {
+			continue
+		}
+
+		pod := &corev1.Pod{}
+
+		// Wait up to 10s for the pod object to appear.
+		for i := 0; i < 5; i++ {
+			if err := r.Get(
+				context.TODO(),
+				types.NamespacedName{Name: podName, Namespace: st.Namespace},
+				pod,
+			); err == nil {
+				break
+			}
+
+			time.Sleep(time.Second * 2)
+		}
+
+		var isRunning bool
+
+		for i := 0; i < podStatusMaxRetry; i++ {
+			r.Log.V(1).Info("Check server container running", "pod", podName)
+
+			if err := r.Get(
+				context.TODO(),
+				types.NamespacedName{Name: podName, Namespace: st.Namespace},
+				pod,
+			); err != nil {
+				return fmt.Errorf("failed to get pod %s: %v", podName, err)
+			}
+
+			if podState := utils.CheckServerFailedWithGrace(pod, false); podState.State == utils.PodFailed {
+				return fmt.Errorf("server container in pod %s failed: %s", podName, podState.Reason)
+			}
+
+			if utils.IsAerospikeServerRunning(pod) {
+				isRunning = true
+
+				r.Log.Info("Server container is running", "pod", podName)
+
+				break
+			}
+
+			time.Sleep(podStatusRetryInterval)
+		}
+
+		if !isRunning {
+			return fmt.Errorf(
+				"server container in pod %s did not start. Status: %v",
+				podName, pod.Status.ContainerStatuses,
+			)
+		}
+	}
+
+	return nil
+}
+
 func (r *SingleClusterReconciler) waitForSTSToBeReady(
 	st *appsv1.StatefulSet, ignorablePodNames sets.Set[string],
 ) error {
@@ -1078,20 +1152,24 @@ func updateSTSContainers(
 	return finalContainers
 }
 
-func (r *SingleClusterReconciler) waitForAllSTSToBeReady(ignorablePodNames sets.Set[string]) error {
-	r.Log.Info("Waiting for all cluster STSs to be ready")
+// waitForAllAerospikeServersRunning waits for the Aerospike server container to
+// be in Running state on every non-ignorable pod across all cluster StatefulSets.
+// It does NOT require sidecars or other containers to be ready. Pods whose names
+// are in ignorablePodNames are skipped entirely; sidecar-failed pods are NOT
+// skipped because their server containers are still reachable.
+func (r *SingleClusterReconciler) waitForAllAerospikeServersRunning(ignorablePodNames sets.Set[string]) error {
+	r.Log.Info("Waiting for all Aerospike server containers to be running")
 
 	allRackIdentifiers := sets.NewString()
 
-	statusRacks := r.aeroCluster.Status.RackConfig.Racks
-	for idx := range statusRacks {
-		allRackIdentifiers.Insert(utils.GetRackIdentifier(statusRacks[idx].ID, statusRacks[idx].Revision))
+	for idx := range r.aeroCluster.Status.RackConfig.Racks {
+		rack := r.aeroCluster.Status.RackConfig.Racks[idx]
+		allRackIdentifiers.Insert(utils.GetRackIdentifier(rack.ID, rack.Revision))
 	}
 
-	// Check for newly added racks also because we do not check for these racks just after they are added
-	specRacks := r.aeroCluster.Spec.RackConfig.Racks
-	for idx := range specRacks {
-		allRackIdentifiers.Insert(utils.GetRackIdentifier(specRacks[idx].ID, specRacks[idx].Revision))
+	for idx := range r.aeroCluster.Spec.RackConfig.Racks {
+		rack := r.aeroCluster.Spec.RackConfig.Racks[idx]
+		allRackIdentifiers.Insert(utils.GetRackIdentifier(rack.ID, rack.Revision))
 	}
 
 	for rackIdentifier := range allRackIdentifiers {
@@ -1103,11 +1181,10 @@ func (r *SingleClusterReconciler) waitForAllSTSToBeReady(ignorablePodNames sets.
 				return err
 			}
 
-			// Skip if a sts not found. It may have be deleted and status may not have been updated yet
 			continue
 		}
 
-		if err := r.waitForSTSToBeReady(st, ignorablePodNames); err != nil {
+		if err := r.waitForServerContainersRunning(st, ignorablePodNames); err != nil {
 			return err
 		}
 	}

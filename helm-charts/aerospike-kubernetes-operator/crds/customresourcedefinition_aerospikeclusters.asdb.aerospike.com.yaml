@@ -347,6 +347,11 @@ spec:
                         type: object
                     type: object
                 type: object
+              ignoreSidecarFailure:
+                description: |-
+                  IgnoreSidecarFailure controls whether cluster operations are blocked when a
+                  sidecar container is failing but the Aerospike server container is still running.
+                type: boolean
               image:
                 description: Aerospike server image
                 minLength: 1
@@ -9730,6 +9735,11 @@ spec:
                         type: object
                     type: object
                 type: object
+              ignoreSidecarFailure:
+                description: |-
+                  IgnoreSidecarFailure controls whether cluster operations are blocked when a
+                  sidecar container is failing but the Aerospike server container is still running.
+                type: boolean
               image:
                 description: Aerospike server image
                 type: string

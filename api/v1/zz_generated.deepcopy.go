@@ -209,6 +209,11 @@ func (in *AerospikeClusterSpec) DeepCopyInto(out *AerospikeClusterSpec) {
 		*out = new(bool)
 		**out = **in
 	}
+	if in.IgnoreSidecarFailure != nil {
+		in, out := &in.IgnoreSidecarFailure, &out.IgnoreSidecarFailure
+		*out = new(bool)
+		**out = **in
+	}
 	if in.Operations != nil {
 		in, out := &in.Operations, &out.Operations
 		*out = make([]OperationSpec, len(*in))
@@ -291,6 +296,11 @@ func (in *AerospikeClusterStatusSpec) DeepCopyInto(out *AerospikeClusterStatusSp
 	}
 	if in.EnableRackIDOverride != nil {
 		in, out := &in.EnableRackIDOverride, &out.EnableRackIDOverride
+		*out = new(bool)
+		**out = **in
+	}
+	if in.IgnoreSidecarFailure != nil {
+		in, out := &in.IgnoreSidecarFailure, &out.IgnoreSidecarFailure
 		*out = new(bool)
 		**out = **in
 	}
