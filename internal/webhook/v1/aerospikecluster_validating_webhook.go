@@ -586,14 +586,12 @@ func warnOperatorClientCertSecretNamespace(spec *asdbv1.AerospikeOperatorClientC
 
 	var warnings admission.Warnings
 
-	//nolint:staticcheck // SA1019: intentionally read deprecated SecretNamespace to emit admission warning
 	if spec.SecretCertSource.SecretNamespace != "" {
 		warnings = append(warnings,
 			"operatorClientCert.secretCertSource.secretNamespace is deprecated: use secrets in the same"+
 				" namespace as the AerospikeCluster. Omit this field. This will be removed in future versions.")
 	}
 
-	//nolint:staticcheck // SA1019: intentionally read deprecated SecretNamespace to emit admission warning
 	if spec.SecretCertSource.CaCertsSource != nil && spec.SecretCertSource.CaCertsSource.SecretNamespace != "" {
 		warnings = append(warnings,
 			"operatorClientCert.secretCertSource.caCertsSource.secretNamespace is deprecated: use secrets in"+
@@ -606,7 +604,7 @@ func warnOperatorClientCertSecretNamespace(spec *asdbv1.AerospikeOperatorClientC
 // warnValidationPolicySkipXdrDlogFileValidate returns an admission warning when the deprecated
 // skipXdrDlogFileValidate field is set. This field is no longer in use and will be removed in future versions.
 func warnValidationPolicySkipXdrDlogFileValidate(validationPolicy *asdbv1.ValidationPolicySpec) admission.Warnings {
-	//nolint:staticcheck // SA1019: intentionally read deprecated SkipXdrDlogFileValidate to emit admission warning
+
 	if validationPolicy == nil || !validationPolicy.SkipXdrDlogFileValidate {
 		return nil
 	}
