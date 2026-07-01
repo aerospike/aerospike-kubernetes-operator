@@ -46,6 +46,18 @@ func (r *SingleClusterReconciler) waitForMultipleNodesSafeStopReady(
 		return common.ReconcileSuccess()
 	}
 
+	// Wait for all non-ignorable pods to have their Aerospike server containers
+	// running before making any cluster-level info calls. This replaces the old
+	// waitForAllSTSToBeReady pre-check (which required full pod readiness
+	// including sidecars). Server-only readiness is sufficient here — sidecar
+	// failures do not prevent the server from accepting info calls. The wait
+	// uses the same blocking-retry semantics (up to 18×10s) so that a pod which
+	// was just restarted in a previous batch has time to bring its server up
+	// before we attempt the migration/quiesce checks.
+	if err := r.waitForAllAerospikeServersRunning(ignorablePodNames); err != nil {
+		return common.ReconcileError(fmt.Errorf("waiting for all server containers to be running: %v", err))
+	}
+
 	// This doesn't make actual connection, only objects having connection info are created
 	allHostConns, err := r.newAllHostConnWithOption(ignorablePodNames)
 	if err != nil {

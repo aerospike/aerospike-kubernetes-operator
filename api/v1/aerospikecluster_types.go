@@ -190,8 +190,8 @@ type AerospikeClusterSpec struct { //nolint:govet // for readability
 	// +optional
 	Paused *bool `json:"paused,omitempty"`
 
-	// IgnoreSidecarFailure controls whether reconciliation is blocked when a sidecar
-	// container is failing but the Aerospike server container is still running.
+	// IgnoreSidecarFailure controls whether cluster operations are blocked when a
+	// sidecar container is failing but the Aerospike server container is still running.
 	// +operator-sdk:csv:customresourcedefinitions:type=spec,displayName="Ignore Sidecar Failure"
 	// +optional
 	IgnoreSidecarFailure *bool `json:"ignoreSidecarFailure,omitempty"`
@@ -991,9 +991,8 @@ type AerospikeClusterStatusSpec struct { //nolint:govet // for readability
 	// +optional
 	EnableRackIDOverride *bool `json:"enableRackIDOverride,omitempty"`
 
-	// IgnoreSidecarFailure controls whether the reconciler is blocked when a
-	// sidecar container is failing but the Aerospike server container is still
-	// running.
+	// IgnoreSidecarFailure controls whether cluster operations are blocked when a
+	// sidecar container is failing but the Aerospike server container is still running.
 	// +optional
 	IgnoreSidecarFailure *bool `json:"ignoreSidecarFailure,omitempty"`
 
