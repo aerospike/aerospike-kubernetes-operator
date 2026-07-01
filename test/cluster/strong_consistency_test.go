@@ -305,6 +305,69 @@ var _ = Describe("SCMode", func() {
 
 			Expect(DeployCluster(k8sClient, ctx, aeroCluster)).ToNot(HaveOccurred())
 		})
+
+		It("Should persist data in in-memory SC namespace with persistent storage after pod restart", func() {
+			sc1Path := "/test/dev/" + sc1Name
+
+			By("Deploy single-node SC cluster with in-memory + persistent namespace (RF=1)")
+
+			aeroCluster := createDummyAerospikeCluster(clusterNamespacedName, 1)
+			aeroCluster.Spec.Storage.Volumes = append(
+				aeroCluster.Spec.Storage.Volumes, getStorageVolumeForAerospike(sc1Name, sc1Path))
+
+			aeroCluster.Spec.AerospikeConfig = &asdbv1.AerospikeConfigSpec{
+				Value: map[string]interface{}{
+					asdbv1.ConfKeyService: map[string]interface{}{
+						"feature-key-file": "/etc/aerospike/secret/features.conf",
+						"proto-fd-max":     defaultProtofdmax,
+					},
+					asdbv1.ConfKeySecurity: map[string]interface{}{},
+					asdbv1.ConfKeyNetwork:  getNetworkConfig(),
+					asdbv1.ConfKeyNamespace: []interface{}{
+						map[string]interface{}{
+							"name":               sc1Name,
+							"replication-factor": 1,
+							"strong-consistency": true,
+							"storage-engine": map[string]interface{}{
+								"type":    "memory",
+								"devices": []interface{}{sc1Path},
+							},
+						},
+					},
+				},
+			}
+
+			Expect(DeployCluster(k8sClient, ctx, aeroCluster)).ToNot(HaveOccurred())
+
+			By("Write data to the cluster")
+
+			aeroCluster, err := getCluster(k8sClient, ctx, clusterNamespacedName)
+			Expect(err).ToNot(HaveOccurred())
+
+			Expect(WriteDataToCluster(aeroCluster, k8sClient, []string{sc1Name})).ToNot(HaveOccurred())
+
+			By("Delete the pod and wait for it to restart")
+
+			podList, err := getClusterPodList(k8sClient, ctx, aeroCluster)
+			Expect(err).ToNot(HaveOccurred())
+			Expect(podList.Items).ToNot(BeEmpty())
+
+			pod := podList.Items[0]
+			Expect(k8sClient.Delete(ctx, &pod)).ToNot(HaveOccurred())
+
+			started := waitForPod(utils.GetNamespacedName(&pod))
+			Expect(started).To(BeTrue(), "pod was not able to come online in time")
+
+			By("Verify data persisted across pod restart")
+
+			aeroCluster, err = getCluster(k8sClient, ctx, clusterNamespacedName)
+			Expect(err).ToNot(HaveOccurred())
+
+			records, err := CheckDataInCluster(aeroCluster, k8sClient, []string{sc1Name})
+			Expect(err).ToNot(HaveOccurred())
+			Expect(records[sc1Name]).To(BeTrue(), "data should be present after pod restart — "+
+				"devices provide durability even with in-memory storage engine")
+		})
 	})
 
 	Context("When doing invalid operation", func() {
@@ -403,7 +466,7 @@ var _ = Describe("SCMode", func() {
 			Expect(DeployCluster(k8sClient, ctx, aeroCluster)).To(HaveOccurred())
 		})
 
-		It("Should not allow in-memory sc namespace", func() {
+		It("Should not allow in-memory sc namespace without persistent storage", func() {
 			aeroCluster := createDummyAerospikeCluster(clusterNamespacedName, 3)
 			racks := getDummyRackConf(1)
 
