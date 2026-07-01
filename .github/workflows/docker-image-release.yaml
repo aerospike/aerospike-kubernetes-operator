@@ -87,7 +87,7 @@ jobs:
           egress-policy: audit
 
       - name: Install preflight
-        uses: redhat-actions/openshift-tools-installer@v1
+        uses: redhat-actions/openshift-tools-installer@144527c7d98999f2652264c048c7a9bd103f8a82 # v1.13.1
         with:
           source: "github"
           github_pat: ${{ github.token }}
