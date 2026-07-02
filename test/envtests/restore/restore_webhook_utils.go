@@ -186,6 +186,8 @@ func minimalTimestampRestoreConfigMap() map[string]interface{} {
 
 func restoreConfigBytes(restoreType asdbv1beta1.RestoreType) []byte {
 	switch restoreType {
+	case asdbv1beta1.Full, asdbv1beta1.Incremental:
+		return marshalConfig(minimalRestoreConfigMap())
 	case asdbv1beta1.Timestamp:
 		return marshalConfig(minimalTimestampRestoreConfigMap())
 	default:
@@ -193,7 +195,10 @@ func restoreConfigBytes(restoreType asdbv1beta1.RestoreType) []byte {
 	}
 }
 
-func newRestore(restoreNsNm, absNsNm types.NamespacedName, restoreType asdbv1beta1.RestoreType) *asdbv1beta1.AerospikeRestore {
+func newRestore(
+	restoreNsNm, absNsNm types.NamespacedName,
+	restoreType asdbv1beta1.RestoreType,
+) *asdbv1beta1.AerospikeRestore {
 	return &asdbv1beta1.AerospikeRestore{
 		ObjectMeta: metav1.ObjectMeta{
 			Name:      restoreNsNm.Name,

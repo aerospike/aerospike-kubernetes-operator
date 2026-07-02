@@ -180,7 +180,7 @@ func configureEnvtestKubeconfig() error {
 	}
 
 	kubeconfigRel = "envtest-kubeconfig-" + hex.EncodeToString(buf[:]) + ".yaml"
-	if err = root.WriteFile(kubeconfigRel, testEnv.KubeConfig, 0o600); err != nil {
+	if err := root.WriteFile(kubeconfigRel, testEnv.KubeConfig, 0o600); err != nil {
 		return err
 	}
 
