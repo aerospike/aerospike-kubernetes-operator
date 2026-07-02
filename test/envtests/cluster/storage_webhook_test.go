@@ -22,6 +22,7 @@ import (
 	"github.com/aerospike/aerospike-kubernetes-operator/v4/test/testutil"
 	. "github.com/onsi/ginkgo/v2"
 	. "github.com/onsi/gomega"
+	corev1 "k8s.io/api/core/v1"
 	"k8s.io/apimachinery/pkg/types"
 	"k8s.io/utils/ptr"
 
@@ -108,6 +109,65 @@ var _ = Describe("Storage webhook validation", func() {
 					}
 
 					Expect(envtests.K8sClient.Create(ctx, aeroCluster)).To(Succeed())
+				})
+			})
+		})
+
+		Context("spec.storage volumes (PersistentVolumeSpec)", func() {
+			Context("negative", func() {
+				It("rejects invalid volumeMode (Enum)", func() {
+					aeroCluster := testCluster.CreateDummyAerospikeCluster(nsName, 1)
+
+					for i := range aeroCluster.Spec.Storage.Volumes {
+						if aeroCluster.Spec.Storage.Volumes[i].Source.PersistentVolume != nil {
+							aeroCluster.Spec.Storage.Volumes[i].Source.PersistentVolume.VolumeMode =
+								corev1.PersistentVolumeMode("NotBlockOrFilesystem")
+
+							break
+						}
+					}
+
+					err := envtests.K8sClient.Create(ctx, aeroCluster)
+					Expect(err).To(HaveOccurred())
+					envtests.NewStatusErrorMatcher().
+						WithMessageSubstrings(testutil.CRDSchemaErrorPrefix, "volumeMode").
+						Validate(err)
+				})
+
+				It("rejects accessMode not in allowed enum (items:Enum)", func() {
+					aeroCluster := testCluster.CreateDummyAerospikeCluster(nsName, 1)
+
+					for i := range aeroCluster.Spec.Storage.Volumes {
+						if aeroCluster.Spec.Storage.Volumes[i].Source.PersistentVolume != nil {
+							aeroCluster.Spec.Storage.Volumes[i].Source.PersistentVolume.AccessModes = []corev1.PersistentVolumeAccessMode{
+								corev1.ReadWriteOncePod,
+							}
+
+							break
+						}
+					}
+
+					err := envtests.K8sClient.Create(ctx, aeroCluster)
+					Expect(err).To(HaveOccurred())
+					envtests.NewStatusErrorMatcher().
+						WithMessageSubstrings(testutil.CRDSchemaErrorPrefix, "accessModes").
+						Validate(err)
+				})
+			})
+		})
+
+		Context("spec.storage volume policy initMethod (Enum)", func() {
+			Context("negative", func() {
+				It("rejects invalid block volume InputInitMethod", func() {
+					aeroCluster := testCluster.CreateDummyAerospikeCluster(nsName, 1)
+					bad := asdbv1.AerospikeVolumeMethod("notARealMethod")
+					aeroCluster.Spec.Storage.BlockVolumePolicy.InputInitMethod = &bad
+
+					err := envtests.K8sClient.Create(ctx, aeroCluster)
+					Expect(err).To(HaveOccurred())
+					envtests.NewStatusErrorMatcher().
+						WithMessageSubstrings(testutil.CRDSchemaErrorPrefix, "initMethod").
+						Validate(err)
 				})
 			})
 		})
