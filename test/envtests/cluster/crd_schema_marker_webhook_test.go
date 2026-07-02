@@ -409,4 +409,36 @@ var _ = Describe("CRD schema marker validation", func() {
 			})
 		})
 	})
+
+	Context("Update validation", func() {
+		Context("spec.rackConfig.racks[].id", func() {
+			Context("negative", func() {
+				It("rejects out-of-range rack id on update (Maximum)", func() {
+					nsName = uniqueNamespacedName("crd-rack-id-max-update")
+					aeroCluster := testCluster.CreateDummyAerospikeCluster(nsName, 2)
+					aeroCluster.Spec.RackConfig = asdbv1.RackConfig{
+						Racks: []asdbv1.Rack{
+							{ID: 1},
+							{ID: 2},
+						},
+					}
+					Expect(envtests.K8sClient.Create(ctx, aeroCluster)).To(Succeed())
+
+					current, err := testCluster.GetCluster(envtests.K8sClient, ctx, nsName)
+					Expect(err).ToNot(HaveOccurred())
+
+					current.Spec.RackConfig.Racks = append(
+						current.Spec.RackConfig.Racks,
+						asdbv1.Rack{ID: 20000000000},
+					)
+
+					err = envtests.K8sClient.Update(ctx, current)
+					Expect(err).To(HaveOccurred())
+					envtests.NewStatusErrorMatcher().
+						WithMessageSubstrings(testutil.CRDSchemaErrorPrefix, "id").
+						Validate(err)
+				})
+			})
+		})
+	})
 })
