@@ -215,7 +215,9 @@ func (r *SingleClusterReconciler) createEmptyRack(rackState *RackState) (
 		)
 
 		// Delete statefulset and everything related so that it can be properly created and updated in next run
-		_ = r.deleteSTS(found)
+		if found != nil {
+			_ = r.deleteSTS(found)
+		}
 
 		return nil, common.ReconcileError(err)
 	}
