@@ -70,6 +70,8 @@ func (pp fromSecretPasswordProvider) GetDefaultPassword(ctx context.Context, spe
 
 	password, err := pp.getPasswordFromSecret(ctx, secretName, passwordFileName)
 	if err != nil {
+		// TODO: Refactor per KO-379 §2.5 — return wrapped error instead of log-and-continue;
+		// let reconcile defer log once (separate ticket).
 		pkgLog.Error(err, "Failed to get password from secret",
 			"secret", klog.KRef(pp.namespace, secretName),
 		)
@@ -106,6 +108,8 @@ func (r *SingleClusterReconciler) getPasswordProvider() fromSecretPasswordProvid
 	}
 }
 
+// TODO: Refactor per KO-379 §2.5 — return (*as.ClientPolicy, error), build/cache once per
+// reconcile, and remove log.Error here so defer logs each failure once (separate ticket).
 func (r *SingleClusterReconciler) getClientPolicy(ctx context.Context) *as.ClientPolicy {
 	policy := as.NewClientPolicy()
 
@@ -193,6 +197,8 @@ func (r *SingleClusterReconciler) getClientPolicy(ctx context.Context) *as.Clien
 	return policy
 }
 
+// TODO: Refactor per KO-379 §2.5 — return wrapped errors instead of log-and-continue
+// (separate ticket; called from getClientPolicy on every reconcile pass).
 func (r *SingleClusterReconciler) getClusterServerCAPool(
 	ctx context.Context,
 	clientCertSpec *asdbv1.AerospikeOperatorClientCertSpec,
@@ -238,6 +244,8 @@ func (r *SingleClusterReconciler) getClusterServerCAPool(
 	}
 }
 
+// TODO: Refactor per KO-379 §2.5 — return wrapped errors instead of log-and-continue
+// (separate ticket; called from getClientPolicy on every reconcile pass).
 func (r *SingleClusterReconciler) appendCACertFromFileOrPath(
 	caPath string, serverPool *x509.CertPool,
 ) *x509.CertPool {
@@ -285,6 +293,8 @@ func (r *SingleClusterReconciler) appendCACertFromFileOrPath(
 	return serverPool
 }
 
+// TODO: Refactor per KO-379 §2.5 — return wrapped errors instead of log-and-continue
+// (separate ticket; called from getClientPolicy on every reconcile pass).
 func (r *SingleClusterReconciler) appendCACertFromSecret(
 	ctx context.Context,
 	secretSource *asdbv1.AerospikeSecretCertSource,
