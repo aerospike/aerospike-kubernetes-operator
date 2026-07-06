@@ -47,7 +47,7 @@ func (r *SingleClusterReconciler) reconcileRacks(ctx context.Context) common.Rec
 		return common.ReconcileError(err)
 	}
 
-	ignorablePodNames, err := r.getIgnorablePods(ctx, racksToDelete, configuredRacks, revisionChangedRacks)
+	ignorablePodNames, err := r.getIgnorablePods(ctx, racksToDelete, configuredRacks)
 	if err != nil {
 		return common.ReconcileError(err)
 	}

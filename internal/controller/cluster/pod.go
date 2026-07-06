@@ -1087,7 +1087,6 @@ func (r *SingleClusterReconciler) cleanupDanglingPodsRack(
 // are ignored from stability checks.
 func (r *SingleClusterReconciler) getIgnorablePods(
 	ctx context.Context, racksToDelete []asdbv1.Rack, configuredRacks []RackState,
-	revisionChangedRacks map[int]revisionChangedRack,
 ) (sets.Set[string], error) {
 	ignorablePodNames := sets.Set[string]{}
 	ignorableRackIDs := sets.Set[int]{}
@@ -1109,34 +1108,6 @@ func (r *SingleClusterReconciler) getIgnorablePods(
 		}
 
 		ignorableRackIDs.Insert(ignorableRacks[rackIdx].ID)
-	}
-
-	// Handle failed pods from old revisions of revision-changed racks
-	for rackID, revisionChangedRackInfo := range revisionChangedRacks {
-		oldRackState := revisionChangedRackInfo.oldRack
-		r.Log.Info("Checking old revision failed pods for revision-changed rack",
-			"rackID", rackID, "oldRevision", oldRackState.Rack.Revision)
-
-		oldPodList, err := r.getRackPodList(ctx, oldRackState.Rack.ID, oldRackState.Rack.Revision)
-		if err != nil {
-			return nil, err
-		}
-
-		var oldFailedPods []string
-
-		for podIdx := range oldPodList.Items {
-			pod := oldPodList.Items[podIdx]
-			if !utils.IsPodRunningAndReady(&pod) {
-				oldFailedPods = append(oldFailedPods, pod.Name)
-				ignorablePodNames.Insert(pod.Name)
-			}
-		}
-
-		if len(oldFailedPods) > 0 {
-			r.Log.Info("Adding old revision failed pods to ignore list (will be replaced)",
-				"rackID", oldRackState.Rack.ID, "oldRevision", oldRackState.Rack.Revision,
-				"failedPods", oldFailedPods)
-		}
 	}
 
 	for idx := range configuredRacks {

@@ -186,7 +186,7 @@ func (r *SingleClusterReconciler) Reconcile(ctx context.Context) (result ctrl.Re
 		return reconcile.Result{}, recErr
 	}
 
-	ignorablePodNames, err := r.getIgnorablePods(ctx, nil, getConfiguredRackStateList(r.aeroCluster), nil)
+	ignorablePodNames, err := r.getIgnorablePods(ctx, nil, getConfiguredRackStateList(r.aeroCluster))
 	if err != nil {
 		recErr = fmt.Errorf(
 			"could not determine pods to be ignored for cluster %s: %w",
@@ -879,9 +879,9 @@ func (r *SingleClusterReconciler) recoverFailedCreate(ctx context.Context) error
 			newPodNames = append(newPodNames, pods.Items[podIdx].Name)
 		}
 
-		if err := r.cleanupPods(ctx, newPodNames, &state); err != nil {
+		if err := r.cleanupPodMeshAndStatus(ctx, newPodNames); err != nil {
 			return fmt.Errorf(
-				"cleaning up pods for rack %d while recovering cluster %s after create failure: %w",
+				"cleaning up pod mesh and status for rack %d while recovering cluster %s after create failure: %w",
 				state.Rack.ID, utils.ClusterNamespacedName(r.aeroCluster), err,
 			)
 		}
