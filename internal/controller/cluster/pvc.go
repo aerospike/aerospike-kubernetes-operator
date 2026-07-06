@@ -90,7 +90,7 @@ func (r *SingleClusterReconciler) removePVCsAsync(
 
 			if err := r.Delete(ctx, &pvc); err != nil {
 				return nil, fmt.Errorf(
-					"could not delete pvc %s: %w", utils.NamespacedName(pvc.Namespace, pvc.Name), err,
+					"delete PVC %s: %w", utils.NamespacedName(pvc.Namespace, pvc.Name), err,
 				)
 			}
 
@@ -134,7 +134,7 @@ func (r *SingleClusterReconciler) deleteLocalPVCs(ctx context.Context, rackState
 			if err := r.Delete(ctx, &pvcItems[idx]); err != nil {
 				if !errors.IsNotFound(err) {
 					return fmt.Errorf(
-						"could not delete pvc %s: %w",
+						"delete PVC %s: %w",
 						utils.NamespacedName(pvcItems[idx].Namespace, pvcItems[idx].Name), err,
 					)
 				}

@@ -101,7 +101,7 @@ func (r *SingleClusterReconciler) Reconcile(ctx context.Context) (result ctrl.Re
 	// The cluster is not being deleted, add finalizer if not added already
 	if err := r.addFinalizer(ctx, finalizerName); err != nil {
 		recErr = fmt.Errorf(
-			"could not add finalizer for cluster %s: %w",
+			"add finalizer for cluster %s: %w",
 			utils.ClusterNamespacedName(r.aeroCluster), err,
 		)
 
@@ -134,7 +134,7 @@ func (r *SingleClusterReconciler) Reconcile(ctx context.Context) (result ctrl.Re
 		)
 
 		recErr = fmt.Errorf(
-			"could not create or update headless Service for cluster %s: %w",
+			"create or update headless Service for cluster %s: %w",
 			utils.ClusterNamespacedName(r.aeroCluster), err,
 		)
 
@@ -164,7 +164,7 @@ func (r *SingleClusterReconciler) Reconcile(ctx context.Context) (result ctrl.Re
 		)
 
 		recErr = fmt.Errorf(
-			"could not reconcile PodDisruptionBudget for cluster %s: %w",
+			"reconcile PodDisruptionBudget for cluster %s: %w",
 			utils.ClusterNamespacedName(r.aeroCluster), err,
 		)
 
@@ -179,7 +179,7 @@ func (r *SingleClusterReconciler) Reconcile(ctx context.Context) (result ctrl.Re
 		)
 
 		recErr = fmt.Errorf(
-			"could not reconcile LoadBalancer Service for cluster %s: %w",
+			"reconcile LoadBalancer Service for cluster %s: %w",
 			utils.ClusterNamespacedName(r.aeroCluster), err,
 		)
 
@@ -189,7 +189,7 @@ func (r *SingleClusterReconciler) Reconcile(ctx context.Context) (result ctrl.Re
 	ignorablePodNames, err := r.getIgnorablePods(ctx, nil, getConfiguredRackStateList(r.aeroCluster))
 	if err != nil {
 		recErr = fmt.Errorf(
-			"could not determine pods to be ignored for cluster %s: %w",
+			"determine ignorable pods for cluster %s: %w",
 			utils.ClusterNamespacedName(r.aeroCluster), err,
 		)
 
@@ -201,7 +201,7 @@ func (r *SingleClusterReconciler) Reconcile(ctx context.Context) (result ctrl.Re
 	allHostConns, err := r.newAllHostConnWithOption(ctx, ignorablePodNames)
 	if err != nil {
 		e := fmt.Errorf(
-			"could not get host connections for cluster %s nodes: %w", utils.ClusterNamespacedName(r.aeroCluster), err,
+			"get host connections for cluster %s nodes: %w", utils.ClusterNamespacedName(r.aeroCluster), err,
 		)
 
 		recErr = e
@@ -214,7 +214,7 @@ func (r *SingleClusterReconciler) Reconcile(ctx context.Context) (result ctrl.Re
 		r.getClientPolicy(ctx), allHostConns,
 	); err != nil {
 		recErr = fmt.Errorf(
-			"could not undo quiesce state for cluster %s: %w",
+			"undo quiesce state for cluster %s: %w",
 			utils.ClusterNamespacedName(r.aeroCluster), err,
 		)
 
@@ -231,7 +231,7 @@ func (r *SingleClusterReconciler) Reconcile(ctx context.Context) (result ctrl.Re
 		)
 
 		recErr = fmt.Errorf(
-			"could not reconcile access control for cluster %s: %w",
+			"reconcile access control for cluster %s: %w",
 			utils.ClusterNamespacedName(r.aeroCluster), err,
 		)
 
@@ -250,7 +250,7 @@ func (r *SingleClusterReconciler) Reconcile(ctx context.Context) (result ctrl.Re
 	); !res.IsSuccess {
 		if res.Err != nil {
 			recErr = fmt.Errorf(
-				"could not revert migrate-fill-delay for cluster %s: %w",
+				"revert migrate-fill-delay for cluster %s: %w",
 				utils.ClusterNamespacedName(r.aeroCluster), res.Err,
 			)
 		}
@@ -265,7 +265,7 @@ func (r *SingleClusterReconciler) Reconcile(ctx context.Context) (result ctrl.Re
 			policy, allHostConns,
 		); err != nil {
 			recErr = fmt.Errorf(
-				"could not run recluster for cluster %s: %w",
+				"run recluster for cluster %s: %w",
 				utils.ClusterNamespacedName(r.aeroCluster), err,
 			)
 
@@ -285,7 +285,7 @@ func (r *SingleClusterReconciler) Reconcile(ctx context.Context) (result ctrl.Re
 		// Setup roster
 		if err = r.getAndSetRoster(ctx, policy, r.aeroCluster.Spec.RosterNodeBlockList, ignorablePodNames); err != nil {
 			recErr = fmt.Errorf(
-				"could not set roster for cluster %s: %w",
+				"set roster for cluster %s: %w",
 				utils.ClusterNamespacedName(r.aeroCluster), err,
 			)
 
@@ -302,7 +302,7 @@ func (r *SingleClusterReconciler) Reconcile(ctx context.Context) (result ctrl.Re
 		)
 
 		recErr = fmt.Errorf(
-			"could not update AerospikeCluster status for cluster %s: %w",
+			"update AerospikeCluster status for cluster %s: %w",
 			utils.ClusterNamespacedName(r.aeroCluster), err,
 		)
 
@@ -362,7 +362,7 @@ func (r *SingleClusterReconciler) recoverIgnorablePods(
 	podList, gErr := r.getClusterPodList(ctx)
 	if gErr != nil {
 		return common.ReconcileError(fmt.Errorf(
-			"could not list pods for cluster %s: %w",
+			"list pods for cluster %s: %w",
 			utils.ClusterNamespacedName(r.aeroCluster), gErr,
 		))
 	}
@@ -400,7 +400,7 @@ func (r *SingleClusterReconciler) recoverIgnorablePods(
 
 				if err := r.Delete(ctx, &podList.Items[idx]); err != nil {
 					return common.ReconcileError(fmt.Errorf(
-						"could not delete pod %s: %w",
+						"delete pod %s: %w",
 						utils.GetNamespacedNameString(&podList.Items[idx]), err,
 					))
 				}
@@ -469,7 +469,7 @@ func (r *SingleClusterReconciler) validateAndReconcileAccessControl(
 	aeroClient, err := as.NewClientWithPolicyAndHost(clientPolicy, hosts...)
 	if err != nil {
 		return fmt.Errorf(
-			"could not create Aerospike client for cluster %s: %w",
+			"create Aerospike client for cluster %s: %w",
 			utils.ClusterNamespacedName(r.aeroCluster), err,
 		)
 	}
@@ -553,7 +553,7 @@ func (r *SingleClusterReconciler) updateStatus(ctx context.Context) error {
 
 	err = r.patchStatus(ctx, newAeroCluster)
 	if err != nil {
-		return fmt.Errorf("error updating status: %w", err)
+		return fmt.Errorf("update status: %w", err)
 	}
 
 	r.aeroCluster = newAeroCluster
@@ -579,7 +579,7 @@ func (r *SingleClusterReconciler) setStatusPhase(ctx context.Context, phase asdb
 			return r.Client.Status().Update(context.Background(), r.aeroCluster)
 		}); err != nil {
 			return fmt.Errorf(
-				"could not set cluster status phase to %s for cluster %s: %w",
+				"set cluster status phase to %s for cluster %s: %w",
 				phase, utils.ClusterNamespacedName(r.aeroCluster), err,
 			)
 		}
@@ -641,7 +641,7 @@ func (r *SingleClusterReconciler) updateAccessControlStatus(ctx context.Context)
 	newAeroCluster.Status.AerospikeAccessControl = statusAerospikeAccessControl
 
 	if err := r.patchStatus(ctx, newAeroCluster); err != nil {
-		return fmt.Errorf("error updating status: %w", err)
+		return fmt.Errorf("update access control status: %w", err)
 	}
 
 	r.Log.V(2).Info("Updated access control status", "status", newAeroCluster.Status)
@@ -669,7 +669,7 @@ func (r *SingleClusterReconciler) createStatus(ctx context.Context) error {
 	if err := r.Client.Status().Update(
 		ctx, newAeroCluster,
 	); err != nil {
-		return fmt.Errorf("error creating status: %w", err)
+		return fmt.Errorf("create status: %w", err)
 	}
 
 	return nil
@@ -750,17 +750,17 @@ func (r *SingleClusterReconciler) patchStatus(ctx context.Context, newAeroCluste
 
 	oldJSON, err := json.Marshal(oldAeroCluster)
 	if err != nil {
-		return fmt.Errorf("error marshalling old status: %w", err)
+		return fmt.Errorf("marshal old status: %w", err)
 	}
 
 	newJSON, err := json.Marshal(newAeroCluster)
 	if err != nil {
-		return fmt.Errorf("error marshalling new status: %w", err)
+		return fmt.Errorf("marshal new status: %w", err)
 	}
 
 	jsonPatchPatch, err := jsonpatch.CreatePatch(oldJSON, newJSON)
 	if err != nil {
-		return fmt.Errorf("error creating json patch: %w", err)
+		return fmt.Errorf("create JSON patch: %w", err)
 	}
 
 	// Pick changes to the status object only.
@@ -790,7 +790,7 @@ func (r *SingleClusterReconciler) patchStatus(ctx context.Context, newAeroCluste
 
 	jsonPatchJSON, err := json.Marshal(filteredPatch)
 	if err != nil {
-		return fmt.Errorf("error marshalling json patch: %w", err)
+		return fmt.Errorf("marshal JSON patch: %w", err)
 	}
 
 	patch := client.RawPatch(types.JSONPatchType, jsonPatchJSON)
@@ -802,7 +802,7 @@ func (r *SingleClusterReconciler) patchStatus(ctx context.Context, newAeroCluste
 		}}, patch,
 		client.FieldOwner(patchFieldOwner),
 	); err != nil {
-		return fmt.Errorf("error patching status: %w", err)
+		return fmt.Errorf("patch status: %w", err)
 	}
 
 	// FIXME: Json unmarshal used by above client.Status(),
@@ -996,7 +996,7 @@ func (r *SingleClusterReconciler) deleteExternalResources(ctx context.Context) e
 		rackPVCItems, err := r.getRackPVCList(ctx, rack.ID, rack.Revision)
 		if err != nil {
 			return fmt.Errorf(
-				"could not find pvc for rack %d in cluster %s: %w",
+				"find PVCs for rack %d in cluster %s: %w",
 				rack.ID, utils.ClusterNamespacedName(r.aeroCluster), err,
 			)
 		}
@@ -1004,7 +1004,7 @@ func (r *SingleClusterReconciler) deleteExternalResources(ctx context.Context) e
 		storage := rack.Storage
 		if _, err := r.removePVCsAsync(ctx, &storage, rackPVCItems); err != nil {
 			return fmt.Errorf(
-				"could not remove PVCs for rack %d in cluster %s: %w",
+				"remove PVCs for rack %d in cluster %s: %w",
 				rack.ID, utils.ClusterNamespacedName(r.aeroCluster), err,
 			)
 		}
@@ -1058,7 +1058,7 @@ func (r *SingleClusterReconciler) handleClusterDeletion(ctx context.Context, fin
 	// The cluster is being deleted
 	if err := r.cleanUpAndRemoveFinalizer(ctx, finalizerName); err != nil {
 		return fmt.Errorf(
-			"could not finish cluster deletion (remove finalizer) for cluster %s: %w",
+			"remove finalizer for cluster %s: %w",
 			utils.ClusterNamespacedName(r.aeroCluster), err,
 		)
 	}
@@ -1069,7 +1069,7 @@ func (r *SingleClusterReconciler) handleClusterDeletion(ctx context.Context, fin
 func (r *SingleClusterReconciler) checkPreviouslyFailedCluster(ctx context.Context) (bool, common.ReconcileResult) {
 	isNew, err := r.isNewCluster(ctx)
 	if err != nil {
-		return false, common.ReconcileError(fmt.Errorf("error determining if cluster is new: %w", err))
+		return false, common.ReconcileError(fmt.Errorf("determine if cluster is new: %w", err))
 	}
 
 	if isNew {
@@ -1086,7 +1086,7 @@ func (r *SingleClusterReconciler) checkPreviouslyFailedCluster(ctx context.Conte
 
 		hasFailed, inGracePeriod, err := r.hasClusterFailed(ctx)
 		if err != nil {
-			return false, common.ReconcileError(fmt.Errorf("error determining if cluster has failed: %w", err))
+			return false, common.ReconcileError(fmt.Errorf("determine if cluster has failed: %w", err))
 		}
 
 		if hasFailed {
@@ -1138,7 +1138,7 @@ func (r *SingleClusterReconciler) migrateAerospikeCluster(ctx context.Context, h
 
 		if err := r.migrateInitialisedVolumeNames(ctx); err != nil {
 			return fmt.Errorf(
-				"could not patch initialised volumes for cluster %s: %w",
+				"patch initialised volumes for cluster %s: %w",
 				utils.ClusterNamespacedName(r.aeroCluster), err,
 			)
 		}
@@ -1146,7 +1146,7 @@ func (r *SingleClusterReconciler) migrateAerospikeCluster(ctx context.Context, h
 
 	if err := r.AddAPIVersionLabel(ctx); err != nil {
 		return fmt.Errorf(
-			"could not patch API version label for cluster %s: %w",
+			"patch API version label for cluster %s: %w",
 			utils.ClusterNamespacedName(r.aeroCluster), err,
 		)
 	}

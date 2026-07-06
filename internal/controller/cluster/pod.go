@@ -79,7 +79,7 @@ func (r *SingleClusterReconciler) getRollingRestartTypeMap(
 	pods, err := r.getOrderedRackPodList(ctx, rackState.Rack.ID, rackState.Rack.Revision)
 	if err != nil {
 		return nil, nil, fmt.Errorf(
-			"could not list pods for rack %d in cluster %s: %w",
+			"list pods for rack %d in cluster %s: %w",
 			rackState.Rack.ID, utils.ClusterNamespacedName(r.aeroCluster), err,
 		)
 	}
@@ -364,7 +364,7 @@ func (r *SingleClusterReconciler) rollingRestartPods(
 			); !res.IsSuccess {
 				if res.Err != nil {
 					res.Err = fmt.Errorf(
-						"could not revert migrate-fill-delay for rack %d before restarting the running pods: %w",
+						"revert migrate-fill-delay for rack %d before restarting running pods: %w",
 						rackState.Rack.ID, res.Err,
 					)
 				}
@@ -410,7 +410,7 @@ func (r *SingleClusterReconciler) restartASDOrUpdateAerospikeConf(podName string
 	rackID, rackRevision, err := utils.GetRackIDAndRevisionFromPodName(r.aeroCluster.Name, podName)
 	if err != nil {
 		return fmt.Errorf(
-			"unable to get rackID for the pod %s: %w", utils.NamespacedName(r.aeroCluster.Namespace, podName), err,
+			"get rack ID for pod %s: %w", utils.NamespacedName(r.aeroCluster.Namespace, podName), err,
 		)
 	}
 
@@ -525,7 +525,7 @@ func (r *SingleClusterReconciler) restartPods(
 			// We assume that the pod server image supports pod warm restart.
 			if err := r.restartASDOrUpdateAerospikeConf(pod.Name, quickRestart); err != nil {
 				return common.ReconcileError(fmt.Errorf(
-					"could not warm restart pod %s: %w",
+					"warm restart pod %s: %w",
 					utils.NamespacedName(r.aeroCluster.Namespace, pod.Name), err,
 				))
 			}
@@ -915,7 +915,7 @@ func (r *SingleClusterReconciler) cleanupPods(
 	pvcItems, err := r.getPodsPVCList(ctx, podNames, rackState.Rack.ID, rackState.Rack.Revision)
 	if err != nil {
 		return fmt.Errorf(
-			"could not find pvc for pods %s: %w",
+			"find PVCs for pods %s: %w",
 			strings.Join(utils.NamespacedNames(r.aeroCluster.Namespace, podNames), ", "), err,
 		)
 	}
@@ -923,7 +923,7 @@ func (r *SingleClusterReconciler) cleanupPods(
 	storage := rackState.Rack.Storage
 	if err = r.removePVCs(ctx, &storage, pvcItems); err != nil {
 		return fmt.Errorf(
-			"could not cleanup pvcs for pods %s: %w",
+			"clean up PVCs for pods %s: %w",
 			strings.Join(utils.NamespacedNames(r.aeroCluster.Namespace, podNames), ", "), err,
 		)
 	}
@@ -1006,7 +1006,7 @@ func (r *SingleClusterReconciler) cleanupPodMeshAndStatus(ctx context.Context, p
 
 		if err := r.removePodStatus(ctx, needStatusCleanup); err != nil {
 			return fmt.Errorf(
-				"could not cleanup pod status for pods %s: %w",
+				"clean up pod status for pods %s: %w",
 				strings.Join(utils.NamespacedNames(r.aeroCluster.Namespace, needStatusCleanup), ", "), err,
 			)
 		}
@@ -1047,7 +1047,7 @@ func (r *SingleClusterReconciler) cleanupDanglingPodsRack(
 		rackID, rackRevision, err := utils.GetRackIDAndRevisionFromPodName(r.aeroCluster.Name, podName)
 		if err != nil {
 			return fmt.Errorf(
-				"unable to get rackID for the pod %s: %w", utils.NamespacedName(r.aeroCluster.Namespace, podName), err,
+				"get rack ID for pod %s: %w", utils.NamespacedName(r.aeroCluster.Namespace, podName), err,
 			)
 		}
 
@@ -1071,7 +1071,7 @@ func (r *SingleClusterReconciler) cleanupDanglingPodsRack(
 	if len(danglingPods) > 0 {
 		if err := r.cleanupPods(ctx, danglingPods, rackState); err != nil {
 			return fmt.Errorf(
-				"could not complete dangling pod cleanup for pods %s in rack %d for cluster %s: %w",
+				"clean up dangling pods %s in rack %d for cluster %s: %w",
 				strings.Join(utils.NamespacedNames(r.aeroCluster.Namespace, danglingPods), ", "),
 				rackState.Rack.ID, utils.ClusterNamespacedName(r.aeroCluster), err,
 			)
@@ -1649,7 +1649,7 @@ func (r *SingleClusterReconciler) deleteFileStorage(podName, fileName string) er
 			"stdout", stdout, "stderr", stderr,
 		)
 
-		return fmt.Errorf("error deleting file %w", err)
+		return fmt.Errorf("delete file: %w", err)
 	}
 
 	return nil
@@ -1759,7 +1759,7 @@ func (r *SingleClusterReconciler) patchPodStatus(ctx context.Context, patches []
 		if err := r.Client.Status().Patch(
 			ctx, patchedAerospikeCluster, constantPatch, client.FieldOwner("pod"),
 		); err != nil {
-			return fmt.Errorf("error updating status: %w", err)
+			return fmt.Errorf("update status: %w", err)
 		}
 
 		r.Log.Info("Pod status patched successfully")
@@ -1880,7 +1880,7 @@ func (r *SingleClusterReconciler) updateOperationStatus(
 	newAeroCluster.Status.Operations = statusOps
 
 	if err := r.patchStatus(ctx, newAeroCluster); err != nil {
-		return fmt.Errorf("error updating status: %w", err)
+		return fmt.Errorf("update status: %w", err)
 	}
 
 	return nil

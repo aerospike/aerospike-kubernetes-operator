@@ -210,7 +210,7 @@ func (r *SingleClusterReconciler) createSTS(
 
 	if err := r.waitForSTSToBeReady(ctx, st, nil); err != nil {
 		return st, fmt.Errorf(
-			"could not wait until StatefulSet %s is ready: %w", utils.GetNamespacedNameString(st), err,
+			"wait for StatefulSet %s to be ready: %w", utils.GetNamespacedNameString(st), err,
 		)
 	}
 
@@ -297,7 +297,7 @@ func (r *SingleClusterReconciler) waitForSTSToBeReady(
 				pod,
 			); err != nil {
 				return fmt.Errorf(
-					"could not get StatefulSet pod %s: %w", utils.NamespacedName(st.Namespace, podName), err,
+					"get StatefulSet pod %s: %w", utils.NamespacedName(st.Namespace, podName), err,
 				)
 			}
 
@@ -402,7 +402,7 @@ func (r *SingleClusterReconciler) createSTSConfigMap(
 
 			configMapData, err = r.createConfigMapData(ctx, rack)
 			if err != nil {
-				return fmt.Errorf("failed to build dotConfig from map: %w", err)
+				return fmt.Errorf("build dotConfig from map: %w", err)
 			}
 
 			ls := utils.LabelsForAerospikeCluster(r.aeroCluster.Name)
@@ -429,7 +429,7 @@ func (r *SingleClusterReconciler) createSTSConfigMap(
 				ctx, confMap, common.CreateOption,
 			); err != nil {
 				return fmt.Errorf(
-					"could not create ConfigMap %s: %w", namespacedName, err,
+					"create ConfigMap %s: %w", namespacedName, err,
 				)
 			}
 
@@ -490,7 +490,7 @@ func (r *SingleClusterReconciler) updateSTSConfigMap(
 	configMapData, err := r.createConfigMapData(ctx, rack)
 	if err != nil {
 		return fmt.Errorf(
-			"unable to build dotConfig from map for rack %d in cluster %s: %w",
+			"build dotConfig from map for rack %d in cluster %s: %w",
 			rack.ID, utils.ClusterNamespacedName(r.aeroCluster), err,
 		)
 	}
@@ -662,7 +662,7 @@ func (r *SingleClusterReconciler) updateSTS(
 		return r.Update(ctx, found, common.UpdateOption)
 	}); err != nil {
 		return fmt.Errorf(
-			"could not update StatefulSet %s: %w",
+			"update StatefulSet %s: %w",
 			utils.GetNamespacedNameString(statefulSet),
 			err,
 		)
@@ -1212,7 +1212,7 @@ func (r *SingleClusterReconciler) updateAerospikeInitContainerImage(
 
 			if err := r.Update(ctx, statefulSet, common.UpdateOption); err != nil {
 				return fmt.Errorf(
-					"could not update StatefulSet %s: %w",
+					"update StatefulSet %s: %w",
 					utils.GetNamespacedNameString(statefulSet),
 					err,
 				)

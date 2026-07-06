@@ -794,7 +794,7 @@ func (userDrop aerospikeUserDrop) execute(
 	if err := client.DropUser(adminPolicy, userDrop.name); err != nil {
 		if !strings.Contains(err.Error(), userNotFoundErr) {
 			// Failure to drop for the user.
-			return fmt.Errorf("error dropping user %s: %w", userDrop.name, err)
+			return fmt.Errorf("drop user %s: %w", userDrop.name, err)
 		}
 	}
 
@@ -823,7 +823,7 @@ func (roleDrop aerospikeRoleDrop) execute(
 	if err := client.DropRole(adminPolicy, roleDrop.name); err != nil {
 		if !strings.Contains(err.Error(), roleNotFoundErr) {
 			// Failure to drop for the role.
-			return fmt.Errorf("error dropping role %s: %w", roleDrop.name, err)
+			return fmt.Errorf("drop role %s: %w", roleDrop.name, err)
 		}
 	}
 

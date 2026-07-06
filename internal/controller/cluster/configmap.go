@@ -100,7 +100,7 @@ func (r *SingleClusterReconciler) createConfigMapData(ctx context.Context, rack 
 	confTemp, err := r.buildConfigTemplate(rack)
 	if err != nil {
 		return nil, fmt.Errorf(
-			"could not build config template for rack %d in cluster %s: %w",
+			"build config template for rack %d in cluster %s: %w",
 			rack.ID, utils.ClusterNamespacedName(r.aeroCluster), err,
 		)
 	}
@@ -109,7 +109,7 @@ func (r *SingleClusterReconciler) createConfigMapData(ctx context.Context, rack 
 	confData, err := r.getBaseConfData(ctx, rack)
 	if err != nil {
 		return nil, fmt.Errorf(
-			"could not build base config data for rack %d in cluster %s: %w",
+			"build base config data for rack %d in cluster %s: %w",
 			rack.ID, utils.ClusterNamespacedName(r.aeroCluster), err,
 		)
 	}
@@ -228,7 +228,7 @@ func (r *SingleClusterReconciler) buildConfigTemplate(rack *asdbv1.Rack) (
 	asConf, err := asconfig.NewMapAsConfig(r.Log, configMap)
 	if err != nil {
 		return "", fmt.Errorf(
-			"could not load Aerospike config map via management library for rack %d in cluster %s: %w",
+			"load Aerospike config map for rack %d in cluster %s: %w",
 			rack.ID, utils.ClusterNamespacedName(r.aeroCluster), err,
 		)
 	}

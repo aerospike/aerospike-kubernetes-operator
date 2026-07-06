@@ -426,7 +426,7 @@ func (r *SingleClusterReconciler) loadCertAndKeyFromSecret(
 	cert, err := tls.X509KeyPair(crtData, keyData)
 	if err != nil {
 		return nil, fmt.Errorf(
-			"could not load X509 key pair for cluster from secret %+v: %w",
+			"load X509 key pair for cluster from secret %+v: %w",
 			secretName, err,
 		)
 	}
@@ -472,7 +472,7 @@ func (r *SingleClusterReconciler) loadCertAndKeyFromFiles(
 	cert, err := tls.X509KeyPair(certData, keyData)
 	if err != nil {
 		return nil, fmt.Errorf(
-			"could not load X509 key pair for cluster (cert=%s, key=%s): %w",
+			"load X509 key pair for cluster (cert=%s, key=%s): %w",
 			certPath, keyPath, err,
 		)
 	}

@@ -86,7 +86,7 @@ func (r *SingleClusterReconciler) createOrUpdateSTSHeadlessSvc(ctx context.Conte
 			ctx, service, common.CreateOption,
 		); err != nil {
 			return fmt.Errorf(
-				"could not create headless Service for statefulset %s: %w",
+				"create headless Service for StatefulSet %s: %w",
 				utils.ClusterNamespacedName(r.aeroCluster), err,
 			)
 		}
@@ -181,7 +181,7 @@ func (r *SingleClusterReconciler) reconcileSTSLoadBalancerSvc(ctx context.Contex
 
 	if !utils.IsOwnedBy(service, r.aeroCluster) {
 		return fmt.Errorf(
-			"could not update LoadBalancer service: service is not created/owned by operator, name: %s",
+			"update LoadBalancer Service %s: not created/owned by operator",
 			utils.NamespacedName(service.Namespace, service.Name),
 		)
 	}
@@ -255,7 +255,7 @@ func (r *SingleClusterReconciler) updateLBService(ctx context.Context, service *
 			ctx, service, common.UpdateOption,
 		); err != nil {
 			return fmt.Errorf(
-				"could not update LoadBalancer Service %s: %w",
+				"update LoadBalancer Service %s: %w",
 				utils.NamespacedName(service.Namespace, service.Name), err,
 			)
 		}
@@ -334,7 +334,7 @@ func (r *SingleClusterReconciler) createOrUpdatePodService(ctx context.Context, 
 			ctx, service, common.CreateOption,
 		); err != nil {
 			return fmt.Errorf(
-				"could not create Service for pod %s: %w", utils.NamespacedName(pNamespace, pName), err,
+				"create Service for pod %s: %w", utils.NamespacedName(pNamespace, pName), err,
 			)
 		}
 
@@ -597,7 +597,7 @@ func (r *SingleClusterReconciler) updateService(
 			ctx, service, common.UpdateOption,
 		); err != nil {
 			return fmt.Errorf(
-				"could not update Service %s: %w",
+				"update Service %s: %w",
 				utils.NamespacedName(service.Namespace, service.Name), err,
 			)
 		}

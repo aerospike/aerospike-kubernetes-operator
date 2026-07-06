@@ -71,7 +71,7 @@ func (r *SingleClusterReconciler) createOrUpdatePDB(ctx context.Context) error {
 		clusterReadinessEnabled, err := r.getClusterReadinessStatus(ctx)
 		if err != nil {
 			return fmt.Errorf(
-				"could not get cluster readiness status for cluster %s: %w",
+				"get cluster readiness status for cluster %s: %w",
 				utils.ClusterNamespacedName(r.aeroCluster), err,
 			)
 		}
@@ -119,7 +119,7 @@ func (r *SingleClusterReconciler) createOrUpdatePDB(ctx context.Context) error {
 			ctx, pdb, common.CreateOption,
 		); err != nil {
 			return fmt.Errorf(
-				"could not create PodDisruptionBudget %s: %w",
+				"create PodDisruptionBudget %s: %w",
 				getPDBNamespacedName(r.aeroCluster), err,
 			)
 		}
@@ -139,8 +139,7 @@ func (r *SingleClusterReconciler) createOrUpdatePDB(ctx context.Context) error {
 	// If PDB is not created by operator then no need to even match the spec
 	if !utils.IsOwnedBy(pdb, r.aeroCluster) {
 		return fmt.Errorf(
-			"could not update PodDisruptionBudget: PodDisruptionBudget is not "+
-				"created/owned by operator. name: %s", getPDBNamespacedName(r.aeroCluster).String(),
+			"update PodDisruptionBudget %s: not created/owned by operator", getPDBNamespacedName(r.aeroCluster).String(),
 		)
 	}
 
@@ -151,7 +150,7 @@ func (r *SingleClusterReconciler) createOrUpdatePDB(ctx context.Context) error {
 			ctx, pdb, common.UpdateOption,
 		); err != nil {
 			return fmt.Errorf(
-				"could not update PodDisruptionBudget %s: %w",
+				"update PodDisruptionBudget %s: %w",
 				getPDBNamespacedName(r.aeroCluster), err,
 			)
 		}
