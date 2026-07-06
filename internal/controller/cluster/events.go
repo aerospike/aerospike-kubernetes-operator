@@ -7,53 +7,12 @@ import (
 	"github.com/aerospike/aerospike-kubernetes-operator/v4/pkg/utils"
 )
 
+// Shared Event Reason constants: used in two or more places across the cluster controller.
+// Single-use reasons are inlined as PascalCase string literals at their call sites.
 const (
-	EventReasonDeleteFailed = "DeleteFailed"
-	EventReasonDeleted      = "Deleted"
-
-	EventReasonServiceCreateFailed                = "ServiceCreateFailed"
-	EventReasonRackReconcileFailed                = "UpdateFailed"
-	EventReasonPodDisruptionBudgetReconcileFailed = "PodDisruptionBudgetReconcileFailed"
-	EventReasonAccessControlUpdateFailed          = "ACLUpdateFailed"
-	EventReasonStatusUpdateFailed                 = "StatusUpdateFailed"
-	EventReasonAccessControlUpdated               = "ACLUpdated"
-
-	EventReasonRoleCreateFailed = "RoleCreateFailed"
-	EventReasonRoleUpdateFailed = "RoleUpdateFailed"
-	EventReasonRoleCreated      = "RoleCreated"
-	EventReasonRoleUpdated      = "RoleUpdated"
-	EventReasonRoleDeleted      = "RoleDeleted"
-	EventReasonUserCreateFailed = "UserCreateFailed"
-	EventReasonUserUpdateFailed = "UserUpdateFailed"
-	EventReasonUserCreated      = "UserCreated"
-	EventReasonUserUpdated      = "UserUpdated"
-	EventReasonUserDeleted      = "UserDeleted"
-
-	EventReasonRackCreated              = "RackCreated"
-	EventReasonRackDeleted              = "RackDeleted"
-	EventReasonStatefulSetDeleteFailed  = "STSDeleteFailed"
-	EventReasonRackImageUpdateFailed    = "RackImageUpdateFailed"
-	EventReasonRackRollingRestartFailed = "RackRollingRestartFailed"
-	EventReasonRackDynamicConfigFailed  = "RackDynamicConfigUpdateFailed"
-	EventReasonDynamicConfigUpdate      = "DynamicConfigUpdate"
-	EventReasonDynamicConfigUpdated     = "DynamicConfigUpdated"
-	EventReasonRackScaleDownFailed      = "RackScaleDownFailed"
-	EventReasonRackScaleUpFailed        = "RackScaleUpFailed"
-	EventReasonRackScaleUp              = "RackScaleUp"
-	EventReasonRackScaledUp             = "RackScaledUp"
-	EventReasonPodImageUpdate           = "PodImageUpdate"
-	EventReasonPodImageUpdated          = "PodImageUpdated"
-	EventReasonPodWarmRestarted         = "PodWarmRestarted"
-	EventReasonPodConfUpdated           = "PodConfUpdated"
-	EventReasonPodRestarted             = "PodRestarted"
-	EventReasonPodWaitUpdate            = "PodWaitUpdate"
-	EventReasonRackImageUpdated         = "RackImageUpdated"
-	EventReasonRackScaleDown            = "RackScaleDown"
-	EventReasonPodDeleted               = "PodDeleted"
-	EventReasonRackScaledDown           = "RackScaledDown"
-	EventReasonRackRollingRestart       = "RackRollingRestart"
-	EventReasonRackRollingRestarted     = "RackRollingRestarted"
-	EventReasonWaitMigration            = "WaitMigration"
+	ReasonServiceCreateFailed = "ServiceCreateFailed"
+	ReasonStatusUpdateFailed  = "StatusUpdateFailed"
+	ReasonACLUpdateFailed     = "ACLUpdateFailed"
 )
 
 func eventNamespacedNames(namespace string, names []string) string {

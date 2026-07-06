@@ -228,7 +228,7 @@ func (r *SingleClusterReconciler) createEmptyRack(ctx context.Context, rackState
 	}
 
 	r.Recorder.Eventf(
-		r.aeroCluster, corev1.EventTypeNormal, EventReasonRackCreated,
+		r.aeroCluster, corev1.EventTypeNormal, "RackCreated",
 		"[rack-%d] Created rack", rackState.Rack.ID,
 	)
 
@@ -311,7 +311,7 @@ func (r *SingleClusterReconciler) deleteRacks(
 		// Delete sts
 		if err = r.deleteSTS(ctx, found); err != nil {
 			r.Recorder.Eventf(
-				r.aeroCluster, corev1.EventTypeWarning, EventReasonStatefulSetDeleteFailed,
+				r.aeroCluster, corev1.EventTypeWarning, "STSDeleteFailed",
 				"[rack-%d] Failed to delete StatefulSet %s", rack.ID,
 				utils.GetNamespacedNameString(found),
 			)
@@ -333,7 +333,7 @@ func (r *SingleClusterReconciler) deleteRacks(
 		}
 
 		r.Recorder.Eventf(
-			r.aeroCluster, corev1.EventTypeNormal, EventReasonRackDeleted,
+			r.aeroCluster, corev1.EventTypeNormal, "RackDeleted",
 			"[rack-%d] Deleted rack", rack.ID,
 		)
 	}
@@ -382,7 +382,7 @@ func (r *SingleClusterReconciler) upgradeOrRollingRestartRack(
 			if res.Err != nil {
 				r.Recorder.Eventf(
 					r.aeroCluster, corev1.EventTypeWarning,
-					EventReasonRackImageUpdateFailed,
+					"RackImageUpdateFailed",
 					"[rack-%d] Failed to update image for StatefulSet %s",
 					rackState.Rack.ID, utils.GetNamespacedNameString(found),
 				)
@@ -406,7 +406,7 @@ func (r *SingleClusterReconciler) upgradeOrRollingRestartRack(
 				if res.Err != nil {
 					r.Recorder.Eventf(
 						r.aeroCluster, corev1.EventTypeWarning,
-						EventReasonRackRollingRestartFailed,
+						"RackRollingRestartFailed",
 						"[rack-%d] Failed to roll StatefulSet %s",
 						rackState.Rack.ID, utils.GetNamespacedNameString(found),
 					)
@@ -427,7 +427,7 @@ func (r *SingleClusterReconciler) upgradeOrRollingRestartRack(
 				if res.Err != nil {
 					r.Recorder.Eventf(
 						r.aeroCluster, corev1.EventTypeWarning,
-						EventReasonRackDynamicConfigFailed,
+						"RackDynamicConfigUpdateFailed",
 						"[rack-%d] Failed to update dynamic config for StatefulSet %s",
 						rackState.Rack.ID, utils.GetNamespacedNameString(found),
 					)
@@ -465,7 +465,7 @@ func (r *SingleClusterReconciler) updateDynamicConfig(
 	r.Log.Info("Update dynamic config in Aerospike pods")
 
 	r.Recorder.Eventf(
-		r.aeroCluster, corev1.EventTypeNormal, EventReasonDynamicConfigUpdate,
+		r.aeroCluster, corev1.EventTypeNormal, "DynamicConfigUpdate",
 		"[rack-%d] Started dynamic config update", rackState.Rack.ID,
 	)
 
@@ -503,7 +503,7 @@ func (r *SingleClusterReconciler) updateDynamicConfig(
 	}
 
 	r.Recorder.Eventf(
-		r.aeroCluster, corev1.EventTypeNormal, EventReasonDynamicConfigUpdated,
+		r.aeroCluster, corev1.EventTypeNormal, "DynamicConfigUpdated",
 		"[rack-%d] Finished dynamic config update", rackState.Rack.ID,
 	)
 
@@ -571,7 +571,7 @@ func (r *SingleClusterReconciler) reconcileRack(
 			if res.Err != nil {
 				r.Recorder.Eventf(
 					r.aeroCluster, corev1.EventTypeWarning,
-					EventReasonRackScaleDownFailed,
+					"RackScaleDownFailed",
 					eventRackScaleFailureMessageWithCause(
 						"scale down", rackState.Rack.ID,
 						utils.GetNamespacedNameString(found), currentSize, desiredSize, res.Err,
@@ -624,7 +624,7 @@ func (r *SingleClusterReconciler) reconcileRack(
 		found, res = r.scaleUpRack(ctx, found, rackState, ignorablePodNames)
 		if !res.IsSuccess {
 			r.Recorder.Eventf(
-				r.aeroCluster, corev1.EventTypeWarning, EventReasonRackScaleUpFailed,
+				r.aeroCluster, corev1.EventTypeWarning, "RackScaleUpFailed",
 				eventRackScaleFailureMessageWithCause(
 					"scale up", rackState.Rack.ID,
 					utils.GetNamespacedNameString(found), currentSize, desiredSize, res.Err,
@@ -666,7 +666,7 @@ func (r *SingleClusterReconciler) scaleUpRack(
 
 	r.Log.Info("Scaling up pods", "currentSz", oldSz, "desiredSz", desiredSize)
 	r.Recorder.Eventf(
-		r.aeroCluster, corev1.EventTypeNormal, EventReasonRackScaleUp,
+		r.aeroCluster, corev1.EventTypeNormal, "RackScaleUp",
 		eventRackScaleMessage(
 			"Scaling up", rackState.Rack.ID,
 			utils.GetNamespacedNameString(found), oldSz, desiredSize,
@@ -741,7 +741,7 @@ func (r *SingleClusterReconciler) scaleUpRack(
 	}
 
 	r.Recorder.Eventf(
-		r.aeroCluster, corev1.EventTypeNormal, EventReasonRackScaledUp,
+		r.aeroCluster, corev1.EventTypeNormal, "RackScaledUp",
 		eventRackScaleMessage(
 			"Scaled up", rackState.Rack.ID,
 			utils.GetNamespacedNameString(found), *found.Spec.Replicas, desiredSize,
@@ -844,7 +844,7 @@ func (r *SingleClusterReconciler) upgradeRack(
 		}
 
 		r.Recorder.Eventf(
-			r.aeroCluster, corev1.EventTypeNormal, EventReasonPodImageUpdate,
+			r.aeroCluster, corev1.EventTypeNormal, "PodImageUpdate",
 			"[rack-%d] Updating containers on Pods %s",
 			rackState.Rack.ID, eventNamespacedNames(r.aeroCluster.Namespace, podNames),
 		)
@@ -855,7 +855,7 @@ func (r *SingleClusterReconciler) upgradeRack(
 		}
 
 		r.Recorder.Eventf(
-			r.aeroCluster, corev1.EventTypeNormal, EventReasonPodImageUpdated,
+			r.aeroCluster, corev1.EventTypeNormal, "PodImageUpdated",
 			"[rack-%d] Updated containers on Pods %s",
 			rackState.Rack.ID, eventNamespacedNames(r.aeroCluster.Namespace, podNames),
 		)
@@ -873,7 +873,7 @@ func (r *SingleClusterReconciler) upgradeRack(
 	}
 
 	r.Recorder.Eventf(
-		r.aeroCluster, corev1.EventTypeNormal, EventReasonRackImageUpdated,
+		r.aeroCluster, corev1.EventTypeNormal, "RackImageUpdated",
 		"[rack-%d] Updated image for StatefulSet %s",
 		rackState.Rack.ID, utils.GetNamespacedNameString(statefulSet),
 	)
@@ -897,7 +897,7 @@ func (r *SingleClusterReconciler) scaleDownRack(
 		"currentSize", *found.Spec.Replicas, "rackID", rackState.Rack.ID, "rackRevision", rackState.Rack.Revision,
 	)
 	r.Recorder.Eventf(
-		r.aeroCluster, corev1.EventTypeNormal, EventReasonRackScaleDown,
+		r.aeroCluster, corev1.EventTypeNormal, "RackScaleDown",
 		eventRackScaleMessage(
 			"Scaling down", rackState.Rack.ID,
 			utils.GetNamespacedNameString(found), *found.Spec.Replicas, desiredSize,
@@ -1106,13 +1106,13 @@ func (r *SingleClusterReconciler) scaleDownRack(
 
 	r.Log.Info("Pod Removed", "podNames", podNames)
 	r.Recorder.Eventf(
-		r.aeroCluster, corev1.EventTypeNormal, EventReasonPodDeleted,
+		r.aeroCluster, corev1.EventTypeNormal, "PodDeleted",
 		"[rack-%d] Deleted Pods %s",
 		rackState.Rack.ID, eventNamespacedNames(r.aeroCluster.Namespace, podNames),
 	)
 
 	r.Recorder.Eventf(
-		r.aeroCluster, corev1.EventTypeNormal, EventReasonRackScaledDown,
+		r.aeroCluster, corev1.EventTypeNormal, "RackScaledDown",
 		eventRackScaleMessage(
 			"Scaled down", rackState.Rack.ID,
 			utils.GetNamespacedNameString(found), *found.Spec.Replicas, desiredSize,
@@ -1130,7 +1130,7 @@ func (r *SingleClusterReconciler) rollingRestartRack(
 	r.Log.Info("Rolling restart AerospikeCluster statefulset pods", "statefulSet", klog.KObj(found))
 
 	r.Recorder.Eventf(
-		r.aeroCluster, corev1.EventTypeNormal, EventReasonRackRollingRestart,
+		r.aeroCluster, corev1.EventTypeNormal, "RackRollingRestart",
 		"[rack-%d] Started rolling restart", rackState.Rack.ID,
 	)
 
@@ -1239,7 +1239,7 @@ func (r *SingleClusterReconciler) rollingRestartRack(
 	}
 
 	r.Recorder.Eventf(
-		r.aeroCluster, corev1.EventTypeNormal, EventReasonRackRollingRestarted,
+		r.aeroCluster, corev1.EventTypeNormal, "RackRollingRestarted",
 		"[rack-%d] Finished rolling restart", rackState.Rack.ID,
 	)
 
@@ -1919,7 +1919,7 @@ func (r *SingleClusterReconciler) handleEnableSecurity(
 	// Setup access control.
 	if err := r.validateAndReconcileAccessControl(ctx, securityEnabledPods, ignorablePodNames); err != nil {
 		r.Recorder.Eventf(
-			r.aeroCluster, corev1.EventTypeWarning, EventReasonAccessControlUpdateFailed,
+			r.aeroCluster, corev1.EventTypeWarning, ReasonACLUpdateFailed,
 			"Failed to set up access control for AerospikeCluster %s",
 			utils.GetNamespacedNameString(r.aeroCluster),
 		)

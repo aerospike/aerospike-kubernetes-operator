@@ -483,14 +483,14 @@ func (r *SingleClusterReconciler) restartASDOrUpdateAerospikeConf(podName string
 
 	if subCommand == "quick-restart" {
 		r.Recorder.Eventf(
-			r.aeroCluster, corev1.EventTypeNormal, EventReasonPodWarmRestarted,
+			r.aeroCluster, corev1.EventTypeNormal, "PodWarmRestarted",
 			"[rack-%d] Warm restarted Pod %s",
 			rackID, podNamespacedName.String(),
 		)
 		r.Log.V(1).Info("Pod warm restarted", "pod", klog.KRef(podNamespacedName.Namespace, podNamespacedName.Name))
 	} else {
 		r.Recorder.Eventf(
-			r.aeroCluster, corev1.EventTypeNormal, EventReasonPodConfUpdated,
+			r.aeroCluster, corev1.EventTypeNormal, "PodConfUpdated",
 			"[rack-%d] Updated config for Pod %s",
 			rackID, podNamespacedName.String(),
 		)
@@ -619,7 +619,7 @@ func (r *SingleClusterReconciler) ensurePodsRunningAndReady(
 
 			r.Log.Info("Pod is restarted", "pod", klog.KObj(updatedPod))
 			r.Recorder.Eventf(
-				r.aeroCluster, corev1.EventTypeNormal, EventReasonPodRestarted,
+				r.aeroCluster, corev1.EventTypeNormal, "PodRestarted",
 				"[rack-%s] Restarted Pod %s",
 				pod.Labels[asdbv1.AerospikeRackIDLabel], utils.GetNamespacedNameString(pod),
 			)
@@ -782,7 +782,7 @@ func (r *SingleClusterReconciler) deletePodAndEnsureImageUpdated(
 
 		r.Log.V(1).Info("Pod deleted", "pod", klog.KObj(pod))
 		r.Recorder.Eventf(
-			r.aeroCluster, corev1.EventTypeNormal, EventReasonPodWaitUpdate,
+			r.aeroCluster, corev1.EventTypeNormal, "PodWaitUpdate",
 			"[rack-%d] Waiting to update Pod %s",
 			rackState.Rack.ID, utils.GetNamespacedNameString(pod),
 		)

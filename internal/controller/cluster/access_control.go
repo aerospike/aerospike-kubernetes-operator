@@ -489,7 +489,7 @@ func (roleCreate aerospikeRoleCreateUpdate) execute(
 		var errorCreate error
 		if errorCreate = roleCreate.createRole(client, adminPolicy, logger, recorder, aeroCluster); errorCreate != nil {
 			recorder.Eventf(
-				aeroCluster, corev1.EventTypeWarning, EventReasonRoleCreateFailed,
+				aeroCluster, corev1.EventTypeWarning, "RoleCreateFailed",
 				"Failed to create Aerospike role %s", roleCreate.name,
 			)
 		}
@@ -501,7 +501,7 @@ func (roleCreate aerospikeRoleCreateUpdate) execute(
 		client, adminPolicy, role, logger, recorder, aeroCluster,
 	); errorUpdate != nil {
 		recorder.Eventf(
-			aeroCluster, corev1.EventTypeWarning, EventReasonRoleUpdateFailed,
+			aeroCluster, corev1.EventTypeWarning, "RoleUpdateFailed",
 			"Failed to update Aerospike role %s", roleCreate.name,
 		)
 
@@ -532,7 +532,7 @@ func (roleCreate aerospikeRoleCreateUpdate) createRole(
 
 	logger.Info("Created role", "role name", roleCreate.name)
 	recorder.Eventf(
-		aeroCluster, corev1.EventTypeNormal, EventReasonRoleCreated,
+		aeroCluster, corev1.EventTypeNormal, "RoleCreated",
 		"Created Aerospike role %s", roleCreate.name,
 	)
 
@@ -623,7 +623,7 @@ func (roleCreate aerospikeRoleCreateUpdate) updateRole(
 
 	logger.Info("Updated role", "role name", roleCreate.name)
 	recorder.Eventf(
-		aeroCluster, corev1.EventTypeNormal, EventReasonRoleUpdated,
+		aeroCluster, corev1.EventTypeNormal, "RoleUpdated",
 		"Updated Aerospike role %s", roleCreate.name,
 	)
 
@@ -665,7 +665,7 @@ func (userCreate aerospikeUserCreateUpdate) execute(
 		err := userCreate.createUser(client, adminPolicy, logger, recorder, aeroCluster)
 		if err != nil {
 			recorder.Eventf(
-				aeroCluster, corev1.EventTypeWarning, EventReasonUserCreateFailed,
+				aeroCluster, corev1.EventTypeWarning, "UserCreateFailed",
 				"Failed to create Aerospike user %s", userCreate.name,
 			)
 		}
@@ -677,7 +677,7 @@ func (userCreate aerospikeUserCreateUpdate) execute(
 		client, adminPolicy, user, logger, recorder, aeroCluster,
 	); errorUpdate != nil {
 		recorder.Eventf(
-			aeroCluster, corev1.EventTypeWarning, EventReasonUserUpdateFailed,
+			aeroCluster, corev1.EventTypeWarning, "UserUpdateFailed",
 			"Failed to update Aerospike user %s", userCreate.name,
 		)
 
@@ -708,7 +708,7 @@ func (userCreate aerospikeUserCreateUpdate) createUser(
 
 	logger.Info("Created user", "username", userCreate.name)
 	recorder.Eventf(
-		aeroCluster, corev1.EventTypeNormal, EventReasonUserCreated,
+		aeroCluster, corev1.EventTypeNormal, "UserCreated",
 		"Created Aerospike user %s", userCreate.name,
 	)
 
@@ -771,7 +771,7 @@ func (userCreate aerospikeUserCreateUpdate) updateUser(
 
 	logger.Info("Updated user", "username", userCreate.name)
 	recorder.Eventf(
-		aeroCluster, corev1.EventTypeNormal, EventReasonUserUpdated,
+		aeroCluster, corev1.EventTypeNormal, "UserUpdated",
 		"Updated Aerospike user %s", userCreate.name,
 	)
 
@@ -800,7 +800,7 @@ func (userDrop aerospikeUserDrop) execute(
 
 	logger.Info("Dropped user", "username", userDrop.name)
 	recorder.Eventf(
-		aeroCluster, corev1.EventTypeNormal, EventReasonUserDeleted,
+		aeroCluster, corev1.EventTypeNormal, "UserDeleted",
 		"Deleted Aerospike user %s", userDrop.name,
 	)
 
@@ -829,7 +829,7 @@ func (roleDrop aerospikeRoleDrop) execute(
 
 	logger.Info("Dropped role", "role", roleDrop.name)
 	recorder.Eventf(
-		aeroCluster, corev1.EventTypeNormal, EventReasonRoleDeleted,
+		aeroCluster, corev1.EventTypeNormal, "RoleDeleted",
 		"Deleted Aerospike role %s", roleDrop.name,
 	)
 
