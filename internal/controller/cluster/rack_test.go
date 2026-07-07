@@ -66,7 +66,9 @@ func newTestRackState(aeroCluster *asdbv1.AerospikeCluster) *RackState {
 	}
 }
 
-func newTestReconciler(t *testing.T, aeroCluster *asdbv1.AerospikeCluster, funcs *interceptor.Funcs) *SingleClusterReconciler {
+func newTestReconciler(
+	t *testing.T, aeroCluster *asdbv1.AerospikeCluster, funcs *interceptor.Funcs,
+) *SingleClusterReconciler {
 	t.Helper()
 
 	scheme := runtime.NewScheme()
