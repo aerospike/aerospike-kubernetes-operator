@@ -207,6 +207,99 @@ var _ = Describe("Rack enabled cluster webhook validation", func() {
 			})
 		})
 
+		Context("spec.rackConfig.racks[].id", func() {
+			Context("positive", func() {
+				It("adds implicit default rack when racks are omitted (DefaultRackID)", func() {
+					aeroCluster := testCluster.CreateDummyAerospikeCluster(nsName, 2)
+					Expect(aeroCluster.Spec.RackConfig.Racks).To(BeEmpty())
+
+					Expect(envtests.K8sClient.Create(ctx, aeroCluster)).To(Succeed())
+
+					fetched, err := testCluster.GetCluster(envtests.K8sClient, ctx, nsName)
+					Expect(err).ToNot(HaveOccurred())
+					Expect(fetched.Spec.RackConfig.Racks).To(HaveLen(1))
+					Expect(fetched.Spec.RackConfig.Racks[0].ID).To(Equal(asdbv1.DefaultRackID))
+				})
+
+				It("allows a single explicit rack with DefaultRackID when it has no per-rack overrides", func() {
+					aeroCluster := testCluster.CreateDummyAerospikeCluster(nsName, 2)
+					aeroCluster.Spec.RackConfig = asdbv1.RackConfig{
+						Namespaces: []string{"test"},
+						Racks:      []asdbv1.Rack{{ID: asdbv1.DefaultRackID}},
+					}
+
+					Expect(envtests.K8sClient.Create(ctx, aeroCluster)).To(Succeed())
+
+					fetched, err := testCluster.GetCluster(envtests.K8sClient, ctx, nsName)
+					Expect(err).ToNot(HaveOccurred())
+					Expect(fetched.Spec.RackConfig.Racks).To(HaveLen(1))
+					Expect(fetched.Spec.RackConfig.Racks[0].ID).To(Equal(asdbv1.DefaultRackID))
+				})
+
+				// Out-of-range above MaxRackID is rejected by CRD OpenAPI ("rejects rack id above 1000000").
+				It("allows rack id at MaxRackID (in-range upper bound)", func() {
+					aeroCluster := testCluster.CreateDummyAerospikeCluster(nsName, 2)
+					aeroCluster.Spec.RackConfig = asdbv1.RackConfig{
+						Namespaces: []string{"test"},
+						Racks:      []asdbv1.Rack{{ID: asdbv1.MaxRackID}},
+					}
+
+					Expect(envtests.K8sClient.Create(ctx, aeroCluster)).To(Succeed())
+
+					fetched, err := testCluster.GetCluster(envtests.K8sClient, ctx, nsName)
+					Expect(err).ToNot(HaveOccurred())
+					Expect(fetched.Spec.RackConfig.Racks).To(HaveLen(1))
+					Expect(fetched.Spec.RackConfig.Racks[0].ID).To(Equal(asdbv1.MaxRackID))
+				})
+			})
+
+			Context("negative", func() {
+				It("rejects DefaultRackID when multiple racks are configured (reserved, mutating webhook)", func() {
+					aeroCluster := testCluster.CreateDummyAerospikeCluster(nsName, 2)
+					aeroCluster.Spec.RackConfig = asdbv1.RackConfig{
+						Namespaces: []string{"test"},
+						Racks: []asdbv1.Rack{
+							{ID: 1},
+							{ID: asdbv1.DefaultRackID},
+						},
+					}
+
+					err := envtests.K8sClient.Create(ctx, aeroCluster)
+					Expect(err).To(HaveOccurred())
+					envtests.NewStatusErrorMatcher().
+						WithMessageSubstrings(
+							"\"maerospikecluster.kb.io\"",
+							"invalid RackConfig",
+							"RackID",
+							"reserved",
+						).
+						Validate(err)
+				})
+
+				It("rejects DefaultRackID combined with rack placement (reserved, mutating webhook)", func() {
+					aeroCluster := testCluster.CreateDummyAerospikeCluster(nsName, 2)
+					zone := "zone-a"
+					aeroCluster.Spec.RackConfig = asdbv1.RackConfig{
+						Namespaces: []string{"test"},
+						Racks: []asdbv1.Rack{
+							{ID: asdbv1.DefaultRackID, Zone: zone},
+						},
+					}
+
+					err := envtests.K8sClient.Create(ctx, aeroCluster)
+					Expect(err).To(HaveOccurred())
+					envtests.NewStatusErrorMatcher().
+						WithMessageSubstrings(
+							"\"maerospikecluster.kb.io\"",
+							"invalid RackConfig",
+							"RackID",
+							"reserved",
+						).
+						Validate(err)
+				})
+			})
+		})
+
 		Context("spec.rackConfig.maxIgnorablePods", func() {
 			Context("positive", func() {
 				// maxIgnorablePods=0 is valid (no pods ignorable; not treated as negative).
@@ -403,6 +496,92 @@ var _ = Describe("Rack enabled cluster webhook validation", func() {
 					patchFirstPVStorageClassSpec(&current.Spec.Storage)
 
 					Expect(envtests.K8sClient.Update(ctx, current)).To(Succeed())
+				})
+			})
+		})
+
+		Context("spec.rackConfig.racks[].id", func() {
+			Context("negative", func() {
+				It("rejects out-of-range rack id on update (Maximum)", func() {
+					aeroCluster := testCluster.CreateDummyAerospikeCluster(nsName, 2)
+					aeroCluster.Spec.RackConfig = asdbv1.RackConfig{
+						Racks: []asdbv1.Rack{
+							{ID: 1},
+							{ID: 2},
+						},
+					}
+					Expect(envtests.K8sClient.Create(ctx, aeroCluster)).To(Succeed())
+
+					current, err := testCluster.GetCluster(envtests.K8sClient, ctx, nsName)
+					Expect(err).ToNot(HaveOccurred())
+
+					current.Spec.RackConfig.Racks = append(
+						current.Spec.RackConfig.Racks,
+						asdbv1.Rack{ID: 20000000000},
+					)
+
+					err = envtests.K8sClient.Update(ctx, current)
+					Expect(err).To(HaveOccurred())
+					envtests.NewStatusErrorMatcher().
+						WithMessageSubstrings(testutil.CRDSchemaErrorPrefix, "id").
+						Validate(err)
+				})
+
+				It("rejects DefaultRackID when appended on update with multiple racks (reserved, mutating webhook)", func() {
+					aeroCluster := testCluster.CreateDummyAerospikeCluster(nsName, 2)
+					aeroCluster.Spec.RackConfig = asdbv1.RackConfig{
+						Namespaces: []string{"test"},
+						Racks: []asdbv1.Rack{
+							{ID: 1},
+							{ID: 2},
+						},
+					}
+					Expect(envtests.K8sClient.Create(ctx, aeroCluster)).To(Succeed())
+
+					current, err := testCluster.GetCluster(envtests.K8sClient, ctx, nsName)
+					Expect(err).ToNot(HaveOccurred())
+
+					current.Spec.RackConfig.Racks = append(
+						current.Spec.RackConfig.Racks,
+						asdbv1.Rack{ID: asdbv1.DefaultRackID},
+					)
+
+					err = envtests.K8sClient.Update(ctx, current)
+					Expect(err).To(HaveOccurred())
+					envtests.NewStatusErrorMatcher().
+						WithMessageSubstrings(
+							"\"maerospikecluster.kb.io\"",
+							"invalid RackConfig",
+							"RackID",
+							"reserved",
+						).
+						Validate(err)
+				})
+
+				It("rejects DefaultRackID combined with rack placement on update (reserved, mutating webhook)", func() {
+					aeroCluster := testCluster.CreateDummyAerospikeCluster(nsName, 2)
+					aeroCluster.Spec.RackConfig = asdbv1.RackConfig{
+						Namespaces: []string{"test"},
+						Racks:      []asdbv1.Rack{{ID: asdbv1.DefaultRackID}},
+					}
+					Expect(envtests.K8sClient.Create(ctx, aeroCluster)).To(Succeed())
+
+					current, err := testCluster.GetCluster(envtests.K8sClient, ctx, nsName)
+					Expect(err).ToNot(HaveOccurred())
+
+					zone := "zone-a"
+					current.Spec.RackConfig.Racks[0].Zone = zone
+
+					err = envtests.K8sClient.Update(ctx, current)
+					Expect(err).To(HaveOccurred())
+					envtests.NewStatusErrorMatcher().
+						WithMessageSubstrings(
+							"\"maerospikecluster.kb.io\"",
+							"invalid RackConfig",
+							"RackID",
+							"reserved",
+						).
+						Validate(err)
 				})
 			})
 		})
