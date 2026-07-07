@@ -66,7 +66,7 @@ func newTestRackState(aeroCluster *asdbv1.AerospikeCluster) *RackState {
 	}
 }
 
-func newTestReconciler(t *testing.T, aeroCluster *asdbv1.AerospikeCluster, funcs interceptor.Funcs) *SingleClusterReconciler {
+func newTestReconciler(t *testing.T, aeroCluster *asdbv1.AerospikeCluster, funcs *interceptor.Funcs) *SingleClusterReconciler {
 	t.Helper()
 
 	scheme := runtime.NewScheme()
@@ -75,7 +75,7 @@ func newTestReconciler(t *testing.T, aeroCluster *asdbv1.AerospikeCluster, funcs
 
 	fakeClient := fake.NewClientBuilder().
 		WithScheme(scheme).
-		WithInterceptorFuncs(funcs).
+		WithInterceptorFuncs(*funcs).
 		Build()
 
 	return &SingleClusterReconciler{
@@ -98,7 +98,7 @@ func TestCreateEmptyRack_NilSTSOnCreateFailure(t *testing.T) {
 
 	var stsDeleteAttempted bool
 
-	r := newTestReconciler(t, aeroCluster, interceptor.Funcs{
+	r := newTestReconciler(t, aeroCluster, &interceptor.Funcs{
 		Create: func(
 			ctx context.Context, c client.WithWatch, obj client.Object, opts ...client.CreateOption,
 		) error {
@@ -139,7 +139,7 @@ func TestCreateEmptyRack_NilSTSOnOwnerRefFailure(t *testing.T) {
 
 	// A scheme with no registered types makes SetControllerReference fail immediately,
 	// before either the ConfigMap or the StatefulSet is ever created.
-	r := newTestReconciler(t, aeroCluster, interceptor.Funcs{})
+	r := newTestReconciler(t, aeroCluster, &interceptor.Funcs{})
 	r.Scheme = runtime.NewScheme()
 
 	require.NotPanics(t, func() {
@@ -163,7 +163,7 @@ func TestDeleteSTS_RemovesExistingStatefulSet(t *testing.T) {
 		},
 	}
 
-	r := newTestReconciler(t, aeroCluster, interceptor.Funcs{})
+	r := newTestReconciler(t, aeroCluster, &interceptor.Funcs{})
 	require.NoError(t, r.Create(context.TODO(), st))
 
 	require.NoError(t, r.deleteSTS(st))
