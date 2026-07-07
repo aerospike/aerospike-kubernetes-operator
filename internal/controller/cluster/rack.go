@@ -211,9 +211,9 @@ func (r *SingleClusterReconciler) createEmptyRack(rackState *RackState) (
 	if err != nil {
 		// Delete statefulset and everything related so that it can be properly created and updated in next run
 		if found != nil {
-			r.Log.Error(
-				err, "Statefulset setup failed. Deleting statefulset", "name",
-				stsName, "err", err,
+			r.Log.V(1).Info(
+				"Statefulset setup failed. Deleting statefulset", "name",
+				stsName,
 			)
 			_ = r.deleteSTS(found)
 		}
