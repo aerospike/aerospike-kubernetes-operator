@@ -168,7 +168,7 @@ var _ = Describe(
 							Expect(validatePVCDeletion(ctx, oldPvcInfoPerPod[targetPod.Name], false)).ToNot(HaveOccurred())
 						})
 
-					FIt("Should delete local PVCs when an eviction-blocked annotation is set on a failed pod "+
+					It("Should delete local PVCs when an eviction-blocked annotation is set on a failed pod "+
 						"and deleteLocalStorageOnPodRecovery is enabled", func() {
 						aeroCluster, err := getCluster(k8sClient, ctx, clusterNamespacedName)
 						Expect(err).ToNot(HaveOccurred())
