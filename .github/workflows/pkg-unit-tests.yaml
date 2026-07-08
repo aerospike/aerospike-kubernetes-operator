@@ -39,5 +39,5 @@ jobs:
           cache: true
       
       - name: Run pkg unit tests
-        run: make pkg-test
+        run: make unit-test
 
