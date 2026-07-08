@@ -6,12 +6,14 @@ on:
       - master
     paths:
       - 'pkg/**'
+      - 'internal/**'
       - '.github/workflows/pkg-unit-tests.yaml'
   pull_request:
     branches:
       - master
     paths:
       - 'pkg/**'
+      - 'internal/**'
       - '.github/workflows/pkg-unit-tests.yaml'
 
 jobs:
