@@ -17,8 +17,8 @@ on:
       - '.github/workflows/pkg-unit-tests.yaml'
 
 jobs:
-  pkg-unit-tests:
-    name: pkg
+  run-unit-tests:
+    name: run-unit-tests
     runs-on: ubuntu-latest
     
     steps:
