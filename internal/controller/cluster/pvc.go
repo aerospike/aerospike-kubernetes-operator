@@ -90,7 +90,7 @@ func (r *SingleClusterReconciler) removePVCsAsync(
 
 			if err := r.Delete(ctx, &pvc); err != nil {
 				return nil, fmt.Errorf(
-					"delete PVC %s: %w", utils.NamespacedName(pvc.Namespace, pvc.Name), err,
+					"delete PVC %s: %w", utils.GetNamespacedNameString(&pvc), err,
 				)
 			}
 
@@ -135,7 +135,7 @@ func (r *SingleClusterReconciler) deleteLocalPVCs(ctx context.Context, rackState
 				if !errors.IsNotFound(err) {
 					return fmt.Errorf(
 						"delete PVC %s: %w",
-						utils.NamespacedName(pvcItems[idx].Namespace, pvcItems[idx].Name), err,
+						utils.GetNamespacedNameString(&pvcItems[idx]), err,
 					)
 				}
 
@@ -226,7 +226,7 @@ func (r *SingleClusterReconciler) waitForPVCTermination(
 func (r *SingleClusterReconciler) deleteAllClusterPVCsForce(ctx context.Context) error {
 	pvcItems, err := r.getClusterPVCList(ctx)
 	if err != nil {
-		return fmt.Errorf("listing cluster PVCs: %w", err)
+		return fmt.Errorf("list cluster PVCs: %w", err)
 	}
 
 	var deletedPVCs []corev1.PersistentVolumeClaim
@@ -240,11 +240,11 @@ func (r *SingleClusterReconciler) deleteAllClusterPVCsForce(ctx context.Context)
 
 		if err := r.Delete(ctx, pvc); err != nil {
 			if !errors.IsNotFound(err) {
-				return fmt.Errorf("deleting PVC %s: %w", pvc.Name, err)
+				return fmt.Errorf("delete PVC %s: %w", utils.GetNamespacedNameString(pvc), err)
 			}
 		}
 
-		r.Log.Info("PVC force-deleted during cluster recovery", "pvc", pvc.Name)
+		r.Log.Info("PVC force-deleted during cluster recovery", "persistentVolumeClaim", klog.KObj(pvc))
 
 		deletedPVCs = append(deletedPVCs, *pvc)
 	}

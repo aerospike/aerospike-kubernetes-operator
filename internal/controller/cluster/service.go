@@ -87,7 +87,7 @@ func (r *SingleClusterReconciler) createOrUpdateSTSHeadlessSvc(ctx context.Conte
 		); err != nil {
 			return fmt.Errorf(
 				"create headless Service for StatefulSet %s: %w",
-				utils.ClusterNamespacedName(r.aeroCluster), err,
+				utils.GetNamespacedNameString(r.aeroCluster), err,
 			)
 		}
 

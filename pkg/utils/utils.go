@@ -32,11 +32,6 @@ const (
 	ReasonRegistryUnavailable = "RegistryUnavailable"
 )
 
-// ClusterNamespacedName return namespaced name
-func ClusterNamespacedName(aeroCluster *asdbv1.AerospikeCluster) string {
-	return NamespacedName(aeroCluster.Namespace, aeroCluster.Name)
-}
-
 // NamespacedName return namespaced name
 func NamespacedName(namespace, name string) string {
 	return fmt.Sprintf("%s/%s", namespace, name)

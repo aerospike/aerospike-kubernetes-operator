@@ -204,8 +204,7 @@ func (r *SingleClusterReconciler) createSTS(
 	}
 
 	r.Log.Info(
-		"Created new StatefulSet", "StatefulSet.Namespace", st.Namespace,
-		"StatefulSet.Name", st.Name,
+		"Created new StatefulSet", "statefulSet", klog.KObj(st),
 	)
 
 	if err := r.waitForSTSToBeReady(ctx, st, nil); err != nil {
@@ -257,7 +256,7 @@ func (r *SingleClusterReconciler) waitForSTSToBeReady(
 	)
 
 	r.Log.Info(
-		"Waiting for statefulset to be ready", "WaitTimePerPod",
+		"Waiting for statefulset to be ready", "waitTimePerPod",
 		podStatusRetryInterval*time.Duration(podStatusMaxRetry),
 	)
 
@@ -303,7 +302,7 @@ func (r *SingleClusterReconciler) waitForSTSToBeReady(
 
 			if err := utils.CheckPodFailed(pod); err != nil {
 				return fmt.Errorf(
-					"statefulset pod %s failed: %w", utils.NamespacedName(st.Namespace, podName), err,
+					"check StatefulSet pod %s: %w", utils.NamespacedName(st.Namespace, podName), err,
 				)
 			}
 
@@ -434,8 +433,7 @@ func (r *SingleClusterReconciler) createSTSConfigMap(
 			}
 
 			r.Log.Info(
-				"Created new ConfigMap", "ConfigMap.Namespace",
-				confMap.Namespace, "ConfigMap.Name", confMap.Name,
+				"Created new ConfigMap", "configMap", klog.KObj(confMap),
 			)
 
 			return nil
@@ -479,7 +477,7 @@ func (r *SingleClusterReconciler) createSTSConfigMap(
 func (r *SingleClusterReconciler) updateSTSConfigMap(
 	ctx context.Context, namespacedName types.NamespacedName, rack *asdbv1.Rack,
 ) error {
-	r.Log.Info("Updating ConfigMap", "ConfigMap", namespacedName)
+	r.Log.Info("Updating ConfigMap", "configMap", klog.KRef(namespacedName.Namespace, namespacedName.Name))
 
 	confMap := &corev1.ConfigMap{}
 	if err := r.Get(ctx, namespacedName, confMap); err != nil {
@@ -491,7 +489,7 @@ func (r *SingleClusterReconciler) updateSTSConfigMap(
 	if err != nil {
 		return fmt.Errorf(
 			"build dotConfig from map for rack %d in cluster %s: %w",
-			rack.ID, utils.ClusterNamespacedName(r.aeroCluster), err,
+			rack.ID, utils.GetNamespacedNameString(r.aeroCluster), err,
 		)
 	}
 
@@ -794,7 +792,10 @@ func (r *SingleClusterReconciler) updateSTSPVStorage(
 				st.Spec.VolumeClaimTemplates, pvc,
 			)
 
-			r.Log.V(1).Info("Added PVC for volume", "volume", volume)
+			r.Log.V(1).Info("Added PVC for volume",
+				"persistentVolumeClaim", klog.KObj(&pvc),
+				"volume", volume.Name,
+			)
 		}
 	}
 }

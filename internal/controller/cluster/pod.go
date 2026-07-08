@@ -80,7 +80,7 @@ func (r *SingleClusterReconciler) getRollingRestartTypeMap(
 	if err != nil {
 		return nil, nil, fmt.Errorf(
 			"list pods for rack %d in cluster %s: %w",
-			rackState.Rack.ID, utils.ClusterNamespacedName(r.aeroCluster), err,
+			rackState.Rack.ID, utils.GetNamespacedNameString(r.aeroCluster), err,
 		)
 	}
 
@@ -266,7 +266,7 @@ func (r *SingleClusterReconciler) getRollingRestartTypePod(
 		restartType = mergeRestartType(restartType, opType)
 
 		r.Log.Info("Pod warm/cold restart requested. Need rolling restart",
-			"pod name", pod.Name, "operation", opType, "restartType", restartType)
+			"pod", klog.KObj(pod), "operation", opType, "restartType", restartType)
 	}
 
 	// Check if EnableRackIDOverride in spec differs from RackIDOverridden in pod status
@@ -465,7 +465,7 @@ func (r *SingleClusterReconciler) restartASDOrUpdateAerospikeConf(podName string
 			)
 			if err != nil {
 				return fmt.Errorf(
-					"pod %s: warm restart via /etc/aerospike/refresh-cmap-restart-asd.sh failed "+
+					"pod %s: warm restart via /etc/aerospike/refresh-cmap-restart-asd.sh: "+
 						"stdout=%q stderr=%q: %w",
 					utils.NamespacedName(podNamespacedName.Namespace, podNamespacedName.Name),
 					stdout, stderr, err,
@@ -473,7 +473,7 @@ func (r *SingleClusterReconciler) restartASDOrUpdateAerospikeConf(podName string
 			}
 		} else {
 			return fmt.Errorf(
-				"pod %s: %s %s failed: stdout=%q stderr=%q: %w",
+				"pod %s: %s %s: stdout=%q stderr=%q: %w",
 				utils.NamespacedName(podNamespacedName.Namespace, podNamespacedName.Name),
 				initBinary, subCommand,
 				stdout, stderr, err,
@@ -596,7 +596,7 @@ func (r *SingleClusterReconciler) ensurePodsRunningAndReady(
 
 			r.Log.V(1).Info(
 				"Waiting for pod to be ready", "pod", klog.KObj(pod),
-				"status", pod.Status.Phase, "DeletionTimestamp",
+				"status", pod.Status.Phase, "deletionTimestamp",
 				pod.DeletionTimestamp,
 			)
 
@@ -940,7 +940,7 @@ func (r *SingleClusterReconciler) cleanupPodMeshAndStatus(ctx context.Context, p
 
 	clusterPodList, err := r.getClusterPodList(ctx)
 	if err != nil {
-		return fmt.Errorf("clean up pod PVCs for cluster %s: %w", utils.ClusterNamespacedName(r.aeroCluster), err)
+		return fmt.Errorf("clean up pod PVCs for cluster %s: %w", utils.GetNamespacedNameString(r.aeroCluster), err)
 	}
 
 	podNameSet := sets.NewString(podNames...)
@@ -973,11 +973,11 @@ func (r *SingleClusterReconciler) cleanupPodMeshAndStatus(ctx context.Context, p
 			// All nodes from other rack
 			r.Log.Info(
 				"About to remove host from tipHostnames and reset alumni in pod...",
-				"pod to remove", podName, "remove and reset on pod", np.Name,
+				"podToRemove", podName, "pod", klog.KObj(np),
 			)
 
 			if err := r.tipClearHostname(ctx, np, podName); err != nil {
-				r.Log.V(2).Info("Failed to tipClear", "hostName", podName, "from the pod", np.Name)
+				r.Log.V(2).Info("Failed to tipClear", "hostName", podName, "pod", klog.KObj(np))
 			}
 
 			if err := r.alumniReset(ctx, np); err != nil {
@@ -1073,7 +1073,7 @@ func (r *SingleClusterReconciler) cleanupDanglingPodsRack(
 			return fmt.Errorf(
 				"clean up dangling pods %s in rack %d for cluster %s: %w",
 				strings.Join(utils.NamespacedNames(r.aeroCluster.Namespace, danglingPods), ", "),
-				rackState.Rack.ID, utils.ClusterNamespacedName(r.aeroCluster), err,
+				rackState.Rack.ID, utils.GetNamespacedNameString(r.aeroCluster), err,
 			)
 		}
 	}
@@ -1974,7 +1974,7 @@ func (r *SingleClusterReconciler) getEvictionBlockedPods(ctx context.Context) (s
 	pods, err := r.getClusterPodList(ctx)
 	if err != nil {
 		return evictionBlockedPods, fmt.Errorf("list pods for cluster %s: %w",
-			utils.ClusterNamespacedName(r.aeroCluster), err)
+			utils.GetNamespacedNameString(r.aeroCluster), err)
 	}
 
 	for idx := range pods.Items {

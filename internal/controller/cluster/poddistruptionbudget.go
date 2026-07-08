@@ -72,7 +72,7 @@ func (r *SingleClusterReconciler) createOrUpdatePDB(ctx context.Context) error {
 		if err != nil {
 			return fmt.Errorf(
 				"get cluster readiness status for cluster %s: %w",
-				utils.ClusterNamespacedName(r.aeroCluster), err,
+				utils.GetNamespacedNameString(r.aeroCluster), err,
 			)
 		}
 

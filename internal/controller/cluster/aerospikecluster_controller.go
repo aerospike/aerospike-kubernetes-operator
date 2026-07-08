@@ -148,7 +148,7 @@ type RackState struct {
 func (r *AerospikeClusterReconciler) Reconcile(
 	ctx context.Context, request reconcile.Request,
 ) (ctrl.Result, error) {
-	log := r.Log.WithValues("aerospikeCluster", klog.KRef(request.Namespace, request.Name))
+	log := klog.LoggerWithValues(r.Log, "aerospikeCluster", klog.KRef(request.Namespace, request.Name))
 
 	log.Info("Reconciling AerospikeCluster")
 

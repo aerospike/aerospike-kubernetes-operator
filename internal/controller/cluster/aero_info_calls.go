@@ -15,6 +15,7 @@ package cluster
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"time"
 
@@ -50,14 +51,14 @@ func (r *SingleClusterReconciler) waitForMultipleNodesSafeStopReady(
 	// Remove a node only if the cluster is stable
 	if err := r.waitForAllSTSToBeReady(ctx, ignorablePodNames); err != nil {
 		return common.ReconcileError(fmt.Errorf(
-			"wait for cluster %s StatefulSets to be ready: %w", utils.ClusterNamespacedName(r.aeroCluster), err))
+			"wait for cluster %s StatefulSets to be ready: %w", utils.GetNamespacedNameString(r.aeroCluster), err))
 	}
 
 	// This doesn't make actual connection, only objects having connection info are created
 	allHostConns, err := r.newAllHostConnWithOption(ctx, ignorablePodNames)
 	if err != nil {
 		return common.ReconcileError(fmt.Errorf(
-			"get host connections for cluster %s nodes: %w", utils.ClusterNamespacedName(r.aeroCluster), err))
+			"get host connections for cluster %s nodes: %w", utils.GetNamespacedNameString(r.aeroCluster), err))
 	}
 
 	// Safety guard: if the cluster is degraded (some pods are failed/ignorable) and
@@ -90,7 +91,7 @@ func (r *SingleClusterReconciler) waitForMultipleNodesSafeStopReady(
 
 	// Setup roster after migration.
 	if err = r.getAndSetRoster(ctx, policy, r.aeroCluster.Spec.RosterNodeBlockList, ignorablePodNames); err != nil {
-		r.Log.V(1).Info("Failed to set roster for cluster, will requeue", "err", err)
+		r.Log.Info("Failed to set roster for cluster, will requeue", "err", err)
 		return common.ReconcileRequeueAfter(1)
 	}
 
@@ -109,7 +110,7 @@ func (r *SingleClusterReconciler) waitForMigrationToComplete(ctx context.Context
 	allHostConns, err := r.newAllHostConnWithOption(ctx, ignorablePodNames)
 	if err != nil {
 		return common.ReconcileError(fmt.Errorf(
-			"get host connections for cluster %s nodes: %w", utils.ClusterNamespacedName(r.aeroCluster), err))
+			"get host connections for cluster %s nodes: %w", utils.GetNamespacedNameString(r.aeroCluster), err))
 	}
 
 	r.Log.Info("Waiting for migration to complete")
@@ -282,7 +283,7 @@ func (r *SingleClusterReconciler) newAsConn(pod *corev1.Pod) *deployment.ASConn 
 		AerospikeHostName: host,
 		AerospikePort:     int(*port),
 		AerospikeTLSName:  tlsName,
-		Log:               r.Log.WithValues("pod", klog.KObj(pod)),
+		Log:               klog.LoggerWithValues(r.Log, "pod", klog.KObj(pod)),
 	}
 
 	return asConn
@@ -326,7 +327,7 @@ func (r *SingleClusterReconciler) setMigrateFillDelay(
 	if err != nil {
 		return common.ReconcileError(
 			fmt.Errorf(
-				"get host connections for cluster %s nodes: %w", utils.ClusterNamespacedName(r.aeroCluster), err,
+				"get host connections for cluster %s nodes: %w", utils.GetNamespacedNameString(r.aeroCluster), err,
 			),
 		)
 	}
@@ -349,7 +350,7 @@ func (r *SingleClusterReconciler) setDynamicConfig(
 	if err != nil {
 		return common.ReconcileError(
 			fmt.Errorf(
-				"get host connections for cluster %s nodes: %w", utils.ClusterNamespacedName(r.aeroCluster), err,
+				"get host connections for cluster %s nodes: %w", utils.GetNamespacedNameString(r.aeroCluster), err,
 			),
 		)
 	}
@@ -366,7 +367,7 @@ func (r *SingleClusterReconciler) setDynamicConfig(
 	if err != nil {
 		return common.ReconcileError(
 			fmt.Errorf(
-				"get host connections for cluster %s nodes: %w", utils.ClusterNamespacedName(r.aeroCluster), err,
+				"get host connections for cluster %s nodes: %w", utils.GetNamespacedNameString(r.aeroCluster), err,
 			),
 		)
 	}
@@ -387,7 +388,7 @@ func (r *SingleClusterReconciler) setDynamicConfig(
 			return common.ReconcileError(err)
 		}
 
-		r.Log.V(2).Info("Generated dynamic config commands",
+		r.Log.Info("Generated dynamic config commands",
 			"commands", asConfCmds, "pod", klog.KRef(r.aeroCluster.Namespace, podName))
 
 		if succeededCmds, err := deployment.SetConfigCommandsOnHosts(r.Log, r.getClientPolicy(ctx), allHostConns,
@@ -412,7 +413,10 @@ func (r *SingleClusterReconciler) setDynamicConfig(
 				ctx, patches,
 			); patchErr != nil {
 				return common.ReconcileError(
-					fmt.Errorf("update status (patch error: %v, dynamic config error: %v)", patchErr, err),
+					errors.Join(
+						fmt.Errorf("update status: %w", patchErr),
+						fmt.Errorf("apply dynamic config: %w", err),
+					),
 				)
 			}
 

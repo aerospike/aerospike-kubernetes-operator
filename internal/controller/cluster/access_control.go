@@ -480,7 +480,7 @@ func (roleCreate aerospikeRoleCreateUpdate) execute(
 		} else {
 			// Failure to query for the role.
 			return fmt.Errorf(
-				"error querying role %s: %w", roleCreate.name, err,
+				"query role %s: %w", roleCreate.name, err,
 			)
 		}
 	}
@@ -516,7 +516,7 @@ func (roleCreate aerospikeRoleCreateUpdate) createRole(
 	client *as.Client, adminPolicy *as.AdminPolicy, logger logger,
 	recorder record.EventRecorder, aeroCluster *asdbv1.AerospikeCluster,
 ) error {
-	logger.Info("Creating role", "role name", roleCreate.name)
+	logger.Info("Creating role", "roleName", roleCreate.name)
 
 	aerospikePrivileges, err := privilegeStringToAerospikePrivilege(roleCreate.privileges)
 	if err != nil {
@@ -530,7 +530,7 @@ func (roleCreate aerospikeRoleCreateUpdate) createRole(
 		return fmt.Errorf("create role %s: %w", roleCreate.name, err)
 	}
 
-	logger.Info("Created role", "role name", roleCreate.name)
+	logger.Info("Created role", "roleName", roleCreate.name)
 	recorder.Eventf(
 		aeroCluster, corev1.EventTypeNormal, "RoleCreated",
 		"Created Aerospike role %s", roleCreate.name,
@@ -546,7 +546,7 @@ func (roleCreate aerospikeRoleCreateUpdate) updateRole(
 	aeroCluster *asdbv1.AerospikeCluster,
 ) error {
 	// Update the role.
-	logger.Info("Updating role", "role name", roleCreate.name)
+	logger.Info("Updating role", "roleName", roleCreate.name)
 
 	// Find the privileges to drop.
 	currentPrivileges, err := AerospikePrivilegeToPrivilegeString(role.Privileges)
@@ -568,13 +568,13 @@ func (roleCreate aerospikeRoleCreateUpdate) updateRole(
 			adminPolicy, roleCreate.name, aerospikePrivileges,
 		); err != nil {
 			return fmt.Errorf(
-				"error revoking privileges for role %s: %w", roleCreate.name,
+				"revoke privileges for role %s: %w", roleCreate.name,
 				err,
 			)
 		}
 
 		logger.Info(
-			"Revoked privileges for role", "role name", roleCreate.name,
+			"Revoked privileges for role", "roleName", roleCreate.name,
 			"privileges", privilegesToRevoke,
 		)
 	}
@@ -589,13 +589,13 @@ func (roleCreate aerospikeRoleCreateUpdate) updateRole(
 			adminPolicy, roleCreate.name, aerospikePrivileges,
 		); err != nil {
 			return fmt.Errorf(
-				"error granting privileges for role %s: %w", roleCreate.name,
+				"grant privileges for role %s: %w", roleCreate.name,
 				err,
 			)
 		}
 
 		logger.Info(
-			"Granted privileges to role", "role name", roleCreate.name,
+			"Granted privileges to role", "roleName", roleCreate.name,
 			"privileges", privilegesToGrant,
 		)
 	}
@@ -606,7 +606,7 @@ func (roleCreate aerospikeRoleCreateUpdate) updateRole(
 			adminPolicy, roleCreate.name, roleCreate.whitelist,
 		); err != nil {
 			return fmt.Errorf(
-				"error setting whitelist for role %s: %w", roleCreate.name, err,
+				"set whitelist for role %s: %w", roleCreate.name, err,
 			)
 		}
 	}
@@ -616,12 +616,12 @@ func (roleCreate aerospikeRoleCreateUpdate) updateRole(
 			adminPolicy, roleCreate.name, roleCreate.readQuota, roleCreate.writeQuota,
 		); err != nil {
 			return fmt.Errorf(
-				"error setting quotas for role %s: %w", roleCreate.name, err,
+				"set quotas for role %s: %w", roleCreate.name, err,
 			)
 		}
 	}
 
-	logger.Info("Updated role", "role name", roleCreate.name)
+	logger.Info("Updated role", "roleName", roleCreate.name)
 	recorder.Eventf(
 		aeroCluster, corev1.EventTypeNormal, "RoleUpdated",
 		"Updated Aerospike role %s", roleCreate.name,
@@ -656,7 +656,7 @@ func (userCreate aerospikeUserCreateUpdate) execute(
 		} else {
 			// Failure to query for the user.
 			return fmt.Errorf(
-				"error querying user %s: %w", userCreate.name, err,
+				"query user %s: %w", userCreate.name, err,
 			)
 		}
 	}
@@ -696,7 +696,7 @@ func (userCreate aerospikeUserCreateUpdate) createUser(
 
 	if userCreate.password == nil {
 		return fmt.Errorf(
-			"error creating user %s. Password not specified", userCreate.name,
+			"create user %s: password not specified", userCreate.name,
 		)
 	}
 
@@ -730,7 +730,7 @@ func (userCreate aerospikeUserCreateUpdate) updateUser(
 			adminPolicy, userCreate.name, *userCreate.password,
 		); err != nil {
 			return fmt.Errorf(
-				"error updating password for user %s: %w", userCreate.name, err,
+				"update password for user %s: %w", userCreate.name, err,
 			)
 		}
 
@@ -746,7 +746,7 @@ func (userCreate aerospikeUserCreateUpdate) updateUser(
 	if len(rolesToRevoke) > 0 {
 		if err := client.RevokeRoles(adminPolicy, userCreate.name, rolesToRevoke); err != nil {
 			return fmt.Errorf(
-				"error revoking roles for user %s: %w", userCreate.name, err,
+				"revoke roles for user %s: %w", userCreate.name, err,
 			)
 		}
 
@@ -759,7 +759,7 @@ func (userCreate aerospikeUserCreateUpdate) updateUser(
 	if len(rolesToGrant) > 0 {
 		if err := client.GrantRoles(adminPolicy, userCreate.name, rolesToGrant); err != nil {
 			return fmt.Errorf(
-				"error granting roles for user %s: %w", userCreate.name, err,
+				"grant roles for user %s: %w", userCreate.name, err,
 			)
 		}
 

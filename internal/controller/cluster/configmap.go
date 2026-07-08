@@ -26,7 +26,7 @@ import (
 	"github.com/aerospike/aerospike-management-lib/asconfig"
 )
 
-var pkgLog = ctrl.Log.WithName("lib.asconfig")
+var pkgLog = klog.LoggerWithName(ctrl.Log, "lib.asconfig")
 
 const (
 	// aerospikeTemplateConfFileName is the name of the aerospike conf template
@@ -101,7 +101,7 @@ func (r *SingleClusterReconciler) createConfigMapData(ctx context.Context, rack 
 	if err != nil {
 		return nil, fmt.Errorf(
 			"build config template for rack %d in cluster %s: %w",
-			rack.ID, utils.ClusterNamespacedName(r.aeroCluster), err,
+			rack.ID, utils.GetNamespacedNameString(r.aeroCluster), err,
 		)
 	}
 
@@ -110,7 +110,7 @@ func (r *SingleClusterReconciler) createConfigMapData(ctx context.Context, rack 
 	if err != nil {
 		return nil, fmt.Errorf(
 			"build base config data for rack %d in cluster %s: %w",
-			rack.ID, utils.ClusterNamespacedName(r.aeroCluster), err,
+			rack.ID, utils.GetNamespacedNameString(r.aeroCluster), err,
 		)
 	}
 
@@ -215,7 +215,8 @@ func createPodSpecForRack(
 func (r *SingleClusterReconciler) buildConfigTemplate(rack *asdbv1.Rack) (
 	string, error,
 ) {
-	log := pkgLog.WithValues(
+	log := klog.LoggerWithValues(
+		pkgLog,
 		"aerospikeCluster", klog.KRef(r.aeroCluster.Namespace, r.aeroCluster.Name),
 	)
 
@@ -229,7 +230,7 @@ func (r *SingleClusterReconciler) buildConfigTemplate(rack *asdbv1.Rack) (
 	if err != nil {
 		return "", fmt.Errorf(
 			"load Aerospike config map for rack %d in cluster %s: %w",
-			rack.ID, utils.ClusterNamespacedName(r.aeroCluster), err,
+			rack.ID, utils.GetNamespacedNameString(r.aeroCluster), err,
 		)
 	}
 
@@ -370,8 +371,8 @@ func (r *SingleClusterReconciler) deleteRackConfigMap(ctx context.Context, names
 	if err := r.Delete(ctx, configMap); err != nil {
 		if errors.IsNotFound(err) {
 			r.Log.Info(
-				"Can't find rack configmap while trying to delete it. Skipping...",
-				"configmap", namespacedName.Name,
+				"Rack ConfigMap not found while deleting, skipping",
+				"configMap", klog.KRef(namespacedName.Namespace, namespacedName.Name),
 			)
 
 			return nil
