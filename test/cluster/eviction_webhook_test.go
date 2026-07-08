@@ -168,7 +168,7 @@ var _ = Describe(
 							Expect(validatePVCDeletion(ctx, oldPvcInfoPerPod[targetPod.Name], false)).ToNot(HaveOccurred())
 						})
 
-					It("Should delete local PVCs when an eviction-blocked annotation is set on a failed pod "+
+					FIt("Should delete local PVCs when an eviction-blocked annotation is set on a failed pod "+
 						"and deleteLocalStorageOnPodRecovery is enabled", func() {
 						aeroCluster, err := getCluster(k8sClient, ctx, clusterNamespacedName)
 						Expect(err).ToNot(HaveOccurred())
@@ -186,6 +186,7 @@ var _ = Describe(
 						Expect(err).ToNot(HaveOccurred())
 
 						targetPod := &podList.Items[0]
+						originalPodUID := string(targetPod.UID)
 
 						By("Marking the target pod as failed")
 						Expect(markPodAsFailed(ctx, k8sClient, targetPod.Name, namespace)).ToNot(HaveOccurred())
@@ -199,6 +200,9 @@ var _ = Describe(
 							targetPod.Namespace, targetPod.Name))
 
 						By("Waiting for AKO to recover the failed pod (with PVC deletion)")
+
+						err = waitForPodRestart(ctx, targetPod.Name, targetPod.Namespace, originalPodUID)
+						Expect(err).ToNot(HaveOccurred())
 
 						err = waitForAerospikeCluster(
 							k8sClient, ctx, aeroCluster, int(aeroCluster.Spec.Size),
