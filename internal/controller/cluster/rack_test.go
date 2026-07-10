@@ -20,10 +20,6 @@ import (
 	asdbv1 "github.com/aerospike/aerospike-kubernetes-operator/v4/api/v1"
 )
 
-// createEmptyRack must not panic when createSTS
-// fails before a StatefulSet object exists (createSTS returns a nil *appsv1.StatefulSet
-// alongside the error), since the cleanup call on that path used to pass the nil
-// pointer straight into deleteSTS, which dereferences it.
 func newTestAerospikeCluster(namespace, name string) *asdbv1.AerospikeCluster {
 	aeroConfig := asdbv1.AerospikeConfigSpec{
 		Value: map[string]interface{}{
@@ -133,7 +129,7 @@ func TestCreateEmptyRack_NilSTSOnCreateFailure(t *testing.T) {
 }
 
 // TestCreateEmptyRack_NilSTSOnOwnerRefFailure covers the other nil-returning error path in
-// createSTS (controllerutil.SetControllerReference failing before r.Create is ever reached),
+// createSTSConfigMap (controllerutil.SetControllerReference failing before r.Create is ever reached),
 // to confirm the nil guard in createEmptyRack isn't narrowly coupled to just one failure site.
 func TestCreateEmptyRack_NilSTSOnOwnerRefFailure(t *testing.T) {
 	aeroCluster := newTestAerospikeCluster("test-ns", "test-cluster")
