@@ -139,17 +139,17 @@ go-lint-fix: golangci-lint ## Run golangci-lint linter and perform fixes
 	$(GOLANGCI_LINT) run --fix
 
 .PHONY: all-test
-all-test: manifests generate fmt vet setup-envtest cluster-test backup-service-test backup-test restore-test ## Run tests.
+all-test: manifests generate fmt vet setup-envtest unit-test cluster-test backup-service-test backup-test restore-test ## Run tests.
 
-.PHONY: pkg-test
-pkg-test: ## Run unit tests for pkg directory
-	@echo "Running pkg unit tests..."
-	go test -v -race -coverprofile=coverage.out ./pkg/...
+.PHONY: unit-test
+unit-test: ## Run unit tests for pkg and internal directories
+	@echo "Running unit tests..."
+	go test -v -race -coverprofile=coverage.out ./pkg/... ./internal/...
 	@echo "\nCoverage Summary:"
 	@go tool cover -func=coverage.out | tail -1
 
-.PHONY: pkg-test-coverage
-pkg-test-coverage: pkg-test ## Run pkg unit tests and open coverage report in browser
+.PHONY: unit-test-coverage
+unit-test-coverage: unit-test ## Run pkg unit tests and open coverage report in browser
 	@echo "Opening coverage report in browser..."
 	go tool cover -html=coverage.out
 
