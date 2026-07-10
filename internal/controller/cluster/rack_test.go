@@ -190,7 +190,8 @@ func TestCreateEmptyRack_DeletesSTSWhenReadinessFails(t *testing.T) {
 
 	require.Nil(t, found)
 	require.False(t, res.IsSuccess)
-	require.True(t, stsDeleteAttempted, "deleteSTS should be invoked to roll back the StatefulSet created before readiness failed")
+	require.True(t, stsDeleteAttempted,
+		"deleteSTS should be invoked to roll back the StatefulSet created before readiness failed")
 
 	err := r.Get(context.TODO(), types.NamespacedName{Name: "test-cluster-1", Namespace: "test-ns"}, &appsv1.StatefulSet{})
 	require.Error(t, err, "the StatefulSet created by createSTS should have been deleted by the cleanup path")
