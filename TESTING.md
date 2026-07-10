@@ -37,7 +37,7 @@ make unit-test-coverage
 Runs all unit tests with race detection and coverage reporting.
 
 **What it does:**
-- Runs `go test -v -race -coverprofile=coverage.out ./pkg/...`
+- Runs `go test -v -race -coverprofile=coverage.out ./pkg/... ./internal/...`
 - Displays coverage summary at the end
 - Same command used by GitHub Actions CI
 
