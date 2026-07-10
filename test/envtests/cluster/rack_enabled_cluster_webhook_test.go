@@ -527,6 +527,29 @@ var _ = Describe("Rack enabled cluster webhook validation", func() {
 						Validate(err)
 				})
 
+				It("rejects negative rack id on update (Minimum)", func() {
+					aeroCluster := testCluster.CreateDummyAerospikeCluster(nsName, 2)
+					aeroCluster.Spec.RackConfig = asdbv1.RackConfig{
+						Racks: []asdbv1.Rack{
+							{ID: 1},
+							{ID: 2},
+						},
+					}
+					Expect(envtests.K8sClient.Create(ctx, aeroCluster)).To(Succeed())
+
+					current, err := testCluster.GetCluster(envtests.K8sClient, ctx, nsName)
+					Expect(err).ToNot(HaveOccurred())
+
+					current.Spec.RackConfig.Racks[0].ID = -1
+					err = envtests.K8sClient.Update(ctx, current)
+					Expect(err).To(HaveOccurred())
+					envtests.NewStatusErrorMatcher().
+						WithMessageSubstrings(testutil.CRDSchemaErrorPrefix,
+							"Invalid value: -1",
+							"id in body should be greater than or equal to 0").
+						Validate(err)
+				})
+
 				It("rejects DefaultRackID when appended on update with multiple racks (reserved, mutating webhook)", func() {
 					aeroCluster := testCluster.CreateDummyAerospikeCluster(nsName, 2)
 					aeroCluster.Spec.RackConfig = asdbv1.RackConfig{

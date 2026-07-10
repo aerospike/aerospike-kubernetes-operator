@@ -1530,32 +1530,30 @@ var _ = Describe("AerospikeCluster validation", func() {
 			})
 
 			Context("negative", func() {
-				It("rejects InvalidImage and image lower than base", func() {
-					current, err := testCluster.GetCluster(envtests.K8sClient, ctx, updateValidationClusterNamespacedName)
-					Expect(err).ToNot(HaveOccurred())
+				DescribeTable("rejects invalid image on update",
+					func(image string, msgSubs ...string) {
+						current, err := testCluster.GetCluster(envtests.K8sClient, ctx, updateValidationClusterNamespacedName)
+						Expect(err).ToNot(HaveOccurred())
 
-					current.Spec.Image = "InvalidImage"
-					err = envtests.K8sClient.Update(ctx, current)
-					Expect(err).To(HaveOccurred())
-					envtests.NewStatusErrorMatcher().
-						WithMessageSubstrings(
-							testutil.WebhookErrorPrefix,
-							"image \"InvalidImage\" is not supported",
-							"only Enterprise and Federal editions are allowed").
-						Validate(err)
-
-					current, err = testCluster.GetCluster(envtests.K8sClient, ctx, updateValidationClusterNamespacedName)
-					Expect(err).ToNot(HaveOccurred())
-
-					current.Spec.Image = testutil.InvalidImage
-					err = envtests.K8sClient.Update(ctx, current)
-					Expect(err).To(HaveOccurred())
-					envtests.NewStatusErrorMatcher().
-						WithMessageSubstrings(
-							testutil.WebhookErrorPrefix,
-							"image version 3.0.0.4 not supported. Base version 6.0.0.0").
-						Validate(err)
-				})
+						current.Spec.Image = image
+						err = envtests.K8sClient.Update(ctx, current)
+						Expect(err).To(HaveOccurred())
+						envtests.NewStatusErrorMatcher().
+							WithMessageSubstrings(msgSubs...).
+							Validate(err)
+					},
+					Entry("invalid image edition", "InvalidImage",
+						testutil.WebhookErrorPrefix,
+						"image \"InvalidImage\" is not supported",
+						"only Enterprise and Federal editions are allowed"),
+					Entry("version below base", testutil.InvalidImage,
+						testutil.WebhookErrorPrefix,
+						"image version 3.0.0.4 not supported. Base version 6.0.0.0"),
+					Entry("empty 'Image' string (CRD MinLength=1)", "",
+						testutil.CRDSchemaErrorPrefix,
+						"spec.image: Invalid value: \"\"",
+						"should be at least 1 chars long"),
+				)
 			})
 		})
 
@@ -1566,17 +1564,51 @@ var _ = Describe("AerospikeCluster validation", func() {
 			})
 
 			Context("negative", func() {
-				It("rejects zero size", func() {
+				DescribeTable("rejects invalid size on update",
+					func(size int32, msgSubs ...string) {
+						current, err := testCluster.GetCluster(envtests.K8sClient, ctx, updateValidationClusterNamespacedName)
+						Expect(err).ToNot(HaveOccurred())
+
+						current.Spec.Size = size
+						err = envtests.K8sClient.Update(ctx, current)
+						Expect(err).To(HaveOccurred())
+						envtests.NewStatusErrorMatcher().
+							WithMessageSubstrings(msgSubs...).
+							Validate(err)
+					},
+					Entry("zero size (Minimum)", int32(0),
+						testutil.CRDSchemaErrorPrefix,
+						"spec.size: Invalid value: 0"),
+					Entry("size above 256 (Maximum)", int32(257),
+						testutil.CRDSchemaErrorPrefix,
+						"spec.size: Invalid value: 257",
+						"should be less than or equal to 256"),
+				)
+			})
+		})
+
+		Context("spec.aerospikeAccessControl.adminPolicy", func() {
+			BeforeEach(func() {
+				aeroCluster := testCluster.CreateDummyAerospikeCluster(updateValidationClusterNamespacedName, 2)
+				aeroCluster.Spec.AerospikeAccessControl.AdminPolicy = &asdbv1.AerospikeClientAdminPolicy{
+					Timeout: 0,
+				}
+				Expect(envtests.K8sClient.Create(ctx, aeroCluster)).To(Succeed())
+			})
+
+			Context("negative", func() {
+				It("rejects negative adminPolicy timeout on update (Minimum)", func() {
 					current, err := testCluster.GetCluster(envtests.K8sClient, ctx, updateValidationClusterNamespacedName)
 					Expect(err).ToNot(HaveOccurred())
 
-					current.Spec.Size = 0
+					current.Spec.AerospikeAccessControl.AdminPolicy.Timeout = -1
 					err = envtests.K8sClient.Update(ctx, current)
 					Expect(err).To(HaveOccurred())
 					envtests.NewStatusErrorMatcher().
 						WithMessageSubstrings(
 							testutil.CRDSchemaErrorPrefix,
-							"spec.size: Invalid value: 0").
+							"Invalid value: -1",
+							"timeout in body should be greater than or equal to 0").
 						Validate(err)
 				})
 			})
@@ -1603,6 +1635,19 @@ var _ = Describe("AerospikeCluster validation", func() {
 							testutil.WebhookErrorPrefix,
 							"denied the request:",
 							"cannot update MultiPodPerHost setting").
+						Validate(err)
+				})
+
+				It("rejects dnsPolicy Default on update", func() {
+					current, err := testCluster.GetCluster(envtests.K8sClient, ctx, updateValidationClusterNamespacedName)
+					Expect(err).ToNot(HaveOccurred())
+
+					defaultDNS := v1.DNSDefault
+					current.Spec.PodSpec.InputDNSPolicy = &defaultDNS
+					err = envtests.K8sClient.Update(ctx, current)
+					Expect(err).To(HaveOccurred())
+					envtests.NewStatusErrorMatcher().
+						WithMessageSubstrings(testutil.WebhookErrorPrefix, "dnsPolicy: Default is not supported").
 						Validate(err)
 				})
 			})

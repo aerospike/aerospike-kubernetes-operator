@@ -146,6 +146,23 @@ var _ = Describe("AerospikeBackup validation", func() {
 			})
 
 			Context("positive", func() {
+				It("accepts on-demand backup with type Incremental on update (Enum)", func() {
+					backup.Spec.OnDemandBackups = []asdbv1beta1.OnDemandBackupSpec{
+						{
+							ID:          "on-demand-incremental",
+							RoutineName: routineName(backupNsNm),
+							Type:        asdbv1beta1.IncrementalBackup,
+						},
+					}
+
+					Expect(envtests.K8sClient.Update(ctx, backup)).To(Succeed())
+
+					var updated asdbv1beta1.AerospikeBackup
+					Expect(envtests.K8sClient.Get(ctx, backupNsNm, &updated)).To(Succeed())
+					Expect(updated.Spec.OnDemandBackups).To(HaveLen(1))
+					Expect(updated.Spec.OnDemandBackups[0].Type).To(Equal(asdbv1beta1.IncrementalBackup))
+				})
+
 				It("defaults on-demand backup type to Full when omitted (default=Full)", func() {
 					backup.Spec.OnDemandBackups = []asdbv1beta1.OnDemandBackupSpec{
 						{
@@ -160,6 +177,28 @@ var _ = Describe("AerospikeBackup validation", func() {
 					Expect(envtests.K8sClient.Get(ctx, backupNsNm, &updated)).To(Succeed())
 					Expect(updated.Spec.OnDemandBackups).To(HaveLen(1))
 					Expect(updated.Spec.OnDemandBackups[0].Type).To(Equal(asdbv1beta1.FullBackup))
+				})
+			})
+		})
+
+		Context("spec.backupService", func() {
+			Context("negative", func() {
+				It("rejects empty backup service name on update (MinLength=1)", func() {
+					backup.Spec.BackupService.Name = ""
+					err := envtests.K8sClient.Update(ctx, backup)
+					Expect(err).To(HaveOccurred())
+					envtests.NewStatusErrorMatcher().
+						WithMessageSubstrings(testutil.BackupCRDSchemaErrorPrefix, "backupService", "name").
+						Validate(err)
+				})
+
+				It("rejects empty backup service namespace on update (MinLength=1)", func() {
+					backup.Spec.BackupService.Namespace = ""
+					err := envtests.K8sClient.Update(ctx, backup)
+					Expect(err).To(HaveOccurred())
+					envtests.NewStatusErrorMatcher().
+						WithMessageSubstrings(testutil.BackupCRDSchemaErrorPrefix, "backupService", "namespace").
+						Validate(err)
 				})
 			})
 		})
