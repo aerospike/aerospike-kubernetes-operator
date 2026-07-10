@@ -8,6 +8,7 @@ import (
 	"github.com/go-logr/logr"
 	"github.com/stretchr/testify/require"
 	appsv1 "k8s.io/api/apps/v1"
+	corev1 "k8s.io/api/core/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/runtime"
 	"k8s.io/apimachinery/pkg/types"
@@ -148,24 +149,49 @@ func TestCreateEmptyRack_NilSTSOnOwnerRefFailure(t *testing.T) {
 	})
 }
 
-// TestDeleteSTS_RemovesExistingStatefulSet confirms deleteSTS still performs real cleanup
-// for the case createEmptyRack's nil guard must not accidentally suppress: a non-nil
-// StatefulSet returned alongside an error.
-func TestDeleteSTS_RemovesExistingStatefulSet(t *testing.T) {
+// TestCreateEmptyRack_DeletesSTSWhenReadinessFails covers the case createEmptyRack's nil
+// guard must not accidentally suppress: createSTS creates the StatefulSet successfully
+// (r.Create succeeds) but then fails, here via waitForSTSToBeReady, returning a non-nil
+// StatefulSet alongside a non-nil error. createEmptyRack must call deleteSTS to roll back
+// the StatefulSet it just created.
+func TestCreateEmptyRack_DeletesSTSWhenReadinessFails(t *testing.T) {
 	aeroCluster := newTestAerospikeCluster("test-ns", "test-cluster")
+	rackState := newTestRackState(aeroCluster)
 
-	st := &appsv1.StatefulSet{
+	var stsDeleteAttempted bool
+
+	r := newTestReconciler(t, aeroCluster, &interceptor.Funcs{
+		Delete: func(
+			ctx context.Context, c client.WithWatch, obj client.Object, opts ...client.DeleteOption,
+		) error {
+			if _, ok := obj.(*appsv1.StatefulSet); ok {
+				stsDeleteAttempted = true
+			}
+
+			return c.Delete(ctx, obj, opts...)
+		},
+	})
+
+	// Pre-create the StatefulSet's pod-0 in a Failed phase so waitForSTSToBeReady
+	// (invoked by createSTS right after the StatefulSet is created) fails immediately via
+	// utils.CheckPodFailed, instead of polling for pod readiness for up to 3 minutes.
+	pod := &corev1.Pod{
 		ObjectMeta: metav1.ObjectMeta{
-			Name:      "test-cluster-1",
+			Name:      "test-cluster-1-0",
 			Namespace: "test-ns",
 		},
+		Status: corev1.PodStatus{
+			Phase: corev1.PodFailed,
+		},
 	}
+	require.NoError(t, r.Create(context.TODO(), pod))
 
-	r := newTestReconciler(t, aeroCluster, &interceptor.Funcs{})
-	require.NoError(t, r.Create(context.TODO(), st))
+	found, res := r.createEmptyRack(rackState)
 
-	require.NoError(t, r.deleteSTS(st))
+	require.Nil(t, found)
+	require.False(t, res.IsSuccess)
+	require.True(t, stsDeleteAttempted, "deleteSTS should be invoked to roll back the StatefulSet created before readiness failed")
 
-	err := r.Get(context.TODO(), types.NamespacedName{Name: st.Name, Namespace: st.Namespace}, &appsv1.StatefulSet{})
-	require.Error(t, err)
+	err := r.Get(context.TODO(), types.NamespacedName{Name: "test-cluster-1", Namespace: "test-ns"}, &appsv1.StatefulSet{})
+	require.Error(t, err, "the StatefulSet created by createSTS should have been deleted by the cleanup path")
 }

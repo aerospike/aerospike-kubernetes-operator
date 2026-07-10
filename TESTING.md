@@ -100,7 +100,7 @@ go test -v -race ./pkg/utils -run TestGetFailedPodGracePeriod
 
 ### Run with coverage:
 ```bash
-go test -v -race -coverprofile=coverage.out ./pkg/...
+go test -v -race -coverprofile=coverage.out ./pkg/... ./internal/...
 go tool cover -func=coverage.out
 go tool cover -html=coverage.out
 ```
