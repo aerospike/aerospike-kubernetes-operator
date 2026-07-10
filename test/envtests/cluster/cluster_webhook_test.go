@@ -384,7 +384,7 @@ var _ = Describe("AerospikeCluster validation", func() {
 					// Webhook response validation
 					envtests.NewStatusErrorMatcher().
 						WithMessageSubstrings(
-							"\"maerospikecluster.kb.io\"",
+							testutil.MutatingClusterWebhookErrorPrefix,
 							"aerospikeConfig.namespaces not present.").
 						Validate(err)
 				})
@@ -400,7 +400,7 @@ var _ = Describe("AerospikeCluster validation", func() {
 					// Webhook response validation
 					envtests.NewStatusErrorMatcher().
 						WithMessageSubstrings(
-							"\"maerospikecluster.kb.io\"",
+							testutil.MutatingClusterWebhookErrorPrefix,
 							"aerospikeConfig.namespaces cannot be nil").
 						Validate(err)
 				})
@@ -582,7 +582,7 @@ var _ = Describe("AerospikeCluster validation", func() {
 					// Webhook response validation
 					envtests.NewStatusErrorMatcher().
 						WithMessageSubstrings(" ",
-							"\"maerospikecluster.kb.io\"",
+							testutil.MutatingClusterWebhookErrorPrefix,
 							"spec.aerospikeConfig cannot be nil").
 						Validate(err)
 				})
@@ -600,7 +600,7 @@ var _ = Describe("AerospikeCluster validation", func() {
 					// Webhook response validation
 					envtests.NewStatusErrorMatcher().
 						WithMessageSubstrings(" ",
-							"\"maerospikecluster.kb.io\"",
+							testutil.MutatingClusterWebhookErrorPrefix,
 							"aerospikeConfig.namespaces not valid namespace list invalidConf").
 						Validate(err)
 				})
@@ -663,7 +663,7 @@ var _ = Describe("AerospikeCluster validation", func() {
 
 					// Webhook response validation
 					envtests.NewStatusErrorMatcher().
-						WithMessageSubstrings(" \"maerospikecluster.kb.io\"",
+						WithMessageSubstrings(testutil.MutatingClusterWebhookErrorPrefix,
 							"failed to set default aerospikeConfig.service config:",
 							"config node-id can not have non-default value (string a1).",
 							"It will be set internally (string ENV_NODE_ID)").
@@ -684,7 +684,7 @@ var _ = Describe("AerospikeCluster validation", func() {
 
 					// Webhook response validation
 					envtests.NewStatusErrorMatcher().
-						WithMessageSubstrings(" \"maerospikecluster.kb.io\"",
+						WithMessageSubstrings(testutil.MutatingClusterWebhookErrorPrefix,
 							"failed to set default aerospikeConfig.service config:",
 							"config cluster-name can not have non-default value (string cluster-name).",
 							fmt.Sprintf("It will be set internally (string %s)", clusterNamespacedName.Name)).
@@ -767,7 +767,7 @@ var _ = Describe("AerospikeCluster validation", func() {
 					Expect(err).To(HaveOccurred())
 
 					envtests.NewStatusErrorMatcher().
-						WithMessageSubstrings(" \"maerospikecluster.kb.io\"",
+						WithMessageSubstrings(testutil.MutatingClusterWebhookErrorPrefix,
 							"failed to set default aerospikeConfig.network.service config:",
 							"access-addresses",
 							"can not have non-default value",
@@ -787,7 +787,7 @@ var _ = Describe("AerospikeCluster validation", func() {
 					Expect(err).To(HaveOccurred())
 
 					envtests.NewStatusErrorMatcher().
-						WithMessageSubstrings(" \"maerospikecluster.kb.io\"",
+						WithMessageSubstrings(testutil.MutatingClusterWebhookErrorPrefix,
 							"failed to set default aerospikeConfig.network.service config:",
 							"tls-access-addresses",
 							"can not have non-default value",
@@ -1377,11 +1377,10 @@ var _ = Describe("AerospikeCluster validation", func() {
 
 				It("rejects rack id above 1000000 (Maximum)", func() {
 					aeroCluster := testCluster.CreateDummyAerospikeCluster(clusterNamespacedName, 1)
-					st := getStorageSpecForDevice("/test/dev/xvdf")
 					aeroCluster.Spec.RackConfig = asdbv1.RackConfig{
 						Namespaces: []string{"test"},
 						Racks: []asdbv1.Rack{
-							{ID: 1000001, Revision: "v1", InputStorage: &st},
+							{ID: asdbv1.MaxRackID + 1},
 						},
 					}
 

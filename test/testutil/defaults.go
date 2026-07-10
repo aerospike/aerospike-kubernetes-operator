@@ -24,6 +24,7 @@ const (
 	DefaultNamespace                  = "default"
 	DefaultDevicePath                 = "/test/dev/xvdf"
 	WebhookErrorPrefix                = "vaerospikecluster.kb.io"
+	MutatingClusterWebhookErrorPrefix = "maerospikecluster.kb.io"
 	CRDSchemaErrorPrefix              = "AerospikeCluster.asdb.aerospike.com"
 	BackupWebhookErrorPrefix          = "vaerospikebackup.kb.io"
 	BackupCRDSchemaErrorPrefix        = "AerospikeBackup.asdb.aerospike.com"

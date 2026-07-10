@@ -33,10 +33,10 @@ import (
 	"github.com/aerospike/aerospike-kubernetes-operator/v4/test/testutil"
 )
 
-// nRackStrongConsistencyCluster returns a deployable multi-rack cluster (SC namespace per rack)
+// createMultiRackSCCluster returns a deployable multi-rack cluster (SC namespace per rack)
 // with per-rack storage and no spec-level storage, matching other rack envtests.
 // Cluster size is fixed at 4 so pod distribution across racks matches these webhook cases.
-func nRackStrongConsistencyCluster(ns types.NamespacedName, devicePaths ...string) *asdbv1.AerospikeCluster {
+func createMultiRackSCCluster(ns types.NamespacedName, devicePaths ...string) *asdbv1.AerospikeCluster {
 	aeroCluster := testCluster.CreateDummyAerospikeCluster(ns, 4)
 	racks := make([]asdbv1.Rack, len(devicePaths))
 
@@ -268,7 +268,7 @@ var _ = Describe("Rack enabled cluster webhook validation", func() {
 					Expect(err).To(HaveOccurred())
 					envtests.NewStatusErrorMatcher().
 						WithMessageSubstrings(
-							"\"maerospikecluster.kb.io\"",
+							testutil.MutatingClusterWebhookErrorPrefix,
 							"invalid RackConfig",
 							"RackID",
 							"reserved",
@@ -290,7 +290,7 @@ var _ = Describe("Rack enabled cluster webhook validation", func() {
 					Expect(err).To(HaveOccurred())
 					envtests.NewStatusErrorMatcher().
 						WithMessageSubstrings(
-							"\"maerospikecluster.kb.io\"",
+							testutil.MutatingClusterWebhookErrorPrefix,
 							"invalid RackConfig",
 							"RackID",
 							"reserved",
@@ -396,7 +396,7 @@ var _ = Describe("Rack enabled cluster webhook validation", func() {
 		Context("spec.rackConfig.racks[].forceBlockFromRoster", func() {
 			Context("positive", func() {
 				It("allows create when exactly one rack has forceBlockFromRoster and at least one rack stays in roster", func() {
-					aeroCluster := nRackStrongConsistencyCluster(nsName,
+					aeroCluster := createMultiRackSCCluster(nsName,
 						"/rack1/xvda", "/rack2/xvdb", "/rack3/xvdc")
 					aeroCluster.Spec.RackConfig.Racks[0].ForceBlockFromRoster = ptr.To(true)
 
@@ -406,7 +406,7 @@ var _ = Describe("Rack enabled cluster webhook validation", func() {
 
 			Context("negative", func() {
 				It("rejects create when every rack has forceBlockFromRoster enabled", func() {
-					aeroCluster := nRackStrongConsistencyCluster(nsName,
+					aeroCluster := createMultiRackSCCluster(nsName,
 						"/rack1/xvda", "/rack2/xvdb", "/rack3/xvdc")
 					aeroCluster.Spec.RackConfig.Racks[0].ForceBlockFromRoster = ptr.To(true)
 					aeroCluster.Spec.RackConfig.Racks[1].ForceBlockFromRoster = ptr.To(true)
@@ -424,7 +424,7 @@ var _ = Describe("Rack enabled cluster webhook validation", func() {
 				})
 
 				It("rejects create when forceBlockFromRoster is used together with maxIgnorablePods", func() {
-					aeroCluster := nRackStrongConsistencyCluster(nsName,
+					aeroCluster := createMultiRackSCCluster(nsName,
 						"/rack1/xvda", "/rack2/xvdb")
 					aeroCluster.Spec.RackConfig.Racks[0].ForceBlockFromRoster = ptr.To(true)
 					aeroCluster.Spec.RackConfig.MaxIgnorablePods = ptr.To(intstr.FromInt32(1))
@@ -441,7 +441,7 @@ var _ = Describe("Rack enabled cluster webhook validation", func() {
 				})
 
 				It("rejects create when forceBlockFromRoster is used together with rosterNodeBlockList", func() {
-					aeroCluster := nRackStrongConsistencyCluster(nsName,
+					aeroCluster := createMultiRackSCCluster(nsName,
 						"/rack1/xvda", "/rack2/xvdb")
 					aeroCluster.Spec.RackConfig.Racks[0].ForceBlockFromRoster = ptr.To(true)
 					aeroCluster.Spec.RosterNodeBlockList = []string{"1a0"}
@@ -458,7 +458,7 @@ var _ = Describe("Rack enabled cluster webhook validation", func() {
 				})
 
 				It("rejects create when only one rack remains in roster and rollingUpdateBatchSize is set", func() {
-					aeroCluster := nRackStrongConsistencyCluster(nsName,
+					aeroCluster := createMultiRackSCCluster(nsName,
 						"/rack1/xvda", "/rack2/xvdb")
 					aeroCluster.Spec.RackConfig.Racks[0].ForceBlockFromRoster = ptr.To(true)
 					aeroCluster.Spec.RackConfig.RollingUpdateBatchSize = ptr.To(intstr.FromInt32(2))
@@ -475,7 +475,7 @@ var _ = Describe("Rack enabled cluster webhook validation", func() {
 				})
 
 				It("rejects create when only one rack remains in roster and scaleDownBatchSize is set", func() {
-					aeroCluster := nRackStrongConsistencyCluster(nsName,
+					aeroCluster := createMultiRackSCCluster(nsName,
 						"/rack1/xvda", "/rack2/xvdb")
 					aeroCluster.Spec.RackConfig.Racks[0].ForceBlockFromRoster = ptr.To(true)
 					aeroCluster.Spec.RackConfig.ScaleDownBatchSize = ptr.To(intstr.FromInt32(1))
@@ -620,7 +620,7 @@ var _ = Describe("Rack enabled cluster webhook validation", func() {
 					Expect(err).To(HaveOccurred())
 					envtests.NewStatusErrorMatcher().
 						WithMessageSubstrings(
-							"\"maerospikecluster.kb.io\"",
+							testutil.MutatingClusterWebhookErrorPrefix,
 							"invalid RackConfig",
 							"RackID",
 							"reserved",
@@ -646,7 +646,7 @@ var _ = Describe("Rack enabled cluster webhook validation", func() {
 					Expect(err).To(HaveOccurred())
 					envtests.NewStatusErrorMatcher().
 						WithMessageSubstrings(
-							"\"maerospikecluster.kb.io\"",
+							testutil.MutatingClusterWebhookErrorPrefix,
 							"invalid RackConfig",
 							"RackID",
 							"reserved",
@@ -730,7 +730,7 @@ var _ = Describe("Rack enabled cluster webhook validation", func() {
 				})
 
 				It("rejects update adding maxIgnorablePods when forceBlockFromRoster is already enabled", func() {
-					aeroCluster := nRackStrongConsistencyCluster(nsName,
+					aeroCluster := createMultiRackSCCluster(nsName,
 						"/rack1/xvda", "/rack2/xvdb")
 					aeroCluster.Spec.RackConfig.Racks[0].ForceBlockFromRoster = ptr.To(true)
 					Expect(envtests.K8sClient.Create(ctx, aeroCluster)).To(Succeed())
@@ -756,7 +756,7 @@ var _ = Describe("Rack enabled cluster webhook validation", func() {
 		Context("spec.rackConfig.racks[].forceBlockFromRoster", func() {
 			Context("positive", func() {
 				It("allows update enabling forceBlockFromRoster on a single rack when status is populated", func() {
-					aeroCluster := nRackStrongConsistencyCluster(nsName,
+					aeroCluster := createMultiRackSCCluster(nsName,
 						"/rack1/xvda", "/rack2/xvdb", "/rack3/xvdc")
 					Expect(envtests.K8sClient.Create(ctx, aeroCluster)).To(Succeed())
 					seedClusterStatusFromSpec(ctx, nsName)
@@ -771,7 +771,7 @@ var _ = Describe("Rack enabled cluster webhook validation", func() {
 
 				It("allows sequential updates enabling forceBlockFromRoster on another rack after status reflects the first",
 					func() {
-						aeroCluster := nRackStrongConsistencyCluster(nsName,
+						aeroCluster := createMultiRackSCCluster(nsName,
 							"/rack1/xvda", "/rack2/xvdb", "/rack3/xvdc")
 						Expect(envtests.K8sClient.Create(ctx, aeroCluster)).To(Succeed())
 						seedClusterStatusFromSpec(ctx, nsName)
@@ -795,7 +795,7 @@ var _ = Describe("Rack enabled cluster webhook validation", func() {
 
 			Context("negative", func() {
 				It("rejects update toggling forceBlockFromRoster when status.aerospikeConfig is not populated", func() {
-					aeroCluster := nRackStrongConsistencyCluster(nsName,
+					aeroCluster := createMultiRackSCCluster(nsName,
 						"/rack1/xvda", "/rack2/xvdb", "/rack3/xvdc")
 					Expect(envtests.K8sClient.Create(ctx, aeroCluster)).To(Succeed())
 
@@ -815,7 +815,7 @@ var _ = Describe("Rack enabled cluster webhook validation", func() {
 				})
 
 				It("rejects update enabling forceBlockFromRoster on more than one new rack in a single change", func() {
-					aeroCluster := nRackStrongConsistencyCluster(nsName,
+					aeroCluster := createMultiRackSCCluster(nsName,
 						"/rack1/xvda", "/rack2/xvdb", "/rack3/xvdc")
 					Expect(envtests.K8sClient.Create(ctx, aeroCluster)).To(Succeed())
 					seedClusterStatusFromSpec(ctx, nsName)
@@ -837,7 +837,7 @@ var _ = Describe("Rack enabled cluster webhook validation", func() {
 				})
 
 				It("rejects update when every rack has forceBlockFromRoster enabled", func() {
-					aeroCluster := nRackStrongConsistencyCluster(nsName,
+					aeroCluster := createMultiRackSCCluster(nsName,
 						"/rack1/xvda", "/rack2/xvdb")
 					aeroCluster.Spec.RackConfig.Racks[0].ForceBlockFromRoster = ptr.To(true)
 					Expect(envtests.K8sClient.Create(ctx, aeroCluster)).To(Succeed())
@@ -859,7 +859,7 @@ var _ = Describe("Rack enabled cluster webhook validation", func() {
 				})
 
 				It("rejects update adding rosterNodeBlockList when forceBlockFromRoster is enabled", func() {
-					aeroCluster := nRackStrongConsistencyCluster(nsName,
+					aeroCluster := createMultiRackSCCluster(nsName,
 						"/rack1/xvda", "/rack2/xvdb")
 					aeroCluster.Spec.RackConfig.Racks[0].ForceBlockFromRoster = ptr.To(true)
 					Expect(envtests.K8sClient.Create(ctx, aeroCluster)).To(Succeed())
@@ -881,7 +881,7 @@ var _ = Describe("Rack enabled cluster webhook validation", func() {
 				})
 
 				It("rejects update adding rollingUpdateBatchSize when only one rack remains in roster", func() {
-					aeroCluster := nRackStrongConsistencyCluster(nsName,
+					aeroCluster := createMultiRackSCCluster(nsName,
 						"/rack1/xvda", "/rack2/xvdb")
 					aeroCluster.Spec.RackConfig.Racks[0].ForceBlockFromRoster = ptr.To(true)
 					Expect(envtests.K8sClient.Create(ctx, aeroCluster)).To(Succeed())
@@ -903,7 +903,7 @@ var _ = Describe("Rack enabled cluster webhook validation", func() {
 				})
 
 				It("rejects update adding scaleDownBatchSize when only one rack remains in roster", func() {
-					aeroCluster := nRackStrongConsistencyCluster(nsName,
+					aeroCluster := createMultiRackSCCluster(nsName,
 						"/rack1/xvda", "/rack2/xvdb")
 					aeroCluster.Spec.RackConfig.Racks[0].ForceBlockFromRoster = ptr.To(true)
 					Expect(envtests.K8sClient.Create(ctx, aeroCluster)).To(Succeed())
