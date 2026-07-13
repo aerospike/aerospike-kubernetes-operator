@@ -166,6 +166,9 @@ func SetupTestEnv() {
 	time.Sleep(3 * time.Second)
 }
 
+// TODO: Fix k8s client creation in the backup and restore webhook flow by creating
+// a client once in webhook setup (inject mgr.GetClient() into validators).
+// Remove this KUBECONFIG file workaround once webhooks stop using getK8sClient()/GetConfigOrDie().
 func configureEnvtestKubeconfig() error {
 	root, err := os.OpenRoot(os.TempDir())
 	if err != nil {
