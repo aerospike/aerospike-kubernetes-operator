@@ -69,7 +69,7 @@ var _ = Describe("AerospikeBackup validation", Ordered, func() {
 
 		Context("spec.onDemandBackups", func() {
 			Context("negative", func() {
-				It("rejects on-demand backup config on create (webhook)", func() {
+				It("rejects on-demand backup config on create", func() {
 					backup := buildBackupCR(backupNsNm, absNsNm)
 					backup.Spec.OnDemandBackups = []asdbv1beta1.OnDemandBackupSpec{
 						{
