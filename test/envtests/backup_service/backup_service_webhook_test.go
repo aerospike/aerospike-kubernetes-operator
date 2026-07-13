@@ -30,7 +30,7 @@ var _ = Describe("AerospikeBackupService validation", func() {
 		Context("status.phase", func() {
 			Context("negative", func() {
 				It("rejects invalid phase value (Enum)", func() {
-					backupService := newBackupService(absNsNm)
+					backupService := buildBackupServiceCR(absNsNm)
 					Expect(envtests.K8sClient.Create(ctx, backupService)).To(Succeed())
 
 					backupService.Status.Phase = asdbv1beta1.AerospikeBackupServicePhase("InvalidPhase")
@@ -45,7 +45,7 @@ var _ = Describe("AerospikeBackupService validation", func() {
 
 			Context("positive", func() {
 				It("accepts valid phase values (Enum)", func() {
-					backupService := newBackupService(absNsNm)
+					backupService := buildBackupServiceCR(absNsNm)
 					Expect(envtests.K8sClient.Create(ctx, backupService)).To(Succeed())
 
 					for _, phase := range []asdbv1beta1.AerospikeBackupServicePhase{

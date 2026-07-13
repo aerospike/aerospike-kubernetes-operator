@@ -9,10 +9,11 @@ import (
 
 	asdbv1beta1 "github.com/aerospike/aerospike-kubernetes-operator/v4/api/v1beta1"
 	"github.com/aerospike/aerospike-kubernetes-operator/v4/test/envtests"
+	"github.com/aerospike/aerospike-kubernetes-operator/v4/test/fixtures/backupconfig"
 	"github.com/aerospike/aerospike-kubernetes-operator/v4/test/testutil"
 )
 
-var _ = Describe("AerospikeBackup validation", func() {
+var _ = Describe("AerospikeBackup validation", Ordered, func() {
 	ctx := context.TODO()
 
 	var (
@@ -22,22 +23,28 @@ var _ = Describe("AerospikeBackup validation", func() {
 		absNsNm types.NamespacedName
 	)
 
+	BeforeAll(func() {
+		absNsNm = uniqueNamespacedName("shared-abs")
+		Expect(backupconfig.CreateStubBackupService(ctx, envtests.K8sClient, absNsNm, nil)).To(Succeed())
+	})
+
+	AfterAll(func() {
+		backupconfig.DeleteStubBackupService(ctx, envtests.K8sClient, absNsNm)
+	})
+
 	BeforeEach(func() {
 		backupNsNm = uniqueNamespacedName("backup")
-		absNsNm = uniqueNamespacedName("abs-for-backup")
-		Expect(createStubBackupService(ctx, absNsNm)).To(Succeed())
 	})
 
 	AfterEach(func() {
 		deleteBackup(ctx, backupNsNm)
-		deleteBackupService(ctx, absNsNm)
 	})
 
 	Context("Deploy validation", func() {
 		Context("spec.backupService", func() {
 			Context("negative", func() {
 				It("rejects empty backup service name (MinLength=1)", func() {
-					backup := newBackup(backupNsNm, absNsNm)
+					backup := buildBackupCR(backupNsNm, absNsNm)
 					backup.Spec.BackupService.Name = ""
 
 					err := envtests.K8sClient.Create(ctx, backup)
@@ -48,7 +55,7 @@ var _ = Describe("AerospikeBackup validation", func() {
 				})
 
 				It("rejects empty backup service namespace (MinLength=1)", func() {
-					backup := newBackup(backupNsNm, absNsNm)
+					backup := buildBackupCR(backupNsNm, absNsNm)
 					backup.Spec.BackupService.Namespace = ""
 
 					err := envtests.K8sClient.Create(ctx, backup)
@@ -63,11 +70,11 @@ var _ = Describe("AerospikeBackup validation", func() {
 		Context("spec.onDemandBackups", func() {
 			Context("negative", func() {
 				It("rejects on-demand backup config on create (webhook)", func() {
-					backup := newBackup(backupNsNm, absNsNm)
+					backup := buildBackupCR(backupNsNm, absNsNm)
 					backup.Spec.OnDemandBackups = []asdbv1beta1.OnDemandBackupSpec{
 						{
 							ID:          "on-demand",
-							RoutineName: routineName(backupNsNm),
+							RoutineName: backupconfig.BuildRoutineNameForBackup(backupNsNm),
 						},
 					}
 
@@ -86,7 +93,7 @@ var _ = Describe("AerospikeBackup validation", func() {
 		var backup *asdbv1beta1.AerospikeBackup
 
 		BeforeEach(func() {
-			backup = newBackup(backupNsNm, absNsNm)
+			backup = buildBackupCR(backupNsNm, absNsNm)
 			Expect(envtests.K8sClient.Create(ctx, backup)).To(Succeed())
 			Expect(syncBackupStatus(ctx, backup)).To(Succeed())
 		})
@@ -97,11 +104,11 @@ var _ = Describe("AerospikeBackup validation", func() {
 					backup.Spec.OnDemandBackups = []asdbv1beta1.OnDemandBackupSpec{
 						{
 							ID:          "on-demand-1",
-							RoutineName: routineName(backupNsNm),
+							RoutineName: backupconfig.BuildRoutineNameForBackup(backupNsNm),
 						},
 						{
 							ID:          "on-demand-2",
-							RoutineName: routineName(backupNsNm),
+							RoutineName: backupconfig.BuildRoutineNameForBackup(backupNsNm),
 						},
 					}
 
@@ -116,7 +123,7 @@ var _ = Describe("AerospikeBackup validation", func() {
 					backup.Spec.OnDemandBackups = []asdbv1beta1.OnDemandBackupSpec{
 						{
 							ID:          "",
-							RoutineName: routineName(backupNsNm),
+							RoutineName: backupconfig.BuildRoutineNameForBackup(backupNsNm),
 						},
 					}
 
@@ -131,7 +138,7 @@ var _ = Describe("AerospikeBackup validation", func() {
 					backup.Spec.OnDemandBackups = []asdbv1beta1.OnDemandBackupSpec{
 						{
 							ID:          "on-demand-invalid-type",
-							RoutineName: routineName(backupNsNm),
+							RoutineName: backupconfig.BuildRoutineNameForBackup(backupNsNm),
 							Type:        asdbv1beta1.BackupType("InvalidType"),
 						},
 					}
@@ -150,7 +157,7 @@ var _ = Describe("AerospikeBackup validation", func() {
 					backup.Spec.OnDemandBackups = []asdbv1beta1.OnDemandBackupSpec{
 						{
 							ID:          "on-demand-incremental",
-							RoutineName: routineName(backupNsNm),
+							RoutineName: backupconfig.BuildRoutineNameForBackup(backupNsNm),
 							Type:        asdbv1beta1.IncrementalBackup,
 						},
 					}
@@ -167,7 +174,7 @@ var _ = Describe("AerospikeBackup validation", func() {
 					backup.Spec.OnDemandBackups = []asdbv1beta1.OnDemandBackupSpec{
 						{
 							ID:          "on-demand-default-type",
-							RoutineName: routineName(backupNsNm),
+							RoutineName: backupconfig.BuildRoutineNameForBackup(backupNsNm),
 						},
 					}
 
