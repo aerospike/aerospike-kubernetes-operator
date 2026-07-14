@@ -473,12 +473,12 @@ var _ = Describe("Storage webhook validation", func() {
 
 func setVolumePolicyMethod(
 	storage *asdbv1.AerospikeStorageSpec,
-	blockPolicy, initMethod bool,
+	isBlockPolicy bool, initMethod bool,
 	method asdbv1.AerospikeVolumeMethod,
 ) {
 	m := method
 
-	if blockPolicy {
+	if isBlockPolicy {
 		if initMethod {
 			storage.BlockVolumePolicy.InputInitMethod = &m
 		} else {

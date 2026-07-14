@@ -195,6 +195,11 @@ func removeEnvtestKubeconfig() {
 		return
 	}
 
+	defer func() {
+		kubeconfigRel = ""
+		_ = os.Unsetenv("KUBECONFIG")
+	}()
+
 	root, err := os.OpenRoot(os.TempDir())
 	if err != nil {
 		return
@@ -203,7 +208,6 @@ func removeEnvtestKubeconfig() {
 	defer func() { _ = root.Close() }()
 
 	_ = root.Remove(kubeconfigRel)
-	kubeconfigRel = ""
 }
 
 // TeardownTestEnv stops the envtest environment. Idempotent.
