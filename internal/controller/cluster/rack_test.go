@@ -21,6 +21,7 @@ import (
 	asdbv1 "github.com/aerospike/aerospike-kubernetes-operator/v4/api/v1"
 )
 
+//nolint:unparam // for future use
 func newTestAerospikeCluster(namespace, name string) *asdbv1.AerospikeCluster {
 	aeroConfig := asdbv1.AerospikeConfigSpec{
 		Value: map[string]interface{}{
