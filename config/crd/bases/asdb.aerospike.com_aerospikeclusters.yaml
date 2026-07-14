@@ -6877,6 +6877,7 @@ spec:
                                               - ReadOnlyMany
                                               - ReadWriteMany
                                               - ReadWriteOnce
+                                              - ReadWriteOncePod
                                               type: string
                                             type: array
                                           metadata:
@@ -8526,6 +8527,7 @@ spec:
                                               - ReadOnlyMany
                                               - ReadWriteMany
                                               - ReadWriteOnce
+                                              - ReadWriteOncePod
                                               type: string
                                             type: array
                                           metadata:
@@ -9238,6 +9240,7 @@ spec:
                                     - ReadOnlyMany
                                     - ReadWriteMany
                                     - ReadWriteOnce
+                                    - ReadWriteOncePod
                                     type: string
                                   type: array
                                 metadata:
@@ -16429,6 +16432,7 @@ spec:
                                               - ReadOnlyMany
                                               - ReadWriteMany
                                               - ReadWriteOnce
+                                              - ReadWriteOncePod
                                               type: string
                                             type: array
                                           metadata:
@@ -18078,6 +18082,7 @@ spec:
                                               - ReadOnlyMany
                                               - ReadWriteMany
                                               - ReadWriteOnce
+                                              - ReadWriteOncePod
                                               type: string
                                             type: array
                                           metadata:
@@ -18855,6 +18860,7 @@ spec:
                                     - ReadOnlyMany
                                     - ReadWriteMany
                                     - ReadWriteOnce
+                                    - ReadWriteOncePod
                                     type: string
                                   type: array
                                 metadata:
