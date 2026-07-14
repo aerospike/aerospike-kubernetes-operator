@@ -24,6 +24,9 @@ package envtests
 
 import (
 	"context"
+	"crypto/rand"
+	"encoding/hex"
+	"os"
 	"path/filepath"
 	"time"
 
@@ -43,8 +46,10 @@ import (
 	"sigs.k8s.io/controller-runtime/pkg/webhook"
 
 	asdbv1 "github.com/aerospike/aerospike-kubernetes-operator/v4/api/v1"
+	asdbv1beta1 "github.com/aerospike/aerospike-kubernetes-operator/v4/api/v1beta1"
 	evictionwebhook "github.com/aerospike/aerospike-kubernetes-operator/v4/internal/webhook/eviction"
 	webhookv1 "github.com/aerospike/aerospike-kubernetes-operator/v4/internal/webhook/v1"
+	webhookv1beta1 "github.com/aerospike/aerospike-kubernetes-operator/v4/internal/webhook/v1beta1"
 	"github.com/aerospike/aerospike-kubernetes-operator/v4/pkg/configschema"
 	"github.com/aerospike/aerospike-kubernetes-operator/v4/test/testutil"
 	"github.com/aerospike/aerospike-management-lib/asconfig"
@@ -62,6 +67,7 @@ var (
 	scheme          = k8Runtime.NewScheme()
 	cancel          context.CancelFunc
 	EvictionWebhook *evictionwebhook.EvictionWebhook
+	kubeconfigRel   string
 )
 
 // SetupTestEnv starts the envtest environment and webhook server. Idempotent.
@@ -98,10 +104,15 @@ func SetupTestEnv() {
 	Expect(err).NotTo(HaveOccurred())
 	Expect(cfg).NotTo(BeNil())
 
+	Expect(configureEnvtestKubeconfig()).To(Succeed())
+
 	err = clientgoscheme.AddToScheme(scheme)
 	Expect(err).NotTo(HaveOccurred())
 
 	err = asdbv1.AddToScheme(scheme)
+	Expect(err).NotTo(HaveOccurred())
+
+	err = asdbv1beta1.AddToScheme(scheme)
 	Expect(err).NotTo(HaveOccurred())
 
 	err = admissionv1.AddToScheme(scheme)
@@ -135,6 +146,12 @@ func SetupTestEnv() {
 	EvictionWebhook = evictionwebhook.SetupEvictionWebhookWithManager(mgr)
 	err = webhookv1.SetupAerospikeClusterWebhookWithManager(mgr)
 	Expect(err).NotTo(HaveOccurred())
+	err = webhookv1beta1.SetupAerospikeBackupServiceWebhookWithManager(mgr)
+	Expect(err).NotTo(HaveOccurred())
+	err = webhookv1beta1.SetupAerospikeBackupWebhookWithManager(mgr)
+	Expect(err).NotTo(HaveOccurred())
+	err = webhookv1beta1.SetupAerospikeRestoreWebhookWithManager(mgr)
+	Expect(err).NotTo(HaveOccurred())
 
 	ctx, c := context.WithCancel(context.Background())
 	cancel = c
@@ -149,6 +166,50 @@ func SetupTestEnv() {
 	time.Sleep(3 * time.Second)
 }
 
+// TODO: Fix k8s client creation in the backup and restore webhook flow by creating
+// a client once in webhook setup (inject mgr.GetClient() into validators).
+// Remove this KUBECONFIG file workaround once webhooks stop using getK8sClient()/GetConfigOrDie().
+func configureEnvtestKubeconfig() error {
+	root, err := os.OpenRoot(os.TempDir())
+	if err != nil {
+		return err
+	}
+
+	defer func() { _ = root.Close() }()
+
+	var buf [12]byte
+	if _, err = rand.Read(buf[:]); err != nil {
+		return err
+	}
+
+	kubeconfigRel = "envtest-kubeconfig-" + hex.EncodeToString(buf[:]) + ".yaml"
+	if err := root.WriteFile(kubeconfigRel, testEnv.KubeConfig, 0o600); err != nil {
+		return err
+	}
+
+	return os.Setenv("KUBECONFIG", filepath.Join(os.TempDir(), kubeconfigRel))
+}
+
+func removeEnvtestKubeconfig() {
+	if kubeconfigRel == "" {
+		return
+	}
+
+	defer func() {
+		kubeconfigRel = ""
+		_ = os.Unsetenv("KUBECONFIG")
+	}()
+
+	root, err := os.OpenRoot(os.TempDir())
+	if err != nil {
+		return
+	}
+
+	defer func() { _ = root.Close() }()
+
+	_ = root.Remove(kubeconfigRel)
+}
+
 // TeardownTestEnv stops the envtest environment. Idempotent.
 func TeardownTestEnv() {
 	if testEnv == nil {
@@ -156,11 +217,17 @@ func TeardownTestEnv() {
 	}
 
 	By("tearing down the test environment")
-	cancel()
+	// Avoid panic if setup failed before cancel was set.
+	if cancel != nil {
+		cancel()
+	}
+
 	gexec.KillAndWait(5 * time.Second)
 
 	err := testEnv.Stop()
 	Expect(err).ToNot(HaveOccurred())
+
+	removeEnvtestKubeconfig()
 
 	testEnv = nil
 	K8sClient = nil

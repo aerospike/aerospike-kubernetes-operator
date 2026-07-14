@@ -6,8 +6,8 @@ This document describes how to run tests for the Aerospike Kubernetes Operator.
 
 | Command                           | Description                              |
 |-----------------------------------|------------------------------------------|
-| `make pkg-test`                   | Run pkg unit tests (CI command)          |
-| `make pkg-test-coverage`          | Run tests + open coverage report         |
+| `make unit-test`                  | Run unit tests (CI command)          |
+| `make unit-test-coverage`         | Run tests + open coverage report         |
 | `make cluster-test`               | Run cluster integration tests            |
 | `make backup-service-test`        | Run backup-service integration tests     |
 | `make backup-test`                | Run backup integration tests             |
@@ -22,22 +22,22 @@ This document describes how to run tests for the Aerospike Kubernetes Operator.
 ### Run PKG Unit Tests (Recommended)
 
 ```bash
-# Run pkg unit tests (same command used in CI)
-make pkg-test
+# Run unit tests (same command used in CI)
+make unit-test
 
-# Run pkg unit tests and open coverage report in browser
-make pkg-test-coverage
+# Run unit tests and open coverage report in browser
+make unit-test-coverage
 ```
 
 ## Available Test Targets
 
 ### Unit Tests
 
-#### `make pkg-test`
-Runs all unit tests in the `pkg/` directory with race detection and coverage reporting.
+#### `make unit-test`
+Runs all unit tests with race detection and coverage reporting.
 
 **What it does:**
-- Runs `go test -v -race -coverprofile=coverage.out ./pkg/...`
+- Runs `go test -v -race -coverprofile=coverage.out ./pkg/... ./internal/...`
 - Displays coverage summary at the end
 - Same command used by GitHub Actions CI
 
@@ -54,8 +54,8 @@ Coverage Summary:
 total: (statements) 18.6%
 ```
 
-#### `make pkg-test-coverage`
-Runs pkg unit tests and opens an HTML coverage report in your browser.
+#### `make unit-test-coverage`
+Runs unit tests and opens an HTML coverage report in your browser.
 
 **Use this when:**
 - You want to see detailed line-by-line coverage
@@ -100,7 +100,7 @@ go test -v -race ./pkg/utils -run TestGetFailedPodGracePeriod
 
 ### Run with coverage:
 ```bash
-go test -v -race -coverprofile=coverage.out ./pkg/...
+go test -v -race -coverprofile=coverage.out ./pkg/... ./internal/...
 go tool cover -func=coverage.out
 go tool cover -html=coverage.out
 ```
@@ -109,7 +109,7 @@ go tool cover -html=coverage.out
 
 ### Current Coverage
 
-Run `make pkg-test` to see current coverage:
+Run `make unit-test` to see current coverage:
 ```
 pkg/jsonpatch: 64.1% of statements
 pkg/merge:     89.3% of statements
