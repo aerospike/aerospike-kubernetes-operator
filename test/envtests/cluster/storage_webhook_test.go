@@ -22,6 +22,7 @@ import (
 	"github.com/aerospike/aerospike-kubernetes-operator/v4/test/testutil"
 	. "github.com/onsi/ginkgo/v2"
 	. "github.com/onsi/gomega"
+	corev1 "k8s.io/api/core/v1"
 	"k8s.io/apimachinery/pkg/types"
 	"k8s.io/utils/ptr"
 
@@ -109,6 +110,78 @@ var _ = Describe("Storage webhook validation", func() {
 
 					Expect(envtests.K8sClient.Create(ctx, aeroCluster)).To(Succeed())
 				})
+			})
+		})
+
+		Context("spec.storage volumes (PersistentVolumeSpec)", func() {
+			Context("negative", func() {
+				It("rejects invalid volumeMode (Enum)", func() {
+					aeroCluster := testCluster.CreateDummyAerospikeCluster(nsName, 1)
+
+					for i := range aeroCluster.Spec.Storage.Volumes {
+						if aeroCluster.Spec.Storage.Volumes[i].Source.PersistentVolume != nil {
+							aeroCluster.Spec.Storage.Volumes[i].Source.PersistentVolume.VolumeMode =
+								corev1.PersistentVolumeMode("NotBlockOrFilesystem")
+
+							break
+						}
+					}
+
+					err := envtests.K8sClient.Create(ctx, aeroCluster)
+					Expect(err).To(HaveOccurred())
+					envtests.NewStatusErrorMatcher().
+						WithMessageSubstrings(testutil.CRDSchemaErrorPrefix, "volumeMode").
+						Validate(err)
+				})
+
+				It("rejects accessMode not in allowed enum (items:Enum)", func() {
+					aeroCluster := testCluster.CreateDummyAerospikeCluster(nsName, 1)
+
+					for i := range aeroCluster.Spec.Storage.Volumes {
+						if aeroCluster.Spec.Storage.Volumes[i].Source.PersistentVolume != nil {
+							aeroCluster.Spec.Storage.Volumes[i].Source.PersistentVolume.AccessModes = []corev1.PersistentVolumeAccessMode{
+								corev1.PersistentVolumeAccessMode("invalid"),
+							}
+
+							break
+						}
+					}
+
+					err := envtests.K8sClient.Create(ctx, aeroCluster)
+					Expect(err).To(HaveOccurred())
+					envtests.NewStatusErrorMatcher().
+						WithMessageSubstrings(testutil.CRDSchemaErrorPrefix, "accessModes").
+						Validate(err)
+				})
+			})
+		})
+
+		Context("spec.storage volume policy (Enum)", func() {
+			Context("negative", func() {
+				DescribeTable("rejects invalid volume policy enum values",
+					func(blockPolicy, initMethod bool, method asdbv1.AerospikeVolumeMethod, fieldSubstring string) {
+						aeroCluster := testCluster.CreateDummyAerospikeCluster(nsName, 1)
+						setVolumePolicyMethod(&aeroCluster.Spec.Storage, blockPolicy, initMethod, method)
+
+						err := envtests.K8sClient.Create(ctx, aeroCluster)
+						Expect(err).To(HaveOccurred())
+						envtests.NewStatusErrorMatcher().
+							WithMessageSubstrings(testutil.CRDSchemaErrorPrefix, fieldSubstring).
+							Validate(err)
+					},
+					Entry("block initMethod",
+						true, true, asdbv1.AerospikeVolumeMethod("notARealMethod"), "initMethod"),
+					Entry("filesystem initMethod",
+						false, true, asdbv1.AerospikeVolumeMethod("notARealMethod"), "initMethod"),
+					Entry("block wipeMethod",
+						true, false, asdbv1.AerospikeVolumeMethod("notARealMethod"), "wipeMethod"),
+					Entry("filesystem wipeMethod",
+						false, false, asdbv1.AerospikeVolumeMethod("notARealMethod"), "wipeMethod"),
+					Entry("block wipeMethod rejects init-only value none",
+						true, false, asdbv1.AerospikeVolumeMethodNone, "wipeMethod"),
+					Entry("filesystem wipeMethod rejects init-only value none",
+						false, false, asdbv1.AerospikeVolumeMethodNone, "wipeMethod"),
+				)
 			})
 		})
 
@@ -397,3 +470,27 @@ var _ = Describe("Storage webhook validation", func() {
 		})
 	})
 })
+
+func setVolumePolicyMethod(
+	storage *asdbv1.AerospikeStorageSpec,
+	isBlockPolicy bool, initMethod bool,
+	method asdbv1.AerospikeVolumeMethod,
+) {
+	m := method
+
+	if isBlockPolicy {
+		if initMethod {
+			storage.BlockVolumePolicy.InputInitMethod = &m
+		} else {
+			storage.BlockVolumePolicy.InputWipeMethod = &m
+		}
+
+		return
+	}
+
+	if initMethod {
+		storage.FileSystemVolumePolicy.InputInitMethod = &m
+	} else {
+		storage.FileSystemVolumePolicy.InputWipeMethod = &m
+	}
+}

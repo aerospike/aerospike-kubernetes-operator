@@ -180,7 +180,19 @@ env-test-cluster:  fmt vet setup-envtest ## Run tests.
 
 .PHONY: env-test-eviction # Run test/envtests/eviction
 env-test-eviction:  fmt vet setup-envtest ## Run tests.
-	export KUBEBUILDER_ASSETS="$(shell $(ENVTEST) use $(ENVTEST_K8S_VERSION) --bin-dir $(LOCALBIN) -p path)"; cd $(shell pwd)/test/envtests/eviction && mkdir -p ../../test-results && go run github.com/onsi/ginkgo/v2/ginkgo -r --focus "$(FOCUS)" -coverprofile envcover.out -timeout=1h0m0s --junit-report=../../test-results/junit-envtests-eviction.xml -- . ${ARGS}	
+	export KUBEBUILDER_ASSETS="$(shell $(ENVTEST) use $(ENVTEST_K8S_VERSION) --bin-dir $(LOCALBIN) -p path)"; cd $(shell pwd)/test/envtests/eviction && mkdir -p ../../test-results && go run github.com/onsi/ginkgo/v2/ginkgo -r --focus "$(FOCUS)" -coverprofile envcover.out -timeout=1h0m0s --junit-report=../../test-results/junit-envtests-eviction.xml -- . ${ARGS}
+
+.PHONY: env-test-backup
+env-test-backup: fmt vet setup-envtest ## Run backup envtests.
+	export KUBEBUILDER_ASSETS="$(shell $(ENVTEST) use $(ENVTEST_K8S_VERSION) --bin-dir $(LOCALBIN) -p path)"; cd $(shell pwd)/test/envtests/backup && mkdir -p ../../test-results && go run github.com/onsi/ginkgo/v2/ginkgo -r --focus "$(FOCUS)" -coverprofile envcover.out -timeout=1h0m0s --junit-report=../../test-results/junit-envtests-backup.xml -- . ${ARGS}
+
+.PHONY: env-test-backup-service
+env-test-backup-service: fmt vet setup-envtest ## Run backup service envtests.
+	export KUBEBUILDER_ASSETS="$(shell $(ENVTEST) use $(ENVTEST_K8S_VERSION) --bin-dir $(LOCALBIN) -p path)"; cd $(shell pwd)/test/envtests/backup_service && mkdir -p ../../test-results && go run github.com/onsi/ginkgo/v2/ginkgo -r --focus "$(FOCUS)" -coverprofile envcover.out -timeout=1h0m0s --junit-report=../../test-results/junit-envtests-backup-service.xml -- . ${ARGS}
+
+.PHONY: env-test-restore
+env-test-restore: fmt vet setup-envtest ## Run restore envtests.
+	export KUBEBUILDER_ASSETS="$(shell $(ENVTEST) use $(ENVTEST_K8S_VERSION) --bin-dir $(LOCALBIN) -p path)"; cd $(shell pwd)/test/envtests/restore && mkdir -p ../../test-results && go run github.com/onsi/ginkgo/v2/ginkgo -r --focus "$(FOCUS)" -coverprofile envcover.out -timeout=1h0m0s --junit-report=../../test-results/junit-envtests-restore.xml -- . ${ARGS}
 ##@ Build
 
 .PHONY: build
