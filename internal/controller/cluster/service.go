@@ -583,6 +583,15 @@ func (r *SingleClusterReconciler) updateService(
 		needsUpdate = true
 	}
 
+	// Ensure PublishNotReadyAddresses is set. This field is always required for
+	// both the headless and per-pod NodePort services so that pods are reachable
+	// before they become Ready (e.g. during rolling restarts). It may be absent
+	// on services created by older AKO versions and must be backfilled on upgrade.
+	if !service.Spec.PublishNotReadyAddresses {
+		service.Spec.PublishNotReadyAddresses = true
+		needsUpdate = true
+	}
+
 	if needsUpdate {
 		if err := r.Update(
 			context.TODO(), service, common.UpdateOption,

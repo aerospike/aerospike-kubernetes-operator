@@ -1147,7 +1147,7 @@ func (r *SingleClusterReconciler) getIgnorablePods(
 		)
 
 		if failedAllowed == 0 {
-			return ignorablePodNames, nil
+			continue
 		}
 
 		podList, err := r.getAllRevisionRackPodList(rackState.Rack.ID)
