@@ -21,7 +21,6 @@ import (
 
 	corev1 "k8s.io/api/core/v1"
 	"k8s.io/apimachinery/pkg/util/sets"
-	"k8s.io/klog/v2"
 
 	as "github.com/aerospike/aerospike-client-go/v8"
 	asdbv1 "github.com/aerospike/aerospike-kubernetes-operator/v4/api/v1"
@@ -51,14 +50,14 @@ func (r *SingleClusterReconciler) waitForMultipleNodesSafeStopReady(
 	// Remove a node only if the cluster is stable
 	if err := r.waitForAllSTSToBeReady(ctx, ignorablePodNames); err != nil {
 		return common.ReconcileError(fmt.Errorf(
-			"wait for cluster %s StatefulSets to be ready: %w", utils.GetNamespacedNameString(r.aeroCluster), err))
+			"wait for cluster to be ready: %w", err))
 	}
 
 	// This doesn't make actual connection, only objects having connection info are created
 	allHostConns, err := r.newAllHostConnWithOption(ctx, ignorablePodNames)
 	if err != nil {
 		return common.ReconcileError(fmt.Errorf(
-			"get host connections for cluster %s nodes: %w", utils.GetNamespacedNameString(r.aeroCluster), err))
+			"get host connections for cluster nodes: %w", err))
 	}
 
 	// Safety guard: if the cluster is degraded (some pods are failed/ignorable) and
@@ -72,7 +71,7 @@ func (r *SingleClusterReconciler) waitForMultipleNodesSafeStopReady(
 	if len(allHostConns) < 2 && ignorablePodNames.Len() > 0 {
 		return common.ReconcileError(fmt.Errorf(
 			"cluster is degraded: %d failed/ignorable pod(s) excluded, only %d reachable node(s) remain; "+
-				"refusing to proceed to prevent data loss — recover the failed pods first",
+				"refusing to proceed to prevent data loss — recover the failed Pods first",
 			ignorablePodNames.Len(), len(allHostConns),
 		))
 	}
@@ -91,7 +90,7 @@ func (r *SingleClusterReconciler) waitForMultipleNodesSafeStopReady(
 
 	// Setup roster after migration.
 	if err = r.getAndSetRoster(ctx, policy, r.aeroCluster.Spec.RosterNodeBlockList, ignorablePodNames); err != nil {
-		r.Log.Info("Failed to set roster for cluster, will requeue", "err", err)
+		r.Log.Error(err, "Failed to set roster for cluster, will requeue")
 		return common.ReconcileRequeueAfter(1)
 	}
 
@@ -110,7 +109,7 @@ func (r *SingleClusterReconciler) waitForMigrationToComplete(ctx context.Context
 	allHostConns, err := r.newAllHostConnWithOption(ctx, ignorablePodNames)
 	if err != nil {
 		return common.ReconcileError(fmt.Errorf(
-			"get host connections for cluster %s nodes: %w", utils.GetNamespacedNameString(r.aeroCluster), err))
+			"get host connections for cluster nodes: %w", err))
 	}
 
 	r.Log.Info("Waiting for migration to complete")
@@ -227,7 +226,7 @@ func (r *SingleClusterReconciler) newAllHostConnWithOption(ctx context.Context, 
 	}
 
 	if len(podList.Items) == 0 {
-		return nil, fmt.Errorf("pod list empty")
+		return nil, fmt.Errorf("get Pod list: empty")
 	}
 
 	return r.newPodsHostConnWithOption(podList.Items, ignorablePodNames)
@@ -251,13 +250,13 @@ func (r *SingleClusterReconciler) newPodsHostConnWithOption(pods []corev1.Pod, i
 			if ignorablePodNames.Has(pod.Name) {
 				// This pod is not running and ignorable.
 				r.Log.Info(
-					"Ignoring info call on non-running pod", "pod", klog.KObj(pod),
+					"Ignoring info call on non-running Pod", "pod", utils.GetNamespacedName(pod),
 				)
 
 				continue
 			}
 
-			return nil, fmt.Errorf("pod %s is not ready", utils.GetNamespacedNameString(pod))
+			return nil, fmt.Errorf("check Pod %s: not ready", utils.GetNamespacedNameString(pod))
 		}
 
 		asConn := r.newAsConn(pod)
@@ -283,7 +282,7 @@ func (r *SingleClusterReconciler) newAsConn(pod *corev1.Pod) *deployment.ASConn 
 		AerospikeHostName: host,
 		AerospikePort:     int(*port),
 		AerospikeTLSName:  tlsName,
-		Log:               klog.LoggerWithValues(r.Log, "pod", klog.KObj(pod)),
+		Log:               r.Log.WithValues("pod", utils.GetNamespacedName(pod)),
 	}
 
 	return asConn
@@ -327,7 +326,7 @@ func (r *SingleClusterReconciler) setMigrateFillDelay(
 	if err != nil {
 		return common.ReconcileError(
 			fmt.Errorf(
-				"get host connections for cluster %s nodes: %w", utils.GetNamespacedNameString(r.aeroCluster), err,
+				"get host connections for cluster nodes: %w", err,
 			),
 		)
 	}
@@ -350,7 +349,7 @@ func (r *SingleClusterReconciler) setDynamicConfig(
 	if err != nil {
 		return common.ReconcileError(
 			fmt.Errorf(
-				"get host connections for cluster %s nodes: %w", utils.GetNamespacedNameString(r.aeroCluster), err,
+				"get host connections for cluster nodes: %w", err,
 			),
 		)
 	}
@@ -367,13 +366,13 @@ func (r *SingleClusterReconciler) setDynamicConfig(
 	if err != nil {
 		return common.ReconcileError(
 			fmt.Errorf(
-				"get host connections for cluster %s nodes: %w", utils.GetNamespacedNameString(r.aeroCluster), err,
+				"get host connections for cluster nodes: %w", err,
 			),
 		)
 	}
 
 	if len(selectedHostConns) == 0 {
-		r.Log.Info("No pods selected for dynamic config change")
+		r.Log.Info("No Pods selected for dynamic config change")
 
 		return common.ReconcileSuccess()
 	}
@@ -389,7 +388,7 @@ func (r *SingleClusterReconciler) setDynamicConfig(
 		}
 
 		r.Log.Info("Generated dynamic config commands",
-			"commands", asConfCmds, "pod", klog.KRef(r.aeroCluster.Namespace, podName))
+			"commands", asConfCmds, "pod", utils.NewNamespacedName(r.aeroCluster.Namespace, podName))
 
 		if succeededCmds, err := deployment.SetConfigCommandsOnHosts(r.Log, r.getClientPolicy(ctx), allHostConns,
 			[]*deployment.HostConn{host}, asConfCmds); err != nil {

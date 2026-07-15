@@ -18,7 +18,6 @@ import (
 	"k8s.io/apimachinery/pkg/util/intstr"
 	"k8s.io/apimachinery/pkg/util/sets"
 	"k8s.io/client-go/util/retry"
-	"k8s.io/klog/v2"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 	"sigs.k8s.io/controller-runtime/pkg/controller/controllerutil"
 
@@ -99,7 +98,7 @@ func (r *SingleClusterReconciler) createSTS(
 ) (*appsv1.StatefulSet, error) {
 	replicas := rackState.Size
 
-	r.Log.Info("Create statefulset for AerospikeCluster", "size", replicas)
+	r.Log.Info("Create StatefulSet for AerospikeCluster", "size", replicas)
 
 	ports := getSTSContainerPort(
 		r.aeroCluster.Spec.PodSpec.MultiPodPerHost,
@@ -204,7 +203,7 @@ func (r *SingleClusterReconciler) createSTS(
 	}
 
 	r.Log.Info(
-		"Created new StatefulSet", "statefulSet", klog.KObj(st),
+		"Created new StatefulSet", "statefulSet", utils.GetNamespacedName(st),
 	)
 
 	if err := r.waitForSTSToBeReady(ctx, st, nil); err != nil {
@@ -240,7 +239,7 @@ func (r *SingleClusterReconciler) getReadinessProbe() *corev1.Probe {
 }
 
 func (r *SingleClusterReconciler) deleteSTS(ctx context.Context, st *appsv1.StatefulSet) error {
-	r.Log.Info("Delete statefulset", "namespace", st.Namespace, "name", st.Name)
+	r.Log.Info("Delete StatefulSet", "namespace", st.Namespace, "name", st.Name)
 	// No need to do cleanup pods after deleting sts
 	// It is only deleted while its creation is failed
 	// While doing rackRemove, we call scaleDown to 0 so that will do cleanup
@@ -256,7 +255,7 @@ func (r *SingleClusterReconciler) waitForSTSToBeReady(
 	)
 
 	r.Log.Info(
-		"Waiting for statefulset to be ready", "waitTimePerPod",
+		"Waiting for StatefulSet to be ready", "waitTimePerPod",
 		podStatusRetryInterval*time.Duration(podStatusMaxRetry),
 	)
 
@@ -287,7 +286,7 @@ func (r *SingleClusterReconciler) waitForSTSToBeReady(
 		// Wait for pod to get ready
 		for i := 0; i < podStatusMaxRetry; i++ {
 			r.Log.V(1).Info(
-				"Check statefulSet pod running and ready", "pod", klog.KRef(st.Namespace, podName),
+				"Check StatefulSet Pod running and ready", "pod", utils.NewNamespacedName(st.Namespace, podName),
 			)
 
 			if err := r.Get(
@@ -309,7 +308,7 @@ func (r *SingleClusterReconciler) waitForSTSToBeReady(
 			if utils.IsPodRunningAndReady(pod) {
 				isReady = true
 
-				r.Log.Info("Pod is running and ready", "pod", klog.KObj(pod))
+				r.Log.Info("Pod is running and ready", "pod", utils.GetNamespacedName(pod))
 
 				break
 			}
@@ -319,7 +318,7 @@ func (r *SingleClusterReconciler) waitForSTSToBeReady(
 
 		if !isReady {
 			statusErr := fmt.Errorf(
-				"statefulSet pod is not ready. Status: %v",
+				"StatefulSet Pod is not ready. Status: %v",
 				pod.Status.Conditions,
 			)
 
@@ -339,7 +338,7 @@ func (r *SingleClusterReconciler) waitForSTSToBeReady(
 	for i := 0; i < stsStatusMaxRetry; i++ {
 		time.Sleep(stsStatusRetryInterval)
 
-		r.Log.V(1).Info("Check statefulSet status is updated or not")
+		r.Log.V(1).Info("Check StatefulSet status is updated or not")
 
 		if err := r.Get(
 			ctx,
@@ -360,7 +359,7 @@ func (r *SingleClusterReconciler) waitForSTSToBeReady(
 	}
 
 	if !updated {
-		return fmt.Errorf("statefulset status is not updated")
+		return fmt.Errorf("StatefulSet status is not updated")
 	}
 
 	r.Log.Info("StatefulSet is ready")
@@ -385,7 +384,7 @@ func (r *SingleClusterReconciler) getSTS(ctx context.Context, rackState *RackSta
 func (r *SingleClusterReconciler) createSTSConfigMap(
 	ctx context.Context, namespacedName types.NamespacedName, rack *asdbv1.Rack,
 ) error {
-	r.Log.Info("Creating a new ConfigMap for statefulSet")
+	r.Log.Info("Creating a new ConfigMap for StatefulSet")
 
 	confMap := &corev1.ConfigMap{}
 
@@ -433,7 +432,7 @@ func (r *SingleClusterReconciler) createSTSConfigMap(
 			}
 
 			r.Log.Info(
-				"Created new ConfigMap", "configMap", klog.KObj(confMap),
+				"Created new ConfigMap", "configMap", utils.GetNamespacedName(confMap),
 			)
 
 			return nil
@@ -443,7 +442,7 @@ func (r *SingleClusterReconciler) createSTSConfigMap(
 	}
 
 	r.Log.Info(
-		"Configmap already exists for statefulSet - using existing configmap",
+		"ConfigMap already exists for StatefulSet - using existing ConfigMap",
 		"name", utils.NamespacedName(confMap.Namespace, confMap.Name),
 	)
 
@@ -459,7 +458,7 @@ func (r *SingleClusterReconciler) createSTSConfigMap(
 	}
 
 	r.Log.Info(
-		"Updating existed configmap",
+		"Updating existed ConfigMap",
 		"name", utils.NamespacedName(confMap.Namespace, confMap.Name),
 	)
 
@@ -477,7 +476,7 @@ func (r *SingleClusterReconciler) createSTSConfigMap(
 func (r *SingleClusterReconciler) updateSTSConfigMap(
 	ctx context.Context, namespacedName types.NamespacedName, rack *asdbv1.Rack,
 ) error {
-	r.Log.Info("Updating ConfigMap", "configMap", klog.KRef(namespacedName.Namespace, namespacedName.Name))
+	r.Log.Info("Updating ConfigMap", "configMap", utils.NewNamespacedName(namespacedName.Namespace, namespacedName.Name))
 
 	confMap := &corev1.ConfigMap{}
 	if err := r.Get(ctx, namespacedName, confMap); err != nil {
@@ -488,8 +487,8 @@ func (r *SingleClusterReconciler) updateSTSConfigMap(
 	configMapData, err := r.createConfigMapData(ctx, rack)
 	if err != nil {
 		return fmt.Errorf(
-			"build dotConfig from map for rack %d in cluster %s: %w",
-			rack.ID, utils.GetNamespacedNameString(r.aeroCluster), err,
+			"build dotConfig from map for rack %d: %w",
+			rack.ID, err,
 		)
 	}
 
@@ -568,7 +567,7 @@ func (r *SingleClusterReconciler) allContainersAreOnDesiredImages(
 
 			if logChanges {
 				r.Log.Info(
-					"Found container for upgrading/downgrading in pod", "pod",
+					"Found container for upgrading/downgrading in Pod", "pod",
 					podName, "container", container.Name, "currentImage",
 					container.Image, "desiredImage", desiredImage,
 				)
@@ -667,7 +666,7 @@ func (r *SingleClusterReconciler) updateSTS(
 	}
 
 	r.Log.V(1).Info(
-		"Saved StatefulSet", "statefulSet", klog.KObj(statefulSet),
+		"Saved StatefulSet", "statefulSet", utils.GetNamespacedName(statefulSet),
 	)
 
 	return nil
@@ -793,7 +792,7 @@ func (r *SingleClusterReconciler) updateSTSPVStorage(
 			)
 
 			r.Log.V(1).Info("Added PVC for volume",
-				"persistentVolumeClaim", klog.KObj(&pvc),
+				"persistentVolumeClaim", utils.GetNamespacedName(&pvc),
 				"volume", volume.Name,
 			)
 		}
@@ -822,7 +821,7 @@ func (r *SingleClusterReconciler) updateSTSNonPVStorage(
 		initContainerAttachments, containerAttachments := getFinalVolumeAttachmentsForVolume(volume, workDir)
 
 		r.Log.V(1).Info(
-			"Added volume mount in statefulSet pod containers for volume",
+			"Added volume mount in StatefulSet Pod containers for volume",
 			"volume", volume,
 		)
 
@@ -865,7 +864,7 @@ func (r *SingleClusterReconciler) updateSTSSchedulingPolicy(
 
 		antiAffinityLabels := utils.LabelsForPodAntiAffinity(r.aeroCluster.Name)
 
-		r.Log.Info("Adding pod affinity rules for statefulSet pod")
+		r.Log.Info("Adding pod affinity rules for StatefulSet Pod")
 
 		antiAffinity := &corev1.PodAntiAffinity{
 			RequiredDuringSchedulingIgnoredDuringExecution: []corev1.PodAffinityTerm{
@@ -1158,7 +1157,7 @@ func (r *SingleClusterReconciler) updateContainerImages(statefulset *appsv1.Stat
 
 			if !utils.IsImageEqual(container.Image, desiredImage) {
 				r.Log.Info(
-					"Updating image in statefulset spec", "container",
+					"Updating image in StatefulSet spec", "container",
 					container.Name, "desiredImage", desiredImage,
 					"currentImage", container.Image,
 				)
@@ -1203,7 +1202,7 @@ func (r *SingleClusterReconciler) updateAerospikeInitContainerImage(
 
 		if !utils.IsImageEqual(container.Image, desiredImage) {
 			r.Log.Info(
-				"Updating image in statefulset spec", "container",
+				"Updating image in StatefulSet spec", "container",
 				container.Name, "desiredImage", desiredImage,
 				"currentImage",
 				container.Image,
@@ -1220,7 +1219,7 @@ func (r *SingleClusterReconciler) updateAerospikeInitContainerImage(
 			}
 
 			r.Log.V(1).Info(
-				"Saved StatefulSet", "statefulSet", klog.KObj(statefulSet),
+				"Saved StatefulSet", "statefulSet", utils.GetNamespacedName(statefulSet),
 			)
 		}
 

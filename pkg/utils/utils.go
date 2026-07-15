@@ -37,6 +37,19 @@ func NamespacedName(namespace, name string) string {
 	return fmt.Sprintf("%s/%s", namespace, name)
 }
 
+// ClusterNamespacedName return namespaced name
+func ClusterNamespacedName(aeroCluster *asdbv1.AerospikeCluster) string {
+	return NamespacedName(aeroCluster.Namespace, aeroCluster.Name)
+}
+
+// NewNamespacedName returns a types.NamespacedName for use in structured log fields.
+func NewNamespacedName(namespace, name string) types.NamespacedName {
+	return types.NamespacedName{
+		Namespace: namespace,
+		Name:      name,
+	}
+}
+
 // NamespacedNames returns namespace/name identities for all names in namespace.
 func NamespacedNames(namespace string, names []string) []string {
 	namespacedNames := make([]string, 0, len(names))
@@ -48,10 +61,7 @@ func NamespacedNames(namespace string, names []string) []string {
 }
 
 func GetNamespacedName(obj meta.Object) types.NamespacedName {
-	return types.NamespacedName{
-		Namespace: obj.GetNamespace(),
-		Name:      obj.GetName(),
-	}
+	return NewNamespacedName(obj.GetNamespace(), obj.GetName())
 }
 
 // GetNamespacedNameString returns the namespace/name identity of obj as a string,

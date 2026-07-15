@@ -12,7 +12,6 @@ import (
 	"k8s.io/client-go/kubernetes"
 	"k8s.io/client-go/rest"
 	"k8s.io/client-go/tools/record"
-	"k8s.io/klog/v2"
 	ctrl "sigs.k8s.io/controller-runtime"
 	"sigs.k8s.io/controller-runtime/pkg/builder"
 	"sigs.k8s.io/controller-runtime/pkg/client"
@@ -148,7 +147,7 @@ type RackState struct {
 func (r *AerospikeClusterReconciler) Reconcile(
 	ctx context.Context, request reconcile.Request,
 ) (ctrl.Result, error) {
-	log := klog.LoggerWithValues(r.Log, "aerospikeCluster", klog.KRef(request.Namespace, request.Name))
+	log := r.Log.WithValues("aerospikecluster", request.NamespacedName)
 
 	log.Info("Reconciling AerospikeCluster")
 

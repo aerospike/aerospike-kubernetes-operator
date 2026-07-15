@@ -9,7 +9,6 @@ import (
 	corev1 "k8s.io/api/core/v1"
 	"k8s.io/apimachinery/pkg/api/errors"
 	"k8s.io/apimachinery/pkg/labels"
-	"k8s.io/klog/v2"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 
 	asdbv1 "github.com/aerospike/aerospike-kubernetes-operator/v4/api/v1"
@@ -58,7 +57,7 @@ func (r *SingleClusterReconciler) removePVCsAsync(
 			)
 			r.Log.Error(
 				err, "Failed to remove PVC",
-				"persistentVolumeClaim", klog.KObj(&pvc),
+				"persistentVolumeClaim", utils.GetNamespacedName(&pvc),
 				"annotations", pvc.Annotations,
 			)
 
@@ -78,7 +77,7 @@ func (r *SingleClusterReconciler) removePVCsAsync(
 			r.Log.Info(
 				"PVC's volume not found in configured storage volumes. "+
 					"Use storage level cascadeDelete policy",
-				"persistentVolumeClaim", klog.KObj(&pvc),
+				"persistentVolumeClaim", utils.GetNamespacedName(&pvc),
 				"volume", pvcStorageVolName, "cascadeDelete", cascadeDelete,
 			)
 		} else {
@@ -96,13 +95,13 @@ func (r *SingleClusterReconciler) removePVCsAsync(
 
 			r.Log.Info(
 				"PVC removed",
-				"persistentVolumeClaim", klog.KObj(&pvc),
+				"persistentVolumeClaim", utils.GetNamespacedName(&pvc),
 				"pvcCascadeDelete", cascadeDelete,
 			)
 		} else {
 			r.Log.Info(
 				"PVC not removed",
-				"persistentVolumeClaim", klog.KObj(&pvc),
+				"persistentVolumeClaim", utils.GetNamespacedName(&pvc),
 				"pvcCascadeDelete", cascadeDelete,
 			)
 		}
@@ -116,7 +115,7 @@ func (r *SingleClusterReconciler) removePVCsAsync(
 func (r *SingleClusterReconciler) deleteLocalPVCs(ctx context.Context, rackState *RackState, pod *corev1.Pod) error {
 	pvcItems, err := r.getPodsPVCList(ctx, []string{pod.Name}, rackState.Rack.ID, rackState.Rack.Revision)
 	if err != nil {
-		return fmt.Errorf("find PVC for pod %s: %w", utils.GetNamespacedNameString(pod), err)
+		return fmt.Errorf("find PVC for Pod %s: %w", utils.GetNamespacedNameString(pod), err)
 	}
 
 	for idx := range pvcItems {
@@ -124,7 +123,7 @@ func (r *SingleClusterReconciler) deleteLocalPVCs(ctx context.Context, rackState
 		if pvcStorageClass == nil {
 			r.Log.Info(
 				"PVC does not have storageClass set, no need to delete PVC",
-				"persistentVolumeClaim", klog.KObj(&pvcItems[idx]),
+				"persistentVolumeClaim", utils.GetNamespacedName(&pvcItems[idx]),
 			)
 
 			continue
@@ -141,12 +140,12 @@ func (r *SingleClusterReconciler) deleteLocalPVCs(ctx context.Context, rackState
 
 				r.Log.Info(
 					"PVC not found, may have been already deleted",
-					"persistentVolumeClaim", klog.KObj(&pvcItems[idx]),
+					"persistentVolumeClaim", utils.GetNamespacedName(&pvcItems[idx]),
 				)
 			} else {
 				r.Log.Info(
 					"Successfully deleted local PVC",
-					"persistentVolumeClaim", klog.KObj(&pvcItems[idx]),
+					"persistentVolumeClaim", utils.GetNamespacedName(&pvcItems[idx]),
 					"storageClass", *pvcStorageClass,
 				)
 			}
@@ -183,7 +182,7 @@ func (r *SingleClusterReconciler) waitForPVCTermination(
 				if existingPVCs[existingIdx].Name == pvc.Name {
 					r.Log.Info(
 						"Waiting for PVC termination",
-						"persistentVolumeClaim", klog.KObj(&pvc),
+						"persistentVolumeClaim", utils.GetNamespacedName(&pvc),
 					)
 
 					found = true
@@ -213,7 +212,7 @@ func (r *SingleClusterReconciler) waitForPVCTermination(
 			pvcNames = append(pvcNames, utils.GetNamespacedNameString(&deletedPVCs[idx]))
 		}
 
-		return fmt.Errorf("pvc termination timed out for pvcs %s", strings.Join(pvcNames, ", "))
+		return fmt.Errorf("PVC termination timed out for PVCs %s", strings.Join(pvcNames, ", "))
 	}
 
 	return nil
@@ -244,7 +243,7 @@ func (r *SingleClusterReconciler) deleteAllClusterPVCsForce(ctx context.Context)
 			}
 		}
 
-		r.Log.Info("PVC force-deleted during cluster recovery", "persistentVolumeClaim", klog.KObj(pvc))
+		r.Log.Info("PVC force-deleted during cluster recovery", "persistentVolumeClaim", utils.GetNamespacedName(pvc))
 
 		deletedPVCs = append(deletedPVCs, *pvc)
 	}

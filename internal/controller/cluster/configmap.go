@@ -17,16 +17,12 @@ import (
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/types"
 	"k8s.io/apimachinery/pkg/util/sets"
-	"k8s.io/klog/v2"
-	ctrl "sigs.k8s.io/controller-runtime"
 
 	asdbv1 "github.com/aerospike/aerospike-kubernetes-operator/v4/api/v1"
 	"github.com/aerospike/aerospike-kubernetes-operator/v4/pkg/utils"
 	lib "github.com/aerospike/aerospike-management-lib"
 	"github.com/aerospike/aerospike-management-lib/asconfig"
 )
-
-var pkgLog = klog.LoggerWithName(ctrl.Log, "lib.asconfig")
 
 const (
 	// aerospikeTemplateConfFileName is the name of the aerospike conf template
@@ -100,8 +96,8 @@ func (r *SingleClusterReconciler) createConfigMapData(ctx context.Context, rack 
 	confTemp, err := r.buildConfigTemplate(rack)
 	if err != nil {
 		return nil, fmt.Errorf(
-			"build config template for rack %d in cluster %s: %w",
-			rack.ID, utils.GetNamespacedNameString(r.aeroCluster), err,
+			"build config template for rack %d: %w",
+			rack.ID, err,
 		)
 	}
 
@@ -109,8 +105,8 @@ func (r *SingleClusterReconciler) createConfigMapData(ctx context.Context, rack 
 	confData, err := r.getBaseConfData(ctx, rack)
 	if err != nil {
 		return nil, fmt.Errorf(
-			"build base config data for rack %d in cluster %s: %w",
-			rack.ID, utils.GetNamespacedNameString(r.aeroCluster), err,
+			"build base config data for rack %d: %w",
+			rack.ID, err,
 		)
 	}
 
@@ -215,10 +211,7 @@ func createPodSpecForRack(
 func (r *SingleClusterReconciler) buildConfigTemplate(rack *asdbv1.Rack) (
 	string, error,
 ) {
-	log := klog.LoggerWithValues(
-		pkgLog,
-		"aerospikeCluster", klog.KRef(r.aeroCluster.Namespace, r.aeroCluster.Name),
-	)
+	log := r.asConfigLog()
 
 	configMap := rack.AerospikeConfig.Value
 	log.V(1).Info(
@@ -229,8 +222,8 @@ func (r *SingleClusterReconciler) buildConfigTemplate(rack *asdbv1.Rack) (
 	asConf, err := asconfig.NewMapAsConfig(r.Log, configMap)
 	if err != nil {
 		return "", fmt.Errorf(
-			"load Aerospike config map for rack %d in cluster %s: %w",
-			rack.ID, utils.GetNamespacedNameString(r.aeroCluster), err,
+			"load Aerospike config map for rack %d: %w",
+			rack.ID, err,
 		)
 	}
 
@@ -372,7 +365,7 @@ func (r *SingleClusterReconciler) deleteRackConfigMap(ctx context.Context, names
 		if errors.IsNotFound(err) {
 			r.Log.Info(
 				"Rack ConfigMap not found while deleting, skipping",
-				"configMap", klog.KRef(namespacedName.Namespace, namespacedName.Name),
+				"configMap", utils.NewNamespacedName(namespacedName.Namespace, namespacedName.Name),
 			)
 
 			return nil

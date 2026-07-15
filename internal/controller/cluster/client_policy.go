@@ -10,9 +10,9 @@ import (
 	"path/filepath"
 	"time"
 
+	"github.com/go-logr/logr"
 	corev1 "k8s.io/api/core/v1"
 	"k8s.io/apimachinery/pkg/types"
-	"k8s.io/klog/v2"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 
 	as "github.com/aerospike/aerospike-client-go/v8"
@@ -27,6 +27,8 @@ type fromSecretPasswordProvider struct {
 
 	// The secret namespace.
 	namespace string
+
+	log logr.Logger
 }
 
 // Get returns the password for the username using userSpec.
@@ -41,12 +43,12 @@ func (pp fromSecretPasswordProvider) Get(
 		types.NamespacedName{Name: secretName, Namespace: pp.namespace}, secret,
 	)
 	if err != nil {
-		return "", fmt.Errorf("get secret %s: %w", utils.NamespacedName(pp.namespace, secretName), err)
+		return "", fmt.Errorf("get Secret %s: %w", utils.NamespacedName(pp.namespace, secretName), err)
 	}
 
 	passBytes, ok := secret.Data["password"]
 	if !ok {
-		return "", fmt.Errorf("missing %q key in secret %s", "password", utils.NamespacedName(pp.namespace, secretName))
+		return "", fmt.Errorf("missing %q key in Secret %s", "password", utils.NamespacedName(pp.namespace, secretName))
 	}
 
 	return string(passBytes), nil
@@ -70,10 +72,8 @@ func (pp fromSecretPasswordProvider) GetDefaultPassword(ctx context.Context, spe
 
 	password, err := pp.getPasswordFromSecret(ctx, secretName, passwordFileName)
 	if err != nil {
-		pkgLog.Info(
-			"Failed to get password from secret, using default password",
-			"secret", klog.KRef(pp.namespace, secretName),
-			"err", err,
+		pp.log.Error(err, "Failed to get password from Secret",
+			"secret", utils.NewNamespacedName(pp.namespace, secretName),
 		)
 
 		return asdbv1.DefaultAdminPassword
@@ -91,12 +91,12 @@ func (pp fromSecretPasswordProvider) getPasswordFromSecret(
 
 	err := (*pp.k8sClient).Get(ctx, secretNamespcedName, secret)
 	if err != nil {
-		return "", fmt.Errorf("get secret %s: %w", secretNamespcedName, err)
+		return "", fmt.Errorf("get Secret %s: %w", secretNamespcedName, err)
 	}
 
 	passBytes, ok := secret.Data[passFileName]
 	if !ok {
-		return "", fmt.Errorf("get password file %q from secret %s: not found in secret data",
+		return "", fmt.Errorf("get password file %q from Secret %s: not found in Secret data",
 			passFileName, secretNamespcedName)
 	}
 
@@ -105,7 +105,7 @@ func (pp fromSecretPasswordProvider) getPasswordFromSecret(
 
 func (r *SingleClusterReconciler) getPasswordProvider() fromSecretPasswordProvider {
 	return fromSecretPasswordProvider{
-		k8sClient: &r.Client, namespace: r.aeroCluster.Namespace,
+		k8sClient: &r.Client, namespace: r.aeroCluster.Namespace, log: r.asConfigLog(),
 	}
 }
 
@@ -135,7 +135,6 @@ func (r *SingleClusterReconciler) getClientPolicy(ctx context.Context) *as.Clien
 			// This is possible when tls-authenticate-client = false
 			r.Log.Info(
 				"Operator's client cert is not configured. Skip using client certs.",
-				"aerospikeCluster", klog.KRef(r.aeroCluster.Namespace, r.aeroCluster.Name),
 				"clientCertSpec", clientCertSpec,
 			)
 		} else if cert, err := r.getClientCertificate(
@@ -143,10 +142,9 @@ func (r *SingleClusterReconciler) getClientPolicy(ctx context.Context) *as.Clien
 		); err == nil {
 			tlsConf.Certificates = append(tlsConf.Certificates, *cert)
 		} else {
-			r.Log.Info(
-				"Failed to get client certificate, using basic clientPolicy",
-				"aerospikeCluster", klog.KRef(r.aeroCluster.Namespace, r.aeroCluster.Name),
-				"err", err,
+			r.Log.Error(
+				err,
+				"Failed to get client certificate. Using basic clientPolicy",
 			)
 		}
 
@@ -164,22 +162,14 @@ func (r *SingleClusterReconciler) getClientPolicy(ctx context.Context) *as.Clien
 
 	statusToSpec, err := asdbv1.CopyStatusToSpec(&r.aeroCluster.Status.AerospikeClusterStatusSpec)
 	if err != nil {
-		r.Log.Info(
-			"Failed to copy status to spec, continuing with partial client policy",
-			"aerospikeCluster", klog.KRef(r.aeroCluster.Namespace, r.aeroCluster.Name),
-			"err", err,
-		)
+		r.Log.Error(err, "Failed to copy status in spec", "err", err)
 	}
 
 	user, pass, err := AerospikeAdminCredentials(
 		ctx, &r.aeroCluster.Spec, statusToSpec, r.getPasswordProvider(),
 	)
 	if err != nil {
-		r.Log.Info(
-			"Failed to get cluster auth info, using empty credentials",
-			"aerospikeCluster", klog.KRef(r.aeroCluster.Namespace, r.aeroCluster.Name),
-			"err", err,
-		)
+		r.Log.Error(err, "Failed to get cluster auth info", "err", err)
 	}
 	// TODO: What should be the timeout, should make it configurable or just keep it default
 	policy.Timeout = time.Minute * 1
@@ -210,7 +200,6 @@ func (r *SingleClusterReconciler) getClusterServerCAPool(
 	if err != nil {
 		r.Log.Info(
 			"Failed to load system certificates into pool, using empty pool",
-			"aerospikeCluster", klog.KRef(r.aeroCluster.Namespace, r.aeroCluster.Name),
 			"err", err,
 		)
 
@@ -220,7 +209,6 @@ func (r *SingleClusterReconciler) getClusterServerCAPool(
 	if clientCertSpec == nil {
 		r.Log.Info(
 			"operatorClientCertSpec is not configured, using default system CA certs",
-			"aerospikeCluster", klog.KRef(r.aeroCluster.Namespace, r.aeroCluster.Name),
 		)
 
 		return serverPool
@@ -236,9 +224,9 @@ func (r *SingleClusterReconciler) getClusterServerCAPool(
 			ctx, clientCertSpec.SecretCertSource, clusterNamespace, serverPool,
 		)
 	default:
-		r.Log.Info(
-			"Neither secretName nor certPathInOperator is set in operatorClientCertSpec, using existing cert pool",
-			"aerospikeCluster", klog.KRef(r.aeroCluster.Namespace, r.aeroCluster.Name),
+		r.Log.Error(
+			fmt.Errorf("both secretName and certPathInOperator are not set"),
+			"Returning empty certPool.",
 		)
 
 		return serverPool
@@ -251,7 +239,6 @@ func (r *SingleClusterReconciler) appendCACertFromFileOrPath(
 	if caPath == "" {
 		r.Log.Info(
 			"CA path is not provided in operatorClientCertSpec, using default system CA certs",
-			"aerospikeCluster", klog.KRef(r.aeroCluster.Namespace, r.aeroCluster.Name),
 		)
 
 		return serverPool
@@ -273,7 +260,6 @@ func (r *SingleClusterReconciler) appendCACertFromFileOrPath(
 
 				serverPool.AppendCertsFromPEM(caData)
 				r.Log.Info("Loaded CA certs from file",
-					"aerospikeCluster", klog.KRef(r.aeroCluster.Namespace, r.aeroCluster.Name),
 					"caPath", caPath,
 					"file", path,
 				)
@@ -283,11 +269,8 @@ func (r *SingleClusterReconciler) appendCACertFromFileOrPath(
 		},
 	)
 	if err != nil {
-		r.Log.Info(
-			"Failed to load CA certs from dir, using cert pool without those CAs",
-			"aerospikeCluster", klog.KRef(r.aeroCluster.Namespace, r.aeroCluster.Name),
-			"caPath", caPath,
-			"err", err,
+		r.Log.Error(
+			err, "Failed to load CA certs from dir.", "caPath", caPath,
 		)
 	}
 
@@ -302,7 +285,6 @@ func (r *SingleClusterReconciler) appendCACertFromSecret(
 	if secretSource.CaCertsFilename == "" && secretSource.CaCertsSource == nil {
 		r.Log.Info(
 			"Neither caCertsFilename nor caCertSource is specified, using default CA certs",
-			"aerospikeCluster", klog.KRef(r.aeroCluster.Namespace, r.aeroCluster.Name),
 			"secretSource", secretSource,
 		)
 
@@ -310,8 +292,7 @@ func (r *SingleClusterReconciler) appendCACertFromSecret(
 	}
 	// get the tls info from secret
 	r.Log.Info(
-		"Trying to find an appropriate CA cert from the secret",
-		"aerospikeCluster", klog.KRef(r.aeroCluster.Namespace, r.aeroCluster.Name),
+		"Trying to find an appropriate CA cert from the Secret",
 		"secretSource", secretSource,
 	)
 
@@ -322,11 +303,10 @@ func (r *SingleClusterReconciler) appendCACertFromSecret(
 		secretName := namespacedSecret(secretSource.CaCertsSource.SecretNamespace,
 			secretSource.CaCertsSource.SecretName, defaultNamespace)
 		if err := r.Get(ctx, secretName, found); err != nil {
-			r.Log.Info(
-				"Failed to get CA certificates secret, using cert pool without secret CAs",
-				"secret", klog.KRef(secretName.Namespace, secretName.Name),
-				"aerospikeCluster", klog.KRef(r.aeroCluster.Namespace, r.aeroCluster.Name),
-				"err", err,
+			r.Log.Error(
+				err,
+				"Failed to get CA certificates Secret, returning empty certPool",
+				"secret", utils.NewNamespacedName(secretName.Namespace, secretName.Name),
 			)
 
 			return serverPool
@@ -334,9 +314,8 @@ func (r *SingleClusterReconciler) appendCACertFromSecret(
 
 		for file, caData := range found.Data {
 			r.Log.V(1).Info(
-				"Adding cert to tls server-pool from the secret",
-				"secret", klog.KRef(secretName.Namespace, secretName.Name),
-				"aerospikeCluster", klog.KRef(r.aeroCluster.Namespace, r.aeroCluster.Name),
+				"Adding cert to tls server-pool from the Secret",
+				"secret", utils.NewNamespacedName(secretName.Namespace, secretName.Name),
 				"file", file,
 			)
 			serverPool.AppendCertsFromPEM(caData)
@@ -345,11 +324,10 @@ func (r *SingleClusterReconciler) appendCACertFromSecret(
 		//nolint:staticcheck // SA1019: must read deprecated SecretNamespace to resolve secret until field is removed
 		secretName := namespacedSecret(secretSource.SecretNamespace, secretSource.SecretName, defaultNamespace)
 		if err := r.Get(ctx, secretName, found); err != nil {
-			r.Log.Info(
-				"Failed to get CA certificates secret, using cert pool without secret CAs",
-				"secret", klog.KRef(secretName.Namespace, secretName.Name),
-				"aerospikeCluster", klog.KRef(r.aeroCluster.Namespace, r.aeroCluster.Name),
-				"err", err,
+			r.Log.Error(
+				err,
+				"Failed to get Secret certificates to the pool, returning empty certPool",
+				"secret", utils.NewNamespacedName(secretName.Namespace, secretName.Name),
 			)
 
 			return serverPool
@@ -357,16 +335,14 @@ func (r *SingleClusterReconciler) appendCACertFromSecret(
 
 		if caData, ok := found.Data[secretSource.CaCertsFilename]; ok {
 			r.Log.V(1).Info(
-				"Adding cert to tls server-pool from the secret",
-				"secret", klog.KRef(secretName.Namespace, secretName.Name),
-				"aerospikeCluster", klog.KRef(r.aeroCluster.Namespace, r.aeroCluster.Name),
+				"Adding cert to tls server-pool from the Secret",
+				"secret", utils.NewNamespacedName(secretName.Namespace, secretName.Name),
 			)
 			serverPool.AppendCertsFromPEM(caData)
 		} else {
 			r.Log.V(1).Info(
-				"CA file not found in secret, using cert pool without that CA",
-				"secret", klog.KRef(secretName.Namespace, secretName.Name),
-				"aerospikeCluster", klog.KRef(r.aeroCluster.Namespace, r.aeroCluster.Name),
+				"CA file not found in Secret, using cert pool without that CA",
+				"secret", utils.NewNamespacedName(secretName.Namespace, secretName.Name),
 				"caFile", secretSource.CaCertsFilename,
 			)
 		}
@@ -406,20 +382,13 @@ func (r *SingleClusterReconciler) loadCertAndKeyFromSecret(
 	//nolint:staticcheck // SA1019: must read deprecated SecretNamespace to resolve secret until field is removed
 	secretName := namespacedSecret(secretSource.SecretNamespace, secretSource.SecretName, defaultNamespace)
 	if err := r.Get(ctx, secretName, found); err != nil {
-		r.Log.Info(
-			"Failed to get secret for client certificate, continuing with error",
-			"aerospikeCluster", klog.KRef(r.aeroCluster.Namespace, r.aeroCluster.Name),
-			"secret", klog.KRef(secretName.Namespace, secretName.Name),
-			"err", err,
-		)
-
-		return nil, fmt.Errorf("get secret %+v: %w", secretName, err)
+		return nil, fmt.Errorf("get Secret %s: %w", secretName, err)
 	}
 
 	crtData, crtExists := found.Data[secretSource.ClientCertFilename]
 	if !crtExists {
 		return nil, fmt.Errorf(
-			"find certificate %q in secret %+v",
+			"certificate %q not found in Secret %+v",
 			secretSource.ClientCertFilename, secretName,
 		)
 	}
@@ -427,7 +396,7 @@ func (r *SingleClusterReconciler) loadCertAndKeyFromSecret(
 	keyData, keyExists := found.Data[secretSource.ClientKeyFilename]
 	if !keyExists {
 		return nil, fmt.Errorf(
-			"find client key %q in secret %+v",
+			"client key %q not found in Secret %+v",
 			secretSource.ClientKeyFilename, secretName,
 		)
 	}
@@ -435,15 +404,14 @@ func (r *SingleClusterReconciler) loadCertAndKeyFromSecret(
 	cert, err := tls.X509KeyPair(crtData, keyData)
 	if err != nil {
 		return nil, fmt.Errorf(
-			"load X509 key pair for cluster from secret %+v: %w",
+			"load X509 key pair for cluster from Secret %+v: %w",
 			secretName, err,
 		)
 	}
 
 	r.Log.Info(
-		"Loading Aerospike Cluster client cert from secret",
-		"aerospikeCluster", klog.KRef(r.aeroCluster.Namespace, r.aeroCluster.Name),
-		"secret", klog.KRef(secretName.Namespace, secretName.Name),
+		"Loading AerospikeCluster client cert from Secret",
+		"secret", utils.NewNamespacedName(secretName.Namespace, secretName.Name),
 	)
 
 	return &cert, nil
@@ -487,8 +455,7 @@ func (r *SingleClusterReconciler) loadCertAndKeyFromFiles(
 	}
 
 	r.Log.Info(
-		"Loading Aerospike Cluster client cert from files",
-		"aerospikeCluster", klog.KRef(r.aeroCluster.Namespace, r.aeroCluster.Name),
+		"Loading AerospikeCluster client cert from files",
 		"certPath", certPath,
 		"keyPath", keyPath,
 	)

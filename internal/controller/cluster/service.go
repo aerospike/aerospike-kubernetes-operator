@@ -12,7 +12,6 @@ import (
 	"k8s.io/apimachinery/pkg/types"
 	"k8s.io/apimachinery/pkg/util/intstr"
 	"k8s.io/apimachinery/pkg/util/sets"
-	"k8s.io/klog/v2"
 	"sigs.k8s.io/controller-runtime/pkg/controller/controllerutil"
 
 	asdbv1 "github.com/aerospike/aerospike-kubernetes-operator/v4/api/v1"
@@ -43,8 +42,8 @@ func (r *SingleClusterReconciler) createOrUpdateSTSHeadlessSvc(ctx context.Conte
 			return err
 		}
 
-		r.Log.Info("Creating headless service for statefulSet",
-			"service", klog.KRef(r.aeroCluster.Namespace, serviceName))
+		r.Log.Info("Creating headless Service for cluster",
+			"service", utils.NewNamespacedName(r.aeroCluster.Namespace, serviceName))
 
 		if specHeadlessSvc.Metadata.Annotations != nil {
 			if defaultMetadata.Annotations == nil {
@@ -86,19 +85,19 @@ func (r *SingleClusterReconciler) createOrUpdateSTSHeadlessSvc(ctx context.Conte
 			ctx, service, common.CreateOption,
 		); err != nil {
 			return fmt.Errorf(
-				"create headless Service for StatefulSet %s: %w",
-				utils.GetNamespacedNameString(r.aeroCluster), err,
+				"create headless Service %s for cluster: %w",
+				utils.NamespacedName(service.Namespace, service.Name), err,
 			)
 		}
 
-		r.Log.Info("Created new headless service",
-			"service", klog.KObj(service))
+		r.Log.Info("Created new headless Service",
+			"service", utils.GetNamespacedName(service))
 
 		return nil
 	}
 
-	r.Log.Info("Headless service already exist, checking for update",
-		"service", klog.KObj(service))
+	r.Log.Info("Headless Service already exist, checking for update",
+		"service", utils.GetNamespacedName(service))
 
 	return r.updateService(
 		ctx,
@@ -126,8 +125,8 @@ func (r *SingleClusterReconciler) reconcileSTSLoadBalancerSvc(ctx context.Contex
 		}, service,
 	); err != nil {
 		if errors.IsNotFound(err) {
-			r.Log.Info("Creating LoadBalancer service for cluster",
-				"service", klog.KRef(r.aeroCluster.Namespace, serviceName))
+			r.Log.Info("Creating LoadBalancer Service for cluster",
+				"service", utils.NewNamespacedName(r.aeroCluster.Namespace, serviceName))
 			ls := utils.LabelsForAerospikeCluster(r.aeroCluster.Name)
 
 			service = &corev1.Service{
@@ -167,8 +166,8 @@ func (r *SingleClusterReconciler) reconcileSTSLoadBalancerSvc(ctx context.Contex
 				return nErr
 			}
 
-			r.Log.Info("Created new LoadBalancer service",
-				"service", klog.KObj(service))
+			r.Log.Info("Created new LoadBalancer Service",
+				"service", utils.GetNamespacedName(service))
 
 			return nil
 		}
@@ -176,8 +175,8 @@ func (r *SingleClusterReconciler) reconcileSTSLoadBalancerSvc(ctx context.Contex
 		return err
 	}
 
-	r.Log.Info("LoadBalancer service already exist for cluster, checking for update",
-		"service", klog.KObj(service))
+	r.Log.Info("LoadBalancer Service already exist for cluster, checking for update",
+		"service", utils.GetNamespacedName(service))
 
 	if !utils.IsOwnedBy(service, r.aeroCluster) {
 		return fmt.Errorf(
@@ -210,8 +209,8 @@ func (r *SingleClusterReconciler) deleteLBServiceIfPresent(ctx context.Context, 
 
 	if !utils.IsOwnedBy(service, r.aeroCluster) {
 		r.Log.Info(
-			"LoadBalancer service is not created/owned by operator. Skipping delete",
-			"service", klog.KObj(service),
+			"LoadBalancer Service is not created/owned by operator. Skipping delete",
+			"service", utils.GetNamespacedName(service),
 		)
 
 		return nil
@@ -260,14 +259,14 @@ func (r *SingleClusterReconciler) updateLBService(ctx context.Context, service *
 			)
 		}
 	} else {
-		r.Log.Info("LoadBalancer service update not required, skipping",
-			"service", klog.KObj(service))
+		r.Log.Info("LoadBalancer Service update not required, skipping",
+			"service", utils.GetNamespacedName(service))
 
 		return nil
 	}
 
-	r.Log.Info("LoadBalancer service updated",
-		"service", klog.KObj(service))
+	r.Log.Info("LoadBalancer Service updated",
+		"service", utils.GetNamespacedName(service))
 
 	return nil
 }
@@ -300,8 +299,9 @@ func (r *SingleClusterReconciler) createOrUpdatePodService(ctx context.Context, 
 			return err
 		}
 
-		r.Log.Info("Creating new service for pod",
-			"pod", klog.KRef(pNamespace, pName))
+		r.Log.Info("Creating new Service for Pod",
+			"service", utils.NewNamespacedName(pNamespace, pName),
+			"pod", utils.NewNamespacedName(pNamespace, pName))
 		// NodePort will be allocated automatically
 		service = &corev1.Service{
 			ObjectMeta: metav1.ObjectMeta{
@@ -334,19 +334,19 @@ func (r *SingleClusterReconciler) createOrUpdatePodService(ctx context.Context, 
 			ctx, service, common.CreateOption,
 		); err != nil {
 			return fmt.Errorf(
-				"create Service for pod %s: %w", utils.NamespacedName(pNamespace, pName), err,
+				"create Service for Pod %s: %w", utils.NamespacedName(pNamespace, pName), err,
 			)
 		}
 
-		r.Log.Info("Created new service for pod",
-			"service", klog.KObj(service),
-			"pod", klog.KRef(pNamespace, pName))
+		r.Log.Info("Created new Service for Pod",
+			"service", utils.GetNamespacedName(service),
+			"pod", utils.NewNamespacedName(pNamespace, pName))
 
 		return nil
 	}
 
 	r.Log.Info("Service already exist, checking for update",
-		"service", klog.KObj(service))
+		"service", utils.GetNamespacedName(service))
 
 	return r.updateService(
 		ctx,
@@ -366,14 +366,15 @@ func (r *SingleClusterReconciler) deletePodService(ctx context.Context, pName, p
 	if err := r.Delete(ctx, service); err != nil {
 		if errors.IsNotFound(err) {
 			r.Log.Info(
-				"Pod service not found for deletion. Skipping...",
-				"service", klog.KRef(serviceName.Namespace, serviceName.Name),
+				"Pod Service not found for deletion. Skipping...",
+				"service", utils.NewNamespacedName(serviceName.Namespace, serviceName.Name),
+				"pod", utils.NewNamespacedName(pNamespace, pName),
 			)
 
 			return nil
 		}
 
-		return fmt.Errorf("delete Service for pod %s: %w", serviceName, err)
+		return fmt.Errorf("delete Service for Pod %s: %w", serviceName, err)
 	}
 
 	return nil
@@ -603,13 +604,13 @@ func (r *SingleClusterReconciler) updateService(
 		}
 
 		r.Log.Info("Service updated",
-			"service", klog.KObj(service))
+			"service", utils.GetNamespacedName(service))
 
 		return nil
 	}
 
 	r.Log.Info("Service update not required, skipping",
-		"service", klog.KObj(service))
+		"service", utils.GetNamespacedName(service))
 
 	return nil
 }
