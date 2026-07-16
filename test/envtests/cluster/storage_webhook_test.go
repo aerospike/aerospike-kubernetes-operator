@@ -114,6 +114,32 @@ var _ = Describe("Storage webhook validation", func() {
 		})
 
 		Context("spec.storage volumes (PersistentVolumeSpec)", func() {
+			Context("positive", func() {
+				// accessModes carries a +kubebuilder:validation:items:Enum marker, so every value in
+				// the allowed set must be accepted by the CRD schema.
+				DescribeTable("allows valid accessMode enum values (items:Enum)",
+					func(accessMode corev1.PersistentVolumeAccessMode) {
+						// Size 2 satisfies the strong-consistency namespace replication-factor (2).
+						aeroCluster := testCluster.CreateDummyAerospikeCluster(nsName, 2)
+						setFirstPVAccessModes(&aeroCluster.Spec.Storage, accessMode)
+
+						Expect(envtests.K8sClient.Create(ctx, aeroCluster)).To(Succeed())
+					},
+					Entry("ReadOnlyMany", corev1.ReadOnlyMany),
+					Entry("ReadWriteMany", corev1.ReadWriteMany),
+					Entry("ReadWriteOnce", corev1.ReadWriteOnce),
+					Entry("ReadWriteOncePod", corev1.ReadWriteOncePod),
+				)
+
+				It("allows multiple valid accessModes together, including ReadWriteOncePod (items:Enum)", func() {
+					aeroCluster := testCluster.CreateDummyAerospikeCluster(nsName, 2)
+					setFirstPVAccessModes(&aeroCluster.Spec.Storage,
+						corev1.ReadWriteOnce, corev1.ReadWriteOncePod)
+
+					Expect(envtests.K8sClient.Create(ctx, aeroCluster)).To(Succeed())
+				})
+			})
+
 			Context("negative", func() {
 				It("rejects invalid volumeMode (Enum)", func() {
 					aeroCluster := testCluster.CreateDummyAerospikeCluster(nsName, 1)
@@ -134,18 +160,26 @@ var _ = Describe("Storage webhook validation", func() {
 						Validate(err)
 				})
 
-				It("rejects accessMode not in allowed enum (items:Enum)", func() {
+				DescribeTable("rejects accessMode not in allowed enum (items:Enum)",
+					func(accessMode corev1.PersistentVolumeAccessMode) {
+						aeroCluster := testCluster.CreateDummyAerospikeCluster(nsName, 1)
+						setFirstPVAccessModes(&aeroCluster.Spec.Storage, accessMode)
+
+						err := envtests.K8sClient.Create(ctx, aeroCluster)
+						Expect(err).To(HaveOccurred())
+						envtests.NewStatusErrorMatcher().
+							WithMessageSubstrings(testutil.CRDSchemaErrorPrefix, "accessModes").
+							Validate(err)
+					},
+					Entry("arbitrary invalid value", corev1.PersistentVolumeAccessMode("invalid")),
+					// Guards against a typo/casing regression in the newly added enum value.
+					Entry("wrong casing of ReadWriteOncePod", corev1.PersistentVolumeAccessMode("ReadWriteOncepod")),
+				)
+
+				It("rejects a valid and an invalid accessMode together (items:Enum)", func() {
 					aeroCluster := testCluster.CreateDummyAerospikeCluster(nsName, 1)
-
-					for i := range aeroCluster.Spec.Storage.Volumes {
-						if aeroCluster.Spec.Storage.Volumes[i].Source.PersistentVolume != nil {
-							aeroCluster.Spec.Storage.Volumes[i].Source.PersistentVolume.AccessModes = []corev1.PersistentVolumeAccessMode{
-								corev1.PersistentVolumeAccessMode("invalid"),
-							}
-
-							break
-						}
-					}
+					setFirstPVAccessModes(&aeroCluster.Spec.Storage,
+						corev1.ReadWriteOncePod, corev1.PersistentVolumeAccessMode("invalid"))
 
 					err := envtests.K8sClient.Create(ctx, aeroCluster)
 					Expect(err).To(HaveOccurred())
@@ -470,6 +504,20 @@ var _ = Describe("Storage webhook validation", func() {
 		})
 	})
 })
+
+// setFirstPVAccessModes sets AccessModes on the first volume backed by a
+// PersistentVolume source. It is used to exercise the accessModes items:Enum marker.
+func setFirstPVAccessModes(
+	storage *asdbv1.AerospikeStorageSpec,
+	modes ...corev1.PersistentVolumeAccessMode,
+) {
+	for i := range storage.Volumes {
+		if storage.Volumes[i].Source.PersistentVolume != nil {
+			storage.Volumes[i].Source.PersistentVolume.AccessModes = modes
+			return
+		}
+	}
+}
 
 func setVolumePolicyMethod(
 	storage *asdbv1.AerospikeStorageSpec,

@@ -5,6 +5,8 @@ import (
 	"fmt"
 	"path/filepath"
 	"reflect"
+	"regexp"
+	"strconv"
 
 	. "github.com/onsi/ginkgo/v2"
 	. "github.com/onsi/gomega"
@@ -142,6 +144,39 @@ var _ = Describe(
 									[]v1.PersistentVolumeAccessMode{accessMode}
 
 								Expect(DeployCluster(k8sClient, ctx, aeroCluster)).Should(HaveOccurred())
+							},
+						)
+
+						FIt(
+							"Should allow ReadWriteOncePod accessMode for PV source",
+							func() {
+								// ReadWriteOncePod was introduced as an alpha feature in Kubernetes 1.22.
+								skipIfK8sVersionBelow(1, 22, "ReadWriteOncePod accessMode support")
+
+								aeroCluster := createDummyAerospikeCluster(
+									clusterNamespacedName, 2,
+								)
+
+								for i, volume := range aeroCluster.Spec.Storage.Volumes {
+									if volume.Source.PersistentVolume != nil {
+										aeroCluster.Spec.Storage.Volumes[i].Source.PersistentVolume.AccessModes =
+											[]v1.PersistentVolumeAccessMode{v1.ReadWriteOncePod}
+									}
+								}
+
+								Expect(DeployCluster(k8sClient, ctx, aeroCluster)).ShouldNot(HaveOccurred())
+
+								pvcs, err := getAeroClusterPVCList(
+									aeroCluster, k8sClient,
+								)
+								Expect(err).ShouldNot(HaveOccurred())
+								Expect(pvcs).ShouldNot(BeEmpty())
+
+								for idx := range pvcs {
+									Expect(pvcs[idx].Spec.AccessModes).To(
+										ContainElement(v1.ReadWriteOncePod),
+									)
+								}
 							},
 						)
 
@@ -1011,5 +1046,29 @@ func validateWorkDirSubPathMounts(pod *v1.Pod, volumeName, workDirPath string) {
 
 		Expect(found).To(BeTrue(), "volume %s not mounted with subPath %s at path %s",
 			volumeName, subPath, expectedPath)
+	}
+}
+
+var k8sVersionRegex = regexp.MustCompile(`^v?(\d+)\.(\d+)`)
+
+// skipIfK8sVersionBelow skips the current spec when the API server's version is
+// older than the provided major.minor. Used to gate features that are unavailable
+// on older Kubernetes clusters.
+func skipIfK8sVersionBelow(major, minor int, reason string) {
+	info, err := k8sClientSet.Discovery().ServerVersion()
+	Expect(err).ToNot(HaveOccurred())
+
+	matches := k8sVersionRegex.FindStringSubmatch(info.GitVersion)
+	Expect(matches).To(HaveLen(3), "unable to parse Kubernetes version %q", info.GitVersion)
+
+	serverMajor, err := strconv.Atoi(matches[1])
+	Expect(err).ToNot(HaveOccurred())
+
+	serverMinor, err := strconv.Atoi(matches[2])
+	Expect(err).ToNot(HaveOccurred())
+
+	if serverMajor < major || (serverMajor == major && serverMinor < minor) {
+		Skip(fmt.Sprintf("requires Kubernetes >= %d.%d (server is %s): %s",
+			major, minor, info.GitVersion, reason))
 	}
 }
