@@ -17,6 +17,7 @@ limitations under the License.
 package cluster
 
 import (
+	"context"
 	"testing"
 
 	appsv1 "k8s.io/api/apps/v1"
@@ -56,7 +57,7 @@ func TestWaitForServerContainersRunning(t *testing.T) {
 		// that Get from ever being issued.
 		podName := stsName + "-0"
 
-		if err := r.waitForServerContainersRunning(sts, sets.New(podName)); err != nil {
+		if err := r.waitForServerContainersRunning(context.Background(), sts, sets.New(podName)); err != nil {
 			t.Errorf("expected nil for ignorable pod, got: %v", err)
 		}
 	})
@@ -75,7 +76,7 @@ func TestWaitForServerContainersRunning(t *testing.T) {
 		}
 		r := newReconcilerWithObjects(newTestScheme(), aeroCluster, sts, pod)
 
-		if err := r.waitForServerContainersRunning(sts, sets.New[string]()); err != nil {
+		if err := r.waitForServerContainersRunning(context.Background(), sts, sets.New[string]()); err != nil {
 			t.Errorf("expected nil for running server container, got: %v", err)
 		}
 	})
@@ -103,7 +104,7 @@ func TestWaitForServerContainersRunning(t *testing.T) {
 		}
 		r := newReconcilerWithObjects(newTestScheme(), aeroCluster, sts, pod)
 
-		if err := r.waitForServerContainersRunning(sts, sets.New[string]()); err == nil {
+		if err := r.waitForServerContainersRunning(context.Background(), sts, sets.New[string]()); err == nil {
 			t.Error("expected an error for CrashLoopBackOff server container, got nil")
 		}
 	})
@@ -128,7 +129,7 @@ func TestWaitForServerContainersRunning(t *testing.T) {
 		ignorable := sets.New(stsName + "-1")
 		r := newReconcilerWithObjects(newTestScheme(), aeroCluster, multiSTS, pod0)
 
-		if err := r.waitForServerContainersRunning(multiSTS, ignorable); err != nil {
+		if err := r.waitForServerContainersRunning(context.Background(), multiSTS, ignorable); err != nil {
 			t.Errorf("expected nil when running pod + ignorable pod, got: %v", err)
 		}
 	})

@@ -145,7 +145,7 @@ type RackState struct {
 
 // Reconcile AerospikeCluster object
 func (r *AerospikeClusterReconciler) Reconcile(
-	_ context.Context, request reconcile.Request,
+	ctx context.Context, request reconcile.Request,
 ) (ctrl.Result, error) {
 	log := r.Log.WithValues("aerospikecluster", request.NamespacedName)
 
@@ -153,7 +153,7 @@ func (r *AerospikeClusterReconciler) Reconcile(
 
 	// Fetch the AerospikeCluster instance
 	aeroCluster := &asdbv1.AerospikeCluster{}
-	if err := r.Get(context.TODO(), request.NamespacedName, aeroCluster); err != nil {
+	if err := r.Get(ctx, request.NamespacedName, aeroCluster); err != nil {
 		if errors.IsNotFound(err) {
 			// Request object not found, could have been deleted after Reconcile request.
 			return reconcile.Result{}, nil
@@ -172,5 +172,5 @@ func (r *AerospikeClusterReconciler) Reconcile(
 		Recorder:    r.Recorder,
 	}
 
-	return cr.Reconcile()
+	return cr.Reconcile(ctx)
 }

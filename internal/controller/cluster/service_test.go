@@ -50,11 +50,11 @@ func TestCreateOrUpdatePodService_PublishNotReadyAddresses(t *testing.T) {
 	r := newTestReconciler(t, aeroCluster, &interceptor.Funcs{})
 	r.Recorder = record.NewFakeRecorder(10)
 
-	require.NoError(t, r.createOrUpdatePodService(podName, namespace))
+	require.NoError(t, r.createOrUpdatePodService(context.Background(), podName, namespace))
 
 	svc := &corev1.Service{}
 	require.NoError(t, r.Get(
-		context.TODO(),
+		context.Background(),
 		types.NamespacedName{Name: podName, Namespace: namespace},
 		svc,
 	))
@@ -85,13 +85,13 @@ func TestCreateOrUpdatePodService_Idempotent(t *testing.T) {
 	r := newTestReconciler(t, aeroCluster, &interceptor.Funcs{})
 	r.Recorder = record.NewFakeRecorder(10)
 
-	require.NoError(t, r.createOrUpdatePodService(podName, namespace), "first call")
-	require.NoError(t, r.createOrUpdatePodService(podName, namespace), "second call (update path)")
+	require.NoError(t, r.createOrUpdatePodService(context.Background(), podName, namespace), "first call")
+	require.NoError(t, r.createOrUpdatePodService(context.Background(), podName, namespace), "second call (update path)")
 
 	// Service should still have the correct flag after update.
 	svc := &corev1.Service{}
 	require.NoError(t, r.Get(
-		context.TODO(),
+		context.Background(),
 		types.NamespacedName{Name: podName, Namespace: namespace},
 		svc,
 	))
@@ -121,11 +121,11 @@ func TestCreateOrUpdatePodService_IgnoreSidecarFailure(t *testing.T) {
 	r := newTestReconciler(t, aeroCluster, &interceptor.Funcs{})
 	r.Recorder = record.NewFakeRecorder(10)
 
-	require.NoError(t, r.createOrUpdatePodService(podName, namespace))
+	require.NoError(t, r.createOrUpdatePodService(context.Background(), podName, namespace))
 
 	svc := &corev1.Service{}
 	require.NoError(t, r.Get(
-		context.TODO(),
+		context.Background(),
 		types.NamespacedName{Name: podName, Namespace: namespace},
 		svc,
 	))

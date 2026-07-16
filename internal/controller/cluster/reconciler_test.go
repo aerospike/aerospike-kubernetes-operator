@@ -17,6 +17,7 @@ limitations under the License.
 package cluster
 
 import (
+	"context"
 	"testing"
 	"time"
 
@@ -103,7 +104,7 @@ func TestCheckPreviouslyFailedCluster(t *testing.T) {
 		}
 		r := newReconcilerWithObjects(scheme, aeroCluster)
 
-		failed, res := r.checkPreviouslyFailedCluster()
+		failed, res := r.checkPreviouslyFailedCluster(context.Background())
 
 		if failed {
 			t.Error("expected failed=false for a cluster with non-empty status")
@@ -136,7 +137,7 @@ func TestCheckPreviouslyFailedCluster(t *testing.T) {
 
 		r := newReconcilerWithObjects(scheme, aeroCluster, reusableSTS, healthyPod)
 
-		failed, res := r.checkPreviouslyFailedCluster()
+		failed, res := r.checkPreviouslyFailedCluster(context.Background())
 
 		if failed {
 			t.Error("expected failed=false when a healthy pod is present")
@@ -169,7 +170,7 @@ func TestCheckPreviouslyFailedCluster(t *testing.T) {
 
 		r := newReconcilerWithObjects(scheme, aeroCluster, reusableSTS, recentFailedPod)
 
-		failed, res := r.checkPreviouslyFailedCluster()
+		failed, res := r.checkPreviouslyFailedCluster(context.Background())
 
 		if failed {
 			t.Error("expected failed=false when pods are still within the grace period")
