@@ -180,7 +180,7 @@ func (r *SingleClusterReconciler) reconcileSTSLoadBalancerSvc(ctx context.Contex
 
 	if !utils.IsOwnedBy(service, r.aeroCluster) {
 		return fmt.Errorf(
-			"update LoadBalancer Service %s: not created/owned by operator",
+			"existing LoadBalancer Service %s: not created/owned by operator",
 			utils.NamespacedName(service.Namespace, service.Name),
 		)
 	}

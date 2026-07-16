@@ -188,7 +188,7 @@ func (r *SingleClusterReconciler) Reconcile(ctx context.Context) (result ctrl.Re
 			utils.GetNamespacedNameString(r.aeroCluster),
 		)
 
-		return reconcile.Result{}, err
+		return reconcile.Result{}, fmt.Errorf("reconcile access control: %w", err)
 	}
 
 	// Use policy from spec after setting up access control
@@ -351,13 +351,7 @@ func (r *SingleClusterReconciler) validateAndReconcileAccessControl(
 	ctx context.Context,
 	selectedPods []corev1.Pod,
 	ignorablePodNames sets.Set[string],
-) (err error) {
-	defer func() {
-		if err != nil {
-			err = fmt.Errorf("reconcile access control: %w", err)
-		}
-	}()
-
+) error {
 	enabled, err := asdbv1.IsSecurityEnabled(r.aeroCluster.Spec.AerospikeConfig.Value)
 	if err != nil {
 		return fmt.Errorf("get cluster security status: %w", err)
@@ -800,7 +794,7 @@ func (r *SingleClusterReconciler) recoverFailedCreate(ctx context.Context) error
 
 		if err := r.cleanupPodMeshAndStatus(ctx, newPodNames); err != nil {
 			return fmt.Errorf(
-				"clean up Pod mesh and status for rack %d after create failure: %w",
+				"clean up Pod mesh and status for rack %d during failed cluster recovery: %w",
 				state.Rack.ID, err,
 			)
 		}
@@ -1066,7 +1060,8 @@ func (r *SingleClusterReconciler) migrateInitialisedVolumeNames(ctx context.Cont
 		pod := &podList.Items[podIdx]
 
 		if _, ok := r.aeroCluster.Status.Pods[pod.Name]; !ok {
-			return fmt.Errorf("empty status found in CR for Pod %s", pod.Name)
+			return fmt.Errorf("empty status for Pod %s in CR",
+				utils.GetNamespacedNameString(pod))
 		}
 
 		initializedVolumes := r.aeroCluster.Status.Pods[pod.Name].InitializedVolumes
@@ -1090,7 +1085,7 @@ func (r *SingleClusterReconciler) migrateInitialisedVolumeNames(ctx context.Cont
 				}
 
 				if pvcUID == "" {
-					return fmt.Errorf("found empty pvcUID for the volume %s", oldFormatInitVolNames[oldVolIdx])
+					return fmt.Errorf("volume %s: empty pvcUID", oldFormatInitVolNames[oldVolIdx])
 				}
 
 				// Appending volume name as <vol_name>@<pvcUID> in initializedVolumes list

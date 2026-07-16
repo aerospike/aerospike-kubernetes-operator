@@ -96,7 +96,7 @@ func (pp fromSecretPasswordProvider) getPasswordFromSecret(
 
 	passBytes, ok := secret.Data[passFileName]
 	if !ok {
-		return "", fmt.Errorf("get password file %q from Secret %s: not found in Secret data",
+		return "", fmt.Errorf("password file %q not found in Secret %s",
 			passFileName, secretNamespcedName)
 	}
 
@@ -162,14 +162,14 @@ func (r *SingleClusterReconciler) getClientPolicy(ctx context.Context) *as.Clien
 
 	statusToSpec, err := asdbv1.CopyStatusToSpec(&r.aeroCluster.Status.AerospikeClusterStatusSpec)
 	if err != nil {
-		r.Log.Error(err, "Failed to copy status in spec", "err", err)
+		r.Log.Error(err, "Failed to copy status in spec")
 	}
 
 	user, pass, err := AerospikeAdminCredentials(
 		ctx, &r.aeroCluster.Spec, statusToSpec, r.getPasswordProvider(),
 	)
 	if err != nil {
-		r.Log.Error(err, "Failed to get cluster auth info", "err", err)
+		r.Log.Error(err, "Failed to get cluster auth info")
 	}
 	// TODO: What should be the timeout, should make it configurable or just keep it default
 	policy.Timeout = time.Minute * 1
@@ -283,18 +283,12 @@ func (r *SingleClusterReconciler) appendCACertFromSecret(
 	defaultNamespace string, serverPool *x509.CertPool,
 ) *x509.CertPool {
 	if secretSource.CaCertsFilename == "" && secretSource.CaCertsSource == nil {
-		r.Log.Info(
-			"Neither caCertsFilename nor caCertSource is specified, using default CA certs",
-			"secretSource", secretSource,
-		)
+		r.Log.Info("Neither caCertsFilename nor caCertSource is specified, using default CA certs")
 
 		return serverPool
 	}
 	// get the tls info from secret
-	r.Log.Info(
-		"Trying to find an appropriate CA cert from the Secret",
-		"secretSource", secretSource,
-	)
+	r.Log.Info("Trying to find an appropriate CA cert from the Secret")
 
 	found := &corev1.Secret{}
 

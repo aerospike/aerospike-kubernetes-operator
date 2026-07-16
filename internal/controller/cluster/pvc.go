@@ -52,7 +52,7 @@ func (r *SingleClusterReconciler) removePVCsAsync(
 
 		if !ok {
 			err := fmt.Errorf(
-				"PVC can not be removed, " +
+				"annotation missing on PVC: can not be removed, " +
 					"it does not have storage-volume annotation",
 			)
 			r.Log.Error(
@@ -212,7 +212,7 @@ func (r *SingleClusterReconciler) waitForPVCTermination(
 			pvcNames = append(pvcNames, utils.GetNamespacedNameString(&deletedPVCs[idx]))
 		}
 
-		return fmt.Errorf("PVC termination timed out for PVCs %s", strings.Join(pvcNames, ", "))
+		return fmt.Errorf("termination timed out for PVCs %s", strings.Join(pvcNames, ", "))
 	}
 
 	return nil

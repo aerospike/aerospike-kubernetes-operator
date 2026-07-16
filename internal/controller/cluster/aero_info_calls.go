@@ -50,7 +50,7 @@ func (r *SingleClusterReconciler) waitForMultipleNodesSafeStopReady(
 	// Remove a node only if the cluster is stable
 	if err := r.waitForAllSTSToBeReady(ctx, ignorablePodNames); err != nil {
 		return common.ReconcileError(fmt.Errorf(
-			"wait for cluster to be ready: %w", err))
+			"wait for cluster StatefulSets to be ready: %w", err))
 	}
 
 	// This doesn't make actual connection, only objects having connection info are created
@@ -226,7 +226,7 @@ func (r *SingleClusterReconciler) newAllHostConnWithOption(ctx context.Context, 
 	}
 
 	if len(podList.Items) == 0 {
-		return nil, fmt.Errorf("get Pod list: empty")
+		return nil, fmt.Errorf("cluster Pod list is empty")
 	}
 
 	return r.newPodsHostConnWithOption(podList.Items, ignorablePodNames)
@@ -256,7 +256,7 @@ func (r *SingleClusterReconciler) newPodsHostConnWithOption(pods []corev1.Pod, i
 				continue
 			}
 
-			return nil, fmt.Errorf("check Pod %s: not ready", utils.GetNamespacedNameString(pod))
+			return nil, fmt.Errorf("status for Pod %s: not ready", utils.GetNamespacedNameString(pod))
 		}
 
 		asConn := r.newAsConn(pod)

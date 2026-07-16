@@ -318,9 +318,8 @@ func (r *SingleClusterReconciler) waitForSTSToBeReady(
 
 		if !isReady {
 			statusErr := fmt.Errorf(
-				"StatefulSet Pod is not ready. Status: %v",
-				pod.Status.Conditions,
-			)
+				"status for Pod %s: resource not ready, conditions=%v",
+				utils.GetNamespacedNameString(pod), pod.Status.Conditions)
 
 			return statusErr
 		}
@@ -359,7 +358,7 @@ func (r *SingleClusterReconciler) waitForSTSToBeReady(
 	}
 
 	if !updated {
-		return fmt.Errorf("StatefulSet status is not updated")
+		return fmt.Errorf("status for StatefulSet is not updated")
 	}
 
 	r.Log.Info("StatefulSet is ready")

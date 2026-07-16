@@ -696,7 +696,7 @@ func (userCreate aerospikeUserCreateUpdate) createUser(
 
 	if userCreate.password == nil {
 		return fmt.Errorf(
-			"create user %s: password not specified", userCreate.name,
+			"user %s: password not specified", userCreate.name,
 		)
 	}
 

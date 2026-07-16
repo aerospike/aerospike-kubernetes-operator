@@ -384,8 +384,8 @@ func (r *SingleClusterReconciler) rollingRestartPods(
 				ignorablePodNames,
 			); !res.IsSuccess {
 				if res.Err != nil {
-					res.Err = fmt.Errorf("set migrate-fill-delay to `0` for rack %d after restarting the running pods: %w",
-						rackState.Rack.ID, res.Err)
+					res.Err = fmt.Errorf("set migrate-fill-delay to `0` after restarting the running pods: %w",
+						res.Err)
 				}
 
 				return res
@@ -723,7 +723,7 @@ func (r *SingleClusterReconciler) safelyDeletePodsAndEnsureImageUpdated(
 				ignorablePodNames,
 			); !res.IsSuccess {
 				if res.Err != nil {
-					res.Err = fmt.Errorf("revert migrate-fill-delay for rack %d: %w", rackState.Rack.ID, res.Err)
+					res.Err = fmt.Errorf("revert migrate-fill-delay: %w", res.Err)
 				}
 
 				return res
@@ -741,7 +741,7 @@ func (r *SingleClusterReconciler) safelyDeletePodsAndEnsureImageUpdated(
 				ignorablePodNames,
 			); !res.IsSuccess {
 				if res.Err != nil {
-					res.Err = fmt.Errorf("set migrate-fill-delay to `0` for rack %d: %w", rackState.Rack.ID, res.Err)
+					res.Err = fmt.Errorf("set migrate-fill-delay to `0`: %w", res.Err)
 				}
 
 				return res

@@ -171,7 +171,7 @@ func (r *SingleClusterReconciler) reconcileRacks(ctx context.Context) common.Rec
 			// terminate times out and event is re-queued.
 			// Next reconcile will not invoke scale up or down and will
 			// fall through,
-			// and might run reconcile steps common to all racks before the racks
+			// and might run reconcile step	s common to all racks before the racks
 			// have scaled up.
 			r.Log.Error(
 				err, "Failed to wait for StatefulSet to be ready, will requeue",
@@ -206,10 +206,6 @@ func (r *SingleClusterReconciler) createEmptyRack(ctx context.Context, rackState
 
 	found, err := r.createSTS(ctx, stsName, rackState)
 	if err != nil {
-		r.Log.V(1).Info(
-			"StatefulSet setup failed. Deleting StatefulSet", "name",
-			stsName,
-		)
 		// Delete statefulset and everything related so that it can be properly created and updated in next run
 		if found != nil {
 			r.Log.V(1).Info(
@@ -403,10 +399,10 @@ func (r *SingleClusterReconciler) upgradeOrRollingRestartRack(
 					r.Recorder.Eventf(
 						r.aeroCluster, corev1.EventTypeWarning,
 						"RackRollingRestartFailed",
-						"[rack-%d] Failed to roll StatefulSet %s",
+						"[rack-%d] Failed to do rolling restart of StatefulSet %s",
 						rackState.Rack.ID, utils.GetNamespacedNameString(found),
 					)
-					res.Err = fmt.Errorf("complete rolling restart for rack %d StatefulSet %s: %w",
+					res.Err = fmt.Errorf("rolling restart rack %d StatefulSet %s: %w",
 						rackState.Rack.ID, utils.GetNamespacedNameString(found), res.Err)
 				}
 
@@ -595,8 +591,8 @@ func (r *SingleClusterReconciler) reconcileRack(
 				nil,
 			); !res.IsSuccess {
 				if res.Err != nil {
-					res.Err = fmt.Errorf("revert migrate-fill-delay after scale down for rack %d: %w",
-						rackState.Rack.ID, res.Err)
+					res.Err = fmt.Errorf("revert migrate-fill-delay after scale down: %w",
+						res.Err)
 				}
 
 				return res
@@ -619,15 +615,15 @@ func (r *SingleClusterReconciler) reconcileRack(
 	if currentSize < desiredSize {
 		found, res = r.scaleUpRack(ctx, found, rackState, ignorablePodNames)
 		if !res.IsSuccess {
-			r.Recorder.Eventf(
-				r.aeroCluster, corev1.EventTypeWarning, "RackScaleUpFailed",
-				eventRackScaleFailureMessageWithCause(
-					"scale up", rackState.Rack.ID,
-					utils.GetNamespacedNameString(found), currentSize, desiredSize, res.Err,
-				),
-			)
-
 			if res.Err != nil {
+				r.Recorder.Eventf(
+					r.aeroCluster, corev1.EventTypeWarning, "RackScaleUpFailed",
+					eventRackScaleFailureMessageWithCause(
+						"scale up", rackState.Rack.ID,
+						utils.GetNamespacedNameString(found), currentSize, desiredSize, res.Err,
+					),
+				)
+
 				res.Err = fmt.Errorf(
 					"scale up StatefulSet %s for rack %d (current %d, desired %d replicas): %w",
 					utils.GetNamespacedNameString(found), rackState.Rack.ID, currentSize, desiredSize, res.Err,
@@ -681,7 +677,7 @@ func (r *SingleClusterReconciler) scaleUpRack(
 
 	if r.isAnyPodInImageFailedState(podList, ignorablePodNames) {
 		return found, common.ReconcileError(fmt.Errorf(
-			"scale up rack %d: a Pod is already in failed state", rackState.Rack.ID))
+			"cannot scale up rack %d: a Pod is already in failed state", rackState.Rack.ID))
 	}
 
 	var newPodNames []string
@@ -695,7 +691,7 @@ func (r *SingleClusterReconciler) scaleUpRack(
 			if podList[idx].Name == newPodName {
 				return found, common.ReconcileError(
 					fmt.Errorf(
-						"check Pod %s: yet to be launched is still present",
+						"pending Pod %s: yet to be launched is still present",
 						utils.NamespacedName(r.aeroCluster.Namespace, newPodName),
 					),
 				)
@@ -909,7 +905,7 @@ func (r *SingleClusterReconciler) scaleDownRack(
 
 	if r.isAnyPodInImageFailedState(oldPodList, ignorablePodNames) {
 		return found, common.ReconcileError(
-			fmt.Errorf("scale down rack %d: a Pod is already in failed state", rackState.Rack.ID))
+			fmt.Errorf("cannot scale down rack %d: a Pod is already in failed state", rackState.Rack.ID))
 	}
 
 	// Code flow will reach this stage only when found.Spec.Replicas > desiredSize
@@ -974,7 +970,7 @@ func (r *SingleClusterReconciler) scaleDownRack(
 		// The user can override this by raising maxIgnorablePods.
 		return found, common.ReconcileError(
 			fmt.Errorf(
-				"check Pod %s: not ready; waiting for recovery before scale-down to prevent data loss",
+				"status for Pod %s: not ready; waiting for recovery before scale-down to prevent data loss",
 				podsBatch[idx].Name,
 			),
 		)
@@ -996,7 +992,7 @@ func (r *SingleClusterReconciler) scaleDownRack(
 			ctx, policy, &rackState.Rack.AerospikeConfig, true, ignorablePodNames,
 		); !res.IsSuccess {
 			if res.Err != nil {
-				res.Err = fmt.Errorf("set migrate-fill-delay to 0 for rack %d: %w", rackState.Rack.ID, res.Err)
+				res.Err = fmt.Errorf("set migrate-fill-delay to 0: %w", res.Err)
 			}
 
 			return found, res
@@ -1839,7 +1835,7 @@ func (r *SingleClusterReconciler) getOrderedRackPodList(ctx context.Context, rac
 
 		if indexInt >= len(podList.Items) {
 			// Happens if we do not get full list of pods due to a crash,
-			return nil, fmt.Errorf("list Pods for rack %d revision %s: incomplete Pod list", rackID, rackRevision)
+			return nil, fmt.Errorf("error get pod list for rack:%v, rackRevision:%v", rackID, rackRevision)
 		}
 
 		sortedList[(len(podList.Items)-1)-indexInt] = &podList.Items[idx]
@@ -1923,7 +1919,7 @@ func (r *SingleClusterReconciler) handleEnableSecurity(
 			utils.GetNamespacedNameString(r.aeroCluster),
 		)
 
-		return err
+		return fmt.Errorf("reconcile access control: %w", err)
 	}
 
 	return nil
