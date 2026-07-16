@@ -147,7 +147,7 @@ var _ = Describe(
 							},
 						)
 
-						FIt(
+						It(
 							"Should allow ReadWriteOncePod accessMode for PV source",
 							func() {
 								// ReadWriteOncePod was introduced as an alpha feature in Kubernetes 1.22.
