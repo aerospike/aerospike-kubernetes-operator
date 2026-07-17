@@ -31,6 +31,42 @@ Operator uses admission webhooks, which needs TLS certificates. These are issued
 helm install aerospike-kubernetes-operator ./aerospike-kubernetes-operator --set replicas=3
 ```
 
+## Values validation
+
+`values.yaml` is validated against `values.schema.json` by Helm on every `install`/`upgrade`/`template`, so bad values
+fail fast with a pointer to the offending field instead of producing a broken manifest.
+
+**`values.schema.json` is generated — do not edit it by hand.** It is built from `values.yaml` by the
+[`helm-values-schema-json`](https://github.com/losisin/helm-values-schema-json) plugin. Validation rules live in
+`# @schema ...` comments in `values.yaml`, field descriptions in `# -- ...` comments, and generator settings in
+`.schema.yaml`. Anything written directly into the JSON is lost the next time the generator runs.
+
+### Adding or changing a value
+
+1. Add the key to `values.yaml` with a `# -- ` description, plus any `# @schema` constraints
+   (see the [annotation reference](https://github.com/losisin/helm-values-schema-json/blob/main/docs/README.md)).
+2. Regenerate and commit the schema:
+
+   ```sh
+   helm plugin install https://github.com/losisin/helm-values-schema-json   # once; add --verify=false on Helm v4
+   cd helm-charts/aerospike-kubernetes-operator
+   helm schema
+   ```
+
+   The `helm-schema-aerospike-kubernetes-operator` pre-commit hook does this automatically if you have
+   [pre-commit](https://pre-commit.com/) installed. CI fails the PR when the committed schema is stale.
+3. Verify with `helm schema lint --strict`, `helm lint .`, and `helm unittest .` (test suites live in `tests/`).
+
+Two things to know when editing `values.yaml`:
+
+- A key that is **commented out or absent is invisible to the generator**, and because the root schema sets
+  `additionalProperties: false` it then gets *rejected* at install time. Keys that are optional in practice
+  (`nameOverride`, `logging.level`, …) are therefore always present, defaulting to `""` (or, for
+  `webhookServicePort`, annotated `# @schema type: [integer, null]` and defaulting to `null`).
+- Kubernetes passthrough objects (`affinity`, `nodeSelector`, `podSecurityContext`, the probes, …) are intentionally
+  left open so arbitrary upstream fields are accepted. Objects that should reject unknown keys opt in individually with
+  `# @schema additionalProperties: false`.
+
 ## Configurations
 
 | Name                                | Description                                                                                                                                                                                                               | Default                                                                                                            |

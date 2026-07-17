@@ -1,0 +1,140 @@
+suite: values.schema.json edge cases — certs
+
+templates:
+  - templates/aerospike-operator-controller-manager-deployment.yaml
+
+tests:
+  # -- parent-object presence --
+  # Every template dereferences .Values.certs.webhook.create / .Values.certs.metrics.create
+  # with no nil guard, so nulling out a parent must fail schema validation rather than
+  # crashing the renderer with "nil pointer evaluating interface {}.webhook".
+  - it: rejects certs being nulled out entirely
+    set:
+      certs: null
+    asserts:
+      - failedTemplate:
+          errorPattern: "missing propert(y|ies) 'certs'"
+
+  - it: rejects certs.webhook being nulled out
+    set:
+      certs:
+        webhook: null
+    asserts:
+      - failedTemplate:
+          errorPattern: "at '/certs': missing propert(y|ies) 'webhook'"
+
+  - it: rejects certs.metrics being nulled out
+    set:
+      certs:
+        metrics: null
+    asserts:
+      - failedTemplate:
+          errorPattern: "at '/certs': missing propert(y|ies) 'metrics'"
+
+  # -- certs.webhook.create / certs.metrics.create --
+  - it: accepts certs.webhook.create as a boolean
+    set:
+      certs:
+        webhook:
+          create: false
+    asserts:
+      - notFailedTemplate: {}
+
+  - it: rejects certs.webhook.create as a string
+    set:
+      certs:
+        webhook:
+          create: "true"
+    asserts:
+      - failedTemplate:
+          errorPattern: "certs/webhook/create.*got string, want boolean"
+
+  - it: accepts certs.metrics.create as a boolean
+    set:
+      certs:
+        metrics:
+          create: true
+    asserts:
+      - notFailedTemplate: {}
+
+  # metricsServerCertSecretName is only referenced by the template when
+  # certs.metrics.create is true.
+  # Gates the metrics-certs volume behind {{- if .Values.certs.metrics.create }}), so the
+  # schema only requires it non-empty conditionally, via an if/then on certs.metrics.
+  - it: accepts a non-empty metricsServerCertSecretName when metrics.create is true
+    set:
+      certs:
+        metrics:
+          create: true
+          metricsServerCertSecretName: "x"
+    asserts:
+      - notFailedTemplate: {}
+
+  - it: rejects an empty metricsServerCertSecretName when metrics.create is true
+    set:
+      certs:
+        metrics:
+          create: true
+          metricsServerCertSecretName: ""
+    asserts:
+      - failedTemplate:
+          errorPattern: "at '/certs/metrics/metricsServerCertSecretName': minLength: got 0, want 1"
+
+  - it: accepts an empty metricsServerCertSecretName when metrics.create is false (unused by the template)
+    set:
+      certs:
+        metrics:
+          create: false
+          metricsServerCertSecretName: ""
+    asserts:
+      - notFailedTemplate: {}
+
+  # webhook certs are mandatory for AKO to function (unlike metrics TLS, which is
+  # optional) — the webhook-certs volume is always mounted with no {{- if }} guard,
+  # so webhookServerCertSecretName is required non-empty unconditionally. If
+  # webhook.create is false, the user must provide this secret externally.
+  - it: accepts a non-empty webhookServerCertSecretName when webhook.create is true
+    set:
+      certs:
+        webhook:
+          create: true
+          webhookServerCertSecretName: "x"
+    asserts:
+      - notFailedTemplate: {}
+
+  - it: rejects an empty webhookServerCertSecretName when webhook.create is true
+    set:
+      certs:
+        webhook:
+          create: true
+          webhookServerCertSecretName: ""
+    asserts:
+      - failedTemplate:
+          errorPattern: "at '/certs/webhook/webhookServerCertSecretName': minLength: got 0, want 1"
+
+  - it: accepts a non-empty webhookServerCertSecretName when webhook.create is false
+    set:
+      certs:
+        webhook:
+          create: false
+          webhookServerCertSecretName: "x"
+    asserts:
+      - notFailedTemplate: {}
+
+  - it: rejects an empty webhookServerCertSecretName even when webhook.create is false (user must supply the secret externally)
+    set:
+      certs:
+        webhook:
+          create: false
+          webhookServerCertSecretName: ""
+    asserts:
+      - failedTemplate:
+          errorPattern: "at '/certs/webhook/webhookServerCertSecretName': minLength: got 0, want 1"
+
+  # -- metrics.secure --
+  - it: accepts metrics.secure as a boolean
+    set:
+      metrics:
+        secure: false
+    asserts:
+      - notFailedTemplate: {}

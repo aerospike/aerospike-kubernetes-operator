@@ -26,3 +26,15 @@ repos:
     rev: 3.0.0
     hooks:
       - id: shellcheck
+
+  # Regenerates values.schema.json for aerospike-kubernetes-operator chart.
+  # Requires the helm plugin losisin/helm-values/schema-json.
+  # Install cmd: helm plugin install https://github.com/losisin/helm-values-schema-json --version v3.1.0
+  - repo: local
+    hooks:
+      - id: helm-schema-aerospike-kubernetes-operator
+        name: Generate values.schema.json (aerospike-kubernetes-operator)
+        language: system
+        pass_filenames: false
+        files: ^helm-charts/aerospike-kubernetes-operator/(values\.yaml|\.schema\.yaml)$
+        entry: sh -c 'cd helm-charts/aerospike-kubernetes-operator && helm schema'

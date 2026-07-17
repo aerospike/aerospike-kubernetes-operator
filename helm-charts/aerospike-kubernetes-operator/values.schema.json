@@ -1,0 +1,565 @@
+{
+    "$schema": "https://json-schema.org/draft/2020-12/schema",
+    "type": "object",
+    "required": [
+        "replicas",
+        "operatorImage",
+        "rbac",
+        "healthPort",
+        "healthPortTest",
+        "healthPortTestNew",
+        "healthPortTestNewNew",
+        "metricsPort",
+        "certs",
+        "logging",
+        "metrics",
+        "watchNamespaces",
+        "safePodEviction",
+        "aerospikeKubernetesInitRegistry",
+        "aerospikeKubernetesInitRegistryNamespace",
+        "aerospikeKubernetesInitNameTag",
+        "metricsService",
+        "webhookService",
+        "livenessProbe",
+        "readinessProbe"
+    ],
+    "properties": {
+        "aerospikeKubernetesInitNameTag": {
+            "description": "Init container image name with a tag or digest, which must contain a colon (e.g. name:tag or name@sha256:digest). Combined with the registry and namespace to form the full image reference",
+            "type": "string",
+            "pattern": "^\\S+:\\S+$"
+        },
+        "aerospikeKubernetesInitRegistry": {
+            "description": "Registry to pull the init container image from",
+            "type": "string",
+            "minLength": 1
+        },
+        "aerospikeKubernetesInitRegistryNamespace": {
+            "description": "Registry namespace/organization for the init container image",
+            "type": "string",
+            "minLength": 1
+        },
+        "affinity": {
+            "description": "Pod affinity/anti-affinity and node affinity rules, passed through as-is to the Deployment's pod spec (validated by the Kubernetes API server)",
+            "type": "object"
+        },
+        "annotations": {
+            "description": "Deployment annotations, passed through as-is (validated by the Kubernetes API server)",
+            "type": "object"
+        },
+        "certs": {
+            "description": "Certificate configuration for the webhook and metrics endpoints",
+            "type": "object",
+            "required": [
+                "webhook",
+                "metrics"
+            ],
+            "properties": {
+                "metrics": {
+                    "description": "Metrics server certificate configuration",
+                    "allOf": [
+                        {
+                            "type": "object"
+                        },
+                        {
+                            "if": {
+                                "required": [
+                                    "create"
+                                ],
+                                "properties": {
+                                    "create": {
+                                        "const": true
+                                    }
+                                }
+                            },
+                            "then": {
+                                "required": [
+                                    "metricsServerCertSecretName"
+                                ],
+                                "properties": {
+                                    "metricsServerCertSecretName": {
+                                        "minLength": 1
+                                    }
+                                }
+                            }
+                        }
+                    ],
+                    "properties": {
+                        "create": {
+                            "description": "Create a self-signed certificate for the metrics endpoint",
+                            "type": "boolean"
+                        },
+                        "metricsServerCertSecretName": {
+                            "description": "Name of the secret holding the metrics server certificate, used when metrics.create is true. Required to be non-empty when metrics.create is true",
+                            "type": "string"
+                        }
+                    }
+                },
+                "webhook": {
+                    "description": "Webhook server certificate configuration",
+                    "type": "object",
+                    "required": [
+                        "webhookServerCertSecretName"
+                    ],
+                    "properties": {
+                        "create": {
+                            "description": "Create a self-signed certificate for the webhook endpoint",
+                            "type": "boolean"
+                        },
+                        "webhookServerCertSecretName": {
+                            "description": "Name of the secret holding the webhook server certificate, always mounted regardless of webhook.create. Webhook certs are mandatory for AKO, so if webhook.create is false this secret must already exist and be provided by the user",
+                            "type": "string",
+                            "minLength": 1
+                        }
+                    }
+                }
+            }
+        },
+        "extraEnv": {
+            "description": "Extra environment variables to inject into the operator container. Names follow the Kubernetes EnvVar validation rules, so letters, digits, '-', '.' and '_', not starting with a digit",
+            "allOf": [
+                {
+                    "type": "object"
+                },
+                {
+                    "propertyNames": {
+                        "pattern": "^[-._a-zA-Z][-._a-zA-Z0-9]*$"
+                    }
+                }
+            ],
+            "additionalProperties": {
+                "type": "string"
+            }
+        },
+        "failedPodGracePeriodSeconds": {
+            "description": "Grace period in seconds to delete/recover failed Aerospike pods. Must be a positive integer (silently falls back to 60 if invalid or unset)",
+            "anyOf": [
+                {
+                    "type": "string"
+                },
+                {
+                    "type": "integer",
+                    "minimum": 1
+                }
+            ]
+        },
+        "fullnameOverride": {
+            "description": "Override the fully qualified name used for generated resource names",
+            "type": "string"
+        },
+        "global": {
+            "description": "Global values shared between all subcharts",
+            "$comment": "Added automatically by 'helm schema' to allow this chart to be used as a Helm dependency, as the `additionalProperties` setting would otherwise collide with Helm's special 'global' values key.",
+            "type": [
+                "object",
+                "null"
+            ]
+        },
+        "healthPort": {
+            "description": "Port for the operator's health probe bind address",
+            "type": "integer",
+            "maximum": 65535,
+            "minimum": 1
+        },
+        "healthPortTest": {
+            "description": "Port for the operator's health probe bind address",
+            "type": "integer",
+            "maximum": 65535,
+            "minimum": 1
+        },
+        "healthPortTestNew": {
+            "description": "Port for the operator's health probe bind address",
+            "type": "integer",
+            "maximum": 65535,
+            "minimum": 1
+        },
+        "healthPortTestNewNew": {
+            "description": "Port for the operator's health probe bind address",
+            "type": "integer",
+            "maximum": 65535,
+            "minimum": 1
+        },
+        "ignoreNamespaces": {
+            "description": "Comma-separated (no spaces) list of namespaces ignored by the eviction webhook",
+            "type": "string",
+            "pattern": "^$|^[a-z0-9]([-a-z0-9]*[a-z0-9])?(,[a-z0-9]([-a-z0-9]*[a-z0-9])?)*$"
+        },
+        "imagePullSecrets": {
+            "description": "Names of secrets containing credentials for pulling the operator image from a private registry",
+            "type": "array",
+            "items": {
+                "type": "string"
+            }
+        },
+        "labels": {
+            "description": "Deployment labels, inherited by the pods automatically, passed through as-is (validated by the Kubernetes API server)",
+            "type": "object"
+        },
+        "livenessProbe": {
+            "description": "Liveness probe configuration for the operator container, passed through as-is (validated by the Kubernetes API server)",
+            "type": "object",
+            "properties": {
+                "failureThreshold": {
+                    "description": "Consecutive failures needed for the container to be restarted",
+                    "type": "integer"
+                },
+                "initialDelaySeconds": {
+                    "description": "Seconds to wait after the container starts before the first probe",
+                    "type": "integer"
+                },
+                "periodSeconds": {
+                    "description": "Seconds between probe attempts",
+                    "type": "integer"
+                },
+                "successThreshold": {
+                    "description": "Consecutive successes needed for the probe to be considered successful after a failure",
+                    "type": "integer"
+                },
+                "timeoutSeconds": {
+                    "description": "Seconds after which a probe attempt times out",
+                    "type": "integer"
+                }
+            }
+        },
+        "logging": {
+            "description": "Operator manager logging (controller-runtime / Zap)",
+            "type": "object",
+            "properties": {
+                "development": {
+                    "description": "Zap development mode (--zap-devel). Must always be explicitly set",
+                    "type": "boolean"
+                },
+                "encoder": {
+                    "description": "Zap log encoder (--zap-encoder). Empty leaves the flag off",
+                    "type": "string",
+                    "enum": [
+                        "",
+                        "json",
+                        "console"
+                    ]
+                },
+                "level": {
+                    "description": "Zap log level (--zap-log-level): debug, info, error, panic, or a positive integer for custom verbosity. Empty leaves the flag off",
+                    "anyOf": [
+                        {
+                            "enum": [
+                                "",
+                                "debug",
+                                "info",
+                                "error",
+                                "panic"
+                            ]
+                        },
+                        {
+                            "type": "integer",
+                            "minimum": 1
+                        }
+                    ]
+                }
+            }
+        },
+        "metrics": {
+            "description": "Operator manager /metrics endpoint configuration",
+            "type": "object",
+            "properties": {
+                "secure": {
+                    "description": "Serve the metrics endpoint securely via HTTPS (--metrics-secure). False serves over HTTP instead",
+                    "type": "boolean"
+                }
+            }
+        },
+        "metricsPort": {
+            "description": "Port for the operator's metrics bind address",
+            "type": "integer",
+            "maximum": 65535,
+            "minimum": 1
+        },
+        "metricsService": {
+            "description": "Service exposing the operator metrics endpoint",
+            "type": "object",
+            "properties": {
+                "annotations": {
+                    "description": "Extra annotations for the service, passed through as-is (validated by the Kubernetes API server)",
+                    "type": "object"
+                },
+                "labels": {
+                    "description": "Extra labels for the service, passed through as-is (validated by the Kubernetes API server)",
+                    "type": "object"
+                },
+                "port": {
+                    "description": "Service port",
+                    "type": "integer",
+                    "maximum": 65535,
+                    "minimum": 1
+                },
+                "type": {
+                    "description": "Kubernetes Service type",
+                    "type": "string"
+                }
+            }
+        },
+        "nameOverride": {
+            "description": "Override the chart name used in generated resource names",
+            "type": "string"
+        },
+        "nodeSelector": {
+            "description": "Node labels for pod assignment, passed through as-is (validated by the Kubernetes API server)",
+            "type": "object"
+        },
+        "operatorImage": {
+            "description": "Operator image",
+            "type": "object",
+            "properties": {
+                "pullPolicy": {
+                    "description": "Operator image pull policy",
+                    "type": "string"
+                },
+                "repository": {
+                    "description": "Operator image repository",
+                    "type": "string",
+                    "minLength": 1
+                },
+                "tag": {
+                    "description": "Operator image tag",
+                    "type": "string",
+                    "minLength": 1
+                }
+            }
+        },
+        "podAnnotations": {
+            "description": "Pod annotations, passed through as-is (validated by the Kubernetes API server)",
+            "type": "object"
+        },
+        "podLabels": {
+            "description": "Pod labels, passed through as-is (validated by the Kubernetes API server)",
+            "type": "object"
+        },
+        "podSecurityContext": {
+            "description": "Pod-level security context, passed through as-is (validated by the Kubernetes API server)",
+            "type": "object"
+        },
+        "rbac": {
+            "description": "RBAC resource creation for the operator",
+            "allOf": [
+                {
+                    "type": "object"
+                },
+                {
+                    "if": {
+                        "required": [
+                            "create"
+                        ],
+                        "properties": {
+                            "create": {
+                                "const": false
+                            }
+                        }
+                    },
+                    "then": {
+                        "required": [
+                            "serviceAccountName"
+                        ],
+                        "properties": {
+                            "serviceAccountName": {
+                                "minLength": 1
+                            }
+                        }
+                    }
+                }
+            ],
+            "properties": {
+                "create": {
+                    "description": "Create RBAC resources and a service account for the operator",
+                    "type": "boolean"
+                },
+                "serviceAccountName": {
+                    "description": "Name of an existing service account to use when rbac.create is false. Required to be non-empty when rbac.create is false",
+                    "type": "string"
+                }
+            }
+        },
+        "readinessProbe": {
+            "description": "Readiness probe configuration for the operator container, passed through as-is (validated by the Kubernetes API server)",
+            "type": "object",
+            "properties": {
+                "failureThreshold": {
+                    "description": "Consecutive failures needed for the pod to be marked unready",
+                    "type": "integer"
+                },
+                "initialDelaySeconds": {
+                    "description": "Seconds to wait after the container starts before the first probe",
+                    "type": "integer"
+                },
+                "periodSeconds": {
+                    "description": "Seconds between probe attempts",
+                    "type": "integer"
+                },
+                "successThreshold": {
+                    "description": "Consecutive successes needed for the probe to be considered successful after a failure",
+                    "type": "integer"
+                },
+                "timeoutSeconds": {
+                    "description": "Seconds after which a probe attempt times out",
+                    "type": "integer"
+                }
+            }
+        },
+        "replicas": {
+            "description": "Number of operator replicas to deploy",
+            "type": "integer",
+            "minimum": 0
+        },
+        "resources": {
+            "description": "Resource requests and limits for the operator container",
+            "type": "object",
+            "properties": {
+                "limits": {
+                    "description": "Resource limits for the operator container",
+                    "type": "object",
+                    "properties": {
+                        "cpu": {
+                            "description": "CPU limit as a Kubernetes quantity, must be greater than 0 (e.g. 400m, 1)",
+                            "anyOf": [
+                                {
+                                    "type": "string"
+                                },
+                                {
+                                    "type": "number",
+                                    "exclusiveMinimum": 0
+                                }
+                            ]
+                        },
+                        "memory": {
+                            "description": "Memory limit as a Kubernetes quantity, must be greater than 0 (e.g. 512Mi, 2Gi)",
+                            "anyOf": [
+                                {
+                                    "type": "string"
+                                },
+                                {
+                                    "type": "number",
+                                    "exclusiveMinimum": 0
+                                }
+                            ]
+                        }
+                    }
+                },
+                "requests": {
+                    "description": "Resource requests for the operator container",
+                    "type": "object",
+                    "properties": {
+                        "cpu": {
+                            "description": "CPU request as a Kubernetes quantity, must be greater than 0 (e.g. 10m, 1)",
+                            "anyOf": [
+                                {
+                                    "type": "string"
+                                },
+                                {
+                                    "type": "number",
+                                    "exclusiveMinimum": 0
+                                }
+                            ]
+                        },
+                        "memory": {
+                            "description": "Memory request as a Kubernetes quantity, must be greater than 0 (e.g. 64Mi, 1Gi)",
+                            "anyOf": [
+                                {
+                                    "type": "string"
+                                },
+                                {
+                                    "type": "number",
+                                    "exclusiveMinimum": 0
+                                }
+                            ]
+                        }
+                    }
+                }
+            }
+        },
+        "safePodEviction": {
+            "description": "Eviction webhook to safely block Aerospike pod evictions during node maintenance. Also enables the Prometheus metric aerospike_ako_eviction_webhook_requests_total (labels eviction_namespace, decision)",
+            "type": "object",
+            "properties": {
+                "enable": {
+                    "description": "Enable the eviction webhook to safely block Aerospike pod evictions during node maintenance",
+                    "type": "boolean"
+                },
+                "timeoutSeconds": {
+                    "description": "Eviction webhook timeout in seconds. Must be between 1 and 30 per the Kubernetes ValidatingWebhookConfiguration API",
+                    "anyOf": [
+                        {
+                            "type": "string"
+                        },
+                        {
+                            "type": "integer",
+                            "maximum": 30,
+                            "minimum": 1
+                        }
+                    ]
+                }
+            }
+        },
+        "securityContext": {
+            "description": "Container-level security context, passed through as-is (validated by the Kubernetes API server)",
+            "type": "object",
+            "properties": {
+                "allowPrivilegeEscalation": {
+                    "description": "Whether the operator container may gain more privileges than its parent process",
+                    "type": "boolean"
+                }
+            }
+        },
+        "tolerations": {
+            "description": "Tolerations for pod assignment, passed through as-is (validated by the Kubernetes API server)",
+            "type": "array",
+            "items": {
+                "type": "object"
+            }
+        },
+        "watchNamespaces": {
+            "description": "Comma-separated (no spaces) list of namespaces to watch for Aerospike custom resources. Empty means cluster-wide",
+            "type": "string",
+            "pattern": "^$|^[a-z0-9]([-a-z0-9]*[a-z0-9])?(,[a-z0-9]([-a-z0-9]*[a-z0-9])?)*$"
+        },
+        "webhookService": {
+            "description": "Service exposing the operator webhook endpoint",
+            "type": "object",
+            "properties": {
+                "annotations": {
+                    "description": "Extra annotations for the service, passed through as-is (validated by the Kubernetes API server)",
+                    "type": "object"
+                },
+                "labels": {
+                    "description": "Extra labels for the service, passed through as-is (validated by the Kubernetes API server)",
+                    "type": "object"
+                },
+                "port": {
+                    "description": "Service port",
+                    "type": "integer",
+                    "maximum": 65535,
+                    "minimum": 1
+                },
+                "targetPort": {
+                    "description": "Target container port",
+                    "type": "integer",
+                    "maximum": 65535,
+                    "minimum": 1
+                },
+                "type": {
+                    "description": "Kubernetes Service type",
+                    "type": "string"
+                }
+            }
+        },
+        "webhookServicePort": {
+            "description": "Deprecated, use webhookService.targetPort instead. Setting this fails chart rendering with a message pointing to the replacement",
+            "deprecated": true,
+            "type": [
+                "integer",
+                "null"
+            ],
+            "maximum": 65535,
+            "minimum": 1
+        }
+    },
+    "additionalProperties": false
+}

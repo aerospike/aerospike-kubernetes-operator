@@ -197,6 +197,37 @@ env-test-backup-service: fmt vet setup-envtest ## Run backup service envtests.
 .PHONY: env-test-restore
 env-test-restore: fmt vet setup-envtest ## Run restore envtests.
 	export KUBEBUILDER_ASSETS="$(shell $(ENVTEST) use $(ENVTEST_K8S_VERSION) --bin-dir $(LOCALBIN) -p path)"; cd $(shell pwd)/test/envtests/restore && mkdir -p ../../test-results && go run github.com/onsi/ginkgo/v2/ginkgo -r --focus "$(FOCUS)" -coverprofile envcover.out -timeout=1h0m0s --junit-report=../../test-results/junit-envtests-restore.xml -- . ${ARGS}
+
+##@ Helm
+
+.PHONY: helm-unittest-plugin
+helm-unittest-plugin: ## Install the helm-unittest plugin locally if not already present.
+	@helm plugin list 2>/dev/null | grep -q '^unittest' || \
+		helm plugin install https://github.com/helm-unittest/helm-unittest --verify=false --version v1.1.1
+
+.PHONY: helm-test
+helm-test: helm-unittest-plugin ## Run helm-unittest schema/edge-case tests for every chart with a tests/ dir.
+	@for chart in helm-charts/*/; do \
+		if [ -d "$${chart}tests" ]; then \
+			echo "==> helm unittest $${chart%/}"; \
+			helm unittest "$${chart%/}" || exit 1; \
+		fi; \
+	done
+
+.PHONY: helm-schema-plugin
+helm-schema-plugin: ## Install the "helm schema" plugin locally if not already present.
+	@helm plugin list 2>/dev/null | grep -q '^schema' || \
+		helm plugin install https://github.com/losisin/helm-values-schema-json --verify=false
+
+.PHONY: helm-schema
+helm-schema: helm-schema-plugin ## Regenerate values.schema.json for every chart with a .schema.yaml.
+	@for chart in helm-charts/*/; do \
+		if [ -f "$${chart}.schema.yaml" ]; then \
+			echo "==> helm schema $${chart%/}"; \
+			(cd "$${chart}" && helm schema) || exit 1; \
+		fi; \
+	done
+
 ##@ Build
 
 .PHONY: build
