@@ -624,7 +624,7 @@ func (r *SingleClusterReconciler) ensurePodsRunningAndReady(
 			if err := utils.CheckPodFailed(updatedPod); err != nil {
 				// When IgnoreSidecarFailure is set and the Aerospike server
 				// container is still running, the failure is sidecar-only — skip it.
-				if ignoreSidecar && utils.IsAerospikeServerRunning(updatedPod) {
+				if ignoreSidecar && utils.IsAerospikeServerReady(updatedPod) {
 					r.Log.Info("Pod has sidecar failure, ignoring per IgnoreSidecarFailure",
 						"podName", updatedPod.Name, "err", err)
 				} else {
@@ -635,7 +635,7 @@ func (r *SingleClusterReconciler) ensurePodsRunningAndReady(
 			// Consider a pod "ready" when it is fully ready, or — if
 			// IgnoreSidecarFailure is set — when just the server container is running.
 			podReady := utils.IsPodRunningAndReady(updatedPod) ||
-				(ignoreSidecar && utils.IsAerospikeServerRunning(updatedPod))
+				(ignoreSidecar && utils.IsAerospikeServerReady(updatedPod))
 
 			if !podReady {
 				break
@@ -706,7 +706,7 @@ func getSidecarFailedPods(pods []*corev1.Pod) []*corev1.Pod {
 
 	for idx := range pods {
 		pod := pods[idx]
-		if !utils.IsPodTerminating(pod) && utils.IsAerospikeServerRunning(pod) && !utils.IsPodReady(pod) {
+		if !utils.IsPodTerminating(pod) && utils.IsAerospikeServerReady(pod) && !utils.IsPodReady(pod) {
 			sidecarFailed = append(sidecarFailed, pod)
 		}
 	}
@@ -923,7 +923,7 @@ func (r *SingleClusterReconciler) ensurePodsImageUpdated(
 			if err := utils.CheckPodFailed(updatedPod); err != nil {
 				// When IgnoreSidecarFailure is set and the Aerospike server
 				// container is still running, the failure is sidecar-only — skip it.
-				if ignoreSidecar && utils.IsAerospikeServerRunning(updatedPod) {
+				if ignoreSidecar && utils.IsAerospikeServerReady(updatedPod) {
 					r.Log.Info("Pod has sidecar failure, ignoring per IgnoreSidecarFailure",
 						"podName", updatedPod.Name, "err", err)
 				} else {
@@ -935,7 +935,7 @@ func (r *SingleClusterReconciler) ensurePodsImageUpdated(
 			// pods. When IgnoreSidecarFailure is set and the server is running, fall back
 			// to checking only whether the container images are on the desired versions.
 			podUpgraded := r.isPodUpgraded(updatedPod) ||
-				(ignoreSidecar && utils.IsAerospikeServerRunning(updatedPod) && r.isPodOnDesiredImage(updatedPod, false))
+				(ignoreSidecar && utils.IsAerospikeServerReady(updatedPod) && r.isPodOnDesiredImage(updatedPod, false))
 
 			if !podUpgraded {
 				break
@@ -1173,7 +1173,7 @@ func (r *SingleClusterReconciler) getIgnorablePods(
 			// Only ignore pods whose server container is not running.
 			// Pods with a running server but a failing sidecar are still reachable
 			// and must participate in cluster operations.
-			if !utils.IsAerospikeServerRunning(pod) {
+			if !utils.IsAerospikeServerReady(pod) {
 				ignorablePodNames.Insert(pod.Name)
 			}
 		}
@@ -1214,7 +1214,7 @@ func (r *SingleClusterReconciler) getIgnorablePods(
 					continue
 				}
 
-				if !utils.IsAerospikeServerRunning(pod) {
+				if !utils.IsAerospikeServerReady(pod) {
 					// Old-revision pods belong to an STS that is being replaced and cannot
 					// recover on their own. Prioritise them so they always consume the
 					// maxIgnorablePods budget first, leaving leftover capacity for

@@ -30,13 +30,13 @@ import (
 
 func replicaCount(n int32) *int32 { return &n }
 
-// TestWaitForServerContainersRunning covers the three fast-path branches of
-// waitForServerContainersRunning that complete without any sleep:
+// TestWaitForAerospikeServerReady covers the three fast-path branches of
+// waitForAerospikeServerReady that complete without any sleep:
 //
 //  1. The pod name is in ignorablePodNames → skip entirely, return nil.
-//  2. The pod's server container is already Running → return nil on first poll.
+//  2. The pod's server container is already ready → return nil on first poll.
 //  3. The pod's server container is in CrashLoopBackOff → PodFailed, return error on first poll.
-func TestWaitForServerContainersRunning(t *testing.T) {
+func TestWaitForAerospikeServerReady(t *testing.T) {
 	const (
 		namespace   = "test-ns"
 		clusterName = "test-cluster"
@@ -57,7 +57,7 @@ func TestWaitForServerContainersRunning(t *testing.T) {
 		// that Get from ever being issued.
 		podName := stsName + "-0"
 
-		if err := r.waitForServerContainersRunning(context.Background(), sts, sets.New(podName)); err != nil {
+		if err := r.waitForAerospikeServerReady(context.Background(), sts, sets.New(podName)); err != nil {
 			t.Errorf("expected nil for ignorable pod, got: %v", err)
 		}
 	})
@@ -76,7 +76,7 @@ func TestWaitForServerContainersRunning(t *testing.T) {
 		}
 		r := newReconcilerWithObjects(newTestScheme(), aeroCluster, sts, pod)
 
-		if err := r.waitForServerContainersRunning(context.Background(), sts, sets.New[string]()); err != nil {
+		if err := r.waitForAerospikeServerReady(context.Background(), sts, sets.New[string]()); err != nil {
 			t.Errorf("expected nil for running server container, got: %v", err)
 		}
 	})
@@ -104,7 +104,7 @@ func TestWaitForServerContainersRunning(t *testing.T) {
 		}
 		r := newReconcilerWithObjects(newTestScheme(), aeroCluster, sts, pod)
 
-		if err := r.waitForServerContainersRunning(context.Background(), sts, sets.New[string]()); err == nil {
+		if err := r.waitForAerospikeServerReady(context.Background(), sts, sets.New[string]()); err == nil {
 			t.Error("expected an error for CrashLoopBackOff server container, got nil")
 		}
 	})
@@ -129,7 +129,7 @@ func TestWaitForServerContainersRunning(t *testing.T) {
 		ignorable := sets.New(stsName + "-1")
 		r := newReconcilerWithObjects(newTestScheme(), aeroCluster, multiSTS, pod0)
 
-		if err := r.waitForServerContainersRunning(context.Background(), multiSTS, ignorable); err != nil {
+		if err := r.waitForAerospikeServerReady(context.Background(), multiSTS, ignorable); err != nil {
 			t.Errorf("expected nil when running pod + ignorable pod, got: %v", err)
 		}
 	})

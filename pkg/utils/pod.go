@@ -183,13 +183,11 @@ func checkContainerFailures(pod *corev1.Pod, includeSidecarFailures bool) string
 	return ""
 }
 
-// IsAerospikeServerRunning returns true if the aerospike server container is
-// ready — i.e. the process is running and the TCP readiness probe has passed.
-// Checking Ready (rather than just State.Running) ensures the Aerospike node
-// is actually accepting connections before it is considered healthy. Sidecar
-// containers are deliberately skipped so a crashing sidecar never influences
-// this result.
-func IsAerospikeServerRunning(pod *corev1.Pod) bool {
+// IsAerospikeServerReady returns true if the Aerospike server container's
+// ready state is true — i.e. the process is running and accepting
+// connections. Sidecar containers are deliberately skipped so a crashing
+// sidecar never influences this result.
+func IsAerospikeServerReady(pod *corev1.Pod) bool {
 	if IsPodTerminating(pod) || pod.Status.Phase != corev1.PodRunning {
 		return false
 	}

@@ -246,7 +246,7 @@ func (r *SingleClusterReconciler) deleteSTS(ctx context.Context, st *appsv1.Stat
 	return r.Delete(ctx, st)
 }
 
-func (r *SingleClusterReconciler) waitForServerContainersRunning(
+func (r *SingleClusterReconciler) waitForAerospikeServerReady(
 	ctx context.Context, st *appsv1.StatefulSet, ignorablePodNames sets.Set[string],
 ) error {
 	const (
@@ -255,8 +255,8 @@ func (r *SingleClusterReconciler) waitForServerContainersRunning(
 	)
 
 	r.Log.Info(
-		"Waiting for server containers to be running",
-		"WaitTimePerPod", podStatusRetryInterval*time.Duration(podStatusMaxRetry),
+		"Waiting for Aerospike server containers to be ready",
+		"waitTimePerPod", podStatusRetryInterval*time.Duration(podStatusMaxRetry),
 	)
 
 	for podIndex := int32(0); podIndex < *st.Spec.Replicas; podIndex++ {
@@ -281,27 +281,28 @@ func (r *SingleClusterReconciler) waitForServerContainersRunning(
 			time.Sleep(time.Second * 2)
 		}
 
-		var isRunning bool
+		var isReady bool
 
 		for i := 0; i < podStatusMaxRetry; i++ {
-			r.Log.V(1).Info("Check server container running", "pod", podName)
+			r.Log.V(1).Info("Check Aerospike server container ready", "pod", podName)
 
 			if err := r.Get(
 				ctx,
 				types.NamespacedName{Name: podName, Namespace: st.Namespace},
 				pod,
 			); err != nil {
-				return fmt.Errorf("failed to get pod %s: %v", podName, err)
+				return fmt.Errorf("get pod %s: %w", utils.NamespacedName(st.Namespace, podName), err)
 			}
 
 			if podState := utils.CheckServerFailedWithGrace(pod, false); podState.State == utils.PodFailed {
-				return fmt.Errorf("server container in pod %s failed: %s", podName, podState.Reason)
+				return fmt.Errorf("server container in pod %s failed: %s",
+					utils.NamespacedName(st.Namespace, podName), podState.Reason)
 			}
 
-			if utils.IsAerospikeServerRunning(pod) {
-				isRunning = true
+			if utils.IsAerospikeServerReady(pod) {
+				isReady = true
 
-				r.Log.Info("Server container is running", "pod", podName)
+				r.Log.Info("Aerospike server container is ready", "pod", utils.GetNamespacedName(pod))
 
 				break
 			}
@@ -309,10 +310,10 @@ func (r *SingleClusterReconciler) waitForServerContainersRunning(
 			time.Sleep(podStatusRetryInterval)
 		}
 
-		if !isRunning {
+		if !isReady {
 			return fmt.Errorf(
-				"server container in pod %s did not start. Status: %v",
-				podName, pod.Status.ContainerStatuses,
+				"server container in pod %s did not become ready. Status: %v",
+				utils.NamespacedName(st.Namespace, podName), pod.Status.ContainerStatuses,
 			)
 		}
 	}
@@ -1156,14 +1157,14 @@ func updateSTSContainers(
 	return finalContainers
 }
 
-// waitForAllAerospikeServersRunning waits for the Aerospike server container to
-// be in Running state on every non-ignorable pod across all cluster StatefulSets.
-// It does NOT require sidecars or other containers to be ready. Pods whose names
-// are in ignorablePodNames are skipped entirely; sidecar-failed pods are NOT
-// skipped because their server containers are still reachable.
-func (r *SingleClusterReconciler) waitForAllAerospikeServersRunning(
+// waitForAllAerospikeServersReady waits for the Aerospike server container's
+// readiy state to be true on every non-ignorable pod across all cluster
+// StatefulSets. It does NOT require sidecars or other containers to be ready.
+// Pods whose names are in ignorablePodNames are skipped entirely; sidecar-failed
+// pods are NOT skipped because their server containers are still reachable.
+func (r *SingleClusterReconciler) waitForAllAerospikeServersReady(
 	ctx context.Context, ignorablePodNames sets.Set[string]) error {
-	r.Log.Info("Waiting for all Aerospike server containers to be running")
+	r.Log.Info("Waiting for all Aerospike server containers to be ready")
 
 	allRackIdentifiers := sets.NewString()
 
@@ -1186,11 +1187,11 @@ func (r *SingleClusterReconciler) waitForAllAerospikeServersRunning(
 				return err
 			}
 
-			// Skip if a sts not found. It may have be deleted and status may not have been updated yet
+			// Skip if a sts not found. It may have been deleted and status may not have been updated yet
 			continue
 		}
 
-		if err := r.waitForServerContainersRunning(ctx, st, ignorablePodNames); err != nil {
+		if err := r.waitForAerospikeServerReady(ctx, st, ignorablePodNames); err != nil {
 			return err
 		}
 	}

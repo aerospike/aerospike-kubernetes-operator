@@ -171,7 +171,7 @@ func (r *SingleClusterReconciler) reconcileRacks(ctx context.Context) common.Rec
 		var waitErr error
 
 		if asdbv1.GetBool(r.aeroCluster.Spec.IgnoreSidecarFailure) {
-			waitErr = r.waitForServerContainersRunning(ctx, found, ignorablePodNames)
+			waitErr = r.waitForAerospikeServerReady(ctx, found, ignorablePodNames)
 		} else {
 			waitErr = r.waitForSTSToBeReady(ctx, found, ignorablePodNames)
 		}
@@ -182,10 +182,15 @@ func (r *SingleClusterReconciler) reconcileRacks(ctx context.Context) common.Rec
 			// terminate times out and event is re-queued.
 			// Next reconcile will not invoke scale up or down and will
 			// fall through,
-			// and might run reconcile step	s common to all racks before the racks
+			// and might run reconcile steps common to all racks before the racks
 			// have scaled up.
+			waitMsg := "Failed to wait for StatefulSet to be ready, will requeue"
+			if asdbv1.GetBool(r.aeroCluster.Spec.IgnoreSidecarFailure) {
+				waitMsg = "Failed to wait for Aerospike server containers to be ready, will requeue"
+			}
+
 			r.Log.Error(
-				waitErr, "Failed to wait for StatefulSet to be ready, will requeue",
+				waitErr, waitMsg,
 				"statefulSet", utils.GetNamespacedName(found),
 			)
 
@@ -402,7 +407,7 @@ func (r *SingleClusterReconciler) upgradeOrRollingRestartRack(
 		serverFailedPodsNames := sets.New[string]()
 
 		for _, pod := range failedPods {
-			if !utils.IsAerospikeServerRunning(pod) {
+			if !utils.IsAerospikeServerReady(pod) {
 				serverFailedPodsNames.Insert(pod.Name)
 			}
 		}
@@ -945,7 +950,7 @@ func (r *SingleClusterReconciler) scaleDownRack(
 	ignorablePodNames = ignorablePodNames.Clone()
 
 	for idx := range podsBatch {
-		if utils.IsAerospikeServerRunning(podsBatch[idx]) {
+		if utils.IsAerospikeServerReady(podsBatch[idx]) {
 			// Server container is running (pod may still be sidecar-failing but
 			// its Aerospike node is reachable — include in safe-stop/migration checks).
 			runningPods = append(runningPods, podsBatch[idx])
@@ -1038,8 +1043,8 @@ func (r *SingleClusterReconciler) scaleDownRack(
 	// These checks will fail if there is any other pod in failed state outside the batch.
 	if isAnyPodRunningAndReady {
 		// Wait for pods to get terminated
-		if err = r.waitForServerContainersRunning(ctx, found, ignorablePodNames); err != nil {
-			r.Log.Error(err, "Failed to wait for server containers to be ready, will requeue",
+		if err = r.waitForAerospikeServerReady(ctx, found, ignorablePodNames); err != nil {
+			r.Log.Error(err, "Failed to wait for Aerospike server containers to be ready, will requeue",
 				"statefulSet", utils.GetNamespacedName(found))
 
 			return found, common.ReconcileRequeueAfter(1)
@@ -1071,9 +1076,9 @@ func (r *SingleClusterReconciler) scaleDownRack(
 				)
 			}
 
-			if err = r.waitForServerContainersRunning(ctx, found, ignorablePodNames); err != nil {
+			if err = r.waitForAerospikeServerReady(ctx, found, ignorablePodNames); err != nil {
 				r.Log.Error(
-					err, "Failed to wait for server containers to be ready after reset, will requeue",
+					err, "Failed to wait for Aerospike server containers to be ready after reset, will requeue",
 					"statefulSet", utils.GetNamespacedName(found),
 				)
 			}
@@ -2171,7 +2176,7 @@ func (r *SingleClusterReconciler) reconcileRevisionChangedRacks(
 		return res
 	}
 
-	if err := r.waitForAllAerospikeServersRunning(ctx, ignorablePodNames); err != nil {
+	if err := r.waitForAllAerospikeServersReady(ctx, ignorablePodNames); err != nil {
 		return common.ReconcileError(err)
 	}
 
@@ -2327,7 +2332,7 @@ func (r *SingleClusterReconciler) handleFailedPodsInRack(
 	podList, err = r.getOrderedRackPodList(ctx, rackState.Rack.ID, rackState.Rack.Revision)
 	if err != nil {
 		return common.ReconcileError(
-			fmt.Errorf("re-fetch pods after sidecar reconcile on rack %d-%s: %v",
+			fmt.Errorf("re-fetch pods after sidecar reconcile on rack %d-%s: %w",
 				rackState.Rack.ID, rackState.Rack.Revision, err),
 		)
 	}

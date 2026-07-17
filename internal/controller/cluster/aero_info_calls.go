@@ -48,15 +48,15 @@ func (r *SingleClusterReconciler) waitForMultipleNodesSafeStopReady(
 	}
 
 	// Wait for all non-ignorable pods to have their Aerospike server containers
-	// running before making any cluster-level info calls. This replaces the old
+	// ready before making any cluster-level info calls. This replaces the old
 	// waitForAllSTSToBeReady pre-check (which required full pod readiness
 	// including sidecars). Server-only readiness is sufficient here — sidecar
 	// failures do not prevent the server from accepting info calls. The wait
 	// uses the same blocking-retry semantics (up to 18×10s) so that a pod which
 	// was just restarted in a previous batch has time to bring its server up
 	// before we attempt the migration/quiesce checks.
-	if err := r.waitForAllAerospikeServersRunning(ctx, ignorablePodNames); err != nil {
-		return common.ReconcileError(fmt.Errorf("wait for all server containers to be running: %w", err))
+	if err := r.waitForAllAerospikeServersReady(ctx, ignorablePodNames); err != nil {
+		return common.ReconcileError(fmt.Errorf("wait for all Aerospike server containers to be ready: %w", err))
 	}
 
 	// This doesn't make actual connection, only objects having connection info are created
@@ -253,7 +253,7 @@ func (r *SingleClusterReconciler) newPodsHostConnWithOption(pods []corev1.Pod, i
 
 		// Only the Aerospike server container needs to be running to accept info calls.
 		// Sidecar failures do not prevent the server from being reachable.
-		if !utils.IsAerospikeServerRunning(pod) {
+		if !utils.IsAerospikeServerReady(pod) {
 			if ignorablePodNames.Has(pod.Name) {
 				// This pod's aerospike server is not running and it is marked ignorable.
 				r.Log.Info(
@@ -263,7 +263,7 @@ func (r *SingleClusterReconciler) newPodsHostConnWithOption(pods []corev1.Pod, i
 				continue
 			}
 
-			return nil, fmt.Errorf("pod %v server container is not running", utils.GetNamespacedNameString(pod))
+			return nil, fmt.Errorf("pod %s server container is not running", utils.GetNamespacedNameString(pod))
 		}
 
 		asConn := r.newAsConn(pod)

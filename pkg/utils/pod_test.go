@@ -190,7 +190,7 @@ func TestCheckPodFailedWithGrace(t *testing.T) {
 	}
 }
 
-func TestIsAerospikeServerRunning(t *testing.T) {
+func TestIsAerospikeServerReady(t *testing.T) {
 	// serverStatus builds a ContainerStatus for the aerospike-server container.
 	serverStatus := func(ready bool) corev1.ContainerStatus {
 		return corev1.ContainerStatus{
@@ -295,9 +295,9 @@ func TestIsAerospikeServerRunning(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			got := IsAerospikeServerRunning(tt.pod)
+			got := IsAerospikeServerReady(tt.pod)
 			if got != tt.expected {
-				t.Errorf("IsAerospikeServerRunning() = %v, want %v", got, tt.expected)
+				t.Errorf("IsAerospikeServerReady() = %v, want %v", got, tt.expected)
 			}
 		})
 	}

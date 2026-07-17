@@ -202,7 +202,7 @@ var _ = Describe("SidecarFailure", func() {
 				for idx := range podList.Items {
 					g.Expect(podHasCrashingSidecar(&podList.Items[idx])).To(BeTrue(),
 						"expected sidecar to be crashing on pod %s", podList.Items[idx].Name)
-					g.Expect(utils.IsAerospikeServerRunning(&podList.Items[idx])).To(BeTrue(),
+					g.Expect(utils.IsAerospikeServerReady(&podList.Items[idx])).To(BeTrue(),
 						"expected server container to be running on pod %s", podList.Items[idx].Name)
 				}
 			}, 3*time.Minute, 5*time.Second).Should(Succeed())
@@ -292,7 +292,7 @@ var _ = Describe("SidecarFailure", func() {
 				pod := &finalPodList.Items[idx]
 				Expect(podHasCrashingSidecar(pod)).To(BeTrue(),
 					"expected crashing sidecar on pod %s after full rolling restart", pod.Name)
-				Expect(utils.IsAerospikeServerRunning(pod)).To(BeTrue(),
+				Expect(utils.IsAerospikeServerReady(pod)).To(BeTrue(),
 					"expected Aerospike server to be running on pod %s", pod.Name)
 			}
 		})
@@ -455,7 +455,7 @@ var _ = Describe("SidecarFailure", func() {
 				for idx := range podList.Items {
 					g.Expect(podHasCrashingSidecar(&podList.Items[idx])).To(BeTrue(),
 						"expected sidecar to be crashing on pod %s after rolling restart", podList.Items[idx].Name)
-					g.Expect(utils.IsAerospikeServerRunning(&podList.Items[idx])).To(BeTrue(),
+					g.Expect(utils.IsAerospikeServerReady(&podList.Items[idx])).To(BeTrue(),
 						"expected server to be running on pod %s after rolling restart", podList.Items[idx].Name)
 				}
 			}, 3*time.Minute, 5*time.Second).Should(Succeed())
@@ -910,7 +910,7 @@ done`,
 
 					for idx := range podList.Items {
 						pod := &podList.Items[idx]
-						g.Expect(utils.IsAerospikeServerRunning(pod)).To(BeTrue(),
+						g.Expect(utils.IsAerospikeServerReady(pod)).To(BeTrue(),
 							"expected Aerospike server to be running on pod %s", pod.Name)
 						g.Expect(podHasCrashingSidecar(pod)).To(BeTrue(),
 							"expected sidecar to still be crashing on pod %s", pod.Name)
@@ -962,7 +962,7 @@ done`,
 					g.Expect(utils.IsImageEqual(podStatus.Image, nextImage)).To(BeTrue(),
 						"expected pod %s to be on image %s after upgrade, got %s",
 						pod.Name, nextImage, podStatus.Image)
-					g.Expect(utils.IsAerospikeServerRunning(pod)).To(BeTrue(),
+					g.Expect(utils.IsAerospikeServerReady(pod)).To(BeTrue(),
 						"expected Aerospike server to be running on pod %s after upgrade", pod.Name)
 					g.Expect(podHasCrashingSidecar(pod)).To(BeTrue(),
 						"expected sidecar to still be crashing on pod %s after upgrade", pod.Name)
@@ -1074,7 +1074,7 @@ done`,
 
 			for idx := range finalPodList.Items {
 				pod := &finalPodList.Items[idx]
-				Expect(utils.IsAerospikeServerRunning(pod)).To(BeTrue(),
+				Expect(utils.IsAerospikeServerReady(pod)).To(BeTrue(),
 					"expected Aerospike server to be running on pod %s", pod.Name)
 				Expect(podHasCrashingSidecar(pod)).To(BeTrue(),
 					"expected crashing sidecar on pod %s (all pods carry the new spec)", pod.Name)

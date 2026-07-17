@@ -231,7 +231,7 @@ func TestGetSidecarFailedPods(t *testing.T) {
 			wantPods: nil,
 		},
 		{
-			// Server not ready: IsAerospikeServerRunning returns false, so this is
+			// Server not ready: IsAerospikeServerReady returns false, so this is
 			// a server-failed pod, not a sidecar-failed pod.
 			name: "server not ready pod is not returned",
 			pods: []*corev1.Pod{
