@@ -22,19 +22,19 @@ import (
 
 	corev1 "k8s.io/api/core/v1"
 	"k8s.io/apimachinery/pkg/types"
-	"k8s.io/apimachinery/pkg/util/sets"
 	"k8s.io/client-go/tools/record"
 	"sigs.k8s.io/controller-runtime/pkg/client/interceptor"
 
 	"github.com/stretchr/testify/require"
 )
 
-// TestCreateOrUpdatePodService_PublishNotReadyAddresses verifies that the
-// NodePort service created for a pod has PublishNotReadyAddresses=true.
-// This flag was added in the sidecar-failure PR so that the service continues
-// to forward traffic to sidecar-failing pods (whose Aerospike server is still
-// reachable) even though the pod is not yet Ready.
-func TestCreateOrUpdatePodService_PublishNotReadyAddresses(t *testing.T) {
+// TestCreateOrUpdatePodService verifies invariants of the NodePort service that
+// is created (or updated) per pod:
+//   - PublishNotReadyAddresses is always true so that sidecar-failing pods
+//     (whose Aerospike server is still reachable) continue to receive traffic.
+//   - The call is idempotent — a second invocation must not return an error.
+//   - The behaviour is the same regardless of the IgnoreSidecarFailure flag.
+func TestCreateOrUpdatePodService(t *testing.T) {
 	const (
 		namespace   = "test-ns"
 		clusterName = "test-cluster"
@@ -42,98 +42,73 @@ func TestCreateOrUpdatePodService_PublishNotReadyAddresses(t *testing.T) {
 		clusterUID  = "test-uid"
 	)
 
-	aeroCluster := newTestAerospikeCluster(namespace, clusterName)
-	// A non-empty UID is required by controllerutil.SetControllerReference to
-	// populate the OwnerReference correctly.
-	aeroCluster.UID = clusterUID
+	tests := []struct {
+		checkSvc      func(*testing.T, *corev1.Service)
+		name          string
+		ignoreSidecar bool
+		callTwice     bool
+	}{
+		{
+			name: "service has PublishNotReadyAddresses=true and ServiceTypeNodePort",
+			checkSvc: func(t *testing.T, svc *corev1.Service) {
+				t.Helper()
 
-	r := newTestReconciler(t, aeroCluster, &interceptor.Funcs{})
-	r.Recorder = record.NewFakeRecorder(10)
+				if !svc.Spec.PublishNotReadyAddresses {
+					t.Error("expected PublishNotReadyAddresses=true, got false")
+				}
 
-	require.NoError(t, r.createOrUpdatePodService(context.Background(), podName, namespace))
+				if svc.Spec.Type != corev1.ServiceTypeNodePort {
+					t.Errorf("expected ServiceTypeNodePort, got %s", svc.Spec.Type)
+				}
+			},
+		},
+		{
+			name:      "idempotent: second call succeeds and flag is preserved",
+			callTwice: true,
+			checkSvc: func(t *testing.T, svc *corev1.Service) {
+				t.Helper()
 
-	svc := &corev1.Service{}
-	require.NoError(t, r.Get(
-		context.Background(),
-		types.NamespacedName{Name: podName, Namespace: namespace},
-		svc,
-	))
+				if !svc.Spec.PublishNotReadyAddresses {
+					t.Error("expected PublishNotReadyAddresses=true after idempotent call, got false")
+				}
+			},
+		},
+		{
+			name:          "PublishNotReadyAddresses=true even with IgnoreSidecarFailure",
+			ignoreSidecar: true,
+			checkSvc: func(t *testing.T, svc *corev1.Service) {
+				t.Helper()
 
-	if !svc.Spec.PublishNotReadyAddresses {
-		t.Error("expected PublishNotReadyAddresses=true on the pod NodePort service, got false")
+				if !svc.Spec.PublishNotReadyAddresses {
+					t.Error("expected PublishNotReadyAddresses=true even with IgnoreSidecarFailure, got false")
+				}
+			},
+		},
 	}
 
-	if svc.Spec.Type != corev1.ServiceTypeNodePort {
-		t.Errorf("expected ServiceTypeNodePort, got %s", svc.Spec.Type)
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			aeroCluster := newTestAerospikeCluster(namespace, clusterName)
+			aeroCluster.UID = clusterUID
+
+			if tt.ignoreSidecar {
+				boolTrue := true
+				aeroCluster.Spec.IgnoreSidecarFailure = &boolTrue
+			}
+
+			r := newTestReconciler(t, aeroCluster, &interceptor.Funcs{})
+			r.Recorder = record.NewFakeRecorder(10)
+
+			require.NoError(t, r.createOrUpdatePodService(context.Background(), podName, namespace), "first call")
+
+			if tt.callTwice {
+				require.NoError(t, r.createOrUpdatePodService(context.Background(), podName, namespace), "second call")
+			}
+
+			svc := &corev1.Service{}
+			require.NoError(t, r.Get(context.Background(), types.NamespacedName{Name: podName, Namespace: namespace}, svc))
+
+			tt.checkSvc(t, svc)
+		})
 	}
-}
-
-// TestCreateOrUpdatePodService_Idempotent verifies that calling
-// createOrUpdatePodService a second time (service already exists) does not
-// return an error (the update path is exercised).
-func TestCreateOrUpdatePodService_Idempotent(t *testing.T) {
-	const (
-		namespace   = "test-ns"
-		clusterName = "test-cluster"
-		podName     = "test-cluster-1-0"
-		clusterUID  = "test-uid"
-	)
-
-	aeroCluster := newTestAerospikeCluster(namespace, clusterName)
-	aeroCluster.UID = clusterUID
-
-	r := newTestReconciler(t, aeroCluster, &interceptor.Funcs{})
-	r.Recorder = record.NewFakeRecorder(10)
-
-	require.NoError(t, r.createOrUpdatePodService(context.Background(), podName, namespace), "first call")
-	require.NoError(t, r.createOrUpdatePodService(context.Background(), podName, namespace), "second call (update path)")
-
-	// Service should still have the correct flag after update.
-	svc := &corev1.Service{}
-	require.NoError(t, r.Get(
-		context.Background(),
-		types.NamespacedName{Name: podName, Namespace: namespace},
-		svc,
-	))
-
-	if !svc.Spec.PublishNotReadyAddresses {
-		t.Error("expected PublishNotReadyAddresses=true after idempotent call, got false")
-	}
-}
-
-// TestCreateOrUpdatePodService_IgnorablePodNames is a guard to ensure that
-// even when IgnoreSidecarFailure is set, the service is still created with
-// PublishNotReadyAddresses=true (the field is unconditional in the spec).
-func TestCreateOrUpdatePodService_IgnoreSidecarFailure(t *testing.T) {
-	const (
-		namespace   = "test-ns"
-		clusterName = "test-cluster"
-		podName     = "test-cluster-1-0"
-		clusterUID  = "test-uid"
-	)
-
-	aeroCluster := newTestAerospikeCluster(namespace, clusterName)
-	aeroCluster.UID = clusterUID
-
-	boolTrue := true
-	aeroCluster.Spec.IgnoreSidecarFailure = &boolTrue
-
-	r := newTestReconciler(t, aeroCluster, &interceptor.Funcs{})
-	r.Recorder = record.NewFakeRecorder(10)
-
-	require.NoError(t, r.createOrUpdatePodService(context.Background(), podName, namespace))
-
-	svc := &corev1.Service{}
-	require.NoError(t, r.Get(
-		context.Background(),
-		types.NamespacedName{Name: podName, Namespace: namespace},
-		svc,
-	))
-
-	if !svc.Spec.PublishNotReadyAddresses {
-		t.Error("expected PublishNotReadyAddresses=true even with IgnoreSidecarFailure, got false")
-	}
-
-	// Verify the unused ignorable set variable doesn't cause test issues.
-	_ = sets.New[string]()
 }

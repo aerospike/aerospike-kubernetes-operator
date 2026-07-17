@@ -303,38 +303,54 @@ func TestIsAerospikeServerReady(t *testing.T) {
 	}
 }
 
+// crashingCS returns a ContainerStatus in CrashLoopBackOff waiting state.
+func crashingCS(name string) corev1.ContainerStatus {
+	return corev1.ContainerStatus{
+		Name:  name,
+		State: corev1.ContainerState{Waiting: &corev1.ContainerStateWaiting{Reason: "CrashLoopBackOff"}},
+	}
+}
+
+// runningReadyCS returns a ContainerStatus in Running+Ready state.
+func runningReadyCS(name string) corev1.ContainerStatus {
+	return corev1.ContainerStatus{
+		Name:  name,
+		Ready: true,
+		State: corev1.ContainerState{Running: &corev1.ContainerStateRunning{}},
+	}
+}
+
+// agedPod returns a Running-phase pod created `age` ago with the given container statuses.
+func agedPod(name string, age time.Duration, statuses ...corev1.ContainerStatus) *corev1.Pod {
+	return &corev1.Pod{
+		ObjectMeta: metav1.ObjectMeta{
+			Name:              name,
+			CreationTimestamp: metav1.NewTime(time.Now().Add(-age)),
+		},
+		Status: corev1.PodStatus{Phase: corev1.PodRunning, ContainerStatuses: statuses},
+	}
+}
+
+// agedInitPod returns a Running-phase pod created `age` ago with the given init-container statuses.
+func agedInitPod(name string, age time.Duration, initStatuses ...corev1.ContainerStatus) *corev1.Pod {
+	return &corev1.Pod{
+		ObjectMeta: metav1.ObjectMeta{
+			Name:              name,
+			CreationTimestamp: metav1.NewTime(time.Now().Add(-age)),
+		},
+		Status: corev1.PodStatus{Phase: corev1.PodRunning, InitContainerStatuses: initStatuses},
+	}
+}
+
 func TestCheckServerFailedWithGrace_IgnoresSidecarFailures(t *testing.T) {
 	// The central invariant: CheckServerFailedWithGrace must return PodHealthy
 	// for a pod whose Aerospike server is running but whose sidecar is crashing.
 	// CheckPodFailedWithGrace on the same pod returns PodFailed because it
 	// includes sidecar failures. This contrast is the core behaviour change.
-	sidecarCrashingPod := &corev1.Pod{
-		ObjectMeta: metav1.ObjectMeta{
-			Name:              "pod-with-crashing-sidecar",
-			CreationTimestamp: metav1.NewTime(time.Now().Add(-5 * time.Minute)),
-		},
-		Status: corev1.PodStatus{
-			Phase: corev1.PodRunning,
-			ContainerStatuses: []corev1.ContainerStatus{
-				{
-					Name:  asdbv1.AerospikeServerContainerName,
-					Ready: true,
-					State: corev1.ContainerState{
-						Running: &corev1.ContainerStateRunning{},
-					},
-				},
-				{
-					Name: "crashing-sidecar",
-					State: corev1.ContainerState{
-						Waiting: &corev1.ContainerStateWaiting{
-							Reason:  "CrashLoopBackOff",
-							Message: "back-off 5m0s restarting failed container",
-						},
-					},
-				},
-			},
-		},
-	}
+	sidecarCrashingPod := agedPod("pod-with-crashing-sidecar", 5*time.Minute,
+		runningReadyCS(asdbv1.AerospikeServerContainerName),
+		crashingCS("crashing-sidecar"),
+	)
 
 	serverState := CheckServerFailedWithGrace(sidecarCrashingPod, false)
 	if serverState.State != PodHealthy {
@@ -351,7 +367,7 @@ func TestCheckServerFailedWithGrace_IgnoresSidecarFailures(t *testing.T) {
 }
 
 func TestCheckServerFailedWithGrace(t *testing.T) {
-	now := time.Now()
+	now := metav1.Now()
 
 	tests := []struct {
 		pod           *corev1.Pod
@@ -364,7 +380,7 @@ func TestCheckServerFailedWithGrace(t *testing.T) {
 			pod: &corev1.Pod{
 				ObjectMeta: metav1.ObjectMeta{
 					Name:              "terminating",
-					DeletionTimestamp: &metav1.Time{Time: now},
+					DeletionTimestamp: &now,
 				},
 				Status: corev1.PodStatus{Phase: corev1.PodRunning},
 			},
@@ -376,7 +392,7 @@ func TestCheckServerFailedWithGrace(t *testing.T) {
 			pod: &corev1.Pod{
 				ObjectMeta: metav1.ObjectMeta{
 					Name:              "healthy",
-					CreationTimestamp: metav1.NewTime(now.Add(-5 * time.Minute)),
+					CreationTimestamp: metav1.NewTime(time.Now().Add(-5 * time.Minute)),
 				},
 				Status: corev1.PodStatus{
 					Phase: corev1.PodRunning,
@@ -389,74 +405,20 @@ func TestCheckServerFailedWithGrace(t *testing.T) {
 			expectedState: PodHealthy,
 		},
 		{
-			name: "server container in CrashLoopBackOff is PodFailed",
-			pod: &corev1.Pod{
-				ObjectMeta: metav1.ObjectMeta{
-					Name:              "server-crash",
-					CreationTimestamp: metav1.NewTime(now.Add(-5 * time.Minute)),
-				},
-				Status: corev1.PodStatus{
-					Phase: corev1.PodRunning,
-					ContainerStatuses: []corev1.ContainerStatus{
-						{
-							Name: asdbv1.AerospikeServerContainerName,
-							State: corev1.ContainerState{
-								Waiting: &corev1.ContainerStateWaiting{
-									Reason: "CrashLoopBackOff",
-								},
-							},
-						},
-					},
-				},
-			},
+			name:          "server container in CrashLoopBackOff is PodFailed",
+			pod:           agedPod("server-crash", 5*time.Minute, crashingCS(asdbv1.AerospikeServerContainerName)),
 			allowGrace:    false,
 			expectedState: PodFailed,
 		},
 		{
-			name: "server container in CrashLoopBackOff within grace period is PodFailedInGrace",
-			pod: &corev1.Pod{
-				ObjectMeta: metav1.ObjectMeta{
-					Name:              "server-crash-grace",
-					CreationTimestamp: metav1.NewTime(now.Add(-10 * time.Second)),
-				},
-				Status: corev1.PodStatus{
-					Phase: corev1.PodRunning,
-					ContainerStatuses: []corev1.ContainerStatus{
-						{
-							Name: asdbv1.AerospikeServerContainerName,
-							State: corev1.ContainerState{
-								Waiting: &corev1.ContainerStateWaiting{
-									Reason: "CrashLoopBackOff",
-								},
-							},
-						},
-					},
-				},
-			},
+			name:          "server container in CrashLoopBackOff within grace period is PodFailedInGrace",
+			pod:           agedPod("server-crash-grace", 10*time.Second, crashingCS(asdbv1.AerospikeServerContainerName)),
 			allowGrace:    true,
 			expectedState: PodFailedInGrace,
 		},
 		{
-			name: "failing init container is PodFailed",
-			pod: &corev1.Pod{
-				ObjectMeta: metav1.ObjectMeta{
-					Name:              "init-crash",
-					CreationTimestamp: metav1.NewTime(now.Add(-5 * time.Minute)),
-				},
-				Status: corev1.PodStatus{
-					Phase: corev1.PodRunning,
-					InitContainerStatuses: []corev1.ContainerStatus{
-						{
-							Name: "aerospike-init",
-							State: corev1.ContainerState{
-								Waiting: &corev1.ContainerStateWaiting{
-									Reason: "CrashLoopBackOff",
-								},
-							},
-						},
-					},
-				},
-			},
+			name:          "failing init container is PodFailed",
+			pod:           agedInitPod("init-crash", 5*time.Minute, crashingCS("aerospike-init")),
 			allowGrace:    false,
 			expectedState: PodFailed,
 		},
@@ -464,30 +426,10 @@ func TestCheckServerFailedWithGrace(t *testing.T) {
 			// Sidecar-only failure: server is healthy, sidecar is in CrashLoopBackOff.
 			// CheckServerFailedWithGrace must return PodHealthy (sidecars ignored).
 			name: "crashing sidecar with healthy server is PodHealthy",
-			pod: &corev1.Pod{
-				ObjectMeta: metav1.ObjectMeta{
-					Name:              "sidecar-crash",
-					CreationTimestamp: metav1.NewTime(now.Add(-5 * time.Minute)),
-				},
-				Status: corev1.PodStatus{
-					Phase: corev1.PodRunning,
-					ContainerStatuses: []corev1.ContainerStatus{
-						{
-							Name:  asdbv1.AerospikeServerContainerName,
-							Ready: true,
-							State: corev1.ContainerState{Running: &corev1.ContainerStateRunning{}},
-						},
-						{
-							Name: "crashing-sidecar",
-							State: corev1.ContainerState{
-								Waiting: &corev1.ContainerStateWaiting{
-									Reason: "CrashLoopBackOff",
-								},
-							},
-						},
-					},
-				},
-			},
+			pod: agedPod("sidecar-crash", 5*time.Minute,
+				runningReadyCS(asdbv1.AerospikeServerContainerName),
+				crashingCS("crashing-sidecar"),
+			),
 			allowGrace:    false,
 			expectedState: PodHealthy,
 		},

@@ -43,14 +43,16 @@ func TestWaitForAerospikeServerReady(t *testing.T) {
 		stsName     = clusterName + "-1"
 	)
 
+	scheme := newTestScheme()
+	aeroCluster := newTestAerospikeCluster(namespace, clusterName)
+
 	sts := &appsv1.StatefulSet{
 		ObjectMeta: metav1.ObjectMeta{Name: stsName, Namespace: namespace},
 		Spec:       appsv1.StatefulSetSpec{Replicas: replicaCount(1)},
 	}
 
 	t.Run("ignorable pod is skipped without any k8s poll", func(t *testing.T) {
-		aeroCluster := newTestAerospikeCluster(namespace, clusterName)
-		r := newReconcilerWithObjects(newTestScheme(), aeroCluster, sts)
+		r := newReconcilerWithObjects(scheme, aeroCluster, sts)
 
 		// No pod is pre-created; if the function tried to Get it, fake client
 		// would return NotFound → error.  The ignorable-skip path must prevent
@@ -63,18 +65,14 @@ func TestWaitForAerospikeServerReady(t *testing.T) {
 	})
 
 	t.Run("pod with running server container succeeds on first poll", func(t *testing.T) {
-		aeroCluster := newTestAerospikeCluster(namespace, clusterName)
 		pod := &corev1.Pod{
-			ObjectMeta: metav1.ObjectMeta{
-				Name:      stsName + "-0",
-				Namespace: namespace,
-			},
+			ObjectMeta: metav1.ObjectMeta{Name: stsName + "-0", Namespace: namespace},
 			Status: corev1.PodStatus{
 				Phase:             corev1.PodRunning,
 				ContainerStatuses: []corev1.ContainerStatus{serverContainer(true)},
 			},
 		}
-		r := newReconcilerWithObjects(newTestScheme(), aeroCluster, sts, pod)
+		r := newReconcilerWithObjects(scheme, aeroCluster, sts, pod)
 
 		if err := r.waitForAerospikeServerReady(context.Background(), sts, sets.New[string]()); err != nil {
 			t.Errorf("expected nil for running server container, got: %v", err)
@@ -82,27 +80,21 @@ func TestWaitForAerospikeServerReady(t *testing.T) {
 	})
 
 	t.Run("server container in CrashLoopBackOff returns error on first poll", func(t *testing.T) {
-		aeroCluster := newTestAerospikeCluster(namespace, clusterName)
 		pod := &corev1.Pod{
-			ObjectMeta: metav1.ObjectMeta{
-				Name:      stsName + "-0",
-				Namespace: namespace,
-			},
+			ObjectMeta: metav1.ObjectMeta{Name: stsName + "-0", Namespace: namespace},
 			Status: corev1.PodStatus{
 				Phase: corev1.PodRunning,
 				ContainerStatuses: []corev1.ContainerStatus{
 					{
 						Name: asdbv1.AerospikeServerContainerName,
 						State: corev1.ContainerState{
-							Waiting: &corev1.ContainerStateWaiting{
-								Reason: "CrashLoopBackOff",
-							},
+							Waiting: &corev1.ContainerStateWaiting{Reason: "CrashLoopBackOff"},
 						},
 					},
 				},
 			},
 		}
-		r := newReconcilerWithObjects(newTestScheme(), aeroCluster, sts, pod)
+		r := newReconcilerWithObjects(scheme, aeroCluster, sts, pod)
 
 		if err := r.waitForAerospikeServerReady(context.Background(), sts, sets.New[string]()); err == nil {
 			t.Error("expected an error for CrashLoopBackOff server container, got nil")
@@ -110,7 +102,6 @@ func TestWaitForAerospikeServerReady(t *testing.T) {
 	})
 
 	t.Run("multiple pods: second pod ignorable, first pod running — succeeds", func(t *testing.T) {
-		aeroCluster := newTestAerospikeCluster(namespace, clusterName)
 		multiSTS := &appsv1.StatefulSet{
 			ObjectMeta: metav1.ObjectMeta{Name: stsName, Namespace: namespace},
 			Spec:       appsv1.StatefulSetSpec{Replicas: replicaCount(2)},
@@ -127,7 +118,7 @@ func TestWaitForAerospikeServerReady(t *testing.T) {
 		// pod-1 is ignorable; no pod object is pre-created for it so any Get
 		// would return NotFound — the skip must fire before the Get.
 		ignorable := sets.New(stsName + "-1")
-		r := newReconcilerWithObjects(newTestScheme(), aeroCluster, multiSTS, pod0)
+		r := newReconcilerWithObjects(scheme, aeroCluster, multiSTS, pod0)
 
 		if err := r.waitForAerospikeServerReady(context.Background(), multiSTS, ignorable); err != nil {
 			t.Errorf("expected nil when running pod + ignorable pod, got: %v", err)

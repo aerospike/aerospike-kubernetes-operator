@@ -626,7 +626,7 @@ func (r *SingleClusterReconciler) ensurePodsRunningAndReady(
 				// container is still running, the failure is sidecar-only — skip it.
 				if ignoreSidecar && utils.IsAerospikeServerReady(updatedPod) {
 					r.Log.Info("Pod has sidecar failure, ignoring per IgnoreSidecarFailure",
-						"podName", updatedPod.Name, "err", err)
+						"pod", utils.GetNamespacedName(updatedPod), "reason", err.Error())
 				} else {
 					return common.ReconcileError(err)
 				}
@@ -849,7 +849,7 @@ func (r *SingleClusterReconciler) isLocalPVCDeletionRequired(
 		// regardless of the eviction-blocked annotation, node block-list, or deleteLocalStorageOnRestart.
 		if asdbv1.GetBool(rackState.Rack.Storage.DeleteLocalStorageOnPodRecovery) {
 			r.Log.Info("deleteLocalStorageOnPodRecovery is enabled, deleting local PVCs for failed Pod",
-				"podName", pod.Name)
+				"pod", utils.GetNamespacedName(pod))
 
 			return true
 		}
@@ -925,7 +925,7 @@ func (r *SingleClusterReconciler) ensurePodsImageUpdated(
 				// container is still running, the failure is sidecar-only — skip it.
 				if ignoreSidecar && utils.IsAerospikeServerReady(updatedPod) {
 					r.Log.Info("Pod has sidecar failure, ignoring per IgnoreSidecarFailure",
-						"podName", updatedPod.Name, "err", err)
+						"pod", utils.GetNamespacedName(updatedPod), "reason", err.Error())
 				} else {
 					return common.ReconcileError(err)
 				}
