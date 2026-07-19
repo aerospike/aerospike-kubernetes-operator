@@ -36,14 +36,7 @@ type SingleBackupReconciler struct {
 
 func (r *SingleBackupReconciler) Reconcile(ctx context.Context) (result ctrl.Result, recErr error) {
 	defer func() {
-		switch {
-		case recErr != nil:
-			r.Log.Error(recErr, "Reconcile failed", "result", "error")
-		case result.RequeueAfter > 0:
-			r.Log.Info("Reconcile requeued", "result", "requeue", "after", result.RequeueAfter)
-		default:
-			r.Log.Info("Reconciled successfully", "result", "success")
-		}
+		r.logReconcileExit(result, recErr)
 	}()
 
 	// Skip reconcile if the backup service version is less than 3.0.0.
@@ -51,7 +44,7 @@ func (r *SingleBackupReconciler) Reconcile(ctx context.Context) (result ctrl.Res
 	if _, err := asdbv1beta1.ValidateBackupSvcSupportedVersion(r.Client,
 		r.aeroBackup.Spec.BackupService.Name,
 		r.aeroBackup.Spec.BackupService.Namespace); err != nil {
-		r.Log.Info("Skipping reconcile, backup service version unsupported",
+		r.Log.Info("Skipping reconcile, backup service version is older than the minimum supported",
 			"backupService", utils.NewNamespacedName(
 				r.aeroBackup.Spec.BackupService.Namespace, r.aeroBackup.Spec.BackupService.Name),
 			"minVersion", asdbv1beta1.BackupSvcMinSupportedVersion,
@@ -70,7 +63,7 @@ func (r *SingleBackupReconciler) Reconcile(ctx context.Context) (result ctrl.Res
 
 		r.Recorder.Eventf(
 			r.aeroBackup, corev1.EventTypeNormal, "Deleted",
-			"Deleted AerospikeBackup %s", utils.GetNamespacedNameString(r.aeroBackup),
+			"Successfully deleted backup resources",
 		)
 		// Stop reconciliation as the backup is being deleted
 		return reconcile.Result{}, nil
@@ -84,29 +77,38 @@ func (r *SingleBackupReconciler) Reconcile(ctx context.Context) (result ctrl.Res
 	if err := r.reconcileConfigMap(ctx); err != nil {
 		bs := r.aeroBackup.Spec.BackupService
 		r.Recorder.Eventf(r.aeroBackup, corev1.EventTypeWarning,
-			"ConfigMapReconcileFailed", "Failed to reconcile ConfigMap %s for AerospikeBackup %s",
-			utils.NamespacedName(bs.Namespace, bs.Name), utils.GetNamespacedNameString(r.aeroBackup))
+			"ConfigMapReconcileFailed", "Failed to reconcile ConfigMap %s",
+			utils.NamespacedName(bs.Namespace, bs.Name))
 
 		return reconcile.Result{}, err
 	}
 
 	if err := r.reconcileBackup(); err != nil {
 		r.Recorder.Eventf(r.aeroBackup, corev1.EventTypeWarning,
-			"BackupReconcileFailed", "Failed to reconcile AerospikeBackup %s",
-			utils.GetNamespacedNameString(r.aeroBackup))
+			"BackupReconcileFailed", "Failed to reconcile backup")
 
 		return reconcile.Result{}, err
 	}
 
 	if err := r.updateStatus(ctx); err != nil {
 		r.Recorder.Eventf(r.aeroBackup, corev1.EventTypeWarning,
-			"StatusUpdateFailed", "Failed to update AerospikeBackup status %s",
-			utils.GetNamespacedNameString(r.aeroBackup))
+			"StatusUpdateFailed", "Failed to update status")
 
 		return reconcile.Result{}, err
 	}
 
 	return ctrl.Result{}, nil
+}
+
+func (r *SingleBackupReconciler) logReconcileExit(result ctrl.Result, recErr error) {
+	switch {
+	case recErr != nil:
+		r.Log.Error(recErr, "Reconcile failed", "result", "error")
+	case result.RequeueAfter > 0:
+		r.Log.Info("Reconcile requeued", "result", "requeue", "after", result.RequeueAfter)
+	default:
+		r.Log.Info("Reconciled successfully", "result", "success")
+	}
 }
 
 func (r *SingleBackupReconciler) addFinalizer(ctx context.Context, finalizerName string) error {
@@ -245,8 +247,7 @@ func (r *SingleBackupReconciler) reconcileConfigMap(ctx context.Context) error {
 		"configMap", utils.NewNamespacedName(bs.Namespace, bs.Name),
 	)
 	r.Recorder.Eventf(r.aeroBackup, corev1.EventTypeNormal, "ConfigMapUpdated",
-		"Updated backup service ConfigMap %s for AerospikeBackup %s", utils.NamespacedName(bs.Namespace, bs.Name),
-		utils.GetNamespacedNameString(r.aeroBackup))
+		"Updated backup service ConfigMap %s", utils.NamespacedName(bs.Namespace, bs.Name))
 
 	return nil
 }
@@ -446,7 +447,7 @@ func (r *SingleBackupReconciler) reconcileScheduledBackup() error {
 
 	r.Log.Info("Reconciled scheduled backup")
 	r.Recorder.Eventf(r.aeroBackup, corev1.EventTypeNormal, "BackupScheduled",
-		"Reconciled scheduled backup %s", utils.GetNamespacedNameString(r.aeroBackup))
+		"Reconciled scheduled backup")
 
 	return nil
 }

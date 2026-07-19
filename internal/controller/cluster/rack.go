@@ -1915,8 +1915,7 @@ func (r *SingleClusterReconciler) handleEnableSecurity(
 	if err := r.validateAndReconcileAccessControl(ctx, securityEnabledPods, ignorablePodNames); err != nil {
 		r.Recorder.Eventf(
 			r.aeroCluster, corev1.EventTypeWarning, ReasonACLUpdateFailed,
-			"Failed to set up access control for AerospikeCluster %s",
-			utils.GetNamespacedNameString(r.aeroCluster),
+			"Failed to set up access control",
 		)
 
 		return fmt.Errorf("reconcile access control: %w", err)
