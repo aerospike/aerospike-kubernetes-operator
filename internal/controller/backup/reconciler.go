@@ -83,7 +83,7 @@ func (r *SingleBackupReconciler) Reconcile(ctx context.Context) (result ctrl.Res
 		return reconcile.Result{}, err
 	}
 
-	if err := r.reconcileBackup(); err != nil {
+	if err := r.reconcileBackup(ctx); err != nil {
 		r.Recorder.Eventf(r.aeroBackup, corev1.EventTypeWarning,
 			"BackupReconcileFailed", "Failed to reconcile backup")
 
@@ -143,7 +143,7 @@ func (r *SingleBackupReconciler) cleanUpAndRemoveFinalizer(ctx context.Context, 
 			return fmt.Errorf("get backup service client: %w", err)
 		}
 
-		if err := common.ReloadBackupServiceConfigInPods(r.Client, backupServiceClient,
+		if err := common.ReloadBackupServiceConfigInPods(ctx, r.Client, backupServiceClient,
 			r.Log, &r.aeroBackup.Spec.BackupService); err != nil {
 			return fmt.Errorf("reload backup service config: %w", err)
 		}
@@ -378,15 +378,15 @@ func (r *SingleBackupReconciler) triggerOnDemandBackup() error {
 	return nil
 }
 
-func (r *SingleBackupReconciler) reconcileBackup() error {
-	if err := r.reconcileScheduledBackup(); err != nil {
+func (r *SingleBackupReconciler) reconcileBackup(ctx context.Context) error {
+	if err := r.reconcileScheduledBackup(ctx); err != nil {
 		return err
 	}
 
 	return r.reconcileOnDemandBackup()
 }
 
-func (r *SingleBackupReconciler) reconcileScheduledBackup() error {
+func (r *SingleBackupReconciler) reconcileScheduledBackup(ctx context.Context) error {
 	r.Log.Info("Reconciling scheduled backup")
 
 	serviceClient, err := backup_service.GetBackupServiceClient(r.Client, &r.aeroBackup.Spec.BackupService)
@@ -439,7 +439,7 @@ func (r *SingleBackupReconciler) reconcileScheduledBackup() error {
 	}
 
 	if hotReloadRequired {
-		err = common.ReloadBackupServiceConfigInPods(r.Client, serviceClient, r.Log, &r.aeroBackup.Spec.BackupService)
+		err = common.ReloadBackupServiceConfigInPods(ctx, r.Client, serviceClient, r.Log, &r.aeroBackup.Spec.BackupService)
 		if err != nil {
 			return fmt.Errorf("reload backup service config: %w", err)
 		}

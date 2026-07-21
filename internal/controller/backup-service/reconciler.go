@@ -342,7 +342,7 @@ func (r *SingleBackupServiceReconciler) updateBackupSvcConfig(ctx context.Contex
 		return fmt.Errorf("fetch backup service config from API: %w", err)
 	}
 
-	desiredData, err := common.GetBackupSvcConfigFromCM(r.Client, backupSvc)
+	desiredData, err := common.GetBackupSvcConfigFromCM(ctx, r.Client, backupSvc)
 	if err != nil {
 		return err
 	}
@@ -379,7 +379,7 @@ func (r *SingleBackupServiceReconciler) updateBackupSvcConfig(ctx context.Contex
 		return r.restartBackupSvcPod(ctx)
 	}
 
-	if err := common.ReloadBackupServiceConfigInPods(r.Client, backupServiceClient, r.Log, backupSvc); err != nil {
+	if err := common.ReloadBackupServiceConfigInPods(ctx, r.Client, backupServiceClient, r.Log, backupSvc); err != nil {
 		return fmt.Errorf("reload backup service config: %w", err)
 	}
 
@@ -387,7 +387,7 @@ func (r *SingleBackupServiceReconciler) updateBackupSvcConfig(ctx context.Contex
 }
 
 func (r *SingleBackupServiceReconciler) restartBackupSvcPod(ctx context.Context) error {
-	podList, err := common.GetBackupServicePodList(r.Client, r.aeroBackupService.Name, r.aeroBackupService.Namespace)
+	podList, err := common.GetBackupServicePodList(ctx, r.Client, r.aeroBackupService.Name, r.aeroBackupService.Namespace)
 	if err != nil {
 		return err
 	}
@@ -715,7 +715,7 @@ func (r *SingleBackupServiceReconciler) waitForDeploymentToBeReady(ctx context.C
 			}
 
 			podList, err := common.GetBackupServicePodList(
-				r.Client, r.aeroBackupService.Name, r.aeroBackupService.Namespace,
+				pollCtx, r.Client, r.aeroBackupService.Name, r.aeroBackupService.Namespace,
 			)
 			if err != nil {
 				return false, err
