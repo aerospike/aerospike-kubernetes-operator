@@ -43,7 +43,7 @@ func GetBackupServicePodList(k8sClient client.Client, name, namespace string) (*
 	}
 
 	if err := k8sClient.List(context.TODO(), &podList, listOps); err != nil {
-		return nil, err
+		return nil, fmt.Errorf("list backup service pods %s/%s: %w", namespace, name, err)
 	}
 
 	return &podList, nil
@@ -63,7 +63,7 @@ func ReloadBackupServiceConfigInPods(
 			backupSvc.Namespace,
 		)
 		if err != nil {
-			return fmt.Errorf("failed to get backup service pod list, error: %v", err)
+			return err
 		}
 
 		for idx := range podList.Items {
@@ -79,7 +79,7 @@ func ReloadBackupServiceConfigInPods(
 			pod.Annotations = annotations
 
 			if err := k8sClient.Update(context.TODO(), &pod); err != nil {
-				return err
+				return fmt.Errorf("update backup service pod %s: %w", utils.GetNamespacedName(&pod), err)
 			}
 		}
 
@@ -150,7 +150,7 @@ func GetBackupSvcConfigFromCM(k8sClient client.Client, backupSvc *v1beta1.Backup
 		Namespace: backupSvc.Namespace,
 		Name:      backupSvc.Name,
 	}, &cm); err != nil {
-		return "", err
+		return "", fmt.Errorf("get backup service ConfigMap %s/%s: %w", backupSvc.Namespace, backupSvc.Name, err)
 	}
 
 	return cm.Data[v1beta1.BackupServiceConfigYAML], nil

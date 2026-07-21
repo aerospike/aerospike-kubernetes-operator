@@ -50,23 +50,22 @@ type AerospikeBackupServiceReconciler struct {
 
 // Reconcile is part of the main kubernetes reconciliation loop which aims to
 // move the current state of the cluster closer to the desired state.
-func (r *AerospikeBackupServiceReconciler) Reconcile(_ context.Context, request ctrl.Request) (ctrl.Result, error) {
-	log := r.Log.WithValues("aerospikebackupservice", request.NamespacedName)
+func (r *AerospikeBackupServiceReconciler) Reconcile(ctx context.Context, request ctrl.Request) (ctrl.Result, error) {
+	log := r.Log.WithValues("aerospikeBackupService", request.NamespacedName)
 
 	log.Info("Reconciling AerospikeBackupService")
 
 	// Fetch the AerospikeBackupService instance
 	aeroBackupService := &asdbv1beta1.AerospikeBackupService{}
-	if err := r.Get(context.TODO(), request.NamespacedName, aeroBackupService); err != nil {
+	if err := r.Get(ctx, request.NamespacedName, aeroBackupService); err != nil {
 		if errors.IsNotFound(err) {
 			log.Info("Deleted AerospikeBackupService")
 
 			aeroBackupService.Namespace = request.Namespace
 			aeroBackupService.Name = request.Name
 			r.Recorder.Eventf(
-				aeroBackupService, corev1.EventTypeNormal, "Deleted",
-				"Deleted AerospikeBackupService %s/%s", aeroBackupService.Namespace,
-				aeroBackupService.Name,
+				aeroBackupService, corev1.EventTypeNormal, ReasonDeleted,
+				"Successfully deleted backup service resources",
 			)
 
 			// Request object not found, could have been deleted after Reconcile request.
@@ -84,7 +83,7 @@ func (r *AerospikeBackupServiceReconciler) Reconcile(_ context.Context, request 
 		Recorder:          r.Recorder,
 	}
 
-	return cr.Reconcile()
+	return cr.Reconcile(ctx)
 }
 
 // SetupWithManager sets up the controller with the Manager.

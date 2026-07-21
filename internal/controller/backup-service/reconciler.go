@@ -2,13 +2,14 @@ package backupservice
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"time"
 
 	"github.com/go-logr/logr"
 	app "k8s.io/api/apps/v1"
 	corev1 "k8s.io/api/core/v1"
-	"k8s.io/apimachinery/pkg/api/errors"
+	apierrors "k8s.io/apimachinery/pkg/api/errors"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	k8sRuntime "k8s.io/apimachinery/pkg/runtime"
 	"k8s.io/apimachinery/pkg/types"
@@ -52,24 +53,17 @@ type SingleBackupServiceReconciler struct {
 	Log               logr.Logger
 }
 
-func (r *SingleBackupServiceReconciler) Reconcile() (result ctrl.Result, recErr error) {
-	// Set the status phase to Error if the recErr is not nil
-	// recErr is only set when reconcile failure should result in Error phase of the Backup service operation
+func (r *SingleBackupServiceReconciler) Reconcile(ctx context.Context) (result ctrl.Result, recErr error) {
 	defer func() {
-		if recErr != nil {
-			r.Log.Error(recErr, "Reconcile failed")
-
-			if err := r.setStatusPhase(asdbv1beta1.AerospikeBackupServiceError); err != nil {
-				recErr = err
-			}
-		}
+		// finishReconcile returns the error to assign here so we avoid *error params; recErr is Reconcile's named return.
+		recErr = r.finishReconcile(ctx, result, recErr)
 	}()
 
 	// Skip reconcile if the backup service version is less than 3.0.0.
 	// This is to avoid rolling restart of the backup service pods after AKO upgrade
 	if _, err := asdbv1beta1.ValidateBackupSvcVersion(r.aeroBackupService.Spec.Image); err != nil {
-		r.Log.Info(fmt.Sprintf("Skipping reconcile as backup service version is less than %s",
-			asdbv1beta1.BackupSvcMinSupportedVersion))
+		r.Log.Info("Skipping reconcile, backup service version unsupported",
+			"minVersion", asdbv1beta1.BackupSvcMinSupportedVersion, "err", err)
 
 		return reconcile.Result{}, nil
 	}
@@ -77,9 +71,8 @@ func (r *SingleBackupServiceReconciler) Reconcile() (result ctrl.Result, recErr 
 	if !r.aeroBackupService.DeletionTimestamp.IsZero() {
 		r.Log.Info("Deleted AerospikeBackupService")
 		r.Recorder.Eventf(
-			r.aeroBackupService, corev1.EventTypeNormal, "Deleted",
-			"Deleted AerospikeBackupService %s/%s", r.aeroBackupService.Namespace,
-			r.aeroBackupService.Name,
+			r.aeroBackupService, corev1.EventTypeNormal, ReasonDeleted,
+			"Successfully deleted backup service resources",
 		)
 
 		// Stop reconciliation as the Aerospike Backup service is being deleted
@@ -87,75 +80,59 @@ func (r *SingleBackupServiceReconciler) Reconcile() (result ctrl.Result, recErr 
 	}
 
 	// Set the status to AerospikeClusterInProgress before starting any operations
-	if err := r.setStatusPhase(asdbv1beta1.AerospikeBackupServiceInProgress); err != nil {
+	if err := r.setStatusPhase(ctx, asdbv1beta1.AerospikeBackupServiceInProgress); err != nil {
 		return reconcile.Result{}, err
 	}
 
-	if err := r.reconcileConfigMap(); err != nil {
-		r.Log.Error(err, "Failed to reconcile config map",
-			"configmap", getBackupServiceName(r.aeroBackupService))
+	if err := r.reconcileConfigMap(ctx); err != nil {
 		r.Recorder.Eventf(r.aeroBackupService, corev1.EventTypeWarning,
-			"ConfigMapReconcileFailed", "Failed to reconcile config map %s/%s",
-			r.aeroBackupService.Namespace, r.aeroBackupService.Name)
-
-		recErr = err
+			"ConfigMapReconcileFailed", "Failed to reconcile ConfigMap %s",
+			utils.GetNamespacedNameString(r.aeroBackupService))
 
 		return ctrl.Result{}, err
 	}
 
-	if err := r.reconcileService(); err != nil {
-		r.Log.Error(err, "Failed to reconcile service",
-			"service", getBackupServiceName(r.aeroBackupService))
+	if err := r.reconcileService(ctx); err != nil {
 		r.Recorder.Eventf(r.aeroBackupService, corev1.EventTypeWarning,
-			"ServiceReconcileFailed", "Failed to reconcile service %s/%s",
-			r.aeroBackupService.Namespace, r.aeroBackupService.Name)
-
-		recErr = err
+			"ServiceReconcileFailed", "Failed to reconcile Service %s",
+			utils.GetNamespacedNameString(r.aeroBackupService))
 
 		return ctrl.Result{}, err
 	}
 
-	if err := r.reconcileDeployment(); err != nil {
-		r.Log.Error(err, "Failed to reconcile deployment",
-			"deployment", getBackupServiceName(r.aeroBackupService))
+	if err := r.reconcileDeployment(ctx); err != nil {
 		r.Recorder.Eventf(r.aeroBackupService, corev1.EventTypeWarning,
-			"DeploymentReconcileFailed", "Failed to reconcile deployment %s/%s",
-			r.aeroBackupService.Namespace, r.aeroBackupService.Name)
-
-		recErr = err
+			"DeploymentReconcileFailed", "Failed to reconcile Deployment %s",
+			utils.GetNamespacedNameString(r.aeroBackupService))
 
 		return ctrl.Result{}, err
 	}
 
-	if err := r.updateStatus(); err != nil {
-		r.Log.Error(err, "Failed to update status")
+	if err := r.updateStatus(ctx); err != nil {
 		r.Recorder.Eventf(r.aeroBackupService, corev1.EventTypeWarning,
-			"StatusUpdateFailed", "Failed to update AerospikeBackupService status %s/%s",
-			r.aeroBackupService.Namespace, r.aeroBackupService.Name)
+			"StatusUpdateFailed", "Failed to update status")
 
 		return ctrl.Result{}, err
 	}
-
-	r.Log.Info("Reconcile completed successfully")
 
 	return ctrl.Result{}, nil
 }
 
-func (r *SingleBackupServiceReconciler) reconcileConfigMap() error {
+func (r *SingleBackupServiceReconciler) reconcileConfigMap(ctx context.Context) error {
 	cm := &corev1.ConfigMap{}
 
-	if err := r.Get(context.TODO(),
+	if err := r.Get(ctx,
 		types.NamespacedName{
 			Namespace: r.aeroBackupService.Namespace,
 			Name:      r.aeroBackupService.Name,
 		}, cm,
 	); err != nil {
-		if !errors.IsNotFound(err) {
-			return err
+		if !apierrors.IsNotFound(err) {
+			return fmt.Errorf("get backup service ConfigMap: %w", err)
 		}
 
-		r.Log.Info("Creating Backup Service ConfigMap",
-			"configmap", getBackupServiceName(r.aeroBackupService))
+		r.Log.Info("Creating backup service ConfigMap",
+			"configMap", utils.GetNamespacedName(r.aeroBackupService))
 
 		cm = &corev1.ConfigMap{
 			ObjectMeta: metav1.ObjectMeta{
@@ -171,42 +148,35 @@ func (r *SingleBackupServiceReconciler) reconcileConfigMap() error {
 			r.aeroBackupService, cm, r.Scheme,
 		)
 		if err != nil {
-			return err
+			return fmt.Errorf("set ConfigMap controller reference: %w", err)
 		}
 
-		if err = r.Create(
-			context.TODO(), cm, common.CreateOption,
-		); err != nil {
-			return fmt.Errorf(
-				"failed to create ConfigMap: %v",
-				err,
-			)
+		if err = r.Create(ctx, cm, common.CreateOption); err != nil {
+			return fmt.Errorf("create backup service ConfigMap: %w", err)
 		}
 
-		r.Log.Info("Created Backup Service ConfigMap",
-			"configmap", getBackupServiceName(r.aeroBackupService))
+		r.Log.Info("Created backup service ConfigMap",
+			"configMap", utils.GetNamespacedName(cm))
 		r.Recorder.Eventf(r.aeroBackupService, corev1.EventTypeNormal, "ConfigMapCreated",
-			"Created Backup Service ConfigMap %s/%s", r.aeroBackupService.Namespace, r.aeroBackupService.Name)
+			"Created backup service ConfigMap %s", utils.GetNamespacedNameString(r.aeroBackupService))
 
 		return nil
 	}
 
-	r.Log.Info(
-		"Backup Service ConfigMap already exist. Updating existing ConfigMap if required",
-		"configmap", getBackupServiceName(r.aeroBackupService),
-	)
+	r.Log.Info("Updating backup service ConfigMap if required",
+		"configMap", utils.GetNamespacedName(cm))
 
 	desiredDataMap := make(map[string]interface{})
 	currentDataMap := make(map[string]interface{})
 
 	if err := yaml.Unmarshal(r.aeroBackupService.Spec.Config.Raw, &desiredDataMap); err != nil {
-		return err
+		return fmt.Errorf("unmarshal backup service spec config: %w", err)
 	}
 
 	data := cm.Data[asdbv1beta1.BackupServiceConfigYAML]
 
 	if err := yaml.Unmarshal([]byte(data), &currentDataMap); err != nil {
-		return err
+		return fmt.Errorf("unmarshal backup service ConfigMap data: %w", err)
 	}
 
 	// Sync keys
@@ -231,24 +201,19 @@ func (r *SingleBackupServiceReconciler) reconcileConfigMap() error {
 
 	updatedConfig, err := yaml.Marshal(currentDataMap)
 	if err != nil {
-		return err
+		return fmt.Errorf("marshal backup service config: %w", err)
 	}
 
 	cm.Data[asdbv1beta1.BackupServiceConfigYAML] = string(updatedConfig)
 
-	if err = r.Update(
-		context.TODO(), cm, common.UpdateOption,
-	); err != nil {
-		return fmt.Errorf(
-			"failed to update Backup Service ConfigMap: %v",
-			err,
-		)
+	if err = r.Update(ctx, cm, common.UpdateOption); err != nil {
+		return fmt.Errorf("update backup service ConfigMap: %w", err)
 	}
 
-	r.Log.Info("Updated Backup Service ConfigMap",
-		"configmap", getBackupServiceName(r.aeroBackupService))
+	r.Log.Info("Updated backup service ConfigMap",
+		"configMap", utils.GetNamespacedName(cm))
 	r.Recorder.Eventf(r.aeroBackupService, corev1.EventTypeNormal, "ConfigMapUpdated",
-		"Updated Backup Service ConfigMap %s/%s", r.aeroBackupService.Namespace, r.aeroBackupService.Name)
+		"Updated backup service ConfigMap %s", utils.GetNamespacedNameString(r.aeroBackupService))
 
 	return nil
 }
@@ -260,15 +225,15 @@ func (r *SingleBackupServiceReconciler) getConfigMapData() map[string]string {
 	return data
 }
 
-func (r *SingleBackupServiceReconciler) reconcileDeployment() error {
-	deployment, err := r.getBackupSvcDeployment()
+func (r *SingleBackupServiceReconciler) reconcileDeployment(ctx context.Context) error {
+	deployment, err := r.getBackupSvcDeployment(ctx)
 	if err != nil {
-		if !errors.IsNotFound(err) {
+		if !apierrors.IsNotFound(err) {
 			return err
 		}
 
-		r.Log.Info("Creating Backup Service deployment",
-			"deployment", getBackupServiceName(r.aeroBackupService))
+		r.Log.Info("Creating backup service deployment",
+			"deployment", utils.GetNamespacedName(r.aeroBackupService))
 
 		deployment, err = r.getDeploymentObject()
 		if err != nil {
@@ -280,26 +245,24 @@ func (r *SingleBackupServiceReconciler) reconcileDeployment() error {
 			r.aeroBackupService, deployment, r.Scheme,
 		)
 		if err != nil {
-			return err
+			return fmt.Errorf("set Deployment controller reference: %w", err)
 		}
 
-		err = r.Create(context.TODO(), deployment, common.CreateOption)
+		err = r.Create(ctx, deployment, common.CreateOption)
 		if err != nil {
-			return fmt.Errorf("failed to deploy Backup service deployment: %v", err)
+			return fmt.Errorf("create Deployment: %w", err)
 		}
 
-		r.Log.Info("Created Backup Service deployment",
-			"deployment", getBackupServiceName(r.aeroBackupService))
+		r.Log.Info("Created backup service deployment",
+			"deployment", utils.GetNamespacedName(deployment))
 		r.Recorder.Eventf(r.aeroBackupService, corev1.EventTypeNormal, "DeploymentCreated",
-			"Created Backup Service Deployment %s/%s", r.aeroBackupService.Namespace, r.aeroBackupService.Name)
+			"Created backup service Deployment %s", utils.GetNamespacedNameString(r.aeroBackupService))
 
-		return r.waitForDeploymentToBeReady()
+		return r.waitForDeploymentToBeReady(ctx)
 	}
 
-	r.Log.Info(
-		"Backup Service deployment already exist. Updating existing deployment if required",
-		"deployment", getBackupServiceName(r.aeroBackupService),
-	)
+	r.Log.Info("Updating backup service deployment if required",
+		"deployment", utils.GetNamespacedName(deployment))
 
 	oldResourceVersion := deployment.ResourceVersion
 
@@ -310,46 +273,46 @@ func (r *SingleBackupServiceReconciler) reconcileDeployment() error {
 
 	deployment.Spec = desiredDeployObj.Spec
 
-	if err = r.Update(context.TODO(), deployment, common.UpdateOption); err != nil {
-		return fmt.Errorf("failed to update Backup service deployment: %v", err)
+	if err = r.Update(ctx, deployment, common.UpdateOption); err != nil {
+		return fmt.Errorf("update Deployment: %w", err)
 	}
 
-	r.Log.Info("Updated Backup Service deployment",
-		"deployment", getBackupServiceName(r.aeroBackupService))
+	r.Log.Info("Updated backup service deployment",
+		"deployment", utils.GetNamespacedName(deployment))
 	r.Recorder.Eventf(r.aeroBackupService, corev1.EventTypeNormal, "DeploymentUpdated",
-		"Updated Backup Service Deployment %s/%s", r.aeroBackupService.Namespace, r.aeroBackupService.Name)
+		"Updated backup service Deployment %s", utils.GetNamespacedNameString(r.aeroBackupService))
 
 	if oldResourceVersion != deployment.ResourceVersion {
-		r.Log.Info("Deployment spec is updated, will result in rolling restart of Backup service pod",
-			"deployment", getBackupServiceName(r.aeroBackupService))
+		r.Log.Info("Deployment spec updated, rolling restart of backup service pod",
+			"deployment", utils.GetNamespacedName(deployment))
 
-		return r.waitForDeploymentToBeReady()
+		return r.waitForDeploymentToBeReady(ctx)
 	}
 
 	// Wait for deployment pods to be ready before doing any operation related to the backup service
-	if err := r.waitForDeploymentToBeReady(); err != nil {
+	if err := r.waitForDeploymentToBeReady(ctx); err != nil {
 		return err
 	}
 
-	return r.updateBackupSvcConfig()
+	return r.updateBackupSvcConfig(ctx)
 }
 
-func (r *SingleBackupServiceReconciler) getBackupSvcDeployment() (*app.Deployment, error) {
+func (r *SingleBackupServiceReconciler) getBackupSvcDeployment(ctx context.Context) (*app.Deployment, error) {
 	var deployment app.Deployment
 
-	if err := r.Get(context.TODO(),
+	if err := r.Get(ctx,
 		types.NamespacedName{
 			Namespace: r.aeroBackupService.Namespace,
 			Name:      r.aeroBackupService.Name,
 		}, &deployment,
 	); err != nil {
-		return nil, err
+		return nil, fmt.Errorf("get Deployment: %w", err)
 	}
 
 	return &deployment, nil
 }
 
-func (r *SingleBackupServiceReconciler) updateBackupSvcConfig() error {
+func (r *SingleBackupServiceReconciler) updateBackupSvcConfig(ctx context.Context) error {
 	if r.aeroBackupService.Status.Config.Raw == nil {
 		r.Log.Info("Skipping backup service config reload as status is empty")
 		return nil
@@ -376,7 +339,7 @@ func (r *SingleBackupServiceReconciler) updateBackupSvcConfig() error {
 
 	apiBackupSvcConfig, err := backupServiceClient.GetBackupServiceConfig()
 	if err != nil {
-		return err
+		return fmt.Errorf("fetch backup service config from API: %w", err)
 	}
 
 	desiredData, err := common.GetBackupSvcConfigFromCM(r.Client, backupSvc)
@@ -386,7 +349,7 @@ func (r *SingleBackupServiceReconciler) updateBackupSvcConfig() error {
 
 	synced, err := common.IsBackupSvcFullConfigSynced(apiBackupSvcConfig, desiredData, r.Log)
 	if err != nil {
-		return err
+		return fmt.Errorf("check backup service config sync: %w", err)
 	}
 
 	if synced {
@@ -398,27 +361,32 @@ func (r *SingleBackupServiceReconciler) updateBackupSvcConfig() error {
 
 	apiBackupSvcConfigData, err := yaml.Marshal(apiBackupSvcConfig)
 	if err != nil {
-		return err
+		return fmt.Errorf("marshal backup service config from API: %w", err)
 	}
 
 	if err := yaml.Unmarshal(apiBackupSvcConfigData, &currentConfig); err != nil {
-		return err
+		return fmt.Errorf("unmarshal backup service config from API: %w", err)
 	}
 
 	if err := yaml.Unmarshal([]byte(desiredData), &desiredConfig); err != nil {
-		return err
+		return fmt.Errorf("unmarshal desired backup service config: %w", err)
 	}
 
 	if err := validation.ValidateStaticFieldChanges(&currentConfig, &desiredConfig); err != nil {
-		r.Log.Info("Static config change detected, will result in rolling restart of Backup service pod")
+		r.Log.Info("Static config change detected, will result in rolling restart of backup service pod",
+			"err", err)
 		// In case of static config change restart the backup service pod
-		return r.restartBackupSvcPod()
+		return r.restartBackupSvcPod(ctx)
 	}
 
-	return common.ReloadBackupServiceConfigInPods(r.Client, backupServiceClient, r.Log, backupSvc)
+	if err := common.ReloadBackupServiceConfigInPods(r.Client, backupServiceClient, r.Log, backupSvc); err != nil {
+		return fmt.Errorf("reload backup service config: %w", err)
+	}
+
+	return nil
 }
 
-func (r *SingleBackupServiceReconciler) restartBackupSvcPod() error {
+func (r *SingleBackupServiceReconciler) restartBackupSvcPod(ctx context.Context) error {
 	podList, err := common.GetBackupServicePodList(r.Client, r.aeroBackupService.Name, r.aeroBackupService.Namespace)
 	if err != nil {
 		return err
@@ -427,17 +395,13 @@ func (r *SingleBackupServiceReconciler) restartBackupSvcPod() error {
 	for idx := range podList.Items {
 		pod := &podList.Items[idx]
 
-		err = r.Delete(context.TODO(), pod)
+		err = r.Delete(ctx, pod)
 		if err != nil {
-			return err
+			return fmt.Errorf("delete Pod %s: %w", utils.GetNamespacedNameString(pod), err)
 		}
 	}
 
-	return r.waitForDeploymentToBeReady()
-}
-
-func getBackupServiceName(aeroBackupService *asdbv1beta1.AerospikeBackupService) types.NamespacedName {
-	return types.NamespacedName{Name: aeroBackupService.Name, Namespace: aeroBackupService.Namespace}
+	return r.waitForDeploymentToBeReady(ctx)
 }
 
 func (r *SingleBackupServiceReconciler) getDeploymentObject() (*app.Deployment, error) {
@@ -575,21 +539,21 @@ func (r *SingleBackupServiceReconciler) getVolumeAndMounts() ([]corev1.VolumeMou
 	return volumeMounts, volumes
 }
 
-func (r *SingleBackupServiceReconciler) reconcileService() error {
+func (r *SingleBackupServiceReconciler) reconcileService(ctx context.Context) error {
 	var service corev1.Service
 
-	if err := r.Get(context.TODO(),
+	if err := r.Get(ctx,
 		types.NamespacedName{
 			Namespace: r.aeroBackupService.Namespace,
 			Name:      r.aeroBackupService.Name,
 		}, &service,
 	); err != nil {
-		if !errors.IsNotFound(err) {
-			return err
+		if !apierrors.IsNotFound(err) {
+			return fmt.Errorf("get Service: %w", err)
 		}
 
-		r.Log.Info("Creating Backup Service",
-			"service", getBackupServiceName(r.aeroBackupService))
+		r.Log.Info("Creating backup service",
+			"service", utils.GetNamespacedName(r.aeroBackupService))
 
 		svc, err := r.getServiceObject()
 		if err != nil {
@@ -601,26 +565,24 @@ func (r *SingleBackupServiceReconciler) reconcileService() error {
 			r.aeroBackupService, svc, r.Scheme,
 		)
 		if err != nil {
-			return err
+			return fmt.Errorf("set Service controller reference: %w", err)
 		}
 
-		err = r.Create(context.TODO(), svc, common.CreateOption)
+		err = r.Create(ctx, svc, common.CreateOption)
 		if err != nil {
-			return fmt.Errorf("failed to create Backup Service: %v", err)
+			return fmt.Errorf("create Service: %w", err)
 		}
 
-		r.Log.Info("Created Backup Service",
-			"service", getBackupServiceName(r.aeroBackupService))
+		r.Log.Info("Created backup service",
+			"service", utils.GetNamespacedName(svc))
 		r.Recorder.Eventf(r.aeroBackupService, corev1.EventTypeNormal, "ServiceCreated",
-			"Created Backup Service %s/%s", r.aeroBackupService.Namespace, r.aeroBackupService.Name)
+			"Created Service %s", utils.GetNamespacedNameString(r.aeroBackupService))
 
 		return nil
 	}
 
-	r.Log.Info(
-		"Backup Service already exist. Updating existing service if required",
-		"service", getBackupServiceName(r.aeroBackupService),
-	)
+	r.Log.Info("Updating backup service if required",
+		"service", utils.GetNamespacedName(r.aeroBackupService))
 
 	svc, err := r.getServiceObject()
 	if err != nil {
@@ -629,13 +591,14 @@ func (r *SingleBackupServiceReconciler) reconcileService() error {
 
 	service.Spec = svc.Spec
 
-	if err = r.Update(context.TODO(), &service, common.UpdateOption); err != nil {
-		return fmt.Errorf("failed to update Backup service: %v", err)
+	if err = r.Update(ctx, &service, common.UpdateOption); err != nil {
+		return fmt.Errorf("update Service: %w", err)
 	}
 
-	r.Log.Info("Updated Backup Service", "service", getBackupServiceName(r.aeroBackupService))
+	r.Log.Info("Updated backup service",
+		"service", utils.GetNamespacedName(r.aeroBackupService))
 	r.Recorder.Eventf(r.aeroBackupService, corev1.EventTypeNormal, "ServiceUpdated",
-		"Updated Backup Service %s/%s", r.aeroBackupService.Namespace, r.aeroBackupService.Name)
+		"Updated Service %s", utils.GetNamespacedNameString(r.aeroBackupService))
 
 	return nil
 }
@@ -678,7 +641,7 @@ func (r *SingleBackupServiceReconciler) getBackupServiceConfig() (*serviceConfig
 	config := make(map[string]interface{})
 
 	if err := yaml.Unmarshal(r.aeroBackupService.Spec.Config.Raw, &config); err != nil {
-		return nil, err
+		return nil, fmt.Errorf("unmarshal backup service spec config: %w", err)
 	}
 
 	if _, ok := config[asdbv1beta1.ServiceKey]; !ok {
@@ -720,20 +683,20 @@ func (r *SingleBackupServiceReconciler) getBackupServiceConfig() (*serviceConfig
 	return &svcConfig, nil
 }
 
-func (r *SingleBackupServiceReconciler) waitForDeploymentToBeReady() error {
+func (r *SingleBackupServiceReconciler) waitForDeploymentToBeReady(ctx context.Context) error {
 	const (
 		podStatusTimeout       = 2 * time.Minute
 		podStatusRetryInterval = 5 * time.Second
 	)
 
-	r.Log.Info(
-		"Waiting for deployment to be ready", "deployment", getBackupServiceName(r.aeroBackupService),
-		"WaitTimePerPod", podStatusTimeout,
+	r.Log.Info("Waiting for deployment to be ready",
+		"deployment", utils.GetNamespacedName(r.aeroBackupService),
+		"waitTimePerPod", podStatusTimeout,
 	)
 
-	if err := wait.PollUntilContextTimeout(context.TODO(),
-		podStatusRetryInterval, podStatusTimeout, true, func(ctx context.Context) (done bool, err error) {
-			deployment, err := r.getBackupSvcDeployment()
+	if err := wait.PollUntilContextTimeout(ctx,
+		podStatusRetryInterval, podStatusTimeout, true, func(pollCtx context.Context) (done bool, err error) {
+			deployment, err := r.getBackupSvcDeployment(pollCtx)
 			if err != nil {
 				return false, err
 			}
@@ -741,20 +704,22 @@ func (r *SingleBackupServiceReconciler) waitForDeploymentToBeReady() error {
 			// This check is for the condition when deployment rollout is yet to begin, and
 			// pods with new spec are yet to be created.
 			if deployment.Generation > deployment.Status.ObservedGeneration {
-				r.Log.Info("Waiting for deployment to be ready",
-					"deployment", getBackupServiceName(r.aeroBackupService))
+				r.Log.Info("Waiting for deployment rollout to begin",
+					"deployment", utils.GetNamespacedName(deployment))
 
 				return false, nil
 			}
 
-			podList, err := common.GetBackupServicePodList(r.Client, r.aeroBackupService.Name, r.aeroBackupService.Namespace)
+			podList, err := common.GetBackupServicePodList(
+				r.Client, r.aeroBackupService.Name, r.aeroBackupService.Namespace,
+			)
 			if err != nil {
 				return false, err
 			}
 
 			if len(podList.Items) == 0 {
 				r.Log.Info("No pod found for deployment",
-					"deployment", getBackupServiceName(r.aeroBackupService))
+					"deployment", utils.GetNamespacedName(deployment))
 
 				return false, nil
 			}
@@ -763,7 +728,7 @@ func (r *SingleBackupServiceReconciler) waitForDeploymentToBeReady() error {
 				pod := &podList.Items[idx]
 
 				if err := utils.CheckPodFailed(pod); err != nil {
-					return false, fmt.Errorf("pod %s failed: %v", pod.Name, err)
+					return false, fmt.Errorf("check Deployment Pod %s: %w", utils.GetNamespacedNameString(pod), err)
 				}
 
 				if !utils.IsPodRunningAndReady(pod) {
@@ -779,28 +744,30 @@ func (r *SingleBackupServiceReconciler) waitForDeploymentToBeReady() error {
 			return true, nil
 		},
 	); err != nil {
-		return err
+		return fmt.Errorf("wait for Deployment ready: %w", err)
 	}
 
-	r.Log.Info("Deployment is ready", "deployment", getBackupServiceName(r.aeroBackupService))
+	r.Log.Info("Deployment is ready",
+		"deployment", utils.GetNamespacedName(r.aeroBackupService))
 
 	return nil
 }
 
-func (r *SingleBackupServiceReconciler) setStatusPhase(phase asdbv1beta1.AerospikeBackupServicePhase) error {
+func (r *SingleBackupServiceReconciler) setStatusPhase(
+	ctx context.Context, phase asdbv1beta1.AerospikeBackupServicePhase,
+) error {
 	if r.aeroBackupService.Status.Phase != phase {
 		r.aeroBackupService.Status.Phase = phase
 
-		if err := r.Client.Status().Update(context.Background(), r.aeroBackupService); err != nil {
-			r.Log.Error(err, fmt.Sprintf("Failed to set backup service status to %s", phase))
-			return err
+		if err := r.Client.Status().Update(ctx, r.aeroBackupService); err != nil {
+			return fmt.Errorf("set AerospikeBackupService status phase %s: %w", phase, err)
 		}
 	}
 
 	return nil
 }
 
-func (r *SingleBackupServiceReconciler) updateStatus() error {
+func (r *SingleBackupServiceReconciler) updateStatus(ctx context.Context) error {
 	svcConfig, err := r.getBackupServiceConfig()
 	if err != nil {
 		return err
@@ -813,7 +780,49 @@ func (r *SingleBackupServiceReconciler) updateStatus() error {
 
 	r.aeroBackupService.Status = *status
 
-	return r.Client.Status().Update(context.Background(), r.aeroBackupService)
+	if err := r.Client.Status().Update(ctx, r.aeroBackupService); err != nil {
+		return fmt.Errorf("update AerospikeBackupService status: %w", err)
+	}
+
+	return nil
+}
+
+// finishReconcile runs at end of Reconcile; return value is assigned to Reconcile's named recErr in defer.
+func (r *SingleBackupServiceReconciler) finishReconcile(ctx context.Context, result ctrl.Result, recErr error) error {
+	logValues := reconcileExitLogValues(result, recErr)
+	if recErr != nil {
+		if err := r.setStatusPhase(ctx, asdbv1beta1.AerospikeBackupServiceError); err != nil {
+			recErr = errors.Join(
+				recErr,
+				fmt.Errorf("set AerospikeBackupService error phase: %w", err),
+			)
+		}
+
+		r.Log.Error(recErr, "Reconcile failed", logValues...)
+
+		return recErr
+	}
+
+	r.Log.Info("Reconcile completed", logValues...)
+
+	return nil
+}
+
+func reconcileExitLogValues(result ctrl.Result, recErr error) []interface{} {
+	const resultKey = "result"
+
+	if recErr != nil {
+		return []interface{}{resultKey, "error"}
+	}
+
+	if result.RequeueAfter > 0 {
+		return []interface{}{
+			resultKey, "requeue",
+			"requeueAfter", result.RequeueAfter.String(),
+		}
+	}
+
+	return []interface{}{resultKey, "success"}
 }
 
 func (r *SingleBackupServiceReconciler) CopySpecToStatus() *asdbv1beta1.AerospikeBackupServiceStatus {
