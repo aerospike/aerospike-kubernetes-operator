@@ -28,7 +28,7 @@ func GetConfigSection(config map[string]interface{}, section string) (map[string
 
 	sectionMap, ok := sectionIface.(map[string]interface{})
 	if !ok {
-		return nil, fmt.Errorf("%s is not a map", section)
+		return nil, fmt.Errorf("section %q is not a map", section)
 	}
 
 	return sectionMap, nil
@@ -43,7 +43,7 @@ func GetBackupServicePodList(k8sClient client.Client, name, namespace string) (*
 	}
 
 	if err := k8sClient.List(context.TODO(), &podList, listOps); err != nil {
-		return nil, fmt.Errorf("list backup service pods %s/%s: %w", namespace, name, err)
+		return nil, fmt.Errorf("list backup service Pods %s: %w", utils.NamespacedName(namespace, name), err)
 	}
 
 	return &podList, nil
@@ -79,7 +79,7 @@ func ReloadBackupServiceConfigInPods(
 			pod.Annotations = annotations
 
 			if err := k8sClient.Update(context.TODO(), &pod); err != nil {
-				return fmt.Errorf("update backup service pod %s: %w", utils.GetNamespacedName(&pod), err)
+				return fmt.Errorf("update backup service Pod %s: %w", utils.GetNamespacedNameString(&pod), err)
 			}
 		}
 
@@ -119,8 +119,8 @@ func validateBackupSvcConfigReload(k8sClient client.Client,
 	}
 
 	if !synced {
-		log.Info("Backup service config not yet updated in pods, requeue")
-		return fmt.Errorf("backup service config not yet updated in pods")
+		log.Info("Backup service config not yet updated in Pods, requeue")
+		return fmt.Errorf("backup service config not yet updated in Pods")
 	}
 
 	log.Info("Reloaded backup service config")
@@ -137,8 +137,8 @@ func IsBackupSvcFullConfigSynced(currentBackupSvcConfig map[string]interface{}, 
 		return false, err
 	}
 
-	log.Info(fmt.Sprintf("Backup Service config fetched from Backup Service via API: %v", currentBackupSvcConfig))
-	log.Info(fmt.Sprintf("Backup Service config found in ConfigMap: %v", desiredBackupSvcConfig))
+	log.Info("Fetched backup service config from backup service via API", "config", currentBackupSvcConfig)
+	log.Info("Found backup service config in backup service ConfigMap", "config", desiredBackupSvcConfig)
 
 	return reflect.DeepEqual(currentBackupSvcConfig, desiredBackupSvcConfig), nil
 }
@@ -150,7 +150,8 @@ func GetBackupSvcConfigFromCM(k8sClient client.Client, backupSvc *v1beta1.Backup
 		Namespace: backupSvc.Namespace,
 		Name:      backupSvc.Name,
 	}, &cm); err != nil {
-		return "", fmt.Errorf("get backup service ConfigMap %s/%s: %w", backupSvc.Namespace, backupSvc.Name, err)
+		return "", fmt.Errorf("get backup service ConfigMap %s: %w",
+			utils.NamespacedName(backupSvc.Namespace, backupSvc.Name), err)
 	}
 
 	return cm.Data[v1beta1.BackupServiceConfigYAML], nil
