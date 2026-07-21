@@ -12,6 +12,7 @@ webhooks:
 - admissionReviewVersions:
   - v1
   clientConfig:
+    {{/* caBundle: {{ .Values.webhookCerts.tlsCrt }} */}}
     service:
       name: aerospike-operator-webhook-service
       namespace: {{ .Release.Namespace }}
@@ -42,6 +43,7 @@ webhooks:
 - admissionReviewVersions:
     - v1
   clientConfig:
+    {{/* caBundle: {{ .Values.webhookCerts.tlsCrt }} */}}
     service:
       name: aerospike-operator-webhook-service
       namespace: {{ .Release.Namespace }}
@@ -72,6 +74,7 @@ webhooks:
 - admissionReviewVersions:
     - v1
   clientConfig:
+    {{/* caBundle: {{ .Values.webhookCerts.tlsCrt }} */}}
     service:
       name: aerospike-operator-webhook-service
       namespace: {{ .Release.Namespace }}
@@ -102,6 +105,7 @@ webhooks:
 - admissionReviewVersions:
     - v1
   clientConfig:
+    {{/* caBundle: {{ .Values.webhookCerts.tlsCrt }} */}}
     service:
       name: aerospike-operator-webhook-service
       namespace: {{ .Release.Namespace }}
@@ -133,6 +137,7 @@ webhooks:
 - admissionReviewVersions:
     - v1
   clientConfig:
+    {{/* caBundle: {{ .Values.webhookCerts.tlsCrt }} */}}
     service:
       name: aerospike-operator-webhook-service
       namespace: {{ .Release.Namespace }}

@@ -22,6 +22,10 @@ rbac:
 healthPort: 8081
 metricsPort: 8443
 
+## Optional: supply webhook CA bundle directly (uncomment the caBundle Helm block in webhook templates)
+# webhookCerts:
+#   tlsCrt: ""
+
 ## Create certificates
 certs:
   webhook:
