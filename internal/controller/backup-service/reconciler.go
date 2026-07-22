@@ -645,23 +645,27 @@ func (r *SingleBackupServiceReconciler) getBackupServiceConfig() (*serviceConfig
 	}
 
 	if _, ok := config[asdbv1beta1.ServiceKey]; !ok {
-		r.Log.Info("Missing Service section in backup service config, using defaults")
+		r.Log.Info("Missing section in backup service config, using defaults",
+			"section", asdbv1beta1.ServiceKey)
+
 		return &defaultServiceConfig, nil
 	}
 
 	svc, ok := config[asdbv1beta1.ServiceKey].(map[string]interface{})
 	if !ok {
-		return nil, fmt.Errorf("backup service config Service section is not in correct format")
+		return nil, fmt.Errorf("backup service config %q section is not in correct format", asdbv1beta1.ServiceKey)
 	}
 
 	if _, ok = svc[asdbv1beta1.HTTPKey]; !ok {
-		r.Log.Info("Missing HTTP section in backup service config, using defaults")
+		r.Log.Info("Missing section in backup service config, using defaults",
+			"section", asdbv1beta1.HTTPKey)
+
 		return &defaultServiceConfig, nil
 	}
 
 	httpConf, ok := svc[asdbv1beta1.HTTPKey].(map[string]interface{})
 	if !ok {
-		return nil, fmt.Errorf("backup service config HTTP section is not in correct format")
+		return nil, fmt.Errorf("backup service config %q section is not in correct format", asdbv1beta1.HTTPKey)
 	}
 
 	var svcConfig serviceConfig
