@@ -1,0 +1,7 @@
+version: v2.10.1
+name: custom-gcl
+destination: ./bin
+plugins:
+  - module: "sigs.k8s.io/logtools"
+    import: "sigs.k8s.io/logtools/logcheck/gclplugin"
+    version: v0.10.1
