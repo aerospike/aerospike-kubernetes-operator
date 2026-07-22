@@ -114,7 +114,7 @@ func (r *SingleClusterReconciler) Reconcile(ctx context.Context) (result ctrl.Re
 	}
 
 	if r.aeroCluster.Labels[asdbv1.AerospikeAPIVersionLabel] == asdbv1.AerospikeAPIVersion {
-		r.Log.Info("cluster migration is not needed")
+		r.Log.Info("Cluster migration is not needed")
 	} else {
 		if err := r.migrateAerospikeCluster(ctx, hasFailed); err != nil {
 			return reconcile.Result{}, err
@@ -323,7 +323,7 @@ func (r *SingleClusterReconciler) validateAndReconcileAccessControl(
 	}
 
 	if !enabled {
-		r.Log.Info("Cluster is not security enabled, please enable security for this cluster.")
+		r.Log.Info("Cluster is not security enabled, please enable security for this cluster")
 		return nil
 	}
 
@@ -706,7 +706,7 @@ func (r *SingleClusterReconciler) patchStatus(ctx context.Context, newAeroCluste
 //
 // Such cases warrant a cluster recreate to recover after the user corrects the configuration.
 func (r *SingleClusterReconciler) recoverFailedCreate(ctx context.Context) error {
-	r.Log.Info("Forcing a cluster recreate as status is nil. The cluster could be unreachable due to bad configuration.")
+	r.Log.Info("Forcing a cluster recreate as status is nil. The cluster could be unreachable due to bad configuration")
 
 	// Delete all statefulsets and everything related so that it can be properly created and updated in next run.
 	statefulSetList, err := r.getClusterSTSList(ctx)
@@ -954,7 +954,7 @@ func (r *SingleClusterReconciler) checkPreviouslyFailedCluster(ctx context.Conte
 		}
 
 		if inGracePeriod {
-			r.Log.Info("Pods are failed but within grace period, requeueing...")
+			r.Log.Info("Pods are failed but within grace period, requeueing")
 			return false, common.ReconcileRequeueAfter(asdbv1.RequeueIntervalSeconds10)
 		}
 	}

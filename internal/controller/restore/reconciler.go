@@ -56,7 +56,7 @@ func (r *SingleRestoreReconciler) Reconcile(ctx context.Context) (result ctrl.Re
 
 	if r.aeroRestore.Status.Phase == asdbv1beta1.AerospikeRestoreCompleted {
 		// Stop reconciliation as the Aerospike restore is already completed
-		r.Log.Info("Restore already completed, skipped reconciliation")
+		r.Log.Info("Restore already completed, skipping reconciliation")
 		return reconcile.Result{}, nil
 	}
 
@@ -101,7 +101,7 @@ func (r *SingleRestoreReconciler) reconcileRestore(ctx context.Context) common.R
 	backupSvcID := r.aeroRestore.Spec.BackupService.String()
 
 	if r.aeroRestore.Status.JobID != nil {
-		r.Log.Info("Restore already running, checked restore status", "jobID", *r.aeroRestore.Status.JobID)
+		r.Log.Info("Restore already running, checking the restore status", "jobID", *r.aeroRestore.Status.JobID)
 		return common.ReconcileSuccess()
 	}
 

@@ -96,7 +96,7 @@ func (r *SingleClusterReconciler) createOrUpdateSTSHeadlessSvc(ctx context.Conte
 		return nil
 	}
 
-	r.Log.Info("Headless Service already exist, checking for update",
+	r.Log.Info("Headless Service already exists, checking for update",
 		"service", utils.GetNamespacedName(service))
 
 	return r.updateService(
@@ -175,7 +175,7 @@ func (r *SingleClusterReconciler) reconcileSTSLoadBalancerSvc(ctx context.Contex
 		return err
 	}
 
-	r.Log.Info("LoadBalancer Service already exist for cluster, checking for update",
+	r.Log.Info("LoadBalancer Service already exists for cluster, checking for update",
 		"service", utils.GetNamespacedName(service))
 
 	if !utils.IsOwnedBy(service, r.aeroCluster) {
@@ -259,7 +259,7 @@ func (r *SingleClusterReconciler) updateLBService(ctx context.Context, service *
 			)
 		}
 	} else {
-		r.Log.Info("LoadBalancer Service update not required, skipping",
+		r.Log.Info("LoadBalancer Service update not required, skipping update",
 			"service", utils.GetNamespacedName(service))
 
 		return nil
@@ -345,7 +345,7 @@ func (r *SingleClusterReconciler) createOrUpdatePodService(ctx context.Context, 
 		return nil
 	}
 
-	r.Log.Info("Service already exist, checking for update",
+	r.Log.Info("Service already exists, checking for update",
 		"service", utils.GetNamespacedName(service))
 
 	return r.updateService(
@@ -366,7 +366,7 @@ func (r *SingleClusterReconciler) deletePodService(ctx context.Context, pName, p
 	if err := r.Delete(ctx, service); err != nil {
 		if errors.IsNotFound(err) {
 			r.Log.Info(
-				"Pod Service not found for deletion. Skipping...",
+				"Pod Service not found for deletion, Skipping delete",
 				"service", utils.NewNamespacedName(serviceName.Namespace, serviceName.Name),
 				"pod", utils.NewNamespacedName(pNamespace, pName),
 			)
@@ -609,7 +609,7 @@ func (r *SingleClusterReconciler) updateService(
 		return nil
 	}
 
-	r.Log.Info("Service update not required, skipping",
+	r.Log.Info("Service update not required, skipping update",
 		"service", utils.GetNamespacedName(service))
 
 	return nil
