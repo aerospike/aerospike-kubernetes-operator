@@ -35,7 +35,7 @@ type SingleRestoreReconciler struct {
 func (r *SingleRestoreReconciler) Reconcile(ctx context.Context) (result ctrl.Result, recErr error) {
 	defer func() {
 		// finishReconcile returns the error to assign here so we avoid *error params; recErr is Reconcile's named return.
-		recErr = r.finishReconcile(result, recErr)
+		recErr = common.FinishReconcile(ctx, r.Log, result, recErr, nil)
 	}()
 
 	if !r.aeroRestore.DeletionTimestamp.IsZero() {
@@ -56,7 +56,7 @@ func (r *SingleRestoreReconciler) Reconcile(ctx context.Context) (result ctrl.Re
 
 	if r.aeroRestore.Status.Phase == asdbv1beta1.AerospikeRestoreCompleted {
 		// Stop reconciliation as the Aerospike restore is already completed
-		r.Log.Info("Restore already completed, skipping reconciliation")
+		r.Log.Info("Restore already completed, skipped reconciliation")
 		return reconcile.Result{}, nil
 	}
 
@@ -72,7 +72,7 @@ func (r *SingleRestoreReconciler) Reconcile(ctx context.Context) (result ctrl.Re
 	if res := r.reconcileRestore(ctx); !res.IsSuccess {
 		if res.Err != nil {
 			r.Recorder.Eventf(r.aeroRestore, corev1.EventTypeWarning, "ReconcileFailed",
-				"Failed to reconcile restore")
+				"Failed to reconcile AerospikeRestore")
 
 			return res.Result, res.Err
 		}
@@ -82,7 +82,7 @@ func (r *SingleRestoreReconciler) Reconcile(ctx context.Context) (result ctrl.Re
 
 	if err := r.checkRestoreStatus(ctx); err != nil {
 		r.Recorder.Eventf(r.aeroRestore, corev1.EventTypeWarning, "StatusCheckFailed",
-			"Failed to check restore status")
+			"Failed to check AerospikeRestore status")
 
 		return ctrl.Result{}, err
 	}
@@ -101,7 +101,7 @@ func (r *SingleRestoreReconciler) reconcileRestore(ctx context.Context) common.R
 	backupSvcID := r.aeroRestore.Spec.BackupService.String()
 
 	if r.aeroRestore.Status.JobID != nil {
-		r.Log.Info("Restore already running, checking the restore status", "jobID", *r.aeroRestore.Status.JobID)
+		r.Log.Info("Restore already running, checked restore status", "jobID", *r.aeroRestore.Status.JobID)
 		return common.ReconcileSuccess()
 	}
 
@@ -318,37 +318,6 @@ func (r *SingleRestoreReconciler) cancelRestoreJob() error {
 	r.Log.Info("Restore job cancelled successfully", "jobID", jobID)
 
 	return nil
-}
-
-// finishReconcile runs at end of Reconcile; return value is assigned to Reconcile's named recErr in defer.
-func (r *SingleRestoreReconciler) finishReconcile(result ctrl.Result, recErr error) error {
-	logValues := reconcileExitLogValues(result, recErr)
-	if recErr != nil {
-		r.Log.Error(recErr, "Reconcile failed", logValues...)
-
-		return recErr
-	}
-
-	r.Log.Info("Reconcile completed", logValues...)
-
-	return nil
-}
-
-func reconcileExitLogValues(result ctrl.Result, recErr error) []interface{} {
-	const resultKey = "result"
-
-	if recErr != nil {
-		return []interface{}{resultKey, "error"}
-	}
-
-	if result.RequeueAfter > 0 {
-		return []interface{}{
-			resultKey, "requeue",
-			"requeueAfter", result.RequeueAfter.String(),
-		}
-	}
-
-	return []interface{}{resultKey, "success"}
 }
 
 func statusToPhase(status string) asdbv1beta1.AerospikeRestorePhase {

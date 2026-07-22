@@ -36,7 +36,7 @@ type SingleBackupReconciler struct {
 
 func (r *SingleBackupReconciler) Reconcile(ctx context.Context) (result ctrl.Result, recErr error) {
 	defer func() {
-		r.logReconcileExit(result, recErr)
+		recErr = common.FinishReconcile(ctx, r.Log, result, recErr, nil)
 	}()
 
 	// Skip reconcile if the backup service version is less than 3.0.0.
@@ -98,17 +98,6 @@ func (r *SingleBackupReconciler) Reconcile(ctx context.Context) (result ctrl.Res
 	}
 
 	return ctrl.Result{}, nil
-}
-
-func (r *SingleBackupReconciler) logReconcileExit(result ctrl.Result, recErr error) {
-	switch {
-	case recErr != nil:
-		r.Log.Error(recErr, "Reconcile failed", "result", "error")
-	case result.RequeueAfter > 0:
-		r.Log.Info("Reconcile requeued", "result", "requeue", "after", result.RequeueAfter)
-	default:
-		r.Log.Info("Reconciled successfully", "result", "success")
-	}
 }
 
 func (r *SingleBackupReconciler) addFinalizer(ctx context.Context, finalizerName string) error {

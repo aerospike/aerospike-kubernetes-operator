@@ -2,7 +2,6 @@ package backupservice
 
 import (
 	"context"
-	"errors"
 	"fmt"
 	"time"
 
@@ -56,7 +55,13 @@ type SingleBackupServiceReconciler struct {
 func (r *SingleBackupServiceReconciler) Reconcile(ctx context.Context) (result ctrl.Result, recErr error) {
 	defer func() {
 		// finishReconcile returns the error to assign here so we avoid *error params; recErr is Reconcile's named return.
-		recErr = r.finishReconcile(ctx, result, recErr)
+		recErr = common.FinishReconcile(ctx, r.Log, result, recErr, func(ctx context.Context) error {
+			if err := r.setStatusPhase(ctx, asdbv1beta1.AerospikeBackupServiceError); err != nil {
+				return fmt.Errorf("set AerospikeBackupService error phase: %w", err)
+			}
+
+			return nil
+		})
 	}()
 
 	// Skip reconcile if the backup service version is less than 3.0.0.
@@ -789,44 +794,6 @@ func (r *SingleBackupServiceReconciler) updateStatus(ctx context.Context) error 
 	}
 
 	return nil
-}
-
-// finishReconcile runs at end of Reconcile; return value is assigned to Reconcile's named recErr in defer.
-func (r *SingleBackupServiceReconciler) finishReconcile(ctx context.Context, result ctrl.Result, recErr error) error {
-	logValues := reconcileExitLogValues(result, recErr)
-	if recErr != nil {
-		if err := r.setStatusPhase(ctx, asdbv1beta1.AerospikeBackupServiceError); err != nil {
-			recErr = errors.Join(
-				recErr,
-				fmt.Errorf("set AerospikeBackupService error phase: %w", err),
-			)
-		}
-
-		r.Log.Error(recErr, "Reconcile failed", logValues...)
-
-		return recErr
-	}
-
-	r.Log.Info("Reconcile completed", logValues...)
-
-	return nil
-}
-
-func reconcileExitLogValues(result ctrl.Result, recErr error) []interface{} {
-	const resultKey = "result"
-
-	if recErr != nil {
-		return []interface{}{resultKey, "error"}
-	}
-
-	if result.RequeueAfter > 0 {
-		return []interface{}{
-			resultKey, "requeue",
-			"requeueAfter", result.RequeueAfter.String(),
-		}
-	}
-
-	return []interface{}{resultKey, "success"}
 }
 
 func (r *SingleBackupServiceReconciler) CopySpecToStatus() *asdbv1beta1.AerospikeBackupServiceStatus {

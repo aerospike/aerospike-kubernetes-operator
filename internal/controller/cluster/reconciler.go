@@ -3,7 +3,6 @@ package cluster
 import (
 	"context"
 	"encoding/json"
-	"errors"
 	"fmt"
 	"reflect"
 	"strings"
@@ -58,7 +57,13 @@ func (r *SingleClusterReconciler) Reconcile(ctx context.Context) (result ctrl.Re
 	// recErr is only set when reconcile failure should result in Error phase of the cluster
 	defer func() {
 		// finishReconcile returns the error to assign here so we avoid *error params; recErr is Reconcile's named return.
-		recErr = r.finishReconcile(ctx, result, recErr)
+		recErr = common.FinishReconcile(ctx, r.Log, result, recErr, func(ctx context.Context) error {
+			if err := r.setStatusPhase(ctx, asdbv1.AerospikeClusterError); err != nil {
+				return fmt.Errorf("setting error phase: %w", err)
+			}
+
+			return nil
+		})
 	}()
 
 	// Check DeletionTimestamp to see if the cluster is being deleted
@@ -246,42 +251,6 @@ func (r *SingleClusterReconciler) Reconcile(ctx context.Context) (result ctrl.Re
 	}
 
 	return reconcile.Result{}, nil
-}
-
-// finishReconcile runs at end of Reconcile; return value is assigned to Reconcile's named recErr in defer.
-func (r *SingleClusterReconciler) finishReconcile(ctx context.Context, result ctrl.Result, recErr error) error {
-	logValues := reconcileExitLogValues(result, recErr)
-	if recErr != nil {
-		if err := r.setStatusPhase(ctx, asdbv1.AerospikeClusterError); err != nil {
-			recErr = errors.Join(
-				recErr,
-				fmt.Errorf("setting error phase: %w", err),
-			)
-		}
-
-		r.Log.Error(recErr, "Reconcile failed", logValues...)
-
-		return recErr
-	}
-
-	r.Log.Info("Reconcile completed", logValues...)
-
-	return nil
-}
-
-func reconcileExitLogValues(result ctrl.Result, recErr error) []interface{} {
-	if recErr != nil {
-		return []interface{}{"result", "error"}
-	}
-
-	if result.RequeueAfter > 0 {
-		return []interface{}{
-			"result", "requeue",
-			"requeueAfter", result.RequeueAfter.String(),
-		}
-	}
-
-	return []interface{}{"result", "success"}
 }
 
 func (r *SingleClusterReconciler) recoverIgnorablePods(
