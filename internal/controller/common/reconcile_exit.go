@@ -4,7 +4,7 @@ import (
 	"context"
 	"errors"
 
-	"github.com/go-logr/logr"
+	"sigs.k8s.io/controller-runtime/pkg/log"
 	"sigs.k8s.io/controller-runtime/pkg/reconcile"
 )
 
@@ -36,11 +36,12 @@ func ReconcileExitLogValues(result reconcile.Result, recErr error) []interface{}
 // Returns the error to assign to Reconcile's named recErr return in defer.
 func FinishReconcile(
 	ctx context.Context,
-	log logr.Logger,
 	result reconcile.Result,
 	recErr error,
 	setErrorPhase func(context.Context) error,
 ) error {
+	logger := log.FromContext(ctx)
+
 	logValues := ReconcileExitLogValues(result, recErr)
 	if recErr != nil {
 		if setErrorPhase != nil {
@@ -49,12 +50,12 @@ func FinishReconcile(
 			}
 		}
 
-		log.Error(recErr, "Reconcile failed", logValues...)
+		logger.Error(recErr, "Reconcile failed", logValues...)
 
 		return recErr
 	}
 
-	log.Info("Reconcile completed", logValues...)
+	logger.Info("Reconcile completed", logValues...)
 
 	return nil
 }

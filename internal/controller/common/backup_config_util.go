@@ -12,6 +12,7 @@ import (
 	"k8s.io/apimachinery/pkg/types"
 	"k8s.io/client-go/util/retry"
 	"sigs.k8s.io/controller-runtime/pkg/client"
+	"sigs.k8s.io/controller-runtime/pkg/log"
 	"sigs.k8s.io/yaml"
 
 	"github.com/aerospike/aerospike-kubernetes-operator/v4/api/v1beta1"
@@ -55,10 +56,10 @@ func ReloadBackupServiceConfigInPods(
 	ctx context.Context,
 	k8sClient client.Client,
 	backupServiceClient *backup_service.Client,
-	log logr.Logger,
 	backupSvc *v1beta1.BackupService,
 ) error {
-	log.Info("Reloading backup service config")
+	logger := log.FromContext(ctx)
+	logger.Info("Reloading backup service config")
 
 	if err := retry.RetryOnConflict(retry.DefaultRetry, func() error {
 		podList, err := GetBackupServicePodList(ctx, k8sClient,
@@ -98,14 +99,15 @@ func ReloadBackupServiceConfigInPods(
 		return fmt.Errorf("apply backup service config: %w", err)
 	}
 
-	return validateBackupSvcConfigReload(ctx, k8sClient, backupServiceClient, log, backupSvc)
+	return validateBackupSvcConfigReload(ctx, k8sClient, backupServiceClient, backupSvc)
 }
 
 func validateBackupSvcConfigReload(ctx context.Context, k8sClient client.Client,
 	backupServiceClient *backup_service.Client,
-	log logr.Logger,
 	backupSvc *v1beta1.BackupService,
 ) error {
+	logger := log.FromContext(ctx)
+
 	apiBackupSvcConfig, err := backupServiceClient.GetBackupServiceConfig()
 	if err != nil {
 		return err
@@ -116,23 +118,23 @@ func validateBackupSvcConfigReload(ctx context.Context, k8sClient client.Client,
 		return err
 	}
 
-	synced, err := IsBackupSvcFullConfigSynced(apiBackupSvcConfig, desiredData, log)
+	synced, err := IsBackupSvcFullConfigSynced(apiBackupSvcConfig, desiredData, logger)
 	if err != nil {
 		return err
 	}
 
 	if !synced {
-		log.Info("Backup service config not yet updated in Pods, requeue")
+		logger.Info("Backup service config not yet updated in Pods, requeue")
 		return fmt.Errorf("backup service config not yet updated in Pods")
 	}
 
-	log.Info("Reloaded backup service config")
+	logger.Info("Reloaded backup service config")
 
 	return nil
 }
 
 func IsBackupSvcFullConfigSynced(currentBackupSvcConfig map[string]interface{}, desired string,
-	log logr.Logger,
+	logger logr.Logger,
 ) (bool, error) {
 	desiredBackupSvcConfig := make(map[string]interface{})
 
@@ -140,8 +142,8 @@ func IsBackupSvcFullConfigSynced(currentBackupSvcConfig map[string]interface{}, 
 		return false, fmt.Errorf("unmarshal backup service config from ConfigMap data: %w", err)
 	}
 
-	log.Info("Fetched backup service config from backup service via API", "config", currentBackupSvcConfig)
-	log.Info("Found backup service config in backup service ConfigMap", "config", desiredBackupSvcConfig)
+	logger.Info("Fetched backup service config from backup service via API", "config", currentBackupSvcConfig)
+	logger.Info("Found backup service config in backup service ConfigMap", "config", desiredBackupSvcConfig)
 
 	return reflect.DeepEqual(currentBackupSvcConfig, desiredBackupSvcConfig), nil
 }

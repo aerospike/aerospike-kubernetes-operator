@@ -14,6 +14,7 @@ import (
 	"k8s.io/client-go/tools/record"
 	ctrl "sigs.k8s.io/controller-runtime"
 	"sigs.k8s.io/controller-runtime/pkg/client"
+	"sigs.k8s.io/controller-runtime/pkg/log"
 	"sigs.k8s.io/controller-runtime/pkg/reconcile"
 
 	asdbv1beta1 "github.com/aerospike/aerospike-kubernetes-operator/v4/api/v1beta1"
@@ -33,9 +34,11 @@ type SingleRestoreReconciler struct {
 }
 
 func (r *SingleRestoreReconciler) Reconcile(ctx context.Context) (result ctrl.Result, recErr error) {
+	ctx = log.IntoContext(ctx, r.Log)
+
 	defer func() {
 		// finishReconcile returns the error to assign here so we avoid *error params; recErr is Reconcile's named return.
-		recErr = common.FinishReconcile(ctx, r.Log, result, recErr, nil)
+		recErr = common.FinishReconcile(ctx, result, recErr, nil)
 	}()
 
 	if !r.aeroRestore.DeletionTimestamp.IsZero() {

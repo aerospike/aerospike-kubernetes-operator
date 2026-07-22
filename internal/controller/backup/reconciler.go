@@ -15,6 +15,7 @@ import (
 	"k8s.io/client-go/tools/record"
 	ctrl "sigs.k8s.io/controller-runtime"
 	"sigs.k8s.io/controller-runtime/pkg/client"
+	"sigs.k8s.io/controller-runtime/pkg/log"
 	"sigs.k8s.io/controller-runtime/pkg/reconcile"
 	"sigs.k8s.io/yaml"
 
@@ -35,8 +36,10 @@ type SingleBackupReconciler struct {
 }
 
 func (r *SingleBackupReconciler) Reconcile(ctx context.Context) (result ctrl.Result, recErr error) {
+	ctx = log.IntoContext(ctx, r.Log)
+
 	defer func() {
-		recErr = common.FinishReconcile(ctx, r.Log, result, recErr, nil)
+		recErr = common.FinishReconcile(ctx, result, recErr, nil)
 	}()
 
 	// Skip reconcile if the backup service version is less than 3.0.0.
@@ -133,7 +136,7 @@ func (r *SingleBackupReconciler) cleanUpAndRemoveFinalizer(ctx context.Context, 
 		}
 
 		if err := common.ReloadBackupServiceConfigInPods(ctx, r.Client, backupServiceClient,
-			r.Log, &r.aeroBackup.Spec.BackupService); err != nil {
+			&r.aeroBackup.Spec.BackupService); err != nil {
 			return fmt.Errorf("reload backup service config: %w", err)
 		}
 
@@ -428,7 +431,7 @@ func (r *SingleBackupReconciler) reconcileScheduledBackup(ctx context.Context) e
 	}
 
 	if hotReloadRequired {
-		err = common.ReloadBackupServiceConfigInPods(ctx, r.Client, serviceClient, r.Log, &r.aeroBackup.Spec.BackupService)
+		err = common.ReloadBackupServiceConfigInPods(ctx, r.Client, serviceClient, &r.aeroBackup.Spec.BackupService)
 		if err != nil {
 			return fmt.Errorf("reload backup service config: %w", err)
 		}

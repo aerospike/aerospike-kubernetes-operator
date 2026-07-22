@@ -21,6 +21,7 @@ import (
 	"k8s.io/client-go/util/retry"
 	ctrl "sigs.k8s.io/controller-runtime"
 	"sigs.k8s.io/controller-runtime/pkg/client"
+	"sigs.k8s.io/controller-runtime/pkg/log"
 	"sigs.k8s.io/controller-runtime/pkg/reconcile"
 
 	as "github.com/aerospike/aerospike-client-go/v8"
@@ -48,6 +49,7 @@ func (r *SingleClusterReconciler) asConfigLog() logr.Logger {
 }
 
 func (r *SingleClusterReconciler) Reconcile(ctx context.Context) (result ctrl.Result, recErr error) {
+	ctx = log.IntoContext(ctx, r.Log)
 	r.Log.V(1).Info(
 		"AerospikeCluster", "spec", r.aeroCluster.Spec, "status",
 		r.aeroCluster.Status,
@@ -57,7 +59,7 @@ func (r *SingleClusterReconciler) Reconcile(ctx context.Context) (result ctrl.Re
 	// recErr is only set when reconcile failure should result in Error phase of the cluster
 	defer func() {
 		// finishReconcile returns the error to assign here so we avoid *error params; recErr is Reconcile's named return.
-		recErr = common.FinishReconcile(ctx, r.Log, result, recErr, func(ctx context.Context) error {
+		recErr = common.FinishReconcile(ctx, result, recErr, func(ctx context.Context) error {
 			if err := r.setStatusPhase(ctx, asdbv1.AerospikeClusterError); err != nil {
 				return fmt.Errorf("setting error phase: %w", err)
 			}

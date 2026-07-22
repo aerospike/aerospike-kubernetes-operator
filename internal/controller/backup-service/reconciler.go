@@ -18,6 +18,7 @@ import (
 	ctrl "sigs.k8s.io/controller-runtime"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 	"sigs.k8s.io/controller-runtime/pkg/controller/controllerutil"
+	"sigs.k8s.io/controller-runtime/pkg/log"
 	"sigs.k8s.io/controller-runtime/pkg/reconcile"
 	"sigs.k8s.io/yaml"
 
@@ -53,9 +54,11 @@ type SingleBackupServiceReconciler struct {
 }
 
 func (r *SingleBackupServiceReconciler) Reconcile(ctx context.Context) (result ctrl.Result, recErr error) {
+	ctx = log.IntoContext(ctx, r.Log)
+
 	defer func() {
 		// finishReconcile returns the error to assign here so we avoid *error params; recErr is Reconcile's named return.
-		recErr = common.FinishReconcile(ctx, r.Log, result, recErr, func(ctx context.Context) error {
+		recErr = common.FinishReconcile(ctx, result, recErr, func(ctx context.Context) error {
 			if err := r.setStatusPhase(ctx, asdbv1beta1.AerospikeBackupServiceError); err != nil {
 				return fmt.Errorf("set AerospikeBackupService error phase: %w", err)
 			}
@@ -384,7 +387,7 @@ func (r *SingleBackupServiceReconciler) updateBackupSvcConfig(ctx context.Contex
 		return r.restartBackupSvcPod(ctx)
 	}
 
-	if err := common.ReloadBackupServiceConfigInPods(ctx, r.Client, backupServiceClient, r.Log, backupSvc); err != nil {
+	if err := common.ReloadBackupServiceConfigInPods(ctx, r.Client, backupServiceClient, backupSvc); err != nil {
 		return fmt.Errorf("reload backup service config: %w", err)
 	}
 
