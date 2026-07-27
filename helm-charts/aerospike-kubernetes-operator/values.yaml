@@ -22,14 +22,13 @@ rbac:
 healthPort: 8081
 metricsPort: 8443
 
-## Optional: supply webhook CA bundle directly (uncomment the caBundle Helm block in webhook templates)
-# webhookCerts:
-#   tlsCrt: ""
-
 ## Create certificates
 certs:
   webhook:
     create: true
+    # Base64-encoded CA certificate for webhook clientConfig.caBundle.
+    # When set, cert-manager inject-ca-from is skipped on webhook configurations.
+    caBundle: ""
     webhookServerCertSecretName: "webhook-server-cert"
   metrics:
     create: false

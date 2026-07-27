@@ -31,6 +31,57 @@ Operator uses admission webhooks, which needs TLS certificates. These are issued
 helm install aerospike-kubernetes-operator ./aerospike-kubernetes-operator --set replicas=3
 ```
 
+## Webhook TLS Configuration
+
+By default, webhook TLS is managed by cert-manager. To manage webhook TLS externally, set `certs.webhook.caBundle` and pre-create the serving cert secret. See [Base64-encoded caBundle](#base64-encoded-cabundle) below.
+
+For cert-manager-free installs, set `certs.webhook.create` to `false` and pre-create the serving certificate secret (`certs.webhook.webhookServerCertSecretName`, default `webhook-server-cert`) with `tls.crt` and `tls.key`. The operator deployment already mounts this secret — no deployment changes needed.
+
+```sh
+kubectl create secret tls webhook-server-cert \
+  --cert=webhook-serving.crt \
+  --key=webhook-serving.key \
+  -n <namespace>
+
+helm install aerospike-kubernetes-operator ./aerospike-kubernetes-operator \
+  --namespace <namespace> \
+  --set certs.webhook.create=false \
+  --set certs.webhook.caBundle="${CA_BUNDLE}"
+```
+
+### Base64-encoded caBundle
+
+`certs.webhook.caBundle` expects the **base64 encoding of the CA certificate PEM** that signed the webhook serving certificate. It is not the serving certificate itself.
+
+When set, the chart injects `clientConfig.caBundle` on all webhooks and skips the `cert-manager.io/inject-ca-from` annotation.
+
+**Encode the CA certificate:**
+
+```sh
+# Linux
+CA_BUNDLE=$(base64 -w0 ca.crt)
+
+# macOS
+CA_BUNDLE=$(base64 -i ca.crt)
+```
+
+The result must be a single-line string with no line breaks.
+
+**Pass via Helm:**
+
+```sh
+helm install aerospike-kubernetes-operator ./aerospike-kubernetes-operator \
+  --set certs.webhook.caBundle="${CA_BUNDLE}"
+```
+
+Or in a values file:
+
+```yaml
+certs:
+  webhook:
+    caBundle: "LS0tLS1CRUdJTi..."   # base64-encoded CA PEM
+```
+
 ## Configurations
 
 | Name                                | Description                                                                                                                                                                                                               | Default                                                                                                            |
@@ -44,8 +95,9 @@ helm install aerospike-kubernetes-operator ./aerospike-kubernetes-operator --set
 | `rbac.serviceAccountName`           | If `rbac.create=false`, provide a service account name to be used with the operator deployment                                                                                                                            | `default`                                                                                                          |
 | `healthPort`                        | Health port                                                                                                                                                                                                               | `8081`                                                                                                             |
 | `metricsPort`                       | Metrics port                                                                                                                                                                                                              | `8080`                                                                                                             |
-| `certs.create`                      | Set this to `true` to let helm chart automatically create certificates using `cert-manager`                                                                                                                               | `true`                                                                                                             |
-| `certs.webhookServerCertSecretName` | Kubernetes secret name which contains webhook server certificates                                                                                                                                                         | `webhook-server-cert`                                                                                              |
+| `certs.webhook.create`              | Create webhook serving certificate via cert-manager                                                                                                                                                                       | `true`                                                                                                             |
+| `certs.webhook.caBundle`            | Base64-encoded CA certificate for webhook `clientConfig.caBundle`. When set, cert-manager CA injection is skipped                                                                                                         | `""`                                                                                                               |
+| `certs.webhook.webhookServerCertSecretName` | Kubernetes secret name which contains webhook server certificates (`tls.crt`, `tls.key`)                                                                                                                            | `webhook-server-cert`                                                                                              |
 | `watchNamespaces`                   | Namespaces to watch. Operator will watch for `AerospikeCluster` custom resources in these namespaces.                                                                                                                     | `default`                                                                                                          |
 | `safePodEviction.enable`            | Enable the eviction webhook to safely block Aerospike pod evictions during node maintenance. Also enables Prometheus metrics (`aerospike_ako_eviction_webhook_requests_total` with labels: eviction_namespace, decision). | `false`                                                                                                            |
 | `safePodEviction.timeoutSeconds`    | Eviction webhook timeout in seconds when safePodEviction is enabled                                                                                                                                                       | `20`                                                                                                               |
