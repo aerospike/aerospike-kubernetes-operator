@@ -69,6 +69,7 @@ type AerospikeRestoreSpec struct {
 	// It is used to poll the restore service to fetch restore operation status.
 	// Default is 60 seconds.
 	// +operator-sdk:csv:customresourcedefinitions:type=spec,displayName="Restore Service Polling Period"
+	// +kubebuilder:default="1m"
 	// +optional
 	PollingPeriod metav1.Duration `json:"pollingPeriod,omitempty"`
 }
@@ -89,7 +90,7 @@ type AerospikeRestoreStatus struct {
 
 // +kubebuilder:object:root=true
 // +kubebuilder:subresource:status
-// +kubebuilder:metadata:annotations="aerospike-kubernetes-operator/version=4.4.1"
+// +kubebuilder:metadata:annotations="aerospike-kubernetes-operator/version=4.5.0"
 // +kubebuilder:printcolumn:name="Backup Service Name",type=string,JSONPath=`.spec.backupService.name`
 // +kubebuilder:printcolumn:name="Backup Service Namespace",type=string,JSONPath=`.spec.backupService.namespace`
 // +kubebuilder:printcolumn:name="Phase",type=string,JSONPath=`.status.phase`

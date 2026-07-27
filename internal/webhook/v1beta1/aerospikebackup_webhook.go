@@ -39,7 +39,6 @@ import (
 // SetupAerospikeBackupWebhookWithManager registers the webhook for AerospikeBackup in the manager.
 func SetupAerospikeBackupWebhookWithManager(mgr ctrl.Manager) error {
 	return ctrl.NewWebhookManagedBy(mgr, &asdbv1beta1.AerospikeBackup{}).
-		WithDefaulter(&AerospikeBackupCustomDefaulter{}).
 		WithValidator(&AerospikeBackupCustomValidator{}).
 		Complete()
 }
@@ -53,21 +52,8 @@ type AerospikeBackupCustomDefaulter struct {
 
 var _ admission.Defaulter[*asdbv1beta1.AerospikeBackup] = &AerospikeBackupCustomDefaulter{}
 
-//nolint:lll // for readability
-// +kubebuilder:webhook:path=/mutate-asdb-aerospike-com-v1beta1-aerospikebackup,mutating=true,failurePolicy=fail,sideEffects=None,groups=asdb.aerospike.com,resources=aerospikebackups,verbs=create;update,versions=v1beta1,name=maerospikebackup.kb.io,admissionReviewVersions=v1
-
 // Default implements admission.Defaulter so a webhook will be registered for the type
 func (abd *AerospikeBackupCustomDefaulter) Default(_ context.Context, backup *asdbv1beta1.AerospikeBackup) error {
-	abLog := logf.Log.WithName(namespacedName(backup))
-
-	abLog.Info("Setting defaults for aerospikeBackup")
-
-	for i := range backup.Spec.OnDemandBackups {
-		if backup.Spec.OnDemandBackups[i].Type == "" {
-			backup.Spec.OnDemandBackups[i].Type = asdbv1beta1.FullBackup
-		}
-	}
-
 	return nil
 }
 

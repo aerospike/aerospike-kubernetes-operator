@@ -22,12 +22,6 @@ const (
 )
 
 const (
-	// Maximum length for role name.
-	roleNameLengthMax int = 63
-
-	// Maximum allowed length for a username.
-	userNameLengthMax int = 63
-
 	// AdminUsername for aerospike cluster
 	AdminUsername = "admin"
 
@@ -278,13 +272,6 @@ func isRoleNameValid(roleName string) (bool, error) {
 		return false, fmt.Errorf("role name cannot be empty")
 	}
 
-	if len(roleName) > roleNameLengthMax {
-		return false, fmt.Errorf(
-			"role name '%s' cannot have more than %d characters", roleName,
-			roleNameLengthMax,
-		)
-	}
-
 	for _, forbiddenChar := range roleNameForbiddenChars {
 		if strings.Contains(roleName, forbiddenChar) {
 			return false, fmt.Errorf(
@@ -503,13 +490,6 @@ func isUserSpecValid(
 func isUserNameValid(userName string) (bool, error) {
 	if strings.TrimSpace(userName) == "" {
 		return false, fmt.Errorf("username cannot be empty")
-	}
-
-	if len(userName) > userNameLengthMax {
-		return false, fmt.Errorf(
-			"username '%s' cannot have more than %d characters", userName,
-			userNameLengthMax,
-		)
 	}
 
 	for _, forbiddenChar := range userNameForbiddenChars {

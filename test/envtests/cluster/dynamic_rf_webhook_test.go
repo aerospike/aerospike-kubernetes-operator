@@ -32,7 +32,7 @@ import (
 
 var _ = Describe("AerospikeCluster dynamic replication-factor validation", func() {
 	const (
-		dynamicRFClusterName = "dynamic-rf-webhook-cluster"
+		dynamicRFClusterName = "dynamic-rf-cluster"
 		maxSchemaRF          = 256
 		rfAboveSchemaMax     = 257
 		namespaceName        = "test"

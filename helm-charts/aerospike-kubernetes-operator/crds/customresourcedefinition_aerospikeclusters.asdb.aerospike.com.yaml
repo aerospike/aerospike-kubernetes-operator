@@ -3,7 +3,7 @@ apiVersion: apiextensions.k8s.io/v1
 kind: CustomResourceDefinition
 metadata:
   annotations:
-    aerospike-kubernetes-operator/version: 4.4.1
+    aerospike-kubernetes-operator/version: 4.5.0
     controller-gen.kubebuilder.io/version: v0.18.0
   name: aerospikeclusters.asdb.aerospike.com
 spec:
@@ -69,6 +69,7 @@ spec:
                     properties:
                       timeout:
                         description: Timeout for admin client policy in milliseconds.
+                        minimum: 0
                         type: integer
                     required:
                     - timeout
@@ -82,6 +83,8 @@ spec:
                       properties:
                         name:
                           description: Name of this role.
+                          maxLength: 63
+                          minLength: 1
                           type: string
                         privileges:
                           description: Privileges granted to this role.
@@ -130,6 +133,8 @@ spec:
                           type: string
                         name:
                           description: Name is the user's username.
+                          maxLength: 63
+                          minLength: 1
                           type: string
                         roles:
                           description: Roles is the list of roles granted to the user.
@@ -164,6 +169,7 @@ spec:
                   access the Aerospike cluster.
                 properties:
                   access:
+                    default: hostInternal
                     description: |-
                       AccessType is the type of network address to use for Aerospike access address.
                       Defaults to hostInternal.
@@ -175,6 +181,7 @@ spec:
                     - customInterface
                     type: string
                   alternateAccess:
+                    default: hostExternal
                     description: |-
                       AlternateAccessType is the type of network address to use for Aerospike alternate access address.
                       Defaults to hostExternal.
@@ -267,6 +274,7 @@ spec:
                     - customInterface
                     type: string
                   tlsAccess:
+                    default: hostInternal
                     description: |-
                       TLSAccessType is the type of network address to use for Aerospike TLS access address.
                       Defaults to hostInternal.
@@ -278,6 +286,7 @@ spec:
                     - customInterface
                     type: string
                   tlsAlternateAccess:
+                    default: hostExternal
                     description: |-
                       TLSAlternateAccessType is the type of network address to use for Aerospike TLS alternate access address.
                       Defaults to hostExternal.
@@ -340,6 +349,7 @@ spec:
                 type: object
               image:
                 description: Aerospike server image
+                minLength: 1
                 type: string
               k8sNodeBlockList:
                 description: |-
@@ -6472,13 +6482,24 @@ spec:
                                   type: string
                               type: object
                             cleanupThreads:
+                              default: 1
                               description: CleanupThreads contains the maximum number
                                 of cleanup threads(dd or blkdiscard) per init container.
+                              minimum: 0
                               type: integer
+                            deleteLocalStorageOnPodRecovery:
+                              description: |-
+                                DeleteLocalStorageOnPodRecovery enables the deletion of local storage PVCs when AKO recovers a failed pod.
+                                Defaults to false.
+                                WARNING: enabling this will cause permanent data loss for local volumes on the failed pod.
+                                Only enable this when the data on the local disk is known to be corrupted or unrecoverable.
+                                Requires localStorageClasses to be non-empty.
+                              type: boolean
                             deleteLocalStorageOnRestart:
                               description: |-
                                 DeleteLocalStorageOnRestart enables the deletion of local storage PVCs when a pod is restarted or rescheduled
-                                by AKO. It only considers local storage classes given in the localStorageClasses field.
+                                by AKO as part of a planned operation (rolling restart, image upgrade).
+                                It only considers local storage classes given in the localStorageClasses field.
                               type: boolean
                             filesystemVolumePolicy:
                               description: FileSystemVolumePolicy contains default
@@ -6856,6 +6877,7 @@ spec:
                                               - ReadOnlyMany
                                               - ReadWriteMany
                                               - ReadWriteOnce
+                                              - ReadWriteOncePod
                                               type: string
                                             type: array
                                           metadata:
@@ -7041,7 +7063,10 @@ spec:
                             It may result in data loss. Use this with caution.
                           type: boolean
                         id:
-                          description: Identifier for the rack
+                          description: Identifier for the rack. Allowed range matches
+                            Aerospike namespace rack-id.
+                          maximum: 1000000
+                          minimum: 0
                           type: integer
                         nodeName:
                           description: K8s Node name for setting rack affinity. Rack
@@ -8107,13 +8132,24 @@ spec:
                                   type: string
                               type: object
                             cleanupThreads:
+                              default: 1
                               description: CleanupThreads contains the maximum number
                                 of cleanup threads(dd or blkdiscard) per init container.
+                              minimum: 0
                               type: integer
+                            deleteLocalStorageOnPodRecovery:
+                              description: |-
+                                DeleteLocalStorageOnPodRecovery enables the deletion of local storage PVCs when AKO recovers a failed pod.
+                                Defaults to false.
+                                WARNING: enabling this will cause permanent data loss for local volumes on the failed pod.
+                                Only enable this when the data on the local disk is known to be corrupted or unrecoverable.
+                                Requires localStorageClasses to be non-empty.
+                              type: boolean
                             deleteLocalStorageOnRestart:
                               description: |-
                                 DeleteLocalStorageOnRestart enables the deletion of local storage PVCs when a pod is restarted or rescheduled
-                                by AKO. It only considers local storage classes given in the localStorageClasses field.
+                                by AKO as part of a planned operation (rolling restart, image upgrade).
+                                It only considers local storage classes given in the localStorageClasses field.
                               type: boolean
                             filesystemVolumePolicy:
                               description: FileSystemVolumePolicy contains default
@@ -8491,6 +8527,7 @@ spec:
                                               - ReadOnlyMany
                                               - ReadWriteMany
                                               - ReadWriteOnce
+                                              - ReadWriteOncePod
                                               type: string
                                             type: array
                                           metadata:
@@ -8749,6 +8786,8 @@ spec:
               size:
                 description: Aerospike cluster size
                 format: int32
+                maximum: 256
+                minimum: 1
                 type: integer
               storage:
                 description: Storage specify persistent storage to use for the Aerospike
@@ -8809,13 +8848,24 @@ spec:
                         type: string
                     type: object
                   cleanupThreads:
+                    default: 1
                     description: CleanupThreads contains the maximum number of cleanup
                       threads(dd or blkdiscard) per init container.
+                    minimum: 0
                     type: integer
+                  deleteLocalStorageOnPodRecovery:
+                    description: |-
+                      DeleteLocalStorageOnPodRecovery enables the deletion of local storage PVCs when AKO recovers a failed pod.
+                      Defaults to false.
+                      WARNING: enabling this will cause permanent data loss for local volumes on the failed pod.
+                      Only enable this when the data on the local disk is known to be corrupted or unrecoverable.
+                      Requires localStorageClasses to be non-empty.
+                    type: boolean
                   deleteLocalStorageOnRestart:
                     description: |-
                       DeleteLocalStorageOnRestart enables the deletion of local storage PVCs when a pod is restarted or rescheduled
-                      by AKO. It only considers local storage classes given in the localStorageClasses field.
+                      by AKO as part of a planned operation (rolling restart, image upgrade).
+                      It only considers local storage classes given in the localStorageClasses field.
                     type: boolean
                   filesystemVolumePolicy:
                     description: FileSystemVolumePolicy contains default policies
@@ -9190,6 +9240,7 @@ spec:
                                     - ReadOnlyMany
                                     - ReadWriteMany
                                     - ReadWriteOnce
+                                    - ReadWriteOncePod
                                     type: string
                                   type: array
                                 metadata:
@@ -9367,6 +9418,8 @@ spec:
                     x-kubernetes-list-type: map
                 type: object
               validationPolicy:
+                default:
+                  skipWorkDirValidate: false
                 description: ValidationPolicy controls validation of the Aerospike
                   cluster resource.
                 properties:
@@ -9403,6 +9456,7 @@ spec:
                     properties:
                       timeout:
                         description: Timeout for admin client policy in milliseconds.
+                        minimum: 0
                         type: integer
                     required:
                     - timeout
@@ -9416,6 +9470,8 @@ spec:
                       properties:
                         name:
                           description: Name of this role.
+                          maxLength: 63
+                          minLength: 1
                           type: string
                         privileges:
                           description: Privileges granted to this role.
@@ -9464,6 +9520,8 @@ spec:
                           type: string
                         name:
                           description: Name is the user's username.
+                          maxLength: 63
+                          minLength: 1
                           type: string
                         roles:
                           description: Roles is the list of roles granted to the user.
@@ -9499,6 +9557,7 @@ spec:
                   access the Aerospike cluster.
                 properties:
                   access:
+                    default: hostInternal
                     description: |-
                       AccessType is the type of network address to use for Aerospike access address.
                       Defaults to hostInternal.
@@ -9510,6 +9569,7 @@ spec:
                     - customInterface
                     type: string
                   alternateAccess:
+                    default: hostExternal
                     description: |-
                       AlternateAccessType is the type of network address to use for Aerospike alternate access address.
                       Defaults to hostExternal.
@@ -9602,6 +9662,7 @@ spec:
                     - customInterface
                     type: string
                   tlsAccess:
+                    default: hostInternal
                     description: |-
                       TLSAccessType is the type of network address to use for Aerospike TLS access address.
                       Defaults to hostInternal.
@@ -9613,6 +9674,7 @@ spec:
                     - customInterface
                     type: string
                   tlsAlternateAccess:
+                    default: hostExternal
                     description: |-
                       TLSAlternateAccessType is the type of network address to use for Aerospike TLS alternate access address.
                       Defaults to hostExternal.
@@ -15975,13 +16037,24 @@ spec:
                                   type: string
                               type: object
                             cleanupThreads:
+                              default: 1
                               description: CleanupThreads contains the maximum number
                                 of cleanup threads(dd or blkdiscard) per init container.
+                              minimum: 0
                               type: integer
+                            deleteLocalStorageOnPodRecovery:
+                              description: |-
+                                DeleteLocalStorageOnPodRecovery enables the deletion of local storage PVCs when AKO recovers a failed pod.
+                                Defaults to false.
+                                WARNING: enabling this will cause permanent data loss for local volumes on the failed pod.
+                                Only enable this when the data on the local disk is known to be corrupted or unrecoverable.
+                                Requires localStorageClasses to be non-empty.
+                              type: boolean
                             deleteLocalStorageOnRestart:
                               description: |-
                                 DeleteLocalStorageOnRestart enables the deletion of local storage PVCs when a pod is restarted or rescheduled
-                                by AKO. It only considers local storage classes given in the localStorageClasses field.
+                                by AKO as part of a planned operation (rolling restart, image upgrade).
+                                It only considers local storage classes given in the localStorageClasses field.
                               type: boolean
                             filesystemVolumePolicy:
                               description: FileSystemVolumePolicy contains default
@@ -16359,6 +16432,7 @@ spec:
                                               - ReadOnlyMany
                                               - ReadWriteMany
                                               - ReadWriteOnce
+                                              - ReadWriteOncePod
                                               type: string
                                             type: array
                                           metadata:
@@ -16544,7 +16618,10 @@ spec:
                             It may result in data loss. Use this with caution.
                           type: boolean
                         id:
-                          description: Identifier for the rack
+                          description: Identifier for the rack. Allowed range matches
+                            Aerospike namespace rack-id.
+                          maximum: 1000000
+                          minimum: 0
                           type: integer
                         nodeName:
                           description: K8s Node name for setting rack affinity. Rack
@@ -17610,13 +17687,24 @@ spec:
                                   type: string
                               type: object
                             cleanupThreads:
+                              default: 1
                               description: CleanupThreads contains the maximum number
                                 of cleanup threads(dd or blkdiscard) per init container.
+                              minimum: 0
                               type: integer
+                            deleteLocalStorageOnPodRecovery:
+                              description: |-
+                                DeleteLocalStorageOnPodRecovery enables the deletion of local storage PVCs when AKO recovers a failed pod.
+                                Defaults to false.
+                                WARNING: enabling this will cause permanent data loss for local volumes on the failed pod.
+                                Only enable this when the data on the local disk is known to be corrupted or unrecoverable.
+                                Requires localStorageClasses to be non-empty.
+                              type: boolean
                             deleteLocalStorageOnRestart:
                               description: |-
                                 DeleteLocalStorageOnRestart enables the deletion of local storage PVCs when a pod is restarted or rescheduled
-                                by AKO. It only considers local storage classes given in the localStorageClasses field.
+                                by AKO as part of a planned operation (rolling restart, image upgrade).
+                                It only considers local storage classes given in the localStorageClasses field.
                               type: boolean
                             filesystemVolumePolicy:
                               description: FileSystemVolumePolicy contains default
@@ -17994,6 +18082,7 @@ spec:
                                               - ReadOnlyMany
                                               - ReadWriteMany
                                               - ReadWriteOnce
+                                              - ReadWriteOncePod
                                               type: string
                                             type: array
                                           metadata:
@@ -18379,13 +18468,24 @@ spec:
                         type: string
                     type: object
                   cleanupThreads:
+                    default: 1
                     description: CleanupThreads contains the maximum number of cleanup
                       threads(dd or blkdiscard) per init container.
+                    minimum: 0
                     type: integer
+                  deleteLocalStorageOnPodRecovery:
+                    description: |-
+                      DeleteLocalStorageOnPodRecovery enables the deletion of local storage PVCs when AKO recovers a failed pod.
+                      Defaults to false.
+                      WARNING: enabling this will cause permanent data loss for local volumes on the failed pod.
+                      Only enable this when the data on the local disk is known to be corrupted or unrecoverable.
+                      Requires localStorageClasses to be non-empty.
+                    type: boolean
                   deleteLocalStorageOnRestart:
                     description: |-
                       DeleteLocalStorageOnRestart enables the deletion of local storage PVCs when a pod is restarted or rescheduled
-                      by AKO. It only considers local storage classes given in the localStorageClasses field.
+                      by AKO as part of a planned operation (rolling restart, image upgrade).
+                      It only considers local storage classes given in the localStorageClasses field.
                     type: boolean
                   filesystemVolumePolicy:
                     description: FileSystemVolumePolicy contains default policies
@@ -18760,6 +18860,7 @@ spec:
                                     - ReadOnlyMany
                                     - ReadWriteMany
                                     - ReadWriteOnce
+                                    - ReadWriteOncePod
                                     type: string
                                   type: array
                                 metadata:

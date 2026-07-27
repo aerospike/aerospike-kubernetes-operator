@@ -23,12 +23,57 @@ import (
 	. "github.com/onsi/gomega"
 	corev1 "k8s.io/api/core/v1"
 	"k8s.io/apimachinery/pkg/types"
+	"k8s.io/apimachinery/pkg/util/intstr"
+	"k8s.io/utils/ptr"
 
 	asdbv1 "github.com/aerospike/aerospike-kubernetes-operator/v4/api/v1"
 	"github.com/aerospike/aerospike-kubernetes-operator/v4/test"
 	testCluster "github.com/aerospike/aerospike-kubernetes-operator/v4/test/cluster"
 	"github.com/aerospike/aerospike-kubernetes-operator/v4/test/envtests"
+	"github.com/aerospike/aerospike-kubernetes-operator/v4/test/testutil"
 )
+
+// createMultiRackSCCluster returns a deployable multi-rack cluster (SC namespace per rack)
+// with per-rack storage and no spec-level storage, matching other rack envtests.
+// Cluster size is fixed at 4 so pod distribution across racks matches these webhook cases.
+func createMultiRackSCCluster(ns types.NamespacedName, devicePaths ...string) *asdbv1.AerospikeCluster {
+	aeroCluster := testCluster.CreateDummyAerospikeCluster(ns, 4)
+	racks := make([]asdbv1.Rack, len(devicePaths))
+
+	for i, p := range devicePaths {
+		s := getStorageSpecForDevice(p)
+		racks[i] = asdbv1.Rack{
+			ID:                   i + 1,
+			Revision:             "v1",
+			InputStorage:         &s,
+			InputAerospikeConfig: rackNSOverride(p),
+		}
+	}
+
+	aeroCluster.Spec.Storage = asdbv1.AerospikeStorageSpec{}
+	aeroCluster.Spec.RackConfig = asdbv1.RackConfig{
+		Namespaces: []string{"test"},
+		Racks:      racks,
+	}
+
+	return aeroCluster
+}
+
+// seedClusterStatusFromSpec mirrors spec into status (AerospikeConfig + rackConfig, etc.) so update
+// webhooks that require populated status (e.g. validateForceBlockFromRosterUpdate) can run.
+func seedClusterStatusFromSpec(ctx context.Context, ns types.NamespacedName) {
+	GinkgoHelper()
+
+	cur, err := testCluster.GetCluster(envtests.K8sClient, ctx, ns)
+	Expect(err).ToNot(HaveOccurred())
+
+	statusSpec, err := asdbv1.CopySpecToStatus(&cur.Spec)
+	Expect(err).ToNot(HaveOccurred())
+
+	cur.Status.AerospikeClusterStatusSpec = *statusSpec
+
+	Expect(envtests.K8sClient.Status().Update(ctx, cur)).To(Succeed())
+}
 
 var _ = Describe("Rack enabled cluster webhook validation", func() {
 	ctx := context.TODO()
@@ -36,7 +81,7 @@ var _ = Describe("Rack enabled cluster webhook validation", func() {
 	var nsName types.NamespacedName
 
 	BeforeEach(func() {
-		nsName = uniqueNamespacedName("rack-enabled")
+		nsName = uniqueNamespacedName("rack-enabled-cluster")
 	})
 
 	AfterEach(func() {
@@ -66,7 +111,7 @@ var _ = Describe("Rack enabled cluster webhook validation", func() {
 					Expect(err).To(HaveOccurred())
 					envtests.NewStatusErrorMatcher().
 						WithMessageSubstrings(
-							"\"vaerospikecluster.kb.io\"",
+							testutil.WebhookErrorPrefix,
 							"namespace storage device related devicePath /expected/missing/device not found in Storage config",
 						).
 						Validate(err)
@@ -108,7 +153,7 @@ var _ = Describe("Rack enabled cluster webhook validation", func() {
 					Expect(err).To(HaveOccurred())
 					envtests.NewStatusErrorMatcher().
 						WithMessageSubstrings(
-							"\"vaerospikecluster.kb.io\"",
+							testutil.WebhookErrorPrefix,
 							"namespace storage device related devicePath /test/dev/xvdf not found in Storage config",
 						).
 						Validate(err)
@@ -161,6 +206,292 @@ var _ = Describe("Rack enabled cluster webhook validation", func() {
 				})
 			})
 		})
+
+		Context("spec.rackConfig.racks[].id", func() {
+			Context("positive", func() {
+				It("adds implicit default rack when racks are omitted (DefaultRackID)", func() {
+					aeroCluster := testCluster.CreateDummyAerospikeCluster(nsName, 2)
+					Expect(aeroCluster.Spec.RackConfig.Racks).To(BeEmpty())
+
+					Expect(envtests.K8sClient.Create(ctx, aeroCluster)).To(Succeed())
+
+					fetched, err := testCluster.GetCluster(envtests.K8sClient, ctx, nsName)
+					Expect(err).ToNot(HaveOccurred())
+					Expect(fetched.Spec.RackConfig.Racks).To(HaveLen(1))
+					Expect(fetched.Spec.RackConfig.Racks[0].ID).To(Equal(asdbv1.DefaultRackID))
+				})
+
+				It("allows a single explicit rack with DefaultRackID when it has no per-rack overrides", func() {
+					aeroCluster := testCluster.CreateDummyAerospikeCluster(nsName, 2)
+					aeroCluster.Spec.RackConfig = asdbv1.RackConfig{
+						Namespaces: []string{"test"},
+						Racks:      []asdbv1.Rack{{ID: asdbv1.DefaultRackID}},
+					}
+
+					Expect(envtests.K8sClient.Create(ctx, aeroCluster)).To(Succeed())
+
+					fetched, err := testCluster.GetCluster(envtests.K8sClient, ctx, nsName)
+					Expect(err).ToNot(HaveOccurred())
+					Expect(fetched.Spec.RackConfig.Racks).To(HaveLen(1))
+					Expect(fetched.Spec.RackConfig.Racks[0].ID).To(Equal(asdbv1.DefaultRackID))
+				})
+
+				// Out-of-range above MaxRackID is rejected by CRD OpenAPI ("rejects rack id above 1000000").
+				It("allows rack id at MaxRackID (in-range upper bound)", func() {
+					aeroCluster := testCluster.CreateDummyAerospikeCluster(nsName, 2)
+					aeroCluster.Spec.RackConfig = asdbv1.RackConfig{
+						Namespaces: []string{"test"},
+						Racks:      []asdbv1.Rack{{ID: asdbv1.MaxRackID}},
+					}
+
+					Expect(envtests.K8sClient.Create(ctx, aeroCluster)).To(Succeed())
+
+					fetched, err := testCluster.GetCluster(envtests.K8sClient, ctx, nsName)
+					Expect(err).ToNot(HaveOccurred())
+					Expect(fetched.Spec.RackConfig.Racks).To(HaveLen(1))
+					Expect(fetched.Spec.RackConfig.Racks[0].ID).To(Equal(asdbv1.MaxRackID))
+				})
+			})
+
+			Context("negative", func() {
+				It("rejects DefaultRackID when multiple racks are configured (reserved, mutating webhook)", func() {
+					aeroCluster := testCluster.CreateDummyAerospikeCluster(nsName, 2)
+					aeroCluster.Spec.RackConfig = asdbv1.RackConfig{
+						Namespaces: []string{"test"},
+						Racks: []asdbv1.Rack{
+							{ID: 1},
+							{ID: asdbv1.DefaultRackID},
+						},
+					}
+
+					err := envtests.K8sClient.Create(ctx, aeroCluster)
+					Expect(err).To(HaveOccurred())
+					envtests.NewStatusErrorMatcher().
+						WithMessageSubstrings(
+							testutil.MutatingClusterWebhookErrorPrefix,
+							"invalid RackConfig",
+							"RackID",
+							"reserved",
+						).
+						Validate(err)
+				})
+
+				It("rejects DefaultRackID combined with rack placement (reserved, mutating webhook)", func() {
+					aeroCluster := testCluster.CreateDummyAerospikeCluster(nsName, 2)
+					zone := "zone-a"
+					aeroCluster.Spec.RackConfig = asdbv1.RackConfig{
+						Namespaces: []string{"test"},
+						Racks: []asdbv1.Rack{
+							{ID: asdbv1.DefaultRackID, Zone: zone},
+						},
+					}
+
+					err := envtests.K8sClient.Create(ctx, aeroCluster)
+					Expect(err).To(HaveOccurred())
+					envtests.NewStatusErrorMatcher().
+						WithMessageSubstrings(
+							testutil.MutatingClusterWebhookErrorPrefix,
+							"invalid RackConfig",
+							"RackID",
+							"reserved",
+						).
+						Validate(err)
+				})
+
+				It("rejects duplicate rack id", func() {
+					aeroCluster := testCluster.CreateDummyAerospikeCluster(nsName, 2)
+					aeroCluster.Spec.RackConfig = asdbv1.RackConfig{
+						Racks: []asdbv1.Rack{
+							{ID: 2},
+							{ID: 2},
+						},
+					}
+
+					err := envtests.K8sClient.Create(ctx, aeroCluster)
+					Expect(err).To(HaveOccurred())
+					envtests.NewStatusErrorMatcher().
+						WithMessageSubstrings(
+							testutil.WebhookErrorPrefix,
+							"duplicate rackID 2 not allowed",
+						).
+						Validate(err)
+				})
+			})
+		})
+
+		Context("spec.rackConfig.maxIgnorablePods", func() {
+			Context("positive", func() {
+				// maxIgnorablePods=0 is valid (no pods ignorable; not treated as negative).
+				It("allows create with maxIgnorablePods integer zero", func() {
+					aeroCluster := testCluster.CreateDummyAerospikeCluster(nsName, 2)
+					aeroCluster.Spec.RackConfig.MaxIgnorablePods = ptr.To(intstr.FromInt32(0))
+
+					Expect(envtests.K8sClient.Create(ctx, aeroCluster)).To(Succeed())
+				})
+
+				It("allows create with a valid positive integer maxIgnorablePods", func() {
+					aeroCluster := testCluster.CreateDummyAerospikeCluster(nsName, 2)
+					aeroCluster.Spec.RackConfig.MaxIgnorablePods = ptr.To(intstr.FromInt32(2))
+
+					Expect(envtests.K8sClient.Create(ctx, aeroCluster)).To(Succeed())
+				})
+
+				It("allows create with a valid maxIgnorablePods percentage not exceeding 100%", func() {
+					aeroCluster := testCluster.CreateDummyAerospikeCluster(nsName, 2)
+					aeroCluster.Spec.RackConfig.MaxIgnorablePods = ptr.To(intstr.FromString("50%"))
+
+					Expect(envtests.K8sClient.Create(ctx, aeroCluster)).To(Succeed())
+				})
+			})
+
+			Context("negative", func() {
+				It("rejects create with negative maxIgnorablePods", func() {
+					aeroCluster := testCluster.CreateDummyAerospikeCluster(nsName, 2)
+					aeroCluster.Spec.RackConfig.MaxIgnorablePods = ptr.To(intstr.FromInt32(-1))
+
+					err := envtests.K8sClient.Create(ctx, aeroCluster)
+					Expect(err).To(HaveOccurred())
+
+					envtests.NewStatusErrorMatcher().
+						WithMessageSubstrings(
+							testutil.WebhookErrorPrefix,
+							"can not use negative spec.rackConfig.maxIgnorablePods",
+						).
+						Validate(err)
+				})
+
+				It("rejects create when maxIgnorablePods percentage is greater than 100%", func() {
+					aeroCluster := testCluster.CreateDummyAerospikeCluster(nsName, 2)
+					aeroCluster.Spec.RackConfig.MaxIgnorablePods = ptr.To(intstr.FromString("101%"))
+
+					err := envtests.K8sClient.Create(ctx, aeroCluster)
+					Expect(err).To(HaveOccurred())
+
+					envtests.NewStatusErrorMatcher().
+						WithMessageSubstrings(
+							testutil.WebhookErrorPrefix,
+							"spec.rackConfig.maxIgnorablePods",
+							"must not be greater than 100 percent",
+						).
+						Validate(err)
+				})
+
+				It("rejects create with an invalid maxIgnorablePods IntOrString value", func() {
+					aeroCluster := testCluster.CreateDummyAerospikeCluster(nsName, 2)
+					aeroCluster.Spec.RackConfig.MaxIgnorablePods = ptr.To(intstr.FromString("not-a-number"))
+
+					err := envtests.K8sClient.Create(ctx, aeroCluster)
+					Expect(err).To(HaveOccurred())
+
+					envtests.NewStatusErrorMatcher().
+						WithMessageSubstrings(
+							testutil.WebhookErrorPrefix,
+							"invalid value for IntOrString: invalid type: string is not a percentage",
+						).
+						Validate(err)
+				})
+			})
+		})
+
+		Context("spec.rackConfig.racks[].forceBlockFromRoster", func() {
+			Context("positive", func() {
+				It("allows create when exactly one rack has forceBlockFromRoster and at least one rack stays in roster", func() {
+					aeroCluster := createMultiRackSCCluster(nsName,
+						"/rack1/xvda", "/rack2/xvdb", "/rack3/xvdc")
+					aeroCluster.Spec.RackConfig.Racks[0].ForceBlockFromRoster = ptr.To(true)
+
+					Expect(envtests.K8sClient.Create(ctx, aeroCluster)).To(Succeed())
+				})
+			})
+
+			Context("negative", func() {
+				It("rejects create when every rack has forceBlockFromRoster enabled", func() {
+					aeroCluster := createMultiRackSCCluster(nsName,
+						"/rack1/xvda", "/rack2/xvdb", "/rack3/xvdc")
+					aeroCluster.Spec.RackConfig.Racks[0].ForceBlockFromRoster = ptr.To(true)
+					aeroCluster.Spec.RackConfig.Racks[1].ForceBlockFromRoster = ptr.To(true)
+					aeroCluster.Spec.RackConfig.Racks[2].ForceBlockFromRoster = ptr.To(true)
+
+					err := envtests.K8sClient.Create(ctx, aeroCluster)
+					Expect(err).To(HaveOccurred())
+
+					envtests.NewStatusErrorMatcher().
+						WithMessageSubstrings(
+							testutil.WebhookErrorPrefix,
+							"all racks cannot have forceBlockFromRoster enabled. At least one rack must remain in the roster",
+						).
+						Validate(err)
+				})
+
+				It("rejects create when forceBlockFromRoster is used together with maxIgnorablePods", func() {
+					aeroCluster := createMultiRackSCCluster(nsName,
+						"/rack1/xvda", "/rack2/xvdb")
+					aeroCluster.Spec.RackConfig.Racks[0].ForceBlockFromRoster = ptr.To(true)
+					aeroCluster.Spec.RackConfig.MaxIgnorablePods = ptr.To(intstr.FromInt32(1))
+
+					err := envtests.K8sClient.Create(ctx, aeroCluster)
+					Expect(err).To(HaveOccurred())
+
+					envtests.NewStatusErrorMatcher().
+						WithMessageSubstrings(
+							testutil.WebhookErrorPrefix,
+							"forceBlockFromRoster cannot be used together with maxIgnorablePods",
+						).
+						Validate(err)
+				})
+
+				It("rejects create when forceBlockFromRoster is used together with rosterNodeBlockList", func() {
+					aeroCluster := createMultiRackSCCluster(nsName,
+						"/rack1/xvda", "/rack2/xvdb")
+					aeroCluster.Spec.RackConfig.Racks[0].ForceBlockFromRoster = ptr.To(true)
+					aeroCluster.Spec.RosterNodeBlockList = []string{"1a0"}
+
+					err := envtests.K8sClient.Create(ctx, aeroCluster)
+					Expect(err).To(HaveOccurred())
+
+					envtests.NewStatusErrorMatcher().
+						WithMessageSubstrings(
+							testutil.WebhookErrorPrefix,
+							"forceBlockFromRoster cannot be used together with RosterNodeBlockList",
+						).
+						Validate(err)
+				})
+
+				It("rejects create when only one rack remains in roster and rollingUpdateBatchSize is set", func() {
+					aeroCluster := createMultiRackSCCluster(nsName,
+						"/rack1/xvda", "/rack2/xvdb")
+					aeroCluster.Spec.RackConfig.Racks[0].ForceBlockFromRoster = ptr.To(true)
+					aeroCluster.Spec.RackConfig.RollingUpdateBatchSize = ptr.To(intstr.FromInt32(2))
+
+					err := envtests.K8sClient.Create(ctx, aeroCluster)
+					Expect(err).To(HaveOccurred())
+
+					envtests.NewStatusErrorMatcher().
+						WithMessageSubstrings(
+							testutil.WebhookErrorPrefix,
+							"with only one rack in roster, cannot use rollingUpdateBatchSize or scaleDownBatchSize",
+						).
+						Validate(err)
+				})
+
+				It("rejects create when only one rack remains in roster and scaleDownBatchSize is set", func() {
+					aeroCluster := createMultiRackSCCluster(nsName,
+						"/rack1/xvda", "/rack2/xvdb")
+					aeroCluster.Spec.RackConfig.Racks[0].ForceBlockFromRoster = ptr.To(true)
+					aeroCluster.Spec.RackConfig.ScaleDownBatchSize = ptr.To(intstr.FromInt32(1))
+
+					err := envtests.K8sClient.Create(ctx, aeroCluster)
+					Expect(err).To(HaveOccurred())
+
+					envtests.NewStatusErrorMatcher().
+						WithMessageSubstrings(
+							testutil.WebhookErrorPrefix,
+							"with only one rack in roster, cannot use rollingUpdateBatchSize or scaleDownBatchSize",
+						).
+						Validate(err)
+				})
+			})
+		})
 	})
 
 	Context("Update validation", func() {
@@ -184,6 +515,413 @@ var _ = Describe("Rack enabled cluster webhook validation", func() {
 					patchFirstPVStorageClassSpec(&current.Spec.Storage)
 
 					Expect(envtests.K8sClient.Update(ctx, current)).To(Succeed())
+				})
+			})
+		})
+
+		Context("spec.rackConfig.racks[].id", func() {
+			Context("negative", func() {
+				It("rejects out-of-range rack id on update (Maximum)", func() {
+					aeroCluster := testCluster.CreateDummyAerospikeCluster(nsName, 2)
+					aeroCluster.Spec.RackConfig = asdbv1.RackConfig{
+						Racks: []asdbv1.Rack{
+							{ID: 1},
+							{ID: 2},
+						},
+					}
+					Expect(envtests.K8sClient.Create(ctx, aeroCluster)).To(Succeed())
+
+					current, err := testCluster.GetCluster(envtests.K8sClient, ctx, nsName)
+					Expect(err).ToNot(HaveOccurred())
+
+					current.Spec.RackConfig.Racks = append(
+						current.Spec.RackConfig.Racks,
+						asdbv1.Rack{ID: 20000000000},
+					)
+
+					err = envtests.K8sClient.Update(ctx, current)
+					Expect(err).To(HaveOccurred())
+					envtests.NewStatusErrorMatcher().
+						WithMessageSubstrings(testutil.CRDSchemaErrorPrefix, "id").
+						Validate(err)
+				})
+
+				It("rejects negative rack id on update (Minimum)", func() {
+					aeroCluster := testCluster.CreateDummyAerospikeCluster(nsName, 2)
+					aeroCluster.Spec.RackConfig = asdbv1.RackConfig{
+						Racks: []asdbv1.Rack{
+							{ID: 1},
+							{ID: 2},
+						},
+					}
+					Expect(envtests.K8sClient.Create(ctx, aeroCluster)).To(Succeed())
+
+					current, err := testCluster.GetCluster(envtests.K8sClient, ctx, nsName)
+					Expect(err).ToNot(HaveOccurred())
+
+					current.Spec.RackConfig.Racks[0].ID = -1
+					err = envtests.K8sClient.Update(ctx, current)
+					Expect(err).To(HaveOccurred())
+					envtests.NewStatusErrorMatcher().
+						WithMessageSubstrings(testutil.CRDSchemaErrorPrefix,
+							"Invalid value: -1",
+							"id in body should be greater than or equal to 0").
+						Validate(err)
+				})
+
+				It("rejects duplicate rack id on update", func() {
+					aeroCluster := testCluster.CreateDummyAerospikeCluster(nsName, 2)
+					aeroCluster.Spec.RackConfig = asdbv1.RackConfig{
+						Racks: []asdbv1.Rack{
+							{ID: 1},
+							{ID: 2},
+						},
+					}
+					Expect(envtests.K8sClient.Create(ctx, aeroCluster)).To(Succeed())
+
+					current, err := testCluster.GetCluster(envtests.K8sClient, ctx, nsName)
+					Expect(err).ToNot(HaveOccurred())
+
+					current.Spec.RackConfig.Racks = append(
+						current.Spec.RackConfig.Racks,
+						current.Spec.RackConfig.Racks...,
+					)
+
+					err = envtests.K8sClient.Update(ctx, current)
+					Expect(err).To(HaveOccurred())
+					envtests.NewStatusErrorMatcher().
+						WithMessageSubstrings(
+							testutil.WebhookErrorPrefix,
+							"duplicate rackID 1 not allowed",
+						).
+						Validate(err)
+				})
+
+				It("rejects DefaultRackID when appended on update with multiple racks (reserved, mutating webhook)", func() {
+					aeroCluster := testCluster.CreateDummyAerospikeCluster(nsName, 2)
+					aeroCluster.Spec.RackConfig = asdbv1.RackConfig{
+						Namespaces: []string{"test"},
+						Racks: []asdbv1.Rack{
+							{ID: 1},
+							{ID: 2},
+						},
+					}
+					Expect(envtests.K8sClient.Create(ctx, aeroCluster)).To(Succeed())
+
+					current, err := testCluster.GetCluster(envtests.K8sClient, ctx, nsName)
+					Expect(err).ToNot(HaveOccurred())
+
+					current.Spec.RackConfig.Racks = append(
+						current.Spec.RackConfig.Racks,
+						asdbv1.Rack{ID: asdbv1.DefaultRackID},
+					)
+
+					err = envtests.K8sClient.Update(ctx, current)
+					Expect(err).To(HaveOccurred())
+					envtests.NewStatusErrorMatcher().
+						WithMessageSubstrings(
+							testutil.MutatingClusterWebhookErrorPrefix,
+							"invalid RackConfig",
+							"RackID",
+							"reserved",
+						).
+						Validate(err)
+				})
+
+				It("rejects DefaultRackID combined with rack placement on update (reserved, mutating webhook)", func() {
+					aeroCluster := testCluster.CreateDummyAerospikeCluster(nsName, 2)
+					aeroCluster.Spec.RackConfig = asdbv1.RackConfig{
+						Namespaces: []string{"test"},
+						Racks:      []asdbv1.Rack{{ID: asdbv1.DefaultRackID}},
+					}
+					Expect(envtests.K8sClient.Create(ctx, aeroCluster)).To(Succeed())
+
+					current, err := testCluster.GetCluster(envtests.K8sClient, ctx, nsName)
+					Expect(err).ToNot(HaveOccurred())
+
+					zone := "zone-a"
+					current.Spec.RackConfig.Racks[0].Zone = zone
+
+					err = envtests.K8sClient.Update(ctx, current)
+					Expect(err).To(HaveOccurred())
+					envtests.NewStatusErrorMatcher().
+						WithMessageSubstrings(
+							testutil.MutatingClusterWebhookErrorPrefix,
+							"invalid RackConfig",
+							"RackID",
+							"reserved",
+						).
+						Validate(err)
+				})
+			})
+		})
+
+		Context("spec.rackConfig.maxIgnorablePods", func() {
+			Context("positive", func() {
+				It("allows update adding maxIgnorablePods as a positive integer", func() {
+					aeroCluster := testCluster.CreateDummyAerospikeCluster(nsName, 2)
+					Expect(envtests.K8sClient.Create(ctx, aeroCluster)).To(Succeed())
+					seedClusterStatusFromSpec(ctx, nsName)
+
+					current, err := testCluster.GetCluster(envtests.K8sClient, ctx, nsName)
+					Expect(err).ToNot(HaveOccurred())
+
+					current.Spec.RackConfig.MaxIgnorablePods = ptr.To(intstr.FromInt32(1))
+
+					Expect(envtests.K8sClient.Update(ctx, current)).To(Succeed())
+				})
+
+				It("allows update adding maxIgnorablePods as a percentage string", func() {
+					aeroCluster := testCluster.CreateDummyAerospikeCluster(nsName, 2)
+					Expect(envtests.K8sClient.Create(ctx, aeroCluster)).To(Succeed())
+					seedClusterStatusFromSpec(ctx, nsName)
+
+					current, err := testCluster.GetCluster(envtests.K8sClient, ctx, nsName)
+					Expect(err).ToNot(HaveOccurred())
+
+					current.Spec.RackConfig.MaxIgnorablePods = ptr.To(intstr.FromString("25%"))
+
+					Expect(envtests.K8sClient.Update(ctx, current)).To(Succeed())
+				})
+			})
+
+			Context("negative", func() {
+				It("rejects update changing maxIgnorablePods to a negative integer", func() {
+					aeroCluster := testCluster.CreateDummyAerospikeCluster(nsName, 2)
+					aeroCluster.Spec.RackConfig.MaxIgnorablePods = ptr.To(intstr.FromInt32(2))
+					Expect(envtests.K8sClient.Create(ctx, aeroCluster)).To(Succeed())
+					seedClusterStatusFromSpec(ctx, nsName)
+
+					current, err := testCluster.GetCluster(envtests.K8sClient, ctx, nsName)
+					Expect(err).ToNot(HaveOccurred())
+
+					current.Spec.RackConfig.MaxIgnorablePods = ptr.To(intstr.FromInt32(-1))
+
+					err = envtests.K8sClient.Update(ctx, current)
+					Expect(err).To(HaveOccurred())
+					envtests.NewStatusErrorMatcher().
+						WithMessageSubstrings(
+							testutil.WebhookErrorPrefix,
+							"can not use negative spec.rackConfig.maxIgnorablePods",
+						).
+						Validate(err)
+				})
+
+				It("rejects update changing maxIgnorablePods to a percentage greater than 100%", func() {
+					aeroCluster := testCluster.CreateDummyAerospikeCluster(nsName, 2)
+					aeroCluster.Spec.RackConfig.MaxIgnorablePods = ptr.To(intstr.FromString("50%"))
+					Expect(envtests.K8sClient.Create(ctx, aeroCluster)).To(Succeed())
+					seedClusterStatusFromSpec(ctx, nsName)
+
+					current, err := testCluster.GetCluster(envtests.K8sClient, ctx, nsName)
+					Expect(err).ToNot(HaveOccurred())
+
+					current.Spec.RackConfig.MaxIgnorablePods = ptr.To(intstr.FromString("101%"))
+
+					err = envtests.K8sClient.Update(ctx, current)
+					Expect(err).To(HaveOccurred())
+					envtests.NewStatusErrorMatcher().
+						WithMessageSubstrings(
+							testutil.WebhookErrorPrefix,
+							"spec.rackConfig.maxIgnorablePods",
+							"must not be greater than 100 percent",
+						).
+						Validate(err)
+				})
+
+				It("rejects update adding maxIgnorablePods when forceBlockFromRoster is already enabled", func() {
+					aeroCluster := createMultiRackSCCluster(nsName,
+						"/rack1/xvda", "/rack2/xvdb")
+					aeroCluster.Spec.RackConfig.Racks[0].ForceBlockFromRoster = ptr.To(true)
+					Expect(envtests.K8sClient.Create(ctx, aeroCluster)).To(Succeed())
+					seedClusterStatusFromSpec(ctx, nsName)
+
+					current, err := testCluster.GetCluster(envtests.K8sClient, ctx, nsName)
+					Expect(err).ToNot(HaveOccurred())
+
+					current.Spec.RackConfig.MaxIgnorablePods = ptr.To(intstr.FromInt32(1))
+
+					err = envtests.K8sClient.Update(ctx, current)
+					Expect(err).To(HaveOccurred())
+					envtests.NewStatusErrorMatcher().
+						WithMessageSubstrings(
+							testutil.WebhookErrorPrefix,
+							"forceBlockFromRoster cannot be used together with maxIgnorablePods",
+						).
+						Validate(err)
+				})
+			})
+		})
+
+		Context("spec.rackConfig.racks[].forceBlockFromRoster", func() {
+			Context("positive", func() {
+				It("allows update enabling forceBlockFromRoster on a single rack when status is populated", func() {
+					aeroCluster := createMultiRackSCCluster(nsName,
+						"/rack1/xvda", "/rack2/xvdb", "/rack3/xvdc")
+					Expect(envtests.K8sClient.Create(ctx, aeroCluster)).To(Succeed())
+					seedClusterStatusFromSpec(ctx, nsName)
+
+					current, err := testCluster.GetCluster(envtests.K8sClient, ctx, nsName)
+					Expect(err).ToNot(HaveOccurred())
+
+					current.Spec.RackConfig.Racks[0].ForceBlockFromRoster = ptr.To(true)
+
+					Expect(envtests.K8sClient.Update(ctx, current)).To(Succeed())
+				})
+
+				It("allows sequential updates enabling forceBlockFromRoster on another rack after status reflects the first",
+					func() {
+						aeroCluster := createMultiRackSCCluster(nsName,
+							"/rack1/xvda", "/rack2/xvdb", "/rack3/xvdc")
+						Expect(envtests.K8sClient.Create(ctx, aeroCluster)).To(Succeed())
+						seedClusterStatusFromSpec(ctx, nsName)
+
+						first, err := testCluster.GetCluster(envtests.K8sClient, ctx, nsName)
+						Expect(err).ToNot(HaveOccurred())
+
+						first.Spec.RackConfig.Racks[0].ForceBlockFromRoster = ptr.To(true)
+						Expect(envtests.K8sClient.Update(ctx, first)).To(Succeed())
+
+						seedClusterStatusFromSpec(ctx, nsName)
+
+						second, err := testCluster.GetCluster(envtests.K8sClient, ctx, nsName)
+						Expect(err).ToNot(HaveOccurred())
+
+						second.Spec.RackConfig.Racks[1].ForceBlockFromRoster = ptr.To(true)
+
+						Expect(envtests.K8sClient.Update(ctx, second)).To(Succeed())
+					})
+			})
+
+			Context("negative", func() {
+				It("rejects update toggling forceBlockFromRoster when status.aerospikeConfig is not populated", func() {
+					aeroCluster := createMultiRackSCCluster(nsName,
+						"/rack1/xvda", "/rack2/xvdb", "/rack3/xvdc")
+					Expect(envtests.K8sClient.Create(ctx, aeroCluster)).To(Succeed())
+
+					current, err := testCluster.GetCluster(envtests.K8sClient, ctx, nsName)
+					Expect(err).ToNot(HaveOccurred())
+
+					current.Spec.RackConfig.Racks[0].ForceBlockFromRoster = ptr.To(true)
+
+					err = envtests.K8sClient.Update(ctx, current)
+					Expect(err).To(HaveOccurred())
+					envtests.NewStatusErrorMatcher().
+						WithMessageSubstrings(
+							testutil.WebhookErrorPrefix,
+							"status is not updated yet, cannot change forceBlockFromRoster in rack",
+						).
+						Validate(err)
+				})
+
+				It("rejects update enabling forceBlockFromRoster on more than one new rack in a single change", func() {
+					aeroCluster := createMultiRackSCCluster(nsName,
+						"/rack1/xvda", "/rack2/xvdb", "/rack3/xvdc")
+					Expect(envtests.K8sClient.Create(ctx, aeroCluster)).To(Succeed())
+					seedClusterStatusFromSpec(ctx, nsName)
+
+					current, err := testCluster.GetCluster(envtests.K8sClient, ctx, nsName)
+					Expect(err).ToNot(HaveOccurred())
+
+					current.Spec.RackConfig.Racks[0].ForceBlockFromRoster = ptr.To(true)
+					current.Spec.RackConfig.Racks[1].ForceBlockFromRoster = ptr.To(true)
+
+					err = envtests.K8sClient.Update(ctx, current)
+					Expect(err).To(HaveOccurred())
+					envtests.NewStatusErrorMatcher().
+						WithMessageSubstrings(
+							testutil.WebhookErrorPrefix,
+							"the forceBlockFromRoster flag can be applied to only one rack at a time",
+						).
+						Validate(err)
+				})
+
+				It("rejects update when every rack has forceBlockFromRoster enabled", func() {
+					aeroCluster := createMultiRackSCCluster(nsName,
+						"/rack1/xvda", "/rack2/xvdb")
+					aeroCluster.Spec.RackConfig.Racks[0].ForceBlockFromRoster = ptr.To(true)
+					Expect(envtests.K8sClient.Create(ctx, aeroCluster)).To(Succeed())
+					seedClusterStatusFromSpec(ctx, nsName)
+
+					current, err := testCluster.GetCluster(envtests.K8sClient, ctx, nsName)
+					Expect(err).ToNot(HaveOccurred())
+
+					current.Spec.RackConfig.Racks[1].ForceBlockFromRoster = ptr.To(true)
+
+					err = envtests.K8sClient.Update(ctx, current)
+					Expect(err).To(HaveOccurred())
+					envtests.NewStatusErrorMatcher().
+						WithMessageSubstrings(
+							testutil.WebhookErrorPrefix,
+							"all racks cannot have forceBlockFromRoster enabled. At least one rack must remain in the roster",
+						).
+						Validate(err)
+				})
+
+				It("rejects update adding rosterNodeBlockList when forceBlockFromRoster is enabled", func() {
+					aeroCluster := createMultiRackSCCluster(nsName,
+						"/rack1/xvda", "/rack2/xvdb")
+					aeroCluster.Spec.RackConfig.Racks[0].ForceBlockFromRoster = ptr.To(true)
+					Expect(envtests.K8sClient.Create(ctx, aeroCluster)).To(Succeed())
+					seedClusterStatusFromSpec(ctx, nsName)
+
+					current, err := testCluster.GetCluster(envtests.K8sClient, ctx, nsName)
+					Expect(err).ToNot(HaveOccurred())
+
+					current.Spec.RosterNodeBlockList = []string{"1a0"}
+
+					err = envtests.K8sClient.Update(ctx, current)
+					Expect(err).To(HaveOccurred())
+					envtests.NewStatusErrorMatcher().
+						WithMessageSubstrings(
+							testutil.WebhookErrorPrefix,
+							"forceBlockFromRoster cannot be used together with RosterNodeBlockList",
+						).
+						Validate(err)
+				})
+
+				It("rejects update adding rollingUpdateBatchSize when only one rack remains in roster", func() {
+					aeroCluster := createMultiRackSCCluster(nsName,
+						"/rack1/xvda", "/rack2/xvdb")
+					aeroCluster.Spec.RackConfig.Racks[0].ForceBlockFromRoster = ptr.To(true)
+					Expect(envtests.K8sClient.Create(ctx, aeroCluster)).To(Succeed())
+					seedClusterStatusFromSpec(ctx, nsName)
+
+					current, err := testCluster.GetCluster(envtests.K8sClient, ctx, nsName)
+					Expect(err).ToNot(HaveOccurred())
+
+					current.Spec.RackConfig.RollingUpdateBatchSize = ptr.To(intstr.FromInt32(2))
+
+					err = envtests.K8sClient.Update(ctx, current)
+					Expect(err).To(HaveOccurred())
+					envtests.NewStatusErrorMatcher().
+						WithMessageSubstrings(
+							testutil.WebhookErrorPrefix,
+							"with only one rack in roster, cannot use rollingUpdateBatchSize or scaleDownBatchSize",
+						).
+						Validate(err)
+				})
+
+				It("rejects update adding scaleDownBatchSize when only one rack remains in roster", func() {
+					aeroCluster := createMultiRackSCCluster(nsName,
+						"/rack1/xvda", "/rack2/xvdb")
+					aeroCluster.Spec.RackConfig.Racks[0].ForceBlockFromRoster = ptr.To(true)
+					Expect(envtests.K8sClient.Create(ctx, aeroCluster)).To(Succeed())
+					seedClusterStatusFromSpec(ctx, nsName)
+
+					current, err := testCluster.GetCluster(envtests.K8sClient, ctx, nsName)
+					Expect(err).ToNot(HaveOccurred())
+
+					current.Spec.RackConfig.ScaleDownBatchSize = ptr.To(intstr.FromInt32(1))
+
+					err = envtests.K8sClient.Update(ctx, current)
+					Expect(err).To(HaveOccurred())
+					envtests.NewStatusErrorMatcher().
+						WithMessageSubstrings(
+							testutil.WebhookErrorPrefix,
+							"with only one rack in roster, cannot use rollingUpdateBatchSize or scaleDownBatchSize",
+						).
+						Validate(err)
 				})
 			})
 		})

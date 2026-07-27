@@ -99,7 +99,6 @@ func setStorageDefaults(storage *asdbv1.AerospikeStorageSpec) {
 	defaultFilesystemWipeMethod := asdbv1.AerospikeVolumeMethodDeleteFiles
 	defaultBlockInitMethod := asdbv1.AerospikeVolumeMethodNone
 	defaultBlockWipeMethod := asdbv1.AerospikeVolumeMethodDD
-	defaultCleanupThreads := asdbv1.AerospikeVolumeSingleCleanupThread
 	// Set storage level defaults.
 	setAerospikePersistentVolumePolicyDefaults(
 		&storage.FileSystemVolumePolicy,
@@ -114,10 +113,6 @@ func setStorageDefaults(storage *asdbv1.AerospikeStorageSpec) {
 			InitMethod: defaultBlockInitMethod, WipeMethod: defaultBlockWipeMethod, CascadeDelete: false,
 		},
 	)
-
-	if storage.CleanupThreads == 0 {
-		storage.CleanupThreads = defaultCleanupThreads
-	}
 
 	for idx := range storage.Volumes {
 		switch {
@@ -247,6 +242,12 @@ func validateStorage(
 	if asdbv1.GetBool(storage.DeleteLocalStorageOnRestart) && len(storage.LocalStorageClasses) == 0 {
 		return warnings, fmt.Errorf(
 			"localStorageClasses cannot be empty if deleteLocalStorageOnRestart is set",
+		)
+	}
+
+	if asdbv1.GetBool(storage.DeleteLocalStorageOnPodRecovery) && len(storage.LocalStorageClasses) == 0 {
+		return warnings, fmt.Errorf(
+			"localStorageClasses cannot be empty if deleteLocalStorageOnPodRecovery is set",
 		)
 	}
 

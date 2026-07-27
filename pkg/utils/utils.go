@@ -32,21 +32,42 @@ const (
 	ReasonRegistryUnavailable = "RegistryUnavailable"
 )
 
-// ClusterNamespacedName return namespaced name
-func ClusterNamespacedName(aeroCluster *asdbv1.AerospikeCluster) string {
-	return NamespacedName(aeroCluster.Namespace, aeroCluster.Name)
-}
-
 // NamespacedName return namespaced name
 func NamespacedName(namespace, name string) string {
 	return fmt.Sprintf("%s/%s", namespace, name)
 }
 
-func GetNamespacedName(obj meta.Object) types.NamespacedName {
+// ClusterNamespacedName return namespaced name
+func ClusterNamespacedName(aeroCluster *asdbv1.AerospikeCluster) string {
+	return NamespacedName(aeroCluster.Namespace, aeroCluster.Name)
+}
+
+// NewNamespacedName returns a types.NamespacedName for use in structured log fields.
+func NewNamespacedName(namespace, name string) types.NamespacedName {
 	return types.NamespacedName{
-		Namespace: obj.GetNamespace(),
-		Name:      obj.GetName(),
+		Namespace: namespace,
+		Name:      name,
 	}
+}
+
+// NamespacedNames returns namespace/name identities for all names in namespace.
+func NamespacedNames(namespace string, names []string) []string {
+	namespacedNames := make([]string, 0, len(names))
+	for _, name := range names {
+		namespacedNames = append(namespacedNames, NamespacedName(namespace, name))
+	}
+
+	return namespacedNames
+}
+
+func GetNamespacedName(obj meta.Object) types.NamespacedName {
+	return NewNamespacedName(obj.GetNamespace(), obj.GetName())
+}
+
+// GetNamespacedNameString returns the namespace/name identity of obj as a string,
+// for use in free-form error and event text.
+func GetNamespacedNameString(obj meta.Object) string {
+	return NamespacedName(obj.GetNamespace(), obj.GetName())
 }
 
 func GetNamespacedNameForSTSOrConfigMap(

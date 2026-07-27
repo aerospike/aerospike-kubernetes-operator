@@ -75,51 +75,6 @@ var _ = Describe(
 
 func invalidResourceTest(ctx goctx.Context, checkAeroServer bool) {
 	Context(
-		"Deploy", func() {
-			var clusterName string
-			if checkAeroServer {
-				clusterName = "server-resource-invalid"
-			} else {
-				clusterName = "init-resource-invalid"
-			}
-
-			clusterNamespacedName := test.GetNamespacedName(
-				clusterName, namespace,
-			)
-			aeroCluster := createDummyAerospikeCluster(
-				clusterNamespacedName, 2,
-			)
-
-			It("DeployClusterWithResource: should fail for request exceeding limit", func() {
-				// It should be greater than given in cluster namespace
-				resourceMem := resource.MustParse("3Gi")
-				resourceCPU := resource.MustParse("250m")
-				limitMem := resource.MustParse("2Gi")
-				limitCPU := resource.MustParse("200m")
-
-				resources := &corev1.ResourceRequirements{
-					Requests: corev1.ResourceList{
-						corev1.ResourceCPU:    resourceCPU,
-						corev1.ResourceMemory: resourceMem,
-					},
-					Limits: corev1.ResourceList{
-						corev1.ResourceCPU:    limitCPU,
-						corev1.ResourceMemory: limitMem,
-					},
-				}
-
-				if checkAeroServer {
-					aeroCluster.Spec.PodSpec.AerospikeContainerSpec.Resources = resources
-				} else {
-					aeroCluster.Spec.PodSpec.AerospikeInitContainerSpec.Resources = resources
-				}
-
-				Expect(DeployCluster(k8sClient, ctx, aeroCluster)).Should(HaveOccurred())
-			})
-		},
-	)
-
-	Context(
 		"Update", func() {
 			var clusterName string
 

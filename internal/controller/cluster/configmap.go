@@ -17,15 +17,12 @@ import (
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/types"
 	"k8s.io/apimachinery/pkg/util/sets"
-	ctrl "sigs.k8s.io/controller-runtime"
 
 	asdbv1 "github.com/aerospike/aerospike-kubernetes-operator/v4/api/v1"
 	"github.com/aerospike/aerospike-kubernetes-operator/v4/pkg/utils"
 	lib "github.com/aerospike/aerospike-management-lib"
 	"github.com/aerospike/aerospike-management-lib/asconfig"
 )
-
-var pkgLog = ctrl.Log.WithName("lib.asconfig")
 
 const (
 	// aerospikeTemplateConfFileName is the name of the aerospike conf template
@@ -92,19 +89,25 @@ func init() {
 }
 
 // createConfigMapData create configMap data
-func (r *SingleClusterReconciler) createConfigMapData(rack *asdbv1.Rack) (
+func (r *SingleClusterReconciler) createConfigMapData(ctx context.Context, rack *asdbv1.Rack) (
 	map[string]string, error,
 ) {
 	// Add config template
 	confTemp, err := r.buildConfigTemplate(rack)
 	if err != nil {
-		return nil, fmt.Errorf("failed to build config template: %v", err)
+		return nil, fmt.Errorf(
+			"build config template for rack %d: %w",
+			rack.ID, err,
+		)
 	}
 
 	// Add conf file
-	confData, err := r.getBaseConfData(rack)
+	confData, err := r.getBaseConfData(ctx, rack)
 	if err != nil {
-		return nil, fmt.Errorf("failed to build config template: %v", err)
+		return nil, fmt.Errorf(
+			"build base config data for rack %d: %w",
+			rack.ID, err,
+		)
 	}
 
 	confData[aerospikeTemplateConfFileName] = confTemp
@@ -208,9 +211,7 @@ func createPodSpecForRack(
 func (r *SingleClusterReconciler) buildConfigTemplate(rack *asdbv1.Rack) (
 	string, error,
 ) {
-	log := pkgLog.WithValues(
-		"aerospikecluster", utils.ClusterNamespacedName(r.aeroCluster),
-	)
+	log := r.asConfigLog()
 
 	configMap := rack.AerospikeConfig.Value
 	log.V(1).Info(
@@ -220,7 +221,10 @@ func (r *SingleClusterReconciler) buildConfigTemplate(rack *asdbv1.Rack) (
 
 	asConf, err := asconfig.NewMapAsConfig(r.Log, configMap)
 	if err != nil {
-		return "", fmt.Errorf("failed to load config map by lib: %v", err)
+		return "", fmt.Errorf(
+			"load Aerospike config map for rack %d: %w",
+			rack.ID, err,
+		)
 	}
 
 	// No need for asConf version validation, it's already validated in admission webhook
@@ -232,7 +236,7 @@ func (r *SingleClusterReconciler) buildConfigTemplate(rack *asdbv1.Rack) (
 }
 
 // getBaseConfData returns the basic data to be used in the config map for input aeroCluster spec.
-func (r *SingleClusterReconciler) getBaseConfData(rack *asdbv1.Rack) (map[string]string, error) {
+func (r *SingleClusterReconciler) getBaseConfData(ctx context.Context, rack *asdbv1.Rack) (map[string]string, error) {
 	workDir := asdbv1.GetWorkDirectory(rack.AerospikeConfig)
 	volume := asdbv1.GetVolumeForAerospikePath(&rack.Storage, workDir)
 
@@ -306,7 +310,7 @@ func (r *SingleClusterReconciler) getBaseConfData(rack *asdbv1.Rack) (map[string
 	}
 
 	// Include peer list.
-	peers, err := r.getFQDNsForCluster()
+	peers, err := r.getFQDNsForCluster(ctx)
 	if err != nil {
 		return nil, err
 	}
@@ -316,12 +320,12 @@ func (r *SingleClusterReconciler) getBaseConfData(rack *asdbv1.Rack) (map[string
 	return baseConfData, nil
 }
 
-func (r *SingleClusterReconciler) getFQDNsForCluster() ([]string, error) {
+func (r *SingleClusterReconciler) getFQDNsForCluster(ctx context.Context) ([]string, error) {
 	podNameSet := sets.NewString()
 
 	// The default rack is not listed in config during switchover to rack aware state.
 	// Use current pod names as well.
-	pods, err := r.getClusterPodList()
+	pods, err := r.getClusterPodList(ctx)
 	if err != nil {
 		return nil, err
 	}
@@ -349,7 +353,7 @@ func (r *SingleClusterReconciler) getFQDNsForCluster() ([]string, error) {
 	return podNameSet.List(), nil
 }
 
-func (r *SingleClusterReconciler) deleteRackConfigMap(namespacedName types.NamespacedName) error {
+func (r *SingleClusterReconciler) deleteRackConfigMap(ctx context.Context, namespacedName types.NamespacedName) error {
 	configMap := &corev1.ConfigMap{
 		ObjectMeta: metav1.ObjectMeta{
 			Name:      namespacedName.Name,
@@ -357,17 +361,17 @@ func (r *SingleClusterReconciler) deleteRackConfigMap(namespacedName types.Names
 		},
 	}
 
-	if err := r.Delete(context.TODO(), configMap); err != nil {
+	if err := r.Delete(ctx, configMap); err != nil {
 		if errors.IsNotFound(err) {
 			r.Log.Info(
-				"Can't find rack configmap while trying to delete it. Skipping...",
-				"configmap", namespacedName.Name,
+				"Rack ConfigMap not found while deleting, skipping",
+				"configMap", utils.NewNamespacedName(namespacedName.Namespace, namespacedName.Name),
 			)
 
 			return nil
 		}
 
-		return fmt.Errorf("failed to delete rack configmap for pod %s: %v", namespacedName.Name, err)
+		return fmt.Errorf("delete rack ConfigMap %s: %w", namespacedName, err)
 	}
 
 	return nil

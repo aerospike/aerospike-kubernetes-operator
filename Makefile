@@ -11,7 +11,7 @@ OPENSHIFT_VERSION="v4.10"
 # - use the VERSION as arg of the bundle target (e.g make bundle VERSION=0.0.2)
 # - use environment variables to overwrite this value (e.g export VERSION=0.0.2)
 # TODO: Version must be pulled from git tags
-VERSION ?= 4.4.1
+VERSION ?= 4.5.0
 
 # Platforms supported
 PLATFORMS ?= linux/amd64,linux/arm64
@@ -139,17 +139,17 @@ go-lint-fix: golangci-lint ## Run golangci-lint linter and perform fixes
 	$(GOLANGCI_LINT) run --fix
 
 .PHONY: all-test
-all-test: manifests generate fmt vet setup-envtest cluster-test backup-service-test backup-test restore-test ## Run tests.
+all-test: manifests generate fmt vet setup-envtest unit-test cluster-test backup-service-test backup-test restore-test ## Run tests.
 
-.PHONY: pkg-test
-pkg-test: ## Run unit tests for pkg directory
-	@echo "Running pkg unit tests..."
-	go test -v -race -coverprofile=coverage.out ./pkg/...
+.PHONY: unit-test
+unit-test: ## Run unit tests for pkg and internal directories
+	@echo "Running unit tests..."
+	go test -v -race -coverprofile=coverage.out ./pkg/... ./internal/...
 	@echo "\nCoverage Summary:"
 	@go tool cover -func=coverage.out | tail -1
 
-.PHONY: pkg-test-coverage
-pkg-test-coverage: pkg-test ## Run pkg unit tests and open coverage report in browser
+.PHONY: unit-test-coverage
+unit-test-coverage: unit-test ## Run pkg unit tests and open coverage report in browser
 	@echo "Opening coverage report in browser..."
 	go tool cover -html=coverage.out
 
@@ -180,7 +180,19 @@ env-test-cluster:  fmt vet setup-envtest ## Run tests.
 
 .PHONY: env-test-eviction # Run test/envtests/eviction
 env-test-eviction:  fmt vet setup-envtest ## Run tests.
-	export KUBEBUILDER_ASSETS="$(shell $(ENVTEST) use $(ENVTEST_K8S_VERSION) --bin-dir $(LOCALBIN) -p path)"; cd $(shell pwd)/test/envtests/eviction && mkdir -p ../../test-results && go run github.com/onsi/ginkgo/v2/ginkgo -r --focus "$(FOCUS)" -coverprofile envcover.out -timeout=1h0m0s --junit-report=../../test-results/junit-envtests-eviction.xml -- . ${ARGS}	
+	export KUBEBUILDER_ASSETS="$(shell $(ENVTEST) use $(ENVTEST_K8S_VERSION) --bin-dir $(LOCALBIN) -p path)"; cd $(shell pwd)/test/envtests/eviction && mkdir -p ../../test-results && go run github.com/onsi/ginkgo/v2/ginkgo -r --focus "$(FOCUS)" -coverprofile envcover.out -timeout=1h0m0s --junit-report=../../test-results/junit-envtests-eviction.xml -- . ${ARGS}
+
+.PHONY: env-test-backup
+env-test-backup: fmt vet setup-envtest ## Run backup envtests.
+	export KUBEBUILDER_ASSETS="$(shell $(ENVTEST) use $(ENVTEST_K8S_VERSION) --bin-dir $(LOCALBIN) -p path)"; cd $(shell pwd)/test/envtests/backup && mkdir -p ../../test-results && go run github.com/onsi/ginkgo/v2/ginkgo -r --focus "$(FOCUS)" -coverprofile envcover.out -timeout=1h0m0s --junit-report=../../test-results/junit-envtests-backup.xml -- . ${ARGS}
+
+.PHONY: env-test-backup-service
+env-test-backup-service: fmt vet setup-envtest ## Run backup service envtests.
+	export KUBEBUILDER_ASSETS="$(shell $(ENVTEST) use $(ENVTEST_K8S_VERSION) --bin-dir $(LOCALBIN) -p path)"; cd $(shell pwd)/test/envtests/backup_service && mkdir -p ../../test-results && go run github.com/onsi/ginkgo/v2/ginkgo -r --focus "$(FOCUS)" -coverprofile envcover.out -timeout=1h0m0s --junit-report=../../test-results/junit-envtests-backup-service.xml -- . ${ARGS}
+
+.PHONY: env-test-restore
+env-test-restore: fmt vet setup-envtest ## Run restore envtests.
+	export KUBEBUILDER_ASSETS="$(shell $(ENVTEST) use $(ENVTEST_K8S_VERSION) --bin-dir $(LOCALBIN) -p path)"; cd $(shell pwd)/test/envtests/restore && mkdir -p ../../test-results && go run github.com/onsi/ginkgo/v2/ginkgo -r --focus "$(FOCUS)" -coverprofile envcover.out -timeout=1h0m0s --junit-report=../../test-results/junit-envtests-restore.xml -- . ${ARGS}
 ##@ Build
 
 .PHONY: build
@@ -346,7 +358,7 @@ submodules: ## Pull and update git submodules recursively
 
 # Generate bundle manifests and metadata, then validate generated files.
 # For OpenShift bundles run
-# CHANNELS=stable DEFAULT_CHANNEL=stable OPENSHIFT_VERSION=v4.10 IMG=docker.io/aerospike/aerospike-kubernetes-operator-nightly:4.4.1 make bundle
+# CHANNELS=stable DEFAULT_CHANNEL=stable OPENSHIFT_VERSION=v4.10 IMG=docker.io/aerospike/aerospike-kubernetes-operator-nightly:4.5.0 make bundle
 .PHONY: bundle
 bundle: manifests kustomize operator-sdk
 	rm -rf $(ROOT_DIR)/bundle.Dockerfile $(BUNDLE_DIR)

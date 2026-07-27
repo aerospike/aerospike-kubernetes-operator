@@ -82,10 +82,13 @@ type AerospikeClusterSpec struct { //nolint:govet // for readability
 
 	// Aerospike cluster size
 	// +operator-sdk:csv:customresourcedefinitions:type=spec,displayName="Cluster Size"
+	// +kubebuilder:validation:Minimum=1
+	// +kubebuilder:validation:Maximum=256
 	Size int32 `json:"size"`
 
 	// Aerospike server image
 	// +operator-sdk:csv:customresourcedefinitions:type=spec,displayName="Server Image"
+	// +kubebuilder:validation:MinLength=1
 	Image string `json:"image"`
 
 	// MaxUnavailable is the percentage/number of pods that can be allowed to go down or unavailable before application
@@ -124,6 +127,7 @@ type AerospikeClusterSpec struct { //nolint:govet // for readability
 
 	// ValidationPolicy controls validation of the Aerospike cluster resource.
 	// +operator-sdk:csv:customresourcedefinitions:type=spec,displayName="Validation Policy"
+	// +kubebuilder:default={skipWorkDirValidate:false}
 	// +optional
 	ValidationPolicy *ValidationPolicySpec `json:"validationPolicy,omitempty"`
 
@@ -521,7 +525,9 @@ type RackConfig struct { //nolint:govet // for readability
 
 // Rack specifies single rack config
 type Rack struct { //nolint:govet // for readability
-	// Identifier for the rack
+	// Identifier for the rack. Allowed range matches Aerospike namespace rack-id.
+	// +kubebuilder:validation:Minimum=0
+	// +kubebuilder:validation:Maximum=1000000
 	ID int `json:"id"`
 
 	// Revision is a version identifier for this rack's specification, used to trigger controlled migrations
@@ -597,6 +603,8 @@ type ValidationPolicySpec struct {
 // AerospikeRoleSpec specifies an Aerospike database role and its associated privileges.
 type AerospikeRoleSpec struct {
 	// Name of this role.
+	// +kubebuilder:validation:MinLength=1
+	// +kubebuilder:validation:MaxLength=63
 	Name string `json:"name"`
 
 	// Privileges granted to this role.
@@ -624,6 +632,8 @@ type AerospikeUserSpec struct {
 	AuthMode AerospikeAuthMode `json:"authMode,omitempty"`
 
 	// Name is the user's username.
+	// +kubebuilder:validation:MinLength=1
+	// +kubebuilder:validation:MaxLength=63
 	Name string `json:"name"`
 
 	// SecretName has secret info created by the user. User needs to create this secret from password literal.
@@ -640,6 +650,7 @@ type AerospikeUserSpec struct {
 // AerospikeClientAdminPolicy specify the aerospike client admin policy for access control operations.
 type AerospikeClientAdminPolicy struct {
 	// Timeout for admin client policy in milliseconds.
+	// +kubebuilder:validation:Minimum=0
 	Timeout int `json:"timeout"`
 }
 
@@ -804,7 +815,7 @@ type PersistentVolumeSpec struct { //nolint:govet // for readability
 
 	// AccessModes contains the desired access modes the volume should have.
 	// More info: https://kubernetes.io/docs/concepts/storage/persistent-volumes/#access-modes
-	// +kubebuilder:validation:items:Enum=ReadOnlyMany;ReadWriteMany;ReadWriteOnce
+	// +kubebuilder:validation:items:Enum=ReadOnlyMany;ReadWriteMany;ReadWriteOnce;ReadWriteOncePod
 	// +optional
 	AccessModes []corev1.PersistentVolumeAccessMode `json:"accessModes,omitempty" protobuf:"bytes,1,rep,name=accessModes,casttype=PersistentVolumeAccessMode"` //nolint:lll // for readability
 
@@ -875,6 +886,8 @@ type AerospikeStorageSpec struct { //nolint:govet // for readability
 	BlockVolumePolicy AerospikePersistentVolumePolicySpec `json:"blockVolumePolicy,omitempty"`
 
 	// CleanupThreads contains the maximum number of cleanup threads(dd or blkdiscard) per init container.
+	// +kubebuilder:validation:Minimum=0
+	// +kubebuilder:default=1
 	// +optional
 	CleanupThreads int `json:"cleanupThreads,omitempty"`
 
@@ -883,9 +896,18 @@ type AerospikeStorageSpec struct { //nolint:govet // for readability
 	LocalStorageClasses []string `json:"localStorageClasses,omitempty"`
 
 	// DeleteLocalStorageOnRestart enables the deletion of local storage PVCs when a pod is restarted or rescheduled
-	// by AKO. It only considers local storage classes given in the localStorageClasses field.
+	// by AKO as part of a planned operation (rolling restart, image upgrade).
+	// It only considers local storage classes given in the localStorageClasses field.
 	// +optional
 	DeleteLocalStorageOnRestart *bool `json:"deleteLocalStorageOnRestart,omitempty"`
+
+	// DeleteLocalStorageOnPodRecovery enables the deletion of local storage PVCs when AKO recovers a failed pod.
+	// Defaults to false.
+	// WARNING: enabling this will cause permanent data loss for local volumes on the failed pod.
+	// Only enable this when the data on the local disk is known to be corrupted or unrecoverable.
+	// Requires localStorageClasses to be non-empty.
+	// +optional
+	DeleteLocalStorageOnPodRecovery *bool `json:"deleteLocalStorageOnPodRecovery,omitempty"`
 
 	// Volumes list to attach to created pods.
 	// +patchMergeKey=name
@@ -1091,6 +1113,7 @@ type AerospikeNetworkPolicy struct {
 	// AccessType is the type of network address to use for Aerospike access address.
 	// Defaults to hostInternal.
 	// +kubebuilder:validation:Enum=pod;hostInternal;hostExternal;configuredIP;customInterface
+	// +kubebuilder:default="hostInternal"
 	// +optional
 	AccessType AerospikeNetworkType `json:"access,omitempty"`
 
@@ -1107,6 +1130,7 @@ type AerospikeNetworkPolicy struct {
 	// AlternateAccessType is the type of network address to use for Aerospike alternate access address.
 	// Defaults to hostExternal.
 	// +kubebuilder:validation:Enum=pod;hostInternal;hostExternal;configuredIP;customInterface
+	// +kubebuilder:default="hostExternal"
 	// +optional
 	AlternateAccessType AerospikeNetworkType `json:"alternateAccess,omitempty"`
 
@@ -1124,6 +1148,7 @@ type AerospikeNetworkPolicy struct {
 	// TLSAccessType is the type of network address to use for Aerospike TLS access address.
 	// Defaults to hostInternal.
 	// +kubebuilder:validation:Enum=pod;hostInternal;hostExternal;configuredIP;customInterface
+	// +kubebuilder:default="hostInternal"
 	// +optional
 	TLSAccessType AerospikeNetworkType `json:"tlsAccess,omitempty"`
 
@@ -1140,6 +1165,7 @@ type AerospikeNetworkPolicy struct {
 	// TLSAlternateAccessType is the type of network address to use for Aerospike TLS alternate access address.
 	// Defaults to hostExternal.
 	// +kubebuilder:validation:Enum=pod;hostInternal;hostExternal;configuredIP;customInterface
+	// +kubebuilder:default="hostExternal"
 	// +optional
 	TLSAlternateAccessType AerospikeNetworkType `json:"tlsAlternateAccess,omitempty"`
 
@@ -1311,7 +1337,7 @@ type AerospikePodStatus struct { //nolint:govet // for readability
 
 // AerospikeCluster is the schema for the AerospikeCluster API
 // +operator-sdk:csv:customresourcedefinitions:displayName="Aerospike Cluster",resources={{Service, v1},{Pod,v1},{StatefulSet,v1}}
-// +kubebuilder:metadata:annotations="aerospike-kubernetes-operator/version=4.4.1"
+// +kubebuilder:metadata:annotations="aerospike-kubernetes-operator/version=4.5.0"
 //
 //nolint:lll // for readability
 type AerospikeCluster struct { //nolint:govet // for readability
