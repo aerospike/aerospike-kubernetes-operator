@@ -466,6 +466,10 @@ func GetIntType(value interface{}) (int, error) {
 
 // GetMigrateFillDelay returns the migrate-fill-delay from the Aerospike configuration
 func GetMigrateFillDelay(asConfig *AerospikeConfigSpec) (int, error) {
+	if asConfig == nil {
+		return 0, nil
+	}
+
 	serviceConfig := asConfig.Value[ConfKeyService].(map[string]interface{})
 
 	fillDelayIFace, exists := serviceConfig["migrate-fill-delay"]

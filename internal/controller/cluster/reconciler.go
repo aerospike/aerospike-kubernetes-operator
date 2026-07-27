@@ -227,7 +227,7 @@ func (r *SingleClusterReconciler) Reconcile() (result ctrl.Result, recErr error)
 	// Redundant safe check to revert migrate-fill-delay if the previous revert operation missed/skipped somehow
 	if res := r.setMigrateFillDelay(
 		policy, &r.aeroCluster.Spec.RackConfig.Racks[0].AerospikeConfig,
-		false, ignorablePodNames,
+		nil, ignorablePodNames,
 	); !res.IsSuccess {
 		r.Log.Error(res.Err, "Failed to revert migrate-fill-delay")
 

@@ -594,8 +594,7 @@ func (r *SingleClusterReconciler) reconcileRack(
 		if (r.aeroCluster.Status.Size > r.aeroCluster.Spec.Size) ||
 			(!r.IsStatusEmpty() && len(r.aeroCluster.Status.RackConfig.Racks) != len(r.aeroCluster.Spec.RackConfig.Racks)) {
 			if res = r.setMigrateFillDelay(
-				r.getClientPolicy(), &rackState.Rack.AerospikeConfig, false,
-				nil,
+				r.getClientPolicy(), &rackState.Rack.AerospikeConfig, nil, nil,
 			); !res.IsSuccess {
 				r.Log.Error(res.Err, "Failed to revert migrate-fill-delay after scale down")
 				return res
@@ -975,9 +974,9 @@ func (r *SingleClusterReconciler) scaleDownRack(
 		// setting migrate-fill-delay only if pod is running and ready.
 		// This check ensures that migrate-fill-delay is not set while processing failed racks.
 		// setting migrate-fill-delay will fail if there are any failed pod
-		if res := r.setMigrateFillDelay(
-			policy, &rackState.Rack.AerospikeConfig, true, ignorablePodNames,
-		); !res.IsSuccess {
+		zeroDelay := 0
+		if res := r.setMigrateFillDelay(policy, &rackState.Rack.AerospikeConfig,
+			&zeroDelay, ignorablePodNames); !res.IsSuccess {
 			return found, res
 		}
 	}

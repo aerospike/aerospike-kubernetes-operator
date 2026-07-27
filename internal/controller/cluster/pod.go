@@ -341,22 +341,22 @@ func (r *SingleClusterReconciler) rollingRestartPods(
 
 		var clientPolicy *as.ClientPolicy
 
-		setMigrateFillDelay := r.shouldSetMigrateFillDelay(rackState, podsToRestart, restartTypeMap)
+		setMigrateFillDelay := r.shouldSetMigrateFillDelay(podsToRestart, restartTypeMap)
 
 		r.Log.Info(
 			fmt.Sprintf("Adjust migrate-fill-delay prior to pod restart: %t", setMigrateFillDelay),
 		)
 
-		// Revert migrate-fill-delay to the original value before restarting active pods.
-		// This will be a no-op in the first reconcile
+		// Set migrate-fill-delay to RestartMigrateFillDelay before restarting active pods so that
+		// migration fills are held off while the pod is temporarily down. This will be a no-op in
+		// the first reconcile (no previous 0-reset to revert).
 		if setMigrateFillDelay {
 			clientPolicy = r.getClientPolicy()
+			restartDelay := int(*r.aeroCluster.Spec.RestartMigrateFillDelay)
 
-			if res := r.setMigrateFillDelay(clientPolicy, &rackState.Rack.AerospikeConfig, false,
-				ignorablePodNames,
-			); !res.IsSuccess {
+			if res := r.setMigrateFillDelay(clientPolicy, nil, &restartDelay, ignorablePodNames); !res.IsSuccess {
 				r.Log.Error(res.Err,
-					"Failed to set migrate-fill-delay to original value before restarting the running pods")
+					"Failed to set migrate-fill-delay to RestartMigrateFillDelay before restarting the running pods")
 
 				return res
 			}
@@ -367,13 +367,12 @@ func (r *SingleClusterReconciler) rollingRestartPods(
 			return res
 		}
 
-		// Set migrate-fill-delay O to immediately start the migration. Will be reverted back to the original value
-		// in the next reconcile.
+		// Reset migrate-fill-delay to 0 after pods have restarted and rejoined the cluster so that
+		// rebalancing can proceed immediately.
 		if setMigrateFillDelay {
-			if res := r.setMigrateFillDelay(clientPolicy, &rackState.Rack.AerospikeConfig, true,
-				ignorablePodNames,
-			); !res.IsSuccess {
-				r.Log.Error(res.Err, "Failed to set migrate-fill-delay to `0` after restarting the running pods")
+			zeroDelay := 0
+			if res := r.setMigrateFillDelay(clientPolicy, nil, &zeroDelay, ignorablePodNames); !res.IsSuccess {
+				r.Log.Error(res.Err, "Failed to reset migrate-fill-delay to 0 after restarting the running pods")
 				return res
 			}
 		}
@@ -685,21 +684,21 @@ func (r *SingleClusterReconciler) safelyDeletePodsAndEnsureImageUpdated(
 
 		var clientPolicy *as.ClientPolicy
 
-		setMigrateFillDelay := r.shouldSetMigrateFillDelay(rackState, podsToUpdate, nil)
+		setMigrateFillDelay := r.shouldSetMigrateFillDelay(podsToUpdate, nil)
 
 		r.Log.Info(
 			fmt.Sprintf("Adjust migrate-fill-delay prior to pod restart: %t", setMigrateFillDelay))
 
-		// Revert migrate-fill-delay to the original value before restarting active pods.
-		// This will be a no-op in the first reconcile
+		// Set migrate-fill-delay to RestartMigrateFillDelay before upgrading active pods so that
+		// migration fills are held off while the pod is temporarily down. This will be a no-op in
+		// the first reconcile (no previous 0-reset to revert).
 		if setMigrateFillDelay {
 			clientPolicy = r.getClientPolicy()
+			restartDelay := int(*r.aeroCluster.Spec.RestartMigrateFillDelay)
 
-			if res := r.setMigrateFillDelay(clientPolicy, &rackState.Rack.AerospikeConfig, false,
-				ignorablePodNames,
-			); !res.IsSuccess {
+			if res := r.setMigrateFillDelay(clientPolicy, nil, &restartDelay, ignorablePodNames); !res.IsSuccess {
 				r.Log.Error(res.Err,
-					"Failed to set migrate-fill-delay to original value before upgrading the running pods")
+					"Failed to set migrate-fill-delay to RestartMigrateFillDelay before upgrading the running pods")
 
 				return res
 			}
@@ -709,13 +708,12 @@ func (r *SingleClusterReconciler) safelyDeletePodsAndEnsureImageUpdated(
 			return res
 		}
 
-		// Set migrate-fill-delay O to immediately start the migration. Will be reverted back to the original value
-		// in the next reconcile.
+		// Reset migrate-fill-delay to 0 after pods have restarted and rejoined the cluster so that
+		// rebalancing can proceed immediately.
 		if setMigrateFillDelay {
-			if res := r.setMigrateFillDelay(clientPolicy, &rackState.Rack.AerospikeConfig, true,
-				ignorablePodNames,
-			); !res.IsSuccess {
-				r.Log.Error(res.Err, "Failed to set migrate-fill-delay to `0` after upgrading the running pods")
+			zeroDelay := 0
+			if res := r.setMigrateFillDelay(clientPolicy, nil, &zeroDelay, ignorablePodNames); !res.IsSuccess {
+				r.Log.Error(res.Err, "Failed to reset migrate-fill-delay to 0 after upgrading the running pods")
 				return res
 			}
 		}
@@ -1944,44 +1942,24 @@ func (r *SingleClusterReconciler) getEvictionBlockedPods() (sets.Set[string], er
 	return evictionBlockedPods, nil
 }
 
-// shouldSetMigrateFillDelay determines if migrate-fill-delay should be set.
-// It only returns true if the following conditions are met:
-// 1. DeleteLocalStorageOnRestart is set to true.
-// 2. At least one pod needs to be restarted.
-// 3. At least one persistent volume is using a local storage class.
-func (r *SingleClusterReconciler) shouldSetMigrateFillDelay(rackState *RackState,
+// shouldSetMigrateFillDelay determines if migrate-fill-delay should be managed during pod restart.
+// Returns true when all of the following conditions are met:
+// 1. At least one pod needs a full pod restart (not just a warm/ASD restart).
+// 2. RestartMigrateFillDelay is configured and greater than 0 in the cluster spec.
+func (r *SingleClusterReconciler) shouldSetMigrateFillDelay(
 	podsToRestart []*corev1.Pod, restartTypeMap map[string]RestartType) bool {
-	if !asdbv1.GetBool(rackState.Rack.Storage.DeleteLocalStorageOnRestart) {
+	if r.aeroCluster.Spec.RestartMigrateFillDelay == nil || *r.aeroCluster.Spec.RestartMigrateFillDelay == 0 {
 		return false
 	}
-
-	var podRestartNeeded bool
 
 	// If restartTypeMap is nil, we assume that a pod restart is needed.
 	if restartTypeMap == nil {
-		podRestartNeeded = true
-	} else {
-		for idx := range podsToRestart {
-			pod := podsToRestart[idx]
-			restartType := restartTypeMap[pod.Name]
-
-			if restartType == podRestart {
-				podRestartNeeded = true
-				break
-			}
-		}
+		return true
 	}
 
-	if !podRestartNeeded {
-		return false
-	}
-
-	localStorageClassSet := sets.NewString(rackState.Rack.Storage.LocalStorageClasses...)
-
-	for idx := range rackState.Rack.Storage.Volumes {
-		volume := &rackState.Rack.Storage.Volumes[idx]
-		if volume.Source.PersistentVolume != nil &&
-			localStorageClassSet.Has(volume.Source.PersistentVolume.StorageClass) {
+	for idx := range podsToRestart {
+		pod := podsToRestart[idx]
+		if restartTypeMap[pod.Name] == podRestart {
 			return true
 		}
 	}

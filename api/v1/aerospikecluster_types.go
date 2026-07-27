@@ -207,6 +207,17 @@ type AerospikeClusterSpec struct { //nolint:govet // for readability
 	// +operator-sdk:csv:customresourcedefinitions:type=spec,displayName="Enable Rack ID Override"
 	// +optional
 	EnableRackIDOverride *bool `json:"enableRackIDOverride,omitempty"`
+
+	// RestartMigrateFillDelay is the duration in seconds that AKO temporarily sets as the
+	// migrate-fill-delay on the Aerospike cluster during a pod restart. This delays migration
+	// fills while a pod is down, giving the cluster time to avoid unnecessary data movement
+	// during short maintenance windows. Once the pod restarts and rejoins the cluster, AKO
+	// resets migrate-fill-delay to 0 so that rebalancing can proceed immediately.
+	// This field only takes effect when a pod restart (not a warm restart) is required.
+	// +operator-sdk:csv:customresourcedefinitions:type=spec,displayName="Restart Migrate Fill Delay"
+	// +kubebuilder:validation:Minimum=0
+	// +optional
+	RestartMigrateFillDelay *int64 `json:"restartMigrateFillDelay,omitempty"`
 }
 
 type OperationKind string
@@ -1047,11 +1058,20 @@ type AerospikeClusterStatusSpec struct { //nolint:govet // for readability
 	// Operations is a list of on-demand operation to be performed on the Aerospike cluster.
 	// +optional
 	Operations []OperationSpec `json:"operations,omitempty"`
+
+	// RestartMigrateFillDelay is the duration in seconds that AKO temporarily sets as the
+	// migrate-fill-delay on the Aerospike cluster during a pod restart. This delays migration
+	// fills while a pod is down, giving the cluster time to avoid unnecessary data movement
+	// during short maintenance windows. Once the pod restarts and rejoins the cluster, AKO
+	// resets migrate-fill-delay to 0 so that rebalancing can proceed immediately.
+	// This field only takes effect when a pod restart (not a warm restart) is required.
+	// +optional
+	RestartMigrateFillDelay *int64 `json:"restartMigrateFillDelay,omitempty"`
 }
 
 // AerospikeClusterStatus defines the observed state of AerospikeCluster
 // +k8s:openapi-gen=true
-type AerospikeClusterStatus struct { //nolint:govet // for readability
+type AerospikeClusterStatus struct {
 	// INSERT ADDITIONAL STATUS FIELD - define observed state of cluster
 	// Add custom validation
 	// using kubebuilder tags: https://book-v1.book.kubebuilder.io/beyond_basics/generating_crd.html
@@ -1481,6 +1501,11 @@ func CopySpecToStatus(spec *AerospikeClusterSpec) (*AerospikeClusterStatusSpec, 
 		status.Operations = *operations
 	}
 
+	if spec.RestartMigrateFillDelay != nil {
+		restartMigrateFillDelay := *spec.RestartMigrateFillDelay
+		status.RestartMigrateFillDelay = &restartMigrateFillDelay
+	}
+
 	return &status, nil
 }
 
@@ -1601,6 +1626,11 @@ func CopyStatusToSpec(status *AerospikeClusterStatusSpec) (*AerospikeClusterSpec
 	if len(status.Operations) != 0 {
 		operations := lib.DeepCopy(&status.Operations).(*[]OperationSpec)
 		spec.Operations = *operations
+	}
+
+	if status.RestartMigrateFillDelay != nil {
+		restartMigrateFillDelay := *status.RestartMigrateFillDelay
+		spec.RestartMigrateFillDelay = &restartMigrateFillDelay
 	}
 
 	return &spec, nil

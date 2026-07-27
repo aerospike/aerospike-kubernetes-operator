@@ -287,11 +287,40 @@ func hostID(hostName string, hostPort int) string {
 	return fmt.Sprintf("%s:%d", hostName, hostPort)
 }
 
+// shouldSkipMFDUpdate returns true when the migrate-fill-delay update can be
+// safely skipped. Both the current config value and the previous (status) value
+// must be 0, AND RestartMigrateFillDelay must not be configured. If
+// RestartMigrateFillDelay is set, a crash between the pre-restart apply and the
+// post-restart reset may have left a stale non-zero dynamic value on the
+// cluster, so we must always force-apply 0 in that case.
+func (r *SingleClusterReconciler) shouldSkipMFDUpdate(configMFD, oldMigrateFillDelay int) bool {
+	if configMFD != 0 || oldMigrateFillDelay != 0 {
+		return false
+	}
+
+	return r.aeroCluster.Spec.RestartMigrateFillDelay == nil ||
+		*r.aeroCluster.Spec.RestartMigrateFillDelay == 0
+}
+
+// setMigrateFillDelay sets the migrate-fill-delay on all cluster nodes.
+//
+// The guard always runs using asConfig (nil is treated as 0): the call is skipped when both the
+// current and previous configured values are 0, unless RestartMigrateFillDelay is set — in that
+// case 0 is force-applied to clear any stale dynamic value left by a crash between the pre-restart
+// set and post-restart reset.
+//
+//   - overrideDelay != nil: apply that exact caller-supplied value (e.g. RestartMigrateFillDelay
+//     before pod restart, 0 after pod restart, or 0 to let scale-down migrations proceed
+//     immediately). The guard still runs to skip the call when MFD is not configured at all.
+//
+//   - overrideDelay == nil: read the value to apply from asConfig.
 func (r *SingleClusterReconciler) setMigrateFillDelay(
 	policy *as.ClientPolicy,
-	asConfig *asdbv1.AerospikeConfigSpec, setToZero bool, ignorablePodNames sets.Set[string],
+	asConfig *asdbv1.AerospikeConfigSpec,
+	overrideDelay *int,
+	ignorablePodNames sets.Set[string],
 ) common.ReconcileResult {
-	migrateFillDelay, err := asdbv1.GetMigrateFillDelay(asConfig)
+	configMFD, err := asdbv1.GetMigrateFillDelay(asConfig)
 	if err != nil {
 		return common.ReconcileError(err)
 	}
@@ -305,14 +334,24 @@ func (r *SingleClusterReconciler) setMigrateFillDelay(
 		}
 	}
 
-	if migrateFillDelay == 0 && oldMigrateFillDelay == 0 {
+	if r.shouldSkipMFDUpdate(configMFD, oldMigrateFillDelay) {
 		r.Log.Info("migrate-fill-delay config not present or 0, skipping it")
 		return common.ReconcileSuccess()
 	}
 
-	// Set migrate-fill-delay to 0 if setToZero flag is set
-	if setToZero {
-		migrateFillDelay = 0
+	if configMFD == 0 && oldMigrateFillDelay == 0 {
+		// RestartMigrateFillDelay is configured so the cluster may have had MFD set to a
+		// non-zero value dynamically (e.g. after a crash between the pre-restart set and the
+		// post-restart reset). Fall through to force-apply 0 and clear the stale delay.
+		r.Log.Info("migrate-fill-delay config is 0 but RestartMigrateFillDelay is set; " +
+			"applying 0 to clear any stale dynamic value")
+	}
+
+	var migrateFillDelay int
+	if overrideDelay != nil {
+		migrateFillDelay = *overrideDelay
+	} else {
+		migrateFillDelay = configMFD
 	}
 
 	// This doesn't make actual connection, only objects having connection info are created

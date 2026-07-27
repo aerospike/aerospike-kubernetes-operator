@@ -167,6 +167,15 @@ spec:
           Pods will be deployed in given racks based on given configuration
         displayName: Rack Config
         path: rackConfig
+      - description: |-
+          RestartMigrateFillDelay is the duration in seconds that AKO temporarily sets as the
+          migrate-fill-delay on the Aerospike cluster during a pod restart. This delays migration
+          fills while a pod is down, giving the cluster time to avoid unnecessary data movement
+          during short maintenance windows. Once the pod restarts and rejoins the cluster, AKO
+          resets migrate-fill-delay to 0 so that rebalancing can proceed immediately.
+          This field only takes effect when a pod restart (not a warm restart) is required.
+        displayName: Restart Migrate Fill Delay
+        path: restartMigrateFillDelay
       - description: RosterNodeBlockList is a list of blocked nodeIDs from roster
           in a strong-consistency setup
         displayName: Roster Node BlockList
