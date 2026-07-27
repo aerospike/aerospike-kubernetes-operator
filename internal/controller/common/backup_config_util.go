@@ -56,12 +56,12 @@ func GetBackupServicePodList(
 //nolint:logcheck // ctx for client calls; explicit logger (no contextual logging in AKO).
 func ReloadBackupServiceConfigInPods(
 	ctx context.Context,
-	logger logr.Logger,
+	log logr.Logger,
 	k8sClient client.Client,
 	backupServiceClient *backup_service.Client,
 	backupSvc *v1beta1.BackupService,
 ) error {
-	logger.Info("Reloading backup service config")
+	log.Info("Reloading backup service config")
 
 	if err := retry.RetryOnConflict(retry.DefaultRetry, func() error {
 		podList, err := GetBackupServicePodList(ctx, k8sClient,
@@ -101,7 +101,7 @@ func ReloadBackupServiceConfigInPods(
 		return fmt.Errorf("apply backup service config: %w", err)
 	}
 
-	return validateBackupSvcConfigReload(ctx, logger, k8sClient, backupServiceClient, backupSvc)
+	return validateBackupSvcConfigReload(ctx, log, k8sClient, backupServiceClient, backupSvc)
 }
 
 //nolint:logcheck // ctx for client calls; explicit logger (no contextual logging in AKO).

@@ -87,7 +87,7 @@ func (r *SingleRestoreReconciler) Reconcile(ctx context.Context) (result ctrl.Re
 
 	if res := r.reconcileRestore(ctx); !res.IsSuccess {
 		if res.Err != nil {
-			r.Recorder.Eventf(r.aeroRestore, corev1.EventTypeWarning, "ReconcileFailed",
+			r.Recorder.Eventf(r.aeroRestore, corev1.EventTypeWarning, "RestoreReconcileFailed",
 				"Failed to reconcile AerospikeRestore")
 
 			return res.Result, res.Err
@@ -97,8 +97,8 @@ func (r *SingleRestoreReconciler) Reconcile(ctx context.Context) (result ctrl.Re
 	}
 
 	if err := r.checkRestoreStatus(ctx); err != nil {
-		r.Recorder.Eventf(r.aeroRestore, corev1.EventTypeWarning, "StatusCheckFailed",
-			"Failed to check AerospikeRestore status")
+		r.Recorder.Eventf(r.aeroRestore, corev1.EventTypeWarning, "RestoreStatusCheckFailed",
+			"Failed to check restore operation status")
 
 		return ctrl.Result{}, err
 	}
@@ -107,15 +107,13 @@ func (r *SingleRestoreReconciler) Reconcile(ctx context.Context) (result ctrl.Re
 		return ctrl.Result{RequeueAfter: r.aeroRestore.Spec.PollingPeriod.Duration}, nil
 	}
 
-	r.Recorder.Eventf(r.aeroRestore, corev1.EventTypeNormal, "Completed",
+	r.Recorder.Eventf(r.aeroRestore, corev1.EventTypeNormal, "RestoreCompleted",
 		"Restore completed")
 
 	return ctrl.Result{}, nil
 }
 
 func (r *SingleRestoreReconciler) reconcileRestore(ctx context.Context) common.ReconcileResult {
-	backupSvcID := r.aeroRestore.Spec.BackupService.String()
-
 	if r.aeroRestore.Status.JobID != nil {
 		r.Log.Info("Restore already running, checking the restore status", "jobID", *r.aeroRestore.Status.JobID)
 		return common.ReconcileSuccess()
@@ -125,7 +123,8 @@ func (r *SingleRestoreReconciler) reconcileRestore(ctx context.Context) common.R
 	if err != nil {
 		return common.ReconcileError(fmt.Errorf(
 			"get backup service client (backup service %s): %w",
-			backupSvcID, err,
+			utils.NamespacedName(r.aeroRestore.Spec.BackupService.Namespace,
+				r.aeroRestore.Spec.BackupService.Name), err,
 		))
 	}
 
@@ -182,7 +181,7 @@ func (r *SingleRestoreReconciler) reconcileRestore(ctx context.Context) common.R
 		))
 	}
 
-	r.Recorder.Eventf(r.aeroRestore, corev1.EventTypeNormal, "Triggered",
+	r.Recorder.Eventf(r.aeroRestore, corev1.EventTypeNormal, "RestoreTriggered",
 		"Triggered restore")
 
 	r.aeroRestore.Status.JobID = jobID
@@ -198,13 +197,12 @@ func (r *SingleRestoreReconciler) reconcileRestore(ctx context.Context) common.R
 }
 
 func (r *SingleRestoreReconciler) checkRestoreStatus(ctx context.Context) error {
-	backupSvcID := r.aeroRestore.Spec.BackupService.String()
-
 	serviceClient, err := backup_service.GetBackupServiceClient(r.Client, &r.aeroRestore.Spec.BackupService)
 	if err != nil {
 		return fmt.Errorf(
 			"get backup service client (backup service %s): %w",
-			backupSvcID, err,
+			utils.NamespacedName(r.aeroRestore.Spec.BackupService.Namespace,
+				r.aeroRestore.Spec.BackupService.Name), err,
 		)
 	}
 
@@ -308,13 +306,12 @@ func (r *SingleRestoreReconciler) cleanUpAndRemoveFinalizer(ctx context.Context,
 }
 
 func (r *SingleRestoreReconciler) cancelRestoreJob() error {
-	backupSvcID := r.aeroRestore.Spec.BackupService.String()
-
 	serviceClient, err := backup_service.GetBackupServiceClient(r.Client, &r.aeroRestore.Spec.BackupService)
 	if err != nil {
 		return fmt.Errorf(
 			"get backup service client (backup service %s): %w",
-			backupSvcID, err,
+			utils.NamespacedName(r.aeroRestore.Spec.BackupService.Namespace,
+				r.aeroRestore.Spec.BackupService.Name), err,
 		)
 	}
 

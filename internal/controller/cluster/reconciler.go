@@ -55,7 +55,7 @@ func (r *SingleClusterReconciler) finishReconcile(ctx context.Context, result ct
 
 	if recErr != nil {
 		if err := r.setStatusPhase(ctx, asdbv1.AerospikeClusterError); err != nil {
-			recErr = errors.Join(recErr, fmt.Errorf("setting error phase: %w", err))
+			recErr = errors.Join(recErr, fmt.Errorf("set AerospikeCluster error phase: %w", err))
 		}
 
 		r.Log.Error(recErr, "Reconcile failed", logValues...)
