@@ -12,7 +12,6 @@ import (
 	"k8s.io/apimachinery/pkg/types"
 	"k8s.io/client-go/util/retry"
 	"sigs.k8s.io/controller-runtime/pkg/client"
-	"sigs.k8s.io/controller-runtime/pkg/log"
 	"sigs.k8s.io/yaml"
 
 	"github.com/aerospike/aerospike-kubernetes-operator/v4/api/v1beta1"
@@ -52,13 +51,16 @@ func GetBackupServicePodList(
 	return &podList, nil
 }
 
+// ReloadBackupServiceConfigInPods reloads backup service configuration in running Pods.
+//
+//nolint:logcheck // ctx for client calls; explicit logger (no contextual logging in AKO).
 func ReloadBackupServiceConfigInPods(
 	ctx context.Context,
+	logger logr.Logger,
 	k8sClient client.Client,
 	backupServiceClient *backup_service.Client,
 	backupSvc *v1beta1.BackupService,
 ) error {
-	logger := log.FromContext(ctx)
 	logger.Info("Reloading backup service config")
 
 	if err := retry.RetryOnConflict(retry.DefaultRetry, func() error {
@@ -99,15 +101,14 @@ func ReloadBackupServiceConfigInPods(
 		return fmt.Errorf("apply backup service config: %w", err)
 	}
 
-	return validateBackupSvcConfigReload(ctx, k8sClient, backupServiceClient, backupSvc)
+	return validateBackupSvcConfigReload(ctx, logger, k8sClient, backupServiceClient, backupSvc)
 }
 
-func validateBackupSvcConfigReload(ctx context.Context, k8sClient client.Client,
+//nolint:logcheck // ctx for client calls; explicit logger (no contextual logging in AKO).
+func validateBackupSvcConfigReload(ctx context.Context, logger logr.Logger, k8sClient client.Client,
 	backupServiceClient *backup_service.Client,
 	backupSvc *v1beta1.BackupService,
 ) error {
-	logger := log.FromContext(ctx)
-
 	apiBackupSvcConfig, err := backupServiceClient.GetBackupServiceConfig()
 	if err != nil {
 		return err

@@ -15,7 +15,6 @@ import (
 	"k8s.io/client-go/tools/record"
 	ctrl "sigs.k8s.io/controller-runtime"
 	"sigs.k8s.io/controller-runtime/pkg/client"
-	"sigs.k8s.io/controller-runtime/pkg/log"
 	"sigs.k8s.io/controller-runtime/pkg/reconcile"
 	"sigs.k8s.io/yaml"
 
@@ -35,11 +34,26 @@ type SingleBackupReconciler struct {
 	Log        logr.Logger
 }
 
-func (r *SingleBackupReconciler) Reconcile(ctx context.Context) (result ctrl.Result, recErr error) {
-	ctx = log.IntoContext(ctx, r.Log)
+// finishReconcile logs the reconcile exit once at the boundary. It holds any
+// AerospikeBackup-specific finish logic so it can grow independently of other controllers.
+func (r *SingleBackupReconciler) finishReconcile(result ctrl.Result, recErr error) error {
+	logValues := common.ReconcileExitLogValues(result, recErr)
 
+	if recErr != nil {
+		r.Log.Error(recErr, "Reconcile failed", logValues...)
+
+		return recErr
+	}
+
+	r.Log.Info("Reconcile completed", logValues...)
+
+	return nil
+}
+
+func (r *SingleBackupReconciler) Reconcile(ctx context.Context) (result ctrl.Result, recErr error) {
 	defer func() {
-		recErr = common.FinishReconcile(ctx, result, recErr, nil)
+		// finishReconcile returns the error to assign here so we avoid *error params; recErr is Reconcile's named return.
+		recErr = r.finishReconcile(result, recErr)
 	}()
 
 	// Skip reconcile if the backup service version is less than 3.0.0.
@@ -135,7 +149,7 @@ func (r *SingleBackupReconciler) cleanUpAndRemoveFinalizer(ctx context.Context, 
 			return fmt.Errorf("get backup service client: %w", err)
 		}
 
-		if err := common.ReloadBackupServiceConfigInPods(ctx, r.Client, backupServiceClient,
+		if err := common.ReloadBackupServiceConfigInPods(ctx, r.Log, r.Client, backupServiceClient,
 			&r.aeroBackup.Spec.BackupService); err != nil {
 			return fmt.Errorf("reload backup service config: %w", err)
 		}
@@ -431,7 +445,7 @@ func (r *SingleBackupReconciler) reconcileScheduledBackup(ctx context.Context) e
 	}
 
 	if hotReloadRequired {
-		err = common.ReloadBackupServiceConfigInPods(ctx, r.Client, serviceClient, &r.aeroBackup.Spec.BackupService)
+		err = common.ReloadBackupServiceConfigInPods(ctx, r.Log, r.Client, serviceClient, &r.aeroBackup.Spec.BackupService)
 		if err != nil {
 			return fmt.Errorf("reload backup service config: %w", err)
 		}

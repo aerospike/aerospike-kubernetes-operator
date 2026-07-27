@@ -14,7 +14,6 @@ import (
 	"k8s.io/client-go/tools/record"
 	ctrl "sigs.k8s.io/controller-runtime"
 	"sigs.k8s.io/controller-runtime/pkg/client"
-	"sigs.k8s.io/controller-runtime/pkg/log"
 	"sigs.k8s.io/controller-runtime/pkg/reconcile"
 
 	asdbv1beta1 "github.com/aerospike/aerospike-kubernetes-operator/v4/api/v1beta1"
@@ -33,12 +32,26 @@ type SingleRestoreReconciler struct {
 	Log         logr.Logger
 }
 
-func (r *SingleRestoreReconciler) Reconcile(ctx context.Context) (result ctrl.Result, recErr error) {
-	ctx = log.IntoContext(ctx, r.Log)
+// finishReconcile logs the reconcile exit once at the boundary. It holds any
+// AerospikeRestore-specific finish logic so it can grow independently of other controllers.
+func (r *SingleRestoreReconciler) finishReconcile(result ctrl.Result, recErr error) error {
+	logValues := common.ReconcileExitLogValues(result, recErr)
 
+	if recErr != nil {
+		r.Log.Error(recErr, "Reconcile failed", logValues...)
+
+		return recErr
+	}
+
+	r.Log.Info("Reconcile completed", logValues...)
+
+	return nil
+}
+
+func (r *SingleRestoreReconciler) Reconcile(ctx context.Context) (result ctrl.Result, recErr error) {
 	defer func() {
 		// finishReconcile returns the error to assign here so we avoid *error params; recErr is Reconcile's named return.
-		recErr = common.FinishReconcile(ctx, result, recErr, nil)
+		recErr = r.finishReconcile(result, recErr)
 	}()
 
 	if !r.aeroRestore.DeletionTimestamp.IsZero() {

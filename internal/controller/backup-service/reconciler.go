@@ -2,6 +2,7 @@ package backupservice
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"time"
 
@@ -18,7 +19,6 @@ import (
 	ctrl "sigs.k8s.io/controller-runtime"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 	"sigs.k8s.io/controller-runtime/pkg/controller/controllerutil"
-	"sigs.k8s.io/controller-runtime/pkg/log"
 	"sigs.k8s.io/controller-runtime/pkg/reconcile"
 	"sigs.k8s.io/yaml"
 
@@ -53,18 +53,32 @@ type SingleBackupServiceReconciler struct {
 	Log               logr.Logger
 }
 
-func (r *SingleBackupServiceReconciler) Reconcile(ctx context.Context) (result ctrl.Result, recErr error) {
-	ctx = log.IntoContext(ctx, r.Log)
+// finishReconcile logs the reconcile exit once at the boundary and sets the AerospikeBackupService
+// error phase on failure. It holds controller-specific finish logic so it can grow independently.
+func (r *SingleBackupServiceReconciler) finishReconcile(
+	ctx context.Context, result ctrl.Result, recErr error,
+) error {
+	logValues := common.ReconcileExitLogValues(result, recErr)
 
+	if recErr != nil {
+		if err := r.setStatusPhase(ctx, asdbv1beta1.AerospikeBackupServiceError); err != nil {
+			recErr = errors.Join(recErr, fmt.Errorf("set AerospikeBackupService error phase: %w", err))
+		}
+
+		r.Log.Error(recErr, "Reconcile failed", logValues...)
+
+		return recErr
+	}
+
+	r.Log.Info("Reconcile completed", logValues...)
+
+	return nil
+}
+
+func (r *SingleBackupServiceReconciler) Reconcile(ctx context.Context) (result ctrl.Result, recErr error) {
 	defer func() {
 		// finishReconcile returns the error to assign here so we avoid *error params; recErr is Reconcile's named return.
-		recErr = common.FinishReconcile(ctx, result, recErr, func(ctx context.Context) error {
-			if err := r.setStatusPhase(ctx, asdbv1beta1.AerospikeBackupServiceError); err != nil {
-				return fmt.Errorf("set AerospikeBackupService error phase: %w", err)
-			}
-
-			return nil
-		})
+		recErr = r.finishReconcile(ctx, result, recErr)
 	}()
 
 	// Skip reconcile if the backup service version is less than 3.0.0.
@@ -387,7 +401,7 @@ func (r *SingleBackupServiceReconciler) updateBackupSvcConfig(ctx context.Contex
 		return r.restartBackupSvcPod(ctx)
 	}
 
-	if err := common.ReloadBackupServiceConfigInPods(ctx, r.Client, backupServiceClient, backupSvc); err != nil {
+	if err := common.ReloadBackupServiceConfigInPods(ctx, r.Log, r.Client, backupServiceClient, backupSvc); err != nil {
 		return fmt.Errorf("reload backup service config: %w", err)
 	}
 
