@@ -56,70 +56,43 @@ func CheckPodFailed(pod *corev1.Pod) error {
 }
 
 // CheckPodFailedWithGrace checks if pod has failed or has terminated or is in an irrecoverable waiting state.
+// Sidecar container failures are included in the check.
 // Returns PodState containing:
 // - State: PodHealthy, PodFailedInGrace, or PodFailed
 // - Reason: Human-readable description of failure (empty if healthy)
 func CheckPodFailedWithGrace(pod *corev1.Pod, allowGrace bool) PodState {
-	if IsPodTerminating(pod) {
-		return PodState{State: PodHealthy}
-	}
-
-	failureReason := checkPodFailureReason(pod, true)
-	if failureReason == "" {
-		return PodState{State: PodHealthy}
-	}
-
-	if allowGrace {
-		since := getPodFailureSince(pod)
-		grace := GetFailedPodGracePeriod()
-
-		if time.Since(since) < grace {
-			return PodState{
-				State:  PodFailedInGrace,
-				Reason: failureReason,
-			}
-		}
-	}
-
-	return PodState{
-		State:  PodFailed,
-		Reason: failureReason,
-	}
+	return checkFailedWithGrace(pod, allowGrace, true)
 }
 
 // CheckServerFailedWithGrace checks if the pod's Aerospike server container (or
 // a blocking init container) has a terminal failure, optionally within a grace
 // period. Sidecar container failures are intentionally ignored — use
-// CheckSidecarFailedWithGrace for those.
+// CheckPodFailedWithGrace to include those.
 // Returns PodState containing:
 // - State: PodHealthy, PodFailedInGrace, or PodFailed
 // - Reason: Human-readable description of failure (empty if healthy)
 func CheckServerFailedWithGrace(pod *corev1.Pod, allowGrace bool) PodState {
+	return checkFailedWithGrace(pod, allowGrace, false)
+}
+
+// checkFailedWithGrace is the single implementation backing CheckPodFailedWithGrace
+// and CheckServerFailedWithGrace. includeSidecarFailures controls whether sidecar
+// container failures are treated as a pod failure.
+func checkFailedWithGrace(pod *corev1.Pod, allowGrace, includeSidecarFailures bool) PodState {
 	if IsPodTerminating(pod) {
 		return PodState{State: PodHealthy}
 	}
 
-	failureReason := checkPodFailureReason(pod, false)
+	failureReason := checkPodFailureReason(pod, includeSidecarFailures)
 	if failureReason == "" {
 		return PodState{State: PodHealthy}
 	}
 
-	if allowGrace {
-		since := getPodFailureSince(pod)
-		grace := GetFailedPodGracePeriod()
-
-		if time.Since(since) < grace {
-			return PodState{
-				State:  PodFailedInGrace,
-				Reason: failureReason,
-			}
-		}
+	if allowGrace && time.Since(getPodFailureSince(pod)) < GetFailedPodGracePeriod() {
+		return PodState{State: PodFailedInGrace, Reason: failureReason}
 	}
 
-	return PodState{
-		State:  PodFailed,
-		Reason: failureReason,
-	}
+	return PodState{State: PodFailed, Reason: failureReason}
 }
 
 // checkPodFailureReason inspects the pod's phase, scheduling conditions, and
@@ -150,26 +123,24 @@ func checkPodFailureReason(pod *corev1.Pod, includeSidecarFailures bool) string 
 // aerospike server from starting. Among regular containers, the aerospike server container
 // is always checked. Sidecar containers are only checked when includeSidecarFailures is true.
 func checkContainerFailures(pod *corev1.Pod, includeSidecarFailures bool) string {
-	// Check all init containers — their failures block server startup entirely.
-	for idx := range pod.Status.InitContainerStatuses {
-		container := &pod.Status.InitContainerStatuses[idx]
-		if waiting := container.State.Waiting; waiting != nil &&
-			(isPodImageError(waiting.Reason) || isPodCrashError(waiting.Reason) || isPodError(waiting.Reason)) {
-			return fmt.Sprintf(
-				"pod failed message in container %s: %s reason: %s",
-				container.Name, waiting.Message, waiting.Reason,
-			)
+	// Build the list to inspect: all init containers, plus regular containers
+	// filtered by includeSidecarFailures (always include the server container).
+	statuses := make(
+		[]corev1.ContainerStatus, 0,
+		len(pod.Status.InitContainerStatuses)+len(pod.Status.ContainerStatuses),
+	)
+
+	statuses = append(statuses, pod.Status.InitContainerStatuses...)
+
+	for idx := range pod.Status.ContainerStatuses {
+		cs := &pod.Status.ContainerStatuses[idx]
+		if cs.Name == asdbv1.AerospikeServerContainerName || includeSidecarFailures {
+			statuses = append(statuses, *cs)
 		}
 	}
 
-	// Inspect regular containers: always check the aerospike server container;
-	// check sidecars only when includeSidecarFailures is true.
-	for idx := range pod.Status.ContainerStatuses {
-		container := &pod.Status.ContainerStatuses[idx]
-		if container.Name != asdbv1.AerospikeServerContainerName && !includeSidecarFailures {
-			continue
-		}
-
+	for idx := range statuses {
+		container := &statuses[idx]
 		if waiting := container.State.Waiting; waiting != nil &&
 			(isPodImageError(waiting.Reason) || isPodCrashError(waiting.Reason) || isPodError(waiting.Reason)) {
 			return fmt.Sprintf(

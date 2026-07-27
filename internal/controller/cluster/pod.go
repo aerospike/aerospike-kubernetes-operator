@@ -175,9 +175,12 @@ func (r *SingleClusterReconciler) getRollingRestartTypeMap(
 			return nil, nil, err
 		}
 
-		// A quick restart only rolls config dynamically; a server-failed pod
-		// needs a full pod restart to recover the crashed server process.
-		if restartType == quickRestart && serverFailedPodNames.Has(pods[idx].Name) {
+		// Any config change on a server-failed pod must become a full pod
+		// restart. The server process is down, so quickRestart cannot bring it
+		// back and noRestartUpdateConf (asinfo) cannot reach it either. Both
+		// are escalated to podRestart so the pod is always restarted when there
+		// is work to do, regardless of the change type.
+		if restartType != noRestart && serverFailedPodNames.Has(pods[idx].Name) {
 			restartType = podRestart
 		}
 
@@ -194,17 +197,16 @@ func (r *SingleClusterReconciler) getRollingRestartTypePod(
 ) (RestartType, error) {
 	restartType := noRestart
 
-	// If this pod has no status entry yet it was just created with the current
-	// config — no restart is needed and the hash fields would all be empty
-	// strings, which would incorrectly trigger every comparison below.
-	podStatus, exists := r.aeroCluster.Status.Pods[pod.Name]
-	if !exists {
+	// AerospikeConfig nil means status not updated yet
+	if r.IsStatusEmpty() {
 		return restartType, nil
 	}
 
 	requiredConfHash := confMap.Data[aerospikeConfHashFileName]
 	requiredNetworkPolicyHash := confMap.Data[networkPolicyHashFileName]
 	requiredPodSpecHash := confMap.Data[podSpecHashFileName]
+
+	podStatus := r.aeroCluster.Status.Pods[pod.Name]
 
 	// Check if aerospikeConfig is updated
 	if podStatus.AerospikeConfigHash != requiredConfHash {

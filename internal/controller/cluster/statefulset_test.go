@@ -30,13 +30,13 @@ import (
 
 func replicaCount(n int32) *int32 { return &n }
 
-// TestWaitForAerospikeServerReady covers the three fast-path branches of
-// waitForAerospikeServerReady that complete without any sleep:
+// TestWaitForSTSPodsServerReady covers the three fast-path branches of
+// waitForSTSPodsServerReady that complete without any sleep:
 //
 //  1. The pod name is in ignorablePodNames → skip entirely, return nil.
 //  2. The pod's server container is already ready → return nil on first poll.
 //  3. The pod's server container is in CrashLoopBackOff → PodFailed, return error on first poll.
-func TestWaitForAerospikeServerReady(t *testing.T) {
+func TestWaitForSTSPodsServerReady(t *testing.T) {
 	const (
 		namespace   = "test-ns"
 		clusterName = "test-cluster"
@@ -49,6 +49,7 @@ func TestWaitForAerospikeServerReady(t *testing.T) {
 	sts := &appsv1.StatefulSet{
 		ObjectMeta: metav1.ObjectMeta{Name: stsName, Namespace: namespace},
 		Spec:       appsv1.StatefulSetSpec{Replicas: replicaCount(1)},
+		Status:     appsv1.StatefulSetStatus{Replicas: 1},
 	}
 
 	t.Run("ignorable pod is skipped without any k8s poll", func(t *testing.T) {
@@ -59,7 +60,7 @@ func TestWaitForAerospikeServerReady(t *testing.T) {
 		// that Get from ever being issued.
 		podName := stsName + "-0"
 
-		if err := r.waitForAerospikeServerReady(context.Background(), sts, sets.New(podName)); err != nil {
+		if err := r.waitForSTSPodsServerReady(context.Background(), sts, sets.New(podName)); err != nil {
 			t.Errorf("expected nil for ignorable pod, got: %v", err)
 		}
 	})
@@ -74,7 +75,7 @@ func TestWaitForAerospikeServerReady(t *testing.T) {
 		}
 		r := newReconcilerWithObjects(scheme, aeroCluster, sts, pod)
 
-		if err := r.waitForAerospikeServerReady(context.Background(), sts, sets.New[string]()); err != nil {
+		if err := r.waitForSTSPodsServerReady(context.Background(), sts, sets.New[string]()); err != nil {
 			t.Errorf("expected nil for running server container, got: %v", err)
 		}
 	})
@@ -96,7 +97,7 @@ func TestWaitForAerospikeServerReady(t *testing.T) {
 		}
 		r := newReconcilerWithObjects(scheme, aeroCluster, sts, pod)
 
-		if err := r.waitForAerospikeServerReady(context.Background(), sts, sets.New[string]()); err == nil {
+		if err := r.waitForSTSPodsServerReady(context.Background(), sts, sets.New[string]()); err == nil {
 			t.Error("expected an error for CrashLoopBackOff server container, got nil")
 		}
 	})
@@ -105,6 +106,7 @@ func TestWaitForAerospikeServerReady(t *testing.T) {
 		multiSTS := &appsv1.StatefulSet{
 			ObjectMeta: metav1.ObjectMeta{Name: stsName, Namespace: namespace},
 			Spec:       appsv1.StatefulSetSpec{Replicas: replicaCount(2)},
+			Status:     appsv1.StatefulSetStatus{Replicas: 2},
 		}
 
 		pod0 := &corev1.Pod{
@@ -120,7 +122,7 @@ func TestWaitForAerospikeServerReady(t *testing.T) {
 		ignorable := sets.New(stsName + "-1")
 		r := newReconcilerWithObjects(scheme, aeroCluster, multiSTS, pod0)
 
-		if err := r.waitForAerospikeServerReady(context.Background(), multiSTS, ignorable); err != nil {
+		if err := r.waitForSTSPodsServerReady(context.Background(), multiSTS, ignorable); err != nil {
 			t.Errorf("expected nil when running pod + ignorable pod, got: %v", err)
 		}
 	})

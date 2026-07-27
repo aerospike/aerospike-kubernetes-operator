@@ -78,6 +78,11 @@ var _ = Describe(
 				UpdateClusterTest(ctx)
 			},
 		)
+		FContext(
+			"ScaleUpWithBadImage", func() {
+				ScaleUpWithBadImageTest(ctx)
+			},
+		)
 		Context(
 			"RunScaleDownWithMigrateFillDelay", func() {
 				ScaleDownWithMigrateFillDelay(ctx)
@@ -2281,5 +2286,91 @@ func negativeUpdateClusterValidationTest(
 			Expect(err).To(HaveOccurred())
 			Expect(err.Error()).To(ContainSubstring("federal to enterprise edition upgrade is not supported"))
 		})
+	})
+}
+
+// ScaleUpWithBadImageTest validates the scale-up pre-flight check: when a bad
+// image and a size increase are applied simultaneously, the operator must not
+// create scale-up pods while existing pods are crashing with the bad image.
+// After the image is corrected the cluster must reach Completed with all pods.
+func ScaleUpWithBadImageTest(ctx goctx.Context) {
+	clusterNamespacedName := test.GetNamespacedName(
+		fmt.Sprintf("scaleup-badimg-%d", GinkgoParallelProcess()), namespace,
+	)
+
+	AfterEach(func() {
+		aeroCluster := &asdbv1.AerospikeCluster{
+			ObjectMeta: metav1.ObjectMeta{
+				Name:      clusterNamespacedName.Name,
+				Namespace: clusterNamespacedName.Namespace,
+			},
+		}
+		Expect(DeleteCluster(k8sClient, ctx, aeroCluster)).ToNot(HaveOccurred())
+		Expect(CleanupPVC(k8sClient, aeroCluster.Namespace, aeroCluster.Name)).ToNot(HaveOccurred())
+	})
+
+	It("Should not create scale-up pods while existing pods are broken, then complete after image is fixed", func() {
+		By("Deploying a healthy 2-pod cluster")
+
+		aeroCluster := createDummyAerospikeCluster(clusterNamespacedName, 2)
+		validImage := aeroCluster.Spec.Image
+		Expect(DeployCluster(k8sClient, ctx, aeroCluster)).ToNot(HaveOccurred())
+
+		// The pod that scale-up would create (rack 0, ordinal 2).
+		scaleUpPodName := fmt.Sprintf("%s-0-2", clusterNamespacedName.Name)
+
+		By("Applying size=3 and a bad image simultaneously")
+
+		aeroCluster, err := getCluster(k8sClient, ctx, clusterNamespacedName)
+		Expect(err).ToNot(HaveOccurred())
+
+		aeroCluster.Spec.Size = 3
+		aeroCluster.Spec.Image = unavailableImage
+		Expect(updateClusterWithNoWait(k8sClient, ctx, aeroCluster)).ToNot(HaveOccurred())
+
+		// checkScaleUpBlocked verifies the expected stuck state: the operator
+		// has attempted the rolling-restart with the bad image (cluster phase
+		// is Error) but has not created the scale-up pod.
+		checkScaleUpBlocked := func(g Gomega) {
+			cluster, clusterErr := getCluster(k8sClient, ctx, clusterNamespacedName)
+			g.Expect(clusterErr).ToNot(HaveOccurred())
+			g.Expect(cluster.Status.Phase).To(Equal(asdbv1.AerospikeClusterError),
+				"cluster must be in Error phase while existing pods are crashing with bad image")
+
+			podList, podListErr := getClusterPodList(k8sClient, ctx, cluster)
+			g.Expect(podListErr).ToNot(HaveOccurred())
+
+			for idx := range podList.Items {
+				g.Expect(podList.Items[idx].Name).NotTo(Equal(scaleUpPodName),
+					"scale-up pod %s must not be created while existing pods are failing with bad image",
+					scaleUpPodName)
+			}
+		}
+
+		By("Waiting for the cluster to enter Error state (bad-image rolling restart blocks scale-up)")
+		Eventually(checkScaleUpBlocked, 5*time.Minute, 10*time.Second).Should(Succeed())
+
+		By("Confirming the scale-up pod stays absent for a sustained period")
+		Consistently(checkScaleUpBlocked, 30*time.Second, 5*time.Second).Should(Succeed())
+
+		By("Restoring the valid image while keeping size=3")
+
+		aeroCluster, err = getCluster(k8sClient, ctx, clusterNamespacedName)
+		Expect(err).ToNot(HaveOccurred())
+
+		aeroCluster.Spec.Image = validImage
+		Expect(updateCluster(k8sClient, ctx, aeroCluster)).ToNot(HaveOccurred())
+
+		By("Verifying the cluster completes with 3 pods on the correct image")
+		Eventually(func(g Gomega) {
+			cluster, clusterErr := getCluster(k8sClient, ctx, clusterNamespacedName)
+			g.Expect(clusterErr).ToNot(HaveOccurred())
+			g.Expect(cluster.Status.Phase).To(Equal(asdbv1.AerospikeClusterCompleted))
+
+			podList, podListErr := getClusterPodList(k8sClient, ctx, cluster)
+			g.Expect(podListErr).ToNot(HaveOccurred())
+			g.Expect(podList.Items).To(HaveLen(3),
+				"expected 3 pods after cluster recovery and scale-up")
+		}, getTimeout(3), 15*time.Second).Should(Succeed())
 	})
 }

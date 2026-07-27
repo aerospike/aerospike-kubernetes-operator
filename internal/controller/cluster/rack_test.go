@@ -12,6 +12,7 @@ import (
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/runtime"
 	"k8s.io/apimachinery/pkg/types"
+	k8ssets "k8s.io/apimachinery/pkg/util/sets"
 	clientgoscheme "k8s.io/client-go/kubernetes/scheme"
 	"k8s.io/client-go/tools/record"
 	"sigs.k8s.io/controller-runtime/pkg/client"
@@ -19,6 +20,7 @@ import (
 	"sigs.k8s.io/controller-runtime/pkg/client/interceptor"
 
 	asdbv1 "github.com/aerospike/aerospike-kubernetes-operator/v4/api/v1"
+	"github.com/aerospike/aerospike-kubernetes-operator/v4/pkg/utils"
 )
 
 //nolint:unparam // for future use
@@ -85,6 +87,201 @@ func newTestReconciler(
 		aeroCluster: aeroCluster,
 		Recorder:    record.NewFakeRecorder(10),
 	}
+}
+
+// rackPodLabels returns the labels that getOrderedRackPodList uses to find pods
+// for a given cluster+rack.
+func rackPodLabels(clusterName string, rackID int) map[string]string {
+	return utils.LabelsForAerospikeClusterRack(clusterName, rackID, "")
+}
+
+// imageFailedPod returns a pod in ErrImagePull waiting state.
+func imageFailedPod(name, namespace, clusterName string, rackID int) *corev1.Pod {
+	return &corev1.Pod{
+		ObjectMeta: metav1.ObjectMeta{
+			Name:      name,
+			Namespace: namespace,
+			Labels:    rackPodLabels(clusterName, rackID),
+		},
+		Status: corev1.PodStatus{
+			Phase: corev1.PodRunning,
+			ContainerStatuses: []corev1.ContainerStatus{
+				{
+					Name: asdbv1.AerospikeServerContainerName,
+					State: corev1.ContainerState{
+						Waiting: &corev1.ContainerStateWaiting{Reason: "ErrImagePull"},
+					},
+				},
+			},
+		},
+	}
+}
+
+// crashLoopPod returns a pod whose server container is in CrashLoopBackOff.
+func crashLoopServerPod(name, namespace, clusterName string, rackID int) *corev1.Pod {
+	return &corev1.Pod{
+		ObjectMeta: metav1.ObjectMeta{
+			Name:      name,
+			Namespace: namespace,
+			Labels:    rackPodLabels(clusterName, rackID),
+		},
+		Status: corev1.PodStatus{
+			Phase: corev1.PodRunning,
+			ContainerStatuses: []corev1.ContainerStatus{
+				{
+					Name: asdbv1.AerospikeServerContainerName,
+					State: corev1.ContainerState{
+						Waiting: &corev1.ContainerStateWaiting{Reason: "CrashLoopBackOff"},
+					},
+				},
+			},
+		},
+	}
+}
+
+// sidecarCrashPod returns a pod with a healthy server but a crashing sidecar.
+func sidecarCrashPod(name, namespace, clusterName string, rackID int) *corev1.Pod {
+	return &corev1.Pod{
+		ObjectMeta: metav1.ObjectMeta{
+			Name:      name,
+			Namespace: namespace,
+			Labels:    rackPodLabels(clusterName, rackID),
+		},
+		Status: corev1.PodStatus{
+			Phase: corev1.PodRunning,
+			ContainerStatuses: []corev1.ContainerStatus{
+				{
+					Name:  asdbv1.AerospikeServerContainerName,
+					Ready: true,
+					State: corev1.ContainerState{Running: &corev1.ContainerStateRunning{}},
+				},
+				{
+					Name: "sidecar",
+					State: corev1.ContainerState{
+						Waiting: &corev1.ContainerStateWaiting{Reason: "CrashLoopBackOff"},
+					},
+				},
+			},
+		},
+	}
+}
+
+// TestScaleUpRack_PreFlightCheck validates that scaleUpRack blocks scale-up
+// when existing pods are in a terminal failure state and proceeds when they are
+// healthy, honouring the IgnoreSidecarFailure flag.
+func TestScaleUpRack_PreFlightCheck(t *testing.T) {
+	const (
+		namespace   = "test-ns"
+		clusterName = "test-cluster"
+		rackID      = 1
+	)
+
+	scheme := runtime.NewScheme()
+	require.NoError(t, asdbv1.AddToScheme(scheme))
+	require.NoError(t, clientgoscheme.AddToScheme(scheme))
+
+	makeSTS := func(currentReplicas int32) *appsv1.StatefulSet {
+		return &appsv1.StatefulSet{
+			ObjectMeta: metav1.ObjectMeta{
+				Name:      clusterName + "-1",
+				Namespace: namespace,
+			},
+			Spec:   appsv1.StatefulSetSpec{Replicas: &currentReplicas},
+			Status: appsv1.StatefulSetStatus{Replicas: currentReplicas},
+		}
+	}
+
+	makeReconciler := func(
+		t *testing.T,
+		ignoreSidecar bool,
+		existingObjects ...client.Object,
+	) *SingleClusterReconciler {
+		t.Helper()
+
+		aeroCluster := newTestAerospikeCluster(namespace, clusterName)
+		aeroCluster.Spec.IgnoreSidecarFailure = &ignoreSidecar
+
+		fakeClient := fake.NewClientBuilder().
+			WithScheme(scheme).
+			WithObjects(existingObjects...).
+			WithObjects(aeroCluster).
+			Build()
+
+		return &SingleClusterReconciler{
+			Client:      fakeClient,
+			Log:         logr.Discard(),
+			Scheme:      scheme,
+			aeroCluster: aeroCluster,
+			Recorder:    record.NewFakeRecorder(10),
+		}
+	}
+
+	ignorableNames := k8ssets.New[string]()
+	desiredState := &RackState{
+		Rack: &asdbv1.Rack{ID: rackID},
+		Size: 2, // scale up from 1 → 2
+	}
+
+	t.Run("blocked: server container ErrImagePull with IgnoreSidecarFailure=false", func(t *testing.T) {
+		sts := makeSTS(1)
+		pod := imageFailedPod(clusterName+"-1-0", namespace, clusterName, rackID)
+		r := makeReconciler(t, false, sts, pod)
+
+		_, res := r.scaleUpRack(context.Background(), sts, desiredState, ignorableNames)
+
+		require.False(t, res.IsSuccess)
+		require.Error(t, res.Err, "expected error when server container has ErrImagePull")
+	})
+
+	t.Run("blocked: server container CrashLoopBackOff with IgnoreSidecarFailure=false", func(t *testing.T) {
+		sts := makeSTS(1)
+		pod := crashLoopServerPod(clusterName+"-1-0", namespace, clusterName, rackID)
+		r := makeReconciler(t, false, sts, pod)
+
+		_, res := r.scaleUpRack(context.Background(), sts, desiredState, ignorableNames)
+
+		require.False(t, res.IsSuccess)
+		require.Error(t, res.Err, "expected error when server container is in CrashLoopBackOff")
+	})
+
+	t.Run("blocked: server container CrashLoopBackOff with IgnoreSidecarFailure=true", func(t *testing.T) {
+		sts := makeSTS(1)
+		pod := crashLoopServerPod(clusterName+"-1-0", namespace, clusterName, rackID)
+		r := makeReconciler(t, true, sts, pod)
+
+		_, res := r.scaleUpRack(context.Background(), sts, desiredState, ignorableNames)
+
+		require.False(t, res.IsSuccess)
+		require.Error(t, res.Err,
+			"expected error when server container is in CrashLoopBackOff even with IgnoreSidecarFailure=true")
+	})
+
+	t.Run("blocked: crashing sidecar with IgnoreSidecarFailure=false", func(t *testing.T) {
+		sts := makeSTS(1)
+		pod := sidecarCrashPod(clusterName+"-1-0", namespace, clusterName, rackID)
+		r := makeReconciler(t, false, sts, pod)
+
+		_, res := r.scaleUpRack(context.Background(), sts, desiredState, ignorableNames)
+
+		require.False(t, res.IsSuccess)
+		require.Error(t, res.Err, "expected error when sidecar is crashing and IgnoreSidecarFailure=false")
+	})
+
+	t.Run("allowed: crashing sidecar with IgnoreSidecarFailure=true", func(t *testing.T) {
+		sts := makeSTS(1)
+		pod := sidecarCrashPod(clusterName+"-1-0", namespace, clusterName, rackID)
+		r := makeReconciler(t, true, sts, pod)
+
+		// Scale-up proceeds past the pre-flight check; it may fail later in
+		// cleanupDanglingPodsRack/createOrUpdatePodServiceIfNeeded but must NOT
+		// return an error attributable to the pre-flight pod-state check.
+		_, res := r.scaleUpRack(context.Background(), sts, desiredState, ignorableNames)
+
+		if res.Err != nil {
+			require.NotContains(t, res.Err.Error(), "is in failed state",
+				"pre-flight check must not block when sidecar crashes and IgnoreSidecarFailure=true")
+		}
+	})
 }
 
 // TestCreateEmptyRack_NilSTSOnCreateFailure reproduces the KO-586 panic: forcing the
