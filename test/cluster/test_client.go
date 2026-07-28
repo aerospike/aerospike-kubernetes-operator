@@ -36,13 +36,13 @@ type FromSecretPasswordProvider struct {
 
 // Get returns the password for the username using userSpec.
 func (pp FromSecretPasswordProvider) Get(
-	_ string, userSpec *asdbv1.AerospikeUserSpec,
+	ctx context.Context, _ string, userSpec *asdbv1.AerospikeUserSpec,
 ) (string, error) {
 	secret := &v1.Secret{}
 	secretName := userSpec.SecretName
 	// Assuming secret is in same namespace
 	err := (*pp.k8sClient).Get(
-		context.TODO(),
+		ctx,
 		types.NamespacedName{Name: secretName, Namespace: pp.namespace}, secret,
 	)
 	if err != nil {
@@ -63,7 +63,7 @@ func (pp FromSecretPasswordProvider) Get(
 // This function is not used in the test code. This is just a dummy implementation.
 // Tests do not make client call till cluster is up and reconciled.
 // DefaultPassword only comes into play when the cluster is being created.
-func (pp FromSecretPasswordProvider) GetDefaultPassword(_ *asdbv1.AerospikeClusterSpec) string {
+func (pp FromSecretPasswordProvider) GetDefaultPassword(_ context.Context, _ *asdbv1.AerospikeClusterSpec) string {
 	return asdbv1.DefaultAdminPassword
 }
 
@@ -240,7 +240,7 @@ func getClientPolicy(
 	}
 
 	user, pass, err := aerospikecluster.AerospikeAdminCredentials(
-		&aeroCluster.Spec, statusToSpec,
+		context.TODO(), &aeroCluster.Spec, statusToSpec,
 		getPasswordProvider(aeroCluster, k8sClient),
 	)
 	if err != nil {

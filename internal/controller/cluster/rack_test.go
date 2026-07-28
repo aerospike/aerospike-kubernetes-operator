@@ -119,7 +119,7 @@ func TestCreateEmptyRack_NilSTSOnCreateFailure(t *testing.T) {
 	})
 
 	require.NotPanics(t, func() {
-		found, res := r.createEmptyRack(rackState)
+		found, res := r.createEmptyRack(context.TODO(), rackState)
 
 		require.Nil(t, found)
 		require.False(t, res.IsSuccess)
@@ -142,7 +142,7 @@ func TestCreateEmptyRack_NilSTSOnOwnerRefFailure(t *testing.T) {
 	r.Scheme = runtime.NewScheme()
 
 	require.NotPanics(t, func() {
-		found, res := r.createEmptyRack(rackState)
+		found, res := r.createEmptyRack(context.TODO(), rackState)
 
 		require.Nil(t, found)
 		require.False(t, res.IsSuccess)
@@ -186,7 +186,7 @@ func TestCreateEmptyRack_DeletesSTSWhenReadinessFails(t *testing.T) {
 	}
 	require.NoError(t, r.Create(context.TODO(), pod))
 
-	found, res := r.createEmptyRack(rackState)
+	found, res := r.createEmptyRack(context.TODO(), rackState)
 
 	require.Nil(t, found)
 	require.False(t, res.IsSuccess)

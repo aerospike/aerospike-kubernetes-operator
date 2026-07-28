@@ -127,16 +127,20 @@ vet: ## Run go vet against code.
 	go vet ./...
 
 .PHONY: lint-config
-lint-config: golangci-lint ## Verify golangci-lint linter configuration
-	$(GOLANGCI_LINT) config verify
+lint-config: custom-gcl ## Verify golangci-lint linter configuration
+	$(CUSTOM_GCL) config verify
 
 .PHONY: go-lint
-go-lint: golangci-lint ## Run golangci-lint against code.
-	$(GOLANGCI_LINT) run
+go-lint: custom-gcl ## Run golangci-lint against code.
+	$(CUSTOM_GCL) run
 
 .PHONY: go-lint-fix
-go-lint-fix: golangci-lint ## Run golangci-lint linter and perform fixes
-	$(GOLANGCI_LINT) run --fix
+go-lint-fix: custom-gcl ## Run golangci-lint linter and perform fixes
+	$(CUSTOM_GCL) run --fix
+
+.PHONY: custom-gcl
+custom-gcl: golangci-lint ## Build golangci-lint with logcheck plugin
+	$(GOLANGCI_LINT) custom
 
 .PHONY: all-test
 all-test: manifests generate fmt vet setup-envtest unit-test cluster-test backup-service-test backup-test restore-test ## Run tests.
@@ -274,6 +278,7 @@ KUSTOMIZE ?= $(LOCALBIN)/kustomize
 CONTROLLER_GEN ?= $(LOCALBIN)/controller-gen
 ENVTEST ?= $(LOCALBIN)/setup-envtest
 GOLANGCI_LINT = $(LOCALBIN)/golangci-lint
+CUSTOM_GCL = $(LOCALBIN)/custom-gcl
 
 ## Tool Versions
 KUSTOMIZE_VERSION ?= v5.6.0

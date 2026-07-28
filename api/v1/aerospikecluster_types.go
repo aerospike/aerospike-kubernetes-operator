@@ -826,7 +826,7 @@ type PersistentVolumeSpec struct { //nolint:govet // for readability
 
 	// AccessModes contains the desired access modes the volume should have.
 	// More info: https://kubernetes.io/docs/concepts/storage/persistent-volumes/#access-modes
-	// +kubebuilder:validation:items:Enum=ReadOnlyMany;ReadWriteMany;ReadWriteOnce
+	// +kubebuilder:validation:items:Enum=ReadOnlyMany;ReadWriteMany;ReadWriteOnce;ReadWriteOncePod
 	// +optional
 	AccessModes []corev1.PersistentVolumeAccessMode `json:"accessModes,omitempty" protobuf:"bytes,1,rep,name=accessModes,casttype=PersistentVolumeAccessMode"` //nolint:lll // for readability
 

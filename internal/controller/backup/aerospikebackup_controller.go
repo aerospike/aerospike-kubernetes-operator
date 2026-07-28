@@ -50,14 +50,14 @@ type AerospikeBackupReconciler struct {
 
 // Reconcile is part of the main kubernetes reconciliation loop which aims to
 // move the current state of the cluster closer to the desired state.
-func (r *AerospikeBackupReconciler) Reconcile(_ context.Context, request ctrl.Request) (ctrl.Result, error) {
-	log := r.Log.WithValues("aerospikebackup", request.NamespacedName)
+func (r *AerospikeBackupReconciler) Reconcile(ctx context.Context, request ctrl.Request) (ctrl.Result, error) {
+	log := r.Log.WithValues("aerospikeBackup", request.NamespacedName)
 
 	log.Info("Reconciling AerospikeBackup")
 
 	// Fetch the AerospikeBackup instance
 	aeroBackup := &asdbv1beta1.AerospikeBackup{}
-	if err := r.Get(context.TODO(), request.NamespacedName, aeroBackup); err != nil {
+	if err := r.Get(ctx, request.NamespacedName, aeroBackup); err != nil {
 		if errors.IsNotFound(err) {
 			// Request object not found, could have been deleted after Reconcile request.
 			return reconcile.Result{}, nil
@@ -74,7 +74,7 @@ func (r *AerospikeBackupReconciler) Reconcile(_ context.Context, request ctrl.Re
 		Recorder:   r.Recorder,
 	}
 
-	return cr.Reconcile()
+	return cr.Reconcile(ctx)
 }
 
 // SetupWithManager sets up the controller with the Manager.
