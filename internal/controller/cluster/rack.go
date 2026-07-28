@@ -993,6 +993,7 @@ func (r *SingleClusterReconciler) scaleDownRack(
 			if res.Err != nil {
 				res.Err = fmt.Errorf("set migrate-fill-delay to 0: %w", res.Err)
 			}
+
 			return found, res
 		}
 	}
