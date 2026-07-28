@@ -78,7 +78,7 @@ var _ = Describe(
 				UpdateClusterTest(ctx)
 			},
 		)
-		FContext(
+		Context(
 			"ScaleUpWithBadImage", func() {
 				ScaleUpWithBadImageTest(ctx)
 			},

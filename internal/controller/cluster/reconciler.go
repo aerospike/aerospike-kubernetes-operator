@@ -914,7 +914,7 @@ func (r *SingleClusterReconciler) checkPreviouslyFailedCluster(ctx context.Conte
 	// StatefulSets exist but status is empty: either the cluster is still being
 	// created or it failed during its initial create. Inspect pod states to
 	// decide whether to recover, requeue, or proceed normally.
-	r.Log.V(1).Info("Cluster status is empty with existing StatefulSets, checking pod states")
+	r.Log.V(1).Info("Cluster status is empty with existing StatefulSets, checking Pod states")
 
 	pods, err := r.getClusterPodList(ctx)
 	if err != nil {

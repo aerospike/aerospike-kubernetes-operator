@@ -748,7 +748,7 @@ func (r *SingleClusterReconciler) scaleUpRack(
 
 		if podState.State == utils.PodFailed {
 			return found, common.ReconcileError(fmt.Errorf(
-				"cannot scale up rack %d: pod %s is in failed state: %s",
+				"scale up rack %d: Pod %s is in failed state: %s",
 				rackState.Rack.ID, utils.GetNamespacedNameString(pod), podState.Reason))
 		}
 	}
@@ -1081,17 +1081,27 @@ func (r *SingleClusterReconciler) scaleDownRack(
 		return found, res
 	}
 
-	// Update new object with new size
-	newSize := *found.Spec.Replicas - utils.Len32(podsBatch)
-	found.Spec.Replicas = &newSize
+	// Scale down the StatefulSet. Re-fetch inside RetryOnConflict so a stale
+	// resourceVersion (bumped by the Kubernetes StatefulSet controller) does not
+	// cause a permanent conflict error.
+	batchLen := utils.Len32(podsBatch)
 
-	if err = r.Update(
-		ctx, found, common.UpdateOption,
-	); err != nil {
+	if err = retry.RetryOnConflict(retry.DefaultRetry, func() error {
+		current, getStsErr := r.getSTS(ctx, rackState)
+		if getStsErr != nil {
+			return getStsErr
+		}
+
+		newSize := *current.Spec.Replicas - batchLen
+		current.Spec.Replicas = &newSize
+		found = current
+
+		return r.Update(ctx, current, common.UpdateOption)
+	}); err != nil {
 		return found, common.ReconcileError(
 			fmt.Errorf(
 				"scale StatefulSet %s to %d replicas: %w",
-				utils.GetNamespacedNameString(found), newSize, err,
+				utils.GetNamespacedNameString(found), *found.Spec.Replicas, err,
 			),
 		)
 	}
@@ -1114,22 +1124,29 @@ func (r *SingleClusterReconciler) scaleDownRack(
 		// objects like pvc and service. These objects would have been removed if scaleup is left for the user.
 		// In case of rolling restart, no pod cleanup happens, therefore rolling config back is left to the user.
 		if err = r.validateSCClusterState(ctx, policy, ignorablePodNames); err != nil {
-			// reset cluster size
-			newSize := *found.Spec.Replicas + utils.Len32(podsBatch)
-			found.Spec.Replicas = &newSize
-
 			r.Log.Error(
 				err, "Cluster validation failed, re-setting AerospikeCluster StatefulSet to previous size",
-				"statefulSet", utils.GetNamespacedName(found), "size", newSize,
+				"statefulSet", utils.GetNamespacedName(found),
 			)
 
-			if err = r.Update(
-				ctx, found, common.UpdateOption,
-			); err != nil {
+			// Roll back the replica count. Re-fetch inside RetryOnConflict for
+			// the same reason as the primary scale-down above.
+			if rollbackErr := retry.RetryOnConflict(retry.DefaultRetry, func() error {
+				current, getStsErr := r.getSTS(ctx, rackState)
+				if getStsErr != nil {
+					return getStsErr
+				}
+
+				rollbackSize := *current.Spec.Replicas + batchLen
+				current.Spec.Replicas = &rollbackSize
+				found = current
+
+				return r.Update(ctx, current, common.UpdateOption)
+			}); rollbackErr != nil {
 				return found, common.ReconcileError(
 					fmt.Errorf(
 						"scale StatefulSet %s to %d replicas: %w",
-						utils.GetNamespacedNameString(found), newSize, err,
+						utils.GetNamespacedNameString(found), *found.Spec.Replicas, rollbackErr,
 					),
 				)
 			}
@@ -2398,7 +2415,7 @@ func (r *SingleClusterReconciler) handleFailedPodsInRack(
 	podList, err = r.getOrderedRackPodList(ctx, rackState.Rack.ID, rackState.Rack.Revision)
 	if err != nil {
 		return common.ReconcileError(
-			fmt.Errorf("re-fetch pods after sidecar reconcile on rack %d-%s: %w",
+			fmt.Errorf("re-fetch Pods after sidecar reconcile on rack %d-%s: %w",
 				rackState.Rack.ID, rackState.Rack.Revision, err),
 		)
 	}

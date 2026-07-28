@@ -255,7 +255,7 @@ func (r *SingleClusterReconciler) waitForSTSPodsServerReady(
 	)
 
 	r.Log.Info(
-		"Waiting for server container to be ready across all pods of STS",
+		"Waiting for server Container to be ready across all Pods of StatefulSet",
 		"statefulSet", utils.GetNamespacedName(st),
 		"maxWaitTimePerPod", podStatusRetryInterval*time.Duration(podStatusMaxRetry),
 	)
@@ -292,11 +292,11 @@ func (r *SingleClusterReconciler) waitForSTSPodsServerReady(
 				types.NamespacedName{Name: podName, Namespace: st.Namespace},
 				pod,
 			); err != nil {
-				return fmt.Errorf("get pod %s: %w", utils.NamespacedName(st.Namespace, podName), err)
+				return fmt.Errorf("get Pod %s: %w", utils.NamespacedName(st.Namespace, podName), err)
 			}
 
 			if podState := utils.CheckServerFailedWithGrace(pod, false); podState.State == utils.PodFailed {
-				return fmt.Errorf("server container in pod %s failed: %s",
+				return fmt.Errorf("server container in Pod %s failed: %s",
 					utils.NamespacedName(st.Namespace, podName), podState.Reason)
 			}
 
@@ -313,7 +313,7 @@ func (r *SingleClusterReconciler) waitForSTSPodsServerReady(
 
 		if !isReady {
 			return fmt.Errorf(
-				"server container in pod %s did not become ready. Status: %v",
+				"server container in Pod %s did not become ready, status: %v",
 				utils.NamespacedName(st.Namespace, podName), pod.Status.ContainerStatuses,
 			)
 		}
@@ -1296,9 +1296,21 @@ func (r *SingleClusterReconciler) updateAerospikeInitContainerImage(
 				container.Image,
 			)
 
-			statefulSet.Spec.Template.Spec.InitContainers[idx].Image = desiredImage
+			// Re-fetch inside RetryOnConflict so a stale resourceVersion does
+			// not cause a permanent conflict error.
+			nsName := types.NamespacedName{Name: statefulSet.Name, Namespace: statefulSet.Namespace}
 
-			if err := r.Update(ctx, statefulSet, common.UpdateOption); err != nil {
+			if err := retry.RetryOnConflict(retry.DefaultRetry, func() error {
+				current := &appsv1.StatefulSet{}
+				if err := r.Get(ctx, nsName, current); err != nil {
+					return err
+				}
+
+				current.Spec.Template.Spec.InitContainers[idx].Image = desiredImage
+				*statefulSet = *current
+
+				return r.Update(ctx, current, common.UpdateOption)
+			}); err != nil {
 				return fmt.Errorf(
 					"update StatefulSet %s: %w",
 					utils.GetNamespacedNameString(statefulSet),

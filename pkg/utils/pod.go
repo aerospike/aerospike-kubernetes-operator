@@ -66,8 +66,7 @@ func CheckPodFailedWithGrace(pod *corev1.Pod, allowGrace bool) PodState {
 
 // CheckServerFailedWithGrace checks if the pod's Aerospike server container (or
 // a blocking init container) has a terminal failure, optionally within a grace
-// period. Sidecar container failures are intentionally ignored — use
-// CheckPodFailedWithGrace to include those.
+// period. Sidecar container failures are intentionally ignored
 // Returns PodState containing:
 // - State: PodHealthy, PodFailedInGrace, or PodFailed
 // - Reason: Human-readable description of failure (empty if healthy)
