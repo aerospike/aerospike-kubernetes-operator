@@ -105,7 +105,7 @@ func ReloadBackupServiceConfigInPods(
 }
 
 //nolint:logcheck // ctx for client calls; explicit logger (no contextual logging in AKO).
-func validateBackupSvcConfigReload(ctx context.Context, logger logr.Logger, k8sClient client.Client,
+func validateBackupSvcConfigReload(ctx context.Context, log logr.Logger, k8sClient client.Client,
 	backupServiceClient *backup_service.Client,
 	backupSvc *v1beta1.BackupService,
 ) error {
@@ -119,23 +119,23 @@ func validateBackupSvcConfigReload(ctx context.Context, logger logr.Logger, k8sC
 		return err
 	}
 
-	synced, err := IsBackupSvcFullConfigSynced(apiBackupSvcConfig, desiredData, logger)
+	synced, err := IsBackupSvcFullConfigSynced(apiBackupSvcConfig, desiredData, log)
 	if err != nil {
 		return err
 	}
 
 	if !synced {
-		logger.Info("Backup service config not yet updated in Pods, requeue")
+		log.Info("Backup service config not yet updated in Pods, requeue")
 		return fmt.Errorf("backup service config not yet updated in Pods")
 	}
 
-	logger.Info("Reloaded backup service config")
+	log.Info("Reloaded backup service config")
 
 	return nil
 }
 
 func IsBackupSvcFullConfigSynced(currentBackupSvcConfig map[string]interface{}, desired string,
-	logger logr.Logger,
+	log logr.Logger,
 ) (bool, error) {
 	desiredBackupSvcConfig := make(map[string]interface{})
 
@@ -143,8 +143,8 @@ func IsBackupSvcFullConfigSynced(currentBackupSvcConfig map[string]interface{}, 
 		return false, fmt.Errorf("unmarshal backup service config from ConfigMap data: %w", err)
 	}
 
-	logger.Info("Fetched backup service config from backup service via API", "config", currentBackupSvcConfig)
-	logger.Info("Found backup service config in backup service ConfigMap", "config", desiredBackupSvcConfig)
+	log.Info("Fetched backup service config from backup service via API", "config", currentBackupSvcConfig)
+	log.Info("Found backup service config in backup service ConfigMap", "config", desiredBackupSvcConfig)
 
 	return reflect.DeepEqual(currentBackupSvcConfig, desiredBackupSvcConfig), nil
 }

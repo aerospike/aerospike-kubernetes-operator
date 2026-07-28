@@ -259,7 +259,7 @@ func (r *SingleClusterReconciler) updateLBService(ctx context.Context, service *
 			)
 		}
 	} else {
-		r.Log.Info("LoadBalancer Service update not required, skipping update",
+		r.Log.Info("LoadBalancer Service update not required, skipping",
 			"service", utils.GetNamespacedName(service))
 
 		return nil
