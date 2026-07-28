@@ -12,7 +12,7 @@ import (
 )
 
 const (
-	BackupServiceImage  = "aerospike/aerospike-backup-service:3.5.0"
+	BackupServiceImage  = "aerospike/aerospike-backup-service:3.6.1"
 	DefaultClusterHost  = "aerocluster.test.svc.cluster.local"
 	DefaultBackupPolicy = "test-policy"
 )
@@ -35,6 +35,14 @@ var (
 		IncrIntervalCron: "@hourly",
 	}
 )
+
+// RestoreOnlyStorageConfig returns a minimal ABS config for restore-side deployments:
+// service, backup-policies, and storage only (no aerospike-clusters or backup-routines).
+// Used to exercise BKRS-212 cross-region timestamp restores where the routine is not
+// configured locally but storage is overridden via source-name.
+func RestoreOnlyStorageConfig() map[string]interface{} {
+	return BackupServiceBaseConfig()
+}
 
 // BackupServiceBaseConfig returns the base backup-service config (service, policies, storage).
 func BackupServiceBaseConfig() map[string]interface{} {

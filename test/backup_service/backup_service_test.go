@@ -207,6 +207,20 @@ var _ = Describe(
 				Expect(err).ToNot(HaveOccurred())
 			})
 
+			It("Should accept compact flag in backup-policies config", func() {
+				config := getBackupServiceConfMap()
+				policies := config[asdbv1beta1.BackupPoliciesKey].(map[string]interface{})
+				policy := policies["test-policy"].(map[string]interface{})
+				policy["compact"] = true
+
+				configBytes, mErr := json.Marshal(config)
+				Expect(mErr).ToNot(HaveOccurred())
+
+				backupService = newBackupServiceWithConfig(backupServiceNamespacedName, configBytes)
+				err = DeployBackupService(k8sClient, backupService)
+				Expect(err).ToNot(HaveOccurred())
+			})
+
 			It("Should restart backup service deployment pod when static fields are changed in backup service "+
 				"config", func() {
 				backupService, err = NewBackupService(backupServiceNamespacedName)

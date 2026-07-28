@@ -5,10 +5,12 @@ import (
 
 	. "github.com/onsi/ginkgo/v2"
 	. "github.com/onsi/gomega"
+	"k8s.io/apimachinery/pkg/runtime"
 	"k8s.io/apimachinery/pkg/types"
 
 	asdbv1beta1 "github.com/aerospike/aerospike-kubernetes-operator/v4/api/v1beta1"
 	"github.com/aerospike/aerospike-kubernetes-operator/v4/test/envtests"
+	"github.com/aerospike/aerospike-kubernetes-operator/v4/test/fixtures/backupconfig"
 	"github.com/aerospike/aerospike-kubernetes-operator/v4/test/testutil"
 )
 
@@ -56,6 +58,26 @@ var _ = Describe("AerospikeBackupService validation", func() {
 						backupService.Status.Phase = phase
 						Expect(envtests.K8sClient.Status().Update(ctx, backupService)).To(Succeed())
 					}
+				})
+			})
+		})
+	})
+
+	Context("Config validation", func() {
+		Context("backup-policies", func() {
+			Context("positive", func() {
+				It("accepts compact flag in backup-policies", func() {
+					config := backupconfig.BackupServiceBaseConfig()
+					policies := config[asdbv1beta1.BackupPoliciesKey].(map[string]interface{})
+					policy := policies[backupconfig.DefaultBackupPolicy].(map[string]interface{})
+					policy["compact"] = true
+
+					backupService := buildBackupServiceCR(absNsNm)
+					backupService.Spec.Config = runtime.RawExtension{
+						Raw: backupconfig.MustMarshalConfig(config),
+					}
+
+					Expect(envtests.K8sClient.Create(ctx, backupService)).To(Succeed())
 				})
 			})
 		})

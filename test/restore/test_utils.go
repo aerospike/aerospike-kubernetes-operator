@@ -4,6 +4,8 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"strconv"
+	"strings"
 	"time"
 
 	k8serrors "k8s.io/apimachinery/pkg/api/errors"
@@ -196,7 +198,7 @@ func waitForRestore(cl client.Client, restore *asdbv1beta1.AerospikeRestore,
 		return err
 	}
 
-	if restoreResult.Status != dto.JobStatusDone {
+	if restoreResult.Status != dto.RestoreSuccess {
 		return fmt.Errorf("restore job status is not done")
 	}
 
@@ -270,6 +272,30 @@ func getRestoreConfigWithTLSInMap(backupPath string) map[string]interface{} {
 	seedNode["port"] = 4333
 
 	return restoreConfig
+}
+
+func getTimestampRestoreConfigWithStorageOverride(backupPath string) (map[string]interface{}, error) {
+	restoreConfig := getRestoreConfigInMap(backupPath)
+	delete(restoreConfig, asdbv1beta1.SourceKey)
+	delete(restoreConfig, asdbv1beta1.BackupDataPathKey)
+
+	parts := strings.Split(backupPath, "/")
+	if len(parts) < 4 {
+		return nil, fmt.Errorf("invalid backup path: %s", backupPath)
+	}
+
+	timeStamp := parts[len(parts)-3]
+
+	timeInt, err := strconv.Atoi(timeStamp)
+	if err != nil {
+		return nil, err
+	}
+
+	restoreConfig[asdbv1beta1.TimeKey] = int64(timeInt) + 5000
+	restoreConfig[asdbv1beta1.RoutineKey] = parts[len(parts)-5]
+	restoreConfig[asdbv1beta1.SourceNameKey] = "local"
+
+	return restoreConfig, nil
 }
 
 func validateRestoredData(k8sClient client.Client) error {

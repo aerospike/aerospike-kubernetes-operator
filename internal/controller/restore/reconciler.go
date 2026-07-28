@@ -7,6 +7,7 @@ import (
 	"fmt"
 	"net/http"
 
+	"github.com/aerospike/aerospike-backup-service/v3/pkg/dto"
 	"github.com/go-logr/logr"
 	corev1 "k8s.io/api/core/v1"
 	k8sRuntime "k8s.io/apimachinery/pkg/runtime"
@@ -334,16 +335,19 @@ func (r *SingleRestoreReconciler) cancelRestoreJob() error {
 }
 
 func statusToPhase(status string) asdbv1beta1.AerospikeRestorePhase {
-	switch status {
-	case "Done":
-		return asdbv1beta1.AerospikeRestoreCompleted
-
-	case "Running":
-		return asdbv1beta1.AerospikeRestoreInProgress
-
-	case "Failed":
-		return asdbv1beta1.AerospikeRestoreFailed
+	jobStatus, ok := dto.ParseJobStatus(status)
+	if !ok {
+		return ""
 	}
 
-	return ""
+	switch jobStatus {
+	case dto.RestoreRunning:
+		return asdbv1beta1.AerospikeRestoreInProgress
+	case dto.RestoreSuccess:
+		return asdbv1beta1.AerospikeRestoreCompleted
+	case dto.RestoreFailure, dto.RestoreCanceled:
+		return asdbv1beta1.AerospikeRestoreFailed
+	default:
+		return ""
+	}
 }

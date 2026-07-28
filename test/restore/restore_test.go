@@ -102,13 +102,17 @@ var _ = Describe(
 					Expect(err.Error()).To(ContainSubstring("empty field validation error: \"time\" required"))
 				})
 
-				It("Should fail when source field is given for Timestamp restore type", func() {
-					restore, err = newRestore(restoreNsNm, asdbv1beta1.Timestamp)
-					Expect(err).ToNot(HaveOccurred())
+				It("Should accept source override for Timestamp restore type", func() {
+					restoreConfig, mErr := getTimestampRestoreConfigWithStorageOverride(backupDataPath)
+					Expect(mErr).ToNot(HaveOccurred())
 
-					err = createRestore(k8sClient, restore)
-					Expect(err).To(HaveOccurred())
-					Expect(err.Error()).To(ContainSubstring("source field is not allowed in restore config"))
+					configBytes, mErr := getRestoreConfBytes(restoreConfig)
+					Expect(mErr).ToNot(HaveOccurred())
+
+					restore = newRestoreWithConfig(restoreNsNm, asdbv1beta1.Timestamp, configBytes)
+
+					err = k8sClient.Create(testCtx, restore)
+					Expect(err).ToNot(HaveOccurred())
 				})
 
 				It("Should fail when routine field is given for Full/Incremental restore type", func() {
