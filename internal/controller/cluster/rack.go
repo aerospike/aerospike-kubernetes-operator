@@ -352,7 +352,7 @@ func (r *SingleClusterReconciler) deleteRacks(
 
 func (r *SingleClusterReconciler) upgradeOrRollingRestartRack(
 	ctx context.Context, found *appsv1.StatefulSet, rackState *RackState,
-	ignorablePodNames sets.Set[string], failedPods *failedPodsInfo,
+	ignorablePodNames sets.Set[string], podFailure *failedPodsInfo,
 ) (*appsv1.StatefulSet, common.ReconcileResult) {
 	var res common.ReconcileResult
 	// Always update configMap. We won't be able to find if a rack's config, and it's pod config is in sync or not
@@ -386,7 +386,7 @@ func (r *SingleClusterReconciler) upgradeOrRollingRestartRack(
 	}
 
 	if upgradeNeeded {
-		found, res = r.upgradeRack(ctx, found, rackState, ignorablePodNames, failedPods)
+		found, res = r.upgradeRack(ctx, found, rackState, ignorablePodNames, podFailure)
 		if !res.IsSuccess {
 			if res.Err != nil {
 				r.Recorder.Eventf(
@@ -409,8 +409,8 @@ func (r *SingleClusterReconciler) upgradeOrRollingRestartRack(
 		// dynamic config updates and asinfo calls remain enabled for those pods.
 		serverFailedPodsNames := sets.New[string]()
 
-		if failedPods != nil && failedPods.isServerFailed {
-			for _, pod := range failedPods.pods {
+		if podFailure != nil && podFailure.isServerFailed {
+			for _, pod := range podFailure.pods {
 				serverFailedPodsNames.Insert(pod.Name)
 			}
 		}
@@ -421,13 +421,8 @@ func (r *SingleClusterReconciler) upgradeOrRollingRestartRack(
 		}
 
 		if rollingRestartInfo.needRestart {
-			var failedPodsList []*corev1.Pod
-			if failedPods != nil {
-				failedPodsList = failedPods.pods
-			}
-
 			found, res = r.rollingRestartRack(
-				ctx, found, rackState, ignorablePodNames, rollingRestartInfo.restartTypeMap, failedPodsList,
+				ctx, found, rackState, ignorablePodNames, rollingRestartInfo.restartTypeMap, podFailure,
 			)
 			if !res.IsSuccess {
 				if res.Err != nil {
@@ -475,7 +470,7 @@ func (r *SingleClusterReconciler) upgradeOrRollingRestartRack(
 
 	// handle k8sNodeBlockList pods only if it is changed
 	if !reflect.DeepEqual(r.aeroCluster.Spec.K8sNodeBlockList, r.aeroCluster.Status.K8sNodeBlockList) {
-		found, res = r.handleK8sNodeBlockListPods(ctx, found, rackState, ignorablePodNames, failedPods)
+		found, res = r.handleK8sNodeBlockListPods(ctx, found, rackState, ignorablePodNames, podFailure)
 		if !res.IsSuccess {
 			return found, res
 		}
@@ -588,7 +583,7 @@ type failedPodsInfo struct {
 
 func (r *SingleClusterReconciler) reconcileRack(
 	ctx context.Context, found *appsv1.StatefulSet, rackState *RackState,
-	ignorablePodNames sets.Set[string], failedPods *failedPodsInfo,
+	ignorablePodNames sets.Set[string], podFailure *failedPodsInfo,
 ) common.ReconcileResult {
 	r.Log.Info(
 		"Reconcile existing Aerospike cluster StatefulSet", "statefulSet",
@@ -632,7 +627,7 @@ func (r *SingleClusterReconciler) reconcileRack(
 	// pods (server still running). Skip when recovering server-failed pods —
 	// the Aerospike server is unreachable on those pods so the info command
 	// would fail.
-	if failedPods == nil || !failedPods.isServerFailed {
+	if podFailure == nil || !podFailure.isServerFailed {
 		// Revert migrate-fill-delay to the original value if it was set to 0 during scale down.
 		// Reset will be done if there is scale-down or Rack redistribution.
 		// This check won't cover a scenario where a scale-down operation was done and then reverted to the previous
@@ -658,7 +653,7 @@ func (r *SingleClusterReconciler) reconcileRack(
 			utils.GetNamespacedNameString(found), err))
 	}
 
-	found, res = r.upgradeOrRollingRestartRack(ctx, found, rackState, ignorablePodNames, failedPods)
+	found, res = r.upgradeOrRollingRestartRack(ctx, found, rackState, ignorablePodNames, podFailure)
 	if !res.IsSuccess {
 		return res
 	}
@@ -828,15 +823,15 @@ func (r *SingleClusterReconciler) scaleUpRack(
 
 func (r *SingleClusterReconciler) upgradeRack(
 	ctx context.Context, statefulSet *appsv1.StatefulSet, rackState *RackState,
-	ignorablePodNames sets.Set[string], failedPods *failedPodsInfo,
+	ignorablePodNames sets.Set[string], podFailure *failedPodsInfo,
 ) (*appsv1.StatefulSet, common.ReconcileResult) {
 	var (
 		err     error
 		podList []*corev1.Pod
 	)
 
-	if failedPods != nil && len(failedPods.pods) != 0 {
-		podList = failedPods.pods
+	if podFailure != nil && len(podFailure.pods) != 0 {
+		podList = podFailure.pods
 	} else {
 		// List the pods for this aeroCluster's statefulset
 		podList, err = r.getOrderedRackPodList(ctx, rackState.Rack.ID, rackState.Rack.Revision)
@@ -1207,7 +1202,7 @@ func (r *SingleClusterReconciler) scaleDownRack(
 func (r *SingleClusterReconciler) rollingRestartRack(
 	ctx context.Context, found *appsv1.StatefulSet, rackState *RackState,
 	ignorablePodNames sets.Set[string], restartTypeMap map[string]RestartType,
-	failedPods []*corev1.Pod,
+	podFailure *failedPodsInfo,
 ) (*appsv1.StatefulSet, common.ReconcileResult) {
 	r.Log.Info("Rolling restart AerospikeCluster StatefulSet Pods", "statefulSet", utils.GetNamespacedName(found))
 
@@ -1221,8 +1216,8 @@ func (r *SingleClusterReconciler) rollingRestartRack(
 		podList []*corev1.Pod
 	)
 
-	if len(failedPods) != 0 {
-		podList = failedPods
+	if podFailure != nil && len(podFailure.pods) != 0 {
+		podList = podFailure.pods
 	} else {
 		// List the pods for this aeroCluster's statefulset
 		podList, err = r.getOrderedRackPodList(ctx, rackState.Rack.ID, rackState.Rack.Revision)
@@ -1314,7 +1309,7 @@ func (r *SingleClusterReconciler) rollingRestartRack(
 
 func (r *SingleClusterReconciler) handleK8sNodeBlockListPods(
 	ctx context.Context, statefulSet *appsv1.StatefulSet, rackState *RackState,
-	ignorablePodNames sets.Set[string], failedPods *failedPodsInfo,
+	ignorablePodNames sets.Set[string], podFailure *failedPodsInfo,
 ) (*appsv1.StatefulSet, common.ReconcileResult) {
 	if err := r.updateSTS(ctx, statefulSet, rackState); err != nil {
 		return statefulSet, common.ReconcileError(
@@ -1327,8 +1322,8 @@ func (r *SingleClusterReconciler) handleK8sNodeBlockListPods(
 		err     error
 	)
 
-	if failedPods != nil && len(failedPods.pods) != 0 {
-		podList = failedPods.pods
+	if podFailure != nil && len(podFailure.pods) != 0 {
+		podList = podFailure.pods
 	} else {
 		// List the pods for this aeroCluster's statefulset
 		podList, err = r.getOrderedRackPodList(ctx, rackState.Rack.ID, rackState.Rack.Revision)
@@ -2318,7 +2313,7 @@ func (r *SingleClusterReconciler) handleFailedPodsInRack(
 	}
 
 	// Server-failed pods — fast path.
-	// Passed as failedPods to reconcileRack so that batching is bypassed and
+	// Passed as podFailure to reconcileRack so that batching is bypassed and
 	// migration/quiesce safety checks are skipped; the Aerospike server is not
 	// reachable on these pods so those checks cannot succeed anyway.
 	serverFailedPods, _, _ := getServerFailedAndActivePods(podList, false)
@@ -2369,7 +2364,8 @@ func (r *SingleClusterReconciler) handleFailedPodsInRack(
 			}
 
 			if _, res := r.rollingRestartRack(
-				ctx, found, rackState, ignorablePodNames, restartTypeMap, serverFailedPods,
+				ctx, found, rackState, ignorablePodNames, restartTypeMap,
+				&failedPodsInfo{pods: serverFailedPods, isServerFailed: true},
 			); !res.IsSuccess {
 				return res
 			}
@@ -2386,7 +2382,7 @@ func (r *SingleClusterReconciler) handleFailedPodsInRack(
 
 	// Sidecar-failed pods — config-change-driven path.
 	// These pods have a running Aerospike server but a failing sidecar. They are
-	// passed as failedPods to reconcileRack; because their server is still running,
+	// passed as podFailure to reconcileRack; because their server is still running,
 	// rollingRestartPods treats them as activePods and normal safety checks
 	// (migration wait, quiesce) apply. getRollingRestartTypePod will restart them
 	// only when a matching config change is present (e.g. a fixed sidecar image).
