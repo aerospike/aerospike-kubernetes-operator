@@ -146,6 +146,46 @@ var _ = Describe(
 						)
 
 						It(
+							"Should allow ReadWriteOncePod accessMode for PV source",
+							func() {
+								// ReadWriteOncePod was introduced as an alpha feature in Kubernetes 1.22.
+								// Beta in v1.27 and GA in v1.29.
+								versionBelowThanExpected, currVersion, err := isK8sVersionBelow(k8sClientSet, 1, 27)
+								Expect(err).ShouldNot(HaveOccurred())
+
+								if versionBelowThanExpected {
+									Skip(fmt.Sprintf("requires Kubernetes >= 1.27 (server is %s): ReadWriteOncePod accessMode support",
+										currVersion))
+								}
+
+								aeroCluster := createDummyAerospikeCluster(
+									clusterNamespacedName, 2,
+								)
+
+								for i, volume := range aeroCluster.Spec.Storage.Volumes {
+									if volume.Source.PersistentVolume != nil {
+										aeroCluster.Spec.Storage.Volumes[i].Source.PersistentVolume.AccessModes =
+											[]v1.PersistentVolumeAccessMode{v1.ReadWriteOncePod}
+									}
+								}
+
+								Expect(DeployCluster(k8sClient, ctx, aeroCluster)).ShouldNot(HaveOccurred())
+
+								pvcs, err := getAeroClusterPVCList(
+									aeroCluster, k8sClient,
+								)
+								Expect(err).ShouldNot(HaveOccurred())
+								Expect(pvcs).ShouldNot(BeEmpty())
+
+								for idx := range pvcs {
+									Expect(pvcs[idx].Spec.AccessModes).To(
+										ContainElement(v1.ReadWriteOncePod),
+									)
+								}
+							},
+						)
+
+						It(
 							"Should allow setting labels and annotation in PVC",
 							func() {
 								aeroCluster := createDummyAerospikeCluster(

@@ -8,6 +8,8 @@ import (
 	"fmt"
 	"io"
 	"reflect"
+	"regexp"
+	"strconv"
 	"strings"
 	"time"
 
@@ -945,4 +947,34 @@ kubectl annotate pod ${POD_NAME} aerospike.com/override-rack-id=${RAND} --overwr
 			},
 		},
 	}
+}
+
+var k8sVersionRegex = regexp.MustCompile(`^v?(\d+)\.(\d+)`)
+
+// isK8sVersionBelow returns if the API server's version is
+// older than the provided major.minor. Used to gate features that are unavailable
+// on older Kubernetes clusters.
+func isK8sVersionBelow(k8sClientSet *kubernetes.Clientset, major, minor int) (isBelow bool, version string, err error) {
+	serverVersion, err := k8sClientSet.Discovery().ServerVersion()
+	if err != nil {
+		return false, "", err
+	}
+
+	matches := k8sVersionRegex.FindStringSubmatch(serverVersion.GitVersion)
+
+	serverMajor, err := strconv.Atoi(matches[1])
+	if err != nil {
+		return false, "", err
+	}
+
+	serverMinor, err := strconv.Atoi(matches[2])
+	if err != nil {
+		return false, "", err
+	}
+
+	if serverMajor < major || (serverMajor == major && serverMinor < minor) {
+		return true, serverVersion.GitVersion, nil
+	}
+
+	return false, serverVersion.GitVersion, nil
 }

@@ -497,7 +497,7 @@ func (r *SingleClusterReconciler) restartASDOrUpdateAerospikeConf(podName string
 		r.Recorder.Eventf(
 			r.aeroCluster, corev1.EventTypeNormal, "PodWarmRestarted",
 			"[rack-%d] Warm restarted Pod %s",
-			rackID, podNamespacedName.String(),
+			rackID, utils.NamespacedName(podNamespacedName.Namespace, podNamespacedName.Name),
 		)
 		r.Log.V(1).Info("Pod warm restarted", "pod",
 			utils.NewNamespacedName(podNamespacedName.Namespace, podNamespacedName.Name))
@@ -505,7 +505,7 @@ func (r *SingleClusterReconciler) restartASDOrUpdateAerospikeConf(podName string
 		r.Recorder.Eventf(
 			r.aeroCluster, corev1.EventTypeNormal, "PodConfUpdated",
 			"[rack-%d] Updated config for Pod %s",
-			rackID, podNamespacedName.String(),
+			rackID, utils.NamespacedName(podNamespacedName.Namespace, podNamespacedName.Name),
 		)
 		r.Log.V(1).Info("Pod conf updated", "pod",
 			utils.NewNamespacedName(podNamespacedName.Namespace, podNamespacedName.Name))
