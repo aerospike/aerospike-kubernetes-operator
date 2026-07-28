@@ -34,7 +34,9 @@ func GetConfigSection(config map[string]interface{}, section string) (map[string
 	return sectionMap, nil
 }
 
-func GetBackupServicePodList(k8sClient client.Client, name, namespace string) (*corev1.PodList, error) {
+func GetBackupServicePodList(
+	ctx context.Context, k8sClient client.Client, name, namespace string,
+) (*corev1.PodList, error) {
 	var podList corev1.PodList
 
 	labelSelector := labels.SelectorFromSet(utils.LabelsForAerospikeBackupService(name))
@@ -42,23 +44,27 @@ func GetBackupServicePodList(k8sClient client.Client, name, namespace string) (*
 		Namespace: namespace, LabelSelector: labelSelector,
 	}
 
-	if err := k8sClient.List(context.TODO(), &podList, listOps); err != nil {
+	if err := k8sClient.List(ctx, &podList, listOps); err != nil {
 		return nil, fmt.Errorf("list backup service Pods %s: %w", utils.NamespacedName(namespace, name), err)
 	}
 
 	return &podList, nil
 }
 
+// ReloadBackupServiceConfigInPods reloads backup service configuration in running Pods.
+//
+//nolint:logcheck // ctx for client calls; explicit logger (no contextual logging in AKO).
 func ReloadBackupServiceConfigInPods(
+	ctx context.Context,
+	log logr.Logger,
 	k8sClient client.Client,
 	backupServiceClient *backup_service.Client,
-	log logr.Logger,
 	backupSvc *v1beta1.BackupService,
 ) error {
 	log.Info("Reloading backup service config")
 
 	if err := retry.RetryOnConflict(retry.DefaultRetry, func() error {
-		podList, err := GetBackupServicePodList(k8sClient,
+		podList, err := GetBackupServicePodList(ctx, k8sClient,
 			backupSvc.Name,
 			backupSvc.Namespace,
 		)
@@ -78,7 +84,7 @@ func ReloadBackupServiceConfigInPods(
 
 			pod.Annotations = annotations
 
-			if err := k8sClient.Update(context.TODO(), &pod); err != nil {
+			if err := k8sClient.Update(ctx, &pod); err != nil {
 				return fmt.Errorf("update backup service Pod %s: %w", utils.GetNamespacedNameString(&pod), err)
 			}
 		}
@@ -92,15 +98,15 @@ func ReloadBackupServiceConfigInPods(
 	time.Sleep(1 * time.Second)
 
 	if err := backupServiceClient.ApplyConfig(); err != nil {
-		return err
+		return fmt.Errorf("apply backup service config: %w", err)
 	}
 
-	return validateBackupSvcConfigReload(k8sClient, backupServiceClient, log, backupSvc)
+	return validateBackupSvcConfigReload(ctx, log, k8sClient, backupServiceClient, backupSvc)
 }
 
-func validateBackupSvcConfigReload(k8sClient client.Client,
+//nolint:logcheck // ctx for client calls; explicit logger (no contextual logging in AKO).
+func validateBackupSvcConfigReload(ctx context.Context, log logr.Logger, k8sClient client.Client,
 	backupServiceClient *backup_service.Client,
-	log logr.Logger,
 	backupSvc *v1beta1.BackupService,
 ) error {
 	apiBackupSvcConfig, err := backupServiceClient.GetBackupServiceConfig()
@@ -108,7 +114,7 @@ func validateBackupSvcConfigReload(k8sClient client.Client,
 		return err
 	}
 
-	desiredData, err := GetBackupSvcConfigFromCM(k8sClient, backupSvc)
+	desiredData, err := GetBackupSvcConfigFromCM(ctx, k8sClient, backupSvc)
 	if err != nil {
 		return err
 	}
@@ -134,7 +140,7 @@ func IsBackupSvcFullConfigSynced(currentBackupSvcConfig map[string]interface{}, 
 	desiredBackupSvcConfig := make(map[string]interface{})
 
 	if err := yaml.Unmarshal([]byte(desired), &desiredBackupSvcConfig); err != nil {
-		return false, err
+		return false, fmt.Errorf("unmarshal backup service config from ConfigMap data: %w", err)
 	}
 
 	log.Info("Fetched backup service config from backup service via API", "config", currentBackupSvcConfig)
@@ -143,10 +149,12 @@ func IsBackupSvcFullConfigSynced(currentBackupSvcConfig map[string]interface{}, 
 	return reflect.DeepEqual(currentBackupSvcConfig, desiredBackupSvcConfig), nil
 }
 
-func GetBackupSvcConfigFromCM(k8sClient client.Client, backupSvc *v1beta1.BackupService) (string, error) {
+func GetBackupSvcConfigFromCM(
+	ctx context.Context, k8sClient client.Client, backupSvc *v1beta1.BackupService,
+) (string, error) {
 	var cm corev1.ConfigMap
 
-	if err := k8sClient.Get(context.TODO(), types.NamespacedName{
+	if err := k8sClient.Get(ctx, types.NamespacedName{
 		Namespace: backupSvc.Namespace,
 		Name:      backupSvc.Name,
 	}, &cm); err != nil {

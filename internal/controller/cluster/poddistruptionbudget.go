@@ -73,8 +73,8 @@ func (r *SingleClusterReconciler) createOrUpdatePDB(ctx context.Context) error {
 		}
 
 		if !clusterReadinessEnabled {
-			r.Log.Info("Pod Readiness is not enabled throughout cluster. Skipping PodDisruptionBudget." +
-				" Refer Aerospike documentation for more details.")
+			r.Log.Info("Pod Readiness is not enabled throughout cluster, Skipping PodDisruptionBudget creation." +
+				" Refer Aerospike documentation for more details")
 
 			return nil
 		}
@@ -127,7 +127,7 @@ func (r *SingleClusterReconciler) createOrUpdatePDB(ctx context.Context) error {
 	}
 
 	r.Log.Info(
-		"PodDisruptionBudget already exist. Updating existing PodDisruptionBudget if required",
+		"PodDisruptionBudget already exists, Updating existing PodDisruptionBudget if required",
 		"podDisruptionBudget", utils.NewNamespacedName(r.aeroCluster.Namespace, r.aeroCluster.Name),
 	)
 

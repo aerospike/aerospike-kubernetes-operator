@@ -53,6 +53,28 @@ type SingleBackupServiceReconciler struct {
 	Log               logr.Logger
 }
 
+// finishReconcile logs the reconcile exit once at the boundary and sets the AerospikeBackupService
+// error phase on failure. It holds controller-specific finish logic so it can grow independently.
+func (r *SingleBackupServiceReconciler) finishReconcile(
+	ctx context.Context, result ctrl.Result, recErr error,
+) error {
+	logValues := common.ReconcileExitLogValues(result, recErr)
+
+	if recErr != nil {
+		if err := r.setStatusPhase(ctx, asdbv1beta1.AerospikeBackupServiceError); err != nil {
+			recErr = errors.Join(recErr, fmt.Errorf("set AerospikeBackupService error phase: %w", err))
+		}
+
+		r.Log.Error(recErr, "Reconcile failed", logValues...)
+
+		return recErr
+	}
+
+	r.Log.Info("Reconcile completed", logValues...)
+
+	return nil
+}
+
 func (r *SingleBackupServiceReconciler) Reconcile(ctx context.Context) (result ctrl.Result, recErr error) {
 	defer func() {
 		// finishReconcile returns the error to assign here so we avoid *error params; recErr is Reconcile's named return.
@@ -342,7 +364,7 @@ func (r *SingleBackupServiceReconciler) updateBackupSvcConfig(ctx context.Contex
 		return fmt.Errorf("fetch backup service config from API: %w", err)
 	}
 
-	desiredData, err := common.GetBackupSvcConfigFromCM(r.Client, backupSvc)
+	desiredData, err := common.GetBackupSvcConfigFromCM(ctx, r.Client, backupSvc)
 	if err != nil {
 		return err
 	}
@@ -379,7 +401,7 @@ func (r *SingleBackupServiceReconciler) updateBackupSvcConfig(ctx context.Contex
 		return r.restartBackupSvcPod(ctx)
 	}
 
-	if err := common.ReloadBackupServiceConfigInPods(r.Client, backupServiceClient, r.Log, backupSvc); err != nil {
+	if err := common.ReloadBackupServiceConfigInPods(ctx, r.Log, r.Client, backupServiceClient, backupSvc); err != nil {
 		return fmt.Errorf("reload backup service config: %w", err)
 	}
 
@@ -387,7 +409,7 @@ func (r *SingleBackupServiceReconciler) updateBackupSvcConfig(ctx context.Contex
 }
 
 func (r *SingleBackupServiceReconciler) restartBackupSvcPod(ctx context.Context) error {
-	podList, err := common.GetBackupServicePodList(r.Client, r.aeroBackupService.Name, r.aeroBackupService.Namespace)
+	podList, err := common.GetBackupServicePodList(ctx, r.Client, r.aeroBackupService.Name, r.aeroBackupService.Namespace)
 	if err != nil {
 		return err
 	}
@@ -715,7 +737,7 @@ func (r *SingleBackupServiceReconciler) waitForDeploymentToBeReady(ctx context.C
 			}
 
 			podList, err := common.GetBackupServicePodList(
-				r.Client, r.aeroBackupService.Name, r.aeroBackupService.Namespace,
+				pollCtx, r.Client, r.aeroBackupService.Name, r.aeroBackupService.Namespace,
 			)
 			if err != nil {
 				return false, err
@@ -789,44 +811,6 @@ func (r *SingleBackupServiceReconciler) updateStatus(ctx context.Context) error 
 	}
 
 	return nil
-}
-
-// finishReconcile runs at end of Reconcile; return value is assigned to Reconcile's named recErr in defer.
-func (r *SingleBackupServiceReconciler) finishReconcile(ctx context.Context, result ctrl.Result, recErr error) error {
-	logValues := reconcileExitLogValues(result, recErr)
-	if recErr != nil {
-		if err := r.setStatusPhase(ctx, asdbv1beta1.AerospikeBackupServiceError); err != nil {
-			recErr = errors.Join(
-				recErr,
-				fmt.Errorf("set AerospikeBackupService error phase: %w", err),
-			)
-		}
-
-		r.Log.Error(recErr, "Reconcile failed", logValues...)
-
-		return recErr
-	}
-
-	r.Log.Info("Reconcile completed", logValues...)
-
-	return nil
-}
-
-func reconcileExitLogValues(result ctrl.Result, recErr error) []interface{} {
-	const resultKey = "result"
-
-	if recErr != nil {
-		return []interface{}{resultKey, "error"}
-	}
-
-	if result.RequeueAfter > 0 {
-		return []interface{}{
-			resultKey, "requeue",
-			"requeueAfter", result.RequeueAfter.String(),
-		}
-	}
-
-	return []interface{}{resultKey, "success"}
 }
 
 func (r *SingleBackupServiceReconciler) CopySpecToStatus() *asdbv1beta1.AerospikeBackupServiceStatus {

@@ -48,6 +48,26 @@ func (r *SingleClusterReconciler) asConfigLog() logr.Logger {
 	return r.Log.WithName("lib.asconfig")
 }
 
+// finishReconcile logs the reconcile exit once at the boundary and sets the AerospikeCluster
+// error phase on failure. It holds controller-specific finish logic so it can grow independently.
+func (r *SingleClusterReconciler) finishReconcile(ctx context.Context, result ctrl.Result, recErr error) error {
+	logValues := common.ReconcileExitLogValues(result, recErr)
+
+	if recErr != nil {
+		if err := r.setStatusPhase(ctx, asdbv1.AerospikeClusterError); err != nil {
+			recErr = errors.Join(recErr, fmt.Errorf("set AerospikeCluster error phase: %w", err))
+		}
+
+		r.Log.Error(recErr, "Reconcile failed", logValues...)
+
+		return recErr
+	}
+
+	r.Log.Info("Reconcile completed", logValues...)
+
+	return nil
+}
+
 func (r *SingleClusterReconciler) Reconcile(ctx context.Context) (result ctrl.Result, recErr error) {
 	r.Log.V(1).Info(
 		"AerospikeCluster", "spec", r.aeroCluster.Spec, "status",
@@ -109,7 +129,7 @@ func (r *SingleClusterReconciler) Reconcile(ctx context.Context) (result ctrl.Re
 	}
 
 	if r.aeroCluster.Labels[asdbv1.AerospikeAPIVersionLabel] == asdbv1.AerospikeAPIVersion {
-		r.Log.Info("cluster migration is not needed")
+		r.Log.Info("Cluster migration is not needed")
 	} else {
 		if err := r.migrateAerospikeCluster(ctx, hasFailed); err != nil {
 			return reconcile.Result{}, err
@@ -248,42 +268,6 @@ func (r *SingleClusterReconciler) Reconcile(ctx context.Context) (result ctrl.Re
 	return reconcile.Result{}, nil
 }
 
-// finishReconcile runs at end of Reconcile; return value is assigned to Reconcile's named recErr in defer.
-func (r *SingleClusterReconciler) finishReconcile(ctx context.Context, result ctrl.Result, recErr error) error {
-	logValues := reconcileExitLogValues(result, recErr)
-	if recErr != nil {
-		if err := r.setStatusPhase(ctx, asdbv1.AerospikeClusterError); err != nil {
-			recErr = errors.Join(
-				recErr,
-				fmt.Errorf("setting error phase: %w", err),
-			)
-		}
-
-		r.Log.Error(recErr, "Reconcile failed", logValues...)
-
-		return recErr
-	}
-
-	r.Log.Info("Reconcile completed", logValues...)
-
-	return nil
-}
-
-func reconcileExitLogValues(result ctrl.Result, recErr error) []interface{} {
-	if recErr != nil {
-		return []interface{}{"result", "error"}
-	}
-
-	if result.RequeueAfter > 0 {
-		return []interface{}{
-			"result", "requeue",
-			"requeueAfter", result.RequeueAfter.String(),
-		}
-	}
-
-	return []interface{}{"result", "success"}
-}
-
 func (r *SingleClusterReconciler) recoverIgnorablePods(
 	ctx context.Context, ignorablePodNames sets.Set[string]) common.ReconcileResult {
 	podList, gErr := r.getClusterPodList(ctx)
@@ -354,7 +338,7 @@ func (r *SingleClusterReconciler) validateAndReconcileAccessControl(
 	}
 
 	if !enabled {
-		r.Log.Info("Cluster is not security enabled, please enable security for this cluster.")
+		r.Log.Info("Cluster is not security enabled, please enable security for this cluster")
 		return nil
 	}
 
@@ -737,7 +721,7 @@ func (r *SingleClusterReconciler) patchStatus(ctx context.Context, newAeroCluste
 //
 // Such cases warrant a cluster recreate to recover after the user corrects the configuration.
 func (r *SingleClusterReconciler) recoverFailedCreate(ctx context.Context) error {
-	r.Log.Info("Forcing a cluster recreate as status is nil. The cluster could be unreachable due to bad configuration.")
+	r.Log.Info("Forcing a cluster recreate as status is nil. The cluster could be unreachable due to bad configuration")
 
 	// Delete all statefulsets and everything related so that it can be properly created and updated in next run.
 	statefulSetList, err := r.getClusterSTSList(ctx)
@@ -985,7 +969,7 @@ func (r *SingleClusterReconciler) checkPreviouslyFailedCluster(ctx context.Conte
 		}
 
 		if inGracePeriod {
-			r.Log.Info("Pods are failed but within grace period, requeueing...")
+			r.Log.Info("Pods are failed but within grace period, requeueing")
 			return false, common.ReconcileRequeueAfter(asdbv1.RequeueIntervalSeconds10)
 		}
 	}
