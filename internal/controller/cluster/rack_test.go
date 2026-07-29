@@ -12,7 +12,7 @@ import (
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/runtime"
 	"k8s.io/apimachinery/pkg/types"
-	k8ssets "k8s.io/apimachinery/pkg/util/sets"
+	"k8s.io/apimachinery/pkg/util/sets"
 	clientgoscheme "k8s.io/client-go/kubernetes/scheme"
 	"k8s.io/client-go/tools/record"
 	"sigs.k8s.io/controller-runtime/pkg/client"
@@ -166,10 +166,13 @@ func sidecarCrashPod(name, namespace, clusterName string, rackID int) *corev1.Po
 	}
 }
 
-// TestScaleUpRack_PreFlightCheck validates that scaleUpRack blocks scale-up
-// when existing pods are in a terminal failure state and proceeds when they are
-// healthy, honouring the IgnoreSidecarFailure flag.
-func TestScaleUpRack_PreFlightCheck(t *testing.T) {
+// TestCheckPodsFailedAfterRackOp validates that checkPodsFailedAfterRackOp
+// blocks scale-up when existing pods are in a terminal failure state, honouring
+// the IgnoreSidecarFailure flag. The pre-flight check was moved from
+// scaleUpRack into checkPodsFailedAfterRackOp (called from
+// upgradeOrRollingRestartRack) so that scale-up is only deferred when a
+// pod-level operation was also performed in the same reconcile cycle.
+func TestCheckPodsFailedAfterRackOp(t *testing.T) {
 	const (
 		namespace   = "test-ns"
 		clusterName = "test-cluster"
@@ -179,17 +182,6 @@ func TestScaleUpRack_PreFlightCheck(t *testing.T) {
 	scheme := runtime.NewScheme()
 	require.NoError(t, asdbv1.AddToScheme(scheme))
 	require.NoError(t, clientgoscheme.AddToScheme(scheme))
-
-	makeSTS := func(currentReplicas int32) *appsv1.StatefulSet {
-		return &appsv1.StatefulSet{
-			ObjectMeta: metav1.ObjectMeta{
-				Name:      clusterName + "-1",
-				Namespace: namespace,
-			},
-			Spec:   appsv1.StatefulSetSpec{Replicas: &currentReplicas},
-			Status: appsv1.StatefulSetStatus{Replicas: currentReplicas},
-		}
-	}
 
 	makeReconciler := func(
 		t *testing.T,
@@ -216,71 +208,69 @@ func TestScaleUpRack_PreFlightCheck(t *testing.T) {
 		}
 	}
 
-	ignorableNames := k8ssets.New[string]()
-	desiredState := &RackState{
+	rackState := &RackState{
 		Rack: &asdbv1.Rack{ID: rackID},
-		Size: 2, // scale up from 1 → 2
+		Size: 2,
 	}
+	noIgnorables := sets.New[string]()
 
 	t.Run("blocked: server container ErrImagePull with IgnoreSidecarFailure=false", func(t *testing.T) {
-		sts := makeSTS(1)
 		pod := imageFailedPod(clusterName+"-1-0", namespace, clusterName, rackID)
-		r := makeReconciler(t, false, sts, pod)
+		r := makeReconciler(t, false, pod)
 
-		_, res := r.scaleUpRack(context.Background(), sts, desiredState, ignorableNames)
+		res := r.checkPodsFailedAfterRackOp(context.Background(), rackState, noIgnorables)
 
 		require.False(t, res.IsSuccess)
-		require.Error(t, res.Err, "expected error when server container has ErrImagePull")
 	})
 
 	t.Run("blocked: server container CrashLoopBackOff with IgnoreSidecarFailure=false", func(t *testing.T) {
-		sts := makeSTS(1)
 		pod := crashLoopServerPod(clusterName+"-1-0", namespace, clusterName, rackID)
-		r := makeReconciler(t, false, sts, pod)
+		r := makeReconciler(t, false, pod)
 
-		_, res := r.scaleUpRack(context.Background(), sts, desiredState, ignorableNames)
+		res := r.checkPodsFailedAfterRackOp(context.Background(), rackState, noIgnorables)
 
 		require.False(t, res.IsSuccess)
-		require.Error(t, res.Err, "expected error when server container is in CrashLoopBackOff")
 	})
 
 	t.Run("blocked: server container CrashLoopBackOff with IgnoreSidecarFailure=true", func(t *testing.T) {
-		sts := makeSTS(1)
 		pod := crashLoopServerPod(clusterName+"-1-0", namespace, clusterName, rackID)
-		r := makeReconciler(t, true, sts, pod)
+		r := makeReconciler(t, true, pod)
 
-		_, res := r.scaleUpRack(context.Background(), sts, desiredState, ignorableNames)
+		res := r.checkPodsFailedAfterRackOp(context.Background(), rackState, noIgnorables)
 
-		require.False(t, res.IsSuccess)
-		require.Error(t, res.Err,
-			"expected error when server container is in CrashLoopBackOff even with IgnoreSidecarFailure=true")
+		require.False(t, res.IsSuccess,
+			"server container failure must block even when IgnoreSidecarFailure=true")
 	})
 
 	t.Run("blocked: crashing sidecar with IgnoreSidecarFailure=false", func(t *testing.T) {
-		sts := makeSTS(1)
 		pod := sidecarCrashPod(clusterName+"-1-0", namespace, clusterName, rackID)
-		r := makeReconciler(t, false, sts, pod)
+		r := makeReconciler(t, false, pod)
 
-		_, res := r.scaleUpRack(context.Background(), sts, desiredState, ignorableNames)
+		res := r.checkPodsFailedAfterRackOp(context.Background(), rackState, noIgnorables)
 
 		require.False(t, res.IsSuccess)
-		require.Error(t, res.Err, "expected error when sidecar is crashing and IgnoreSidecarFailure=false")
 	})
 
 	t.Run("allowed: crashing sidecar with IgnoreSidecarFailure=true", func(t *testing.T) {
-		sts := makeSTS(1)
 		pod := sidecarCrashPod(clusterName+"-1-0", namespace, clusterName, rackID)
-		r := makeReconciler(t, true, sts, pod)
+		r := makeReconciler(t, true, pod)
 
-		// Scale-up proceeds past the pre-flight check; it may fail later in
-		// cleanupDanglingPodsRack/createOrUpdatePodServiceIfNeeded but must NOT
-		// return an error attributable to the pre-flight pod-state check.
-		_, res := r.scaleUpRack(context.Background(), sts, desiredState, ignorableNames)
+		res := r.checkPodsFailedAfterRackOp(context.Background(), rackState, noIgnorables)
 
-		if res.Err != nil {
-			require.NotContains(t, res.Err.Error(), "is in failed state",
-				"pre-flight check must not block when sidecar crashes and IgnoreSidecarFailure=true")
-		}
+		require.True(t, res.IsSuccess,
+			"crashing sidecar must not block when IgnoreSidecarFailure=true")
+	})
+
+	t.Run("allowed: ignorable pod is skipped", func(t *testing.T) {
+		podName := clusterName + "-1-0"
+		pod := crashLoopServerPod(podName, namespace, clusterName, rackID)
+		r := makeReconciler(t, false, pod)
+
+		ignorables := sets.New(podName)
+		res := r.checkPodsFailedAfterRackOp(context.Background(), rackState, ignorables)
+
+		require.True(t, res.IsSuccess,
+			"pod in ignorablePodNames must be skipped regardless of its state")
 	})
 }
 

@@ -865,6 +865,137 @@ done`,
 			Expect(CleanupPVC(k8sClient, aeroCluster.Namespace, aeroCluster.Name)).ToNot(HaveOccurred())
 		})
 
+		// When a sidecar fails for an external reason (no AerospikeCluster spec
+		// change), the operator runs the sidecar recovery path with podFailure !=
+		// nil. Because no pod-level operation was triggered (podOpPerformed=false),
+		// checkPodsFailedAfterRackOp is skipped and scale-up proceeds normally.
+		// The signal-controlled sidecar is used so the failure is injected on
+		// demand via exec — the cluster spec never changes after deployment.
+		It("Should not block pure scale-up when a pod's sidecar fails from an external trigger",
+			func() {
+				By("Deploying a 2-node cluster with a signal-controlled sidecar (initially healthy)")
+
+				aeroCluster := createDummyAerospikeCluster(clusterNamespacedName, 2)
+				vol := signalVolumeForSidecar()
+				aeroCluster.Spec.PodSpec.Sidecars = []corev1.Container{signalControlledSidecar()}
+				aeroCluster.Spec.Storage.Volumes = append(aeroCluster.Spec.Storage.Volumes, vol)
+				Expect(DeployCluster(k8sClient, ctx, aeroCluster)).ToNot(HaveOccurred())
+
+				By("Externally triggering sidecar failure on pod-0 — no AerospikeCluster spec change")
+				Expect(failPodSidecar(namespace, clusterName+"-0-0")).ToNot(HaveOccurred())
+
+				scaleUpPodName := clusterName + "-0-2"
+
+				By("Applying a pure scale-up (size=3, no other spec changes)")
+
+				aeroCluster, err := getCluster(k8sClient, ctx, clusterNamespacedName)
+				Expect(err).ToNot(HaveOccurred())
+
+				aeroCluster.Spec.Size = 3
+				Expect(k8sClient.Update(ctx, aeroCluster)).ToNot(HaveOccurred())
+
+				By("Verifying the scale-up pod is created despite pod-0's externally-triggered sidecar failure")
+				Eventually(func(g Gomega) {
+					cluster, clusterErr := getCluster(k8sClient, ctx, clusterNamespacedName)
+					g.Expect(clusterErr).ToNot(HaveOccurred())
+
+					podList, podListErr := getClusterPodList(k8sClient, ctx, cluster)
+					g.Expect(podListErr).ToNot(HaveOccurred())
+
+					names := make([]string, 0, len(podList.Items))
+					for idx := range podList.Items {
+						names = append(names, podList.Items[idx].Name)
+					}
+
+					g.Expect(names).To(ContainElement(scaleUpPodName),
+						"scale-up pod %s must be created even though pod-0 has an externally-triggered sidecar failure",
+						scaleUpPodName)
+				}, 5*time.Minute, 10*time.Second).Should(Succeed())
+			})
+
+		// When podFailure != nil (sidecar crashing) and a pod-level operation runs
+		// (upgradeRack sets podOpPerformed=true), checkPodsFailedAfterRackOp fires
+		// after the rolling restart and returns non-success — deferring scale-up
+		// for one reconcile cycle. The signal-controlled sidecar is used here
+		// because its failure is emptyDir-persisted: /signal/fail survives pod
+		// restarts, keeping the sidecar in stable CrashLoopBackOff across the
+		// entire rolling restart. exit 1 / exit 2 patterns would not be reliable
+		// because State.Waiting toggles with Running between backoff intervals,
+		// and the check might fire during a Running window where the sidecar
+		// appears healthy.
+		// Pod 2 (scale-up pod) gets a fresh emptyDir, so its sidecar is healthy —
+		// once IgnoreSidecarFailure=true is applied the cluster reaches Completed.
+		It("Should defer scale-up by one reconcile cycle when an image upgrade and sidecar failure coincide",
+			func() {
+				By("Deploying a 2-node cluster with a signal-controlled sidecar (initially healthy)")
+
+				aeroCluster := createDummyAerospikeCluster(clusterNamespacedName, 2)
+				aeroCluster.Spec.PodSpec.Sidecars = []corev1.Container{{
+					Name:    "signal-sidecar",
+					Image:   "busybox:1.28",
+					Command: []string{"sleep", "3600"},
+				}}
+				Expect(DeployCluster(k8sClient, ctx, aeroCluster)).ToNot(HaveOccurred())
+
+				scaleUpPodName := clusterName + "-0-2"
+
+				By("Applying sidecar failure and scale-up (size=3) simultaneously")
+
+				aeroCluster, err := getCluster(k8sClient, ctx, clusterNamespacedName)
+				Expect(err).ToNot(HaveOccurred())
+
+				aeroCluster.Spec.PodSpec.Sidecars = []corev1.Container{
+					{
+						Name:    "signal-sidecar", // same container name
+						Image:   "busybox:1.28",
+						Command: []string{"sh", "-c", "exit 1"},
+					},
+				}
+
+				aeroCluster.Spec.Size = 3
+				Expect(k8sClient.Update(ctx, aeroCluster)).ToNot(HaveOccurred())
+
+				// upgradeRack runs (podOpPerformed=true). After the rolling restart
+				// completes, checkPodsFailedAfterRackOp detects the stable
+				// CrashLoopBackOff on pods 0 and 1 and returns non-success — scale-up
+				// is deferred. The next reconcile finds no pending upgrade, so
+				// podOpPerformed=false and scaleUpRack runs.
+				By("Confirming scale-up pod is absent while rolling restart is in progress")
+				Consistently(func(g Gomega) {
+					cluster, clusterErr := getCluster(k8sClient, ctx, clusterNamespacedName)
+					g.Expect(clusterErr).ToNot(HaveOccurred())
+
+					podList, podListErr := getClusterPodList(k8sClient, ctx, cluster)
+					g.Expect(podListErr).ToNot(HaveOccurred())
+
+					for idx := range podList.Items {
+						g.Expect(podList.Items[idx].Name).NotTo(Equal(scaleUpPodName),
+							"scale-up pod must not appear while the upgrade rolling restart is running")
+					}
+				}, 30*time.Second, 5*time.Second).Should(Succeed())
+
+				By("Applying IgnoreSidecarFailure=true to let the cluster reach Completed")
+
+				aeroCluster, err = getCluster(k8sClient, ctx, clusterNamespacedName)
+				Expect(err).ToNot(HaveOccurred())
+
+				aeroCluster.Spec.IgnoreSidecarFailure = ptr.To(true)
+				Expect(updateClusterWithNoWait(k8sClient, ctx, aeroCluster)).ToNot(HaveOccurred())
+
+				By("Verifying the cluster reaches Completed with 3 pods on nextImage")
+				Eventually(func(g Gomega) {
+					cluster, clusterErr := getCluster(k8sClient, ctx, clusterNamespacedName)
+					g.Expect(clusterErr).ToNot(HaveOccurred())
+					g.Expect(cluster.Status.Phase).To(Equal(asdbv1.AerospikeClusterCompleted),
+						"cluster must reach Completed when IgnoreSidecarFailure bypasses the sidecar check")
+
+					podList, podListErr := getClusterPodList(k8sClient, ctx, cluster)
+					g.Expect(podListErr).ToNot(HaveOccurred())
+					g.Expect(podList.Items).To(HaveLen(3),
+						"expected 3 pods after scale-up completes and sidecar failure is ignored")
+				}, getTimeout(3), 15*time.Second).Should(Succeed())
+			})
+
 		It("Should complete scale-down, scale-up and image upgrade when IgnoreSidecarFailure is true and sidecar "+
 			"is crashing", func() {
 			// Deploy a healthy cluster first, then add the crashing sidecar via

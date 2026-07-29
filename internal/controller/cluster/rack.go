@@ -354,7 +354,10 @@ func (r *SingleClusterReconciler) upgradeOrRollingRestartRack(
 	ctx context.Context, found *appsv1.StatefulSet, rackState *RackState,
 	ignorablePodNames sets.Set[string], podFailure *failedPodsInfo,
 ) (*appsv1.StatefulSet, common.ReconcileResult) {
-	var res common.ReconcileResult
+	var (
+		res            common.ReconcileResult
+		podOpPerformed bool
+	)
 	// Always update configMap. We won't be able to find if a rack's config, and it's pod config is in sync or not
 	// Checking rack.spec, rack.status will not work.
 	// We may change config, let some pods restart with new config and then change config back to original value.
@@ -401,6 +404,8 @@ func (r *SingleClusterReconciler) upgradeOrRollingRestartRack(
 
 			return found, res
 		}
+
+		podOpPerformed = true
 	} else {
 		// Build the set of server-failed pod names. When isServerFailed=true the
 		// caller has already classified every pod in the list as server-failed, so
@@ -415,9 +420,9 @@ func (r *SingleClusterReconciler) upgradeOrRollingRestartRack(
 			}
 		}
 
-		var rollingRestartInfo, nErr = r.getRollingRestartInfo(ctx, rackState, ignorablePodNames, serverFailedPodsNames)
-		if nErr != nil {
-			return found, common.ReconcileError(nErr)
+		rollingRestartInfo, err := r.getRollingRestartInfo(ctx, rackState, ignorablePodNames, serverFailedPodsNames)
+		if err != nil {
+			return found, common.ReconcileError(err)
 		}
 
 		if rollingRestartInfo.needRestart {
@@ -438,6 +443,8 @@ func (r *SingleClusterReconciler) upgradeOrRollingRestartRack(
 
 				return found, res
 			}
+
+			podOpPerformed = true
 		}
 
 		if rollingRestartInfo.needUpdateConf {
@@ -459,6 +466,8 @@ func (r *SingleClusterReconciler) upgradeOrRollingRestartRack(
 
 				return found, res
 			}
+
+			podOpPerformed = true
 		}
 	}
 
@@ -476,7 +485,60 @@ func (r *SingleClusterReconciler) upgradeOrRollingRestartRack(
 		}
 	}
 
+	// Guard scale-up when the reconcile is already handling failed pods and a
+	// pod-level operation (upgrade, rolling restart, dynamic config update) was
+	// performed. If any pod is still in a failed state after that
+	// operation, returning early prevents the caller from adding more broken
+	// pods via scale-up.
+	//
+	// This check is intentionally skipped when podFailure is nil (no pre-known
+	// failed pods) or when no pod operation ran — for example, when a pod fails
+	// due to an external reason and the user submits a pure scale-up. In that
+	// case scale-up should not be blocked by the unrelated failure.
+	if podFailure != nil && podOpPerformed {
+		if res := r.checkPodsFailedAfterRackOp(ctx, rackState, ignorablePodNames); !res.IsSuccess {
+			return found, res
+		}
+	}
+
 	return found, common.ReconcileSuccess()
+}
+
+// checkPodsFailedAfterRackOp fetches the current pod list for the rack and
+// returns a non-success result if any non-ignorable pod is in a terminal
+// failed state. This is called after an upgrade/rolling-restart to prevent
+// scale-up from adding more broken pods to an already-degraded rack.
+// IgnoreSidecarFailure is respected: when set, only the server container is
+// checked; a crashing sidecar does not block scale-up.
+func (r *SingleClusterReconciler) checkPodsFailedAfterRackOp(
+	ctx context.Context, rackState *RackState, ignorablePodNames sets.Set[string],
+) common.ReconcileResult {
+	podList, err := r.getOrderedRackPodList(ctx, rackState.Rack.ID, rackState.Rack.Revision)
+	if err != nil {
+		return common.ReconcileError(fmt.Errorf("list Pods for rack %d: %w", rackState.Rack.ID, err))
+	}
+
+	ignoreSidecar := asdbv1.GetBool(r.aeroCluster.Spec.IgnoreSidecarFailure)
+
+	for idx := range podList {
+		pod := podList[idx]
+		if ignorablePodNames.Has(pod.Name) {
+			continue
+		}
+
+		var podState utils.PodState
+		if ignoreSidecar {
+			podState = utils.CheckServerFailedWithGrace(pod, false)
+		} else {
+			podState = utils.CheckPodFailedWithGrace(pod, false)
+		}
+
+		if podState.State == utils.PodFailed {
+			return common.ReconcileResult{IsSuccess: false}
+		}
+	}
+
+	return common.ReconcileSuccess()
 }
 
 func (r *SingleClusterReconciler) updateDynamicConfig(
@@ -661,7 +723,7 @@ func (r *SingleClusterReconciler) reconcileRack(
 	// Scale up after upgrading, so that new pods come up with new image
 	currentSize = *found.Spec.Replicas
 	if currentSize < desiredSize {
-		found, res = r.scaleUpRack(ctx, found, rackState, ignorablePodNames)
+		found, res = r.scaleUpRack(ctx, found, rackState)
 		if !res.IsSuccess {
 			if res.Err != nil {
 				r.Recorder.Eventf(
@@ -696,7 +758,7 @@ func (r *SingleClusterReconciler) reconcileRack(
 }
 
 func (r *SingleClusterReconciler) scaleUpRack(
-	ctx context.Context, found *appsv1.StatefulSet, rackState *RackState, ignorablePodNames sets.Set[string],
+	ctx context.Context, found *appsv1.StatefulSet, rackState *RackState,
 ) (
 	*appsv1.StatefulSet, common.ReconcileResult,
 ) {
@@ -719,33 +781,6 @@ func (r *SingleClusterReconciler) scaleUpRack(
 			"list Pods for rack %d: %w",
 			rackState.Rack.ID, err,
 		))
-	}
-
-	// Pre-flight: fail fast if any existing pod is already in a terminal
-	// failure state. Scaling up while pods are broken just adds more broken
-	// pods with the same bad image or config. Pods in ignorablePodNames are
-	// excluded. When IgnoreSidecarFailure is set, only the Aerospike server
-	// container is checked — a failing sidecar does not block scale-up.
-	ignoreSidecar := asdbv1.GetBool(r.aeroCluster.Spec.IgnoreSidecarFailure)
-
-	for idx := range podList {
-		pod := podList[idx]
-		if ignorablePodNames.Has(pod.Name) {
-			continue
-		}
-
-		var podState utils.PodState
-		if ignoreSidecar {
-			podState = utils.CheckServerFailedWithGrace(pod, false)
-		} else {
-			podState = utils.CheckPodFailedWithGrace(pod, false)
-		}
-
-		if podState.State == utils.PodFailed {
-			return found, common.ReconcileError(fmt.Errorf(
-				"scale up rack %d: Pod %s is in failed state: %s",
-				rackState.Rack.ID, utils.GetNamespacedNameString(pod), podState.Reason))
-		}
 	}
 
 	var newPodNames []string
@@ -2326,7 +2361,7 @@ func (r *SingleClusterReconciler) handleFailedPodsInRack(
 		if res := r.reconcileRack(
 			ctx, found, rackState, ignorablePodNames,
 			&failedPodsInfo{pods: serverFailedPods, isServerFailed: true},
-		); !res.IsSuccess {
+		); res.Err != nil {
 			return res
 		}
 
@@ -2401,7 +2436,7 @@ func (r *SingleClusterReconciler) handleFailedPodsInRack(
 
 	if res := r.reconcileRack(ctx, found, rackState, ignorablePodNames,
 		&failedPodsInfo{pods: sidecarFailedPods, isServerFailed: false},
-	); !res.IsSuccess {
+	); res.Err != nil {
 		return res
 	}
 
