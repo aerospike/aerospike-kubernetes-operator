@@ -534,6 +534,10 @@ func (r *SingleClusterReconciler) checkPodsFailedAfterRackOp(
 		}
 
 		if podState.State == utils.PodFailed {
+			// Return non-success with no error and no RequeueAfter. This
+			// signals the caller to skip scale-up for this reconcile cycle
+			// without triggering an error requeue on the failed-pod recovery
+			// path.
 			return common.ReconcileResult{IsSuccess: false}
 		}
 	}
@@ -1115,6 +1119,10 @@ func (r *SingleClusterReconciler) scaleDownRack(
 	// resourceVersion (bumped by the Kubernetes StatefulSet controller) does not
 	// cause a permanent conflict error.
 	batchLen := utils.Len32(podsBatch)
+	// Capture the target size before the retry loop. If getSTS fails inside
+	// the closure, found is not updated, so *found.Spec.Replicas would be the
+	// stale pre-scale-down count — scaleDownTargetSize avoids that.
+	scaleDownTargetSize := *found.Spec.Replicas - batchLen
 
 	if err = retry.RetryOnConflict(retry.DefaultRetry, func() error {
 		current, getStsErr := r.getSTS(ctx, rackState)
@@ -1131,7 +1139,7 @@ func (r *SingleClusterReconciler) scaleDownRack(
 		return found, common.ReconcileError(
 			fmt.Errorf(
 				"scale StatefulSet %s to %d replicas: %w",
-				utils.GetNamespacedNameString(found), *found.Spec.Replicas, err,
+				utils.GetNamespacedNameString(found), scaleDownTargetSize, err,
 			),
 		)
 	}
@@ -1161,6 +1169,12 @@ func (r *SingleClusterReconciler) scaleDownRack(
 
 			// Roll back the replica count. Re-fetch inside RetryOnConflict for
 			// the same reason as the primary scale-down above.
+			// Capture rollback target before the loop: at this point found holds
+			// the already-scaled-down STS. If getSTS fails inside the closure,
+			// found is not updated and *found.Spec.Replicas would be the
+			// scaled-down size, not the rollback target we want to log.
+			rollbackTargetSize := *found.Spec.Replicas + batchLen
+
 			if rollbackErr := retry.RetryOnConflict(retry.DefaultRetry, func() error {
 				current, getStsErr := r.getSTS(ctx, rackState)
 				if getStsErr != nil {
@@ -1176,7 +1190,7 @@ func (r *SingleClusterReconciler) scaleDownRack(
 				return found, common.ReconcileError(
 					fmt.Errorf(
 						"scale StatefulSet %s to %d replicas: %w",
-						utils.GetNamespacedNameString(found), *found.Spec.Replicas, rollbackErr,
+						utils.GetNamespacedNameString(found), rollbackTargetSize, rollbackErr,
 					),
 				)
 			}
@@ -2358,6 +2372,13 @@ func (r *SingleClusterReconciler) handleFailedPodsInRack(
 			"rackID", rackState.Rack.ID, "rackRevision", rackState.Rack.Revision,
 			"serverFailedPods", getPodNames(serverFailedPods))
 
+		// Check res.Err rather than !res.IsSuccess intentionally. reconcileRack
+		// can return {IsSuccess: false, Err: nil} when checkPodsFailedAfterRackOp
+		// defers scale-up for one cycle (a pod is still failed after an upgrade
+		// or rolling restart). In that case there is no operation needed on failed pod — we still
+		// want to fall through to the re-fetch and force-restart logic below so
+		// that genuinely stuck server-failed pods can be force-restarted in the
+		// same reconcile cycle. Only a non-nil error should short-circuit here.
 		if res := r.reconcileRack(
 			ctx, found, rackState, ignorablePodNames,
 			&failedPodsInfo{pods: serverFailedPods, isServerFailed: true},
@@ -2434,6 +2455,10 @@ func (r *SingleClusterReconciler) handleFailedPodsInRack(
 		"rackID", rackState.Rack.ID, "rackRevision", rackState.Rack.Revision,
 		"sidecarFailedPods", getPodNames(sidecarFailedPods))
 
+	// Same res.Err-only check as the server-failed path: a {IsSuccess: false,
+	// Err: nil} result means checkPodsFailedAfterRackOp deferred scale-up for
+	// one cycle — not an error. We still fall through to the re-fetch below so
+	// the sidecar-failed state is re-evaluated and the requeue is issued.
 	if res := r.reconcileRack(ctx, found, rackState, ignorablePodNames,
 		&failedPodsInfo{pods: sidecarFailedPods, isServerFailed: false},
 	); res.Err != nil {

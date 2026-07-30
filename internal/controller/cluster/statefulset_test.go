@@ -24,8 +24,6 @@ import (
 	corev1 "k8s.io/api/core/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/util/sets"
-
-	asdbv1 "github.com/aerospike/aerospike-kubernetes-operator/v4/api/v1"
 )
 
 func replicaCount(n int32) *int32 { return &n }
@@ -37,11 +35,7 @@ func replicaCount(n int32) *int32 { return &n }
 //  2. The pod's server container is already ready → return nil on first poll.
 //  3. The pod's server container is in CrashLoopBackOff → PodFailed, return error on first poll.
 func TestWaitForSTSPodsServerReady(t *testing.T) {
-	const (
-		namespace   = "test-ns"
-		clusterName = "test-cluster"
-		stsName     = clusterName + "-1"
-	)
+	const stsName = clusterName + "-1"
 
 	scheme := newTestScheme()
 	aeroCluster := newTestAerospikeCluster(namespace, clusterName)
@@ -84,15 +78,8 @@ func TestWaitForSTSPodsServerReady(t *testing.T) {
 		pod := &corev1.Pod{
 			ObjectMeta: metav1.ObjectMeta{Name: stsName + "-0", Namespace: namespace},
 			Status: corev1.PodStatus{
-				Phase: corev1.PodRunning,
-				ContainerStatuses: []corev1.ContainerStatus{
-					{
-						Name: asdbv1.AerospikeServerContainerName,
-						State: corev1.ContainerState{
-							Waiting: &corev1.ContainerStateWaiting{Reason: "CrashLoopBackOff"},
-						},
-					},
-				},
+				Phase:             corev1.PodRunning,
+				ContainerStatuses: []corev1.ContainerStatus{serverCrashLoopContainer()},
 			},
 		}
 		r := newReconcilerWithObjects(scheme, aeroCluster, sts, pod)

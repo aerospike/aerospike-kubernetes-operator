@@ -35,16 +35,11 @@ import (
 //   - A server-failed pod that is NOT ignorable must produce an error so the
 //     reconcile loop retries rather than issuing incomplete cluster info calls.
 func TestNewPodsHostConnWithOption(t *testing.T) {
-	const (
-		namespace   = "test-ns"
-		clusterName = "test-cluster"
-	)
-
 	aeroCluster := newTestAerospikeCluster(namespace, clusterName)
 	r := newReconcilerWithObjects(newTestScheme(), aeroCluster)
 
-	// terminatingPod has a non-nil DeletionTimestamp, constructed directly (not
-	// through the fake client) because DeletionTimestamp is server-managed.
+	// terminatingPod must be built directly (not through the fake client) because
+	// DeletionTimestamp is a server-managed field.
 	now := metav1.Now()
 	terminatingPod := corev1.Pod{
 		ObjectMeta: metav1.ObjectMeta{
@@ -57,94 +52,67 @@ func TestNewPodsHostConnWithOption(t *testing.T) {
 		},
 	}
 
-	// sidecarFailedPod has a running server but a crashing sidecar.
-	// Its server is reachable, so it must be included in host connections.
-	sidecarFailedPod := corev1.Pod{
-		ObjectMeta: metav1.ObjectMeta{Name: "pod-sidecar-fail"},
-		Status: corev1.PodStatus{
-			Phase: corev1.PodRunning,
-			ContainerStatuses: []corev1.ContainerStatus{
-				serverContainer(true),
-				sidecarContainer("monitor", false, true),
-			},
+	sidecarFailedPod := *sidecarCrashPod("pod-sidecar-fail", namespace, clusterName, 0)
+	serverFailedPod := *crashLoopServerPod("pod-server-fail", namespace, clusterName, 0)
+
+	tests := []struct {
+		ignorable sets.Set[string]
+		name      string
+		pods      []corev1.Pod
+		wantConns int
+		wantErr   bool
+	}{
+		{
+			name:      "terminating pod is always skipped",
+			pods:      []corev1.Pod{terminatingPod},
+			ignorable: sets.New[string](),
+			wantConns: 0,
+		},
+		{
+			name:      "sidecar-failed pod with running server is included",
+			pods:      []corev1.Pod{sidecarFailedPod},
+			ignorable: sets.New[string](),
+			wantConns: 1,
+		},
+		{
+			name:      "server-failed pod in ignorablePodNames is silently skipped",
+			pods:      []corev1.Pod{serverFailedPod},
+			ignorable: sets.New(serverFailedPod.Name),
+			wantConns: 0,
+		},
+		{
+			name:      "server-failed pod not in ignorablePodNames returns an error",
+			pods:      []corev1.Pod{serverFailedPod},
+			ignorable: sets.New[string](),
+			wantErr:   true,
+		},
+		{
+			name:      "mixed list: sidecar-failed included, server-failed ignorable and terminating skipped",
+			pods:      []corev1.Pod{terminatingPod, sidecarFailedPod, serverFailedPod},
+			ignorable: sets.New(serverFailedPod.Name),
+			wantConns: 1,
 		},
 	}
 
-	// serverFailedPod has a non-running server container.
-	serverFailedPod := corev1.Pod{
-		ObjectMeta: metav1.ObjectMeta{Name: "pod-server-fail"},
-		Status: corev1.PodStatus{
-			Phase: corev1.PodRunning,
-			ContainerStatuses: []corev1.ContainerStatus{
-				serverContainer(false),
-			},
-		},
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			conns, err := r.newPodsHostConnWithOption(tt.pods, tt.ignorable)
+
+			if tt.wantErr {
+				if err == nil {
+					t.Error("expected an error, got nil")
+				}
+
+				return
+			}
+
+			if err != nil {
+				t.Fatalf("unexpected error: %v", err)
+			}
+
+			if len(conns) != tt.wantConns {
+				t.Errorf("expected %d connections, got %d", tt.wantConns, len(conns))
+			}
+		})
 	}
-
-	t.Run("terminating pod is always skipped", func(t *testing.T) {
-		conns, err := r.newPodsHostConnWithOption(
-			[]corev1.Pod{terminatingPod},
-			sets.New[string](),
-		)
-		if err != nil {
-			t.Fatalf("unexpected error: %v", err)
-		}
-
-		if len(conns) != 0 {
-			t.Errorf("expected 0 connections for terminating pod, got %d", len(conns))
-		}
-	})
-
-	t.Run("sidecar-failed pod with running server is included in host connections", func(t *testing.T) {
-		conns, err := r.newPodsHostConnWithOption(
-			[]corev1.Pod{sidecarFailedPod},
-			sets.New[string](),
-		)
-		if err != nil {
-			t.Fatalf("unexpected error: %v", err)
-		}
-
-		if len(conns) != 1 {
-			t.Errorf("expected 1 connection for sidecar-failed pod, got %d", len(conns))
-		}
-	})
-
-	t.Run("server-failed pod in ignorablePodNames is silently skipped", func(t *testing.T) {
-		conns, err := r.newPodsHostConnWithOption(
-			[]corev1.Pod{serverFailedPod},
-			sets.New(serverFailedPod.Name),
-		)
-		if err != nil {
-			t.Fatalf("unexpected error: %v", err)
-		}
-
-		if len(conns) != 0 {
-			t.Errorf("expected 0 connections for ignorable server-failed pod, got %d", len(conns))
-		}
-	})
-
-	t.Run("server-failed pod not in ignorablePodNames returns an error", func(t *testing.T) {
-		_, err := r.newPodsHostConnWithOption(
-			[]corev1.Pod{serverFailedPod},
-			sets.New[string](),
-		)
-		if err == nil {
-			t.Error("expected an error for non-ignorable server-failed pod, got nil")
-		}
-	})
-
-	t.Run("mixed list: sidecar-failed included, server-failed ignorable skipped, terminating skipped", func(t *testing.T) {
-		conns, err := r.newPodsHostConnWithOption(
-			[]corev1.Pod{terminatingPod, sidecarFailedPod, serverFailedPod},
-			sets.New(serverFailedPod.Name),
-		)
-		if err != nil {
-			t.Fatalf("unexpected error: %v", err)
-		}
-
-		// Only the sidecar-failed pod (with running server) should appear.
-		if len(conns) != 1 {
-			t.Errorf("expected exactly 1 connection in mixed list, got %d", len(conns))
-		}
-	})
 }

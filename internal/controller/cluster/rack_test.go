@@ -68,6 +68,7 @@ func newTestRackState(aeroCluster *asdbv1.AerospikeCluster) *RackState {
 
 func newTestReconciler(
 	t *testing.T, aeroCluster *asdbv1.AerospikeCluster, funcs *interceptor.Funcs,
+	existingObjects ...client.Object,
 ) *SingleClusterReconciler {
 	t.Helper()
 
@@ -78,6 +79,7 @@ func newTestReconciler(
 	fakeClient := fake.NewClientBuilder().
 		WithScheme(scheme).
 		WithInterceptorFuncs(*funcs).
+		WithObjects(existingObjects...).
 		Build()
 
 	return &SingleClusterReconciler{
@@ -118,6 +120,8 @@ func imageFailedPod(name, namespace, clusterName string, rackID int) *corev1.Pod
 }
 
 // crashLoopPod returns a pod whose server container is in CrashLoopBackOff.
+//
+//nolint:unparam // for future use
 func crashLoopServerPod(name, namespace, clusterName string, rackID int) *corev1.Pod {
 	return &corev1.Pod{
 		ObjectMeta: metav1.ObjectMeta{
@@ -150,17 +154,8 @@ func sidecarCrashPod(name, namespace, clusterName string, rackID int) *corev1.Po
 		Status: corev1.PodStatus{
 			Phase: corev1.PodRunning,
 			ContainerStatuses: []corev1.ContainerStatus{
-				{
-					Name:  asdbv1.AerospikeServerContainerName,
-					Ready: true,
-					State: corev1.ContainerState{Running: &corev1.ContainerStateRunning{}},
-				},
-				{
-					Name: "sidecar",
-					State: corev1.ContainerState{
-						Waiting: &corev1.ContainerStateWaiting{Reason: "CrashLoopBackOff"},
-					},
-				},
+				serverContainer(true),
+				sidecarContainer("sidecar", false, true),
 			},
 		},
 	}
@@ -173,39 +168,14 @@ func sidecarCrashPod(name, namespace, clusterName string, rackID int) *corev1.Po
 // upgradeOrRollingRestartRack) so that scale-up is only deferred when a
 // pod-level operation was also performed in the same reconcile cycle.
 func TestCheckPodsFailedAfterRackOp(t *testing.T) {
-	const (
-		namespace   = "test-ns"
-		clusterName = "test-cluster"
-		rackID      = 1
-	)
+	const rackID = 1
 
-	scheme := runtime.NewScheme()
-	require.NoError(t, asdbv1.AddToScheme(scheme))
-	require.NoError(t, clientgoscheme.AddToScheme(scheme))
+	// clusterWith builds a test AerospikeCluster with the given IgnoreSidecarFailure value.
+	clusterWith := func(ignoreSidecar bool) *asdbv1.AerospikeCluster {
+		ac := newTestAerospikeCluster(namespace, clusterName)
+		ac.Spec.IgnoreSidecarFailure = &ignoreSidecar
 
-	makeReconciler := func(
-		t *testing.T,
-		ignoreSidecar bool,
-		existingObjects ...client.Object,
-	) *SingleClusterReconciler {
-		t.Helper()
-
-		aeroCluster := newTestAerospikeCluster(namespace, clusterName)
-		aeroCluster.Spec.IgnoreSidecarFailure = &ignoreSidecar
-
-		fakeClient := fake.NewClientBuilder().
-			WithScheme(scheme).
-			WithObjects(existingObjects...).
-			WithObjects(aeroCluster).
-			Build()
-
-		return &SingleClusterReconciler{
-			Client:      fakeClient,
-			Log:         logr.Discard(),
-			Scheme:      scheme,
-			aeroCluster: aeroCluster,
-			Recorder:    record.NewFakeRecorder(10),
-		}
+		return ac
 	}
 
 	rackState := &RackState{
@@ -216,7 +186,7 @@ func TestCheckPodsFailedAfterRackOp(t *testing.T) {
 
 	t.Run("blocked: server container ErrImagePull with IgnoreSidecarFailure=false", func(t *testing.T) {
 		pod := imageFailedPod(clusterName+"-1-0", namespace, clusterName, rackID)
-		r := makeReconciler(t, false, pod)
+		r := newTestReconciler(t, clusterWith(false), &interceptor.Funcs{}, pod)
 
 		res := r.checkPodsFailedAfterRackOp(context.Background(), rackState, noIgnorables)
 
@@ -225,7 +195,7 @@ func TestCheckPodsFailedAfterRackOp(t *testing.T) {
 
 	t.Run("blocked: server container CrashLoopBackOff with IgnoreSidecarFailure=false", func(t *testing.T) {
 		pod := crashLoopServerPod(clusterName+"-1-0", namespace, clusterName, rackID)
-		r := makeReconciler(t, false, pod)
+		r := newTestReconciler(t, clusterWith(false), &interceptor.Funcs{}, pod)
 
 		res := r.checkPodsFailedAfterRackOp(context.Background(), rackState, noIgnorables)
 
@@ -234,7 +204,7 @@ func TestCheckPodsFailedAfterRackOp(t *testing.T) {
 
 	t.Run("blocked: server container CrashLoopBackOff with IgnoreSidecarFailure=true", func(t *testing.T) {
 		pod := crashLoopServerPod(clusterName+"-1-0", namespace, clusterName, rackID)
-		r := makeReconciler(t, true, pod)
+		r := newTestReconciler(t, clusterWith(true), &interceptor.Funcs{}, pod)
 
 		res := r.checkPodsFailedAfterRackOp(context.Background(), rackState, noIgnorables)
 
@@ -244,7 +214,7 @@ func TestCheckPodsFailedAfterRackOp(t *testing.T) {
 
 	t.Run("blocked: crashing sidecar with IgnoreSidecarFailure=false", func(t *testing.T) {
 		pod := sidecarCrashPod(clusterName+"-1-0", namespace, clusterName, rackID)
-		r := makeReconciler(t, false, pod)
+		r := newTestReconciler(t, clusterWith(false), &interceptor.Funcs{}, pod)
 
 		res := r.checkPodsFailedAfterRackOp(context.Background(), rackState, noIgnorables)
 
@@ -253,7 +223,7 @@ func TestCheckPodsFailedAfterRackOp(t *testing.T) {
 
 	t.Run("allowed: crashing sidecar with IgnoreSidecarFailure=true", func(t *testing.T) {
 		pod := sidecarCrashPod(clusterName+"-1-0", namespace, clusterName, rackID)
-		r := makeReconciler(t, true, pod)
+		r := newTestReconciler(t, clusterWith(true), &interceptor.Funcs{}, pod)
 
 		res := r.checkPodsFailedAfterRackOp(context.Background(), rackState, noIgnorables)
 
@@ -264,7 +234,7 @@ func TestCheckPodsFailedAfterRackOp(t *testing.T) {
 	t.Run("allowed: ignorable pod is skipped", func(t *testing.T) {
 		podName := clusterName + "-1-0"
 		pod := crashLoopServerPod(podName, namespace, clusterName, rackID)
-		r := makeReconciler(t, false, pod)
+		r := newTestReconciler(t, clusterWith(false), &interceptor.Funcs{}, pod)
 
 		ignorables := sets.New(podName)
 		res := r.checkPodsFailedAfterRackOp(context.Background(), rackState, ignorables)

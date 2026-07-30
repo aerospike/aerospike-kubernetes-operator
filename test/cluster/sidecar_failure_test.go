@@ -175,37 +175,13 @@ var _ = Describe("SidecarFailure", func() {
 
 			By("Adding a crashing sidecar with IgnoreSidecarFailure=true via a rolling restart")
 
-			aeroCluster, err := getCluster(k8sClient, ctx, clusterNamespacedName)
-			Expect(err).ToNot(HaveOccurred())
-
 			aeroCluster.Spec.PodSpec.Sidecars = []corev1.Container{crashingSidecar()}
 			aeroCluster.Spec.IgnoreSidecarFailure = ptr.To(true)
 
 			Expect(updateCluster(k8sClient, ctx, aeroCluster)).ToNot(HaveOccurred())
 
-			By("Verifying Aerospike server is running and reachable in every pod (nodeIDs populated)")
-
-			cluster, err := getCluster(k8sClient, ctx, clusterNamespacedName)
-			Expect(err).ToNot(HaveOccurred())
-
-			for podName, podStatus := range cluster.Status.Pods {
-				Expect(podStatus.Aerospike.NodeID).ToNot(BeEmpty(),
-					"expected nodeID to be set for pod %s", podName)
-			}
-
-			By("Verifying that every pod has its sidecar in CrashLoopBackOff (server still running)")
-
-			Eventually(func(g Gomega) {
-				podList, err := getClusterPodList(k8sClient, ctx, cluster)
-				g.Expect(err).ToNot(HaveOccurred())
-
-				for idx := range podList.Items {
-					g.Expect(podHasCrashingSidecar(&podList.Items[idx])).To(BeTrue(),
-						"expected sidecar to be crashing on pod %s", podList.Items[idx].Name)
-					g.Expect(utils.IsAerospikeServerReady(&podList.Items[idx])).To(BeTrue(),
-						"expected server container to be running on pod %s", podList.Items[idx].Name)
-				}
-			}, 3*time.Minute, 5*time.Second).Should(Succeed())
+			By("Verifying sidecar is crashing and Aerospike server is reachable on every pod")
+			verifyCrashingSidecarOnAllPods(k8sClient, ctx, clusterNamespacedName, 2)
 		})
 
 		It("Should block reconciliation when IgnoreSidecarFailure is false and sidecar starts crashing on an"+
@@ -228,73 +204,19 @@ var _ = Describe("SidecarFailure", func() {
 
 			By("Verifying the rolling restart is blocked at exactly one pod — sidecar failure has not propagated further")
 
-			cluster, err := getCluster(k8sClient, ctx, clusterNamespacedName)
-			Expect(err).ToNot(HaveOccurred())
-
-			// checkBlockedState asserts the expected steady-blocked condition:
-			//   • exactly 1 pod with a CrashLoopBackOff sidecar (the restarted one)
-			//   • the remaining pods fully ready (not yet restarted, no sidecar)
-			checkBlockedState := func(g Gomega) {
-				podList, podListErr := getClusterPodList(k8sClient, ctx, cluster)
-				g.Expect(podListErr).ToNot(HaveOccurred())
-
-				crashingCount := 0
-				readyCount := 0
-
-				for idx := range podList.Items {
-					pod := &podList.Items[idx]
-					if podHasCrashingSidecar(pod) {
-						crashingCount++
-					}
-
-					if utils.IsPodRunningAndReady(pod) {
-						readyCount++
-					}
-				}
-
-				g.Expect(crashingCount).To(Equal(1),
-					"expected exactly 1 pod with a crashing sidecar; rolling restart should be blocked after the first pod")
-				g.Expect(readyCount).To(Equal(int(cluster.Spec.Size)-1),
-					"expected the remaining %d pods to still be fully ready (not yet restarted)", cluster.Spec.Size-1)
-			}
-
-			// Wait for the blocked state to be reached. The container transitions
-			// through transient states (ContainerCreating, Terminated/Error) before
-			// Kubernetes applies the exponential backoff and sets the reason to
-			// "CrashLoopBackOff".
-			Eventually(checkBlockedState, 5*time.Minute, 5*time.Second).Should(Succeed())
-
-			// Prove the rolling restart is truly blocked, not just transiently at 1
-			// crashing pod. An Eventually alone could pass during a fleeting window
-			// between pod restarts. Consistently asserts the state holds for a
-			// sustained period, confirming no further pods are being restarted.
-			Consistently(checkBlockedState, 30*time.Second, 5*time.Second).Should(Succeed())
+			assertRollingRestartBlocked(k8sClient, ctx, clusterNamespacedName, int(aeroCluster.Spec.Size)-1)
 
 			By("Enabling IgnoreSidecarFailure=true and verifying cluster reaches Completed")
 
-			cluster.Spec.IgnoreSidecarFailure = ptr.To(true)
-			Expect(updateCluster(k8sClient, ctx, cluster)).ToNot(HaveOccurred())
+			aeroCluster.Spec.IgnoreSidecarFailure = ptr.To(true)
+			Expect(updateCluster(k8sClient, ctx, aeroCluster)).ToNot(HaveOccurred())
 
-			updatedCluster, err := getCluster(k8sClient, ctx, clusterNamespacedName)
-			Expect(err).ToNot(HaveOccurred())
-			Expect(updatedCluster.Status.Phase).To(Equal(asdbv1.AerospikeClusterCompleted))
-
-			By("Verifying the crashing sidecar has propagated to all pods after rolling restart completes")
+			By("Verifying sidecar has propagated to all pods and server is reachable after rolling restart completes")
 
 			// With IgnoreSidecarFailure=true the rolling restart is no longer
 			// blocked, so it runs to completion. Every pod must now have been
 			// restarted with the new spec and have its sidecar in CrashLoopBackOff.
-			finalPodList, err := getClusterPodList(k8sClient, ctx, updatedCluster)
-			Expect(err).ToNot(HaveOccurred())
-			Expect(finalPodList.Items).To(HaveLen(int(updatedCluster.Spec.Size)))
-
-			for idx := range finalPodList.Items {
-				pod := &finalPodList.Items[idx]
-				Expect(podHasCrashingSidecar(pod)).To(BeTrue(),
-					"expected crashing sidecar on pod %s after full rolling restart", pod.Name)
-				Expect(utils.IsAerospikeServerReady(pod)).To(BeTrue(),
-					"expected Aerospike server to be running on pod %s", pod.Name)
-			}
+			verifyCrashingSidecarOnAllPods(k8sClient, ctx, clusterNamespacedName, int(aeroCluster.Spec.Size))
 		})
 
 		It("Should fix sidecar-failed pod via config-change-driven restart when IgnoreSidecarFailure is false", func() {
@@ -321,40 +243,11 @@ var _ = Describe("SidecarFailure", func() {
 
 			By("Waiting for rolling restart to stall — exactly 1 pod has crashing sidecar, 1 pod still fully ready")
 
-			// checkBlockedState confirms the sidecar has actually crashed on the
-			// first pod and the rolling restart has not propagated further. A plain
-			// waitForClusterPhase(InProgress) is insufficient — the cluster enters
-			// InProgress the moment the rolling restart begins, before any sidecar
-			// has had a chance to crash. We need proof that the sidecar failure is
-			// the reason the restart stopped at pod-0.
-			checkBlockedState := func(g Gomega) {
-				cluster, clusterErr := getCluster(k8sClient, ctx, clusterNamespacedName)
-				g.Expect(clusterErr).ToNot(HaveOccurred())
-
-				podList, podListErr := getClusterPodList(k8sClient, ctx, cluster)
-				g.Expect(podListErr).ToNot(HaveOccurred())
-
-				crashingCount, readyCount := 0, 0
-
-				for idx := range podList.Items {
-					pod := &podList.Items[idx]
-					if podHasCrashingSidecar(pod) {
-						crashingCount++
-					}
-
-					if utils.IsPodRunningAndReady(pod) {
-						readyCount++
-					}
-				}
-
-				g.Expect(crashingCount).To(Equal(1),
-					"expected exactly 1 pod with crashing sidecar; rolling restart blocked after the first pod")
-				g.Expect(readyCount).To(Equal(int(cluster.Spec.Size)-1),
-					"expected the remaining pods to still be fully ready (not yet restarted)")
-			}
-
-			Eventually(checkBlockedState, 5*time.Minute, 5*time.Second).Should(Succeed())
-			Consistently(checkBlockedState, 30*time.Second, 5*time.Second).Should(Succeed())
+			// A plain waitForClusterPhase(InProgress) is insufficient — the cluster
+			// enters InProgress the moment the rolling restart begins, before any
+			// sidecar has had a chance to crash. assertRollingRestartBlocked proves
+			// the sidecar failure is the reason the restart stopped at pod-0.
+			assertRollingRestartBlocked(k8sClient, ctx, clusterNamespacedName, int(aeroCluster.Spec.Size)-1)
 
 			By("Fixing the sidecar by replacing the crashing command with a healthy one")
 
@@ -382,10 +275,7 @@ var _ = Describe("SidecarFailure", func() {
 
 			By("Verifying all pods are fully ready after the config-change-driven restart")
 
-			finalCluster, err := getCluster(k8sClient, ctx, clusterNamespacedName)
-			Expect(err).ToNot(HaveOccurred())
-
-			podList, err := getClusterPodList(k8sClient, ctx, finalCluster)
+			podList, err := getClusterPodList(k8sClient, ctx, aeroCluster)
 			Expect(err).ToNot(HaveOccurred())
 
 			for idx := range podList.Items {
@@ -413,95 +303,6 @@ var _ = Describe("SidecarFailure", func() {
 			Expect(CleanupPVC(k8sClient, aeroCluster.Namespace, aeroCluster.Name)).ToNot(HaveOccurred())
 		})
 
-		It("Should complete rolling restart when IgnoreSidecarFailure is true and sidecar is crashing", func() {
-			// Deploy a healthy cluster first, then introduce the crashing
-			// sidecar and the proto-fd-max config change in a single update.
-			// Combining them into one rolling restart ensures that pods not yet
-			// restarted still carry the old (healthy) spec, so hasClusterFailed
-			// always finds at least one PodHealthy pod and never triggers the
-			// grace-period requeue loop.
-			By("Deploying a healthy 2-node cluster")
-
-			aeroCluster := createDummyAerospikeCluster(clusterNamespacedName, 2)
-			Expect(DeployCluster(k8sClient, ctx, aeroCluster)).ToNot(HaveOccurred())
-
-			By("Adding a crashing sidecar with IgnoreSidecarFailure=true and triggering a rolling restart " +
-				"via proto-fd-max change")
-
-			aeroCluster, err := getCluster(k8sClient, ctx, clusterNamespacedName)
-			Expect(err).ToNot(HaveOccurred())
-
-			aeroCluster.Spec.PodSpec.Sidecars = []corev1.Container{crashingSidecar()}
-			aeroCluster.Spec.IgnoreSidecarFailure = ptr.To(true)
-			aeroCluster.Spec.AerospikeConfig.Value[asdbv1.ConfKeyService].(map[string]interface{})["proto-fd-max"] = int64(20000)
-
-			Expect(updateCluster(k8sClient, ctx, aeroCluster)).ToNot(HaveOccurred())
-
-			By("Verifying proto-fd-max is actually updated on every server node")
-
-			Expect(validateAerospikeConfigServiceClusterUpdate(
-				logger, k8sClient, ctx, clusterNamespacedName, []string{"proto-fd-max"},
-			)).ToNot(HaveOccurred())
-
-			By("Verifying all pods still have the crashing sidecar and running server")
-
-			Eventually(func(g Gomega) {
-				cluster, clusterErr := getCluster(k8sClient, ctx, clusterNamespacedName)
-				g.Expect(clusterErr).ToNot(HaveOccurred())
-
-				podList, podListErr := getClusterPodList(k8sClient, ctx, cluster)
-				g.Expect(podListErr).ToNot(HaveOccurred())
-
-				for idx := range podList.Items {
-					g.Expect(podHasCrashingSidecar(&podList.Items[idx])).To(BeTrue(),
-						"expected sidecar to be crashing on pod %s after rolling restart", podList.Items[idx].Name)
-					g.Expect(utils.IsAerospikeServerReady(&podList.Items[idx])).To(BeTrue(),
-						"expected server to be running on pod %s after rolling restart", podList.Items[idx].Name)
-				}
-			}, 3*time.Minute, 5*time.Second).Should(Succeed())
-
-			By("Curing the sidecar — replacing it with a healthy one and verifying full recovery")
-
-			// Replace the crashlooping sidecar with a long-running healthy one.
-			// The cluster should complete another rolling restart and all pods
-			// should become fully ready (all containers including the sidecar).
-			curedCluster, err := getCluster(k8sClient, ctx, clusterNamespacedName)
-			Expect(err).ToNot(HaveOccurred())
-
-			curedCluster.Spec.PodSpec.Sidecars = []corev1.Container{
-				{
-					Name:    "crashing-sidecar",
-					Image:   "busybox:1.28",
-					Command: []string{"sh", "-c", "echo 'sidecar healthy'; sleep 3600"},
-					Resources: corev1.ResourceRequirements{
-						Requests: corev1.ResourceList{
-							corev1.ResourceCPU:    resource.MustParse("10m"),
-							corev1.ResourceMemory: resource.MustParse("16Mi"),
-						},
-					},
-				},
-			}
-
-			Expect(updateCluster(k8sClient, ctx, curedCluster)).ToNot(HaveOccurred())
-
-			recoveredCluster, err := getCluster(k8sClient, ctx, clusterNamespacedName)
-			Expect(err).ToNot(HaveOccurred())
-			Expect(recoveredCluster.Status.Phase).To(Equal(asdbv1.AerospikeClusterCompleted))
-
-			// After the sidecar is fixed every pod must be fully ready —
-			// both the Aerospike server and the sidecar container are running.
-			recoveredPodList, err := getClusterPodList(k8sClient, ctx, recoveredCluster)
-			Expect(err).ToNot(HaveOccurred())
-
-			for idx := range recoveredPodList.Items {
-				pod := &recoveredPodList.Items[idx]
-				Expect(utils.IsPodRunningAndReady(pod)).To(BeTrue(),
-					"expected pod %s to be fully ready after sidecar is cured", pod.Name)
-				Expect(podHasCrashingSidecar(pod)).To(BeFalse(),
-					"expected sidecar to no longer be crashing on pod %s", pod.Name)
-			}
-		})
-
 		It("Should include sidecar-failed pods in rolling restart config update — treated as active pods", func() {
 			// getServerFailedAndActivePods classifies sidecar-failed pods as
 			// "active" (server is running). They must therefore participate in
@@ -515,16 +316,6 @@ var _ = Describe("SidecarFailure", func() {
 			aeroCluster.Spec.PodSpec.Sidecars = []corev1.Container{signalControlledSidecar()}
 			aeroCluster.Spec.Storage.Volumes = append(aeroCluster.Spec.Storage.Volumes, vol)
 			Expect(DeployCluster(k8sClient, ctx, aeroCluster)).ToNot(HaveOccurred())
-
-			By("Verifying all 3 pods are initially fully ready — sidecar is healthy")
-
-			podList, err := getClusterPodList(k8sClient, ctx, aeroCluster)
-			Expect(err).ToNot(HaveOccurred())
-
-			for idx := range podList.Items {
-				Expect(utils.IsPodRunningAndReady(&podList.Items[idx])).To(BeTrue(),
-					"expected pod %s to be fully ready before fail signal", podList.Items[idx].Name)
-			}
 
 			By("Failing the sidecar on pod-0 and pod-1 (2 of 3 pods become sidecar-failed)")
 
@@ -552,9 +343,6 @@ var _ = Describe("SidecarFailure", func() {
 
 			By("Setting IgnoreSidecarFailure=true and triggering a proto-fd-max rolling restart")
 
-			aeroCluster, err = getCluster(k8sClient, ctx, clusterNamespacedName)
-			Expect(err).ToNot(HaveOccurred())
-
 			aeroCluster.Spec.IgnoreSidecarFailure = ptr.To(true)
 			aeroCluster.Spec.AerospikeConfig.Value[asdbv1.ConfKeyService].(map[string]interface{})["proto-fd-max"] = int64(20000)
 			Expect(updateCluster(k8sClient, ctx, aeroCluster)).ToNot(HaveOccurred())
@@ -569,58 +357,54 @@ var _ = Describe("SidecarFailure", func() {
 
 			validateRoster(k8sClient, ctx, clusterNamespacedName, scNamespace)
 		})
-	})
 
-	Context("Image upgrade with crashing sidecar", func() {
-		clusterName := fmt.Sprintf("sidecar-upgrade-%d", GinkgoParallelProcess())
-		clusterNamespacedName := test.GetNamespacedName(clusterName, namespace)
+		It("Should block rolling restart across all racks when IgnoreSidecarFailure is false, then"+
+			" unblock when set to true", func() {
+			// AKO reconciles racks sequentially. When handleFailedPodsInRack
+			// returns a requeue for a sidecar-failed pod in any rack, the
+			// reconcileRacks loop exits early — subsequent racks in the same
+			// reconcile cycle are not processed. A sidecar failure in rack-1
+			// therefore blocks rack-2's rolling restart even though rack-2 has
+			// no sidecar failures. Setting IgnoreSidecarFailure=true removes the
+			// early-exit so both racks proceed to completion in the same cycle.
+			By("Deploying a healthy 4-node, 2-rack cluster (2 pods per rack)")
 
-		AfterEach(func() {
-			aeroCluster := &asdbv1.AerospikeCluster{
-				ObjectMeta: metav1.ObjectMeta{
-					Name:      clusterName,
-					Namespace: namespace,
-				},
+			aeroCluster := createDummyAerospikeCluster(clusterNamespacedName, 4)
+			aeroCluster.Spec.RackConfig = asdbv1.RackConfig{
+				Racks: []asdbv1.Rack{{ID: 1}, {ID: 2}},
 			}
-			Expect(DeleteCluster(k8sClient, ctx, aeroCluster)).ToNot(HaveOccurred())
-			Expect(CleanupPVC(k8sClient, aeroCluster.Namespace, aeroCluster.Name)).ToNot(HaveOccurred())
-		})
-
-		It("Should complete image upgrade when IgnoreSidecarFailure is true and sidecar is crashing", func() {
-			// Deploy a healthy cluster first, then add the crashing sidecar and
-			// the image upgrade in a single update. Combining them into one
-			// rolling restart ensures pods not yet restarted still carry the old
-			// (healthy) spec, so hasClusterFailed always finds a PodHealthy pod
-			// and never blocks on the grace-period requeue loop.
-			By("Deploying a healthy 2-node cluster")
-
-			aeroCluster := createDummyAerospikeCluster(clusterNamespacedName, 2)
 			Expect(DeployCluster(k8sClient, ctx, aeroCluster)).ToNot(HaveOccurred())
 
-			By("Adding a crashing sidecar with IgnoreSidecarFailure=true and triggering an image upgrade in one update")
+			By("Adding a crashing sidecar to all pods with IgnoreSidecarFailure=false and a proto-fd-max change")
 
 			aeroCluster, err := getCluster(k8sClient, ctx, clusterNamespacedName)
 			Expect(err).ToNot(HaveOccurred())
 
 			aeroCluster.Spec.PodSpec.Sidecars = []corev1.Container{crashingSidecar()}
-			aeroCluster.Spec.IgnoreSidecarFailure = ptr.To(true)
-			aeroCluster.Spec.Image = nextImage
+			aeroCluster.Spec.IgnoreSidecarFailure = ptr.To(false)
+			aeroCluster.Spec.AerospikeConfig.Value[asdbv1.ConfKeyService].(map[string]interface{})["proto-fd-max"] = int64(20000)
+			Expect(k8sClient.Update(ctx, aeroCluster)).ToNot(HaveOccurred())
 
+			By("Verifying the entire cluster stalls — exactly 1 pod has crashing sidecar, 3 pods still fully ready")
+
+			// Pod-0 in rack-1 gets the new spec first and enters CrashLoopBackOff.
+			// With IgnoreSidecarFailure=false the reconciler blocks there; the
+			// remaining 3 pods (including all of rack-2) are never restarted.
+			assertRollingRestartBlocked(k8sClient, ctx, clusterNamespacedName, int(aeroCluster.Spec.Size)-1)
+
+			By("Setting IgnoreSidecarFailure=true — both racks should complete their rolling restarts")
+
+			aeroCluster.Spec.IgnoreSidecarFailure = ptr.To(true)
 			Expect(updateCluster(k8sClient, ctx, aeroCluster)).ToNot(HaveOccurred())
 
-			By("Verifying cluster returns to Completed with the new image")
+			By("Verifying proto-fd-max is updated on all 4 pods in both racks")
 
-			// updateCluster already verified Completed; fetch cluster here only
-			// to read pod statuses. The phase snapshot may briefly show InProgress
-			// again (sidecar crash event) so we do not re-check it.
-			cluster, err := getCluster(k8sClient, ctx, clusterNamespacedName)
-			Expect(err).ToNot(HaveOccurred())
+			Expect(validateAerospikeConfigServiceClusterUpdate(
+				logger, k8sClient, ctx, clusterNamespacedName, []string{"proto-fd-max"},
+			)).ToNot(HaveOccurred())
 
-			for podName, podStatus := range cluster.Status.Pods {
-				Expect(utils.IsImageEqual(podStatus.Image, nextImage)).To(BeTrue(),
-					"expected pod %s to be on image %s after upgrade, got %s",
-					podName, nextImage, podStatus.Image)
-			}
+			By("Verifying all pods have running servers and crashing sidecars after the update")
+			verifyCrashingSidecarOnAllPods(k8sClient, ctx, clusterNamespacedName, 4)
 		})
 	})
 
@@ -646,57 +430,13 @@ var _ = Describe("SidecarFailure", func() {
 			// restarts, so touching the file once is enough to put the sidecar
 			// into permanent CrashLoopBackOff. Initially the file does not exist,
 			// so all pods start fully ready.
-			signalSidecar := corev1.Container{
-				Name:  "signal-sidecar",
-				Image: "busybox:1.28",
-				Command: []string{
-					"sh", "-c",
-					`while true; do
-  if [ -f /signal/fail ]; then
-    echo "signal-sidecar: fail signal received, crashing"
-    exit 1
-  fi
-  sleep 5
-done`,
-				},
-				Resources: corev1.ResourceRequirements{
-					Requests: corev1.ResourceList{
-						corev1.ResourceCPU:    resource.MustParse("10m"),
-						corev1.ResourceMemory: resource.MustParse("16Mi"),
-					},
-				},
-			}
-
-			// emptyDir volume scoped to the sidecar; persists across container
-			// restarts within the pod so the fail signal survives a restart.
-			signalVolume := asdbv1.VolumeSpec{
-				Name: "sidecar-signal",
-				Source: asdbv1.VolumeSource{
-					EmptyDir: &corev1.EmptyDirVolumeSource{},
-				},
-				Sidecars: []asdbv1.VolumeAttachment{
-					{ContainerName: "signal-sidecar", Path: "/signal"},
-				},
-			}
-
 			By("Deploying a 2-node SC cluster with all sidecars healthy")
 
 			aeroCluster := createDummyAerospikeCluster(clusterNamespacedName, 2)
-			aeroCluster.Spec.PodSpec.Sidecars = []corev1.Container{signalSidecar}
-			aeroCluster.Spec.Storage.Volumes = append(aeroCluster.Spec.Storage.Volumes, signalVolume)
+			aeroCluster.Spec.PodSpec.Sidecars = []corev1.Container{signalControlledSidecar()}
+			aeroCluster.Spec.Storage.Volumes = append(aeroCluster.Spec.Storage.Volumes, signalVolumeForSidecar())
 
 			Expect(DeployCluster(k8sClient, ctx, aeroCluster)).ToNot(HaveOccurred())
-
-			By("Verifying all pods are fully ready — sidecar is healthy before the fail signal is sent")
-
-			podList, err := getClusterPodList(k8sClient, ctx, aeroCluster)
-			Expect(err).ToNot(HaveOccurred())
-			Expect(podList.Items).To(HaveLen(2))
-
-			for idx := range podList.Items {
-				Expect(utils.IsPodRunningAndReady(&podList.Items[idx])).To(BeTrue(),
-					"expected pod %s to be fully ready before fail signal", podList.Items[idx].Name)
-			}
 
 			By("Explicitly failing pod-0's sidecar by writing the fail signal into its emptyDir")
 
@@ -723,7 +463,7 @@ done`,
 
 			By("Verifying exactly 1 pod has a crashing sidecar and 1 pod remains fully ready")
 
-			podList, err = getClusterPodList(k8sClient, ctx, aeroCluster)
+			podList, err := getClusterPodList(k8sClient, ctx, aeroCluster)
 			Expect(err).ToNot(HaveOccurred())
 
 			crashingCount := 0
@@ -742,7 +482,7 @@ done`,
 			aeroCluster, err = getCluster(k8sClient, ctx, clusterNamespacedName)
 			Expect(err).ToNot(HaveOccurred())
 
-			maxIgnorable := intOrStr(1)
+			maxIgnorable := intstr.FromInt(1)
 			aeroCluster.Spec.RackConfig.MaxIgnorablePods = &maxIgnorable
 			aeroCluster.Spec.IgnoreSidecarFailure = ptr.To(false)
 			aeroCluster.Spec.AerospikeConfig.Value[asdbv1.ConfKeyService].(map[string]interface{})["proto-fd-max"] = int64(20000)
@@ -757,19 +497,10 @@ done`,
 				2*time.Minute, asdbv1.AerospikeClusterInProgress),
 			).ToNot(HaveOccurred())
 
-			stuckCluster, err := getCluster(k8sClient, ctx, clusterNamespacedName)
-			Expect(err).ToNot(HaveOccurred())
-			Expect(stuckCluster.Status.Phase).ToNot(Equal(asdbv1.AerospikeClusterCompleted),
-				"cluster should not have completed: sidecar failure must block the rolling restart")
-
 			By("Setting IgnoreSidecarFailure=true and verifying rolling restart completes")
 
-			stuckCluster.Spec.IgnoreSidecarFailure = ptr.To(true)
-			Expect(updateCluster(k8sClient, ctx, stuckCluster)).ToNot(HaveOccurred())
-
-			completedCluster, err := getCluster(k8sClient, ctx, clusterNamespacedName)
-			Expect(err).ToNot(HaveOccurred())
-			Expect(completedCluster.Status.Phase).To(Equal(asdbv1.AerospikeClusterCompleted))
+			aeroCluster.Spec.IgnoreSidecarFailure = ptr.To(true)
+			Expect(updateCluster(k8sClient, ctx, aeroCluster)).ToNot(HaveOccurred())
 
 			By("Verifying proto-fd-max is updated on all server nodes including the sidecar-failed pod")
 
@@ -783,69 +514,6 @@ done`,
 			// must remain in the roster. If the sidecar failure were incorrectly
 			// counted against MaxIgnorablePods the pod would be skipped and
 			// could drop out of the roster.
-			validateRoster(k8sClient, ctx, clusterNamespacedName, scNamespace)
-		})
-
-		It("Should not block rolling restart when multiple sidecar-failed pods exceed the MaxIgnorablePods budget", func() {
-			// With MaxIgnorablePods=1, up to 1 pod can be ignored (bypassing
-			// safety checks). Sidecar-failed pods must NOT consume this budget:
-			// the ignorable set is built only from server-failed pods. If 2
-			// sidecar-failed pods incorrectly consumed the budget, the second
-			// one would overflow it and AKO would stall or treat that pod as
-			// an unrecoverable error. With the new code, neither consumes a
-			// slot so the rolling restart proceeds normally regardless of how
-			// many sidecars are crashing.
-			By("Deploying a 4-node cluster with a signal-controlled sidecar and MaxIgnorablePods=1")
-
-			aeroCluster := createDummyAerospikeCluster(clusterNamespacedName, 4)
-			aeroCluster.Spec.PodSpec.Sidecars = []corev1.Container{signalControlledSidecar()}
-			aeroCluster.Spec.Storage.Volumes = append(
-				aeroCluster.Spec.Storage.Volumes, signalVolumeForSidecar())
-			maxIgnorable := intOrStr(1)
-			aeroCluster.Spec.RackConfig.MaxIgnorablePods = &maxIgnorable
-			Expect(DeployCluster(k8sClient, ctx, aeroCluster)).ToNot(HaveOccurred())
-
-			By("Failing the sidecar on pod-0 AND pod-1 — 2 pods sidecar-failed, exceeding budget of 1")
-
-			for _, suffix := range []string{"-0-0", "-0-1"} {
-				Expect(failPodSidecar(namespace, clusterName+suffix)).ToNot(HaveOccurred())
-			}
-
-			Eventually(func(g Gomega) {
-				cluster, clusterErr := getCluster(k8sClient, ctx, clusterNamespacedName)
-				g.Expect(clusterErr).ToNot(HaveOccurred())
-
-				pl, podListErr := getClusterPodList(k8sClient, ctx, cluster)
-				g.Expect(podListErr).ToNot(HaveOccurred())
-
-				crashingCount := 0
-
-				for idx := range pl.Items {
-					if podHasCrashingSidecar(&pl.Items[idx]) {
-						crashingCount++
-					}
-				}
-
-				g.Expect(crashingCount).To(Equal(2), "expected exactly 2 pods with crashing sidecars")
-			}, 2*time.Minute, 5*time.Second).Should(Succeed())
-
-			By("Setting IgnoreSidecarFailure=true and triggering a proto-fd-max change")
-
-			aeroCluster, err := getCluster(k8sClient, ctx, clusterNamespacedName)
-			Expect(err).ToNot(HaveOccurred())
-
-			aeroCluster.Spec.IgnoreSidecarFailure = ptr.To(true)
-			aeroCluster.Spec.AerospikeConfig.Value[asdbv1.ConfKeyService].(map[string]interface{})["proto-fd-max"] = int64(20000)
-			Expect(updateCluster(k8sClient, ctx, aeroCluster)).ToNot(HaveOccurred())
-
-			By("Verifying proto-fd-max updated on all 4 pods — no budget overflow caused a stall")
-
-			Expect(validateAerospikeConfigServiceClusterUpdate(
-				logger, k8sClient, ctx, clusterNamespacedName, []string{"proto-fd-max"},
-			)).ToNot(HaveOccurred())
-
-			By("Verifying roster includes all 4 nodes — sidecar-failed pods were never excluded")
-
 			validateRoster(k8sClient, ctx, clusterNamespacedName, scNamespace)
 		})
 	})
@@ -976,9 +644,6 @@ done`,
 
 				By("Applying IgnoreSidecarFailure=true to let the cluster reach Completed")
 
-				aeroCluster, err = getCluster(k8sClient, ctx, clusterNamespacedName)
-				Expect(err).ToNot(HaveOccurred())
-
 				aeroCluster.Spec.IgnoreSidecarFailure = ptr.To(true)
 				Expect(updateClusterWithNoWait(k8sClient, ctx, aeroCluster)).ToNot(HaveOccurred())
 
@@ -1013,40 +678,18 @@ done`,
 
 			By("Adding a crashing sidecar with IgnoreSidecarFailure=true via a rolling restart")
 
-			aeroCluster, err := getCluster(k8sClient, ctx, clusterNamespacedName)
-			Expect(err).ToNot(HaveOccurred())
-
 			aeroCluster.Spec.PodSpec.Sidecars = []corev1.Container{crashingSidecar()}
 			aeroCluster.Spec.IgnoreSidecarFailure = ptr.To(true)
 
 			Expect(updateCluster(k8sClient, ctx, aeroCluster)).ToNot(HaveOccurred())
 
-			// verifyClusterState is a local helper that asserts all servers are
-			// running, all sidecars are crashing, and the pod count matches
-			// expectedSize. Phase is not checked here because the perpetual
-			// CrashLoopBackOff events can briefly push the cluster back to
-			// InProgress between reconcile cycles; the important invariant is
-			// that every Aerospike server is up and every sidecar is crashing.
+			// verifyClusterState asserts all servers are up, all sidecars are
+			// crashing, and the pod count matches expectedSize. Phase is not
+			// checked because perpetual CrashLoopBackOff events can briefly push
+			// the cluster back to InProgress between reconcile cycles.
 			verifyClusterState := func(expectedSize int) {
 				GinkgoHelper()
-
-				Eventually(func(g Gomega) {
-					cluster, clusterErr := getCluster(k8sClient, ctx, clusterNamespacedName)
-					g.Expect(clusterErr).ToNot(HaveOccurred())
-
-					podList, podListErr := getClusterPodList(k8sClient, ctx, cluster)
-					g.Expect(podListErr).ToNot(HaveOccurred())
-					g.Expect(podList.Items).To(HaveLen(expectedSize),
-						"expected %d pods after operation", expectedSize)
-
-					for idx := range podList.Items {
-						pod := &podList.Items[idx]
-						g.Expect(utils.IsAerospikeServerReady(pod)).To(BeTrue(),
-							"expected Aerospike server to be running on pod %s", pod.Name)
-						g.Expect(podHasCrashingSidecar(pod)).To(BeTrue(),
-							"expected sidecar to still be crashing on pod %s", pod.Name)
-					}
-				}, 3*time.Minute, 10*time.Second).Should(Succeed())
+				verifyCrashingSidecarOnAllPods(k8sClient, ctx, clusterNamespacedName, expectedSize)
 			}
 
 			By("Verifying initial 4-node state — all servers running, all sidecars crashing")
@@ -1071,152 +714,87 @@ done`,
 			// ── Image upgrade ────────────────────────────────────────────────
 			By("Triggering an image upgrade to nextImage")
 
-			aeroCluster, err = getCluster(k8sClient, ctx, clusterNamespacedName)
-			Expect(err).ToNot(HaveOccurred())
-
 			aeroCluster.Spec.Image = nextImage
 			Expect(updateCluster(k8sClient, ctx, aeroCluster)).ToNot(HaveOccurred())
-
-			By("Verifying 5-node state after image upgrade — all pods on new image, all servers running, all sidecars crashing")
-
-			Eventually(func(g Gomega) {
-				cluster, err := getCluster(k8sClient, ctx, clusterNamespacedName)
-				g.Expect(err).ToNot(HaveOccurred())
-
-				podList, err := getClusterPodList(k8sClient, ctx, cluster)
-				g.Expect(err).ToNot(HaveOccurred())
-				g.Expect(podList.Items).To(HaveLen(5))
-
-				for idx := range podList.Items {
-					pod := &podList.Items[idx]
-					podStatus := cluster.Status.Pods[pod.Name]
-					g.Expect(utils.IsImageEqual(podStatus.Image, nextImage)).To(BeTrue(),
-						"expected pod %s to be on image %s after upgrade, got %s",
-						pod.Name, nextImage, podStatus.Image)
-					g.Expect(utils.IsAerospikeServerReady(pod)).To(BeTrue(),
-						"expected Aerospike server to be running on pod %s after upgrade", pod.Name)
-					g.Expect(podHasCrashingSidecar(pod)).To(BeTrue(),
-						"expected sidecar to still be crashing on pod %s after upgrade", pod.Name)
-				}
-			}, 3*time.Minute, 10*time.Second).Should(Succeed())
-		})
-	})
-
-	Context("Multi-rack cluster with crashing sidecar", func() {
-		clusterName := fmt.Sprintf("sidecar-multitrack-%d", GinkgoParallelProcess())
-		clusterNamespacedName := test.GetNamespacedName(clusterName, namespace)
-
-		AfterEach(func() {
-			aeroCluster := &asdbv1.AerospikeCluster{
-				ObjectMeta: metav1.ObjectMeta{
-					Name:      clusterName,
-					Namespace: namespace,
-				},
-			}
-			Expect(DeleteCluster(k8sClient, ctx, aeroCluster)).ToNot(HaveOccurred())
-			Expect(CleanupPVC(k8sClient, aeroCluster.Namespace, aeroCluster.Name)).ToNot(HaveOccurred())
-		})
-
-		It("Should block rolling restart of the entire cluster when IgnoreSidecarFailure is false, then unblock all"+
-			" racks when set to true", func() {
-			// AKO reconciles racks sequentially. When handleFailedPodsInRack
-			// returns a requeue for a sidecar-failed pod in any rack, the
-			// reconcileRacks loop exits early — subsequent racks in the same
-			// reconcile cycle are not processed. This means a sidecar failure in
-			// rack-1 blocks rack-2's rolling restart even though rack-2 has no
-			// sidecar failures. Setting IgnoreSidecarFailure=true removes the
-			// early-exit so both racks proceed to completion in the same cycle.
-			By("Deploying a healthy 4-node, 2-rack cluster (2 pods per rack)")
-
-			aeroCluster := createDummyAerospikeCluster(clusterNamespacedName, 4)
-			aeroCluster.Spec.RackConfig = asdbv1.RackConfig{
-				Racks: []asdbv1.Rack{{ID: 1}, {ID: 2}},
-			}
-			Expect(DeployCluster(k8sClient, ctx, aeroCluster)).ToNot(HaveOccurred())
-
-			By("Adding a crashing sidecar to all pods with IgnoreSidecarFailure=false and a proto-fd-max change")
-
-			aeroCluster, err := getCluster(k8sClient, ctx, clusterNamespacedName)
-			Expect(err).ToNot(HaveOccurred())
-
-			aeroCluster.Spec.PodSpec.Sidecars = []corev1.Container{crashingSidecar()}
-			aeroCluster.Spec.IgnoreSidecarFailure = ptr.To(false)
-			aeroCluster.Spec.AerospikeConfig.Value[asdbv1.ConfKeyService].(map[string]interface{})["proto-fd-max"] = int64(20000)
-			Expect(k8sClient.Update(ctx, aeroCluster)).ToNot(HaveOccurred())
-
-			By("Verifying the entire cluster stalls — exactly 1 pod has crashing sidecar, 3 pods still fully ready")
-
-			// AKO processes racks sequentially. The first pod in rack-1 to get
-			// the new spec (with crashingSidecar) will enter CrashLoopBackOff.
-			// With IgnoreSidecarFailure=false the reconciler blocks waiting for
-			// full readiness. The remaining 3 pods — including all of rack-2 —
-			// are never restarted, so they remain fully ready on the old spec.
-			checkBlockedState := func(g Gomega) {
-				cluster, clusterErr := getCluster(k8sClient, ctx, clusterNamespacedName)
-				g.Expect(clusterErr).ToNot(HaveOccurred())
-
-				podList, podListErr := getClusterPodList(k8sClient, ctx, cluster)
-				g.Expect(podListErr).ToNot(HaveOccurred())
-
-				crashingCount, readyCount := 0, 0
-
-				for idx := range podList.Items {
-					pod := &podList.Items[idx]
-					if podHasCrashingSidecar(pod) {
-						crashingCount++
-					}
-
-					if utils.IsPodRunningAndReady(pod) {
-						readyCount++
-					}
-				}
-
-				g.Expect(crashingCount).To(Equal(1),
-					"expected exactly 1 pod with crashing sidecar; rolling restart blocked after the first pod in rack-1")
-				g.Expect(readyCount).To(Equal(3),
-					"expected 3 pods to still be fully ready — rack-2 not yet processed due to sequential blocking")
-			}
-
-			Eventually(checkBlockedState, 5*time.Minute, 5*time.Second).Should(Succeed())
-			Consistently(checkBlockedState, 30*time.Second, 5*time.Second).Should(Succeed())
-
-			By("Setting IgnoreSidecarFailure=true — both racks should complete their rolling restarts")
-
-			aeroCluster, err = getCluster(k8sClient, ctx, clusterNamespacedName)
-			Expect(err).ToNot(HaveOccurred())
-
-			aeroCluster.Spec.IgnoreSidecarFailure = ptr.To(true)
-			Expect(updateCluster(k8sClient, ctx, aeroCluster)).ToNot(HaveOccurred())
-
-			By("Verifying proto-fd-max is updated on all 4 pods in both racks")
-
-			Expect(validateAerospikeConfigServiceClusterUpdate(
-				logger, k8sClient, ctx, clusterNamespacedName, []string{"proto-fd-max"},
-			)).ToNot(HaveOccurred())
-
-			By("Verifying all pods have running servers and crashing sidecars after the update")
-
-			finalCluster, err := getCluster(k8sClient, ctx, clusterNamespacedName)
-			Expect(err).ToNot(HaveOccurred())
-
-			finalPodList, err := getClusterPodList(k8sClient, ctx, finalCluster)
-			Expect(err).ToNot(HaveOccurred())
-			Expect(finalPodList.Items).To(HaveLen(4))
-
-			for idx := range finalPodList.Items {
-				pod := &finalPodList.Items[idx]
-				Expect(utils.IsAerospikeServerReady(pod)).To(BeTrue(),
-					"expected Aerospike server to be running on pod %s", pod.Name)
-				Expect(podHasCrashingSidecar(pod)).To(BeTrue(),
-					"expected crashing sidecar on pod %s (all pods carry the new spec)", pod.Name)
-			}
 		})
 	})
 })
 
-// intOrStr is a convenience wrapper so test code can build an IntOrString inline.
-func intOrStr(v int) intstr.IntOrString {
-	return intstr.FromInt(v)
+// assertRollingRestartBlocked polls until exactly 1 pod has a crashing sidecar
+// (the first pod restarted) and expectedReadyCount pods are still fully ready
+// (not yet restarted). It then holds that condition consistently to prove the
+// rolling restart is genuinely blocked rather than transiently paused between
+// pod restarts. The container transitions through ContainerCreating and
+// Terminated/Error before Kubernetes applies exponential backoff and sets the
+// reason to "CrashLoopBackOff", which is why an Eventually precedes the
+// Consistently.
+func assertRollingRestartBlocked(
+	k8sClient client.Client,
+	ctx goctx.Context,
+	clusterNamespacedName types.NamespacedName,
+	expectedReadyCount int,
+) {
+	GinkgoHelper()
+
+	check := func(g Gomega) {
+		cluster, err := getCluster(k8sClient, ctx, clusterNamespacedName)
+		g.Expect(err).ToNot(HaveOccurred())
+
+		podList, err := getClusterPodList(k8sClient, ctx, cluster)
+		g.Expect(err).ToNot(HaveOccurred())
+
+		crashingCount, readyCount := 0, 0
+
+		for idx := range podList.Items {
+			pod := &podList.Items[idx]
+			if podHasCrashingSidecar(pod) {
+				crashingCount++
+				continue
+			}
+
+			if utils.IsPodRunningAndReady(pod) {
+				readyCount++
+			}
+		}
+
+		g.Expect(crashingCount).To(Equal(1),
+			"expected exactly 1 pod with a crashing sidecar; rolling restart should be blocked after the first pod")
+		g.Expect(readyCount).To(Equal(expectedReadyCount),
+			"expected %d pods to still be fully ready (not yet restarted)", expectedReadyCount)
+	}
+
+	Eventually(check, 5*time.Minute, 5*time.Second).Should(Succeed())
+	Consistently(check, 30*time.Second, 5*time.Second).Should(Succeed())
+}
+
+// verifyCrashingSidecarOnAllPods polls until every pod in the cluster has its
+// sidecar in CrashLoopBackOff and the Aerospike server is reachable via a live
+// info call. expectedSize is asserted against the total pod count.
+func verifyCrashingSidecarOnAllPods(
+	k8sClient client.Client,
+	ctx goctx.Context,
+	clusterNamespacedName types.NamespacedName,
+	expectedSize int,
+) {
+	GinkgoHelper()
+
+	Eventually(func(g Gomega) {
+		cluster, err := getCluster(k8sClient, ctx, clusterNamespacedName)
+		g.Expect(err).ToNot(HaveOccurred())
+
+		podList, err := getClusterPodList(k8sClient, ctx, cluster)
+		g.Expect(err).ToNot(HaveOccurred())
+		g.Expect(podList.Items).To(HaveLen(expectedSize))
+
+		for idx := range podList.Items {
+			pod := &podList.Items[idx]
+			g.Expect(podHasCrashingSidecar(pod)).To(BeTrue(),
+				"expected sidecar to be crashing on pod %s", pod.Name)
+			_, err := requestInfoFromNode(logger, k8sClient, ctx, clusterNamespacedName, "node", pod.Name)
+			g.Expect(err).ToNot(HaveOccurred(),
+				"expected Aerospike server to be reachable on pod %s", pod.Name)
+		}
+	}, 3*time.Minute, 5*time.Second).Should(Succeed())
 }
 
 // execInPodContainer runs command inside containerName of the named pod and

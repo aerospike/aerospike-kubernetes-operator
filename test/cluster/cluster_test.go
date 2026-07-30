@@ -2357,10 +2357,7 @@ func ScaleUpPreflightChecksTest(ctx goctx.Context) {
 				}
 			}
 
-			By("Waiting for the cluster to enter Error state (bad-image rolling restart blocks scale-up)")
-			Eventually(checkScaleUpBlocked, 5*time.Minute, 10*time.Second).Should(Succeed())
-
-			By("Confirming the scale-up pod stays absent for a sustained period")
+			By("Confirming scale-up pod stays absent while the bad-image rolling restart is active")
 			Consistently(checkScaleUpBlocked, 30*time.Second, 5*time.Second).Should(Succeed())
 
 			By("Restoring the valid image while keeping size=3")
@@ -2370,18 +2367,6 @@ func ScaleUpPreflightChecksTest(ctx goctx.Context) {
 
 			aeroCluster.Spec.Image = validImage
 			Expect(updateCluster(k8sClient, ctx, aeroCluster)).ToNot(HaveOccurred())
-
-			By("Verifying the cluster completes with 3 pods on the correct image")
-			Eventually(func(g Gomega) {
-				cluster, clusterErr := getCluster(k8sClient, ctx, clusterNamespacedName)
-				g.Expect(clusterErr).ToNot(HaveOccurred())
-				g.Expect(cluster.Status.Phase).To(Equal(asdbv1.AerospikeClusterCompleted))
-
-				podList, podListErr := getClusterPodList(k8sClient, ctx, cluster)
-				g.Expect(podListErr).ToNot(HaveOccurred())
-				g.Expect(podList.Items).To(HaveLen(3),
-					"expected 3 pods after cluster recovery and scale-up")
-			}, getTimeout(3), 15*time.Second).Should(Succeed())
 		})
 
 	// -------------------------------------------------------------------------

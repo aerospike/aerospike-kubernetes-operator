@@ -36,10 +36,8 @@ import (
 //   - The behaviour is the same regardless of the IgnoreSidecarFailure flag.
 func TestCreateOrUpdatePodService(t *testing.T) {
 	const (
-		namespace   = "test-ns"
-		clusterName = "test-cluster"
-		podName     = "test-cluster-1-0"
-		clusterUID  = "test-uid"
+		podName    = "test-cluster-1-0"
+		clusterUID = "test-uid"
 	)
 
 	tests := []struct {

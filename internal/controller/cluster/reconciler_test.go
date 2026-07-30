@@ -34,6 +34,11 @@ import (
 	"github.com/aerospike/aerospike-kubernetes-operator/v4/pkg/utils"
 )
 
+const (
+	namespace   = "test-ns"
+	clusterName = "test-cluster"
+)
+
 func newTestScheme() *k8sRuntime.Scheme {
 	s := k8sRuntime.NewScheme()
 	_ = clientGoScheme.AddToScheme(s)
@@ -75,11 +80,6 @@ func clusterLabels(name string) map[string]string {
 //  2. STS found, healthy pod → ReconcileSuccess (early return from pod loop).
 //  3. STS found, all pods in grace period → ReconcileRequeueAfter.
 func TestCheckPreviouslyFailedCluster(t *testing.T) {
-	const (
-		clusterName = "test-cluster"
-		namespace   = "test-ns"
-	)
-
 	scheme := newTestScheme()
 
 	// reusableSTS is a StatefulSet that carries the cluster labels so it is
@@ -129,8 +129,14 @@ func TestCheckPreviouslyFailedCluster(t *testing.T) {
 			},
 			Status: corev1.PodStatus{
 				Phase: corev1.PodRunning,
-				Conditions: []corev1.PodCondition{
-					{Type: corev1.PodReady, Status: corev1.ConditionTrue},
+				ContainerStatuses: []corev1.ContainerStatus{
+					{
+						Name:  asdbv1.AerospikeServerContainerName,
+						Ready: true,
+						State: corev1.ContainerState{
+							Running: &corev1.ContainerStateRunning{StartedAt: metav1.Now()},
+						},
+					},
 				},
 			},
 		}
