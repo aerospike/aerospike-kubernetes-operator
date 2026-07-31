@@ -2,6 +2,7 @@ package cluster
 
 import (
 	"context"
+	"encoding/json"
 	"fmt"
 	"strings"
 
@@ -10,6 +11,7 @@ import (
 	v1 "k8s.io/api/core/v1"
 	"k8s.io/apimachinery/pkg/api/resource"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
+	"k8s.io/apimachinery/pkg/apis/meta/v1/unstructured"
 	"k8s.io/apimachinery/pkg/types"
 	"k8s.io/apimachinery/pkg/util/intstr"
 	"k8s.io/utils/ptr"
@@ -1506,6 +1508,34 @@ var _ = Describe("AerospikeCluster validation", func() {
 					Expect(err).To(HaveOccurred())
 					envtests.NewStatusErrorMatcher().
 						WithMessageSubstrings(testutil.CRDSchemaErrorPrefix, "tlsFabric").
+						Validate(err)
+				})
+			})
+		})
+
+		Context("spec.ignoreSidecarFailure", func() {
+			Context("negative", func() {
+				It("rejects invalid ignoreSidecarFailure type (non-boolean)", func() {
+					aeroCluster := testCluster.CreateDummyAerospikeCluster(clusterNamespacedName, 2)
+
+					raw, err := json.Marshal(aeroCluster)
+					Expect(err).ToNot(HaveOccurred())
+
+					var obj map[string]interface{}
+					Expect(json.Unmarshal(raw, &obj)).To(Succeed())
+
+					spec := obj["spec"].(map[string]interface{})
+					spec["ignoreSidecarFailure"] = "yes"
+
+					cluster := &unstructured.Unstructured{Object: obj}
+					err = envtests.K8sClient.Create(ctx, cluster)
+					Expect(err).To(HaveOccurred())
+					envtests.NewStatusErrorMatcher().
+						WithMessageSubstrings(
+							testutil.MutatingClusterWebhookErrorPrefix,
+							"ignoreSidecarFailure",
+							"cannot unmarshal string",
+						).
 						Validate(err)
 				})
 			})
