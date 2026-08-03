@@ -158,6 +158,32 @@ tests:
       - failedTemplate:
           errorPattern: "podSecurityContext.*got string, want object"
 
+  # -- imagePullSecrets --
+  - it: accepts the default empty array
+    asserts:
+      - notFailedTemplate: {}
+
+  - it: accepts an array of secret name strings
+    set:
+      imagePullSecrets:
+        - secret_with_credentials_to_custom_registry
+    asserts:
+      - notFailedTemplate: {}
+
+  - it: accepts an object for backwards compatibility (deprecated, to be removed in a future major release)
+    set:
+      imagePullSecrets:
+        secret_with_credentials_to_custom_registry: {}
+    asserts:
+      - notFailedTemplate: {}
+
+  - it: rejects a non-array non-object value
+    set:
+      imagePullSecrets: "not-valid"
+    asserts:
+      - failedTemplate:
+          errorPattern: "imagePullSecrets.*got string, want array"
+
   # -- securityContext --
   - it: accepts securityContext.allowPrivilegeEscalation as a boolean
     set:

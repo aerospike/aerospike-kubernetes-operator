@@ -12,15 +12,18 @@ operatorImage: # @schema required
   # -- Operator image pull policy
   pullPolicy: IfNotPresent
 
-# -- Names of secrets containing credentials for pulling the operator image from a private registry
-imagePullSecrets: [] # @schema item: string
+## In case the above image is pulled from a registry that requires
+## authentication, a secret containing credentials can be added
+# imagePullSecrets:
+#   - secret_with_credentials_to_custom_registry
+imagePullSecrets: [] # @schema anyOf: [{type: array, items: {type: string}}, {type: object}]
 
 # @schema allOf: [{type: object}, {if: {properties: {create: {const: false}}, required: [create]}, then: {properties: {serviceAccountName: {minLength: 1}}, required: [serviceAccountName]}}]
 # -- RBAC resource creation for the operator
 rbac: # @schema required
   # -- Create RBAC resources and a service account for the operator
   create: true
-  # -- Name of an existing service account to use when rbac.create is false. Required to be non-empty when rbac.create is false
+  # -- Name of an existing service account to use when rbac.create is false
   serviceAccountName: ""
 
 # -- Port for the operator's health probe bind address
@@ -33,157 +36,133 @@ metricsPort: 8443 # @schema required; minimum: 1; maximum: 65535
 certs: # @schema required
   # -- Webhook server certificate configuration
   webhook: # @schema required
-    # -- Create a self-signed certificate for the webhook endpoint
     create: true
-    # -- Name of the secret holding the webhook server certificate, always mounted regardless of webhook.create. Webhook certs are mandatory for AKO, so if webhook.create is false this secret must already exist and be provided by the user
+    # -- Name of the secret holding the webhook server certificate
     webhookServerCertSecretName: "webhook-server-cert" # @schema required; minLength: 1
 
   # @schema allOf: [{type: object}, {if: {properties: {create: {const: true}}, required: [create]}, then: {properties: {metricsServerCertSecretName: {minLength: 1}}, required: [metricsServerCertSecretName]}}]
   # -- Metrics server certificate configuration
   metrics: # @schema required
-    # -- Create a self-signed certificate for the metrics endpoint
     create: false
-    # -- Name of the secret holding the metrics server certificate, used when metrics.create is true. Required to be non-empty when metrics.create is true
+    # -- Name of the secret holding the metrics server certificate
     metricsServerCertSecretName: "metrics-server-cert"
 
 # -- Operator manager logging (controller-runtime / Zap)
+# development must stay set; level/encoder are optional (uncomment or use --set).
 logging: # @schema required
-  # -- Zap development mode (--zap-devel). Must always be explicitly set
   development: true
-  # -- Zap log level (--zap-log-level): debug, info, error, panic, or a positive integer for custom verbosity. Empty leaves the flag off
+  # -- (Optional) Zap log level (--zap-log-level): debug, info, error, panic, or a positive integer for custom verbosity. Empty leaves the flag off
   level: "" # @schema anyOf: [{enum: ["", debug, info, error, panic]}, {type: integer, minimum: 1}]
-  # -- Zap log encoder (--zap-encoder). Empty leaves the flag off
+  # -- (Optional) Zap log encoder (--zap-encoder). Empty leaves the flag off
   encoder: "" # @schema enum: ["", json, console]
 
 # -- Operator manager /metrics endpoint configuration
+# Always passed in the Deployment args for clarity; defaults to TLS on (`true`).
 metrics: # @schema required
-  # -- Serve the metrics endpoint securely via HTTPS (--metrics-secure). False serves over HTTP instead
   secure: true
 
 # @schema required; pattern:^$|^[a-z0-9]([-a-z0-9]*[a-z0-9])?(,[a-z0-9]([-a-z0-9]*[a-z0-9])?)*$
-# -- Comma-separated (no spaces) list of namespaces to watch for Aerospike custom resources. Empty means cluster-wide
+# -- Comma-separated (no spaces) list of namespaces to watch for Aerospike custom resources
 watchNamespaces: "default,aerospike"
 
 # @schema pattern:^$|^[a-z0-9]([-a-z0-9]*[a-z0-9])?(,[a-z0-9]([-a-z0-9]*[a-z0-9])?)*$
-# -- Comma-separated (no spaces) list of namespaces ignored by the eviction webhook
+# -- Comma-separated (no spaces) list of namespaces to ignore. Only used for eviction webhook
 ignoreNamespaces: "kube-system,kube-node-lease"
 
-# -- Eviction webhook to safely block Aerospike pod evictions during node maintenance. Also enables the Prometheus metric aerospike_ako_eviction_webhook_requests_total (labels eviction_namespace, decision)
+# -- Enable the eviction webhook to safely block Aerospike pod evictions during node maintenance
+# Also enables Prometheus metrics: aerospike_ako_eviction_webhook_requests_total (labels: eviction_namespace, decision)
 safePodEviction: # @schema required
-  # -- Enable the eviction webhook to safely block Aerospike pod evictions during node maintenance
   enable: false
-  # -- Eviction webhook timeout in seconds. Must be between 1 and 30 per the Kubernetes ValidatingWebhookConfiguration API
   timeoutSeconds: "20" # @schema anyOf: [{type: string}, {type: integer, minimum: 1, maximum: 30}]
 
-# -- Grace period in seconds to delete/recover failed Aerospike pods. Must be a positive integer (silently falls back to 60 if invalid or unset)
+# -- Grace period to delete/recover failed pods (in seconds)
 failedPodGracePeriodSeconds: "60" # @schema anyOf: [{type: string}, {type: integer, minimum: 1}]
 
-# -- Registry to pull the init container image from
+# -- Registry used to pull aerospike-init image
 aerospikeKubernetesInitRegistry: "docker.io" # @schema required; minLength: 1
 
-# -- Registry namespace/organization for the init container image
+# -- Namespace in registry used to pull aerospike-init image
 aerospikeKubernetesInitRegistryNamespace: "aerospike" # @schema required; minLength: 1
 
-# -- Init container image name with a tag or digest, which must contain a colon (e.g. name:tag or name@sha256:digest). Combined with the registry and namespace to form the full image reference
+# -- Name and tag of aerospike-init image
 aerospikeKubernetesInitNameTag: "aerospike-kubernetes-init:2.5.3" # @schema required; pattern:^\S+:\S+$
 
-# -- Resource requests and limits for the operator container
+# -- Resources - limits / requests
 resources:
-  # -- Resource limits for the operator container
   limits:
-    # -- CPU limit as a Kubernetes quantity, must be greater than 0 (e.g. 400m, 1)
     cpu: 400m # @schema anyOf: [{type: string}, {type: number, exclusiveMinimum: 0}]
-    # -- Memory limit as a Kubernetes quantity, must be greater than 0 (e.g. 512Mi, 2Gi)
     memory: 512Mi # @schema anyOf: [{type: string}, {type: number, exclusiveMinimum: 0}]
-  # -- Resource requests for the operator container
   requests:
-    # -- CPU request as a Kubernetes quantity, must be greater than 0 (e.g. 10m, 1)
     cpu: 10m # @schema anyOf: [{type: string}, {type: number, exclusiveMinimum: 0}]
-    # -- Memory request as a Kubernetes quantity, must be greater than 0 (e.g. 64Mi, 1Gi)
     memory: 64Mi # @schema anyOf: [{type: string}, {type: number, exclusiveMinimum: 0}]
 
-# -- Pod affinity/anti-affinity and node affinity rules, passed through as-is to the Deployment's pod spec (validated by the Kubernetes API server)
+# -- Affinity rules
 affinity: {}
 
 # @schema additionalProperties: {type: string}
 # @schema allOf: [{type: object}, {propertyNames: {pattern: "^[-._a-zA-Z][-._a-zA-Z0-9]*$"}}]
-# -- Extra environment variables to inject into the operator container. Names follow the Kubernetes EnvVar validation rules, so letters, digits, '-', '.' and '_', not starting with a digit
+# -- Extra environment variables that will be passed into the operator pods
 extraEnv: {}
 
-# -- Node labels for pod assignment, passed through as-is (validated by the Kubernetes API server)
+# -- Node selector
 nodeSelector: {}
 
-# -- Tolerations for pod assignment, passed through as-is (validated by the Kubernetes API server)
+# -- Tolerations
 tolerations: [] # @schema item: object
 
-# -- Deployment annotations, passed through as-is (validated by the Kubernetes API server)
+# -- Deployment annotations
 annotations: {}
 
-# -- Deployment labels, inherited by the pods automatically, passed through as-is (validated by the Kubernetes API server)
+# -- Deployment labels are inherited by the pods automatically
 labels: {}
 
-# -- Pod annotations, passed through as-is (validated by the Kubernetes API server)
+# -- Pod annotations
 podAnnotations: {}
 
-# -- Pod labels, passed through as-is (validated by the Kubernetes API server)
+# -- Pod labels
 podLabels: {}
 
-# -- Service exposing the operator metrics endpoint
+# -- Service configuration
 metricsService: # @schema required
-  # -- Service port
   port: 8443 # @schema minimum: 1; maximum: 65535
-  # -- Kubernetes Service type
   type: ClusterIP
-  # -- Extra labels for the service, passed through as-is (validated by the Kubernetes API server)
+  # -- (Optional) Extra labels for the service
   labels: {}
-  # -- Extra annotations for the service, passed through as-is (validated by the Kubernetes API server)
+  # -- (Optional) Extra annotations for the service
   annotations: {}
 
-# -- Service exposing the operator webhook endpoint
+# -- Service configuration
 webhookService: # @schema required
-  # -- Service port
   port: 443 # @schema minimum: 1; maximum: 65535
-  # -- Target container port
   targetPort: 9443 # @schema minimum: 1; maximum: 65535
   # -- Kubernetes Service type
   type: ClusterIP
-  # -- Extra labels for the service, passed through as-is (validated by the Kubernetes API server)
+  # -- (Optional) Extra labels for the service
   labels: {}
-  # -- Extra annotations for the service, passed through as-is (validated by the Kubernetes API server)
+  # -- (Optional) Extra annotations for the service
   annotations: {}
 
-# -- Pod-level security context, passed through as-is (validated by the Kubernetes API server)
+# -- Pod security context
 podSecurityContext: {}
 
-# -- Container-level security context, passed through as-is (validated by the Kubernetes API server)
+# -- Container security context
 securityContext:
-  # -- Whether the operator container may gain more privileges than its parent process
   allowPrivilegeEscalation: false
 
-# -- Liveness probe configuration for the operator container, passed through as-is (validated by the Kubernetes API server)
+# -- Liveness probe configuration
 livenessProbe: # @schema required
-  # -- Seconds to wait after the container starts before the first probe
   initialDelaySeconds: 15
-  # -- Seconds between probe attempts
   periodSeconds: 20
-  # -- Seconds after which a probe attempt times out
   timeoutSeconds: 1
-  # -- Consecutive successes needed for the probe to be considered successful after a failure
   successThreshold: 1
-  # -- Consecutive failures needed for the container to be restarted
   failureThreshold: 3
 
-# -- Readiness probe configuration for the operator container, passed through as-is (validated by the Kubernetes API server)
+# -- Readiness probe configuration
 readinessProbe: # @schema required
-  # -- Seconds to wait after the container starts before the first probe
   initialDelaySeconds: 5
-  # -- Seconds between probe attempts
   periodSeconds: 10
-  # -- Seconds after which a probe attempt times out
   timeoutSeconds: 1
-  # -- Consecutive successes needed for the probe to be considered successful after a failure
   successThreshold: 1
-  # -- Consecutive failures needed for the pod to be marked unready
   failureThreshold: 3
 
 # -- Override the chart name used in generated resource names
