@@ -116,22 +116,23 @@ fi
 echo "    Extracted to ${EXTRACT_DIR}/helm-charts/"
 
 # ---------------------------------------------------------------------------
-# Step 2 — Strip @schema annotations from the operator chart's values.yaml
+# Step 2 — Clean up the operator chart's values.yaml for customers
 #
 # The values.schema.json for aerospike-kubernetes-operator is authored via
-# inline `# @schema ...` comments (see values.docs.jsonschema.yaml tooling).
-# Those annotations are dev-facing only, so strip them before packaging to
-# give customers a clean values.yaml.
+# inline `# @schema ...` comments, and doc comments use the helm-docs
+# `# -- ...` convention. Both are dev-facing only, so strip/simplify them
+# before packaging to give customers a clean values.yaml.
 # ---------------------------------------------------------------------------
 
 echo ""
-echo "==> [2/5] Stripping @schema annotations from operator chart values.yaml..."
+echo "==> [2/5] Cleaning up operator chart values.yaml..."
 
 OPERATOR_VALUES="${EXTRACT_DIR}/helm-charts/aerospike-kubernetes-operator/values.yaml"
 if [[ -f "${OPERATOR_VALUES}" ]]; then
     sed -i.bak -E \
         -e '/^[[:space:]]*# @schema/d' \
         -e 's/[[:space:]]+# @schema.*$//' \
+        -e 's/^([[:space:]]*)# -- /\1# /' \
         "${OPERATOR_VALUES}"
     rm -f "${OPERATOR_VALUES}.bak"
     echo "    Cleaned ${OPERATOR_VALUES}"
