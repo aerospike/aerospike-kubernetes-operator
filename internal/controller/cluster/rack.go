@@ -1130,7 +1130,6 @@ func (r *SingleClusterReconciler) scaleDownRack(
 			return getStsErr
 		}
 
-		scaleDownTargetSize = *current.Spec.Replicas - batchLen
 		current.Spec.Replicas = &scaleDownTargetSize
 		found = current
 
@@ -1181,7 +1180,6 @@ func (r *SingleClusterReconciler) scaleDownRack(
 					return getStsErr
 				}
 
-				rollbackTargetSize = *current.Spec.Replicas + batchLen
 				current.Spec.Replicas = &rollbackTargetSize
 				found = current
 
