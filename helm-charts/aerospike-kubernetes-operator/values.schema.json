@@ -130,7 +130,8 @@
             "description": "Grace period to delete/recover failed pods (in seconds)",
             "anyOf": [
                 {
-                    "type": "string"
+                    "type": "string",
+                    "pattern": "^[1-9][0-9]*$"
                 },
                 {
                     "type": "integer",
@@ -162,6 +163,7 @@
             "pattern": "^$|^[a-z0-9]([-a-z0-9]*[a-z0-9])?(,[a-z0-9]([-a-z0-9]*[a-z0-9])?)*$"
         },
         "imagePullSecrets": {
+            "description": "In case the above image is pulled from a registry that requires authentication, a secret containing credentials can be added imagePullSecrets: - secret_with_credentials_to_custom_registry",
             "anyOf": [
                 {
                     "type": "array",
@@ -448,7 +450,8 @@
                 "timeoutSeconds": {
                     "anyOf": [
                         {
-                            "type": "string"
+                            "type": "string",
+                            "pattern": "^([1-9]|[12][0-9]|30)$"
                         },
                         {
                             "type": "integer",

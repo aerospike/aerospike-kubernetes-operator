@@ -12,8 +12,8 @@ operatorImage: # @schema required
   # -- Operator image pull policy
   pullPolicy: IfNotPresent
 
-## In case the above image is pulled from a registry that requires
-## authentication, a secret containing credentials can be added
+# -- In case the above image is pulled from a registry that requires
+# authentication, a secret containing credentials can be added
 # imagePullSecrets:
 #   - secret_with_credentials_to_custom_registry
 imagePullSecrets: [] # @schema anyOf: [{type: array, items: {type: string}}, {type: object}]
@@ -73,10 +73,10 @@ ignoreNamespaces: "kube-system,kube-node-lease"
 # Also enables Prometheus metrics: aerospike_ako_eviction_webhook_requests_total (labels: eviction_namespace, decision)
 safePodEviction: # @schema required
   enable: false
-  timeoutSeconds: "20" # @schema anyOf: [{type: string}, {type: integer, minimum: 1, maximum: 30}]
+  timeoutSeconds: "20" # @schema anyOf: [{type: string, "pattern": "^([1-9]|[12][0-9]|30)$"}, {type: integer, minimum: 1, maximum: 30}]
 
 # -- Grace period to delete/recover failed pods (in seconds)
-failedPodGracePeriodSeconds: "60" # @schema anyOf: [{type: string}, {type: integer, minimum: 1}]
+failedPodGracePeriodSeconds: "60" # @schema anyOf: [{type: string,"pattern": "^[1-9][0-9]*$"}, {type: integer, minimum: 1}]
 
 # -- Registry used to pull aerospike-init image
 aerospikeKubernetesInitRegistry: "docker.io" # @schema required; minLength: 1
