@@ -160,7 +160,8 @@ var _ = Describe("SidecarFailure", func() {
 			Expect(CleanupPVC(k8sClient, aeroCluster.Namespace, aeroCluster.Name)).ToNot(HaveOccurred())
 		})
 
-		It("Should complete reconciliation when IgnoreSidecarFailure is true and sidecar is crashing", func() {
+		It("Should complete reconciliation and image upgrade when IgnoreSidecarFailure is true and"+
+			" sidecar is crashing", func() {
 			// Deploy a healthy cluster first so the initial reconcile completes
 			// with all pods fully ready. Adding the crashing sidecar as a
 			// subsequent rolling-restart update guarantees that at least one pod
@@ -181,6 +182,17 @@ var _ = Describe("SidecarFailure", func() {
 			Expect(updateCluster(k8sClient, ctx, aeroCluster)).ToNot(HaveOccurred())
 
 			By("Verifying sidecar is crashing and Aerospike server is reachable on every pod")
+			verifyCrashingSidecarOnAllPods(k8sClient, ctx, clusterNamespacedName, 2)
+
+			By("Triggering an image upgrade to nextImage while the sidecar is still crashing")
+
+			// The cluster is already Completed with IgnoreSidecarFailure=true, so
+			// the upgrade proceeds through a rolling restart just like a healthy
+			// cluster. Each pod gets the new image; the sidecar keeps crashing.
+			aeroCluster.Spec.Image = nextImage
+			Expect(updateCluster(k8sClient, ctx, aeroCluster)).ToNot(HaveOccurred())
+
+			By("Verifying all pods are on the new image with servers reachable and sidecars still crashing")
 			verifyCrashingSidecarOnAllPods(k8sClient, ctx, clusterNamespacedName, 2)
 		})
 
@@ -683,17 +695,10 @@ var _ = Describe("SidecarFailure", func() {
 
 			Expect(updateCluster(k8sClient, ctx, aeroCluster)).ToNot(HaveOccurred())
 
-			// verifyClusterState asserts all servers are up, all sidecars are
-			// crashing, and the pod count matches expectedSize. Phase is not
-			// checked because perpetual CrashLoopBackOff events can briefly push
-			// the cluster back to InProgress between reconcile cycles.
-			verifyClusterState := func(expectedSize int) {
-				GinkgoHelper()
-				verifyCrashingSidecarOnAllPods(k8sClient, ctx, clusterNamespacedName, expectedSize)
-			}
-
+			// Phase is not checked because perpetual CrashLoopBackOff events can
+			// briefly push the cluster back to InProgress between reconcile cycles.
 			By("Verifying initial 4-node state — all servers running, all sidecars crashing")
-			verifyClusterState(4)
+			verifyCrashingSidecarOnAllPods(k8sClient, ctx, clusterNamespacedName, 4)
 
 			// ── Scale-down ──────────────────────────────────────────────────
 			By("Scaling down from 4 to 3 nodes")
@@ -701,7 +706,7 @@ var _ = Describe("SidecarFailure", func() {
 			Expect(scaleDownClusterTest(k8sClient, ctx, clusterNamespacedName, 1)).ToNot(HaveOccurred())
 
 			By("Verifying 3-node state after scale-down — all servers running, all sidecars crashing")
-			verifyClusterState(3)
+			verifyCrashingSidecarOnAllPods(k8sClient, ctx, clusterNamespacedName, 3)
 
 			// ── Scale-up ────────────────────────────────────────────────────
 			By("Scaling up from 3 to 5 nodes")
@@ -709,7 +714,7 @@ var _ = Describe("SidecarFailure", func() {
 			Expect(scaleUpClusterTest(k8sClient, ctx, clusterNamespacedName, 2)).ToNot(HaveOccurred())
 
 			By("Verifying 5-node state after scale-up — all servers running, all sidecars crashing")
-			verifyClusterState(5)
+			verifyCrashingSidecarOnAllPods(k8sClient, ctx, clusterNamespacedName, 5)
 
 			// ── Image upgrade ────────────────────────────────────────────────
 			By("Triggering an image upgrade to nextImage")

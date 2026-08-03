@@ -2358,7 +2358,7 @@ func ScaleUpPreflightChecksTest(ctx goctx.Context) {
 			}
 
 			By("Confirming scale-up pod stays absent while the bad-image rolling restart is active")
-			Consistently(checkScaleUpBlocked, 30*time.Second, 5*time.Second).Should(Succeed())
+			Consistently(checkScaleUpBlocked, 60*time.Second, 5*time.Second).Should(Succeed())
 
 			By("Restoring the valid image while keeping size=3")
 

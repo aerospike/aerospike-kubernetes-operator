@@ -130,15 +130,8 @@ func crashLoopServerPod(name, namespace, clusterName string, rackID int) *corev1
 			Labels:    rackPodLabels(clusterName, rackID),
 		},
 		Status: corev1.PodStatus{
-			Phase: corev1.PodRunning,
-			ContainerStatuses: []corev1.ContainerStatus{
-				{
-					Name: asdbv1.AerospikeServerContainerName,
-					State: corev1.ContainerState{
-						Waiting: &corev1.ContainerStateWaiting{Reason: "CrashLoopBackOff"},
-					},
-				},
-			},
+			Phase:             corev1.PodRunning,
+			ContainerStatuses: []corev1.ContainerStatus{serverCrashLoopContainer()},
 		},
 	}
 }
