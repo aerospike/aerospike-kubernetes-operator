@@ -31,7 +31,7 @@ func TestGetServerFailedAndActivePods(t *testing.T) {
 		serverContainer(true),
 		sidecarContainer("monitor", true, false),
 	)
-	sidecarFailedPod := runningPod("sidecar-fail",
+	sidecarNotReadyPod := runningPod("sidecar-fail",
 		serverContainer(true),
 		sidecarContainer("monitor", false, true),
 	)
@@ -76,15 +76,15 @@ func TestGetServerFailedAndActivePods(t *testing.T) {
 			wantFailed:      []string{"server-fail-recent"},
 		},
 		{
-			// Sidecar-failed pod must always be classified as active regardless of
+			// Sidecar-not-ready pod must always be classified as active regardless of
 			// withGracePeriod, because CheckServerFailedWithGrace ignores sidecars.
-			name:       "sidecar-failed pod is always active",
-			pods:       []*corev1.Pod{sidecarFailedPod},
+			name:       "sidecar-not-ready pod is always active",
+			pods:       []*corev1.Pod{sidecarNotReadyPod},
 			wantActive: []string{"sidecar-fail"},
 		},
 		{
-			name:       "mixed: server-failed, sidecar-failed and healthy",
-			pods:       []*corev1.Pod{serverFailedPod, sidecarFailedPod, healthyPod},
+			name:       "mixed: server-failed, sidecar-not-ready and healthy",
+			pods:       []*corev1.Pod{serverFailedPod, sidecarNotReadyPod, healthyPod},
 			wantFailed: []string{"server-fail"},
 			wantActive: []string{"sidecar-fail", "healthy"},
 		},
@@ -101,7 +101,7 @@ func TestGetServerFailedAndActivePods(t *testing.T) {
 	}
 }
 
-func TestGetSidecarFailedPods(t *testing.T) {
+func TestGetSidecarNotReadyPods(t *testing.T) {
 	now := metav1.Now()
 
 	tests := []struct {
@@ -115,7 +115,7 @@ func TestGetSidecarFailedPods(t *testing.T) {
 			wantPods: nil,
 		},
 		{
-			// Server ready, sidecar not ready: this is the definition of a sidecar-failed pod.
+			// Server ready, sidecar not ready: this is the definition of a sidecar-not-ready pod.
 			name: "server ready and sidecar not ready is returned",
 			pods: []*corev1.Pod{
 				runningPod("sidecar-fail",
@@ -188,8 +188,8 @@ func TestGetSidecarFailedPods(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			got := getSidecarFailedPods(tt.pods)
-			assertPodNames(t, "sidecar-failed", podNames(got), tt.wantPods)
+			got := getSidecarNotReadyPods(tt.pods)
+			assertPodNames(t, "sidecar-not-ready", podNames(got), tt.wantPods)
 		})
 	}
 }

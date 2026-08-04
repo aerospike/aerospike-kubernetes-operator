@@ -1167,6 +1167,44 @@ func updateSTSContainers(
 	return finalContainers
 }
 
+func (r *SingleClusterReconciler) waitForAllSTSToBeReady(
+	ctx context.Context, ignorablePodNames sets.Set[string]) error {
+	r.Log.Info("Waiting for all cluster STSs to be ready")
+
+	allRackIdentifiers := sets.NewString()
+
+	statusRacks := r.aeroCluster.Status.RackConfig.Racks
+	for idx := range statusRacks {
+		allRackIdentifiers.Insert(utils.GetRackIdentifier(statusRacks[idx].ID, statusRacks[idx].Revision))
+	}
+
+	// Check for newly added racks also because we do not check for these racks just after they are added
+	specRacks := r.aeroCluster.Spec.RackConfig.Racks
+	for idx := range specRacks {
+		allRackIdentifiers.Insert(utils.GetRackIdentifier(specRacks[idx].ID, specRacks[idx].Revision))
+	}
+
+	for rackIdentifier := range allRackIdentifiers {
+		st := &appsv1.StatefulSet{}
+		stsName := utils.GetNamespacedNameForSTSOrConfigMap(r.aeroCluster, rackIdentifier)
+
+		if err := r.Get(ctx, stsName, st); err != nil {
+			if !errors.IsNotFound(err) {
+				return err
+			}
+
+			// Skip if a sts not found. It may have be deleted and status may not have been updated yet
+			continue
+		}
+
+		if err := r.waitForSTSToBeReady(ctx, st, ignorablePodNames); err != nil {
+			return err
+		}
+	}
+
+	return nil
+}
+
 // waitForAllAerospikeServersReady waits for the Aerospike server container's
 // ready state to be true on every non-ignorable pod across all cluster
 // StatefulSets. It does NOT require sidecars or other containers to be ready.

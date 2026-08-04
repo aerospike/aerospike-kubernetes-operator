@@ -723,6 +723,49 @@ var _ = Describe("SidecarFailure", func() {
 			Expect(updateCluster(k8sClient, ctx, aeroCluster)).ToNot(HaveOccurred())
 		})
 	})
+
+	// A fresh cluster deployed with a permanently crashing sidecar must never
+	// reach Completed regardless of the IgnoreSidecarFailure flag value. The STS
+	// keeps recycling pods but the cluster cannot converge because the pods are
+	// never fully ready.
+	Context("Fresh cluster deploy with a crashing sidecar", func() {
+		clusterName := fmt.Sprintf("sidecar-fresh-%d", GinkgoParallelProcess())
+		clusterNamespacedName := test.GetNamespacedName(clusterName, namespace)
+
+		AfterEach(func() {
+			aeroCluster := &asdbv1.AerospikeCluster{
+				ObjectMeta: metav1.ObjectMeta{
+					Name:      clusterName,
+					Namespace: namespace,
+				},
+			}
+			Expect(DeleteCluster(k8sClient, ctx, aeroCluster)).ToNot(HaveOccurred())
+			Expect(CleanupPVC(k8sClient, aeroCluster.Namespace, aeroCluster.Name)).ToNot(HaveOccurred())
+		})
+
+		for _, ignoreFlag := range []bool{true, false} {
+			It(fmt.Sprintf("Should never reach Completed when IgnoreSidecarFailure=%v", ignoreFlag), func() {
+				By(fmt.Sprintf("Creating a fresh cluster with a crashing sidecar and IgnoreSidecarFailure=%v", ignoreFlag))
+
+				aeroCluster := createDummyAerospikeCluster(clusterNamespacedName, 2)
+				aeroCluster.Spec.PodSpec.Sidecars = []corev1.Container{crashingSidecar()}
+				aeroCluster.Spec.IgnoreSidecarFailure = ptr.To(ignoreFlag)
+
+				// Use Create directly — DeployCluster would block waiting for
+				// Completed, which this cluster must never reach.
+				Expect(k8sClient.Create(ctx, aeroCluster)).ToNot(HaveOccurred())
+
+				By("Verifying the cluster never reaches Completed — pods stay not-fully-ready due to crashing sidecar")
+
+				Consistently(func(g Gomega) {
+					cluster, err := getCluster(k8sClient, ctx, clusterNamespacedName)
+					g.Expect(err).ToNot(HaveOccurred())
+					g.Expect(cluster.Status.Phase).NotTo(Equal(asdbv1.AerospikeClusterCompleted),
+						"cluster must not reach Completed while sidecar is permanently crashing")
+				}, 2*time.Minute, 10*time.Second).Should(Succeed())
+			})
+		}
+	})
 })
 
 // assertRollingRestartBlocked polls until exactly 1 pod has a crashing sidecar

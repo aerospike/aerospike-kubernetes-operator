@@ -699,11 +699,11 @@ func getServerFailedAndActivePods(
 	return failedPods, failedWithinGracePeriodPods, activePods
 }
 
-// getSidecarFailedPods returns pods whose Aerospike server container is Running
-// but the overall pod is not ready, meaning a sidecar container is failing.
+// getSidecarNotReadyPods returns pods whose Aerospike server container is running
+// but the overall pod is not yet ready, indicating one or more sidecars are not ready.
 // These pods are distinct from server-failed pods: their Aerospike node is
 // reachable and should not skip safety checks or batching during rolling restart.
-func getSidecarFailedPods(pods []*corev1.Pod) []*corev1.Pod {
+func getSidecarNotReadyPods(pods []*corev1.Pod) []*corev1.Pod {
 	var sidecarFailed []*corev1.Pod
 
 	for idx := range pods {
@@ -1154,7 +1154,7 @@ func (r *SingleClusterReconciler) cleanupDanglingPodsRack(
 // Only pods whose Aerospike server container is not running are considered
 // ignorable. Pods with a running server but a failing sidecar are never added
 // here; they remain full participants in cluster operations (host connections,
-// roster, etc.) and are handled separately via getSidecarFailedPods.
+// roster, etc.) and are handled separately via getSidecarNotReadyPods.
 func (r *SingleClusterReconciler) getIgnorablePods(
 	ctx context.Context, racksToDelete []asdbv1.Rack, configuredRacks []RackState,
 ) (sets.Set[string], error) {
