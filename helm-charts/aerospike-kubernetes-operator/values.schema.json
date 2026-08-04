@@ -81,6 +81,9 @@
                             }
                         }
                     ],
+                    "required": [
+                        "create"
+                    ],
                     "properties": {
                         "create": {
                             "type": "boolean"
@@ -89,12 +92,14 @@
                             "description": "Name of the secret holding the metrics server certificate",
                             "type": "string"
                         }
-                    }
+                    },
+                    "additionalProperties": false
                 },
                 "webhook": {
                     "description": "Webhook server certificate configuration",
                     "type": "object",
                     "required": [
+                        "create",
                         "webhookServerCertSecretName"
                     ],
                     "properties": {
@@ -106,9 +111,11 @@
                             "type": "string",
                             "minLength": 1
                         }
-                    }
+                    },
+                    "additionalProperties": false
                 }
-            }
+            },
+            "additionalProperties": false
         },
         "extraEnv": {
             "description": "Extra environment variables that will be passed into the operator pods",
@@ -183,6 +190,13 @@
         "livenessProbe": {
             "description": "Liveness probe configuration",
             "type": "object",
+            "required": [
+                "initialDelaySeconds",
+                "periodSeconds",
+                "timeoutSeconds",
+                "successThreshold",
+                "failureThreshold"
+            ],
             "properties": {
                 "failureThreshold": {
                     "type": "integer"
@@ -199,11 +213,15 @@
                 "timeoutSeconds": {
                     "type": "integer"
                 }
-            }
+            },
+            "additionalProperties": false
         },
         "logging": {
             "description": "Operator manager logging (controller-runtime / Zap)",
             "type": "object",
+            "required": [
+                "development"
+            ],
             "properties": {
                 "development": {
                     "type": "boolean"
@@ -235,16 +253,21 @@
                         }
                     ]
                 }
-            }
+            },
+            "additionalProperties": false
         },
         "metrics": {
             "description": "Operator manager /metrics endpoint configuration Always passed in the Deployment args for clarity; defaults to TLS on (`true`).",
             "type": "object",
+            "required": [
+                "secure"
+            ],
             "properties": {
                 "secure": {
                     "type": "boolean"
                 }
-            }
+            },
+            "additionalProperties": false
         },
         "metricsPort": {
             "description": "Port for the operator's metrics bind address",
@@ -255,6 +278,10 @@
         "metricsService": {
             "description": "Service configuration",
             "type": "object",
+            "required": [
+                "port",
+                "type"
+            ],
             "properties": {
                 "annotations": {
                     "description": "Extra annotations for the service",
@@ -272,7 +299,8 @@
                 "type": {
                     "type": "string"
                 }
-            }
+            },
+            "additionalProperties": false
         },
         "nameOverride": {
             "description": "Override the chart name used in generated resource names",
@@ -285,22 +313,25 @@
         "operatorImage": {
             "description": "Operator image",
             "type": "object",
+            "required": [
+                "repository",
+                "tag",
+                "pullPolicy"
+            ],
             "properties": {
                 "pullPolicy": {
-                    "description": "Operator image pull policy",
                     "type": "string"
                 },
                 "repository": {
-                    "description": "Operator image repository",
                     "type": "string",
                     "minLength": 1
                 },
                 "tag": {
-                    "description": "Operator image tag",
                     "type": "string",
                     "minLength": 1
                 }
-            }
+            },
+            "additionalProperties": false
         },
         "podAnnotations": {
             "description": "Pod annotations",
@@ -343,6 +374,9 @@
                     }
                 }
             ],
+            "required": [
+                "create"
+            ],
             "properties": {
                 "create": {
                     "description": "Create RBAC resources and a service account for the operator",
@@ -352,11 +386,19 @@
                     "description": "Name of an existing service account to use when rbac.create is false",
                     "type": "string"
                 }
-            }
+            },
+            "additionalProperties": false
         },
         "readinessProbe": {
             "description": "Readiness probe configuration",
             "type": "object",
+            "required": [
+                "initialDelaySeconds",
+                "periodSeconds",
+                "timeoutSeconds",
+                "successThreshold",
+                "failureThreshold"
+            ],
             "properties": {
                 "failureThreshold": {
                     "type": "integer"
@@ -373,7 +415,8 @@
                 "timeoutSeconds": {
                     "type": "integer"
                 }
-            }
+            },
+            "additionalProperties": false
         },
         "replicas": {
             "description": "Number of operator replicas to deploy",
@@ -442,7 +485,31 @@
         },
         "safePodEviction": {
             "description": "Enable the eviction webhook to safely block Aerospike pod evictions during node maintenance Also enables Prometheus metrics: aerospike_ako_eviction_webhook_requests_total (labels: eviction_namespace, decision)",
-            "type": "object",
+            "allOf": [
+                {
+                    "type": "object"
+                },
+                {
+                    "if": {
+                        "required": [
+                            "enable"
+                        ],
+                        "properties": {
+                            "enable": {
+                                "const": true
+                            }
+                        }
+                    },
+                    "then": {
+                        "required": [
+                            "timeoutSeconds"
+                        ]
+                    }
+                }
+            ],
+            "required": [
+                "enable"
+            ],
             "properties": {
                 "enable": {
                     "type": "boolean"
@@ -460,7 +527,8 @@
                         }
                     ]
                 }
-            }
+            },
+            "additionalProperties": false
         },
         "securityContext": {
             "description": "Container security context",
@@ -486,6 +554,11 @@
         "webhookService": {
             "description": "Service configuration",
             "type": "object",
+            "required": [
+                "port",
+                "targetPort",
+                "type"
+            ],
             "properties": {
                 "annotations": {
                     "description": "Extra annotations for the service",
@@ -509,7 +582,8 @@
                     "description": "Kubernetes Service type",
                     "type": "string"
                 }
-            }
+            },
+            "additionalProperties": false
         },
         "webhookServicePort": {
             "description": "Deprecated, use webhookService.targetPort instead. Setting this fails chart rendering with a message pointing to the replacement",

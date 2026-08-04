@@ -4,25 +4,23 @@
 replicas: 2 # @schema required; minimum: 0
 
 # -- Operator image
-operatorImage: # @schema required
-  # -- Operator image repository
-  repository: aerospike/aerospike-kubernetes-operator # @schema minLength: 1
-  # -- Operator image tag
-  tag: 4.5.0 # @schema minLength: 1
-  # -- Operator image pull policy
-  pullPolicy: IfNotPresent
+operatorImage: # @schema required; additionalProperties: false
+  repository: aerospike/aerospike-kubernetes-operator # @schema required; minLength: 1
+  tag: 4.5.0 # @schema required; minLength: 1
+  pullPolicy: IfNotPresent # @schema required
 
 # -- In case the above image is pulled from a registry that requires
 # authentication, a secret containing credentials can be added
 # imagePullSecrets:
 #   - secret_with_credentials_to_custom_registry
-imagePullSecrets: [] # @schema anyOf: [{type: array, items: {type: string}}, {type: object}]
+imagePullSecrets: {} # @schema anyOf: [{type: array, items: {type: string}}, {type: object}]
 
 # @schema allOf: [{type: object}, {if: {properties: {create: {const: false}}, required: [create]}, then: {properties: {serviceAccountName: {minLength: 1}}, required: [serviceAccountName]}}]
+# @schema additionalProperties: false
 # -- RBAC resource creation for the operator
 rbac: # @schema required
   # -- Create RBAC resources and a service account for the operator
-  create: true
+  create: true # @schema required
   # -- Name of an existing service account to use when rbac.create is false
   serviceAccountName: ""
 
@@ -33,24 +31,25 @@ healthPort: 8081 # @schema required; minimum: 1; maximum: 65535
 metricsPort: 8443 # @schema required; minimum: 1; maximum: 65535
 
 # -- Certificate configuration for the webhook and metrics endpoints
-certs: # @schema required
+certs: # @schema required; additionalProperties: false
   # -- Webhook server certificate configuration
-  webhook: # @schema required
-    create: true
+  webhook: # @schema required; additionalProperties: false
+    create: true # @schema required
     # -- Name of the secret holding the webhook server certificate
     webhookServerCertSecretName: "webhook-server-cert" # @schema required; minLength: 1
 
   # @schema allOf: [{type: object}, {if: {properties: {create: {const: true}}, required: [create]}, then: {properties: {metricsServerCertSecretName: {minLength: 1}}, required: [metricsServerCertSecretName]}}]
+  # @schema additionalProperties: false
   # -- Metrics server certificate configuration
   metrics: # @schema required
-    create: false
+    create: false # @schema required
     # -- Name of the secret holding the metrics server certificate
     metricsServerCertSecretName: "metrics-server-cert"
 
 # -- Operator manager logging (controller-runtime / Zap)
 # development must stay set; level/encoder are optional (uncomment or use --set).
-logging: # @schema required
-  development: true
+logging: # @schema required; additionalProperties: false
+  development: true # @schema required
   # -- (Optional) Zap log level (--zap-log-level): debug, info, error, panic, or a positive integer for custom verbosity. Empty leaves the flag off
   level: "" # @schema anyOf: [{enum: ["", debug, info, error, panic]}, {type: integer, minimum: 1}]
   # -- (Optional) Zap log encoder (--zap-encoder). Empty leaves the flag off
@@ -58,8 +57,8 @@ logging: # @schema required
 
 # -- Operator manager /metrics endpoint configuration
 # Always passed in the Deployment args for clarity; defaults to TLS on (`true`).
-metrics: # @schema required
-  secure: true
+metrics: # @schema required; additionalProperties: false
+  secure: true # @schema required
 
 # @schema required; pattern:^$|^[a-z0-9]([-a-z0-9]*[a-z0-9])?(,[a-z0-9]([-a-z0-9]*[a-z0-9])?)*$
 # -- Comma-separated (no spaces) list of namespaces to watch for Aerospike custom resources
@@ -69,10 +68,12 @@ watchNamespaces: "default,aerospike"
 # -- Comma-separated (no spaces) list of namespaces to ignore. Only used for eviction webhook
 ignoreNamespaces: "kube-system,kube-node-lease"
 
+# @schema allOf: [{type: object}, {if: {properties: {enable: {const: true}}, required: [enable]}, then: {required: [timeoutSeconds]}}]
+# @schema additionalProperties: false
 # -- Enable the eviction webhook to safely block Aerospike pod evictions during node maintenance
 # Also enables Prometheus metrics: aerospike_ako_eviction_webhook_requests_total (labels: eviction_namespace, decision)
 safePodEviction: # @schema required
-  enable: false
+  enable: false # @schema required
   timeoutSeconds: "20" # @schema anyOf: [{type: string, "pattern": "^([1-9]|[12][0-9]|30)$"}, {type: integer, minimum: 1, maximum: 30}]
 
 # -- Grace period to delete/recover failed pods (in seconds)
@@ -123,20 +124,20 @@ podAnnotations: {}
 podLabels: {}
 
 # -- Service configuration
-metricsService: # @schema required
-  port: 8443 # @schema minimum: 1; maximum: 65535
-  type: ClusterIP
+metricsService: # @schema required; additionalProperties: false
+  port: 8443 # @schema required; minimum: 1; maximum: 65535
+  type: ClusterIP # @schema required
   # -- (Optional) Extra labels for the service
   labels: {}
   # -- (Optional) Extra annotations for the service
   annotations: {}
 
 # -- Service configuration
-webhookService: # @schema required
-  port: 443 # @schema minimum: 1; maximum: 65535
-  targetPort: 9443 # @schema minimum: 1; maximum: 65535
+webhookService: # @schema required; additionalProperties: false
+  port: 443 # @schema required; minimum: 1; maximum: 65535
+  targetPort: 9443 # @schema required; minimum: 1; maximum: 65535
   # -- Kubernetes Service type
-  type: ClusterIP
+  type: ClusterIP # @schema required
   # -- (Optional) Extra labels for the service
   labels: {}
   # -- (Optional) Extra annotations for the service
@@ -150,25 +151,25 @@ securityContext:
   allowPrivilegeEscalation: false
 
 # -- Liveness probe configuration
-livenessProbe: # @schema required
-  initialDelaySeconds: 15
-  periodSeconds: 20
-  timeoutSeconds: 1
-  successThreshold: 1
-  failureThreshold: 3
+livenessProbe: # @schema required; additionalProperties: false
+  initialDelaySeconds: 15 # @schema required
+  periodSeconds: 20 # @schema required
+  timeoutSeconds: 1 # @schema required
+  successThreshold: 1 # @schema required
+  failureThreshold: 3 # @schema required
 
 # -- Readiness probe configuration
-readinessProbe: # @schema required
-  initialDelaySeconds: 5
-  periodSeconds: 10
-  timeoutSeconds: 1
-  successThreshold: 1
-  failureThreshold: 3
+readinessProbe: # @schema required; additionalProperties: false
+  initialDelaySeconds: 5 # @schema required
+  periodSeconds: 10 # @schema required
+  timeoutSeconds: 1 # @schema required
+  successThreshold: 1 # @schema required
+  failureThreshold: 3 # @schema required
 
-# -- Override the chart name used in generated resource names
+# -- (Optional) Override the chart name used in generated resource names
 nameOverride: ""
 
-# -- Override the fully qualified name used for generated resource names
+# -- (Optional) Override the fully qualified name used for generated resource names
 fullnameOverride: ""
 
 # -- Deprecated, use webhookService.targetPort instead. Setting this fails chart rendering with a message pointing to the replacement
