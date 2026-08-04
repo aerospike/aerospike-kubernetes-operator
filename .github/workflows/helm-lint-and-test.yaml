@@ -62,9 +62,7 @@ jobs:
       # developers use locally). Charts without a .schema.yaml are skipped.
       - name: Regenerate values.schema.json for ${{ matrix.chart }}
         if: hashFiles(format('helm-charts/{0}/.schema.yaml', matrix.chart)) != ''
-        run: |
-          make helm-schema-plugin
-          (cd helm-charts/${{ matrix.chart }} && helm schema)
+        run: make helm-schema CHART=${{ matrix.chart }}
 
       - name: Suggest regenerated values.schema.json for ${{ matrix.chart }}
         if: hashFiles(format('helm-charts/{0}/.schema.yaml', matrix.chart)) != '' && steps.can-suggest.outputs.value == 'true'
@@ -95,10 +93,6 @@ jobs:
       - name: Run helm template on ${{ matrix.chart }}
         run: helm template test-release helm-charts/${{ matrix.chart }} > /dev/null
 
-      - name: Install helm-unittest plugin
-        if: hashFiles(format('helm-charts/{0}/tests/**', matrix.chart)) != ''
-        run: helm plugin install https://github.com/helm-unittest/helm-unittest --verify=false --version v1.1.2
-
       - name: Run helm unittest on ${{ matrix.chart }}
         if: hashFiles(format('helm-charts/{0}/tests/**', matrix.chart)) != ''
-        run: helm unittest helm-charts/${{ matrix.chart }}
+        run: make helm-test CHART=${{ matrix.chart }}

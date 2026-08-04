@@ -208,11 +208,12 @@ helm-unittest-plugin: ## Install the pinned helm-unittest plugin locally, replac
 	}
 
 .PHONY: helm-test
-helm-test: helm-unittest-plugin ## Run helm-unittest schema/edge-case tests for every chart with a tests/ dir.
-	@for chart in helm-charts/*/; do \
-		if [ -d "$${chart}tests" ]; then \
-			echo "==> helm unittest $${chart%/}"; \
-			helm unittest "$${chart%/}" || exit 1; \
+helm-test: helm-unittest-plugin ## Run helm-unittest for CHART (default: every chart with a tests/ dir). Usage: make helm-test [CHART=chart-name]
+	@for chart in $(if $(CHART),helm-charts/$(CHART),helm-charts/*/); do \
+		chart="$${chart%/}"; \
+		if [ -d "$$chart/tests" ]; then \
+			echo "==> helm unittest $$chart"; \
+			helm unittest "$$chart" || exit 1; \
 		fi; \
 	done
 
@@ -224,11 +225,12 @@ helm-schema-plugin: ## Install the pinned "helm schema" plugin locally, replacin
 	}
 
 .PHONY: helm-schema
-helm-schema: helm-schema-plugin ## Regenerate values.schema.json for every chart with a .schema.yaml.
-	@for chart in helm-charts/*/; do \
-		if [ -f "$${chart}.schema.yaml" ]; then \
-			echo "==> helm schema $${chart%/}"; \
-			(cd "$${chart}" && helm schema) || exit 1; \
+helm-schema: helm-schema-plugin ## Regenerate values.schema.json for CHART (default: every chart with a .schema.yaml). Usage: make helm-schema [CHART=chart-name]
+	@for chart in $(if $(CHART),helm-charts/$(CHART),helm-charts/*/); do \
+		chart="$${chart%/}"; \
+		if [ -f "$$chart/.schema.yaml" ]; then \
+			echo "==> helm schema $$chart"; \
+			(cd "$$chart" && helm schema) || exit 1; \
 		fi; \
 	done
 
