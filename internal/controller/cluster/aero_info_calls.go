@@ -35,11 +35,11 @@ import (
 // Aerospike helper
 // ------------------------------------------------------------------------------------
 
-// waitForMultipleNodesSafeStopReady waits until the input pods are safe to stop,
-// skipping pods that are not running and present in ignorablePodNames for stability check.
-// The ignorablePodNames is the list of failed or pending pods that are either::
-// 1. going to be deleted eventually and are safe to ignore in stability checks
-// 2. given in ignorePodList by the user and are safe to ignore in stability checks
+// waitForMultipleNodesSafeStopReady waits until the input pods are safe to stop.
+// ignorablePodNames are pods whose Aerospike server is unreachable and are
+// skipped from cluster-operation queries (host connections, roster, quiesce).
+// Pods with a running server but a failing sidecar are not in this set; they are
+// included in all cluster-operation calls since their servers are still reachable.
 func (r *SingleClusterReconciler) waitForMultipleNodesSafeStopReady(
 	ctx context.Context, pods []*corev1.Pod, ignorablePodNames sets.Set[string],
 ) common.ReconcileResult {
@@ -47,10 +47,18 @@ func (r *SingleClusterReconciler) waitForMultipleNodesSafeStopReady(
 		return common.ReconcileSuccess()
 	}
 
-	// Remove a node only if the cluster is stable
-	if err := r.waitForAllSTSToBeReady(ctx, ignorablePodNames); err != nil {
-		return common.ReconcileError(fmt.Errorf(
-			"wait for cluster StatefulSets to be ready: %w", err))
+	// Wait for all non-ignorable pods to have their Aerospike server containers
+	// ready before making any cluster-level info calls. This replaces the old
+	// waitForAllSTSToBeReady pre-check (which required full pod readiness
+	// including sidecars). Server-only readiness is sufficient here — sidecar
+	// failures do not prevent the server from accepting info calls. The wait
+	// uses the same blocking-retry semantics (up to 18×10s) so that a pod which
+	// was just restarted in a previous batch has time to bring its server up
+	// before we attempt the migration/quiesce checks.
+	if err := r.waitForAllAerospikeServersReady(ctx, ignorablePodNames); err != nil {
+		return common.ReconcileError(
+			fmt.Errorf("wait for Aerospike server containers across all StatefulSets to be ready: %w", err),
+		)
 	}
 
 	// This doesn't make actual connection, only objects having connection info are created
@@ -245,18 +253,19 @@ func (r *SingleClusterReconciler) newPodsHostConnWithOption(pods []corev1.Pod, i
 			continue
 		}
 
-		// Checking if all the container in the pod are ready or not
-		if !utils.IsPodRunningAndReady(pod) {
+		// Only the Aerospike server container needs to be running to accept info calls.
+		// Sidecar failures do not prevent the server from being reachable.
+		if !utils.IsAerospikeServerReady(pod) {
 			if ignorablePodNames.Has(pod.Name) {
-				// This pod is not running and ignorable.
+				// This pod's aerospike server is not running and it is marked ignorable.
 				r.Log.Info(
-					"Ignoring info call on non-running Pod", "pod", utils.GetNamespacedName(pod),
+					"Ignoring info call on Pod with non-running server container", "pod", utils.GetNamespacedName(pod),
 				)
 
 				continue
 			}
 
-			return nil, fmt.Errorf("status for Pod %s: not ready", utils.GetNamespacedNameString(pod))
+			return nil, fmt.Errorf("pod %s server container is not running", utils.GetNamespacedNameString(pod))
 		}
 
 		asConn := r.newAsConn(pod)

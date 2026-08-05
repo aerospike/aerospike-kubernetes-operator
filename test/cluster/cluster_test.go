@@ -79,6 +79,11 @@ var _ = Describe(
 			},
 		)
 		Context(
+			"ScaleUpPreflightChecks", func() {
+				ScaleUpPreflightChecksTest(ctx)
+			},
+		)
+		Context(
 			"RunScaleDownWithMigrateFillDelay", func() {
 				ScaleDownWithMigrateFillDelay(ctx)
 			},
@@ -2282,4 +2287,140 @@ func negativeUpdateClusterValidationTest(
 			Expect(err.Error()).To(ContainSubstring("federal to enterprise edition upgrade is not supported"))
 		})
 	})
+}
+
+// ScaleUpPreflightChecksTest groups two scale-up pre-flight scenarios involving
+// server-container failures:
+//
+//  1. Bad image + scale-up → scale-up blocked while pods crash; unblocked after image fix.
+//  2. Failing pod within MaxIgnorablePods budget + scale-up → scale-up succeeds.
+//
+// Sidecar-failure scenarios (external trigger + pure scale-up, and config-change-induced
+// sidecar failure + IgnoreSidecarFailure) are in sidecar_failure_test.go.
+func ScaleUpPreflightChecksTest(ctx goctx.Context) {
+	// clusterNamespacedName is set at the start of each It block and read by
+	// the shared AfterEach to clean up the cluster that was created.
+	var clusterNamespacedName types.NamespacedName
+
+	AfterEach(func() {
+		aeroCluster := &asdbv1.AerospikeCluster{
+			ObjectMeta: metav1.ObjectMeta{
+				Name:      clusterNamespacedName.Name,
+				Namespace: clusterNamespacedName.Namespace,
+			},
+		}
+		Expect(DeleteCluster(k8sClient, ctx, aeroCluster)).ToNot(HaveOccurred())
+		Expect(CleanupPVC(k8sClient, aeroCluster.Namespace, aeroCluster.Name)).ToNot(HaveOccurred())
+	})
+
+	// -------------------------------------------------------------------------
+	// Test 1: bad image + scale-up → scale-up blocked, then completes after fix
+	// -------------------------------------------------------------------------
+	It("Should block scale-up while existing pods crash with a bad image, then complete after image is fixed",
+		func() {
+			clusterNamespacedName = test.GetNamespacedName(
+				fmt.Sprintf("scaleup-badimg-%d", GinkgoParallelProcess()), namespace,
+			)
+
+			By("Deploying a healthy 2-pod cluster")
+
+			aeroCluster := createDummyAerospikeCluster(clusterNamespacedName, 2)
+			validImage := aeroCluster.Spec.Image
+			Expect(DeployCluster(k8sClient, ctx, aeroCluster)).ToNot(HaveOccurred())
+
+			// The pod that scale-up would create (rack 0, ordinal 2).
+			scaleUpPodName := fmt.Sprintf("%s-0-2", clusterNamespacedName.Name)
+
+			By("Applying size=3 and a bad image simultaneously")
+
+			aeroCluster, err := getCluster(k8sClient, ctx, clusterNamespacedName)
+			Expect(err).ToNot(HaveOccurred())
+
+			aeroCluster.Spec.Size = 3
+			aeroCluster.Spec.Image = unavailableImage
+			Expect(updateClusterWithNoWait(k8sClient, ctx, aeroCluster)).ToNot(HaveOccurred())
+
+			// checkScaleUpBlocked verifies the expected stuck state: the operator
+			// has attempted the rolling-restart with the bad image (cluster phase
+			// is Error) but has not created the scale-up pod.
+			checkScaleUpBlocked := func(g Gomega) {
+				cluster, clusterErr := getCluster(k8sClient, ctx, clusterNamespacedName)
+				g.Expect(clusterErr).ToNot(HaveOccurred())
+
+				podList, podListErr := getClusterPodList(k8sClient, ctx, cluster)
+				g.Expect(podListErr).ToNot(HaveOccurred())
+
+				for idx := range podList.Items {
+					g.Expect(podList.Items[idx].Name).NotTo(Equal(scaleUpPodName),
+						"scale-up pod %s must not be created while existing pods are failing with bad image",
+						scaleUpPodName)
+				}
+			}
+
+			By("Confirming scale-up pod stays absent while the bad-image rolling restart is active")
+			Consistently(checkScaleUpBlocked, 60*time.Second, 5*time.Second).Should(Succeed())
+
+			By("Restoring the valid image while keeping size=3")
+
+			aeroCluster, err = getCluster(k8sClient, ctx, clusterNamespacedName)
+			Expect(err).ToNot(HaveOccurred())
+
+			aeroCluster.Spec.Image = validImage
+			Expect(updateCluster(k8sClient, ctx, aeroCluster)).ToNot(HaveOccurred())
+		})
+
+	// -------------------------------------------------------------------------
+	// Test 2: failing pod within MaxIgnorablePods budget + scale-up → scale-up succeeds
+	// One pod is externally patched with an unsupported image (simulating an
+	// external crash). When MaxIgnorablePods=1 is set alongside the scale-up,
+	// the failing pod is placed in ignorablePodNames and the upgrade check skips
+	// it — the operator proceeds directly to scale-up without being blocked.
+	// -------------------------------------------------------------------------
+	It("Should allow scale-up when failing pods are within the MaxIgnorablePods budget",
+		func() {
+			clusterNamespacedName = test.GetNamespacedName(
+				fmt.Sprintf("scaleup-ignorable-%d", GinkgoParallelProcess()), namespace,
+			)
+
+			By("Deploying a healthy 2-pod cluster")
+
+			aeroCluster := createDummyAerospikeCluster(clusterNamespacedName, 2)
+			Expect(DeployCluster(k8sClient, ctx, aeroCluster)).ToNot(HaveOccurred())
+
+			// Pod 0 of rack 0 — directly patched to simulate an external failure.
+			failedPodName := fmt.Sprintf("%s-0-0", clusterNamespacedName.Name)
+
+			By("Patching pod 0 with a bad image to simulate an external pod failure")
+			Expect(markPodAsFailed(ctx, k8sClient, failedPodName, namespace)).ToNot(HaveOccurred())
+
+			scaleUpPodName := fmt.Sprintf("%s-0-2", clusterNamespacedName.Name)
+
+			By("Applying size=3 with MaxIgnorablePods=1 so the failing pod is within the ignorable budget")
+
+			aeroCluster, err := getCluster(k8sClient, ctx, clusterNamespacedName)
+			Expect(err).ToNot(HaveOccurred())
+
+			maxIgnorable := intstr.FromInt32(1)
+			aeroCluster.Spec.Size = 3
+			aeroCluster.Spec.RackConfig.MaxIgnorablePods = &maxIgnorable
+			Expect(updateClusterWithNoWait(k8sClient, ctx, aeroCluster)).ToNot(HaveOccurred())
+
+			By("Verifying the scale-up pod is created even though pod 0 is still failing")
+			Eventually(func(g Gomega) {
+				cluster, clusterErr := getCluster(k8sClient, ctx, clusterNamespacedName)
+				g.Expect(clusterErr).ToNot(HaveOccurred())
+
+				podList, podListErr := getClusterPodList(k8sClient, ctx, cluster)
+				g.Expect(podListErr).ToNot(HaveOccurred())
+
+				names := make([]string, 0, len(podList.Items))
+				for idx := range podList.Items {
+					names = append(names, podList.Items[idx].Name)
+				}
+
+				g.Expect(names).To(ContainElement(scaleUpPodName),
+					"scale-up pod %s must be created when the failing pod is within MaxIgnorablePods",
+					scaleUpPodName)
+			}, 5*time.Minute, 10*time.Second).Should(Succeed())
+		})
 }

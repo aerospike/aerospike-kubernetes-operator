@@ -41,7 +41,7 @@ type PodState struct {
 // IsPodRunningAndReady returns true if pod is in the PodRunning Phase, if it has a condition of PodReady.
 // TODO: check if its is properly running, error crashLoop also passed in this
 func IsPodRunningAndReady(pod *corev1.Pod) bool {
-	return !IsPodTerminating(pod) && pod.Status.Phase == corev1.PodRunning && isPodReady(pod)
+	return !IsPodTerminating(pod) && pod.Status.Phase == corev1.PodRunning && IsPodReady(pod)
 }
 
 // CheckPodFailed checks if pod has failed or has terminated or is in an irrecoverable waiting state.
@@ -56,80 +56,90 @@ func CheckPodFailed(pod *corev1.Pod) error {
 }
 
 // CheckPodFailedWithGrace checks if pod has failed or has terminated or is in an irrecoverable waiting state.
+// Sidecar container failures are included in the check.
 // Returns PodState containing:
 // - State: PodHealthy, PodFailedInGrace, or PodFailed
 // - Reason: Human-readable description of failure (empty if healthy)
 func CheckPodFailedWithGrace(pod *corev1.Pod, allowGrace bool) PodState {
+	return checkFailedWithGrace(pod, allowGrace, true)
+}
+
+// CheckServerFailedWithGrace checks if the pod's Aerospike server container (or
+// a blocking init container) has a terminal failure, optionally within a grace
+// period. Sidecar container failures are intentionally ignored
+// Returns PodState containing:
+// - State: PodHealthy, PodFailedInGrace, or PodFailed
+// - Reason: Human-readable description of failure (empty if healthy)
+func CheckServerFailedWithGrace(pod *corev1.Pod, allowGrace bool) PodState {
+	return checkFailedWithGrace(pod, allowGrace, false)
+}
+
+// checkFailedWithGrace is the single implementation backing CheckPodFailedWithGrace
+// and CheckServerFailedWithGrace. includeSidecarFailures controls whether sidecar
+// container failures are treated as a pod failure.
+func checkFailedWithGrace(pod *corev1.Pod, allowGrace, includeSidecarFailures bool) PodState {
 	if IsPodTerminating(pod) {
 		return PodState{State: PodHealthy}
 	}
 
-	// First, determine if the pod has any failure condition
-	var failureReason string
+	failureReason := checkPodFailureReason(pod, includeSidecarFailures)
+	if failureReason == "" {
+		return PodState{State: PodHealthy}
+	}
 
-	// if the value of ".status.phase" is "Failed", the pod is trivially in a failure state
+	if allowGrace && time.Since(getPodFailureSince(pod)) < GetFailedPodGracePeriod() {
+		return PodState{State: PodFailedInGrace, Reason: failureReason}
+	}
+
+	return PodState{State: PodFailed, Reason: failureReason}
+}
+
+// checkPodFailureReason inspects the pod's phase, scheduling conditions, and
+// container statuses and returns a human-readable reason string if the pod is in
+// a failure state, or an empty string if the pod is healthy.
+// It does NOT apply any grace-period logic.
+// When includeSidecarFailures is true, failing sidecar containers are also
+// treated as a pod failure; otherwise only init-container and server-container
+// failures are reported.
+func checkPodFailureReason(pod *corev1.Pod, includeSidecarFailures bool) string {
 	if pod.Status.Phase == corev1.PodFailed {
-		failureReason = fmt.Sprintf("pod %s has failed status with reason: %s and message: %s",
+		return fmt.Sprintf("pod %s has failed status with reason: %s and message: %s",
 			pod.Name, pod.Status.Reason, pod.Status.Message)
 	}
 
 	if pod.Status.Phase == corev1.PodPending {
 		if isPodUnschedulable, reason := IsPodReasonUnschedulable(pod); isPodUnschedulable {
-			failureReason = fmt.Sprintf("pod %s is in unschedulable state and reason is %s", pod.Name, reason)
+			return fmt.Sprintf("pod %s is in unschedulable state and reason is %s", pod.Name, reason)
 		}
 	}
 
-	// Check for container-level failures if no pod-level failure found
-	if failureReason == "" {
-		failureReason = checkContainerFailures(pod)
-	}
-
-	// If no failure found, pod is healthy
-	if failureReason == "" {
-		return PodState{State: PodHealthy}
-	}
-
-	if allowGrace {
-		// Pod has failed, check if it's within the grace period
-		since := getPodFailureSince(pod)
-		grace := GetFailedPodGracePeriod()
-
-		if time.Since(since) < grace {
-			return PodState{
-				State:  PodFailedInGrace,
-				Reason: failureReason,
-			}
-		}
-	}
-
-	// Pod has failed and is not within grace period
-	return PodState{
-		State:  PodFailed,
-		Reason: failureReason,
-	}
+	return checkContainerFailures(pod, includeSidecarFailures)
 }
 
 // checkContainerFailures checks for container-level failure states and returns a failure reason.
 // Returns an empty string if no failure is found.
-func checkContainerFailures(pod *corev1.Pod) string {
-	// grab the status of every container in the pod (including its init containers)
-	containerStatus := make(
+// All init container failures are reported because a failing init container prevents the
+// aerospike server from starting. Among regular containers, the aerospike server container
+// is always checked. Sidecar containers are only checked when includeSidecarFailures is true.
+func checkContainerFailures(pod *corev1.Pod, includeSidecarFailures bool) string {
+	// Build the list to inspect: all init containers, plus regular containers
+	// filtered by includeSidecarFailures (always include the server container).
+	statuses := make(
 		[]corev1.ContainerStatus, 0,
 		len(pod.Status.InitContainerStatuses)+len(pod.Status.ContainerStatuses),
 	)
 
-	containerStatus = append(containerStatus, pod.Status.InitContainerStatuses...)
-	containerStatus = append(containerStatus, pod.Status.ContainerStatuses...)
+	statuses = append(statuses, pod.Status.InitContainerStatuses...)
 
-	// inspect the status of each individual container for common failure states
-	for idx := range containerStatus {
-		container := &containerStatus[idx]
-		// if the container is marked as "Terminated", check if its exit code is non-zero since this may still represent
-		// a container that has terminated successfully (such as an init container)
-		// if terminated := container.State.Terminated; terminated != nil && terminated.ExitCode != 0 {
-		// 	return "pod has terminated status"
-		// }
-		// if the container is marked as "Waiting", check for common image-related errors or container crashing.
+	for idx := range pod.Status.ContainerStatuses {
+		cs := &pod.Status.ContainerStatuses[idx]
+		if cs.Name == asdbv1.AerospikeServerContainerName || includeSidecarFailures {
+			statuses = append(statuses, *cs)
+		}
+	}
+
+	for idx := range statuses {
+		container := &statuses[idx]
 		if waiting := container.State.Waiting; waiting != nil &&
 			(isPodImageError(waiting.Reason) || isPodCrashError(waiting.Reason) || isPodError(waiting.Reason)) {
 			return fmt.Sprintf(
@@ -143,51 +153,29 @@ func checkContainerFailures(pod *corev1.Pod) string {
 	return ""
 }
 
-// CheckPodImageFailed checks if pod has failed or has terminated or is in an irrecoverable waiting state due to an
-// image related error.
-func CheckPodImageFailed(pod *corev1.Pod) error {
-	if IsPodTerminating(pod) {
-		return nil
+// IsAerospikeServerReady returns true if the Aerospike server container's
+// ready state is true — i.e. the process is running and accepting
+// connections. Sidecar containers are deliberately skipped so a crashing
+// sidecar never influences this result.
+func IsAerospikeServerReady(pod *corev1.Pod) bool {
+	if IsPodTerminating(pod) || pod.Status.Phase != corev1.PodRunning {
+		return false
 	}
 
-	// if the value of ".status.phase" is "Failed", the pod is trivially in a failure state
-	if pod.Status.Phase == corev1.PodFailed {
-		return fmt.Errorf("pod %s has failed status with reason: %s and message: %s",
-			pod.Name, pod.Status.Reason, pod.Status.Message)
-	}
-
-	// grab the status of every container in the pod (including its init containers)
-	containerStatus := make(
-		[]corev1.ContainerStatus, 0,
-		len(pod.Status.InitContainerStatuses)+len(pod.Status.ContainerStatuses),
-	)
-
-	containerStatus = append(containerStatus, pod.Status.InitContainerStatuses...)
-	containerStatus = append(containerStatus, pod.Status.ContainerStatuses...)
-
-	// inspect the status of each individual container for common failure states
-	for idx := range containerStatus {
-		container := &containerStatus[idx]
-		// if the container is marked as "Terminated", check if its exit code is non-zero since this may still represent
-		// a container that has terminated successfully (such as an init container)
-		// if terminated := container.State.Terminated; terminated != nil && terminated.ExitCode != 0 {
-		// 	return fmt.Errorf("pod has terminated status")
-		// }
-		// if the container is marked as "Waiting", check for common image-related errors
-		if waiting := container.State.Waiting; waiting != nil && isPodImageError(waiting.Reason) {
-			return fmt.Errorf(
-				"pod image pull failed with given container message: %s",
-				waiting.Message,
-			)
+	for idx := range pod.Status.ContainerStatuses {
+		cs := &pod.Status.ContainerStatuses[idx]
+		if cs.Name != asdbv1.AerospikeServerContainerName {
+			continue
 		}
+
+		return cs.Ready
 	}
 
-	// no failure state was found
-	return nil
+	return false
 }
 
-// isPodReady return true if all the container of the pod are in ready state
-func isPodReady(pod *corev1.Pod) bool {
+// IsPodReady returns true if all containers in the pod are in the ready state.
+func IsPodReady(pod *corev1.Pod) bool {
 	statuses := pod.Status.ContainerStatuses
 	for idx := range statuses {
 		if !statuses[idx].Ready {
