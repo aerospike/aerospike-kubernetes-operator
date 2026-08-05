@@ -2,6 +2,7 @@ package cluster
 
 import (
 	"context"
+	"encoding/json"
 	"fmt"
 	"strings"
 
@@ -10,6 +11,7 @@ import (
 	v1 "k8s.io/api/core/v1"
 	"k8s.io/apimachinery/pkg/api/resource"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
+	"k8s.io/apimachinery/pkg/apis/meta/v1/unstructured"
 	"k8s.io/apimachinery/pkg/types"
 	"k8s.io/apimachinery/pkg/util/intstr"
 	"k8s.io/utils/ptr"
@@ -1510,6 +1512,34 @@ var _ = Describe("AerospikeCluster validation", func() {
 				})
 			})
 		})
+
+		Context("spec.ignoreSidecarFailure", func() {
+			Context("negative", func() {
+				It("rejects invalid ignoreSidecarFailure type (non-boolean)", func() {
+					aeroCluster := testCluster.CreateDummyAerospikeCluster(clusterNamespacedName, 2)
+
+					raw, err := json.Marshal(aeroCluster)
+					Expect(err).ToNot(HaveOccurred())
+
+					var obj map[string]interface{}
+					Expect(json.Unmarshal(raw, &obj)).To(Succeed())
+
+					spec := obj["spec"].(map[string]interface{})
+					spec["ignoreSidecarFailure"] = "yes"
+
+					cluster := &unstructured.Unstructured{Object: obj}
+					err = envtests.K8sClient.Create(ctx, cluster)
+					Expect(err).To(HaveOccurred())
+					envtests.NewStatusErrorMatcher().
+						WithMessageSubstrings(
+							testutil.MutatingClusterWebhookErrorPrefix,
+							"ignoreSidecarFailure",
+							"cannot unmarshal string",
+						).
+						Validate(err)
+				})
+			})
+		})
 	})
 
 	Context("Update validation", func() {
@@ -1818,6 +1848,55 @@ var _ = Describe("AerospikeCluster validation", func() {
 							"namespace storage device related devicePath /missing/dev/device1 not found in Storage config",
 						).
 						Validate(err)
+				})
+			})
+		})
+
+		Context("spec.ignoreSidecarFailure", func() {
+			Context("positive", func() {
+				It("allows toggling ignoreSidecarFailure during InProgress phase and copies spec to status", func() {
+					aeroCluster := testCluster.CreateDummyAerospikeCluster(updateValidationClusterNamespacedName, 2)
+					aeroCluster.Spec.IgnoreSidecarFailure = ptr.To(false)
+					Expect(envtests.K8sClient.Create(ctx, aeroCluster)).To(Succeed())
+
+					current, err := testCluster.GetCluster(envtests.K8sClient, ctx, updateValidationClusterNamespacedName)
+					Expect(err).ToNot(HaveOccurred())
+
+					current.Status.Phase = asdbv1.AerospikeClusterInProgress
+					Expect(envtests.K8sClient.Status().Update(ctx, current)).To(Succeed())
+
+					current, err = testCluster.GetCluster(envtests.K8sClient, ctx, updateValidationClusterNamespacedName)
+					Expect(err).ToNot(HaveOccurred())
+					Expect(current.Status.Phase).To(Equal(asdbv1.AerospikeClusterInProgress))
+
+					By("patching ignoreSidecarFailure to true while cluster is InProgress")
+
+					current.Spec.IgnoreSidecarFailure = ptr.To(true)
+					Expect(envtests.K8sClient.Update(ctx, current)).To(Succeed())
+
+					By("mirroring updated spec into status via CopySpecToStatus")
+					seedClusterStatusFromSpec(ctx, updateValidationClusterNamespacedName)
+
+					current, err = testCluster.GetCluster(envtests.K8sClient, ctx, updateValidationClusterNamespacedName)
+					Expect(err).ToNot(HaveOccurred())
+					Expect(current.Spec.IgnoreSidecarFailure).ToNot(BeNil())
+					Expect(*current.Spec.IgnoreSidecarFailure).To(BeTrue())
+					Expect(current.Status.IgnoreSidecarFailure).ToNot(BeNil())
+					Expect(*current.Status.IgnoreSidecarFailure).To(Equal(*current.Spec.IgnoreSidecarFailure))
+
+					By("patching ignoreSidecarFailure back to false while cluster is still InProgress")
+
+					current.Spec.IgnoreSidecarFailure = ptr.To(false)
+					Expect(envtests.K8sClient.Update(ctx, current)).To(Succeed())
+
+					seedClusterStatusFromSpec(ctx, updateValidationClusterNamespacedName)
+
+					current, err = testCluster.GetCluster(envtests.K8sClient, ctx, updateValidationClusterNamespacedName)
+					Expect(err).ToNot(HaveOccurred())
+					Expect(current.Spec.IgnoreSidecarFailure).ToNot(BeNil())
+					Expect(*current.Spec.IgnoreSidecarFailure).To(BeFalse())
+					Expect(current.Status.IgnoreSidecarFailure).ToNot(BeNil())
+					Expect(*current.Status.IgnoreSidecarFailure).To(Equal(*current.Spec.IgnoreSidecarFailure))
 				})
 			})
 		})
