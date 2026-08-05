@@ -1851,5 +1851,54 @@ var _ = Describe("AerospikeCluster validation", func() {
 				})
 			})
 		})
+
+		Context("spec.ignoreSidecarFailure", func() {
+			Context("positive", func() {
+				It("allows toggling ignoreSidecarFailure during InProgress phase and copies spec to status", func() {
+					aeroCluster := testCluster.CreateDummyAerospikeCluster(updateValidationClusterNamespacedName, 2)
+					aeroCluster.Spec.IgnoreSidecarFailure = ptr.To(false)
+					Expect(envtests.K8sClient.Create(ctx, aeroCluster)).To(Succeed())
+
+					current, err := testCluster.GetCluster(envtests.K8sClient, ctx, updateValidationClusterNamespacedName)
+					Expect(err).ToNot(HaveOccurred())
+
+					current.Status.Phase = asdbv1.AerospikeClusterInProgress
+					Expect(envtests.K8sClient.Status().Update(ctx, current)).To(Succeed())
+
+					current, err = testCluster.GetCluster(envtests.K8sClient, ctx, updateValidationClusterNamespacedName)
+					Expect(err).ToNot(HaveOccurred())
+					Expect(current.Status.Phase).To(Equal(asdbv1.AerospikeClusterInProgress))
+
+					By("patching ignoreSidecarFailure to true while cluster is InProgress")
+
+					current.Spec.IgnoreSidecarFailure = ptr.To(true)
+					Expect(envtests.K8sClient.Update(ctx, current)).To(Succeed())
+
+					By("mirroring updated spec into status via CopySpecToStatus")
+					seedClusterStatusFromSpec(ctx, updateValidationClusterNamespacedName)
+
+					current, err = testCluster.GetCluster(envtests.K8sClient, ctx, updateValidationClusterNamespacedName)
+					Expect(err).ToNot(HaveOccurred())
+					Expect(current.Spec.IgnoreSidecarFailure).ToNot(BeNil())
+					Expect(*current.Spec.IgnoreSidecarFailure).To(BeTrue())
+					Expect(current.Status.IgnoreSidecarFailure).ToNot(BeNil())
+					Expect(*current.Status.IgnoreSidecarFailure).To(Equal(*current.Spec.IgnoreSidecarFailure))
+
+					By("patching ignoreSidecarFailure back to false while cluster is still InProgress")
+
+					current.Spec.IgnoreSidecarFailure = ptr.To(false)
+					Expect(envtests.K8sClient.Update(ctx, current)).To(Succeed())
+
+					seedClusterStatusFromSpec(ctx, updateValidationClusterNamespacedName)
+
+					current, err = testCluster.GetCluster(envtests.K8sClient, ctx, updateValidationClusterNamespacedName)
+					Expect(err).ToNot(HaveOccurred())
+					Expect(current.Spec.IgnoreSidecarFailure).ToNot(BeNil())
+					Expect(*current.Spec.IgnoreSidecarFailure).To(BeFalse())
+					Expect(current.Status.IgnoreSidecarFailure).ToNot(BeNil())
+					Expect(*current.Status.IgnoreSidecarFailure).To(Equal(*current.Spec.IgnoreSidecarFailure))
+				})
+			})
+		})
 	})
 })
