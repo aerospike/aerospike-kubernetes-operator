@@ -13,7 +13,7 @@ operatorImage: # @schema required; additionalProperties: false
 # authentication, a secret containing credentials can be added
 # imagePullSecrets:
 #   - secret_with_credentials_to_custom_registry
-imagePullSecrets: {} # @schema anyOf: [{type: array, items: {type: string}}, {type: object}]
+imagePullSecrets: [] # @schema anyOf: [{type: array, items: {type: string}}, {type: object}]
 
 # @schema allOf: [{type: object}, {if: {properties: {create: {const: false}}, required: [create]}, then: {properties: {serviceAccountName: {minLength: 1}}, required: [serviceAccountName]}}]
 # @schema additionalProperties: false
