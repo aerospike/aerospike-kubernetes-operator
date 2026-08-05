@@ -3,6 +3,7 @@ package restore
 import (
 	"testing"
 
+	"github.com/go-logr/logr"
 	"github.com/stretchr/testify/require"
 
 	asdbv1beta1 "github.com/aerospike/aerospike-kubernetes-operator/v4/api/v1beta1"
@@ -32,7 +33,7 @@ func TestStatusToPhase(t *testing.T) {
 		t.Run(tt.name, func(t *testing.T) {
 			t.Parallel()
 
-			require.Equal(t, tt.want, statusToPhase(tt.status))
+			require.Equal(t, tt.want, statusToPhase(logr.Discard(), tt.status))
 		})
 	}
 }

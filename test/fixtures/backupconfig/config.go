@@ -36,14 +36,6 @@ var (
 	}
 )
 
-// RestoreOnlyStorageConfig returns a minimal ABS config for restore-side deployments:
-// service, backup-policies, and storage only (no aerospike-clusters or backup-routines).
-// Used to exercise BKRS-212 cross-region timestamp restores where the routine is not
-// configured locally but storage is overridden via source-name.
-func RestoreOnlyStorageConfig() map[string]interface{} {
-	return BackupServiceBaseConfig()
-}
-
 // BackupServiceBaseConfig returns the base backup-service config (service, policies, storage).
 func BackupServiceBaseConfig() map[string]interface{} {
 	return map[string]interface{}{
@@ -55,6 +47,7 @@ func BackupServiceBaseConfig() map[string]interface{} {
 		asdbv1beta1.BackupPoliciesKey: map[string]interface{}{
 			DefaultBackupPolicy: map[string]interface{}{
 				"parallel": 3,
+				"compact":  true,
 			},
 		},
 		asdbv1beta1.StorageKey: map[string]interface{}{

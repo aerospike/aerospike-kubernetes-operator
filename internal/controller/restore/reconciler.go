@@ -220,7 +220,7 @@ func (r *SingleRestoreReconciler) checkRestoreStatus(ctx context.Context) error 
 	r.Log.Info("Restore status received", "status", restoreStatus, "jobID", jobID)
 
 	if status, ok := restoreStatus["status"]; ok {
-		r.aeroRestore.Status.Phase = statusToPhase(status.(string))
+		r.aeroRestore.Status.Phase = statusToPhase(r.Log, status.(string))
 	}
 
 	statusBytes, err := json.Marshal(restoreStatus)
@@ -334,7 +334,7 @@ func (r *SingleRestoreReconciler) cancelRestoreJob() error {
 	return nil
 }
 
-func statusToPhase(status string) asdbv1beta1.AerospikeRestorePhase {
+func statusToPhase(log logr.Logger, status string) asdbv1beta1.AerospikeRestorePhase {
 	jobStatus, ok := dto.ParseJobStatus(status)
 	if !ok {
 		return ""
@@ -348,6 +348,9 @@ func statusToPhase(status string) asdbv1beta1.AerospikeRestorePhase {
 	case dto.RestoreFailure, dto.RestoreCanceled:
 		return asdbv1beta1.AerospikeRestoreFailed
 	default:
+		log.Info("Unmapped ABS restore job status; update statusToPhase for new dto.JobStatus value",
+			"status", status, "jobStatus", jobStatus)
+
 		return ""
 	}
 }

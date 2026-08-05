@@ -274,13 +274,14 @@ func getRestoreConfigWithTLSInMap(backupPath string) map[string]interface{} {
 	return restoreConfig
 }
 
-func getTimestampRestoreConfigWithStorageOverride(backupPath string) (map[string]interface{}, error) {
-	restoreConfig := getRestoreConfigInMap(backupPath)
+func getTimeStampRestoreConfig(
+	restoreConfig map[string]interface{}, backupPath string,
+) (map[string]interface{}, error) {
 	delete(restoreConfig, asdbv1beta1.SourceKey)
 	delete(restoreConfig, asdbv1beta1.BackupDataPathKey)
 
 	parts := strings.Split(backupPath, "/")
-	if len(parts) < 4 {
+	if len(parts) < 5 {
 		return nil, fmt.Errorf("invalid backup path: %s", backupPath)
 	}
 
@@ -291,11 +292,20 @@ func getTimestampRestoreConfigWithStorageOverride(backupPath string) (map[string
 		return nil, err
 	}
 
+	// increase time by 5 seconds to consider the latest backup under time bound
 	restoreConfig[asdbv1beta1.TimeKey] = int64(timeInt) + 5000
 	restoreConfig[asdbv1beta1.RoutineKey] = parts[len(parts)-5]
-	restoreConfig[asdbv1beta1.SourceNameKey] = "local"
 
 	return restoreConfig, nil
+}
+
+func getTimeStampRestoreConfigBytes(restoreConfig map[string]interface{}, backupPath string) ([]byte, error) {
+	config, err := getTimeStampRestoreConfig(restoreConfig, backupPath)
+	if err != nil {
+		return nil, err
+	}
+
+	return getRestoreConfBytes(config)
 }
 
 func validateRestoredData(k8sClient client.Client) error {
