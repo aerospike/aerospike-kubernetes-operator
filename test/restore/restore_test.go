@@ -172,7 +172,9 @@ var _ = Describe(
 
 				It(
 					"Should complete restore for Timestamp restore type", func() {
-						configBytes, err := getTimeStampRestoreConfigBytes(
+						var configBytes []byte
+
+						configBytes, err = getTimeStampRestoreConfigBytes(
 							getRestoreConfigInMap(backupDataPath), backupDataPath)
 						Expect(err).ToNot(HaveOccurred())
 
@@ -188,7 +190,9 @@ var _ = Describe(
 
 				It(
 					"Should complete restore for Timestamp restore type and with TLS configured", func() {
-						configBytes, err := getTimeStampRestoreConfigBytes(
+						var configBytes []byte
+
+						configBytes, err = getTimeStampRestoreConfigBytes(
 							getRestoreConfigWithTLSInMap(backupDataPath), backupDataPath)
 						Expect(err).ToNot(HaveOccurred())
 
