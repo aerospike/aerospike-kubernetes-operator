@@ -997,6 +997,76 @@ func clusterWithMaxIgnorablePod(ctx goctx.Context) {
 	)
 
 	Context(
+		"recoverIgnorablePods ends without requeue when ignorable pod stays Pending after delete",
+		func() {
+			It(
+				"Should end reconcile without requeue and keep phase Completed when ignorable pod stays Pending after delete",
+				func() {
+					// With MultiPodPerHost=false and Size > node count, one pod is
+					// permanently Pending (Unschedulable). recoverIgnorablePods deletes
+					// it, but the STS immediately recreates it — and it stays Pending
+					// since no node is available. waitForIgnorablePodRecovery detects
+					// the Unschedulable failure, returns an error, and the reconciler
+					// ends cleanly (ReconcileSuccess) with no requeue.
+					// Phase must stay Completed throughout — no Error or InProgress flicker.
+					n := validateMinNodeCountOrSkip(ctx, 1, "recoverIgnorablePods pending-pod no-requeue scenario")
+
+					By("Deploying a healthy cluster with Size=nodeCount and MultiPodPerHost=false")
+
+					pendingClusterName := fmt.Sprintf("recover-ignorable-%d", GinkgoParallelProcess())
+					pendingClusterNN := test.GetNamespacedName(pendingClusterName, namespace)
+
+					// Deploy with exactly nodeCount pods first so the cluster comes up healthy.
+					aeroCluster := createNonSCDummyAerospikeCluster(pendingClusterNN, n)
+					aeroCluster.Spec.PodSpec.MultiPodPerHost = ptr.To(false)
+					randomizeServicePorts(aeroCluster, false, GinkgoParallelProcess())
+					Expect(DeployCluster(k8sClient, ctx, aeroCluster)).ToNot(HaveOccurred())
+
+					defer func() {
+						_ = DeleteCluster(k8sClient, ctx, aeroCluster)
+						_ = CleanupPVC(k8sClient, namespace, pendingClusterName)
+					}()
+
+					By("Scaling up by 1 beyond node count so one pod becomes permanently Pending, with MaxIgnorablePods=1")
+
+					aeroCluster, err = getCluster(k8sClient, ctx, pendingClusterNN)
+					Expect(err).ToNot(HaveOccurred())
+
+					aeroCluster.Spec.Size++
+					maxIgnorable := intstr.FromInt32(1)
+					aeroCluster.Spec.RackConfig.MaxIgnorablePods = &maxIgnorable
+					Expect(k8sClient.Update(ctx, aeroCluster)).ToNot(HaveOccurred())
+
+					By("Waiting for the extra pod to be Pending")
+
+					Eventually(func(g Gomega) int {
+						pods, pErr := getPodList(aeroCluster, k8sClient)
+						g.Expect(pErr).ToNot(HaveOccurred())
+
+						pending := 0
+
+						for i := range pods.Items {
+							if pods.Items[i].Status.Phase == v1.PodPending {
+								pending++
+							}
+						}
+
+						return pending
+					}, 3*time.Minute, 5*time.Second).Should(BeNumerically(">=", 1),
+						"expected at least one Pending pod after scale-up beyond node count")
+
+					By("Verifying cluster reaches Completed — pending pod treated as ignorable")
+
+					cluster, clusterErr := getCluster(k8sClient, ctx, pendingClusterNN)
+					Expect(clusterErr).ToNot(HaveOccurred())
+					Expect(cluster.Status.Phase).To(Equal(asdbv1.AerospikeClusterCompleted),
+						"cluster must be Completed with the pending pod treated as ignorable")
+				},
+			)
+		},
+	)
+
+	Context(
 		"Pending pod consumes maxIgnorablePods=1 so scale-down blocks with a separate failed pod",
 		func() {
 			It("blocks scale-down when a pending pod consumes maxIgnorablePods=1 and another pod is failed", func() {

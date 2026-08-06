@@ -7,6 +7,7 @@ import (
 	"fmt"
 	"reflect"
 	"strings"
+	"time"
 
 	"github.com/go-logr/logr"
 	corev1 "k8s.io/api/core/v1"
@@ -112,9 +113,11 @@ func (r *SingleClusterReconciler) Reconcile(ctx context.Context) (result ctrl.Re
 		return reconcile.Result{}, nil
 	}
 
-	// Set the status to AerospikeClusterInProgress before starting any operations
-	if err := r.setStatusPhase(ctx, asdbv1.AerospikeClusterInProgress); err != nil {
-		return reconcile.Result{}, err
+	// but only if the cluster is not already in an error state.
+	if r.aeroCluster.Status.Phase != asdbv1.AerospikeClusterError {
+		if err := r.setStatusPhase(ctx, asdbv1.AerospikeClusterInProgress); err != nil {
+			return reconcile.Result{}, err
+		}
 	}
 
 	// The cluster is not being deleted, add finalizer if not added already
@@ -314,17 +317,82 @@ func (r *SingleClusterReconciler) recoverIgnorablePods(
 				}
 
 				r.Log.Info("Deleted Pod", "pod", utils.GetNamespacedName(&podList.Items[idx]))
+
+				// Block for up to 3 minutes polling every 10s. Exit early if the
+				// server container fails (no point waiting further) or becomes ready.
+				// If the pod fails or recovers, requeueInterval stays 0 — nothing
+				// left to monitor for this pod.
+				if podReady, err := r.waitForIgnorablePodRecovery(podList.Items[idx].Name); err != nil {
+					r.Log.Error(err, "Ignorable pod failed during recovery", "pod", podList.Items[idx].Name)
+				} else if !podReady {
+					requeueInterval = asdbv1.RequeueIntervalSeconds10
+
+					r.Log.Info("Ignorable pod not ready after 3 minutes, will requeue", "pod", podList.Items[idx].Name)
+				}
 			}
 		}
 	}
 
-	if anyPodFailed {
-		r.Log.Info("Found failed/pending Pod(s), requeuing")
-	} else {
-		r.Log.Info("Found ignorable Pod(s), requeuing")
+	if !anyPodFailed {
+		// No failures at all — ignorable pods are present but healthy. Requeue at a
+		// slower cadence to keep monitoring without overwhelming the API server.
+		r.Log.Info("Found ignorable pod(s), requeuing")
+
+		requeueInterval = asdbv1.RequeueIntervalSeconds60
 	}
 
+	if requeueInterval == 0 {
+		// All deleted pods either failed or recovered — nothing left to monitor.
+		return common.ReconcileSuccess()
+	}
+
+	r.Log.Info("Found failed/pending pod(s), requeuing")
+
 	return common.ReconcileRequeueAfter(requeueInterval)
+}
+
+// waitForIgnorablePodRecovery polls the named pod for up to 3 minutes after it
+// has been deleted, returning early as soon as the outcome is known:
+//   - (true, nil)  — server container is running and ready
+//   - (false, err) — pod entered a failed state; caller should log and continue
+//   - (false, nil) — 3-minute timeout elapsed without the pod becoming ready
+func (r *SingleClusterReconciler) waitForIgnorablePodRecovery(podName string) (bool, error) {
+	const (
+		maxRetries    = 18 // 18 * 10s = 3 minutes
+		retryInterval = 10 * time.Second
+	)
+
+	pod := &corev1.Pod{}
+
+	for i := 0; i < maxRetries; i++ {
+		if err := r.Get(
+			context.TODO(),
+			types.NamespacedName{Name: podName, Namespace: r.aeroCluster.Namespace},
+			pod,
+		); err != nil {
+			if apierrors.IsNotFound(err) {
+				// Pod is still terminating / not yet recreated — keep waiting.
+				time.Sleep(retryInterval)
+				continue
+			}
+
+			return false, fmt.Errorf("failed to get pod %s during recovery wait: %w", podName, err)
+		}
+
+		if err := utils.CheckPodFailed(pod); err != nil {
+			return false, fmt.Errorf("pod %s failed during recovery: %w", podName, err)
+		}
+
+		if utils.IsAerospikeServerReady(pod) {
+			r.Log.Info("Ignorable pod server container is ready", "pod", podName)
+			return true, nil
+		}
+
+		r.Log.V(1).Info("Waiting for ignorable pod to recover", "pod", podName, "attempt", i+1)
+		time.Sleep(retryInterval)
+	}
+
+	return false, nil
 }
 
 func (r *SingleClusterReconciler) validateAndReconcileAccessControl(

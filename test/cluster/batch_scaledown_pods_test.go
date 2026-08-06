@@ -120,6 +120,10 @@ var _ = Describe("BatchScaleDown", func() {
 			aeroCluster.Spec.Size--
 			Expect(k8sClient.Update(ctx, aeroCluster)).ToNot(HaveOccurred())
 
+			By("Verifying cluster transitions to Error — reconciler detects server-failed pod, blocks scale-down")
+			Expect(waitForClusterPhase(k8sClient, ctx, clusterNamespacedName,
+				asdbv1.AerospikeClusterError)).ToNot(HaveOccurred())
+
 			By("Asserting cluster does not complete (blocked waiting for pod recovery)")
 
 			err = waitForAerospikeCluster(
@@ -144,6 +148,10 @@ var _ = Describe("BatchScaleDown", func() {
 
 			aeroCluster.Spec.Size--
 			Expect(k8sClient.Update(ctx, aeroCluster)).ToNot(HaveOccurred())
+
+			By("Verifying cluster transitions to Error — reconciler detects server-failed pod, blocks scale-down")
+			Expect(waitForClusterPhase(k8sClient, ctx, clusterNamespacedName,
+				asdbv1.AerospikeClusterError)).ToNot(HaveOccurred())
 
 			By("Asserting cluster does not complete (blocked waiting for pod recovery)")
 
