@@ -100,21 +100,6 @@ var _ = Describe(
 					Expect(err.Error()).To(ContainSubstring("empty field validation error: \"time\" required"))
 				})
 
-				It("Should accept source override for Timestamp restore type", func() {
-					restoreConfig, mErr := getTimeStampRestoreConfig(getRestoreConfigInMap(backupDataPath), backupDataPath)
-					Expect(mErr).ToNot(HaveOccurred())
-
-					restoreConfig[asdbv1beta1.SourceNameKey] = "local"
-
-					configBytes, mErr := getRestoreConfBytes(restoreConfig)
-					Expect(mErr).ToNot(HaveOccurred())
-
-					restore = newRestoreWithConfig(restoreNsNm, asdbv1beta1.Timestamp, configBytes)
-
-					err = createRestore(k8sClient, restore)
-					Expect(err).ToNot(HaveOccurred())
-				})
-
 				It("Should fail when routine field is given for Full/Incremental restore type", func() {
 					restoreConfig := getRestoreConfigInMap(backupDataPath)
 					restoreConfig[asdbv1beta1.RoutineKey] = "test-routine"
@@ -206,6 +191,26 @@ var _ = Describe(
 						configBytes, err := getTimeStampRestoreConfigBytes(
 							getRestoreConfigWithTLSInMap(backupDataPath), backupDataPath)
 						Expect(err).ToNot(HaveOccurred())
+
+						restore = newRestoreWithConfig(restoreNsNm, asdbv1beta1.Timestamp, configBytes)
+
+						err = createRestore(k8sClient, restore)
+						Expect(err).ToNot(HaveOccurred())
+
+						err = validateRestoredData(k8sClient)
+						Expect(err).ToNot(HaveOccurred())
+					},
+				)
+
+				It(
+					"Should accept source override for Timestamp restore type", func() {
+						restoreConfig, mErr := getTimeStampRestoreConfig(getRestoreConfigInMap(backupDataPath), backupDataPath)
+						Expect(mErr).ToNot(HaveOccurred())
+
+						restoreConfig[asdbv1beta1.SourceNameKey] = "local"
+
+						configBytes, mErr := getRestoreConfBytes(restoreConfig)
+						Expect(mErr).ToNot(HaveOccurred())
 
 						restore = newRestoreWithConfig(restoreNsNm, asdbv1beta1.Timestamp, configBytes)
 
