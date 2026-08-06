@@ -31,6 +31,61 @@ Operator uses admission webhooks, which needs TLS certificates. These are issued
 helm install aerospike-kubernetes-operator ./aerospike-kubernetes-operator --set replicas=3
 ```
 
+## Webhook TLS Configuration
+
+By default, webhook TLS is managed by cert-manager. When `certs.webhook.create` is `true` (default), the chart creates cert-manager `Certificate` resources and relies on `cert-manager.io/inject-ca-from` to populate webhook `caBundle` values.
+
+To manage webhook TLS externally, set `certs.webhook.create` to `false`, supply `certs.webhook.caBundle`, and pre-create the serving cert secret outside Helm (private keys should not be passed through Helm values or CI logs). See [Base64-encoded caBundle](#base64-encoded-cabundle) below.
+
+Pre-create the serving certificate secret (`certs.webhook.webhookServerCertSecretName`, default `webhook-server-cert`) with `tls.crt` and `tls.key`. The operator deployment already mounts this secret — no deployment changes needed.
+
+```sh
+kubectl create secret tls webhook-server-cert \
+  --cert=webhook-serving.crt \
+  --key=webhook-serving.key \
+  -n <namespace>
+
+helm install aerospike-kubernetes-operator ./aerospike-kubernetes-operator \
+  --namespace <namespace> \
+  --set certs.webhook.create=false \
+  --set certs.webhook.caBundle="${CA_BUNDLE}"
+```
+
+### Base64-encoded caBundle
+
+`certs.webhook.caBundle` expects the **base64 encoding of the CA certificate PEM** that signed the webhook serving certificate. It is not the serving certificate itself.
+
+When set, the chart injects `clientConfig.caBundle` on all webhooks and skips the `cert-manager.io/inject-ca-from` annotation.
+
+**Encode the CA certificate:**
+
+```sh
+# Linux
+CA_BUNDLE=$(base64 -w0 ca.crt)
+
+# macOS
+CA_BUNDLE=$(base64 -i ca.crt)
+```
+
+The result must be a single-line string with no line breaks.
+
+**Pass via Helm:**
+
+```sh
+helm install aerospike-kubernetes-operator ./aerospike-kubernetes-operator \
+  --set certs.webhook.create=false \
+  --set certs.webhook.caBundle="${CA_BUNDLE}"
+```
+
+Or in a values file:
+
+```yaml
+certs:
+  webhook:
+    create: false
+    caBundle: "LS0tLS1CRUdJTi..."   # base64-encoded CA PEM
+```
+
 ## Configurations
 
 | Name                                | Description                                                                                                                                                                                                               | Default                                                                                                            |
@@ -45,6 +100,7 @@ helm install aerospike-kubernetes-operator ./aerospike-kubernetes-operator --set
 | `healthPort`                        | Health port                                                                                                                                                                                                               | `8081`                                                                                                             |
 | `metricsPort`                       | Metrics port                                                                                                                                                                                                              | `8443`                                                                                                             |
 | `certs.webhook.create`              | When `true`, chart creates webhook TLS certificate resources via `cert-manager`                                                                                                                                          | `true`                                                                                                             |
+| `certs.webhook.caBundle`            | Base64-encoded CA certificate for webhook `clientConfig.caBundle`. When set, cert-manager CA injection is skipped                                                                                                         | `""`                                                                                                               |
 | `certs.webhook.webhookServerCertSecretName` | Kubernetes `Secret` name for webhook serving certificates                                                                                                                                                           | `webhook-server-cert`                                                                                              |
 | `certs.metrics.create`              | When `true`, chart creates metrics TLS certificate resources via `cert-manager` and mounts them on the manager                                                                                                          | `false`                                                                                                            |
 | `certs.metrics.metricsServerCertSecretName` | Kubernetes `Secret` name for metrics serving certificates                                                                                                                                                         | `metrics-server-cert`                                                                                            |

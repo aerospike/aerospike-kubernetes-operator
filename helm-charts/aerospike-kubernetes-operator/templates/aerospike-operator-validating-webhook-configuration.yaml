@@ -1,8 +1,7 @@
 apiVersion: admissionregistration.k8s.io/v1
 kind: ValidatingWebhookConfiguration
 metadata:
-  annotations:
-    cert-manager.io/inject-ca-from: {{ .Release.Namespace }}/aerospike-operator-serving-cert
+  {{- include "aerospike-kubernetes-operator.webhookCAInjectionAnnotations" . | nindent 2 }}
   name: aerospike-operator-validating-webhook-configuration
   labels:
     app: {{ template "aerospike-kubernetes-operator.fullname" . }}
@@ -12,6 +11,7 @@ webhooks:
 - admissionReviewVersions:
   - v1
   clientConfig:
+    {{- include "aerospike-kubernetes-operator.webhookCABundle" . | nindent 4 }}
     service:
       name: aerospike-operator-webhook-service
       namespace: {{ .Release.Namespace }}
@@ -42,6 +42,7 @@ webhooks:
 - admissionReviewVersions:
     - v1
   clientConfig:
+    {{- include "aerospike-kubernetes-operator.webhookCABundle" . | nindent 4 }}
     service:
       name: aerospike-operator-webhook-service
       namespace: {{ .Release.Namespace }}
@@ -72,6 +73,7 @@ webhooks:
 - admissionReviewVersions:
     - v1
   clientConfig:
+    {{- include "aerospike-kubernetes-operator.webhookCABundle" . | nindent 4 }}
     service:
       name: aerospike-operator-webhook-service
       namespace: {{ .Release.Namespace }}
@@ -102,6 +104,7 @@ webhooks:
 - admissionReviewVersions:
     - v1
   clientConfig:
+    {{- include "aerospike-kubernetes-operator.webhookCABundle" . | nindent 4 }}
     service:
       name: aerospike-operator-webhook-service
       namespace: {{ .Release.Namespace }}
@@ -133,6 +136,7 @@ webhooks:
 - admissionReviewVersions:
     - v1
   clientConfig:
+    {{- include "aerospike-kubernetes-operator.webhookCABundle" . | nindent 4 }}
     service:
       name: aerospike-operator-webhook-service
       namespace: {{ .Release.Namespace }}
