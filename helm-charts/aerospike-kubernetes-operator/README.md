@@ -33,9 +33,11 @@ helm install aerospike-kubernetes-operator ./aerospike-kubernetes-operator --set
 
 ## Webhook TLS Configuration
 
-By default, webhook TLS is managed by cert-manager. To manage webhook TLS externally, set `certs.webhook.caBundle` and pre-create the serving cert secret. See [Base64-encoded caBundle](#base64-encoded-cabundle) below.
+By default, webhook TLS is managed by cert-manager. When `certs.webhook.create` is `true` (default), the chart creates cert-manager `Certificate` resources and relies on `cert-manager.io/inject-ca-from` to populate webhook `caBundle` values.
 
-For cert-manager-free installs, set `certs.webhook.create` to `false` and pre-create the serving certificate secret (`certs.webhook.webhookServerCertSecretName`, default `webhook-server-cert`) with `tls.crt` and `tls.key`. The operator deployment already mounts this secret — no deployment changes needed.
+To manage webhook TLS externally, set `certs.webhook.create` to `false`, supply `certs.webhook.caBundle`, and pre-create the serving cert secret outside Helm (private keys should not be passed through Helm values or CI logs). See [Base64-encoded caBundle](#base64-encoded-cabundle) below.
+
+Pre-create the serving certificate secret (`certs.webhook.webhookServerCertSecretName`, default `webhook-server-cert`) with `tls.crt` and `tls.key`. The operator deployment already mounts this secret — no deployment changes needed.
 
 ```sh
 kubectl create secret tls webhook-server-cert \
@@ -71,6 +73,7 @@ The result must be a single-line string with no line breaks.
 
 ```sh
 helm install aerospike-kubernetes-operator ./aerospike-kubernetes-operator \
+  --set certs.webhook.create=false \
   --set certs.webhook.caBundle="${CA_BUNDLE}"
 ```
 
@@ -79,6 +82,7 @@ Or in a values file:
 ```yaml
 certs:
   webhook:
+    create: false
     caBundle: "LS0tLS1CRUdJTi..."   # base64-encoded CA PEM
 ```
 

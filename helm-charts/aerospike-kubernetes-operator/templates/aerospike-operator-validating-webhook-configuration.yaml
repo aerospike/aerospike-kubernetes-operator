@@ -1,10 +1,7 @@
 apiVersion: admissionregistration.k8s.io/v1
 kind: ValidatingWebhookConfiguration
 metadata:
-  {{- if not .Values.certs.webhook.caBundle }}
-  annotations:
-    cert-manager.io/inject-ca-from: {{ .Release.Namespace }}/aerospike-operator-serving-cert
-  {{- end }}
+  {{- include "aerospike-kubernetes-operator.webhookCAInjectionAnnotations" . | nindent 2 }}
   name: aerospike-operator-validating-webhook-configuration
   labels:
     app: {{ template "aerospike-kubernetes-operator.fullname" . }}
@@ -14,9 +11,7 @@ webhooks:
 - admissionReviewVersions:
   - v1
   clientConfig:
-    {{- with .Values.certs.webhook.caBundle }}
-    caBundle: {{ . }}
-    {{- end }}
+    {{- include "aerospike-kubernetes-operator.webhookCABundle" . | nindent 4 }}
     service:
       name: aerospike-operator-webhook-service
       namespace: {{ .Release.Namespace }}
@@ -47,9 +42,7 @@ webhooks:
 - admissionReviewVersions:
     - v1
   clientConfig:
-    {{- with .Values.certs.webhook.caBundle }}
-    caBundle: {{ . }}
-    {{- end }}
+    {{- include "aerospike-kubernetes-operator.webhookCABundle" . | nindent 4 }}
     service:
       name: aerospike-operator-webhook-service
       namespace: {{ .Release.Namespace }}
@@ -80,9 +73,7 @@ webhooks:
 - admissionReviewVersions:
     - v1
   clientConfig:
-    {{- with .Values.certs.webhook.caBundle }}
-    caBundle: {{ . }}
-    {{- end }}
+    {{- include "aerospike-kubernetes-operator.webhookCABundle" . | nindent 4 }}
     service:
       name: aerospike-operator-webhook-service
       namespace: {{ .Release.Namespace }}
@@ -113,9 +104,7 @@ webhooks:
 - admissionReviewVersions:
     - v1
   clientConfig:
-    {{- with .Values.certs.webhook.caBundle }}
-    caBundle: {{ . }}
-    {{- end }}
+    {{- include "aerospike-kubernetes-operator.webhookCABundle" . | nindent 4 }}
     service:
       name: aerospike-operator-webhook-service
       namespace: {{ .Release.Namespace }}
@@ -147,9 +136,7 @@ webhooks:
 - admissionReviewVersions:
     - v1
   clientConfig:
-    {{- with .Values.certs.webhook.caBundle }}
-    caBundle: {{ . }}
-    {{- end }}
+    {{- include "aerospike-kubernetes-operator.webhookCABundle" . | nindent 4 }}
     service:
       name: aerospike-operator-webhook-service
       namespace: {{ .Release.Namespace }}

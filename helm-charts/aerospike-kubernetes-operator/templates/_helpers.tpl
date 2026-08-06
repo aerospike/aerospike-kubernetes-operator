@@ -62,3 +62,31 @@ Deprecated fields are not allowed to be used with new charts, install/upgrade sh
 {{- end -}}
 
 {{- end -}}
+
+{{/*
+Validate webhook TLS configuration.
+*/}}
+{{- define "validateWebhookCerts" -}}
+{{- if and .Values.certs.webhook.create .Values.certs.webhook.caBundle }}
+{{- fail "certs.webhook.caBundle and certs.webhook.create are mutually exclusive: set certs.webhook.create=false when supplying a static caBundle" }}
+{{- end }}
+{{- end -}}
+
+{{/*
+Inject cert-manager CA when a static caBundle is not supplied.
+*/}}
+{{- define "aerospike-kubernetes-operator.webhookCAInjectionAnnotations" -}}
+{{- if not .Values.certs.webhook.caBundle }}
+annotations:
+  cert-manager.io/inject-ca-from: {{ .Release.Namespace }}/aerospike-operator-serving-cert
+{{- end }}
+{{- end -}}
+
+{{/*
+Static webhook CA bundle for clientConfig when TLS is managed externally.
+*/}}
+{{- define "aerospike-kubernetes-operator.webhookCABundle" -}}
+{{- with .Values.certs.webhook.caBundle }}
+caBundle: {{ . | replace "\n" "" | quote }}
+{{- end }}
+{{- end -}}
