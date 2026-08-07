@@ -66,7 +66,8 @@ const (
 	ConfKeyPort    = "port"
 
 	// XDR keys.
-	ConfKeyXdr = "xdr"
+	ConfKeyXdr      = "xdr"
+	ConfKeyAuthMode = "auth-mode"
 
 	// Security keys.
 	ConfKeySecurity                    = "security"
