@@ -1057,10 +1057,12 @@ func clusterWithMaxIgnorablePod(ctx goctx.Context) {
 
 					By("Verifying cluster reaches Completed — pending pod treated as ignorable")
 
-					cluster, clusterErr := getCluster(k8sClient, ctx, pendingClusterNN)
-					Expect(clusterErr).ToNot(HaveOccurred())
-					Expect(cluster.Status.Phase).To(Equal(asdbv1.AerospikeClusterCompleted),
-						"cluster must be Completed with the pending pod treated as ignorable")
+					Eventually(func(g Gomega) {
+						cluster, clusterErr := getCluster(k8sClient, ctx, pendingClusterNN)
+						g.Expect(clusterErr).ToNot(HaveOccurred())
+						g.Expect(cluster.Status.Phase).To(Equal(asdbv1.AerospikeClusterCompleted),
+							"cluster must be Completed with the pending pod treated as ignorable")
+					}, 2*time.Minute, retryInterval).Should(Succeed())
 				},
 			)
 		},

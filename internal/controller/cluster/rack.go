@@ -2,6 +2,7 @@ package cluster
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"path/filepath"
 	"reflect"
@@ -10,7 +11,7 @@ import (
 
 	appsv1 "k8s.io/api/apps/v1"
 	corev1 "k8s.io/api/core/v1"
-	"k8s.io/apimachinery/pkg/api/errors"
+	k8serrors "k8s.io/apimachinery/pkg/api/errors"
 	ls "k8s.io/apimachinery/pkg/labels"
 	"k8s.io/apimachinery/pkg/util/intstr"
 	"k8s.io/apimachinery/pkg/util/sets"
@@ -76,7 +77,7 @@ func (r *SingleClusterReconciler) reconcileRacks(ctx context.Context) common.Rec
 			utils.GetRackIdentifier(state.Rack.ID, state.Rack.Revision))
 
 		if err = r.Get(ctx, stsName, found); err != nil {
-			if !errors.IsNotFound(err) {
+			if !k8serrors.IsNotFound(err) {
 				return common.ReconcileError(err)
 			}
 
@@ -114,7 +115,7 @@ func (r *SingleClusterReconciler) reconcileRacks(ctx context.Context) common.Rec
 			utils.GetRackIdentifier(state.Rack.ID, state.Rack.Revision))
 
 		if err = r.Get(ctx, stsName, found); err != nil {
-			if !errors.IsNotFound(err) {
+			if !k8serrors.IsNotFound(err) {
 				return common.ReconcileError(err)
 			}
 
@@ -182,7 +183,7 @@ func (r *SingleClusterReconciler) waitForAllRacksReady(
 			utils.GetRackIdentifier(state.Rack.ID, state.Rack.Revision))
 
 		if err := r.Get(ctx, stsName, found); err != nil {
-			if !errors.IsNotFound(err) {
+			if !k8serrors.IsNotFound(err) {
 				return common.ReconcileError(err)
 			}
 
@@ -216,21 +217,30 @@ func (r *SingleClusterReconciler) waitForAllRacksReady(
 		}
 
 		if waitErr != nil {
-			// If the wait times out try again.
-			// The wait is required in cases where scale up waits for a pod to
-			// terminate times out and event is re-queued.
-			// Next reconcile will not invoke scale up or down and will
-			// fall through,
-			// and might run reconcile steps common to all racks before the racks
-			// have scaled up.
-			waitMsg := "Failed to wait for StatefulSet to be ready, will requeue"
-			if ignoreSidecar {
-				waitMsg = "Failed to wait for Aerospike server containers to be ready, will requeue"
+			var notReady *stsNotReadyError
+			if errors.As(waitErr, &notReady) {
+				// Pod is still starting up — genuine timeout, requeue and check again.
+				// The wait is required in cases where scale up waits for a pod to
+				// terminate times out and event is re-queued.
+				// Next reconcile will not invoke scale up or down and will
+				// fall through,
+				// and might run reconcile steps common to all racks before the racks
+				// have scaled up.
+				waitMsg := "Failed to wait for StatefulSet to be ready, will requeue"
+				if ignoreSidecar {
+					waitMsg = "Failed to wait for Aerospike server containers to be ready, will requeue"
+				}
+
+				r.Log.Error(waitErr, waitMsg, "statefulSet", utils.GetNamespacedName(found))
+
+				return common.ReconcileRequeueAfter(1)
 			}
 
-			r.Log.Error(waitErr, waitMsg, "statefulSet", utils.GetNamespacedName(found))
+			// Pod failure or API error — hard error.
+			r.Log.Error(waitErr, "Error while waiting for StatefulSet to be ready",
+				"statefulSet", utils.GetNamespacedName(found))
 
-			return common.ReconcileRequeueAfter(1)
+			return common.ReconcileError(waitErr)
 		}
 	}
 
@@ -337,7 +347,7 @@ func (r *SingleClusterReconciler) deleteRacks(
 		err := r.Get(ctx, stsName, found)
 		if err != nil {
 			// If not found, then go to the next
-			if errors.IsNotFound(err) {
+			if k8serrors.IsNotFound(err) {
 				continue
 			}
 
@@ -889,7 +899,7 @@ func (r *SingleClusterReconciler) scaleUpRack(
 		r.aeroCluster, corev1.EventTypeNormal, "RackScaledUp",
 		eventRackScaleMessage(
 			"Scaled up", rackState.Rack.ID,
-			utils.GetNamespacedNameString(found), *found.Spec.Replicas, desiredSize,
+			utils.GetNamespacedNameString(found), oldSz, *found.Spec.Replicas,
 		),
 	)
 
@@ -1275,7 +1285,7 @@ func (r *SingleClusterReconciler) scaleDownRack(
 		r.aeroCluster, corev1.EventTypeNormal, "RackScaledDown",
 		eventRackScaleMessage(
 			"Scaled down", rackState.Rack.ID,
-			utils.GetNamespacedNameString(found), *found.Spec.Replicas, desiredSize,
+			utils.GetNamespacedNameString(found), scaleDownTargetSize, *found.Spec.Replicas,
 		),
 	)
 
@@ -2291,7 +2301,7 @@ func (r *SingleClusterReconciler) reconcileRevisionChangedRacks(
 
 	newSts, err := r.getSTS(ctx, newRack)
 	if err != nil {
-		if !errors.IsNotFound(err) {
+		if !k8serrors.IsNotFound(err) {
 			return common.ReconcileError(err)
 		}
 		// Create new STS
@@ -2305,7 +2315,7 @@ func (r *SingleClusterReconciler) reconcileRevisionChangedRacks(
 
 	oldSts, err := r.getSTS(ctx, oldRack)
 	if err != nil {
-		if !errors.IsNotFound(err) {
+		if !k8serrors.IsNotFound(err) {
 			return common.ReconcileError(err)
 		}
 

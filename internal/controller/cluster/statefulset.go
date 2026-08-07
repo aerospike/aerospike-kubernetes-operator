@@ -246,6 +246,18 @@ func (r *SingleClusterReconciler) deleteSTS(ctx context.Context, st *appsv1.Stat
 	return r.Delete(ctx, st)
 }
 
+// stsNotReadyError is returned when the wait loop exhausts all retries but the
+// pod is still starting up (not a failure — just slow). This is the only error
+// that should result in a requeue; everything else is a hard ReconcileError.
+type stsNotReadyError struct {
+	podName string
+	reason  string
+}
+
+func (e *stsNotReadyError) Error() string {
+	return fmt.Sprintf("pod %s not ready yet: %s", e.podName, e.reason)
+}
+
 func (r *SingleClusterReconciler) waitForSTSPodsServerReady(
 	ctx context.Context, st *appsv1.StatefulSet, ignorablePodNames sets.Set[string],
 ) error {
@@ -312,10 +324,10 @@ func (r *SingleClusterReconciler) waitForSTSPodsServerReady(
 		}
 
 		if !isReady {
-			return fmt.Errorf(
-				"server container in Pod %s did not become ready, status: %v",
-				utils.NamespacedName(st.Namespace, podName), pod.Status.ContainerStatuses,
-			)
+			return &stsNotReadyError{
+				podName: utils.NamespacedName(st.Namespace, podName),
+				reason:  fmt.Sprintf("server container not ready, containerStatuses: %v", pod.Status.ContainerStatuses),
+			}
 		}
 	}
 
@@ -376,9 +388,8 @@ func (r *SingleClusterReconciler) waitForSTSToBeReady(
 			}
 
 			if err := utils.CheckPodFailed(pod); err != nil {
-				return fmt.Errorf(
-					"check StatefulSet pod %s: %w", utils.NamespacedName(st.Namespace, podName), err,
-				)
+				return fmt.Errorf("pod %s failed: %w",
+					utils.NamespacedName(st.Namespace, podName), err)
 			}
 
 			if utils.IsPodRunningAndReady(pod) {
@@ -393,11 +404,10 @@ func (r *SingleClusterReconciler) waitForSTSToBeReady(
 		}
 
 		if !isReady {
-			statusErr := fmt.Errorf(
-				"status for Pod %s: resource not ready, conditions=%v",
-				utils.GetNamespacedNameString(pod), pod.Status.Conditions)
-
-			return statusErr
+			return &stsNotReadyError{
+				podName: utils.GetNamespacedNameString(pod),
+				reason:  fmt.Sprintf("resource not ready, conditions: %v", pod.Status.Conditions),
+			}
 		}
 	}
 
