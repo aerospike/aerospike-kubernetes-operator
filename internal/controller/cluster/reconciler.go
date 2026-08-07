@@ -214,11 +214,12 @@ func (r *SingleClusterReconciler) Reconcile(ctx context.Context) (result ctrl.Re
 	// Revert migrate-fill-delay to the original value if it was set to a different value while processing racks.
 	// Passing the first rack from the list as all the racks will have the same migrate-fill-delay
 	// Redundant safe check to revert migrate-fill-delay if the previous revert operation missed/skipped somehow
-	if res := r.setMigrateFillDelay(
+	mfd, err := asdbv1.GetMigrateFillDelay(&r.aeroCluster.Spec.RackConfig.Racks[0].AerospikeConfig)
+	if err != nil {
+		return reconcile.Result{}, fmt.Errorf("get migrate-fill-delay from spec: %w", err)
+	}
 
-		ctx, policy, &r.aeroCluster.Spec.RackConfig.Racks[0].AerospikeConfig,
-		nil, ignorablePodNames,
-	); !res.IsSuccess {
+	if res := r.setMigrateFillDelay(ctx, policy, mfd, ignorablePodNames); !res.IsSuccess {
 		if res.Err != nil {
 			return reconcile.Result{}, fmt.Errorf("revert migrate-fill-delay: %w", res.Err)
 		}

@@ -341,55 +341,27 @@ func (r *SingleClusterReconciler) rollingRestartPods(
 	if len(activePods) != 0 {
 		r.Log.Info("Restart active Pods", "pods", getPodNames(activePods))
 
-		if res := r.waitForMultipleNodesSafeStopReady(ctx, activePods, ignorablePodNames); !res.IsSuccess {
-			return res
+		// mfdDelay < 0 → MFD management disabled. 0 or positive → zero first, then raise to
+		// mfdDelay before quiesce so that quiesce-triggered fills are also suppressed.
+		mfdDelay, err := r.mfdDelayForRestart(rackState, podsToRestart, restartTypeMap)
+		if err != nil {
+			return common.ReconcileError(fmt.Errorf(
+				"resolve migrate-fill-delay for rack %d: %w", rackState.Rack.ID, err))
 		}
 
-		var clientPolicy *as.ClientPolicy
+		r.Log.Info(fmt.Sprintf("migrate-fill-delay for Pod restart: %d", mfdDelay))
 
-		setMigrateFillDelay := r.shouldSetMigrateFillDelay(podsToRestart, restartTypeMap)
-
-		r.Log.Info(
-			fmt.Sprintf("Adjust migrate-fill-delay prior to Pod restart: %t", setMigrateFillDelay),
-		)
-
-		// Set migrate-fill-delay to RestartMigrateFillDelay before restarting active pods so that
-		// migration fills are held off while the pod is temporarily down. This will be a no-op in
-		// the first reconcile (no previous 0-reset to revert).
-		if setMigrateFillDelay {
-			clientPolicy = r.getClientPolicy(ctx)
-			restartDelay := int(*r.aeroCluster.Spec.RestartMigrateFillDelay)
-
-			if res := r.setMigrateFillDelay(ctx, clientPolicy, nil, &restartDelay, ignorablePodNames); !res.IsSuccess {
-				if res.Err != nil {
-					res.Err = fmt.Errorf(
-						"set migrate-fill-delay to restartMigrateFillDelay %d for rack %d before restarting running Pods: %w",
-						restartDelay, rackState.Rack.ID, res.Err,
-					)
-				}
-
-				return res
-			}
+		if res := r.waitForMultipleNodesSafeStopReady(ctx, activePods, ignorablePodNames, mfdDelay); !res.IsSuccess {
+			return res
 		}
 
 		// Active pods are healthy — any restart of them is a planned operation.
 		if res := r.restartPods(ctx, rackState, activePods, restartTypeMap, false); !res.IsSuccess {
 			return res
 		}
-
-		// Reset migrate-fill-delay to 0 after pods have restarted and rejoined the cluster so that
-		// rebalancing can proceed immediately.
-		if setMigrateFillDelay {
-			zeroDelay := 0
-			if res := r.setMigrateFillDelay(ctx, clientPolicy, nil, &zeroDelay, ignorablePodNames); !res.IsSuccess {
-				if res.Err != nil {
-					res.Err = fmt.Errorf("set migrate-fill-delay to `0` after restarting the running pods: %w",
-						res.Err)
-				}
-
-				return res
-			}
-		}
+		// No explicit MFD reset here: for subsequent batches, waitForMultipleNodesSafeStopReady
+		// sets MFD to 0 before the next stability check. For the last batch, reconciler.go resets
+		// it to configMFD after all racks are processed within the same reconcile.
 	}
 
 	if len(failedWithinGracePeriodPods) != 0 {
@@ -668,6 +640,32 @@ func getFailedAndActivePods(
 	return failedPods, failedWithinGracePeriodPods, activePods
 }
 
+// podNamesToSet returns a Set containing the names of the given pods.
+func podNamesToSet(pods []*corev1.Pod) sets.Set[string] {
+	names := sets.New[string]()
+	for idx := range pods {
+		names.Insert(pods[idx].Name)
+	}
+
+	return names
+}
+
+// hasDefinitiveFailure reports whether at least one pod in the list has a failure that is not
+// merely Unschedulable. Unschedulable pods are transient — the user may have set a large
+// OverrideMigrateFillDelay to tolerate a node being temporarily unavailable. Definitive failures
+// (PodFailed phase, CrashLoopBackOff, ImagePullBackOff, etc.) indicate the pod cannot start and
+// the MFD override should be reverted.
+func hasDefinitiveFailure(pods []*corev1.Pod) bool {
+	for idx := range pods {
+		isUnschedulable, _ := utils.IsPodReasonUnschedulable(pods[idx])
+		if !isUnschedulable {
+			return true
+		}
+	}
+
+	return false
+}
+
 func getNonIgnorablePods(pods []*corev1.Pod, ignorablePodNames sets.Set[string],
 ) []*corev1.Pod {
 	nonIgnorablePods := make([]*corev1.Pod, 0, len(pods))
@@ -702,49 +700,25 @@ func (r *SingleClusterReconciler) safelyDeletePodsAndEnsureImageUpdated(
 	if len(activePods) != 0 {
 		r.Log.Info("Restart active Pods with updated container image", "pods", getPodNames(activePods))
 
-		if res := r.waitForMultipleNodesSafeStopReady(ctx, activePods, ignorablePodNames); !res.IsSuccess {
-			return res
+		// mfdDelay < 0 → MFD management disabled. 0 or positive → zero first, then raise to
+		// mfdDelay before quiesce so that quiesce-triggered fills are also suppressed.
+		mfdDelay, err := r.mfdDelayForRestart(rackState, podsToUpdate, nil)
+		if err != nil {
+			return common.ReconcileError(err)
 		}
 
-		var clientPolicy *as.ClientPolicy
+		r.Log.Info(fmt.Sprintf("migrate-fill-delay for Pod upgrade: %d", mfdDelay))
 
-		setMigrateFillDelay := r.shouldSetMigrateFillDelay(podsToUpdate, nil)
-
-		r.Log.Info(
-			fmt.Sprintf("Adjust migrate-fill-delay prior to Pod restart: %t", setMigrateFillDelay))
-
-		// Set migrate-fill-delay to RestartMigrateFillDelay before upgrading active pods so that
-		// migration fills are held off while the pod is temporarily down. This will be a no-op in
-		// the first reconcile (no previous 0-reset to revert).
-		if setMigrateFillDelay {
-			clientPolicy = r.getClientPolicy(ctx)
-			restartDelay := int(*r.aeroCluster.Spec.RestartMigrateFillDelay)
-
-			if res := r.setMigrateFillDelay(ctx, clientPolicy, nil, &restartDelay, ignorablePodNames); !res.IsSuccess {
-				if res.Err != nil {
-					res.Err = fmt.Errorf("set migrate-fill-delay to RestartMigrateFillDelay %d: %w", restartDelay, res.Err)
-				}
-
-				return res
-			}
+		if res := r.waitForMultipleNodesSafeStopReady(ctx, activePods, ignorablePodNames, mfdDelay); !res.IsSuccess {
+			return res
 		}
 
 		if res := r.deletePodAndEnsureImageUpdated(ctx, rackState, activePods, false); !res.IsSuccess {
 			return res
 		}
-
-		// Reset migrate-fill-delay to 0 after pods have restarted and rejoined the cluster so that
-		// rebalancing can proceed immediately.
-		if setMigrateFillDelay {
-			zeroDelay := 0
-			if res := r.setMigrateFillDelay(ctx, clientPolicy, nil, &zeroDelay, ignorablePodNames); !res.IsSuccess {
-				if res.Err != nil {
-					res.Err = fmt.Errorf("set migrate-fill-delay to `0`: %w", res.Err)
-				}
-
-				return res
-			}
-		}
+		// No explicit MFD reset here: for subsequent batches, waitForMultipleNodesSafeStopReady
+		// sets MFD to 0 before the next stability check. For the last batch, reconciler.go resets
+		// it to configMFD after all racks are processed within the same reconcile.
 	}
 
 	if len(failedWithinGracePeriodPods) != 0 {
@@ -1991,29 +1965,69 @@ func (r *SingleClusterReconciler) getEvictionBlockedPods(ctx context.Context) (s
 	return evictionBlockedPods, nil
 }
 
-// shouldSetMigrateFillDelay determines if migrate-fill-delay should be managed during pod restart.
-// Returns true when all of the following conditions are met:
-// 1. At least one pod needs a full pod restart (not just a warm/ASD restart).
-// 2. RestartMigrateFillDelay is configured and greater than 0 in the cluster spec.
-func (r *SingleClusterReconciler) shouldSetMigrateFillDelay(
-	podsToRestart []*corev1.Pod, restartTypeMap map[string]RestartType) bool {
-	if r.aeroCluster.Spec.RestartMigrateFillDelay == nil || *r.aeroCluster.Spec.RestartMigrateFillDelay == 0 {
-		return false
-	}
+// mfdDelayForRestart returns the migrate-fill-delay value to apply during a pod restart, or -1
+// if MFD management should be skipped entirely for this restart.
+//
+//   - Returns -1 when no pod restart is needed or neither OverrideMigrateFillDelay nor the
+//     DeleteLocalStorageOnRestart path applies.
+//   - Returns 0 or a positive value (the resolved delay) when MFD management is active.
+func (r *SingleClusterReconciler) mfdDelayForRestart(rackState *RackState,
+	podsToRestart []*corev1.Pod, restartTypeMap map[string]RestartType) (int, error) {
+	// Require at least one full pod restart (not just a warm/ASD restart).
+	podRestartNeeded := restartTypeMap == nil // nil → upgrade path, always a full restart
 
-	// If restartTypeMap is nil, we assume that a pod restart is needed.
-	if restartTypeMap == nil {
-		return true
-	}
-
-	for idx := range podsToRestart {
-		pod := podsToRestart[idx]
-		if restartTypeMap[pod.Name] == podRestart {
-			return true
+	if !podRestartNeeded {
+		for idx := range podsToRestart {
+			if restartTypeMap[podsToRestart[idx].Name] == podRestart {
+				podRestartNeeded = true
+				break
+			}
 		}
 	}
 
-	return false
+	if !podRestartNeeded {
+		return -1, nil
+	}
+
+	// Condition 1: explicit override configured via RestartStrategy.
+	if override := r.aeroCluster.Spec.RestartStrategy.GetOverrideMigrateFillDelay(); override > 0 {
+		return int(override), nil
+	}
+
+	// TODO: remove this block once DeleteLocalStorageOnRestart-based MFD toggling is deprecated.
+	if asdbv1.GetBool(rackState.Rack.Storage.DeleteLocalStorageOnRestart) {
+		localStorageClassSet := sets.New[string](rackState.Rack.Storage.LocalStorageClasses...)
+
+		for idx := range rackState.Rack.Storage.Volumes {
+			volume := &rackState.Rack.Storage.Volumes[idx]
+			if volume.Source.PersistentVolume != nil &&
+				localStorageClassSet.Has(volume.Source.PersistentVolume.StorageClass) {
+				delay, err := asdbv1.GetMigrateFillDelay(&rackState.Rack.AerospikeConfig)
+				if err != nil {
+					return -1, err
+				}
+
+				return delay, nil
+			}
+		}
+	}
+
+	return -1, nil
+}
+
+// revertMFDToConfig sets migrate-fill-delay back to the aerospike.conf configured value.
+func (r *SingleClusterReconciler) revertMFDToConfig(
+	ctx context.Context,
+	policy *as.ClientPolicy,
+	asConfig *asdbv1.AerospikeConfigSpec,
+	ignorablePodNames sets.Set[string],
+) common.ReconcileResult {
+	configMFD, err := asdbv1.GetMigrateFillDelay(asConfig)
+	if err != nil {
+		return common.ReconcileError(fmt.Errorf("read configMFD for revert: %w", err))
+	}
+
+	return r.setMigrateFillDelay(ctx, policy, configMFD, ignorablePodNames)
 }
 
 // isAnyPodSpecUpdated checks if any pod spec has been updated indirectly based on

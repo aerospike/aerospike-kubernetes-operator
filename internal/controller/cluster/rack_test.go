@@ -24,6 +24,7 @@ import (
 func newTestAerospikeCluster(namespace, name string) *asdbv1.AerospikeCluster { //nolint:unparam // generic function
 	aeroConfig := asdbv1.AerospikeConfigSpec{
 		Value: map[string]interface{}{
+			asdbv1.ConfKeyService: map[string]interface{}{},
 			asdbv1.ConfKeyNetwork: map[string]interface{}{
 				asdbv1.ConfKeyNetworkService: map[string]interface{}{
 					asdbv1.ConfKeyPort: float64(3000),

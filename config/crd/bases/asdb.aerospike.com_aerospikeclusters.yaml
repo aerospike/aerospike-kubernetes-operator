@@ -8729,17 +8729,25 @@ spec:
                       pods that can be scaled down simultaneously
                     x-kubernetes-int-or-string: true
                 type: object
-              restartMigrateFillDelay:
+              restartStrategy:
                 description: |-
-                  RestartMigrateFillDelay is the duration in seconds that AKO temporarily sets as the
-                  migrate-fill-delay on the Aerospike cluster during a pod restart. This delays migration
-                  fills while a pod is down, giving the cluster time to avoid unnecessary data movement
-                  during short maintenance windows. Once the pod restarts and rejoins the cluster, AKO
-                  resets migrate-fill-delay to 0 so that rebalancing can proceed immediately.
-                  This field only takes effect when a pod restart (not a warm restart) is required.
-                format: int64
-                minimum: 0
-                type: integer
+                  RestartStrategy configures transient operator behaviour applied around a rolling pod restart
+                  or upgrade.
+                properties:
+                  overrideMigrateFillDelay:
+                    description: |-
+                      OverrideMigrateFillDelay is the duration in seconds that AKO temporarily sets as the
+                      migrate-fill-delay on the Aerospike cluster before restarting pods. This delays migration
+                      fills while a pod is down, giving the cluster time to avoid unnecessary data movement
+                      during short maintenance windows. Once the pod restarts and rejoins the cluster, AKO
+                      resets migrate-fill-delay to 0 so that rebalancing can proceed immediately.
+                      This field only takes effect when a pod restart (not a warm restart) is required.
+                      This settings are applied dynamically before the first pod is taken down and
+                      reverted once all pods have rejoined; they are never written to aerospike.conf.
+                    format: int64
+                    minimum: 0
+                    type: integer
+                type: object
               rosterNodeBlockList:
                 description: RosterNodeBlockList is a list of blocked nodeIDs from
                   roster in a strong-consistency setup
@@ -18359,16 +18367,25 @@ spec:
                       More info: https://kubernetes.io/docs/concepts/configuration/manage-resources-containers/
                     type: object
                 type: object
-              restartMigrateFillDelay:
+              restartStrategy:
                 description: |-
-                  RestartMigrateFillDelay is the duration in seconds that AKO temporarily sets as the
-                  migrate-fill-delay on the Aerospike cluster during a pod restart. This delays migration
-                  fills while a pod is down, giving the cluster time to avoid unnecessary data movement
-                  during short maintenance windows. Once the pod restarts and rejoins the cluster, AKO
-                  resets migrate-fill-delay to 0 so that rebalancing can proceed immediately.
-                  This field only takes effect when a pod restart (not a warm restart) is required.
-                format: int64
-                type: integer
+                  RestartStrategy configures transient operator behaviour applied around a rolling pod restart
+                  or upgrade.
+                properties:
+                  overrideMigrateFillDelay:
+                    description: |-
+                      OverrideMigrateFillDelay is the duration in seconds that AKO temporarily sets as the
+                      migrate-fill-delay on the Aerospike cluster before restarting pods. This delays migration
+                      fills while a pod is down, giving the cluster time to avoid unnecessary data movement
+                      during short maintenance windows. Once the pod restarts and rejoins the cluster, AKO
+                      resets migrate-fill-delay to 0 so that rebalancing can proceed immediately.
+                      This field only takes effect when a pod restart (not a warm restart) is required.
+                      This settings are applied dynamically before the first pod is taken down and
+                      reverted once all pods have rejoined; they are never written to aerospike.conf.
+                    format: int64
+                    minimum: 0
+                    type: integer
+                type: object
               rosterNodeBlockList:
                 description: RosterNodeBlockList is a list of blocked nodeIDs from
                   roster in a strong-consistency setup

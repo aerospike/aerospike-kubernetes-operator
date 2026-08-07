@@ -22,166 +22,160 @@ func makePod(name string) *corev1.Pod {
 }
 
 // ---------------------------------------------------------------------------
-// shouldSetMigrateFillDelay
+// mfdDelayForRestart
 // ---------------------------------------------------------------------------
 
-func TestShouldSetMigrateFillDelay(t *testing.T) {
+func TestMFDDelayForRestart(t *testing.T) {
+	trueVal := true
+	localStorageClass := "local-ssd"
+
 	tests := []struct {
-		delay          *int64
-		restartTypeMap map[string]RestartType
-		name           string
-		pods           []*corev1.Pod
-		want           bool
+		delay                       *int64
+		restartTypeMap              map[string]RestartType
+		name                        string
+		pods                        []*corev1.Pod
+		deleteLocalStorageOnRestart *bool
+		localStorageClasses         []string
+		localStorageVolumes         []asdbv1.VolumeSpec
+		// wantDelay: -1 = MFD management disabled; 0 = zero only (no raise); >0 = override value.
+		wantDelay int
 	}{
 		{
-			name:           "nil RestartMigrateFillDelay → never set MFD",
+			name:           "nil RestartStrategy, no deleteLocalStorageOnRestart → disabled",
 			delay:          nil,
 			pods:           []*corev1.Pod{makePod("pod-0")},
 			restartTypeMap: map[string]RestartType{"pod-0": podRestart},
-			want:           false,
+			wantDelay:      -1,
 		},
 		{
-			name:           "zero RestartMigrateFillDelay → never set MFD",
+			name:           "zero OverrideMigrateFillDelay → disabled",
 			delay:          ptrInt64(0),
 			pods:           []*corev1.Pod{makePod("pod-0")},
 			restartTypeMap: map[string]RestartType{"pod-0": podRestart},
-			want:           false,
+			wantDelay:      -1,
 		},
 		{
-			name:           "nil restartTypeMap assumes pod restart is needed",
+			name:           "nil restartTypeMap with OverrideMigrateFillDelay assumes pod restart",
 			delay:          ptrInt64(120),
 			pods:           []*corev1.Pod{makePod("pod-0")},
 			restartTypeMap: nil,
-			want:           true,
+			wantDelay:      120,
 		},
 		{
-			name:           "at least one pod has podRestart → set MFD",
+			name:           "at least one pod has podRestart with OverrideMigrateFillDelay → override",
 			delay:          ptrInt64(120),
 			pods:           []*corev1.Pod{makePod("pod-0")},
 			restartTypeMap: map[string]RestartType{"pod-0": podRestart},
-			want:           true,
+			wantDelay:      120,
 		},
 		{
-			name:  "all pods are warm (quickRestart) only → do not set MFD",
+			name:  "all pods are warm (quickRestart) only → disabled",
 			delay: ptrInt64(120),
 			pods:  []*corev1.Pod{makePod("pod-0"), makePod("pod-1")},
 			restartTypeMap: map[string]RestartType{
 				"pod-0": quickRestart,
 				"pod-1": quickRestart,
 			},
-			want: false,
+			wantDelay: -1,
 		},
 		{
-			name:  "mix: one quickRestart and one podRestart → set MFD",
+			name:  "mix: one quickRestart and one podRestart with OverrideMigrateFillDelay → override",
 			delay: ptrInt64(120),
 			pods:  []*corev1.Pod{makePod("pod-0"), makePod("pod-1")},
 			restartTypeMap: map[string]RestartType{
 				"pod-0": quickRestart,
 				"pod-1": podRestart,
 			},
-			want: true,
+			wantDelay: 120,
 		},
 		{
-			name:           "no pods to restart and MFD is configured → false",
+			name:           "no pods to restart and MFD is configured → disabled",
 			delay:          ptrInt64(120),
 			pods:           []*corev1.Pod{},
 			restartTypeMap: map[string]RestartType{},
-			want:           false,
+			wantDelay:      -1,
 		},
-	}
-
-	for _, tc := range tests {
-		t.Run(tc.name, func(t *testing.T) {
-			cluster := newTestAerospikeCluster("test-ns", "test-cluster")
-			cluster.Spec.RestartMigrateFillDelay = tc.delay
-
-			r := newTestReconciler(t, cluster, &interceptor.Funcs{})
-			got := r.shouldSetMigrateFillDelay(tc.pods, tc.restartTypeMap)
-			require.Equal(t, tc.want, got)
-		})
-	}
-}
-
-// ---------------------------------------------------------------------------
-// shouldSkipMFDUpdate
-// ---------------------------------------------------------------------------
-
-func TestShouldSkipMFDUpdate(t *testing.T) {
-	tests := []struct {
-		restartMFDDelay *int64
-		name            string
-		configMFD       int
-		oldMFD          int
-		want            bool
-	}{
+		// DeleteLocalStorageOnRestart (original master behavior — aerospike.conf MFD not set → 0)
 		{
-			name:            "configMFD non-zero → never skip",
-			configMFD:       60,
-			oldMFD:          0,
-			restartMFDDelay: nil,
-			want:            false,
-		},
-		{
-			name:            "oldMFD non-zero → never skip",
-			configMFD:       0,
-			oldMFD:          30,
-			restartMFDDelay: nil,
-			want:            false,
-		},
-		{
-			name:            "both zero and no RestartMigrateFillDelay → skip",
-			configMFD:       0,
-			oldMFD:          0,
-			restartMFDDelay: nil,
-			want:            true,
-		},
-		{
-			name:            "both zero and zero RestartMigrateFillDelay → skip",
-			configMFD:       0,
-			oldMFD:          0,
-			restartMFDDelay: ptrInt64(0),
-			want:            true,
-		},
-		{
-			name:            "both zero but RestartMigrateFillDelay > 0 → do not skip (force-clear stale value)",
-			configMFD:       0,
-			oldMFD:          0,
-			restartMFDDelay: ptrInt64(120),
-			want:            false,
-		},
-		{
-			name:            "configMFD and oldMFD both non-zero → never skip",
-			configMFD:       60,
-			oldMFD:          30,
-			restartMFDDelay: nil,
-			want:            false,
-		},
-	}
-
-	for _, tc := range tests {
-		t.Run(tc.name, func(t *testing.T) {
-			cluster := newTestAerospikeCluster("test-ns", "test-cluster")
-			cluster.Spec.RestartMigrateFillDelay = tc.restartMFDDelay
-
-			// Populate a status rack so the old-MFD lookup can run.
-			if tc.oldMFD != 0 {
-				cluster.Status.RackConfig.Racks = []asdbv1.Rack{
-					{
-						ID: 1,
-						AerospikeConfig: asdbv1.AerospikeConfigSpec{
-							Value: map[string]interface{}{
-								asdbv1.ConfKeyService: map[string]interface{}{
-									"migrate-fill-delay": int64(tc.oldMFD),
-								},
-							},
-						},
+			name:                        "deleteLocalStorageOnRestart + local storage volume → aerospike.conf delay (0)",
+			delay:                       nil,
+			deleteLocalStorageOnRestart: &trueVal,
+			localStorageClasses:         []string{localStorageClass},
+			localStorageVolumes: []asdbv1.VolumeSpec{
+				{
+					Name: "data",
+					Source: asdbv1.VolumeSource{
+						PersistentVolume: &asdbv1.PersistentVolumeSpec{StorageClass: localStorageClass},
 					},
-				}
+				},
+			},
+			pods:           []*corev1.Pod{makePod("pod-0")},
+			restartTypeMap: map[string]RestartType{"pod-0": podRestart},
+			wantDelay:      0,
+		},
+		{
+			name:                        "deleteLocalStorageOnRestart but no local storage volumes → disabled",
+			delay:                       nil,
+			deleteLocalStorageOnRestart: &trueVal,
+			localStorageClasses:         []string{localStorageClass},
+			localStorageVolumes:         []asdbv1.VolumeSpec{},
+			pods:                        []*corev1.Pod{makePod("pod-0")},
+			restartTypeMap:              map[string]RestartType{"pod-0": podRestart},
+			wantDelay:                   -1,
+		},
+		{
+			name:                        "deleteLocalStorageOnRestart + local storage + only warm restart → disabled",
+			delay:                       nil,
+			deleteLocalStorageOnRestart: &trueVal,
+			localStorageClasses:         []string{localStorageClass},
+			localStorageVolumes: []asdbv1.VolumeSpec{
+				{
+					Name: "data",
+					Source: asdbv1.VolumeSource{
+						PersistentVolume: &asdbv1.PersistentVolumeSpec{StorageClass: localStorageClass},
+					},
+				},
+			},
+			pods:           []*corev1.Pod{makePod("pod-0")},
+			restartTypeMap: map[string]RestartType{"pod-0": quickRestart},
+			wantDelay:      -1,
+		},
+		{
+			name: "OverrideMigrateFillDelay takes precedence when " +
+				"deleteLocalStorageOnRestart is also set",
+			delay:                       ptrInt64(120),
+			deleteLocalStorageOnRestart: &trueVal,
+			localStorageClasses:         []string{localStorageClass},
+			localStorageVolumes: []asdbv1.VolumeSpec{
+				{
+					Name: "data",
+					Source: asdbv1.VolumeSource{
+						PersistentVolume: &asdbv1.PersistentVolumeSpec{StorageClass: localStorageClass},
+					},
+				},
+			},
+			pods:           []*corev1.Pod{makePod("pod-0")},
+			restartTypeMap: map[string]RestartType{"pod-0": podRestart},
+			wantDelay:      120,
+		},
+	}
+
+	for _, tc := range tests {
+		t.Run(tc.name, func(t *testing.T) {
+			cluster := newTestAerospikeCluster("test-ns", "test-cluster")
+			if tc.delay != nil {
+				cluster.Spec.RestartStrategy = &asdbv1.RestartStrategy{OverrideMigrateFillDelay: tc.delay}
 			}
 
+			rackState := newTestRackState(cluster)
+			rackState.Rack.Storage.DeleteLocalStorageOnRestart = tc.deleteLocalStorageOnRestart
+			rackState.Rack.Storage.LocalStorageClasses = tc.localStorageClasses
+			rackState.Rack.Storage.Volumes = tc.localStorageVolumes
+
 			r := newTestReconciler(t, cluster, &interceptor.Funcs{})
-			got := r.shouldSkipMFDUpdate(tc.configMFD, tc.oldMFD)
-			require.Equal(t, tc.want, got)
+			got, err := r.mfdDelayForRestart(rackState, tc.pods, tc.restartTypeMap)
+			require.NoError(t, err)
+			require.Equal(t, tc.wantDelay, got)
 		})
 	}
 }

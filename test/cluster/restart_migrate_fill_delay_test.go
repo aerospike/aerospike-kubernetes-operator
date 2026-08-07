@@ -36,7 +36,9 @@ func RestartMigrateFillDelayTest(ctx goctx.Context) {
 			BeforeEach(
 				func() {
 					aeroCluster := createDummyAerospikeCluster(clusterNamespacedName, 4)
-					aeroCluster.Spec.RestartMigrateFillDelay = &restartMigrateFillDelay
+					aeroCluster.Spec.RestartStrategy = &asdbv1.RestartStrategy{
+						OverrideMigrateFillDelay: &restartMigrateFillDelay,
+					}
 					Expect(DeployCluster(k8sClient, ctx, aeroCluster)).ToNot(HaveOccurred())
 				},
 			)

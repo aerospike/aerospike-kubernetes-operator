@@ -40,8 +40,15 @@ import (
 // The ignorablePodNames is the list of failed or pending pods that are either::
 // 1. going to be deleted eventually and are safe to ignore in stability checks
 // 2. given in ignorePodList by the user and are safe to ignore in stability checks
+//
+// mfdDelay controls migrate-fill-delay management during this function:
+//   - mfdDelay < 0: MFD is left untouched (MFD management is disabled for this restart).
+//   - mfdDelay == 0: MFD is zeroed before the stability check so fills from the previous restart
+//     can drain; it is NOT raised before quiesce (used for scale-down).
+//   - mfdDelay > 0: MFD is zeroed before the stability check, then raised to mfdDelay just before
+//     quiescePods so that fills triggered by quiesce are also suppressed.
 func (r *SingleClusterReconciler) waitForMultipleNodesSafeStopReady(
-	ctx context.Context, pods []*corev1.Pod, ignorablePodNames sets.Set[string],
+	ctx context.Context, pods []*corev1.Pod, ignorablePodNames sets.Set[string], mfdDelay int,
 ) common.ReconcileResult {
 	if len(pods) == 0 {
 		return common.ReconcileSuccess()
@@ -83,6 +90,14 @@ func (r *SingleClusterReconciler) waitForMultipleNodesSafeStopReady(
 		"[rack-%s] Waiting for migrations to complete", pods[0].Labels[asdbv1.AerospikeRackIDLabel],
 	)
 
+	if mfdDelay >= 0 {
+		// Set MFD to 0 so that any fills held from the previous pod restart can drain before the
+		// stability check. Migrations triggered by the upcoming quiesce will be suppressed below.
+		if res := r.setMigrateFillDelay(ctx, policy, 0, ignorablePodNames); !res.IsSuccess {
+			return res
+		}
+	}
+
 	// Check for cluster stability
 	if res := r.waitForClusterStability(policy, allHostConns); !res.IsSuccess {
 		return res
@@ -92,6 +107,15 @@ func (r *SingleClusterReconciler) waitForMultipleNodesSafeStopReady(
 	if err = r.getAndSetRoster(ctx, policy, r.aeroCluster.Spec.RosterNodeBlockList, ignorablePodNames); err != nil {
 		r.Log.Error(err, "Failed to set roster for cluster, will requeue")
 		return common.ReconcileRequeueAfter(1)
+	}
+
+	// Raise MFD to the override value before quiesce so that fills triggered by quiesce are also
+	// suppressed while the pod is absent. Skipped for scale-down (mfdDelay==0) — fills should
+	// proceed once the node is removed.
+	if mfdDelay > 0 {
+		if res := r.setMigrateFillDelay(ctx, policy, mfdDelay, ignorablePodNames); !res.IsSuccess {
+			return res
+		}
 	}
 
 	if err := r.quiescePods(ctx, policy, allHostConns, pods, ignorablePodNames); err != nil {
@@ -292,46 +316,22 @@ func hostID(hostName string, hostPort int) string {
 	return fmt.Sprintf("%s:%d", hostName, hostPort)
 }
 
-// shouldSkipMFDUpdate returns true when the migrate-fill-delay update can be
-// safely skipped. Both the current config value and the previous (status) value
-// must be 0, AND RestartMigrateFillDelay must not be configured. If
-// RestartMigrateFillDelay is set, a crash between the pre-restart apply and the
-// post-restart reset may have left a stale non-zero dynamic value on the
-// cluster, so we must always force-apply 0 in that case.
-func (r *SingleClusterReconciler) shouldSkipMFDUpdate(configMFD, oldMigrateFillDelay int) bool {
-	if configMFD != 0 || oldMigrateFillDelay != 0 {
-		return false
-	}
-
-	return r.aeroCluster.Spec.RestartMigrateFillDelay == nil ||
-		*r.aeroCluster.Spec.RestartMigrateFillDelay == 0
-}
-
-// setMigrateFillDelay sets the migrate-fill-delay on all cluster nodes.
+// setMigrateFillDelay sets the migrate-fill-delay on all cluster nodes to delay fill migrations.
+// The caller is responsible for resolving delay (e.g. via GetMigrateFillDelay for the
+// config-driven value, or a literal 0 for post-restart / scale-down resets).
 //
-// The guard always runs using asConfig (nil is treated as 0): the call is skipped when both the
-// current and previous configured values are 0, unless RestartMigrateFillDelay is set — in that
-// case 0 is force-applied to clear any stale dynamic value left by a crash between the pre-restart
-// set and post-restart reset.
-//
-//   - overrideDelay != nil: apply that exact caller-supplied value (e.g. RestartMigrateFillDelay
-//     before pod restart, 0 after pod restart, or 0 to let scale-down migrations proceed
-//     immediately). The guard still runs to skip the call when MFD is not configured at all.
-//
-//   - overrideDelay == nil: read the value to apply from asConfig.
+// The call is skipped when delay and the previously applied value (from status) are both 0,
+// UNLESS OverrideMigrateFillDelay is set.
 func (r *SingleClusterReconciler) setMigrateFillDelay(
 	ctx context.Context,
 	policy *as.ClientPolicy,
-	asConfig *asdbv1.AerospikeConfigSpec,
-	overrideDelay *int,
+	delay int,
 	ignorablePodNames sets.Set[string],
 ) common.ReconcileResult {
-	configMFD, err := asdbv1.GetMigrateFillDelay(asConfig)
-	if err != nil {
-		return common.ReconcileError(err)
-	}
-
-	var oldMigrateFillDelay int
+	var (
+		oldMigrateFillDelay int
+		err                 error
+	)
 
 	if len(r.aeroCluster.Status.RackConfig.Racks) > 0 {
 		oldMigrateFillDelay, err = asdbv1.GetMigrateFillDelay(&r.aeroCluster.Status.RackConfig.Racks[0].AerospikeConfig)
@@ -340,24 +340,11 @@ func (r *SingleClusterReconciler) setMigrateFillDelay(
 		}
 	}
 
-	if r.shouldSkipMFDUpdate(configMFD, oldMigrateFillDelay) {
+	if delay == 0 && oldMigrateFillDelay == 0 &&
+		r.aeroCluster.Spec.RestartStrategy.GetOverrideMigrateFillDelay() == 0 {
+		// Nothing is configured — no-op.
 		r.Log.Info("migrate-fill-delay config not present or 0, skipping it")
 		return common.ReconcileSuccess()
-	}
-
-	if configMFD == 0 && oldMigrateFillDelay == 0 {
-		// RestartMigrateFillDelay is configured so the cluster may have had MFD set to a
-		// non-zero value dynamically (e.g. after a crash between the pre-restart set and the
-		// post-restart reset). Fall through to force-apply 0 and clear the stale delay.
-		r.Log.Info("migrate-fill-delay config is 0 but RestartMigrateFillDelay is set; " +
-			"applying 0 to clear any stale dynamic value")
-	}
-
-	var migrateFillDelay int
-	if overrideDelay != nil {
-		migrateFillDelay = *overrideDelay
-	} else {
-		migrateFillDelay = configMFD
 	}
 
 	// This doesn't make actual connection, only objects having connection info are created
@@ -370,9 +357,9 @@ func (r *SingleClusterReconciler) setMigrateFillDelay(
 		)
 	}
 
-	r.Log.Info("Setting migrate-fill-delay", "migrateFillDelay", migrateFillDelay)
+	r.Log.Info("Setting migrate-fill-delay", "migrateFillDelay", delay)
 
-	if err := deployment.SetMigrateFillDelay(r.Log, policy, allHostConns, migrateFillDelay); err != nil {
+	if err := deployment.SetMigrateFillDelay(r.Log, policy, allHostConns, delay); err != nil {
 		return common.ReconcileError(err)
 	}
 

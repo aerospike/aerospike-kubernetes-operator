@@ -586,12 +586,11 @@ func (r *SingleClusterReconciler) reconcileRack(
 		// value before the scale down could complete.
 		if (r.aeroCluster.Status.Size > r.aeroCluster.Spec.Size) ||
 			(!r.IsStatusEmpty() && len(r.aeroCluster.Status.RackConfig.Racks) != len(r.aeroCluster.Spec.RackConfig.Racks)) {
-			if res = r.setMigrateFillDelay(
-				ctx, r.getClientPolicy(ctx), &rackState.Rack.AerospikeConfig, nil, nil,
+			if res = r.revertMFDToConfig(
+				ctx, r.getClientPolicy(ctx), &rackState.Rack.AerospikeConfig, nil,
 			); !res.IsSuccess {
 				if res.Err != nil {
-					res.Err = fmt.Errorf("revert migrate-fill-delay after scale down: %w",
-						res.Err)
+					res.Err = fmt.Errorf("revert migrate-fill-delay after scale down: %w", res.Err)
 				}
 
 				return res
@@ -978,22 +977,11 @@ func (r *SingleClusterReconciler) scaleDownRack(
 	// Ignore safe stop check if all pods in the batch are not running.
 	// Ignore migrate-fill-delay if pod is not running. Deleting this pod will not lead to any migration.
 	if isAnyPodRunningAndReady {
-		if res := r.waitForMultipleNodesSafeStopReady(ctx, runningPods, ignorablePodNames); !res.IsSuccess {
+		// mfdDelay=0: zero MFD before the stability check so fills can drain quickly,
+		// but do not raise it before quiesce — for scale-down we want fills to proceed once the
+		// node is removed.
+		if res := r.waitForMultipleNodesSafeStopReady(ctx, runningPods, ignorablePodNames, 0); !res.IsSuccess {
 			// The pod is running and is unsafe to terminate.
-			return found, res
-		}
-
-		// set migrate-fill-delay to 0 across all nodes of cluster to scale down fast
-		// setting migrate-fill-delay only if pod is running and ready.
-		// This check ensures that migrate-fill-delay is not set while processing failed racks.
-		// setting migrate-fill-delay will fail if there are any failed pod
-		zeroDelay := 0
-		if res := r.setMigrateFillDelay(ctx, policy, &rackState.Rack.AerospikeConfig,
-			&zeroDelay, ignorablePodNames); !res.IsSuccess {
-			if res.Err != nil {
-				res.Err = fmt.Errorf("set migrate-fill-delay to 0: %w", res.Err)
-			}
-
 			return found, res
 		}
 	}
@@ -2241,6 +2229,21 @@ func (r *SingleClusterReconciler) handleFailedPodsInRack(
 		r.Log.Info("Reconcile the failed Pods in the Rack",
 			"rackID", rackState.Rack.ID, "rackRevision", rackState.Rack.Revision,
 			"failedPods", getPodNames(failedPods))
+
+		// Revert MFD only when at least one pod has a definitive failure (crash, image error, or
+		// PodFailed phase). If ALL failed pods are merely Unschedulable, the user may have set a
+		// large OverrideMigrateFillDelay precisely to tolerate the pod being absent while a node
+		// is coming up — reverting MFD in that case defeats the purpose of the override.
+		if hasDefinitiveFailure(failedPods) {
+			// Include failed pod names in the ignorable set so that the info call inside
+			// revertMFDToConfig skips their (dead) Aerospike nodes and doesn't fail.
+			ignorableWithFailed := ignorablePodNames.Union(podNamesToSet(failedPods))
+			if res := r.revertMFDToConfig(
+				ctx, r.getClientPolicy(ctx), &rackState.Rack.AerospikeConfig, ignorableWithFailed,
+			); !res.IsSuccess {
+				return res
+			}
+		}
 
 		if res := r.reconcileRack(
 			ctx, found, rackState, ignorablePodNames, failedPods,

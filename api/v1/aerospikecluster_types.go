@@ -208,16 +208,38 @@ type AerospikeClusterSpec struct { //nolint:govet // for readability
 	// +optional
 	EnableRackIDOverride *bool `json:"enableRackIDOverride,omitempty"`
 
-	// RestartMigrateFillDelay is the duration in seconds that AKO temporarily sets as the
-	// migrate-fill-delay on the Aerospike cluster during a pod restart. This delays migration
+	// RestartStrategy configures transient operator behaviour applied around a rolling pod restart
+	// or upgrade.
+	// +operator-sdk:csv:customresourcedefinitions:type=spec,displayName="Restart Strategy"
+	// +optional
+	RestartStrategy *RestartStrategy `json:"restartStrategy,omitempty"`
+}
+
+// RestartStrategy configures transient operator behaviour applied around a rolling pod restart or
+// upgrade. Settings here are applied dynamically before the first pod is taken down and reverted
+// once all pods have rejoined; they are never persisted in aerospike.conf.
+type RestartStrategy struct {
+	// OverrideMigrateFillDelay is the duration in seconds that AKO temporarily sets as the
+	// migrate-fill-delay on the Aerospike cluster before restarting pods. This delays migration
 	// fills while a pod is down, giving the cluster time to avoid unnecessary data movement
 	// during short maintenance windows. Once the pod restarts and rejoins the cluster, AKO
 	// resets migrate-fill-delay to 0 so that rebalancing can proceed immediately.
 	// This field only takes effect when a pod restart (not a warm restart) is required.
-	// +operator-sdk:csv:customresourcedefinitions:type=spec,displayName="Restart Migrate Fill Delay"
+	// This settings are applied dynamically before the first pod is taken down and
+	// reverted once all pods have rejoined; they are never written to aerospike.conf.
+	// +operator-sdk:csv:customresourcedefinitions:type=spec,displayName="Override Migrate Fill Delay"
 	// +kubebuilder:validation:Minimum=0
 	// +optional
-	RestartMigrateFillDelay *int64 `json:"restartMigrateFillDelay,omitempty"`
+	OverrideMigrateFillDelay *int64 `json:"overrideMigrateFillDelay,omitempty"`
+}
+
+// GetOverrideMigrateFillDelay returns OverrideMigrateFillDelay or 0 when the receiver or the field is nil.
+func (rs *RestartStrategy) GetOverrideMigrateFillDelay() int64 {
+	if rs == nil || rs.OverrideMigrateFillDelay == nil {
+		return 0
+	}
+
+	return *rs.OverrideMigrateFillDelay
 }
 
 type OperationKind string
@@ -1059,14 +1081,10 @@ type AerospikeClusterStatusSpec struct { //nolint:govet // for readability
 	// +optional
 	Operations []OperationSpec `json:"operations,omitempty"`
 
-	// RestartMigrateFillDelay is the duration in seconds that AKO temporarily sets as the
-	// migrate-fill-delay on the Aerospike cluster during a pod restart. This delays migration
-	// fills while a pod is down, giving the cluster time to avoid unnecessary data movement
-	// during short maintenance windows. Once the pod restarts and rejoins the cluster, AKO
-	// resets migrate-fill-delay to 0 so that rebalancing can proceed immediately.
-	// This field only takes effect when a pod restart (not a warm restart) is required.
+	// RestartStrategy configures transient operator behaviour applied around a rolling pod restart
+	// or upgrade.
 	// +optional
-	RestartMigrateFillDelay *int64 `json:"restartMigrateFillDelay,omitempty"`
+	RestartStrategy *RestartStrategy `json:"restartStrategy,omitempty"`
 }
 
 // AerospikeClusterStatus defines the observed state of AerospikeCluster
@@ -1501,9 +1519,8 @@ func CopySpecToStatus(spec *AerospikeClusterSpec) (*AerospikeClusterStatusSpec, 
 		status.Operations = *operations
 	}
 
-	if spec.RestartMigrateFillDelay != nil {
-		restartMigrateFillDelay := *spec.RestartMigrateFillDelay
-		status.RestartMigrateFillDelay = &restartMigrateFillDelay
+	if spec.RestartStrategy != nil {
+		status.RestartStrategy = spec.RestartStrategy.DeepCopy()
 	}
 
 	return &status, nil
@@ -1628,9 +1645,8 @@ func CopyStatusToSpec(status *AerospikeClusterStatusSpec) (*AerospikeClusterSpec
 		spec.Operations = *operations
 	}
 
-	if status.RestartMigrateFillDelay != nil {
-		restartMigrateFillDelay := *status.RestartMigrateFillDelay
-		spec.RestartMigrateFillDelay = &restartMigrateFillDelay
+	if status.RestartStrategy != nil {
+		spec.RestartStrategy = status.RestartStrategy.DeepCopy()
 	}
 
 	return &spec, nil
