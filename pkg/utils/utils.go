@@ -13,6 +13,7 @@ import (
 	ls "k8s.io/apimachinery/pkg/labels"
 	"k8s.io/apimachinery/pkg/selection"
 	"k8s.io/apimachinery/pkg/types"
+	"k8s.io/apimachinery/pkg/util/sets"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 
 	asdbv1 "github.com/aerospike/aerospike-kubernetes-operator/v4/api/v1"
@@ -294,6 +295,27 @@ func GetRackIdentifier(rackID int, rackRevision string) string {
 	}
 
 	return rackIDStr
+}
+
+// GetNetworkTLSNames returns the set of TLS configuration names defined in network.tls,
+// used to check that xdr.dcs[].tls-name references an existing entry.
+func GetNetworkTLSNames(networkConf map[string]interface{}) sets.Set[string] {
+	tlsNames := sets.Set[string]{}
+
+	tlsConfList, ok := networkConf["tls"].([]interface{})
+	if !ok {
+		return tlsNames
+	}
+
+	for _, tlsConfInt := range tlsConfList {
+		if tlsConf, ok := tlsConfInt.(map[string]interface{}); ok {
+			if tlsName, ok := tlsConf["name"].(string); ok {
+				tlsNames.Insert(tlsName)
+			}
+		}
+	}
+
+	return tlsNames
 }
 
 func IsOwnedBy(obj, parent client.Object) bool {
