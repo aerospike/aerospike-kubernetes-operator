@@ -18,6 +18,7 @@ const (
 	RoutineKey        = "routine"
 	TimeKey           = "time"
 	SourceKey         = "source"
+	SourceNameKey     = "source-name"
 	BackupDataPathKey = "backup-data-path"
 )
 

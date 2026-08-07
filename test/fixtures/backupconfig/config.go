@@ -12,7 +12,7 @@ import (
 )
 
 const (
-	BackupServiceImage  = "aerospike/aerospike-backup-service:3.5.0"
+	BackupServiceImage  = "aerospike/aerospike-backup-service:3.6.1"
 	DefaultClusterHost  = "aerocluster.test.svc.cluster.local"
 	DefaultBackupPolicy = "test-policy"
 )
@@ -47,6 +47,7 @@ func BackupServiceBaseConfig() map[string]interface{} {
 		asdbv1beta1.BackupPoliciesKey: map[string]interface{}{
 			DefaultBackupPolicy: map[string]interface{}{
 				"parallel": 3,
+				"compact":  true,
 			},
 		},
 		asdbv1beta1.StorageKey: map[string]interface{}{
