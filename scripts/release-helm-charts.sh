@@ -9,11 +9,13 @@
 #
 # What it does:
 #   1. Extracts helm-charts/ from the main repo at the given tag (non-destructive)
-#   2. Packages each chart into a temp dir
-#   3. Runs `helm repo index <tempdir> --merge <committed-index>` so that only
+#   2. Strips @schema annotations from the aerospike-kubernetes-operator chart's
+#      values.yaml so customers get a clean file
+#   3. Packages each chart into a temp dir
+#   4. Runs `helm repo index <tempdir> --merge <committed-index>` so that only
 #      new entries get fresh timestamps; all pre-existing entries are taken
 #      verbatim from the committed index.yaml
-#   4. Moves the new .tgz files and updated index.yaml into this directory
+#   5. Moves the new .tgz files and updated index.yaml into this directory
 
 set -euo pipefail
 
@@ -101,7 +103,7 @@ mkdir -p "${EXTRACT_DIR}" "${NEW_PKGS_DIR}"
 # Step 1 — Extract helm-charts/ from the tagged commit (non-destructive)
 # ---------------------------------------------------------------------------
 
-echo "==> [1/4] Extracting helm-charts/ from tag ${TAG}..."
+echo "==> [1/5] Extracting helm-charts/ from tag ${TAG}..."
 
 git -C "${MAIN_REPO_DIR}" archive "${TAG}" -- helm-charts/ \
     | tar -x -C "${EXTRACT_DIR}"
@@ -114,11 +116,36 @@ fi
 echo "    Extracted to ${EXTRACT_DIR}/helm-charts/"
 
 # ---------------------------------------------------------------------------
-# Step 2 — Package each chart into the temp dir
+# Step 2 — Clean up the operator chart's values.yaml for customers
+#
+# The values.schema.json for aerospike-kubernetes-operator is authored via
+# inline `# @schema ...` comments, and doc comments use the helm-docs
+# `# -- ...` convention. Both are dev-facing only, so strip/simplify them
+# before packaging to give customers a clean values.yaml.
 # ---------------------------------------------------------------------------
 
 echo ""
-echo "==> [2/4] Packaging charts..."
+echo "==> [2/5] Cleaning up operator chart values.yaml..."
+
+OPERATOR_VALUES="${EXTRACT_DIR}/helm-charts/aerospike-kubernetes-operator/values.yaml"
+if [[ -f "${OPERATOR_VALUES}" ]]; then
+    sed -i.bak -E \
+        -e '/^[[:space:]]*# @schema/d' \
+        -e 's/[[:space:]]+# @schema.*$//' \
+        -e 's/^([[:space:]]*)# -- /\1# /' \
+        "${OPERATOR_VALUES}"
+    rm -f "${OPERATOR_VALUES}.bak"
+    echo "    Cleaned ${OPERATOR_VALUES}"
+else
+    echo "    [skip] values.yaml not found for aerospike-kubernetes-operator"
+fi
+
+# ---------------------------------------------------------------------------
+# Step 3 — Package each chart into the temp dir
+# ---------------------------------------------------------------------------
+
+echo ""
+echo "==> [3/5] Packaging charts..."
 
 packaged=()
 for chart in "${CHART_NAMES[@]}"; do
@@ -149,7 +176,7 @@ fi
 echo "    Packaged ${#packaged[@]} chart(s)"
 
 # ---------------------------------------------------------------------------
-# Step 3 — Generate index.yaml for new packages, merging with committed index
+# Step 4 — Generate index.yaml for new packages, merging with committed index
 #
 # Running helm repo index on a directory that contains ONLY the new .tgz files
 # means helm generates fresh entries only for those. --merge then pulls in all
@@ -157,7 +184,7 @@ echo "    Packaged ${#packaged[@]} chart(s)"
 # ---------------------------------------------------------------------------
 
 echo ""
-echo "==> [3/4] Running helm repo index..."
+echo "==> [4/5] Running helm repo index..."
 
 MERGE_FLAG=()
 if git show HEAD:index.yaml > "${WORK_DIR}/index.yaml.committed" 2>/dev/null; then
@@ -171,11 +198,11 @@ helm repo index "${NEW_PKGS_DIR}" --url "${HELM_REPO_URL}" "${MERGE_FLAG[@]}"
 echo "    index.yaml generated"
 
 # ---------------------------------------------------------------------------
-# Step 4 — Move new packages and updated index.yaml into the packages dir
+# Step 5 — Move new packages and updated index.yaml into the packages dir
 # ---------------------------------------------------------------------------
 
 echo ""
-echo "==> [4/4] Moving packages and index.yaml into ${PACKAGES_DIR}..."
+echo "==> [5/5] Moving packages and index.yaml into ${PACKAGES_DIR}..."
 
 for pkg in "${packaged[@]}"; do
     mv "${NEW_PKGS_DIR}/${pkg}" "${PACKAGES_DIR}/"
