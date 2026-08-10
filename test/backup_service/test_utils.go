@@ -21,9 +21,9 @@ import (
 	backup_service "github.com/aerospike/aerospike-kubernetes-operator/v4/pkg/backup-service"
 	"github.com/aerospike/aerospike-kubernetes-operator/v4/pkg/utils"
 	"github.com/aerospike/aerospike-kubernetes-operator/v4/test"
+	"github.com/aerospike/aerospike-kubernetes-operator/v4/test/fixtures/backupconfig"
 )
 
-const BackupServiceImage = "aerospike/aerospike-backup-service:3.5.0"
 const BackupServiceVersion2Image = "aerospike/aerospike-backup-service:2.0.0"
 
 const (
@@ -103,7 +103,7 @@ func newBackupServiceWithEmptyConfig(
 			Namespace: backupServiceNamespaceName.Namespace,
 		},
 		Spec: asdbv1beta1.AerospikeBackupServiceSpec{
-			Image: BackupServiceImage,
+			Image: backupconfig.BackupServiceImage,
 			SecretMounts: []asdbv1beta1.SecretMount{
 				{
 					SecretName: test.AWSSecretName,
@@ -277,6 +277,7 @@ func getBackupServiceConfMap() map[string]interface{} {
 		asdbv1beta1.BackupPoliciesKey: map[string]interface{}{
 			"test-policy": map[string]interface{}{
 				"parallel": 3,
+				"compact":  true,
 			},
 			"test-policy1": map[string]interface{}{
 				"parallel": 3,
