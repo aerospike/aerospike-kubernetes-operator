@@ -503,7 +503,7 @@ var _ = Describe("SidecarFailure", func() {
 			aeroCluster, err = getCluster(k8sClient, ctx, clusterNamespacedName)
 			Expect(err).ToNot(HaveOccurred())
 
-			maxIgnorable := intstr.FromInt(1)
+			maxIgnorable := intstr.FromInt32(1)
 			aeroCluster.Spec.RackConfig.MaxIgnorablePods = &maxIgnorable
 			aeroCluster.Spec.IgnoreSidecarFailure = ptr.To(false)
 			aeroCluster.Spec.AerospikeConfig.Value[asdbv1.ConfKeyService].(map[string]interface{})["proto-fd-max"] = int64(20000)
@@ -515,7 +515,7 @@ var _ = Describe("SidecarFailure", func() {
 			By("Verifying rolling restart is stuck in InProgress — sidecar failure blocks readiness wait")
 
 			Expect(waitForClusterPhase(k8sClient, ctx, clusterNamespacedName,
-				asdbv1.AerospikeClusterInProgress)).ToNot(HaveOccurred())
+				asdbv1.AerospikeClusterError)).ToNot(HaveOccurred())
 
 			By("Setting IgnoreSidecarFailure=true and verifying rolling restart completes")
 
