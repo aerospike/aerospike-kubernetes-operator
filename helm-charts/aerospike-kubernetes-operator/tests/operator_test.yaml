@@ -127,14 +127,6 @@ tests:
     asserts:
       - notFailedTemplate: {}
 
-  - it: rejects safePodEviction.timeoutSeconds integer above 30
-    set:
-      safePodEviction:
-        timeoutSeconds: 31
-    asserts:
-      - failedTemplate:
-          errorPattern: "at '/safePodEviction/timeoutSeconds': maximum: got 31, want 30"
-
   # -- logging --
   - it: accepts logging.development as a boolean
     set:

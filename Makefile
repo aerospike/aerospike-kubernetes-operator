@@ -204,7 +204,7 @@ env-test-restore: fmt vet setup-envtest ## Run restore envtests.
 helm-unittest-plugin: ## Install the pinned helm-unittest plugin locally, replacing any other version.
 	@helm plugin list 2>/dev/null | awk '$$1 == "unittest" { print $$2 }' | grep -qx '$(HELM_UNITTEST_VERSION)' || { \
 		helm plugin uninstall unittest >/dev/null 2>&1 || true; \
-		helm plugin install https://github.com/helm-unittest/helm-unittest --verify=false --version v$(HELM_UNITTEST_VERSION); \
+		helm plugin install https://github.com/helm-unittest/helm-unittest $(HELM_VERIFY_FLAG) --version v$(HELM_UNITTEST_VERSION); \
 	}
 
 .PHONY: helm-test
@@ -221,7 +221,7 @@ helm-test: helm-unittest-plugin ## Run helm-unittest for CHART (default: every c
 helm-schema-plugin: ## Install the pinned "helm schema" plugin locally, replacing any other version.
 	@helm plugin list 2>/dev/null | awk '$$1 == "schema" { print $$2 }' | grep -qx '$(HELM_SCHEMA_VERSION)' || { \
 		helm plugin uninstall schema >/dev/null 2>&1 || true; \
-		helm plugin install https://github.com/losisin/helm-values-schema-json --verify=false --version v$(HELM_SCHEMA_VERSION); \
+		helm plugin install https://github.com/losisin/helm-values-schema-json $(HELM_VERIFY_FLAG) --version v$(HELM_SCHEMA_VERSION); \
 	}
 
 .PHONY: helm-schema
@@ -328,6 +328,10 @@ GOLANGCI_LINT_VERSION ?= v2.10.1
 # Helm plugin versions, without the leading "v" ("helm plugin list" reports them unprefixed).
 HELM_UNITTEST_VERSION ?= 1.1.2
 HELM_SCHEMA_VERSION ?= 2.5.0
+# Helm v3's "helm plugin install" has no --verify flag; Helm v4 requires --verify=false
+# to install plugins from a git URL (git sources don't support signature verification).
+HELM_MAJOR_VERSION := $(shell helm version --template '{{.Version}}' 2>/dev/null | sed -E 's/^v([0-9]+).*/\1/')
+HELM_VERIFY_FLAG := $(shell [ "$(HELM_MAJOR_VERSION)" -ge 4 ] 2>/dev/null && echo --verify=false)
 # Set the Operator SDK version to use. By default, what is installed on the system is used.
 # This is useful for CI or a project to utilize a specific version of the operator-sdk toolkit.
 OPERATOR_SDK_VERSION ?= v1.41.1
