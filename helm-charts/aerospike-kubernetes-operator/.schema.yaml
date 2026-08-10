@@ -23,7 +23,4 @@ useHelmDocs: true
 noAdditionalProperties: false
 
 schemaRoot:
-  # Unknown top-level keys are a user typo, so reject them. This also makes the
-  # plugin inject the "global" property automatically, which Helm needs for this
-  # chart to be usable as a dependency.
-  additionalProperties: false
+  additionalProperties: true

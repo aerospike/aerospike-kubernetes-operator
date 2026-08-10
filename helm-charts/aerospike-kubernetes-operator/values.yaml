@@ -1,5 +1,11 @@
 # Default values for Aerospike Kubernetes Operator.
 
+# -- (Optional) Override the chart name used in generated resource names
+nameOverride: ""
+
+# -- (Optional) Override the fully qualified name used for generated resource names
+fullnameOverride: ""
+
 # -- Number of operator replicas to deploy
 replicas: 2 # @schema required; minimum: 0
 
@@ -47,7 +53,7 @@ certs: # @schema required; additionalProperties: false
     metricsServerCertSecretName: "metrics-server-cert"
 
 # -- Operator manager logging (controller-runtime / Zap)
-# development must stay set; level/encoder are optional (uncomment or use --set).
+# development must stay set; level/encoder are optional (update value or use --set).
 logging: # @schema required; additionalProperties: false
   development: true # @schema required
   # -- (Optional) Zap log level (--zap-log-level): debug, info, error, panic, or a positive integer for custom verbosity. Empty leaves the flag off
@@ -74,7 +80,7 @@ ignoreNamespaces: "kube-system,kube-node-lease"
 # Also enables Prometheus metrics: aerospike_ako_eviction_webhook_requests_total (labels: eviction_namespace, decision)
 safePodEviction: # @schema required
   enable: false # @schema required
-  timeoutSeconds: "20" # @schema anyOf: [{type: string, "pattern": "^([1-9]|[12][0-9]|30)$"}, {type: integer, minimum: 1, maximum: 30}]
+  timeoutSeconds: "20" # @schema anyOf: [{type: string, "pattern": "^([1-9]|[12][0-9]|30)$"}, {type: integer}]
 
 # -- Grace period to delete/recover failed pods (in seconds)
 failedPodGracePeriodSeconds: "60" # @schema anyOf: [{type: string,"pattern": "^[1-9][0-9]*$"}, {type: integer, minimum: 1}]
@@ -91,14 +97,22 @@ aerospikeKubernetesInitNameTag: "aerospike-kubernetes-init:2.5.3" # @schema requ
 # -- Resources - limits / requests
 resources:
   limits:
-    cpu: 400m # @schema anyOf: [{type: string}, {type: number, exclusiveMinimum: 0}]
-    memory: 512Mi # @schema anyOf: [{type: string}, {type: number, exclusiveMinimum: 0}]
+    cpu: 400m
+    memory: 512Mi
   requests:
-    cpu: 10m # @schema anyOf: [{type: string}, {type: number, exclusiveMinimum: 0}]
-    memory: 64Mi # @schema anyOf: [{type: string}, {type: number, exclusiveMinimum: 0}]
+    cpu: 10m
+    memory: 64Mi
 
 # -- Affinity rules
 affinity: {}
+# nodeAffinity:
+#   requiredDuringSchedulingIgnoredDuringExecution:
+#     nodeSelectorTerms:
+#     - matchExpressions:
+#       - key: kubernetes.io/hostname
+#         operator: In
+#         values:
+#         - <Kubernetes Host>
 
 # @schema additionalProperties: {type: string}
 # @schema allOf: [{type: object}, {propertyNames: {pattern: "^[-._a-zA-Z][-._a-zA-Z0-9]*$"}}]
@@ -109,7 +123,7 @@ extraEnv: {}
 nodeSelector: {}
 
 # -- Tolerations
-tolerations: [] # @schema item: object
+tolerations: []
 
 # -- Deployment annotations
 annotations: {}
@@ -151,26 +165,17 @@ securityContext:
   allowPrivilegeEscalation: false
 
 # -- Liveness probe configuration
-livenessProbe: # @schema required; additionalProperties: false
-  initialDelaySeconds: 15 # @schema required
-  periodSeconds: 20 # @schema required
-  timeoutSeconds: 1 # @schema required
-  successThreshold: 1 # @schema required
-  failureThreshold: 3 # @schema required
+livenessProbe:
+  initialDelaySeconds: 15
+  periodSeconds: 20
+  timeoutSeconds: 1
+  successThreshold: 1
+  failureThreshold: 3
 
 # -- Readiness probe configuration
-readinessProbe: # @schema required; additionalProperties: false
-  initialDelaySeconds: 5 # @schema required
-  periodSeconds: 10 # @schema required
-  timeoutSeconds: 1 # @schema required
-  successThreshold: 1 # @schema required
-  failureThreshold: 3 # @schema required
-
-# -- (Optional) Override the chart name used in generated resource names
-nameOverride: ""
-
-# -- (Optional) Override the fully qualified name used for generated resource names
-fullnameOverride: ""
-
-# -- Deprecated, use webhookService.targetPort instead. Setting this fails chart rendering with a message pointing to the replacement
-webhookServicePort: # @schema type: [integer, null]; deprecated; minimum: 1; maximum: 65535
+readinessProbe:
+  initialDelaySeconds: 5
+  periodSeconds: 10
+  timeoutSeconds: 1
+  successThreshold: 1
+  failureThreshold: 3

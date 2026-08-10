@@ -16,9 +16,7 @@
         "aerospikeKubernetesInitRegistryNamespace",
         "aerospikeKubernetesInitNameTag",
         "metricsService",
-        "webhookService",
-        "livenessProbe",
-        "readinessProbe"
+        "webhookService"
     ],
     "properties": {
         "aerospikeKubernetesInitNameTag": {
@@ -150,14 +148,6 @@
             "description": "Override the fully qualified name used for generated resource names",
             "type": "string"
         },
-        "global": {
-            "description": "Global values shared between all subcharts",
-            "$comment": "Added automatically by 'helm schema' to allow this chart to be used as a Helm dependency, as the `additionalProperties` setting would otherwise collide with Helm's special 'global' values key.",
-            "type": [
-                "object",
-                "null"
-            ]
-        },
         "healthPort": {
             "description": "Port for the operator's health probe bind address",
             "type": "integer",
@@ -190,13 +180,6 @@
         "livenessProbe": {
             "description": "Liveness probe configuration",
             "type": "object",
-            "required": [
-                "initialDelaySeconds",
-                "periodSeconds",
-                "timeoutSeconds",
-                "successThreshold",
-                "failureThreshold"
-            ],
             "properties": {
                 "failureThreshold": {
                     "type": "integer"
@@ -213,8 +196,7 @@
                 "timeoutSeconds": {
                     "type": "integer"
                 }
-            },
-            "additionalProperties": false
+            }
         },
         "logging": {
             "description": "Operator manager logging (controller-runtime / Zap)",
@@ -392,13 +374,6 @@
         "readinessProbe": {
             "description": "Readiness probe configuration",
             "type": "object",
-            "required": [
-                "initialDelaySeconds",
-                "periodSeconds",
-                "timeoutSeconds",
-                "successThreshold",
-                "failureThreshold"
-            ],
             "properties": {
                 "failureThreshold": {
                     "type": "integer"
@@ -415,8 +390,7 @@
                 "timeoutSeconds": {
                     "type": "integer"
                 }
-            },
-            "additionalProperties": false
+            }
         },
         "replicas": {
             "description": "Number of operator replicas to deploy",
@@ -431,26 +405,10 @@
                     "type": "object",
                     "properties": {
                         "cpu": {
-                            "anyOf": [
-                                {
-                                    "type": "string"
-                                },
-                                {
-                                    "type": "number",
-                                    "exclusiveMinimum": 0
-                                }
-                            ]
+                            "type": "string"
                         },
                         "memory": {
-                            "anyOf": [
-                                {
-                                    "type": "string"
-                                },
-                                {
-                                    "type": "number",
-                                    "exclusiveMinimum": 0
-                                }
-                            ]
+                            "type": "string"
                         }
                     }
                 },
@@ -458,26 +416,10 @@
                     "type": "object",
                     "properties": {
                         "cpu": {
-                            "anyOf": [
-                                {
-                                    "type": "string"
-                                },
-                                {
-                                    "type": "number",
-                                    "exclusiveMinimum": 0
-                                }
-                            ]
+                            "type": "string"
                         },
                         "memory": {
-                            "anyOf": [
-                                {
-                                    "type": "string"
-                                },
-                                {
-                                    "type": "number",
-                                    "exclusiveMinimum": 0
-                                }
-                            ]
+                            "type": "string"
                         }
                     }
                 }
@@ -521,9 +463,7 @@
                             "pattern": "^([1-9]|[12][0-9]|30)$"
                         },
                         {
-                            "type": "integer",
-                            "maximum": 30,
-                            "minimum": 1
+                            "type": "integer"
                         }
                     ]
                 }
@@ -541,10 +481,7 @@
         },
         "tolerations": {
             "description": "Tolerations",
-            "type": "array",
-            "items": {
-                "type": "object"
-            }
+            "type": "array"
         },
         "watchNamespaces": {
             "description": "Comma-separated (no spaces) list of namespaces to watch for Aerospike custom resources",
@@ -584,17 +521,7 @@
                 }
             },
             "additionalProperties": false
-        },
-        "webhookServicePort": {
-            "description": "Deprecated, use webhookService.targetPort instead. Setting this fails chart rendering with a message pointing to the replacement",
-            "deprecated": true,
-            "type": [
-                "integer",
-                "null"
-            ],
-            "maximum": 65535,
-            "minimum": 1
         }
     },
-    "additionalProperties": false
+    "additionalProperties": true
 }
