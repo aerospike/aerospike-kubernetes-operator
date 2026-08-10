@@ -748,7 +748,7 @@ func (r *SingleClusterReconciler) reconcileRack(
 			(!r.IsStatusEmpty() && len(r.aeroCluster.Status.RackConfig.Racks) != len(r.aeroCluster.Spec.RackConfig.Racks)) {
 			if res = r.setMigrateFillDelay(
 				ctx, r.getClientPolicy(ctx), &rackState.Rack.AerospikeConfig, false,
-				nil,
+				ignorablePodNames,
 			); !res.IsSuccess {
 				if res.Err != nil {
 					res.Err = fmt.Errorf("revert migrate-fill-delay after scale down: %w",
