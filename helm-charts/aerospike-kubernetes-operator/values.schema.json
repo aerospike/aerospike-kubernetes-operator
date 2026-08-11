@@ -1,0 +1,527 @@
+{
+    "$schema": "https://json-schema.org/draft/2020-12/schema",
+    "type": "object",
+    "required": [
+        "replicas",
+        "operatorImage",
+        "rbac",
+        "healthPort",
+        "metricsPort",
+        "certs",
+        "logging",
+        "metrics",
+        "watchNamespaces",
+        "safePodEviction",
+        "aerospikeKubernetesInitRegistry",
+        "aerospikeKubernetesInitRegistryNamespace",
+        "aerospikeKubernetesInitNameTag",
+        "metricsService",
+        "webhookService"
+    ],
+    "properties": {
+        "aerospikeKubernetesInitNameTag": {
+            "description": "Name and tag of aerospike-init image",
+            "type": "string",
+            "pattern": "^\\S+:\\S+$"
+        },
+        "aerospikeKubernetesInitRegistry": {
+            "description": "Registry used to pull aerospike-init image",
+            "type": "string",
+            "minLength": 1
+        },
+        "aerospikeKubernetesInitRegistryNamespace": {
+            "description": "Namespace in registry used to pull aerospike-init image",
+            "type": "string",
+            "minLength": 1
+        },
+        "affinity": {
+            "description": "Affinity rules",
+            "type": "object"
+        },
+        "annotations": {
+            "description": "Deployment annotations",
+            "type": "object"
+        },
+        "certs": {
+            "description": "Certificate configuration for the webhook and metrics endpoints",
+            "type": "object",
+            "required": [
+                "webhook",
+                "metrics"
+            ],
+            "properties": {
+                "metrics": {
+                    "description": "Metrics server certificate configuration",
+                    "allOf": [
+                        {
+                            "type": "object"
+                        },
+                        {
+                            "if": {
+                                "required": [
+                                    "create"
+                                ],
+                                "properties": {
+                                    "create": {
+                                        "const": true
+                                    }
+                                }
+                            },
+                            "then": {
+                                "required": [
+                                    "metricsServerCertSecretName"
+                                ],
+                                "properties": {
+                                    "metricsServerCertSecretName": {
+                                        "minLength": 1
+                                    }
+                                }
+                            }
+                        }
+                    ],
+                    "required": [
+                        "create"
+                    ],
+                    "properties": {
+                        "create": {
+                            "type": "boolean"
+                        },
+                        "metricsServerCertSecretName": {
+                            "description": "Name of the secret holding the metrics server certificate",
+                            "type": "string"
+                        }
+                    },
+                    "additionalProperties": false
+                },
+                "webhook": {
+                    "description": "Webhook server certificate configuration",
+                    "type": "object",
+                    "required": [
+                        "create",
+                        "webhookServerCertSecretName"
+                    ],
+                    "properties": {
+                        "create": {
+                            "type": "boolean"
+                        },
+                        "webhookServerCertSecretName": {
+                            "description": "Name of the secret holding the webhook server certificate",
+                            "type": "string",
+                            "minLength": 1
+                        }
+                    },
+                    "additionalProperties": false
+                }
+            },
+            "additionalProperties": false
+        },
+        "extraEnv": {
+            "description": "Extra environment variables that will be passed into the operator pods",
+            "allOf": [
+                {
+                    "type": "object"
+                },
+                {
+                    "propertyNames": {
+                        "pattern": "^[-._a-zA-Z][-._a-zA-Z0-9]*$"
+                    }
+                }
+            ],
+            "additionalProperties": {
+                "type": "string"
+            }
+        },
+        "failedPodGracePeriodSeconds": {
+            "description": "Grace period to delete/recover failed pods (in seconds)",
+            "anyOf": [
+                {
+                    "type": "string",
+                    "pattern": "^[1-9][0-9]*$"
+                },
+                {
+                    "type": "integer",
+                    "minimum": 1
+                }
+            ]
+        },
+        "fullnameOverride": {
+            "description": "Override the fully qualified name used for generated resource names",
+            "type": "string"
+        },
+        "healthPort": {
+            "description": "Port for the operator's health probe bind address",
+            "type": "integer",
+            "maximum": 65535,
+            "minimum": 1
+        },
+        "ignoreNamespaces": {
+            "description": "Comma-separated (no spaces) list of namespaces to ignore. Only used for eviction webhook",
+            "type": "string",
+            "pattern": "^$|^[a-z0-9]([-a-z0-9]*[a-z0-9])?(,[a-z0-9]([-a-z0-9]*[a-z0-9])?)*$"
+        },
+        "imagePullSecrets": {
+            "description": "In case the above image is pulled from a registry that requires authentication, a secret containing credentials can be added imagePullSecrets: - secret_with_credentials_to_custom_registry",
+            "anyOf": [
+                {
+                    "type": "array",
+                    "items": {
+                        "type": "string"
+                    }
+                },
+                {
+                    "type": "object"
+                }
+            ]
+        },
+        "labels": {
+            "description": "Deployment labels are inherited by the pods automatically",
+            "type": "object"
+        },
+        "livenessProbe": {
+            "description": "Liveness probe configuration",
+            "type": "object",
+            "properties": {
+                "failureThreshold": {
+                    "type": "integer"
+                },
+                "initialDelaySeconds": {
+                    "type": "integer"
+                },
+                "periodSeconds": {
+                    "type": "integer"
+                },
+                "successThreshold": {
+                    "type": "integer"
+                },
+                "timeoutSeconds": {
+                    "type": "integer"
+                }
+            }
+        },
+        "logging": {
+            "description": "Operator manager logging (controller-runtime / Zap)",
+            "type": "object",
+            "required": [
+                "development"
+            ],
+            "properties": {
+                "development": {
+                    "type": "boolean"
+                },
+                "encoder": {
+                    "description": "Zap log encoder (--zap-encoder). Empty leaves the flag off",
+                    "type": "string",
+                    "enum": [
+                        "",
+                        "json",
+                        "console"
+                    ]
+                },
+                "level": {
+                    "description": "Zap log level (--zap-log-level): debug, info, error, panic, or a positive integer for custom verbosity. Empty leaves the flag off",
+                    "anyOf": [
+                        {
+                            "enum": [
+                                "",
+                                "debug",
+                                "info",
+                                "error",
+                                "panic"
+                            ]
+                        },
+                        {
+                            "type": "integer",
+                            "minimum": 1
+                        }
+                    ]
+                }
+            },
+            "additionalProperties": false
+        },
+        "metrics": {
+            "description": "Operator manager /metrics endpoint configuration Always passed in the Deployment args for clarity; defaults to TLS on (`true`).",
+            "type": "object",
+            "required": [
+                "secure"
+            ],
+            "properties": {
+                "secure": {
+                    "type": "boolean"
+                }
+            },
+            "additionalProperties": false
+        },
+        "metricsPort": {
+            "description": "Port for the operator's metrics bind address",
+            "type": "integer",
+            "maximum": 65535,
+            "minimum": 1
+        },
+        "metricsService": {
+            "description": "Service configuration",
+            "type": "object",
+            "required": [
+                "port",
+                "type"
+            ],
+            "properties": {
+                "annotations": {
+                    "description": "Extra annotations for the service",
+                    "type": "object"
+                },
+                "labels": {
+                    "description": "Extra labels for the service",
+                    "type": "object"
+                },
+                "port": {
+                    "type": "integer",
+                    "maximum": 65535,
+                    "minimum": 1
+                },
+                "type": {
+                    "type": "string"
+                }
+            },
+            "additionalProperties": false
+        },
+        "nameOverride": {
+            "description": "Override the chart name used in generated resource names",
+            "type": "string"
+        },
+        "nodeSelector": {
+            "description": "Node selector",
+            "type": "object"
+        },
+        "operatorImage": {
+            "description": "Operator image",
+            "type": "object",
+            "required": [
+                "repository",
+                "tag",
+                "pullPolicy"
+            ],
+            "properties": {
+                "pullPolicy": {
+                    "type": "string"
+                },
+                "repository": {
+                    "type": "string",
+                    "minLength": 1
+                },
+                "tag": {
+                    "type": "string",
+                    "minLength": 1
+                }
+            },
+            "additionalProperties": false
+        },
+        "podAnnotations": {
+            "description": "Pod annotations",
+            "type": "object"
+        },
+        "podLabels": {
+            "description": "Pod labels",
+            "type": "object"
+        },
+        "podSecurityContext": {
+            "description": "Pod security context",
+            "type": "object"
+        },
+        "rbac": {
+            "description": "RBAC resource creation for the operator",
+            "allOf": [
+                {
+                    "type": "object"
+                },
+                {
+                    "if": {
+                        "required": [
+                            "create"
+                        ],
+                        "properties": {
+                            "create": {
+                                "const": false
+                            }
+                        }
+                    },
+                    "then": {
+                        "required": [
+                            "serviceAccountName"
+                        ],
+                        "properties": {
+                            "serviceAccountName": {
+                                "minLength": 1
+                            }
+                        }
+                    }
+                }
+            ],
+            "required": [
+                "create"
+            ],
+            "properties": {
+                "create": {
+                    "description": "Create RBAC resources and a service account for the operator",
+                    "type": "boolean"
+                },
+                "serviceAccountName": {
+                    "description": "Name of an existing service account to use when rbac.create is false",
+                    "type": "string"
+                }
+            },
+            "additionalProperties": false
+        },
+        "readinessProbe": {
+            "description": "Readiness probe configuration",
+            "type": "object",
+            "properties": {
+                "failureThreshold": {
+                    "type": "integer"
+                },
+                "initialDelaySeconds": {
+                    "type": "integer"
+                },
+                "periodSeconds": {
+                    "type": "integer"
+                },
+                "successThreshold": {
+                    "type": "integer"
+                },
+                "timeoutSeconds": {
+                    "type": "integer"
+                }
+            }
+        },
+        "replicas": {
+            "description": "Number of operator replicas to deploy",
+            "type": "integer",
+            "minimum": 0
+        },
+        "resources": {
+            "description": "Resources - limits / requests",
+            "type": "object",
+            "properties": {
+                "limits": {
+                    "type": "object",
+                    "properties": {
+                        "cpu": {
+                            "type": "string"
+                        },
+                        "memory": {
+                            "type": "string"
+                        }
+                    }
+                },
+                "requests": {
+                    "type": "object",
+                    "properties": {
+                        "cpu": {
+                            "type": "string"
+                        },
+                        "memory": {
+                            "type": "string"
+                        }
+                    }
+                }
+            }
+        },
+        "safePodEviction": {
+            "description": "Enable the eviction webhook to safely block Aerospike pod evictions during node maintenance Also enables Prometheus metrics: aerospike_ako_eviction_webhook_requests_total (labels: eviction_namespace, decision)",
+            "allOf": [
+                {
+                    "type": "object"
+                },
+                {
+                    "if": {
+                        "required": [
+                            "enable"
+                        ],
+                        "properties": {
+                            "enable": {
+                                "const": true
+                            }
+                        }
+                    },
+                    "then": {
+                        "required": [
+                            "timeoutSeconds"
+                        ]
+                    }
+                }
+            ],
+            "required": [
+                "enable"
+            ],
+            "properties": {
+                "enable": {
+                    "type": "boolean"
+                },
+                "timeoutSeconds": {
+                    "anyOf": [
+                        {
+                            "type": "string",
+                            "pattern": "^([1-9]|[12][0-9]|30)$"
+                        },
+                        {
+                            "type": "integer"
+                        }
+                    ]
+                }
+            },
+            "additionalProperties": false
+        },
+        "securityContext": {
+            "description": "Container security context",
+            "type": "object",
+            "properties": {
+                "allowPrivilegeEscalation": {
+                    "type": "boolean"
+                }
+            }
+        },
+        "tolerations": {
+            "description": "Tolerations",
+            "type": "array"
+        },
+        "watchNamespaces": {
+            "description": "Comma-separated (no spaces) list of namespaces to watch for Aerospike custom resources",
+            "type": "string",
+            "pattern": "^$|^[a-z0-9]([-a-z0-9]*[a-z0-9])?(,[a-z0-9]([-a-z0-9]*[a-z0-9])?)*$"
+        },
+        "webhookService": {
+            "description": "Service configuration",
+            "type": "object",
+            "required": [
+                "port",
+                "targetPort",
+                "type"
+            ],
+            "properties": {
+                "annotations": {
+                    "description": "Extra annotations for the service",
+                    "type": "object"
+                },
+                "labels": {
+                    "description": "Extra labels for the service",
+                    "type": "object"
+                },
+                "port": {
+                    "type": "integer",
+                    "maximum": 65535,
+                    "minimum": 1
+                },
+                "targetPort": {
+                    "type": "integer",
+                    "maximum": 65535,
+                    "minimum": 1
+                },
+                "type": {
+                    "description": "Kubernetes Service type",
+                    "type": "string"
+                }
+            },
+            "additionalProperties": false
+        }
+    },
+    "additionalProperties": true
+}
