@@ -37,22 +37,30 @@ func TestMFDDelayForRestart(t *testing.T) {
 		deleteLocalStorageOnRestart *bool
 		localStorageClasses         []string
 		localStorageVolumes         []asdbv1.VolumeSpec
-		// wantDelay: -1 = MFD management disabled; 0 = zero only (no raise); >0 = override value.
+		// wantDelay: configMFD value (0 if unset) when pod restarts are needed; 0 when no pod
+		// restart is needed (warm-only / empty batch). >0 = override raise value.
+		// waitForMultipleNodesSafeStopReady raises to this value before quiesce (no-op via guard
+		// when already there); it is not a signal to skip MFD management.
 		wantDelay int
+		// wantDrain: true = MFD was transiently raised (override / DeleteLocalStorageOnRestart);
+		//            zero it before the stability check. false = no transient raise; skip drain.
+		wantDrain bool
 	}{
 		{
-			name:           "nil RestartStrategy, no deleteLocalStorageOnRestart → disabled",
+			name:           "nil RestartStrategy, no deleteLocalStorageOnRestart → configMFD (0), no drain",
 			delay:          nil,
 			pods:           []*corev1.Pod{makePod("pod-0")},
 			restartTypeMap: map[string]RestartType{"pod-0": podRestart},
-			wantDelay:      -1,
+			wantDelay:      0,
+			wantDrain:      false,
 		},
 		{
-			name:           "zero OverrideMigrateFillDelay → disabled",
+			name:           "zero OverrideMigrateFillDelay → configMFD (0), no drain",
 			delay:          ptrInt64(0),
 			pods:           []*corev1.Pod{makePod("pod-0")},
 			restartTypeMap: map[string]RestartType{"pod-0": podRestart},
-			wantDelay:      -1,
+			wantDelay:      0,
+			wantDrain:      false,
 		},
 		{
 			name:           "nil restartTypeMap with OverrideMigrateFillDelay assumes pod restart",
@@ -60,26 +68,29 @@ func TestMFDDelayForRestart(t *testing.T) {
 			pods:           []*corev1.Pod{makePod("pod-0")},
 			restartTypeMap: nil,
 			wantDelay:      120,
+			wantDrain:      true,
 		},
 		{
-			name:           "at least one pod has podRestart with OverrideMigrateFillDelay → override",
+			name:           "at least one pod has podRestart with OverrideMigrateFillDelay → override, drain",
 			delay:          ptrInt64(120),
 			pods:           []*corev1.Pod{makePod("pod-0")},
 			restartTypeMap: map[string]RestartType{"pod-0": podRestart},
 			wantDelay:      120,
+			wantDrain:      true,
 		},
 		{
-			name:  "all pods are warm (quickRestart) only → disabled",
+			name:  "all pods are warm (quickRestart) only → no pod restart needed",
 			delay: ptrInt64(120),
 			pods:  []*corev1.Pod{makePod("pod-0"), makePod("pod-1")},
 			restartTypeMap: map[string]RestartType{
 				"pod-0": quickRestart,
 				"pod-1": quickRestart,
 			},
-			wantDelay: -1,
+			wantDelay: 0,
+			wantDrain: false,
 		},
 		{
-			name:  "mix: one quickRestart and one podRestart with OverrideMigrateFillDelay → override",
+			name:  "mix: one quickRestart and one podRestart with OverrideMigrateFillDelay → override, drain",
 			delay: ptrInt64(120),
 			pods:  []*corev1.Pod{makePod("pod-0"), makePod("pod-1")},
 			restartTypeMap: map[string]RestartType{
@@ -87,17 +98,19 @@ func TestMFDDelayForRestart(t *testing.T) {
 				"pod-1": podRestart,
 			},
 			wantDelay: 120,
+			wantDrain: true,
 		},
 		{
-			name:           "no pods to restart and MFD is configured → disabled",
+			name:           "no pods to restart → no pod restart needed",
 			delay:          ptrInt64(120),
 			pods:           []*corev1.Pod{},
 			restartTypeMap: map[string]RestartType{},
-			wantDelay:      -1,
+			wantDelay:      0,
+			wantDrain:      false,
 		},
 		// DeleteLocalStorageOnRestart (original master behavior — aerospike.conf MFD not set → 0)
 		{
-			name:                        "deleteLocalStorageOnRestart + local storage volume → aerospike.conf delay (0)",
+			name:                        "deleteLocalStorageOnRestart + local storage volume → aerospike.conf delay (0), drain",
 			delay:                       nil,
 			deleteLocalStorageOnRestart: &trueVal,
 			localStorageClasses:         []string{localStorageClass},
@@ -112,19 +125,22 @@ func TestMFDDelayForRestart(t *testing.T) {
 			pods:           []*corev1.Pod{makePod("pod-0")},
 			restartTypeMap: map[string]RestartType{"pod-0": podRestart},
 			wantDelay:      0,
+			wantDrain:      true,
 		},
 		{
-			name:                        "deleteLocalStorageOnRestart but no local storage volumes → disabled",
+			name:                        "deleteLocalStorageOnRestart but no local storage volumes → configMFD (0), no drain",
 			delay:                       nil,
 			deleteLocalStorageOnRestart: &trueVal,
 			localStorageClasses:         []string{localStorageClass},
 			localStorageVolumes:         []asdbv1.VolumeSpec{},
 			pods:                        []*corev1.Pod{makePod("pod-0")},
 			restartTypeMap:              map[string]RestartType{"pod-0": podRestart},
-			wantDelay:                   -1,
+			wantDelay:                   0,
+			wantDrain:                   false,
 		},
 		{
-			name:                        "deleteLocalStorageOnRestart + local storage + only warm restart → disabled",
+			name: "deleteLocalStorageOnRestart + local storage + " +
+				"only warm restart → no pod restart needed",
 			delay:                       nil,
 			deleteLocalStorageOnRestart: &trueVal,
 			localStorageClasses:         []string{localStorageClass},
@@ -138,7 +154,8 @@ func TestMFDDelayForRestart(t *testing.T) {
 			},
 			pods:           []*corev1.Pod{makePod("pod-0")},
 			restartTypeMap: map[string]RestartType{"pod-0": quickRestart},
-			wantDelay:      -1,
+			wantDelay:      0,
+			wantDrain:      false,
 		},
 		{
 			name: "OverrideMigrateFillDelay takes precedence when " +
@@ -157,6 +174,7 @@ func TestMFDDelayForRestart(t *testing.T) {
 			pods:           []*corev1.Pod{makePod("pod-0")},
 			restartTypeMap: map[string]RestartType{"pod-0": podRestart},
 			wantDelay:      120,
+			wantDrain:      true,
 		},
 	}
 
@@ -173,9 +191,10 @@ func TestMFDDelayForRestart(t *testing.T) {
 			rackState.Rack.Storage.Volumes = tc.localStorageVolumes
 
 			r := newTestReconciler(t, cluster, &interceptor.Funcs{})
-			got, err := r.mfdDelayForRestart(rackState, tc.pods, tc.restartTypeMap)
+			gotDelay, gotDrain, err := r.mfdDelayForRestart(rackState, tc.pods, tc.restartTypeMap)
 			require.NoError(t, err)
-			require.Equal(t, tc.wantDelay, got)
+			require.Equal(t, tc.wantDelay, gotDelay, "delay mismatch")
+			require.Equal(t, tc.wantDrain, gotDrain, "drainBeforeStability mismatch")
 		})
 	}
 }

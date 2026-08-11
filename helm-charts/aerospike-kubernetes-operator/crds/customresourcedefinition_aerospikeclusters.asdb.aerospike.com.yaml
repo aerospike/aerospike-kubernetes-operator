@@ -9716,6 +9716,14 @@ spec:
                 description: Disable the PodDisruptionBudget creation for the Aerospike
                   cluster.
                 type: boolean
+              dynamicMigrateFillDelay:
+                description: |-
+                  DynamicMigrateFillDelay is the migrate-fill-delay value most recently applied dynamically
+                  by AKO on the cluster. This reflects the live value on the server, which may differ from
+                  aerospikeConfig.service.migrate-fill-delay during rolling restarts, upgrades, or scale-down.
+                  Defaults to the aerospikeConfig.service.migrate-fill-delay value on cluster creation.
+                format: int64
+                type: integer
               enableDynamicConfigUpdate:
                 description: |-
                   EnableDynamicConfigUpdate enables dynamic config update flow of the operator.

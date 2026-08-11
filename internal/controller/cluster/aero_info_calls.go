@@ -21,6 +21,7 @@ import (
 
 	corev1 "k8s.io/api/core/v1"
 	"k8s.io/apimachinery/pkg/util/sets"
+	"k8s.io/client-go/util/retry"
 
 	as "github.com/aerospike/aerospike-client-go/v8"
 	asdbv1 "github.com/aerospike/aerospike-kubernetes-operator/v4/api/v1"
@@ -41,14 +42,20 @@ import (
 // 1. going to be deleted eventually and are safe to ignore in stability checks
 // 2. given in ignorePodList by the user and are safe to ignore in stability checks
 //
-// mfdDelay controls migrate-fill-delay management during this function:
-//   - mfdDelay < 0: MFD is left untouched (MFD management is disabled for this restart).
-//   - mfdDelay == 0: MFD is zeroed before the stability check so fills from the previous restart
-//     can drain; it is NOT raised before quiesce (used for scale-down).
-//   - mfdDelay > 0: MFD is zeroed before the stability check, then raised to mfdDelay just before
-//     quiescePods so that fills triggered by quiesce are also suppressed.
+// mfdDelay is the target migrate-fill-delay value; drainBeforeStability controls whether MFD is
+// zeroed before the stability check. Both are computed by mfdDelayForRestart (rolling restart /
+// upgrade) or set directly by the scale-down path.
+//
+//   - drainBeforeStability == true: MFD was transiently raised (override or
+//     DeleteLocalStorageOnRestart path); zero it first so that fills held from the previous
+//     quiesce can drain, then raise to mfdDelay before the next quiesce.
+//   - drainBeforeStability == false: MFD was not transiently raised; skip the drain step and go
+//     straight to the stability check. mfdDelay is still raised before quiesce when > 0 (used to
+//     restore MFD to the aerospikeConfig value after a prior scale-down zero, or as a no-op when
+//     the DynamicMigrateFillDelay guard detects the value is already correct).
 func (r *SingleClusterReconciler) waitForMultipleNodesSafeStopReady(
-	ctx context.Context, pods []*corev1.Pod, ignorablePodNames sets.Set[string], mfdDelay int,
+	ctx context.Context, pods []*corev1.Pod, ignorablePodNames sets.Set[string],
+	mfdDelay int, drainBeforeStability bool,
 ) common.ReconcileResult {
 	if len(pods) == 0 {
 		return common.ReconcileSuccess()
@@ -90,9 +97,10 @@ func (r *SingleClusterReconciler) waitForMultipleNodesSafeStopReady(
 		"[rack-%s] Waiting for migrations to complete", pods[0].Labels[asdbv1.AerospikeRackIDLabel],
 	)
 
-	if mfdDelay >= 0 {
-		// Set MFD to 0 so that any fills held from the previous pod restart can drain before the
-		// stability check. Migrations triggered by the upcoming quiesce will be suppressed below.
+	if drainBeforeStability {
+		// Zero MFD so that fills held from the previous pod's quiesce (where MFD was transiently
+		// raised) can drain before this stability check. Only set on the override,
+		// DeleteLocalStorageOnRestart, and scale-down paths.
 		if res := r.setMigrateFillDelay(ctx, policy, 0, ignorablePodNames); !res.IsSuccess {
 			return res
 		}
@@ -109,9 +117,10 @@ func (r *SingleClusterReconciler) waitForMultipleNodesSafeStopReady(
 		return common.ReconcileRequeueAfter(1)
 	}
 
-	// Raise MFD to the override value before quiesce so that fills triggered by quiesce are also
-	// suppressed while the pod is absent. Skipped for scale-down (mfdDelay==0) — fills should
-	// proceed once the node is removed.
+	// Raise MFD to mfdDelay before quiesce. This is either the OverrideMigrateFillDelay value
+	// (suppresses fills while the pod is absent) or the aerospikeConfig value (restores MFD to
+	// the steady-state after a prior scale-down zero). Skipped when mfdDelay==0 (scale-down or
+	// configMFD not set) — fills should proceed at full speed in those cases.
 	if mfdDelay > 0 {
 		if res := r.setMigrateFillDelay(ctx, policy, mfdDelay, ignorablePodNames); !res.IsSuccess {
 			return res
@@ -318,32 +327,19 @@ func hostID(hostName string, hostPort int) string {
 
 // setMigrateFillDelay sets the migrate-fill-delay on all cluster nodes to delay fill migrations.
 // The caller is responsible for resolving delay (e.g. via GetMigrateFillDelay for the
-// config-driven value, or a literal 0 for post-restart / scale-down resets).
+// config-driven value, or a literal 0 for scale-down resets).
 //
-// The call is skipped when delay and the previously applied value (from status) are both 0,
-// UNLESS OverrideMigrateFillDelay is set.
+// The call is skipped when delay equals status.DynamicMigrateFillDelay, which tracks the last
+// value AKO successfully applied and is persisted immediately after every server call, making it
+// a reliable guard.
 func (r *SingleClusterReconciler) setMigrateFillDelay(
 	ctx context.Context,
 	policy *as.ClientPolicy,
 	delay int,
 	ignorablePodNames sets.Set[string],
 ) common.ReconcileResult {
-	var (
-		oldMigrateFillDelay int
-		err                 error
-	)
-
-	if len(r.aeroCluster.Status.RackConfig.Racks) > 0 {
-		oldMigrateFillDelay, err = asdbv1.GetMigrateFillDelay(&r.aeroCluster.Status.RackConfig.Racks[0].AerospikeConfig)
-		if err != nil {
-			return common.ReconcileError(err)
-		}
-	}
-
-	if delay == 0 && oldMigrateFillDelay == 0 &&
-		r.aeroCluster.Spec.RestartStrategy.GetOverrideMigrateFillDelay() == 0 {
-		// Nothing is configured — no-op.
-		r.Log.Info("migrate-fill-delay config not present or 0, skipping it")
+	if int64(delay) == r.aeroCluster.Status.DynamicMigrateFillDelay {
+		r.Log.Info("migrate-fill-delay already at desired value, skipping", "value", delay)
 		return common.ReconcileSuccess()
 	}
 
@@ -361,6 +357,20 @@ func (r *SingleClusterReconciler) setMigrateFillDelay(
 
 	if err := deployment.SetMigrateFillDelay(r.Log, policy, allHostConns, delay); err != nil {
 		return common.ReconcileError(err)
+	}
+
+	// Persist DynamicMigrateFillDelay immediately so the value survives a mid-reconcile requeue.
+	// Without this, an in-memory-only update would be lost when the next reconcile reads from k8s.
+	if err := retry.RetryOnConflict(retry.DefaultRetry, func() error {
+		if err := r.Get(ctx, utils.GetNamespacedName(r.aeroCluster), r.aeroCluster); err != nil {
+			return err
+		}
+
+		r.aeroCluster.Status.DynamicMigrateFillDelay = int64(delay)
+
+		return r.Client.Status().Update(ctx, r.aeroCluster)
+	}); err != nil {
+		return common.ReconcileError(fmt.Errorf("persist dynamic migrate-fill-delay in status: %w", err))
 	}
 
 	return common.ReconcileSuccess()

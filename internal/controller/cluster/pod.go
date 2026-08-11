@@ -341,17 +341,16 @@ func (r *SingleClusterReconciler) rollingRestartPods(
 	if len(activePods) != 0 {
 		r.Log.Info("Restart active Pods", "pods", getPodNames(activePods))
 
-		// mfdDelay < 0 → MFD management disabled. 0 or positive → zero first, then raise to
-		// mfdDelay before quiesce so that quiesce-triggered fills are also suppressed.
-		mfdDelay, err := r.mfdDelayForRestart(rackState, podsToRestart, restartTypeMap)
+		mfdDelay, drainBeforeStability, err := r.mfdDelayForRestart(rackState, podsToRestart, restartTypeMap)
 		if err != nil {
 			return common.ReconcileError(fmt.Errorf(
 				"resolve migrate-fill-delay for rack %d: %w", rackState.Rack.ID, err))
 		}
 
-		r.Log.Info(fmt.Sprintf("migrate-fill-delay for Pod restart: %d", mfdDelay))
+		r.Log.Info(fmt.Sprintf("migrate-fill-delay for Pod restart: %d (drain=%v)", mfdDelay, drainBeforeStability))
 
-		if res := r.waitForMultipleNodesSafeStopReady(ctx, activePods, ignorablePodNames, mfdDelay); !res.IsSuccess {
+		if res := r.waitForMultipleNodesSafeStopReady(ctx, activePods, ignorablePodNames,
+			mfdDelay, drainBeforeStability); !res.IsSuccess {
 			return res
 		}
 
@@ -360,7 +359,7 @@ func (r *SingleClusterReconciler) rollingRestartPods(
 			return res
 		}
 		// No explicit MFD reset here: for subsequent batches, waitForMultipleNodesSafeStopReady
-		// sets MFD to 0 before the next stability check. For the last batch, reconciler.go resets
+		// raises/restores MFD before the next quiesce. For the last batch, reconciler.go resets
 		// it to configMFD after all racks are processed within the same reconcile.
 	}
 
@@ -700,16 +699,15 @@ func (r *SingleClusterReconciler) safelyDeletePodsAndEnsureImageUpdated(
 	if len(activePods) != 0 {
 		r.Log.Info("Restart active Pods with updated container image", "pods", getPodNames(activePods))
 
-		// mfdDelay < 0 → MFD management disabled. 0 or positive → zero first, then raise to
-		// mfdDelay before quiesce so that quiesce-triggered fills are also suppressed.
-		mfdDelay, err := r.mfdDelayForRestart(rackState, podsToUpdate, nil)
+		mfdDelay, drainBeforeStability, err := r.mfdDelayForRestart(rackState, podsToUpdate, nil)
 		if err != nil {
 			return common.ReconcileError(err)
 		}
 
-		r.Log.Info(fmt.Sprintf("migrate-fill-delay for Pod upgrade: %d", mfdDelay))
+		r.Log.Info(fmt.Sprintf("migrate-fill-delay for Pod upgrade: %d (drain=%v)", mfdDelay, drainBeforeStability))
 
-		if res := r.waitForMultipleNodesSafeStopReady(ctx, activePods, ignorablePodNames, mfdDelay); !res.IsSuccess {
+		if res := r.waitForMultipleNodesSafeStopReady(ctx, activePods, ignorablePodNames,
+			mfdDelay, drainBeforeStability); !res.IsSuccess {
 			return res
 		}
 
@@ -717,7 +715,7 @@ func (r *SingleClusterReconciler) safelyDeletePodsAndEnsureImageUpdated(
 			return res
 		}
 		// No explicit MFD reset here: for subsequent batches, waitForMultipleNodesSafeStopReady
-		// sets MFD to 0 before the next stability check. For the last batch, reconciler.go resets
+		// raises/restores MFD before the next quiesce. For the last batch, reconciler.go resets
 		// it to configMFD after all racks are processed within the same reconcile.
 	}
 
@@ -1965,15 +1963,23 @@ func (r *SingleClusterReconciler) getEvictionBlockedPods(ctx context.Context) (s
 	return evictionBlockedPods, nil
 }
 
-// mfdDelayForRestart returns the migrate-fill-delay value to apply during a pod restart, or -1
-// if MFD management should be skipped entirely for this restart.
+// mfdDelayForRestart returns the migrate-fill-delay value (delay) and a drainBeforeStability flag
+// to apply during a pod restart.
 //
-//   - Returns -1 when no pod restart is needed or neither OverrideMigrateFillDelay nor the
-//     DeleteLocalStorageOnRestart path applies.
-//   - Returns 0 or a positive value (the resolved delay) when MFD management is active.
+// drainBeforeStability == true means MFD was (or will be) transiently raised above its
+// steady-state value, so the caller must zero MFD before the next stability check to let
+// previously held fills drain. It is true only when OverrideMigrateFillDelay is configured or the
+// (deprecated) DeleteLocalStorageOnRestart condition is met.
+//
+// delay is the aerospikeConfig value (or 0 if unset) in all cases where pod restarts are needed.
+// waitForMultipleNodesSafeStopReady uses it to raise MFD back to the configured value before
+// quiesce (no-op when already there, thanks to the DynamicMigrateFillDelay guard).
+// When no pod restart is needed (warm-only batch), delay is 0 and drainBeforeStability is false —
+// waitForMultipleNodesSafeStopReady skips both the drain and the raise.
+//
+// restartTypeMap == nil signals the upgrade path, where every pod is a full pod restart.
 func (r *SingleClusterReconciler) mfdDelayForRestart(rackState *RackState,
-	podsToRestart []*corev1.Pod, restartTypeMap map[string]RestartType) (int, error) {
-	// Require at least one full pod restart (not just a warm/ASD restart).
+	podsToRestart []*corev1.Pod, restartTypeMap map[string]RestartType) (delay int, drainBeforeStability bool, err error) {
 	podRestartNeeded := restartTypeMap == nil // nil → upgrade path, always a full restart
 
 	if !podRestartNeeded {
@@ -1986,15 +1992,22 @@ func (r *SingleClusterReconciler) mfdDelayForRestart(rackState *RackState,
 	}
 
 	if !podRestartNeeded {
-		return -1, nil
+		return 0, false, nil
 	}
 
 	// Condition 1: explicit override configured via RestartStrategy.
+	// drainBeforeStability=true: MFD will be transiently raised to suppress fills during restart.
 	if override := r.aeroCluster.Spec.RestartStrategy.GetOverrideMigrateFillDelay(); override > 0 {
-		return int(override), nil
+		return int(override), true, nil
+	}
+
+	delay, err = asdbv1.GetMigrateFillDelay(&rackState.Rack.AerospikeConfig)
+	if err != nil {
+		return 0, false, err
 	}
 
 	// TODO: remove this block once DeleteLocalStorageOnRestart-based MFD toggling is deprecated.
+	// drainBeforeStability=true: same transient-raise semantics as the override path.
 	if asdbv1.GetBool(rackState.Rack.Storage.DeleteLocalStorageOnRestart) {
 		localStorageClassSet := sets.New[string](rackState.Rack.Storage.LocalStorageClasses...)
 
@@ -2002,17 +2015,15 @@ func (r *SingleClusterReconciler) mfdDelayForRestart(rackState *RackState,
 			volume := &rackState.Rack.Storage.Volumes[idx]
 			if volume.Source.PersistentVolume != nil &&
 				localStorageClassSet.Has(volume.Source.PersistentVolume.StorageClass) {
-				delay, err := asdbv1.GetMigrateFillDelay(&rackState.Rack.AerospikeConfig)
-				if err != nil {
-					return -1, err
-				}
-
-				return delay, nil
+				return delay, true, nil
 			}
 		}
 	}
 
-	return -1, nil
+	// No explicit override and no local-storage condition: return configMFD with drain=false.
+	// waitForMultipleNodesSafeStopReady will raise to configMFD before quiesce (restoring any
+	// prior scale-down zero), skipping both the drain and the raise when already at configMFD.
+	return delay, false, nil
 }
 
 // revertMFDToConfig sets migrate-fill-delay back to the aerospike.conf configured value.

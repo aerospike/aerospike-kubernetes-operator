@@ -579,25 +579,6 @@ func (r *SingleClusterReconciler) reconcileRack(
 		}
 	}
 
-	if failedPods == nil {
-		// Revert migrate-fill-delay to the original value if it was set to 0 during scale down.
-		// Reset will be done if there is scale-down or Rack redistribution.
-		// This check won't cover a scenario where a scale-down operation was done and then reverted to the previous
-		// value before the scale down could complete.
-		if (r.aeroCluster.Status.Size > r.aeroCluster.Spec.Size) ||
-			(!r.IsStatusEmpty() && len(r.aeroCluster.Status.RackConfig.Racks) != len(r.aeroCluster.Spec.RackConfig.Racks)) {
-			if res = r.revertMFDToConfig(
-				ctx, r.getClientPolicy(ctx), &rackState.Rack.AerospikeConfig, nil,
-			); !res.IsSuccess {
-				if res.Err != nil {
-					res.Err = fmt.Errorf("revert migrate-fill-delay after scale down: %w", res.Err)
-				}
-
-				return res
-			}
-		}
-	}
-
 	if err := r.updateAerospikeInitContainerImage(ctx, found); err != nil {
 		return common.ReconcileError(fmt.Errorf("update init container image for StatefulSet %s: %w",
 			utils.GetNamespacedNameString(found), err))
@@ -977,10 +958,11 @@ func (r *SingleClusterReconciler) scaleDownRack(
 	// Ignore safe stop check if all pods in the batch are not running.
 	// Ignore migrate-fill-delay if pod is not running. Deleting this pod will not lead to any migration.
 	if isAnyPodRunningAndReady {
-		// mfdDelay=0: zero MFD before the stability check so fills can drain quickly,
-		// but do not raise it before quiesce — for scale-down we want fills to proceed once the
-		// node is removed.
-		if res := r.waitForMultipleNodesSafeStopReady(ctx, runningPods, ignorablePodNames, 0); !res.IsSuccess {
+		// mfdDelay=0: do not raise MFD before quiesce — for scale-down, fills should proceed
+		// immediately once the node is permanently removed.
+		// drainBeforeStability=true: always zero MFD first so any previously raised value is
+		// cleared and fills can drain before the stability check.
+		if res := r.waitForMultipleNodesSafeStopReady(ctx, runningPods, ignorablePodNames, 0, true); !res.IsSuccess {
 			// The pod is running and is unsafe to terminate.
 			return found, res
 		}

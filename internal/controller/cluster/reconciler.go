@@ -437,6 +437,20 @@ func (r *SingleClusterReconciler) updateStatus(ctx context.Context) error {
 	newAeroCluster.Status.AerospikeClusterStatusSpec = *specToStatus
 	newAeroCluster.Status.Phase = asdbv1.AerospikeClusterCompleted
 
+	// setMigrateFillDelay persists DynamicMigrateFillDelay immediately to the API server, so
+	// r.aeroCluster.Status.DynamicMigrateFillDelay is always the authoritative current value.
+	// Just carry it forward; seed from aerospikeConfig only on first reconcile when it is still 0.
+	newAeroCluster.Status.DynamicMigrateFillDelay = r.aeroCluster.Status.DynamicMigrateFillDelay
+
+	if newAeroCluster.Status.DynamicMigrateFillDelay == 0 && len(r.aeroCluster.Spec.RackConfig.Racks) > 0 {
+		configMFD, mfdErr := asdbv1.GetMigrateFillDelay(&r.aeroCluster.Spec.RackConfig.Racks[0].AerospikeConfig)
+		if mfdErr != nil {
+			return fmt.Errorf("read migrate-fill-delay for status initialisation: %w", mfdErr)
+		}
+
+		newAeroCluster.Status.DynamicMigrateFillDelay = int64(configMFD)
+	}
+
 	// If IsReadinessProbeEnabled is not enabled, then only check for cluster readiness.
 	// This is to avoid checking cluster readiness for every reconcile as once it is enabled, it will not be disabled.
 	if !newAeroCluster.Status.IsReadinessProbeEnabled {

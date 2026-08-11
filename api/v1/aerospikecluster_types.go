@@ -1114,6 +1114,13 @@ type AerospikeClusterStatus struct {
 	// Selector specifies the label selector for the Aerospike pods.
 	// +optional
 	Selector string `json:"selector,omitempty"`
+
+	// DynamicMigrateFillDelay is the migrate-fill-delay value most recently applied dynamically
+	// by AKO on the cluster. This reflects the live value on the server, which may differ from
+	// aerospikeConfig.service.migrate-fill-delay during rolling restarts, upgrades, or scale-down.
+	// Defaults to the aerospikeConfig.service.migrate-fill-delay value on cluster creation.
+	// +optional
+	DynamicMigrateFillDelay int64 `json:"dynamicMigrateFillDelay,omitempty"`
 }
 
 // AerospikeNetworkType specifies the type of network address to use.
@@ -1378,7 +1385,7 @@ type AerospikePodStatus struct { //nolint:govet // for readability
 // +kubebuilder:metadata:annotations="aerospike-kubernetes-operator/version=4.5.0"
 //
 //nolint:lll // for readability
-type AerospikeCluster struct { //nolint:govet // for readability
+type AerospikeCluster struct {
 	metav1.TypeMeta   `json:",inline"`
 	metav1.ObjectMeta `json:"metadata,omitempty"`
 
