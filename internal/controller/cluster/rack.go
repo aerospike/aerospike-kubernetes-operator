@@ -11,6 +11,7 @@ import (
 	appsv1 "k8s.io/api/apps/v1"
 	corev1 "k8s.io/api/core/v1"
 	"k8s.io/apimachinery/pkg/api/errors"
+	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	ls "k8s.io/apimachinery/pkg/labels"
 	"k8s.io/apimachinery/pkg/util/intstr"
 	"k8s.io/apimachinery/pkg/util/sets"
@@ -776,6 +777,16 @@ func (r *SingleClusterReconciler) scaleUpRack(
 	oldSz := *found.Spec.Replicas
 
 	r.Log.Info("Scaling up Pods", "currentSz", oldSz, "desiredSz", desiredSize)
+
+	if err := r.setConditions(ctx, metav1.Condition{
+		Type:    string(asdbv1.AerospikeClusterConditionScalingUp),
+		Status:  metav1.ConditionTrue,
+		Reason:  asdbv1.AerospikeClusterReasonScalingUp,
+		Message: fmt.Sprintf("Scaling up rack %d", rackState.Rack.ID),
+	}); err != nil {
+		return found, common.ReconcileError(err)
+	}
+
 	r.Recorder.Eventf(
 		r.aeroCluster, corev1.EventTypeNormal, "RackScaleUp",
 		eventRackScaleMessage(
@@ -841,11 +852,7 @@ func (r *SingleClusterReconciler) scaleUpRack(
 
 		return r.Update(ctx, current, common.UpdateOption)
 	}); err != nil {
-		return found, common.ReconcileError(
-			fmt.Errorf(
-				"scale up StatefulSet %s: %w", utils.GetNamespacedNameString(found), err,
-			),
-		)
+		return found, common.ReconcileError(err)
 	}
 
 	// return a fresh copy
@@ -873,6 +880,15 @@ func (r *SingleClusterReconciler) upgradeRack(
 		err     error
 		podList []*corev1.Pod
 	)
+
+	if err = r.setConditions(ctx, metav1.Condition{
+		Type:    string(asdbv1.AerospikeClusterConditionUpgrading),
+		Status:  metav1.ConditionTrue,
+		Reason:  asdbv1.AerospikeClusterReasonUpgrading,
+		Message: fmt.Sprintf("Upgrading rack %d", rackState.Rack.ID),
+	}); err != nil {
+		return statefulSet, common.ReconcileError(err)
+	}
 
 	if podFailure != nil && len(podFailure.pods) != 0 {
 		podList = podFailure.pods
@@ -999,6 +1015,16 @@ func (r *SingleClusterReconciler) scaleDownRack(
 		"ScaleDown AerospikeCluster StatefulSet", "desiredSize", desiredSize,
 		"currentSize", *found.Spec.Replicas, "rackID", rackState.Rack.ID, "rackRevision", rackState.Rack.Revision,
 	)
+
+	if err := r.setConditions(ctx, metav1.Condition{
+		Type:    string(asdbv1.AerospikeClusterConditionScalingDown),
+		Status:  metav1.ConditionTrue,
+		Reason:  asdbv1.AerospikeClusterReasonScalingDown,
+		Message: fmt.Sprintf("Scaling down rack %d", rackState.Rack.ID),
+	}); err != nil {
+		return found, common.ReconcileError(err)
+	}
+
 	r.Recorder.Eventf(
 		r.aeroCluster, corev1.EventTypeNormal, "RackScaleDown",
 		eventRackScaleMessage(
@@ -1257,6 +1283,18 @@ func (r *SingleClusterReconciler) rollingRestartRack(
 	podFailure *failedPodsInfo,
 ) (*appsv1.StatefulSet, common.ReconcileResult) {
 	r.Log.Info("Rolling restart AerospikeCluster StatefulSet Pods", "statefulSet", utils.GetNamespacedName(found))
+
+	if err := r.setConditions(ctx, metav1.Condition{
+		Type:   string(asdbv1.AerospikeClusterConditionRollingRestart),
+		Status: metav1.ConditionTrue,
+		Reason: asdbv1.AerospikeClusterReasonRollingRestart,
+		Message: fmt.Sprintf(
+			"Rolling restart of rack %d",
+			rackState.Rack.ID,
+		),
+	}); err != nil {
+		return found, common.ReconcileError(err)
+	}
 
 	r.Recorder.Eventf(
 		r.aeroCluster, corev1.EventTypeNormal, "RackRollingRestart",

@@ -76,10 +76,23 @@ func newTestReconciler(
 	require.NoError(t, asdbv1.AddToScheme(scheme))
 	require.NoError(t, clientgoscheme.AddToScheme(scheme))
 
+	// Seed aeroCluster itself so code under test can Get/Update/Patch it. It is deep-copied
+	// so the tracker's copy stays distinct from the reconciler's in-memory r.aeroCluster —
+	// otherwise a missing copy-back would go unnoticed.
+	objects := make([]client.Object, 0, len(existingObjects)+1)
+	if aeroCluster != nil {
+		objects = append(objects, aeroCluster.DeepCopy())
+	}
+
+	objects = append(objects, existingObjects...)
+
 	fakeClient := fake.NewClientBuilder().
 		WithScheme(scheme).
 		WithInterceptorFuncs(*funcs).
-		WithObjects(existingObjects...).
+		// Required for Status().Update/Patch to work; without it the fake client
+		// rejects status writes with a NotFound on the subresource.
+		WithStatusSubresource(&asdbv1.AerospikeCluster{}).
+		WithObjects(objects...).
 		Build()
 
 	return &SingleClusterReconciler{
