@@ -21,6 +21,7 @@ import (
 	asdbv1beta1 "github.com/aerospike/aerospike-kubernetes-operator/v4/api/v1beta1"
 	backup_service "github.com/aerospike/aerospike-kubernetes-operator/v4/pkg/backup-service"
 	backupservice "github.com/aerospike/aerospike-kubernetes-operator/v4/test/backup_service"
+	"github.com/aerospike/aerospike-kubernetes-operator/v4/test/fixtures/backupconfig"
 )
 
 const (
@@ -119,7 +120,7 @@ func newBackupWithEmptyConfig(backupNsNm types.NamespacedName) *asdbv1beta1.Aero
 }
 
 func getBackupConfBytes(backupConfig map[string]interface{}) ([]byte, error) {
-	configBytes, err := json.Marshal(backupConfig)
+	configBytes, err := backupconfig.MarshalConfig(backupConfig)
 	if err != nil {
 		return nil, err
 	}
@@ -129,54 +130,35 @@ func getBackupConfBytes(backupConfig map[string]interface{}) ([]byte, error) {
 	return configBytes, nil
 }
 
+func integrationClusterHost() string {
+	return fmt.Sprintf("%s.%s.svc.cluster.local", aerospikeNsNm.Name, aerospikeNsNm.Namespace)
+}
+
 func getBackupConfigInMap(prefix string) map[string]interface{} {
-	return map[string]interface{}{
-		asdbv1beta1.AerospikeClusterKey: map[string]interface{}{
-			fmt.Sprintf("%s-%s", prefix, "test-cluster"): map[string]interface{}{
-				"credentials": map[string]interface{}{
-					"password": "admin123",
-					"user":     "admin",
-				},
-				"seed-nodes": []map[string]interface{}{
-					{
-						"host-name": fmt.Sprintf("%s.%s.svc.cluster.local",
-							aerospikeNsNm.Name, aerospikeNsNm.Namespace,
-						),
-						"port": 3000,
-					},
-				},
-			},
-		},
-		asdbv1beta1.BackupRoutinesKey: map[string]interface{}{
-			fmt.Sprintf("%s-%s", prefix, "test-routine"): map[string]interface{}{
-				"backup-policy":      "test-policy",
-				"interval-cron":      "*/30 * * * * *",
-				"incr-interval-cron": "@hourly",
-				"namespaces":         []string{"test"},
-				"source-cluster":     fmt.Sprintf("%s-%s", prefix, "test-cluster"),
-				"storage":            "local",
-			},
-		},
-	}
+	return backupconfig.BackupCRConfig(prefix, integrationClusterHost(), backupconfig.IntegrationRoutineCrons)
 }
 
 func getBackupConfigWithTLSInMap(prefix string) map[string]interface{} {
 	backupConfig := getBackupConfigInMap(prefix)
 
 	aerospikeClusterMap := backupConfig[asdbv1beta1.AerospikeClusterKey].(map[string]interface{})
-	aerospikeCluster := aerospikeClusterMap[fmt.Sprintf("%s-%s", prefix, "test-cluster")].(map[string]interface{})
+	for _, cluster := range aerospikeClusterMap {
+		aerospikeCluster := cluster.(map[string]interface{})
 
-	aerospikeCluster["tls"] = map[string]interface{}{
-		"ca-path":   "/etc/aerospike/secret/cacerts",
-		"name":      "aerospike-a-0.test-runner",
-		"cert-file": "/etc/aerospike/secret/svc_cluster_chain.pem",
-		"key-file":  "/etc/aerospike/secret/svc_key.pem",
+		aerospikeCluster["tls"] = map[string]interface{}{
+			"ca-path":   "/etc/aerospike/secret/cacerts",
+			"name":      "aerospike-a-0.test-runner",
+			"cert-file": "/etc/aerospike/secret/svc_cluster_chain.pem",
+			"key-file":  "/etc/aerospike/secret/svc_key.pem",
+		}
+
+		seedNodeList := aerospikeCluster["seed-nodes"].([]map[string]interface{})
+		seedNode := seedNodeList[0]
+		seedNode["tls-name"] = "aerospike-a-0.test-runner"
+		seedNode["port"] = 4333
+
+		break
 	}
-
-	seedNodeList := aerospikeCluster["seed-nodes"].([]map[string]interface{})
-	seedNode := seedNodeList[0]
-	seedNode["tls-name"] = "aerospike-a-0.test-runner"
-	seedNode["port"] = 4333
 
 	return backupConfig
 }

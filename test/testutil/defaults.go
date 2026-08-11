@@ -17,14 +17,19 @@ const (
 	Pre810ServerVersion = "8.0.0.0"
 	// CgroupMemTrackingServerVersion is the minimum Aerospike server version that requires
 	// aerospikeConfig.service.cgroup-mem-tracking to be set to true.
-	CgroupMemTrackingServerVersion = "8.1.2.0"
-	InvalidImageVersion            = "3.0.0.4"
-	StorageClass                   = "ssd"
-	ClusterNameConfig              = "cluster-name"
-	DefaultNamespace               = "default"
-	DefaultDevicePath              = "/test/dev/xvdf"
-	WebhookErrorPrefix             = "vaerospikecluster.kb.io"
-	CRDSchemaErrorPrefix           = "AerospikeCluster.asdb.aerospike.com"
+	CgroupMemTrackingServerVersion    = "8.1.2.0"
+	InvalidImageVersion               = "3.0.0.4"
+	StorageClass                      = "ssd"
+	ClusterNameConfig                 = "cluster-name"
+	DefaultNamespace                  = "default"
+	DefaultDevicePath                 = "/test/dev/xvdf"
+	WebhookErrorPrefix                = "vaerospikecluster.kb.io"
+	MutatingClusterWebhookErrorPrefix = "maerospikecluster.kb.io"
+	CRDSchemaErrorPrefix              = "AerospikeCluster.asdb.aerospike.com"
+	BackupWebhookErrorPrefix          = "vaerospikebackup.kb.io"
+	BackupCRDSchemaErrorPrefix        = "AerospikeBackup.asdb.aerospike.com"
+	BackupServiceCRDSchemaErrorPrefix = "AerospikeBackupService.asdb.aerospike.com"
+	RestoreCRDSchemaErrorPrefix       = "AerospikeRestore.asdb.aerospike.com"
 )
 
 var (

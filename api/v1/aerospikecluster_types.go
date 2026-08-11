@@ -49,59 +49,6 @@ const (
 	AerospikeClusterError AerospikeClusterPhase = "Error"
 )
 
-// AerospikeClusterConditionType is the type for AerospikeCluster status conditions.
-type AerospikeClusterConditionType string
-
-const (
-	// AerospikeClusterConditionReady indicates the cluster has fully reached its desired spec and is healthy.
-	AerospikeClusterConditionReady AerospikeClusterConditionType = "Ready"
-
-	// AerospikeClusterConditionScalingUp indicates currentPods < spec.size (new pods being added).
-	AerospikeClusterConditionScalingUp AerospikeClusterConditionType = "ScalingUp"
-
-	// AerospikeClusterConditionScalingDown indicates currentPods > spec.size (pods being removed).
-	AerospikeClusterConditionScalingDown AerospikeClusterConditionType = "ScalingDown"
-
-	// AerospikeClusterConditionUpgrading indicates one or more pods are not on the desired image.
-	AerospikeClusterConditionUpgrading AerospikeClusterConditionType = "Upgrading"
-
-	// AerospikeClusterConditionRollingRestart indicates one or more pods need a restart
-	// due to config changes that cannot be applied dynamically.
-	AerospikeClusterConditionRollingRestart AerospikeClusterConditionType = "RollingRestart"
-
-	// AerospikeClusterConditionPaused indicates reconciliation has been suspended
-	// via spec.paused=true. True = paused, False = actively reconciling.
-	AerospikeClusterConditionPaused AerospikeClusterConditionType = "Paused"
-)
-
-// Reason constants for AerospikeCluster status conditions.
-const (
-	// Ready reasons
-	AerospikeClusterReasonReconcileComplete = "ReconcileComplete"
-	AerospikeClusterReasonReconciling       = "Reconciling"
-	AerospikeClusterReasonReconcileFailed   = "ReconcileFailed"
-	AerospikeClusterReasonInitializing      = "Initializing"
-	AerospikeClusterReasonPausedByUser      = "PausedByUser"
-	AerospikeClusterReasonTerminating       = "Terminating"
-
-	// Paused reasons
-	AerospikeClusterReasonNotPaused = "NotPaused"
-
-	// ScalingUp / ScalingDown reasons
-	AerospikeClusterReasonScalingUp      = "ScalingUp"
-	AerospikeClusterReasonNotScalingUp   = "NotScalingUp"
-	AerospikeClusterReasonScalingDown    = "ScalingDown"
-	AerospikeClusterReasonNotScalingDown = "NotScalingDown"
-
-	// Upgrading reasons
-	AerospikeClusterReasonUpgrading    = "Upgrading"
-	AerospikeClusterReasonNotUpgrading = "NotUpgrading"
-
-	// RollingRestart reasons
-	AerospikeClusterReasonRollingRestart    = "RollingRestart"
-	AerospikeClusterReasonNotRollingRestart = "NotRollingRestart"
-)
-
 // +kubebuilder:validation:Enum=Failed;PartiallyFailed;""
 type DynamicConfigUpdateStatus string
 
@@ -242,6 +189,12 @@ type AerospikeClusterSpec struct { //nolint:govet // for readability
 	// +operator-sdk:csv:customresourcedefinitions:type=spec,displayName="Pause Reconcile"
 	// +optional
 	Paused *bool `json:"paused,omitempty"`
+
+	// IgnoreSidecarFailure controls whether cluster operations are blocked when a
+	// sidecar container is failing but the Aerospike server container is still running.
+	// +operator-sdk:csv:customresourcedefinitions:type=spec,displayName="Ignore Sidecar Failure"
+	// +optional
+	IgnoreSidecarFailure *bool `json:"ignoreSidecarFailure,omitempty"`
 
 	// Operations is a list of on-demand operations to be performed on the Aerospike cluster.
 	// +operator-sdk:csv:customresourcedefinitions:type=spec,displayName="Operations"
@@ -868,7 +821,7 @@ type PersistentVolumeSpec struct { //nolint:govet // for readability
 
 	// AccessModes contains the desired access modes the volume should have.
 	// More info: https://kubernetes.io/docs/concepts/storage/persistent-volumes/#access-modes
-	// +kubebuilder:validation:items:Enum=ReadOnlyMany;ReadWriteMany;ReadWriteOnce
+	// +kubebuilder:validation:items:Enum=ReadOnlyMany;ReadWriteMany;ReadWriteOnce;ReadWriteOncePod
 	// +optional
 	AccessModes []corev1.PersistentVolumeAccessMode `json:"accessModes,omitempty" protobuf:"bytes,1,rep,name=accessModes,casttype=PersistentVolumeAccessMode"` //nolint:lll // for readability
 
@@ -1038,6 +991,11 @@ type AerospikeClusterStatusSpec struct { //nolint:govet // for readability
 	// +optional
 	EnableRackIDOverride *bool `json:"enableRackIDOverride,omitempty"`
 
+	// IgnoreSidecarFailure controls whether cluster operations are blocked when a
+	// sidecar container is failing but the Aerospike server container is still running.
+	// +optional
+	IgnoreSidecarFailure *bool `json:"ignoreSidecarFailure,omitempty"`
+
 	// IsReadinessProbeEnabled tells whether the readiness probe is present in all pods or not.
 	// Moreover, PodDisruptionBudget should be created for the Aerospike cluster only when this field is enabled.
 	// +optional
@@ -1112,13 +1070,8 @@ type AerospikeClusterStatus struct { //nolint:govet // for readability
 	// The current state of Aerospike cluster.
 	AerospikeClusterStatusSpec `json:",inline"`
 
-	// Conditions is a list of conditions representing the current state of the AerospikeCluster.
-	// +optional
-	// +listType=map
-	// +listMapKey=type
-	// +patchStrategy=merge
-	// +patchMergeKey=type
-	Conditions []metav1.Condition `json:"conditions,omitempty" patchStrategy:"merge" patchMergeKey:"type"`
+	// Details about the current condition of the AerospikeCluster resource.
+	// Conditions []apiextensions.CustomResourceDefinitionCondition `json:"conditions"`
 
 	// Pods has Aerospike specific status of the pods.
 	// This is map instead of the conventional map as list convention to allow each pod to patch update its own
@@ -1391,8 +1344,6 @@ type AerospikePodStatus struct { //nolint:govet // for readability
 // +kubebuilder:printcolumn:name="HostNetwork",type=boolean,JSONPath=`.spec.podSpec.hostNetwork`
 // +kubebuilder:printcolumn:name="Age",type="date",JSONPath=".metadata.creationTimestamp"
 // +kubebuilder:printcolumn:name="Phase",type="string",JSONPath=".status.phase"
-// +kubebuilder:printcolumn:name="Ready",type="string",JSONPath=".status.conditions[?(@.type=='Ready')].status"
-// +kubebuilder:printcolumn:name="Paused",type="string",JSONPath=".status.conditions[?(@.type=='Paused')].status"
 // +kubebuilder:subresource:scale:specpath=.spec.size,statuspath=.status.size,selectorpath=.status.selector
 
 // AerospikeCluster is the schema for the AerospikeCluster API
@@ -1495,6 +1446,11 @@ func CopySpecToStatus(spec *AerospikeClusterSpec) (*AerospikeClusterStatusSpec, 
 	if spec.DisablePDB != nil {
 		disablePDB := *spec.DisablePDB
 		status.DisablePDB = &disablePDB
+	}
+
+	if spec.IgnoreSidecarFailure != nil {
+		ignoreSidecarFailure := *spec.IgnoreSidecarFailure
+		status.IgnoreSidecarFailure = &ignoreSidecarFailure
 	}
 
 	// Storage
@@ -1618,6 +1574,11 @@ func CopyStatusToSpec(status *AerospikeClusterStatusSpec) (*AerospikeClusterSpec
 	if status.DisablePDB != nil {
 		disablePDB := *status.DisablePDB
 		spec.DisablePDB = &disablePDB
+	}
+
+	if status.IgnoreSidecarFailure != nil {
+		ignoreSidecarFailure := *status.IgnoreSidecarFailure
+		spec.IgnoreSidecarFailure = &ignoreSidecarFailure
 	}
 
 	// Storage

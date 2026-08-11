@@ -190,6 +190,319 @@ func TestCheckPodFailedWithGrace(t *testing.T) {
 	}
 }
 
+func TestIsAerospikeServerReady(t *testing.T) {
+	// serverStatus builds a ContainerStatus for the aerospike-server container.
+	serverStatus := func(ready bool) corev1.ContainerStatus {
+		return corev1.ContainerStatus{
+			Name:  asdbv1.AerospikeServerContainerName,
+			Ready: ready,
+		}
+	}
+
+	// sidecarStatus builds a ContainerStatus for a sidecar container.
+	sidecarStatus := func(name string, ready bool) corev1.ContainerStatus {
+		return corev1.ContainerStatus{Name: name, Ready: ready}
+	}
+
+	now := metav1.Now()
+
+	tests := []struct {
+		pod      *corev1.Pod
+		name     string
+		expected bool
+	}{
+		{
+			name: "terminating pod returns false regardless of container state",
+			pod: &corev1.Pod{
+				ObjectMeta: metav1.ObjectMeta{DeletionTimestamp: &now},
+				Status: corev1.PodStatus{
+					Phase:             corev1.PodRunning,
+					ContainerStatuses: []corev1.ContainerStatus{serverStatus(true)},
+				},
+			},
+			expected: false,
+		},
+		{
+			name: "non-Running phase (Pending) returns false",
+			pod: &corev1.Pod{
+				Status: corev1.PodStatus{
+					Phase:             corev1.PodPending,
+					ContainerStatuses: []corev1.ContainerStatus{serverStatus(true)},
+				},
+			},
+			expected: false,
+		},
+		{
+			name: "server container Ready=true returns true",
+			pod: &corev1.Pod{
+				Status: corev1.PodStatus{
+					Phase:             corev1.PodRunning,
+					ContainerStatuses: []corev1.ContainerStatus{serverStatus(true)},
+				},
+			},
+			expected: true,
+		},
+		{
+			name: "server container Ready=false returns false",
+			pod: &corev1.Pod{
+				Status: corev1.PodStatus{
+					Phase:             corev1.PodRunning,
+					ContainerStatuses: []corev1.ContainerStatus{serverStatus(false)},
+				},
+			},
+			expected: false,
+		},
+		{
+			// Key invariant: a crashing sidecar must not influence the result.
+			name: "server Ready=true with crashing sidecar returns true",
+			pod: &corev1.Pod{
+				Status: corev1.PodStatus{
+					Phase: corev1.PodRunning,
+					ContainerStatuses: []corev1.ContainerStatus{
+						serverStatus(true),
+						sidecarStatus("monitoring-sidecar", false),
+					},
+				},
+			},
+			expected: true,
+		},
+		{
+			name: "server Ready=false with healthy sidecar returns false",
+			pod: &corev1.Pod{
+				Status: corev1.PodStatus{
+					Phase: corev1.PodRunning,
+					ContainerStatuses: []corev1.ContainerStatus{
+						serverStatus(false),
+						sidecarStatus("monitoring-sidecar", true),
+					},
+				},
+			},
+			expected: false,
+		},
+		{
+			name: "no server container in statuses returns false",
+			pod: &corev1.Pod{
+				Status: corev1.PodStatus{
+					Phase: corev1.PodRunning,
+					ContainerStatuses: []corev1.ContainerStatus{
+						sidecarStatus("monitoring-sidecar", true),
+					},
+				},
+			},
+			expected: false,
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			got := IsAerospikeServerReady(tt.pod)
+			if got != tt.expected {
+				t.Errorf("IsAerospikeServerReady() = %v, want %v", got, tt.expected)
+			}
+		})
+	}
+}
+
+// crashingCS returns a ContainerStatus in CrashLoopBackOff waiting state.
+func crashingCS(name string) corev1.ContainerStatus {
+	return corev1.ContainerStatus{
+		Name:  name,
+		State: corev1.ContainerState{Waiting: &corev1.ContainerStateWaiting{Reason: "CrashLoopBackOff"}},
+	}
+}
+
+// runningReadyCS returns a ContainerStatus in Running+Ready state.
+func runningReadyCS(name string) corev1.ContainerStatus {
+	return corev1.ContainerStatus{
+		Name:  name,
+		Ready: true,
+		State: corev1.ContainerState{Running: &corev1.ContainerStateRunning{}},
+	}
+}
+
+// agedPod returns a Running-phase pod created `age` ago with the given container statuses.
+func agedPod(name string, age time.Duration, statuses ...corev1.ContainerStatus) *corev1.Pod {
+	return &corev1.Pod{
+		ObjectMeta: metav1.ObjectMeta{
+			Name:              name,
+			CreationTimestamp: metav1.NewTime(time.Now().Add(-age)),
+		},
+		Status: corev1.PodStatus{Phase: corev1.PodRunning, ContainerStatuses: statuses},
+	}
+}
+
+// agedInitPod returns a Running-phase pod created `age` ago with the given init-container statuses.
+func agedInitPod(name string, age time.Duration, initStatuses ...corev1.ContainerStatus) *corev1.Pod {
+	return &corev1.Pod{
+		ObjectMeta: metav1.ObjectMeta{
+			Name:              name,
+			CreationTimestamp: metav1.NewTime(time.Now().Add(-age)),
+		},
+		Status: corev1.PodStatus{Phase: corev1.PodRunning, InitContainerStatuses: initStatuses},
+	}
+}
+
+func TestCheckServerFailedWithGrace_IgnoresSidecarFailures(t *testing.T) {
+	// The central invariant: CheckServerFailedWithGrace must return PodHealthy
+	// for a pod whose Aerospike server is running but whose sidecar is crashing.
+	// CheckPodFailedWithGrace on the same pod returns PodFailed because it
+	// includes sidecar failures. This contrast is the core behaviour change.
+	sidecarCrashingPod := agedPod("pod-with-crashing-sidecar", 5*time.Minute,
+		runningReadyCS(asdbv1.AerospikeServerContainerName),
+		crashingCS("crashing-sidecar"),
+	)
+
+	serverState := CheckServerFailedWithGrace(sidecarCrashingPod, false)
+	if serverState.State != PodHealthy {
+		t.Errorf("CheckServerFailedWithGrace() = %v, want PodHealthy — sidecar failure must be ignored",
+			serverState.State)
+	}
+
+	// Contrast: the full-pod check should see the crashing sidecar as a failure.
+	fullState := CheckPodFailedWithGrace(sidecarCrashingPod, false)
+	if fullState.State != PodFailed {
+		t.Errorf("CheckPodFailedWithGrace() = %v, want PodFailed — sidecar failure should be reported",
+			fullState.State)
+	}
+}
+
+func TestCheckServerFailedWithGrace(t *testing.T) {
+	now := metav1.Now()
+
+	tests := []struct {
+		pod           *corev1.Pod
+		name          string
+		expectedState PodHealthState
+		allowGrace    bool
+	}{
+		{
+			name: "terminating pod is healthy",
+			pod: &corev1.Pod{
+				ObjectMeta: metav1.ObjectMeta{
+					Name:              "terminating",
+					DeletionTimestamp: &now,
+				},
+				Status: corev1.PodStatus{Phase: corev1.PodRunning},
+			},
+			allowGrace:    false,
+			expectedState: PodHealthy,
+		},
+		{
+			name: "server and sidecars all healthy",
+			pod: &corev1.Pod{
+				ObjectMeta: metav1.ObjectMeta{
+					Name:              "healthy",
+					CreationTimestamp: metav1.NewTime(time.Now().Add(-5 * time.Minute)),
+				},
+				Status: corev1.PodStatus{
+					Phase: corev1.PodRunning,
+					Conditions: []corev1.PodCondition{
+						{Type: corev1.PodReady, Status: corev1.ConditionTrue},
+					},
+				},
+			},
+			allowGrace:    false,
+			expectedState: PodHealthy,
+		},
+		{
+			name:          "server container in CrashLoopBackOff is PodFailed",
+			pod:           agedPod("server-crash", 5*time.Minute, crashingCS(asdbv1.AerospikeServerContainerName)),
+			allowGrace:    false,
+			expectedState: PodFailed,
+		},
+		{
+			name:          "server container in CrashLoopBackOff within grace period is PodFailedInGrace",
+			pod:           agedPod("server-crash-grace", 10*time.Second, crashingCS(asdbv1.AerospikeServerContainerName)),
+			allowGrace:    true,
+			expectedState: PodFailedInGrace,
+		},
+		{
+			name:          "failing init container is PodFailed",
+			pod:           agedInitPod("init-crash", 5*time.Minute, crashingCS("aerospike-init")),
+			allowGrace:    false,
+			expectedState: PodFailed,
+		},
+		{
+			// Sidecar-only failure: server is healthy, sidecar is in CrashLoopBackOff.
+			// CheckServerFailedWithGrace must return PodHealthy (sidecars ignored).
+			name: "crashing sidecar with healthy server is PodHealthy",
+			pod: agedPod("sidecar-crash", 5*time.Minute,
+				runningReadyCS(asdbv1.AerospikeServerContainerName),
+				crashingCS("crashing-sidecar"),
+			),
+			allowGrace:    false,
+			expectedState: PodHealthy,
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			got := CheckServerFailedWithGrace(tt.pod, tt.allowGrace)
+			if got.State != tt.expectedState {
+				t.Errorf("CheckServerFailedWithGrace() state = %v, want %v", got.State, tt.expectedState)
+			}
+		})
+	}
+}
+
+func TestIsPodReady(t *testing.T) {
+	tests := []struct {
+		pod      *corev1.Pod
+		name     string
+		expected bool
+	}{
+		{
+			name:     "no container statuses returns true (vacuously all ready)",
+			pod:      &corev1.Pod{Status: corev1.PodStatus{}},
+			expected: true,
+		},
+		{
+			name: "all containers ready returns true",
+			pod: &corev1.Pod{
+				Status: corev1.PodStatus{
+					ContainerStatuses: []corev1.ContainerStatus{
+						{Name: asdbv1.AerospikeServerContainerName, Ready: true},
+						{Name: "sidecar", Ready: true},
+					},
+				},
+			},
+			expected: true,
+		},
+		{
+			name: "server ready but sidecar not ready returns false",
+			pod: &corev1.Pod{
+				Status: corev1.PodStatus{
+					ContainerStatuses: []corev1.ContainerStatus{
+						{Name: asdbv1.AerospikeServerContainerName, Ready: true},
+						{Name: "sidecar", Ready: false},
+					},
+				},
+			},
+			expected: false,
+		},
+		{
+			name: "server not ready returns false",
+			pod: &corev1.Pod{
+				Status: corev1.PodStatus{
+					ContainerStatuses: []corev1.ContainerStatus{
+						{Name: asdbv1.AerospikeServerContainerName, Ready: false},
+					},
+				},
+			},
+			expected: false,
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			got := IsPodReady(tt.pod)
+			if got != tt.expected {
+				t.Errorf("IsPodReady() = %v, want %v", got, tt.expected)
+			}
+		})
+	}
+}
+
 func TestCheckPodFailed(t *testing.T) {
 	now := time.Now()
 

@@ -3,9 +3,11 @@ package restore
 import (
 	"context"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"net/http"
 
+	"github.com/aerospike/aerospike-backup-service/v3/pkg/dto"
 	"github.com/go-logr/logr"
 	corev1 "k8s.io/api/core/v1"
 	k8sRuntime "k8s.io/apimachinery/pkg/runtime"
@@ -31,19 +33,38 @@ type SingleRestoreReconciler struct {
 	Log         logr.Logger
 }
 
-func (r *SingleRestoreReconciler) Reconcile() (result ctrl.Result, recErr error) {
+// finishReconcile logs the reconcile exit once at the boundary. It holds any
+// AerospikeRestore-specific finish logic so it can grow independently of other controllers.
+func (r *SingleRestoreReconciler) finishReconcile(result ctrl.Result, recErr error) error {
+	logValues := common.ReconcileExitLogValues(result, recErr)
+
+	if recErr != nil {
+		r.Log.Error(recErr, "Reconcile failed", logValues...)
+
+		return recErr
+	}
+
+	r.Log.Info("Reconcile completed", logValues...)
+
+	return nil
+}
+
+func (r *SingleRestoreReconciler) Reconcile(ctx context.Context) (result ctrl.Result, recErr error) {
+	defer func() {
+		// finishReconcile returns the error to assign here so we avoid *error params; recErr is Reconcile's named return.
+		recErr = r.finishReconcile(result, recErr)
+	}()
+
 	if !r.aeroRestore.DeletionTimestamp.IsZero() {
 		r.Log.Info("Deleting AerospikeRestore")
 
-		if err := r.cleanUpAndRemoveFinalizer(finalizerName); err != nil {
-			r.Log.Error(err, "Failed to remove finalizer")
+		if err := r.cleanUpAndRemoveFinalizer(ctx, finalizerName); err != nil {
 			return reconcile.Result{}, err
 		}
 
 		r.Recorder.Eventf(
 			r.aeroRestore, corev1.EventTypeNormal, "Deleted",
-			"Deleted AerospikeRestore %s/%s", r.aeroRestore.Namespace,
-			r.aeroRestore.Name,
+			"Successfully deleted restore resources",
 		)
 
 		// Stop reconciliation as the Aerospike restore is being deleted
@@ -56,21 +77,19 @@ func (r *SingleRestoreReconciler) Reconcile() (result ctrl.Result, recErr error)
 		return reconcile.Result{}, nil
 	}
 
-	if err := r.setStatusPhase(asdbv1beta1.AerospikeRestoreInProgress); err != nil {
+	if err := r.setStatusPhase(ctx, asdbv1beta1.AerospikeRestoreInProgress); err != nil {
 		return ctrl.Result{}, err
 	}
 
 	// The restore is not being deleted, add finalizer if not added already
-	if err := r.addFinalizer(finalizerName); err != nil {
-		r.Log.Error(err, "Failed to add finalizer")
+	if err := r.addFinalizer(ctx, finalizerName); err != nil {
 		return reconcile.Result{}, err
 	}
 
-	if res := r.reconcileRestore(); !res.IsSuccess {
+	if res := r.reconcileRestore(ctx); !res.IsSuccess {
 		if res.Err != nil {
-			r.Log.Error(res.Err, "Failed to reconcile restore")
 			r.Recorder.Eventf(r.aeroRestore, corev1.EventTypeWarning, "RestoreReconcileFailed",
-				"Failed to reconcile restore %s/%s", r.aeroRestore.Namespace, r.aeroRestore.Name)
+				"Failed to reconcile AerospikeRestore")
 
 			return res.Result, res.Err
 		}
@@ -78,10 +97,9 @@ func (r *SingleRestoreReconciler) Reconcile() (result ctrl.Result, recErr error)
 		return res.Result, nil
 	}
 
-	if err := r.checkRestoreStatus(); err != nil {
-		r.Log.Error(err, "Failed to check restore status")
+	if err := r.checkRestoreStatus(ctx); err != nil {
 		r.Recorder.Eventf(r.aeroRestore, corev1.EventTypeWarning, "RestoreStatusCheckFailed",
-			"Failed to check restore status %s/%s", r.aeroRestore.Namespace, r.aeroRestore.Name)
+			"Failed to check restore operation status")
 
 		return ctrl.Result{}, err
 	}
@@ -91,22 +109,24 @@ func (r *SingleRestoreReconciler) Reconcile() (result ctrl.Result, recErr error)
 	}
 
 	r.Recorder.Eventf(r.aeroRestore, corev1.EventTypeNormal, "RestoreCompleted",
-		"Restore completed successfully %s/%s", r.aeroRestore.Namespace, r.aeroRestore.Name)
-
-	r.Log.Info("Reconcile completed successfully")
+		"Restore completed")
 
 	return ctrl.Result{}, nil
 }
 
-func (r *SingleRestoreReconciler) reconcileRestore() common.ReconcileResult {
+func (r *SingleRestoreReconciler) reconcileRestore(ctx context.Context) common.ReconcileResult {
 	if r.aeroRestore.Status.JobID != nil {
-		r.Log.Info("Restore already running, checking the restore status")
+		r.Log.Info("Restore already running, checking the restore status", "jobID", *r.aeroRestore.Status.JobID)
 		return common.ReconcileSuccess()
 	}
 
 	serviceClient, err := backup_service.GetBackupServiceClient(r.Client, &r.aeroRestore.Spec.BackupService)
 	if err != nil {
-		return common.ReconcileError(err)
+		return common.ReconcileError(fmt.Errorf(
+			"get backup service client (backup service %s): %w",
+			utils.NamespacedName(r.aeroRestore.Spec.BackupService.Namespace,
+				r.aeroRestore.Spec.BackupService.Name), err,
+		))
 	}
 
 	var (
@@ -114,7 +134,9 @@ func (r *SingleRestoreReconciler) reconcileRestore() common.ReconcileResult {
 		statusCode *int
 	)
 
-	switch r.aeroRestore.Spec.Type {
+	restoreType := r.aeroRestore.Spec.Type
+
+	switch restoreType {
 	case asdbv1beta1.Full:
 		jobID, statusCode, err = serviceClient.TriggerRestoreWithType(r.Log, string(asdbv1beta1.Full),
 			r.aeroRestore.Spec.Config.Raw)
@@ -128,86 +150,114 @@ func (r *SingleRestoreReconciler) reconcileRestore() common.ReconcileResult {
 			r.aeroRestore.Spec.Config.Raw)
 
 	default:
-		return common.ReconcileError(fmt.Errorf("unsupported restore type"))
+		return common.ReconcileError(fmt.Errorf(
+			"unsupported restore type %q", restoreType,
+		))
 	}
 
 	if err != nil {
 		if statusCode != nil && *statusCode == http.StatusBadRequest {
-			r.Log.Error(err, fmt.Sprintf("Failed to trigger restore with status code %d", *statusCode))
-
 			r.aeroRestore.Status.Phase = asdbv1beta1.AerospikeRestoreFailed
 
-			if err = r.Client.Status().Update(context.Background(), r.aeroRestore); err != nil {
-				r.Log.Error(err, fmt.Sprintf("Failed to update restore status to %+v", err))
-				return common.ReconcileError(err)
+			if statusUpdateErr := r.Client.Status().Update(ctx, r.aeroRestore); statusUpdateErr != nil {
+				return common.ReconcileError(errors.Join(
+					err,
+					fmt.Errorf(
+						"set AerospikeRestore status phase to %s: %w",
+						asdbv1beta1.AerospikeRestoreFailed, statusUpdateErr,
+					),
+				))
 			}
 
 			// Don't requeue if the error is due to bad request.
-			return common.ReconcileError(reconcile.TerminalError(err))
+			return common.ReconcileError(reconcile.TerminalError(fmt.Errorf(
+				"trigger restore type %q: %w",
+				restoreType, err,
+			)))
 		}
 
-		return common.ReconcileError(err)
+		return common.ReconcileError(fmt.Errorf(
+			"trigger restore type %q: %w",
+			restoreType, err,
+		))
 	}
 
 	r.Recorder.Eventf(r.aeroRestore, corev1.EventTypeNormal, "RestoreTriggered",
-		"Triggered restore %s/%s", r.aeroRestore.Namespace, r.aeroRestore.Name)
+		"Triggered restore")
 
 	r.aeroRestore.Status.JobID = jobID
 
-	if err = r.Client.Status().Update(context.Background(), r.aeroRestore); err != nil {
-		r.Log.Error(err, fmt.Sprintf("Failed to update restore status to %+v", err))
-		return common.ReconcileError(err)
+	if err = r.Client.Status().Update(ctx, r.aeroRestore); err != nil {
+		return common.ReconcileError(fmt.Errorf(
+			"update AerospikeRestore status with jobID %d: %w",
+			*jobID, err,
+		))
 	}
 
 	return common.ReconcileRequeueAfter(1)
 }
 
-func (r *SingleRestoreReconciler) checkRestoreStatus() error {
+func (r *SingleRestoreReconciler) checkRestoreStatus(ctx context.Context) error {
 	serviceClient, err := backup_service.GetBackupServiceClient(r.Client, &r.aeroRestore.Spec.BackupService)
 	if err != nil {
-		return err
+		return fmt.Errorf(
+			"get backup service client (backup service %s): %w",
+			utils.NamespacedName(r.aeroRestore.Spec.BackupService.Namespace,
+				r.aeroRestore.Spec.BackupService.Name), err,
+		)
 	}
 
-	restoreStatus, err := serviceClient.CheckRestoreStatus(*r.aeroRestore.Status.JobID)
+	jobID := *r.aeroRestore.Status.JobID
+
+	restoreStatus, err := serviceClient.CheckRestoreStatus(jobID)
 	if err != nil {
-		return err
+		return fmt.Errorf(
+			"check restore status for jobID %d: %w",
+			jobID, err,
+		)
 	}
 
-	r.Log.Info(fmt.Sprintf("Restore status: %+v", restoreStatus))
+	r.Log.Info("Restore status received", "status", restoreStatus, "jobID", jobID)
 
 	if status, ok := restoreStatus["status"]; ok {
-		r.aeroRestore.Status.Phase = statusToPhase(status.(string))
+		r.aeroRestore.Status.Phase = statusToPhase(r.Log, status.(string))
 	}
 
 	statusBytes, err := json.Marshal(restoreStatus)
 	if err != nil {
-		return err
+		return fmt.Errorf("marshal restore status: %w", err)
 	}
 
 	r.aeroRestore.Status.RestoreResult.Raw = statusBytes
 
-	if err = r.Client.Status().Update(context.Background(), r.aeroRestore); err != nil {
-		r.Log.Error(err, fmt.Sprintf("Failed to update restore status to %+v", err))
-		return err
+	if err = r.Client.Status().Update(ctx, r.aeroRestore); err != nil {
+		return fmt.Errorf(
+			"update AerospikeRestore status (phase %s, jobID %d): %w",
+			r.aeroRestore.Status.Phase, jobID, err,
+		)
 	}
 
 	return nil
 }
 
-func (r *SingleRestoreReconciler) setStatusPhase(phase asdbv1beta1.AerospikeRestorePhase) error {
+func (r *SingleRestoreReconciler) setStatusPhase(
+	ctx context.Context, phase asdbv1beta1.AerospikeRestorePhase,
+) error {
 	if r.aeroRestore.Status.Phase != phase {
 		r.aeroRestore.Status.Phase = phase
 
-		if err := r.Client.Status().Update(context.Background(), r.aeroRestore); err != nil {
-			r.Log.Error(err, fmt.Sprintf("Failed to set restore status to %s", phase))
-			return err
+		if err := r.Client.Status().Update(ctx, r.aeroRestore); err != nil {
+			return fmt.Errorf(
+				"set AerospikeRestore status phase to %s: %w",
+				phase, err,
+			)
 		}
 	}
 
 	return nil
 }
 
-func (r *SingleRestoreReconciler) addFinalizer(finalizerName string) error {
+func (r *SingleRestoreReconciler) addFinalizer(ctx context.Context, finalizerName string) error {
 	// The object is not being deleted, so if it does not have our finalizer,
 	// then lets add the finalizer and update the object.
 	if !utils.ContainsString(
@@ -217,13 +267,18 @@ func (r *SingleRestoreReconciler) addFinalizer(finalizerName string) error {
 			r.aeroRestore.Finalizers, finalizerName,
 		)
 
-		return r.Update(context.TODO(), r.aeroRestore)
+		if err := r.Update(ctx, r.aeroRestore); err != nil {
+			return fmt.Errorf(
+				"add finalizer %q: %w",
+				finalizerName, err,
+			)
+		}
 	}
 
 	return nil
 }
 
-func (r *SingleRestoreReconciler) cleanUpAndRemoveFinalizer(finalizerName string) error {
+func (r *SingleRestoreReconciler) cleanUpAndRemoveFinalizer(ctx context.Context, finalizerName string) error {
 	if utils.ContainsString(r.aeroRestore.Finalizers, finalizerName) {
 		r.Log.Info("Removing finalizer")
 
@@ -238,8 +293,11 @@ func (r *SingleRestoreReconciler) cleanUpAndRemoveFinalizer(finalizerName string
 			r.aeroRestore.Finalizers, finalizerName,
 		)
 
-		if err := r.Update(context.TODO(), r.aeroRestore); err != nil {
-			return err
+		if err := r.Update(ctx, r.aeroRestore); err != nil {
+			return fmt.Errorf(
+				"remove finalizer %q: %w",
+				finalizerName, err,
+			)
 		}
 
 		r.Log.Info("Removed finalizer")
@@ -251,34 +309,48 @@ func (r *SingleRestoreReconciler) cleanUpAndRemoveFinalizer(finalizerName string
 func (r *SingleRestoreReconciler) cancelRestoreJob() error {
 	serviceClient, err := backup_service.GetBackupServiceClient(r.Client, &r.aeroRestore.Spec.BackupService)
 	if err != nil {
-		return err
+		return fmt.Errorf(
+			"get backup service client (backup service %s): %w",
+			utils.NamespacedName(r.aeroRestore.Spec.BackupService.Namespace,
+				r.aeroRestore.Spec.BackupService.Name), err,
+		)
 	}
 
-	if statusCode, err := serviceClient.CancelRestoreJob(*r.aeroRestore.Status.JobID); err != nil {
+	jobID := *r.aeroRestore.Status.JobID
+
+	if statusCode, err := serviceClient.CancelRestoreJob(jobID); err != nil {
 		if statusCode == http.StatusNotFound {
-			r.Log.Info("Restore job not found, skipping cancel")
+			r.Log.Info("Restore job not found, skipping cancel",
+				"jobID", jobID, "statusCode", statusCode, "err", err)
+
 			return nil
 		}
 
-		return err
+		return fmt.Errorf("cancel restore job %d: %w", jobID, err)
 	}
 
-	r.Log.Info("Restore job cancelled successfully")
+	r.Log.Info("Restore job cancelled successfully", "jobID", jobID)
 
 	return nil
 }
 
-func statusToPhase(status string) asdbv1beta1.AerospikeRestorePhase {
-	switch status {
-	case "Done":
-		return asdbv1beta1.AerospikeRestoreCompleted
-
-	case "Running":
-		return asdbv1beta1.AerospikeRestoreInProgress
-
-	case "Failed":
-		return asdbv1beta1.AerospikeRestoreFailed
+func statusToPhase(log logr.Logger, status string) asdbv1beta1.AerospikeRestorePhase {
+	jobStatus, ok := dto.ParseJobStatus(status)
+	if !ok {
+		return ""
 	}
 
-	return ""
+	switch jobStatus {
+	case dto.RestoreRunning:
+		return asdbv1beta1.AerospikeRestoreInProgress
+	case dto.RestoreSuccess:
+		return asdbv1beta1.AerospikeRestoreCompleted
+	case dto.RestoreFailure, dto.RestoreCanceled:
+		return asdbv1beta1.AerospikeRestoreFailed
+	default:
+		log.Info("Unmapped ABS restore job status; update statusToPhase for new dto.JobStatus value",
+			"status", status, "jobStatus", jobStatus)
+
+		return ""
+	}
 }

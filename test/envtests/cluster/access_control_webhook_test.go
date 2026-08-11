@@ -1143,6 +1143,21 @@ var _ = Describe("AerospikeCluster access control validation (envtests)", func()
 
 		Context("spec.aerospikeAccessControl (users)", func() {
 			Context("negative", func() {
+				It("rejects username longer than 63 characters on update (MaxLength=63)", func() {
+					aeroCluster := testCluster.CreateDummyAerospikeCluster(clusterNamespacedName, 2)
+					aeroCluster.Spec.AerospikeAccessControl = validAccessControlForDeployPositive()
+					Expect(envtests.K8sClient.Create(ctx, aeroCluster)).To(Succeed())
+					current, err := testCluster.GetCluster(envtests.K8sClient, ctx, clusterNamespacedName)
+					Expect(err).ToNot(HaveOccurred())
+
+					current.Spec.AerospikeAccessControl.Users[1].Name = strings.Repeat("u", 64)
+					err = envtests.K8sClient.Update(ctx, current)
+					Expect(err).To(HaveOccurred())
+					envtests.NewStatusErrorMatcher().
+						WithMessageSubstrings(testutil.CRDSchemaErrorPrefix, "aerospikeAccessControl.users", "63").
+						Validate(err)
+				})
+
 				It("fails when user authMode is changed from PKI to Internal", func() {
 					aeroCluster := testCluster.CreatePKIAuthEnabledCluster(clusterNamespacedName, 2)
 					err := envtests.K8sClient.Create(ctx, aeroCluster)
@@ -1348,6 +1363,32 @@ var _ = Describe("AerospikeCluster access control validation (envtests)", func()
 							"cannot enable TLS and PKIOnly authMode in a single update").
 						Validate(err)
 				})
+			})
+		})
+
+		Context("spec.aerospikeAccessControl (roles)", func() {
+			BeforeEach(func() {
+				aeroCluster := testCluster.CreateDummyAerospikeCluster(clusterNamespacedName, 2)
+				aeroCluster.Spec.AerospikeAccessControl = validAccessControlForDeployPositive()
+				Expect(envtests.K8sClient.Create(ctx, aeroCluster)).To(Succeed())
+			})
+
+			Context("negative", func() {
+				DescribeTable("rejects invalid role name on update",
+					func(invalidRoleName string, msgSubs ...string) {
+						current, err := testCluster.GetCluster(envtests.K8sClient, ctx, clusterNamespacedName)
+						Expect(err).ToNot(HaveOccurred())
+
+						current.Spec.AerospikeAccessControl.Roles[0].Name = invalidRoleName
+						err = envtests.K8sClient.Update(ctx, current)
+						Expect(err).To(HaveOccurred())
+						envtests.NewStatusErrorMatcher().WithMessageSubstrings(msgSubs...).Validate(err)
+					},
+					Entry("empty string (MinLength=1)", "",
+						testutil.CRDSchemaErrorPrefix, "name in body should be at least 1 chars long"),
+					Entry("exceeds max length (MaxLength=63)", strings.Repeat("a", 64),
+						testutil.CRDSchemaErrorPrefix, "aerospikeAccessControl.roles", "63"),
+				)
 			})
 		})
 	})

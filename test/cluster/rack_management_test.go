@@ -379,57 +379,6 @@ var _ = Describe(
 				Context(
 					"when deploy cluster with invalid rack ", func() {
 						Context(
-							"InvalidRackID", func() {
-								It(
-									"should fail for DuplicateRackID", func() {
-										aeroCluster := createDummyAerospikeCluster(
-											clusterNamespacedName, 2,
-										)
-
-										rackConf := asdbv1.RackConfig{
-											Racks: []asdbv1.Rack{
-												{ID: 2}, {ID: 2},
-											},
-										}
-										aeroCluster.Spec.RackConfig = rackConf
-										Expect(DeployCluster(k8sClient, ctx, aeroCluster)).Should(HaveOccurred())
-									},
-								)
-								It(
-									"should fail for OutOfRangeRackID", func() {
-										aeroCluster := createDummyAerospikeCluster(
-											clusterNamespacedName, 2,
-										)
-										rackConf := asdbv1.RackConfig{
-											Racks: []asdbv1.Rack{
-												{ID: 1},
-												{ID: asdbv1.MaxRackID + 1},
-											},
-										}
-										aeroCluster.Spec.RackConfig = rackConf
-										Expect(DeployCluster(k8sClient, ctx, aeroCluster)).Should(HaveOccurred())
-									},
-								)
-								It(
-									"should fail for using defaultRackID",
-									func() {
-										aeroCluster := createDummyAerospikeCluster(
-											clusterNamespacedName, 2,
-										)
-										rackConf := asdbv1.RackConfig{
-											Racks: []asdbv1.Rack{
-												{ID: 1},
-												{ID: asdbv1.DefaultRackID},
-											},
-										}
-										aeroCluster.Spec.RackConfig = rackConf
-										Expect(DeployCluster(k8sClient, ctx, aeroCluster)).Should(HaveOccurred())
-									},
-								)
-							},
-						)
-
-						Context(
 							"When using invalid rack storage config", func() {
 								It(
 									"Should fail for empty common storage if per rack storage is not provided",
@@ -649,47 +598,6 @@ var _ = Describe(
 								aeroCluster.Spec.RackConfig.Racks[0].Region = "randomValue"
 								err = updateCluster(k8sClient, ctx, aeroCluster)
 								Expect(err).Should(HaveOccurred())
-							},
-						)
-
-						Context(
-							"InvalidRackID", func() {
-								It(
-									"should fail for DuplicateRackID", func() {
-										aeroCluster, err := getCluster(
-											k8sClient, ctx,
-											clusterNamespacedName,
-										)
-										Expect(err).ToNot(HaveOccurred())
-
-										aeroCluster.Spec.RackConfig.Racks = append(
-											aeroCluster.Spec.RackConfig.Racks,
-											aeroCluster.Spec.RackConfig.Racks...,
-										)
-										err = updateCluster(
-											k8sClient, ctx, aeroCluster,
-										)
-										Expect(err).Should(HaveOccurred())
-									},
-								)
-								It(
-									"should fail for OutOfRangeRackID", func() {
-										aeroCluster, err := getCluster(
-											k8sClient, ctx,
-											clusterNamespacedName,
-										)
-										Expect(err).ToNot(HaveOccurred())
-
-										aeroCluster.Spec.RackConfig.Racks = append(
-											aeroCluster.Spec.RackConfig.Racks,
-											asdbv1.Rack{ID: 20000000000},
-										)
-										err = updateCluster(
-											k8sClient, ctx, aeroCluster,
-										)
-										Expect(err).Should(HaveOccurred())
-									},
-								)
 							},
 						)
 

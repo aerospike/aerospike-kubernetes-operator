@@ -2,8 +2,6 @@ package restore
 
 import (
 	"encoding/json"
-	"strconv"
-	"strings"
 	"time"
 
 	. "github.com/onsi/ginkgo/v2"
@@ -102,15 +100,6 @@ var _ = Describe(
 					Expect(err.Error()).To(ContainSubstring("empty field validation error: \"time\" required"))
 				})
 
-				It("Should fail when source field is given for Timestamp restore type", func() {
-					restore, err = newRestore(restoreNsNm, asdbv1beta1.Timestamp)
-					Expect(err).ToNot(HaveOccurred())
-
-					err = createRestore(k8sClient, restore)
-					Expect(err).To(HaveOccurred())
-					Expect(err.Error()).To(ContainSubstring("source field is not allowed in restore config"))
-				})
-
 				It("Should fail when routine field is given for Full/Incremental restore type", func() {
 					restoreConfig := getRestoreConfigInMap(backupDataPath)
 					restoreConfig[asdbv1beta1.RoutineKey] = "test-routine"
@@ -183,7 +172,10 @@ var _ = Describe(
 
 				It(
 					"Should complete restore for Timestamp restore type", func() {
-						configBytes, err := getTimeStampRestoreConfigBytes(getRestoreConfigInMap(backupDataPath))
+						var configBytes []byte
+
+						configBytes, err = getTimeStampRestoreConfigBytes(
+							getRestoreConfigInMap(backupDataPath), backupDataPath)
 						Expect(err).ToNot(HaveOccurred())
 
 						restore = newRestoreWithConfig(restoreNsNm, asdbv1beta1.Timestamp, configBytes)
@@ -198,8 +190,31 @@ var _ = Describe(
 
 				It(
 					"Should complete restore for Timestamp restore type and with TLS configured", func() {
-						configBytes, err := getTimeStampRestoreConfigBytes(getRestoreConfigWithTLSInMap(backupDataPath))
+						var configBytes []byte
+
+						configBytes, err = getTimeStampRestoreConfigBytes(
+							getRestoreConfigWithTLSInMap(backupDataPath), backupDataPath)
 						Expect(err).ToNot(HaveOccurred())
+
+						restore = newRestoreWithConfig(restoreNsNm, asdbv1beta1.Timestamp, configBytes)
+
+						err = createRestore(k8sClient, restore)
+						Expect(err).ToNot(HaveOccurred())
+
+						err = validateRestoredData(k8sClient)
+						Expect(err).ToNot(HaveOccurred())
+					},
+				)
+
+				It(
+					"Should accept source override for Timestamp restore type", func() {
+						restoreConfig, mErr := getTimeStampRestoreConfig(getRestoreConfigInMap(backupDataPath), backupDataPath)
+						Expect(mErr).ToNot(HaveOccurred())
+
+						restoreConfig[asdbv1beta1.SourceNameKey] = "local"
+
+						configBytes, mErr := getRestoreConfBytes(restoreConfig)
+						Expect(mErr).ToNot(HaveOccurred())
 
 						restore = newRestoreWithConfig(restoreNsNm, asdbv1beta1.Timestamp, configBytes)
 
@@ -212,19 +227,3 @@ var _ = Describe(
 				)
 			})
 	})
-
-func getTimeStampRestoreConfigBytes(restoreConfig map[string]interface{}) (configBytes []byte, err error) {
-	delete(restoreConfig, asdbv1beta1.SourceKey)
-	delete(restoreConfig, asdbv1beta1.BackupDataPathKey)
-
-	parts := strings.Split(backupDataPath, "/")
-	timeStamp := parts[len(parts)-3]
-	timeInt, err := strconv.Atoi(timeStamp)
-	Expect(err).ToNot(HaveOccurred())
-
-	// increase time by 5 seconds to consider the latest backup under time bound
-	restoreConfig[asdbv1beta1.TimeKey] = int64(timeInt) + 5000
-	restoreConfig[asdbv1beta1.RoutineKey] = parts[len(parts)-5]
-
-	return getRestoreConfBytes(restoreConfig)
-}

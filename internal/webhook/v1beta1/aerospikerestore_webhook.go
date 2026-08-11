@@ -66,7 +66,6 @@ var _ admission.Validator[*asdbv1beta1.AerospikeRestore] = &AerospikeRestoreCust
 func (arv *AerospikeRestoreCustomValidator) ValidateCreate(_ context.Context, restore *asdbv1beta1.AerospikeRestore,
 ) (admission.Warnings, error) {
 	arLog := logf.Log.WithName(namespacedName(restore))
-
 	arLog.Info("Validate create")
 
 	k8sClient, gErr := getK8sClient()
@@ -146,10 +145,6 @@ func validateRestoreConfig(k8sClient client.Client, restore *asdbv1beta1.Aerospi
 
 	case asdbv1beta1.Timestamp:
 		var restoreRequest dto.RestoreTimestampRequest
-
-		if _, ok := restoreConfig[asdbv1beta1.SourceKey]; ok {
-			return fmt.Errorf("source field is not allowed in restore config for restore type %s", restore.Spec.Type)
-		}
 
 		if err := yaml.UnmarshalStrict(restore.Spec.Config.Raw, &restoreRequest); err != nil {
 			return err

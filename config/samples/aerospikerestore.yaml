@@ -25,3 +25,32 @@ spec:
       local-storage:
         path: /tmp/localStorage
     backup-data-path: aerospike-aerospikebackup-test-routine/backup/1733506015827/data/test
+---
+# Timestamp restore with storage override (requires ABS >= 3.6.1, BKRS-212).
+# Uses source-name to override backup storage when the routine is not configured locally
+# (cross-region: backup in region A, copy files, restore in region B). The routine field
+# still identifies the backup set name; source-name points at storage defined in this ABS.
+# apiVersion: asdb.aerospike.com/v1beta1
+# kind: AerospikeRestore
+# metadata:
+#   name: aerospikerestore-timestamp-storage-override
+#   namespace: aerospike
+# spec:
+#   backupService:
+#     name: aerospikebackupservice-sample
+#     namespace: aerospike
+#   type: Timestamp
+#   config:
+#     destination:
+#       label: destinationCluster
+#       credentials:
+#         password: admin123
+#         user: admin
+#       seed-nodes:
+#         - host-name: aerocluster.test.svc.cluster.local
+#           port: 3000
+#     policy:
+#       parallel: 3
+#     source-name: local
+#     routine: aerospike-aerospikebackup-test-routine
+#     time: 1733506015827

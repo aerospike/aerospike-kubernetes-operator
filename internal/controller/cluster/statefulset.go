@@ -94,11 +94,11 @@ var defaultContainerPorts = map[string]PortInfo{
 }
 
 func (r *SingleClusterReconciler) createSTS(
-	namespacedName types.NamespacedName, rackState *RackState,
+	ctx context.Context, namespacedName types.NamespacedName, rackState *RackState,
 ) (*appsv1.StatefulSet, error) {
 	replicas := rackState.Size
 
-	r.Log.Info("Create statefulset for AerospikeCluster", "size", replicas)
+	r.Log.Info("Create StatefulSet for AerospikeCluster", "size", replicas)
 
 	ports := getSTSContainerPort(
 		r.aeroCluster.Spec.PodSpec.MultiPodPerHost,
@@ -198,22 +198,21 @@ func (r *SingleClusterReconciler) createSTS(
 		return nil, err
 	}
 
-	if err := r.Create(context.TODO(), st, common.CreateOption); err != nil {
-		return nil, fmt.Errorf("failed to create new StatefulSet: %v", err)
+	if err := r.Create(ctx, st, common.CreateOption); err != nil {
+		return nil, fmt.Errorf("create StatefulSet %s: %w", utils.GetNamespacedNameString(st), err)
 	}
 
 	r.Log.Info(
-		"Created new StatefulSet", "StatefulSet.Namespace", st.Namespace,
-		"StatefulSet.Name", st.Name,
+		"Created new StatefulSet", "statefulSet", utils.GetNamespacedName(st),
 	)
 
-	if err := r.waitForSTSToBeReady(st, nil); err != nil {
+	if err := r.waitForSTSToBeReady(ctx, st, nil); err != nil {
 		return st, fmt.Errorf(
-			"failed to wait for statefulset to be ready: %v", err,
+			"wait for StatefulSet %s to be ready: %w", utils.GetNamespacedNameString(st), err,
 		)
 	}
 
-	return r.getSTS(rackState)
+	return r.getSTS(ctx, rackState)
 }
 
 func (r *SingleClusterReconciler) getReadinessProbe() *corev1.Probe {
@@ -239,16 +238,16 @@ func (r *SingleClusterReconciler) getReadinessProbe() *corev1.Probe {
 	}
 }
 
-func (r *SingleClusterReconciler) deleteSTS(st *appsv1.StatefulSet) error {
-	r.Log.Info("Delete statefulset", "namespace", st.Namespace, "name", st.Name)
+func (r *SingleClusterReconciler) deleteSTS(ctx context.Context, st *appsv1.StatefulSet) error {
+	r.Log.Info("Delete StatefulSet", "namespace", st.Namespace, "name", st.Name)
 	// No need to do cleanup pods after deleting sts
 	// It is only deleted while its creation is failed
 	// While doing rackRemove, we call scaleDown to 0 so that will do cleanup
-	return r.Delete(context.TODO(), st)
+	return r.Delete(ctx, st)
 }
 
-func (r *SingleClusterReconciler) waitForSTSToBeReady(
-	st *appsv1.StatefulSet, ignorablePodNames sets.Set[string],
+func (r *SingleClusterReconciler) waitForSTSPodsServerReady(
+	ctx context.Context, st *appsv1.StatefulSet, ignorablePodNames sets.Set[string],
 ) error {
 	const (
 		podStatusMaxRetry      = 18
@@ -256,7 +255,83 @@ func (r *SingleClusterReconciler) waitForSTSToBeReady(
 	)
 
 	r.Log.Info(
-		"Waiting for statefulset to be ready", "WaitTimePerPod",
+		"Waiting for server Container to be ready across all Pods of StatefulSet",
+		"statefulSet", utils.GetNamespacedName(st),
+		"maxWaitTimePerPod", podStatusRetryInterval*time.Duration(podStatusMaxRetry),
+	)
+
+	for podIndex := int32(0); podIndex < *st.Spec.Replicas; podIndex++ {
+		podName := getSTSPodName(st.Name, podIndex)
+
+		if ignorablePodNames.Has(podName) {
+			continue
+		}
+
+		pod := &corev1.Pod{}
+
+		// Wait up to 10s for the pod object to appear.
+		for i := 0; i < 5; i++ {
+			if err := r.Get(
+				ctx,
+				types.NamespacedName{Name: podName, Namespace: st.Namespace},
+				pod,
+			); err == nil {
+				break
+			}
+
+			time.Sleep(time.Second * 2)
+		}
+
+		var isReady bool
+
+		for i := 0; i < podStatusMaxRetry; i++ {
+			r.Log.V(1).Info("Checking Aerospike server container ready", "pod", utils.NamespacedName(st.Namespace, podName))
+
+			if err := r.Get(
+				ctx,
+				types.NamespacedName{Name: podName, Namespace: st.Namespace},
+				pod,
+			); err != nil {
+				return fmt.Errorf("get Pod %s: %w", utils.NamespacedName(st.Namespace, podName), err)
+			}
+
+			if podState := utils.CheckServerFailedWithGrace(pod, false); podState.State == utils.PodFailed {
+				return fmt.Errorf("server container in Pod %s failed: %s",
+					utils.NamespacedName(st.Namespace, podName), podState.Reason)
+			}
+
+			if utils.IsAerospikeServerReady(pod) {
+				isReady = true
+
+				r.Log.Info("Aerospike server container is ready", "pod", utils.GetNamespacedName(pod))
+
+				break
+			}
+
+			time.Sleep(podStatusRetryInterval)
+		}
+
+		if !isReady {
+			return fmt.Errorf(
+				"server container in Pod %s did not become ready, status: %v",
+				utils.NamespacedName(st.Namespace, podName), pod.Status.ContainerStatuses,
+			)
+		}
+	}
+
+	return r.waitForSTSReplicasConverged(ctx, st)
+}
+
+func (r *SingleClusterReconciler) waitForSTSToBeReady(
+	ctx context.Context, st *appsv1.StatefulSet, ignorablePodNames sets.Set[string],
+) error {
+	const (
+		podStatusMaxRetry      = 18
+		podStatusRetryInterval = time.Second * 10
+	)
+
+	r.Log.Info(
+		"Waiting for StatefulSet to be ready", "waitTimePerPod",
 		podStatusRetryInterval*time.Duration(podStatusMaxRetry),
 	)
 
@@ -274,7 +349,7 @@ func (r *SingleClusterReconciler) waitForSTSToBeReady(
 		// Wait for 10 sec to pod to get started
 		for i := 0; i < 5; i++ {
 			if err := r.Get(
-				context.TODO(),
+				ctx,
 				types.NamespacedName{Name: podName, Namespace: st.Namespace},
 				pod,
 			); err == nil {
@@ -287,27 +362,29 @@ func (r *SingleClusterReconciler) waitForSTSToBeReady(
 		// Wait for pod to get ready
 		for i := 0; i < podStatusMaxRetry; i++ {
 			r.Log.V(1).Info(
-				"Check statefulSet pod running and ready", "pod", podName,
+				"Check StatefulSet Pod running and ready", "pod", utils.NewNamespacedName(st.Namespace, podName),
 			)
 
 			if err := r.Get(
-				context.TODO(),
+				ctx,
 				types.NamespacedName{Name: podName, Namespace: st.Namespace},
 				pod,
 			); err != nil {
 				return fmt.Errorf(
-					"failed to get statefulSet pod %s: %v", podName, err,
+					"get StatefulSet pod %s: %w", utils.NamespacedName(st.Namespace, podName), err,
 				)
 			}
 
 			if err := utils.CheckPodFailed(pod); err != nil {
-				return fmt.Errorf("statefulSet pod %s failed: %v", podName, err)
+				return fmt.Errorf(
+					"check StatefulSet pod %s: %w", utils.NamespacedName(st.Namespace, podName), err,
+				)
 			}
 
 			if utils.IsPodRunningAndReady(pod) {
 				isReady = true
 
-				r.Log.Info("Pod is running and ready", "pod", podName)
+				r.Log.Info("Pod is running and ready", "pod", utils.GetNamespacedName(pod))
 
 				break
 			}
@@ -317,10 +394,8 @@ func (r *SingleClusterReconciler) waitForSTSToBeReady(
 
 		if !isReady {
 			statusErr := fmt.Errorf(
-				"statefulSet pod is not ready. Status: %v",
-				pod.Status.Conditions,
-			)
-			r.Log.Error(statusErr, "Statefulset Not ready")
+				"status for Pod %s: resource not ready, conditions=%v",
+				utils.GetNamespacedNameString(pod), pod.Status.Conditions)
 
 			return statusErr
 		}
@@ -328,38 +403,8 @@ func (r *SingleClusterReconciler) waitForSTSToBeReady(
 
 	// Check for statefulset at the end,
 	// if we check before pods then we would not know status of individual pods
-	const (
-		stsStatusMaxRetry      = 10
-		stsStatusRetryInterval = time.Second * 2
-	)
-
-	var updated bool
-
-	for i := 0; i < stsStatusMaxRetry; i++ {
-		time.Sleep(stsStatusRetryInterval)
-
-		r.Log.V(1).Info("Check statefulSet status is updated or not")
-
-		if err := r.Get(
-			context.TODO(),
-			types.NamespacedName{Name: st.Name, Namespace: st.Namespace}, st,
-		); err != nil {
-			return err
-		}
-
-		if *st.Spec.Replicas == st.Status.Replicas {
-			updated = true
-			break
-		}
-
-		r.Log.V(1).Info(
-			"StatefulSet spec.replica not matching status.replica", "status",
-			st.Status.Replicas, "spec", *st.Spec.Replicas,
-		)
-	}
-
-	if !updated {
-		return fmt.Errorf("statefulset status is not updated")
+	if err := r.waitForSTSReplicasConverged(ctx, st); err != nil {
+		return err
 	}
 
 	r.Log.Info("StatefulSet is ready")
@@ -367,10 +412,49 @@ func (r *SingleClusterReconciler) waitForSTSToBeReady(
 	return nil
 }
 
-func (r *SingleClusterReconciler) getSTS(rackState *RackState) (*appsv1.StatefulSet, error) {
+// waitForSTSReplicasConverged polls until st.Status.Replicas matches
+// st.Spec.Replicas, ensuring the K8s STS controller has accounted for all
+// replicas before the caller proceeds.
+func (r *SingleClusterReconciler) waitForSTSReplicasConverged(
+	ctx context.Context, st *appsv1.StatefulSet,
+) error {
+	const (
+		stsStatusMaxRetry      = 10
+		stsStatusRetryInterval = time.Second * 2
+	)
+
+	for i := 0; i < stsStatusMaxRetry; i++ {
+		if err := r.Get(
+			ctx,
+			types.NamespacedName{Name: st.Name, Namespace: st.Namespace},
+			st,
+		); err != nil {
+			return fmt.Errorf("get StatefulSet %s while checking replica status: %w",
+				utils.GetNamespacedNameString(st), err)
+		}
+
+		if *st.Spec.Replicas == st.Status.Replicas {
+			return nil
+		}
+
+		r.Log.V(1).Info(
+			"StatefulSet spec.replicas not matching status.replicas, retrying",
+			"statefulSet", utils.GetNamespacedName(st),
+			"specReplicas", *st.Spec.Replicas,
+			"statusReplicas", st.Status.Replicas,
+		)
+
+		time.Sleep(stsStatusRetryInterval)
+	}
+
+	return fmt.Errorf("StatefulSet %s status.replicas did not converge to spec.replicas (%d)",
+		utils.GetNamespacedNameString(st), *st.Spec.Replicas)
+}
+
+func (r *SingleClusterReconciler) getSTS(ctx context.Context, rackState *RackState) (*appsv1.StatefulSet, error) {
 	found := &appsv1.StatefulSet{}
 	if err := r.Get(
-		context.TODO(),
+		ctx,
 		utils.GetNamespacedNameForSTSOrConfigMap(r.aeroCluster,
 			utils.GetRackIdentifier(rackState.Rack.ID, rackState.Rack.Revision)),
 		found,
@@ -382,14 +466,14 @@ func (r *SingleClusterReconciler) getSTS(rackState *RackState) (*appsv1.Stateful
 }
 
 func (r *SingleClusterReconciler) createSTSConfigMap(
-	namespacedName types.NamespacedName, rack *asdbv1.Rack,
+	ctx context.Context, namespacedName types.NamespacedName, rack *asdbv1.Rack,
 ) error {
-	r.Log.Info("Creating a new ConfigMap for statefulSet")
+	r.Log.Info("Creating a new ConfigMap for StatefulSet")
 
 	confMap := &corev1.ConfigMap{}
 
 	err := r.Get(
-		context.TODO(), types.NamespacedName{
+		ctx, types.NamespacedName{
 			Name: namespacedName.Name, Namespace: namespacedName.Namespace,
 		}, confMap,
 	)
@@ -398,9 +482,9 @@ func (r *SingleClusterReconciler) createSTSConfigMap(
 			// build the aerospike config file based on the current spec
 			var configMapData map[string]string
 
-			configMapData, err = r.createConfigMapData(rack)
+			configMapData, err = r.createConfigMapData(ctx, rack)
 			if err != nil {
-				return fmt.Errorf("failed to build dotConfig from map: %v", err)
+				return fmt.Errorf("build dotConfig from map: %w", err)
 			}
 
 			ls := utils.LabelsForAerospikeCluster(r.aeroCluster.Name)
@@ -424,16 +508,15 @@ func (r *SingleClusterReconciler) createSTSConfigMap(
 			}
 
 			if err = r.Create(
-				context.TODO(), confMap, common.CreateOption,
+				ctx, confMap, common.CreateOption,
 			); err != nil {
 				return fmt.Errorf(
-					"failed to create new confMap for StatefulSet: %v", err,
+					"create ConfigMap %s: %w", namespacedName, err,
 				)
 			}
 
 			r.Log.Info(
-				"Created new ConfigMap", "ConfigMap.Namespace",
-				confMap.Namespace, "ConfigMap.Name", confMap.Name,
+				"Created new ConfigMap", "configMap", utils.GetNamespacedName(confMap),
 			)
 
 			return nil
@@ -443,14 +526,14 @@ func (r *SingleClusterReconciler) createSTSConfigMap(
 	}
 
 	r.Log.Info(
-		"Configmap already exists for statefulSet - using existing configmap",
+		"ConfigMap already exists for StatefulSet - using existing ConfigMap",
 		"name", utils.NamespacedName(confMap.Namespace, confMap.Name),
 	)
 
 	// Update existing configmap as it might not be current.
-	configMapData, err := r.createConfigMapData(rack)
+	configMapData, err := r.createConfigMapData(ctx, rack)
 	if err != nil {
-		return fmt.Errorf("failed to build config map data: %v", err)
+		return fmt.Errorf("build ConfigMap data: %w", err)
 	}
 
 	// Replace config map data if differs since we are supposed to create a new config map.
@@ -459,35 +542,38 @@ func (r *SingleClusterReconciler) createSTSConfigMap(
 	}
 
 	r.Log.Info(
-		"Updating existed configmap",
+		"Updating existed ConfigMap",
 		"name", utils.NamespacedName(confMap.Namespace, confMap.Name),
 	)
 
 	confMap.Data = configMapData
 
 	if err := r.Update(
-		context.TODO(), confMap, common.UpdateOption,
+		ctx, confMap, common.UpdateOption,
 	); err != nil {
-		return fmt.Errorf("failed to update ConfigMap for StatefulSet: %v", err)
+		return fmt.Errorf("update ConfigMap %s: %w", utils.NamespacedName(confMap.Namespace, confMap.Name), err)
 	}
 
 	return nil
 }
 
 func (r *SingleClusterReconciler) updateSTSConfigMap(
-	namespacedName types.NamespacedName, rack *asdbv1.Rack,
+	ctx context.Context, namespacedName types.NamespacedName, rack *asdbv1.Rack,
 ) error {
-	r.Log.Info("Updating ConfigMap", "ConfigMap", namespacedName)
+	r.Log.Info("Updating ConfigMap", "configMap", utils.NewNamespacedName(namespacedName.Namespace, namespacedName.Name))
 
 	confMap := &corev1.ConfigMap{}
-	if err := r.Get(context.TODO(), namespacedName, confMap); err != nil {
+	if err := r.Get(ctx, namespacedName, confMap); err != nil {
 		return err
 	}
 
 	// build the aerospike config file based on the current spec
-	configMapData, err := r.createConfigMapData(rack)
+	configMapData, err := r.createConfigMapData(ctx, rack)
 	if err != nil {
-		return fmt.Errorf("failed to build dotConfig from map: %v", err)
+		return fmt.Errorf(
+			"build dotConfig from map for rack %d: %w",
+			rack.ID, err,
+		)
 	}
 
 	// Overwrite only spec based keys. Do not touch other keys like pod metadata.
@@ -496,9 +582,9 @@ func (r *SingleClusterReconciler) updateSTSConfigMap(
 	}
 
 	if err := r.Update(
-		context.TODO(), confMap, common.UpdateOption,
+		ctx, confMap, common.UpdateOption,
 	); err != nil {
-		return fmt.Errorf("failed to update confMap for StatefulSet: %v", err)
+		return fmt.Errorf("update ConfigMap %s: %w", namespacedName, err)
 	}
 
 	return nil
@@ -565,7 +651,7 @@ func (r *SingleClusterReconciler) allContainersAreOnDesiredImages(
 
 			if logChanges {
 				r.Log.Info(
-					"Found container for upgrading/downgrading in pod", "pod",
+					"Found container for upgrading/downgrading in Pod", "pod",
 					podName, "container", container.Name, "currentImage",
 					container.Image, "desiredImage", desiredImage,
 				)
@@ -623,7 +709,7 @@ func sortContainerVolumeAttachments(containers []corev1.Container) {
 
 // updateSTS updates the statefulset to match the spec. It is idempotent.
 func (r *SingleClusterReconciler) updateSTS(
-	statefulSet *appsv1.StatefulSet, rackState *RackState,
+	ctx context.Context, statefulSet *appsv1.StatefulSet, rackState *RackState,
 ) error {
 	// Update settings from pod spec.
 	r.updateSTSFromPodSpec(statefulSet, rackState)
@@ -646,7 +732,7 @@ func (r *SingleClusterReconciler) updateSTS(
 	r.updateSTSStorage(statefulSet, rackState)
 
 	if err := retry.RetryOnConflict(retry.DefaultRetry, func() error {
-		found, err := r.getSTS(rackState)
+		found, err := r.getSTS(ctx, rackState)
 		if err != nil {
 			return err
 		}
@@ -654,17 +740,17 @@ func (r *SingleClusterReconciler) updateSTS(
 		// Save the updated stateful set.
 		found.Spec = statefulSet.Spec
 
-		return r.Update(context.TODO(), found, common.UpdateOption)
+		return r.Update(ctx, found, common.UpdateOption)
 	}); err != nil {
 		return fmt.Errorf(
-			"failed to update StatefulSet %s: %v",
-			statefulSet.Name,
+			"update StatefulSet %s: %w",
+			utils.GetNamespacedNameString(statefulSet),
 			err,
 		)
 	}
 
 	r.Log.V(1).Info(
-		"Saved StatefulSet", "statefulSet", *statefulSet,
+		"Saved StatefulSet", "statefulSet", utils.GetNamespacedName(statefulSet),
 	)
 
 	return nil
@@ -789,7 +875,10 @@ func (r *SingleClusterReconciler) updateSTSPVStorage(
 				st.Spec.VolumeClaimTemplates, pvc,
 			)
 
-			r.Log.V(1).Info("Added PVC for volume", "volume", volume)
+			r.Log.V(1).Info("Added PVC for volume",
+				"persistentVolumeClaim", utils.GetNamespacedName(&pvc),
+				"volume", volume.Name,
+			)
 		}
 	}
 }
@@ -816,7 +905,7 @@ func (r *SingleClusterReconciler) updateSTSNonPVStorage(
 		initContainerAttachments, containerAttachments := getFinalVolumeAttachmentsForVolume(volume, workDir)
 
 		r.Log.V(1).Info(
-			"Added volume mount in statefulSet pod containers for volume",
+			"Added volume mount in StatefulSet Pod containers for volume",
 			"volume", volume,
 		)
 
@@ -859,7 +948,7 @@ func (r *SingleClusterReconciler) updateSTSSchedulingPolicy(
 
 		antiAffinityLabels := utils.LabelsForPodAntiAffinity(r.aeroCluster.Name)
 
-		r.Log.Info("Adding pod affinity rules for statefulSet pod")
+		r.Log.Info("Adding pod affinity rules for StatefulSet Pod")
 
 		antiAffinity := &corev1.PodAntiAffinity{
 			RequiredDuringSchedulingIgnoredDuringExecution: []corev1.PodAffinityTerm{
@@ -1078,7 +1167,8 @@ func updateSTSContainers(
 	return finalContainers
 }
 
-func (r *SingleClusterReconciler) waitForAllSTSToBeReady(ignorablePodNames sets.Set[string]) error {
+func (r *SingleClusterReconciler) waitForAllSTSToBeReady(
+	ctx context.Context, ignorablePodNames sets.Set[string]) error {
 	r.Log.Info("Waiting for all cluster STSs to be ready")
 
 	allRackIdentifiers := sets.NewString()
@@ -1098,7 +1188,7 @@ func (r *SingleClusterReconciler) waitForAllSTSToBeReady(ignorablePodNames sets.
 		st := &appsv1.StatefulSet{}
 		stsName := utils.GetNamespacedNameForSTSOrConfigMap(r.aeroCluster, rackIdentifier)
 
-		if err := r.Get(context.TODO(), stsName, st); err != nil {
+		if err := r.Get(ctx, stsName, st); err != nil {
 			if !errors.IsNotFound(err) {
 				return err
 			}
@@ -1107,7 +1197,7 @@ func (r *SingleClusterReconciler) waitForAllSTSToBeReady(ignorablePodNames sets.
 			continue
 		}
 
-		if err := r.waitForSTSToBeReady(st, ignorablePodNames); err != nil {
+		if err := r.waitForSTSToBeReady(ctx, st, ignorablePodNames); err != nil {
 			return err
 		}
 	}
@@ -1115,7 +1205,49 @@ func (r *SingleClusterReconciler) waitForAllSTSToBeReady(ignorablePodNames sets.
 	return nil
 }
 
-func (r *SingleClusterReconciler) getClusterSTSList() (
+// waitForAllAerospikeServersReady waits for the Aerospike server container's
+// ready state to be true on every non-ignorable pod across all cluster
+// StatefulSets. It does NOT require sidecars or other containers to be ready.
+// Pods whose names are in ignorablePodNames are skipped entirely; sidecar-failed
+// pods are NOT skipped because their server containers are still reachable.
+func (r *SingleClusterReconciler) waitForAllAerospikeServersReady(
+	ctx context.Context, ignorablePodNames sets.Set[string]) error {
+	r.Log.Info("Waiting for Aerospike server containers across all STSs to be ready")
+
+	allRackIdentifiers := sets.NewString()
+
+	for idx := range r.aeroCluster.Status.RackConfig.Racks {
+		rack := &r.aeroCluster.Status.RackConfig.Racks[idx]
+		allRackIdentifiers.Insert(utils.GetRackIdentifier(rack.ID, rack.Revision))
+	}
+
+	for idx := range r.aeroCluster.Spec.RackConfig.Racks {
+		rack := &r.aeroCluster.Spec.RackConfig.Racks[idx]
+		allRackIdentifiers.Insert(utils.GetRackIdentifier(rack.ID, rack.Revision))
+	}
+
+	for rackIdentifier := range allRackIdentifiers {
+		st := &appsv1.StatefulSet{}
+		stsName := utils.GetNamespacedNameForSTSOrConfigMap(r.aeroCluster, rackIdentifier)
+
+		if err := r.Get(ctx, stsName, st); err != nil {
+			if !errors.IsNotFound(err) {
+				return err
+			}
+
+			// Skip if a sts not found. It may have been deleted and status may not have been updated yet
+			continue
+		}
+
+		if err := r.waitForSTSPodsServerReady(ctx, st, ignorablePodNames); err != nil {
+			return err
+		}
+	}
+
+	return nil
+}
+
+func (r *SingleClusterReconciler) getClusterSTSList(ctx context.Context) (
 	*appsv1.StatefulSetList, error,
 ) {
 	// List the pods for this aeroCluster's statefulset
@@ -1126,7 +1258,7 @@ func (r *SingleClusterReconciler) getClusterSTSList() (
 	}
 
 	if err := r.List(
-		context.TODO(), statefulSetList, listOps,
+		ctx, statefulSetList, listOps,
 	); err != nil {
 		return nil, err
 	}
@@ -1151,7 +1283,7 @@ func (r *SingleClusterReconciler) updateContainerImages(statefulset *appsv1.Stat
 
 			if !utils.IsImageEqual(container.Image, desiredImage) {
 				r.Log.Info(
-					"Updating image in statefulset spec", "container",
+					"Updating image in StatefulSet spec", "container",
 					container.Name, "desiredImage", desiredImage,
 					"currentImage", container.Image,
 				)
@@ -1179,7 +1311,8 @@ func (r *SingleClusterReconciler) updateReadinessProbe(statefulSet *appsv1.State
 	}
 }
 
-func (r *SingleClusterReconciler) updateAerospikeInitContainerImage(statefulSet *appsv1.StatefulSet) error {
+func (r *SingleClusterReconciler) updateAerospikeInitContainerImage(
+	ctx context.Context, statefulSet *appsv1.StatefulSet) error {
 	for idx := range statefulSet.Spec.Template.Spec.InitContainers {
 		container := &statefulSet.Spec.Template.Spec.InitContainers[idx]
 		if container.Name != asdbv1.AerospikeInitContainerName {
@@ -1195,24 +1328,36 @@ func (r *SingleClusterReconciler) updateAerospikeInitContainerImage(statefulSet 
 
 		if !utils.IsImageEqual(container.Image, desiredImage) {
 			r.Log.Info(
-				"Updating image in statefulset spec", "container",
+				"Updating image in StatefulSet spec", "container",
 				container.Name, "desiredImage", desiredImage,
 				"currentImage",
 				container.Image,
 			)
 
-			statefulSet.Spec.Template.Spec.InitContainers[idx].Image = desiredImage
+			// Re-fetch inside RetryOnConflict so a stale resourceVersion does
+			// not cause a permanent conflict error.
+			nsName := types.NamespacedName{Name: statefulSet.Name, Namespace: statefulSet.Namespace}
 
-			if err := r.Update(context.TODO(), statefulSet, common.UpdateOption); err != nil {
+			if err := retry.RetryOnConflict(retry.DefaultRetry, func() error {
+				current := &appsv1.StatefulSet{}
+				if err := r.Get(ctx, nsName, current); err != nil {
+					return err
+				}
+
+				current.Spec.Template.Spec.InitContainers[idx].Image = desiredImage
+				*statefulSet = *current
+
+				return r.Update(ctx, current, common.UpdateOption)
+			}); err != nil {
 				return fmt.Errorf(
-					"failed to update StatefulSet %s: %v",
-					statefulSet.Name,
+					"update StatefulSet %s: %w",
+					utils.GetNamespacedNameString(statefulSet),
 					err,
 				)
 			}
 
 			r.Log.V(1).Info(
-				"Saved StatefulSet", "statefulSet", *statefulSet,
+				"Saved StatefulSet", "statefulSet", utils.GetNamespacedName(statefulSet),
 			)
 		}
 

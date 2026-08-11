@@ -3,14 +3,14 @@ package cluster
 import (
 	"context"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"reflect"
 	"strings"
 
 	"github.com/go-logr/logr"
 	corev1 "k8s.io/api/core/v1"
-	"k8s.io/apimachinery/pkg/api/errors"
-	apimeta "k8s.io/apimachinery/pkg/api/meta"
+	apierrors "k8s.io/apimachinery/pkg/api/errors"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/labels"
 	k8sRuntime "k8s.io/apimachinery/pkg/runtime"
@@ -44,186 +44,185 @@ type SingleClusterReconciler struct {
 	Log         logr.Logger
 }
 
-func (r *SingleClusterReconciler) Reconcile() (result ctrl.Result, recErr error) {
+func (r *SingleClusterReconciler) asConfigLog() logr.Logger {
+	return r.Log.WithName("lib.asconfig")
+}
+
+// finishReconcile logs the reconcile exit once at the boundary and sets the AerospikeCluster
+// error phase on failure. It holds controller-specific finish logic so it can grow independently.
+func (r *SingleClusterReconciler) finishReconcile(ctx context.Context, result ctrl.Result, recErr error) error {
+	logValues := common.ReconcileExitLogValues(result, recErr)
+
+	if recErr != nil {
+		if err := r.setStatusPhase(ctx, asdbv1.AerospikeClusterError); err != nil {
+			recErr = errors.Join(recErr, fmt.Errorf("set AerospikeCluster error phase: %w", err))
+		}
+
+		r.Log.Error(recErr, "Reconcile failed", logValues...)
+
+		return recErr
+	}
+
+	r.Log.Info("Reconcile completed", logValues...)
+
+	return nil
+}
+
+func (r *SingleClusterReconciler) Reconcile(ctx context.Context) (result ctrl.Result, recErr error) {
 	r.Log.V(1).Info(
-		"AerospikeCluster", "Spec", r.aeroCluster.Spec, "Status",
+		"AerospikeCluster", "spec", r.aeroCluster.Spec, "status",
 		r.aeroCluster.Status,
 	)
 
-	// On reconcile failure set the phase and conditions
+	// Set the status phase to Error if the recErr is not nil
+	// recErr is only set when reconcile failure should result in Error phase of the cluster
 	defer func() {
-		if recErr != nil {
-			r.onReconcileFailure(recErr)
-		}
+		// finishReconcile returns the error to assign here so we avoid *error params; recErr is Reconcile's named return.
+		recErr = r.finishReconcile(ctx, result, recErr)
 	}()
 
 	// Check DeletionTimestamp to see if the cluster is being deleted
 	if !r.aeroCluster.DeletionTimestamp.IsZero() {
-		return reconcile.Result{}, r.handleTerminatingCluster()
-	}
+		r.Log.V(1).Info("Deleting AerospikeCluster")
+		// The cluster is being deleted
+		if err := r.handleClusterDeletion(ctx, finalizerName); err != nil {
+			r.Recorder.Eventf(
+				r.aeroCluster, corev1.EventTypeWarning, "DeleteFailed",
+				"Failed to delete cluster resources",
+			)
 
-	// Pre-seed conditions on first reconcile so kubectl wait doesn't hang.
-	if err := r.initializeConditionsIfNeeded(); err != nil {
-		r.Log.Error(err, "Failed to initialize conditions")
-		return reconcile.Result{}, err
+			return reconcile.Result{}, err
+		}
+
+		r.removeClusterPhaseMetric()
+
+		r.Recorder.Eventf(
+			r.aeroCluster, corev1.EventTypeNormal, "Deleted",
+			"Successfully deleted cluster resources",
+		)
+
+		// Stop reconciliation as the cluster is being deleted
+		return reconcile.Result{}, nil
 	}
 
 	// Pause the reconciliation for the AerospikeCluster if the paused field is set to true.
 	// Deletion of the AerospikeCluster will not be paused.
 	if asdbv1.GetBool(r.aeroCluster.Spec.Paused) {
 		r.Log.Info("Reconciliation is paused for this AerospikeCluster")
-
-		if err := r.setConditions(
-			metav1.Condition{
-				Type:    string(asdbv1.AerospikeClusterConditionPaused),
-				Status:  metav1.ConditionTrue,
-				Reason:  asdbv1.AerospikeClusterReasonPausedByUser,
-				Message: "Reconciliation is paused via spec.paused=true",
-			},
-		); err != nil {
-			return reconcile.Result{}, err
-		}
-
 		return reconcile.Result{}, nil
 	}
 
-	// Mark Ready=False at the start of every reconcile so it doesn't stay True
-	// while operations are in progress.
-	if err := r.setConditions(metav1.Condition{
-		Type:    string(asdbv1.AerospikeClusterConditionReady),
-		Status:  metav1.ConditionFalse,
-		Reason:  asdbv1.AerospikeClusterReasonReconciling,
-		Message: "Reconcile in progress",
-	}); err != nil {
-		return reconcile.Result{}, err
-	}
-
 	// Set the status to AerospikeClusterInProgress before starting any operations
-	if err := r.setStatusPhase(asdbv1.AerospikeClusterInProgress); err != nil {
+	if err := r.setStatusPhase(ctx, asdbv1.AerospikeClusterInProgress); err != nil {
 		return reconcile.Result{}, err
 	}
 
 	// The cluster is not being deleted, add finalizer if not added already
-	if err := r.addFinalizer(finalizerName); err != nil {
-		r.Log.Error(err, "Failed to add finalizer")
-		return reconcile.Result{}, err
+	if err := r.addFinalizer(ctx, finalizerName); err != nil {
+		return reconcile.Result{}, fmt.Errorf("add finalizer: %w", err)
 	}
 
 	// Handle previously failed cluster
-	hasFailed, res := r.checkPreviouslyFailedCluster()
+	hasFailed, res := r.checkPreviouslyFailedCluster(ctx)
 	if !res.IsSuccess {
-		return res.Result, nil
+		return res.Result, res.Err
 	}
 
 	if r.aeroCluster.Labels[asdbv1.AerospikeAPIVersionLabel] == asdbv1.AerospikeAPIVersion {
-		r.Log.Info("cluster migration is not needed")
+		r.Log.Info("Cluster migration is not needed")
 	} else {
-		if err := r.migrateAerospikeCluster(context.TODO(), hasFailed); err != nil {
-			return reconcile.Result{Requeue: true}, err
+		if err := r.migrateAerospikeCluster(ctx, hasFailed); err != nil {
+			return reconcile.Result{}, err
 		}
 	}
 
-	if err := r.createOrUpdateSTSHeadlessSvc(); err != nil {
-		r.Log.Error(err, "Failed to create headless service")
+	if err := r.createOrUpdateSTSHeadlessSvc(ctx); err != nil {
 		r.Recorder.Eventf(
-			r.aeroCluster, corev1.EventTypeWarning, "ServiceCreateFailed",
-			"Failed to create Service(Headless) %s/%s",
-			r.aeroCluster.Namespace, r.aeroCluster.Name,
+			r.aeroCluster, corev1.EventTypeWarning, ReasonServiceCreateFailed,
+			"Failed to create headless Service %s",
+			utils.GetNamespacedNameString(r.aeroCluster),
 		)
 
-		return reconcile.Result{}, err
+		return reconcile.Result{}, fmt.Errorf("create or update headless Service: %w", err)
 	}
 
 	// Reconcile all racks
-	if res := r.reconcileRacks(); !res.IsSuccess {
+	if res := r.reconcileRacks(ctx); !res.IsSuccess {
 		if res.Err != nil {
 			r.Recorder.Eventf(
 				r.aeroCluster, corev1.EventTypeWarning, "UpdateFailed",
-				"Failed to reconcile Racks for cluster %s/%s",
-				r.aeroCluster.Namespace, r.aeroCluster.Name,
+				"Failed to reconcile racks",
 			)
 		}
 
 		return res.Result, res.Err
 	}
 
-	if err := r.reconcilePDB(); err != nil {
-		r.Log.Error(err, "Failed to reconcile PodDisruptionBudget")
+	if err := r.reconcilePDB(ctx); err != nil {
 		r.Recorder.Eventf(
 			r.aeroCluster, corev1.EventTypeWarning, "PodDisruptionBudgetReconcileFailed",
-			"Failed to reconcile PodDisruptionBudget %s/%s",
-			r.aeroCluster.Namespace, r.aeroCluster.Name,
+			"Failed to reconcile PodDisruptionBudget %s",
+			utils.GetNamespacedNameString(r.aeroCluster),
 		)
 
-		return reconcile.Result{}, err
+		return reconcile.Result{}, fmt.Errorf("reconcile PodDisruptionBudget: %w", err)
 	}
 
-	if err := r.reconcileSTSLoadBalancerSvc(); err != nil {
-		r.Log.Error(err, "Failed to create LoadBalancer service")
+	if err := r.reconcileSTSLoadBalancerSvc(ctx); err != nil {
 		r.Recorder.Eventf(
-			r.aeroCluster, corev1.EventTypeWarning, "ServiceCreateFailed",
-			"Failed to create Service(LoadBalancer) %s/%s",
-			r.aeroCluster.Namespace, r.aeroCluster.Name,
+			r.aeroCluster, corev1.EventTypeWarning, ReasonServiceCreateFailed,
+			"Failed to create LoadBalancer Service %s",
+			utils.NamespacedName(r.aeroCluster.Namespace, r.aeroCluster.Name+"-lb"),
 		)
 
-		return reconcile.Result{}, err
+		return reconcile.Result{}, fmt.Errorf("reconcile LoadBalancer Service: %w", err)
 	}
 
-	ignorablePodNames, err := r.getIgnorablePods(nil, getConfiguredRackStateList(r.aeroCluster))
+	ignorablePodNames, err := r.getIgnorablePods(ctx, nil, getConfiguredRackStateList(r.aeroCluster))
 	if err != nil {
-		r.Log.Error(err, "Failed to determine pods to be ignored")
-
-		return reconcile.Result{}, err
+		return reconcile.Result{}, fmt.Errorf("determine ignorable Pods: %w", err)
 	}
 
 	// Check if there is any node with quiesce status. We need to undo that
 	// It may have been left from previous steps
-	allHostConns, err := r.newAllHostConnWithOption(ignorablePodNames)
+	allHostConns, err := r.newAllHostConnWithOption(ctx, ignorablePodNames)
 	if err != nil {
-		e := fmt.Errorf(
-			"failed to get hostConn for aerospike cluster nodes: %v", err,
-		)
-
-		r.Log.Error(err, "Failed to get hostConn for aerospike cluster nodes")
-
-		return reconcile.Result{}, e
+		return reconcile.Result{}, fmt.Errorf("get host connections for cluster nodes: %w", err)
 	}
 
 	if err = deployment.InfoQuiesceUndo(
 		r.Log,
-		r.getClientPolicy(), allHostConns,
+		r.getClientPolicy(ctx), allHostConns,
 	); err != nil {
-		r.Log.Error(err, "Failed to check for Quiesced nodes")
-
-		return reconcile.Result{}, err
+		return reconcile.Result{}, fmt.Errorf("undo quiesce state: %w", err)
 	}
 
 	// Setup access control.
 	// Assuming all pods must be security enabled or disabled.
-	if err = r.validateAndReconcileAccessControl(nil, ignorablePodNames); err != nil {
-		r.Log.Error(err, "Failed to Reconcile access control")
+	if err = r.validateAndReconcileAccessControl(ctx, nil, ignorablePodNames); err != nil {
 		r.Recorder.Eventf(
-			r.aeroCluster, corev1.EventTypeWarning, "ACLUpdateFailed",
-			"Failed to setup Access Control %s/%s", r.aeroCluster.Namespace,
-			r.aeroCluster.Name,
+			r.aeroCluster, corev1.EventTypeWarning, ReasonACLUpdateFailed,
+			"Failed to set up access control",
 		)
 
-		return reconcile.Result{}, err
+		return reconcile.Result{}, fmt.Errorf("reconcile access control: %w", err)
 	}
 
 	// Use policy from spec after setting up access control
-	policy := r.getClientPolicy()
+	policy := r.getClientPolicy(ctx)
 
 	// Revert migrate-fill-delay to the original value if it was set to a different value while processing racks.
 	// Passing the first rack from the list as all the racks will have the same migrate-fill-delay
 	// Redundant safe check to revert migrate-fill-delay if the previous revert operation missed/skipped somehow
 	if res := r.setMigrateFillDelay(
-		policy, &r.aeroCluster.Spec.RackConfig.Racks[0].AerospikeConfig,
+		ctx, policy, &r.aeroCluster.Spec.RackConfig.Racks[0].AerospikeConfig,
 		false, ignorablePodNames,
 	); !res.IsSuccess {
-		r.Log.Error(res.Err, "Failed to revert migrate-fill-delay")
+		if res.Err != nil {
+			return reconcile.Result{}, fmt.Errorf("revert migrate-fill-delay: %w", res.Err)
+		}
 
-		return res.Result, res.Err
+		return reconcile.Result{}, nil
 	}
 
 	// Doing recluster before setting up roster to get the latest observed node list from server.
@@ -232,129 +231,51 @@ func (r *SingleClusterReconciler) Reconcile() (result ctrl.Result, recErr error)
 			r.Log,
 			policy, allHostConns,
 		); err != nil {
-			r.Log.Error(err, "Failed to do recluster")
-			return reconcile.Result{}, err
+			return reconcile.Result{}, fmt.Errorf("run recluster: %w", err)
 		}
 	}
 
-	if res := r.ensureSCRoster(policy, allHostConns, ignorablePodNames); !res.IsSuccess {
-		return res.Result, res.Err
+	if asdbv1.IsClusterSCEnabled(r.aeroCluster) {
+		if !r.IsStatusEmpty() {
+			if res := r.waitForClusterStability(policy, allHostConns); !res.IsSuccess {
+				return res.Result, res.Err
+			}
+		}
+
+		// Setup roster
+		if err = r.getAndSetRoster(ctx, policy, r.aeroCluster.Spec.RosterNodeBlockList, ignorablePodNames); err != nil {
+			return reconcile.Result{}, fmt.Errorf("set roster: %w", err)
+		}
 	}
 
 	// Update the AerospikeCluster status.
-	if err = r.updateStatus(); err != nil {
-		r.Log.Error(err, "Failed to update AerospikeCluster status")
+	if err = r.updateStatus(ctx); err != nil {
 		r.Recorder.Eventf(
-			r.aeroCluster, corev1.EventTypeWarning, "StatusUpdateFailed",
-			"Failed to update AerospikeCluster status %s/%s",
-			r.aeroCluster.Namespace, r.aeroCluster.Name,
+			r.aeroCluster, corev1.EventTypeWarning, ReasonStatusUpdateFailed,
+			"Failed to update status",
 		)
 
-		return reconcile.Result{}, err
+		return reconcile.Result{}, fmt.Errorf("update AerospikeCluster status: %w", err)
 	}
 
 	// Try to recover pods only if there are any ignorable pods, which may be failed or pending.
-	if len(ignorablePodNames) > 0 {
-		if res := r.recoverIgnorablePods(ignorablePodNames); !res.IsSuccess {
+	if ignorablePodNames.Len() > 0 {
+		if res := r.recoverIgnorablePods(ctx, ignorablePodNames); !res.IsSuccess {
 			return res.GetResult()
 		}
 	}
 
-	r.Log.Info("Reconcile completed successfully")
-
 	return reconcile.Result{}, nil
 }
 
-// handleTerminatingCluster sets Ready=False/Terminating and drives cluster deletion.
-// Returns the result to be returned directly from Reconcile.
-func (r *SingleClusterReconciler) handleTerminatingCluster() error {
-	r.Log.V(1).Info("Deleting AerospikeCluster")
-
-	// Signal to observers that the cluster is no longer ready — it is being torn down.
-	if err := r.setConditions(metav1.Condition{
-		Type:    string(asdbv1.AerospikeClusterConditionReady),
-		Status:  metav1.ConditionFalse,
-		Reason:  asdbv1.AerospikeClusterReasonTerminating,
-		Message: "Cluster is being deleted",
-	}); err != nil {
-		r.Log.Error(err, "Failed to set Ready condition for terminating cluster")
-	}
-
-	if err := r.handleClusterDeletion(finalizerName); err != nil {
-		r.Recorder.Eventf(
-			r.aeroCluster, corev1.EventTypeWarning, "DeleteFailed",
-			"Unable to handle AerospikeCluster delete operations %s/%s",
-			r.aeroCluster.Namespace, r.aeroCluster.Name,
-		)
-
-		return err
-	}
-
-	r.removeClusterPhaseMetric()
-
-	r.Recorder.Eventf(
-		r.aeroCluster, corev1.EventTypeNormal, "Deleted",
-		"Deleted AerospikeCluster %s/%s", r.aeroCluster.Namespace,
-		r.aeroCluster.Name,
-	)
-
-	// Stop reconciliation as the cluster is being deleted
-	return nil
-}
-
-// onReconcileFailure logs the error, marks Ready=False with reason ReconcileFailed,
-// and sets the cluster phase to Error. Called from the Reconcile defer on non-nil recErr.
-func (r *SingleClusterReconciler) onReconcileFailure(recErr error) {
-	r.Log.Error(recErr, "Reconcile failed")
-
-	if err := r.setConditions(metav1.Condition{
-		Type:    string(asdbv1.AerospikeClusterConditionReady),
-		Status:  metav1.ConditionFalse,
-		Reason:  asdbv1.AerospikeClusterReasonReconcileFailed,
-		Message: recErr.Error(),
-	}); err != nil {
-		r.Log.Error(err, "Failed to set Ready condition on error")
-	}
-
-	if err := r.setStatusPhase(asdbv1.AerospikeClusterError); err != nil {
-		r.Log.Error(err, "Failed to set cluster phase to Error")
-	}
-}
-
-// ensureSCRoster handles Strong Consistency roster management.
-// For non-SC clusters it is a no-op. For SC clusters it waits for cluster
-// stability (when status is already populated) and then applies the roster.
-func (r *SingleClusterReconciler) ensureSCRoster(
-	policy *as.ClientPolicy,
-	allHostConns []*deployment.HostConn,
-	ignorablePodNames sets.Set[string],
-) common.ReconcileResult {
-	if !asdbv1.IsClusterSCEnabled(r.aeroCluster) {
-		return common.ReconcileSuccess()
-	}
-
-	if !r.IsStatusEmpty() {
-		if res := r.waitForClusterStability(policy, allHostConns); !res.IsSuccess {
-			return res
-		}
-	}
-
-	if err := r.getAndSetRoster(policy, r.aeroCluster.Spec.RosterNodeBlockList, ignorablePodNames); err != nil {
-		r.Log.Error(err, "Failed to set roster for cluster")
-		return common.ReconcileError(err)
-	}
-
-	return common.ReconcileSuccess()
-}
-
-func (r *SingleClusterReconciler) recoverIgnorablePods(ignorablePodNames sets.Set[string]) common.ReconcileResult {
-	podList, gErr := r.getClusterPodList()
+func (r *SingleClusterReconciler) recoverIgnorablePods(
+	ctx context.Context, ignorablePodNames sets.Set[string]) common.ReconcileResult {
+	podList, gErr := r.getClusterPodList(ctx)
 	if gErr != nil {
-		r.Log.Error(gErr, "Failed to get cluster pod list")
-		return common.ReconcileError(gErr)
+		return common.ReconcileError(fmt.Errorf("list Pods: %w", gErr))
 	}
 
-	r.Log.Info("Try to recover failed/pending pods if any")
+	r.Log.Info("Try to recover failed/pending Pods if any")
 
 	var (
 		anyPodFailed    bool
@@ -364,7 +285,7 @@ func (r *SingleClusterReconciler) recoverIgnorablePods(ignorablePodNames sets.Se
 	// Try to recover failed/pending pods by deleting them if grace period is over.
 	for idx := range podList.Items {
 		if ignorablePodNames.Has(podList.Items[idx].Name) {
-			podState := utils.CheckPodFailedWithGrace(&podList.Items[idx], true)
+			podState := utils.CheckServerFailedWithGrace(&podList.Items[idx], true)
 
 			if podState.State != utils.PodHealthy {
 				anyPodFailed = true
@@ -372,7 +293,7 @@ func (r *SingleClusterReconciler) recoverIgnorablePods(ignorablePodNames sets.Se
 				if podState.State == utils.PodFailedInGrace {
 					r.Log.Info(
 						"Pod is in failed state but within grace period, will not delete",
-						"pod", podList.Items[idx].Name,
+						"pod", utils.GetNamespacedName(&podList.Items[idx]),
 					)
 
 					requeueInterval = asdbv1.RequeueIntervalSeconds10
@@ -381,40 +302,43 @@ func (r *SingleClusterReconciler) recoverIgnorablePods(ignorablePodNames sets.Se
 				}
 
 				// Pod has failed and grace period is over
-				if err := r.createOrUpdatePodServiceIfNeeded([]string{podList.Items[idx].Name}); err != nil {
+				if err := r.createOrUpdatePodServiceIfNeeded(ctx, []string{podList.Items[idx].Name}); err != nil {
 					return common.ReconcileError(err)
 				}
 
-				if err := r.Delete(context.TODO(), &podList.Items[idx]); err != nil {
-					r.Log.Error(err, "Failed to delete pod", "pod", podList.Items[idx].Name)
-					return common.ReconcileError(err)
+				if err := r.Delete(ctx, &podList.Items[idx]); err != nil {
+					return common.ReconcileError(fmt.Errorf(
+						"delete Pod %s: %w",
+						utils.GetNamespacedNameString(&podList.Items[idx]), err,
+					))
 				}
 
-				r.Log.Info("Deleted pod", "pod", podList.Items[idx].Name)
+				r.Log.Info("Deleted Pod", "pod", utils.GetNamespacedName(&podList.Items[idx]))
 			}
 		}
 	}
 
 	if anyPodFailed {
-		r.Log.Info("Found failed/pending pod(s), requeuing")
+		r.Log.Info("Found failed/pending Pod(s), requeuing")
 	} else {
-		r.Log.Info("Found ignorable pod(s), requeuing")
+		r.Log.Info("Found ignorable Pod(s), requeuing")
 	}
 
 	return common.ReconcileRequeueAfter(requeueInterval)
 }
 
 func (r *SingleClusterReconciler) validateAndReconcileAccessControl(
+	ctx context.Context,
 	selectedPods []corev1.Pod,
 	ignorablePodNames sets.Set[string],
 ) error {
 	enabled, err := asdbv1.IsSecurityEnabled(r.aeroCluster.Spec.AerospikeConfig.Value)
 	if err != nil {
-		return fmt.Errorf("failed to get cluster security status: %v", err)
+		return fmt.Errorf("get cluster security status: %w", err)
 	}
 
 	if !enabled {
-		r.Log.Info("Cluster is not security enabled, please enable security for this cluster.")
+		r.Log.Info("Cluster is not security enabled, please enable security for this cluster")
 		return nil
 	}
 
@@ -422,14 +346,14 @@ func (r *SingleClusterReconciler) validateAndReconcileAccessControl(
 
 	// Create client
 	if selectedPods == nil {
-		conns, err = r.newAllHostConnWithOption(ignorablePodNames)
+		conns, err = r.newAllHostConnWithOption(ctx, ignorablePodNames)
 		if err != nil {
-			return fmt.Errorf("failed to get host info: %v", err)
+			return fmt.Errorf("get host connections for cluster nodes: %w", err)
 		}
 	} else {
 		conns, err = r.newPodsHostConnWithOption(selectedPods, ignorablePodNames)
 		if err != nil {
-			return fmt.Errorf("failed to get host info: %v", err)
+			return fmt.Errorf("get host connections for selected Pods: %w", err)
 		}
 	}
 
@@ -446,11 +370,11 @@ func (r *SingleClusterReconciler) validateAndReconcileAccessControl(
 	}
 
 	// Create policy using status, status has current connection info
-	clientPolicy := r.getClientPolicy()
+	clientPolicy := r.getClientPolicy(ctx)
 
 	aeroClient, err := as.NewClientWithPolicyAndHost(clientPolicy, hosts...)
 	if err != nil {
-		return fmt.Errorf("failed to create aerospike cluster client: %v", err)
+		return fmt.Errorf("create Aerospike client: %w", err)
 	}
 
 	defer aeroClient.Close()
@@ -458,25 +382,22 @@ func (r *SingleClusterReconciler) validateAndReconcileAccessControl(
 	pp := r.getPasswordProvider()
 
 	err = r.reconcileAccessControl(
-		aeroClient, pp,
+		ctx, aeroClient, pp,
 	)
 	if err != nil {
-		return fmt.Errorf("failed to reconcile access control: %v", err)
+		return err
 	}
 
 	r.Recorder.Eventf(
 		r.aeroCluster, corev1.EventTypeNormal, "ACLUpdated",
-		"Updated Access Control %s/%s", r.aeroCluster.Namespace,
-		r.aeroCluster.Name,
+		"Updated access control",
 	)
 
 	// Update the AerospikeCluster status.
-	if err := r.updateAccessControlStatus(); err != nil {
-		r.Log.Error(err, "Failed to update AerospikeCluster access control status")
+	if err := r.updateAccessControlStatus(ctx); err != nil {
 		r.Recorder.Eventf(
-			r.aeroCluster, corev1.EventTypeWarning, "StatusUpdateFailed",
-			"Failed to update AerospikeCluster access control status %s/%s",
-			r.aeroCluster.Namespace, r.aeroCluster.Name,
+			r.aeroCluster, corev1.EventTypeWarning, ReasonStatusUpdateFailed,
+			"Failed to update access control status",
 		)
 
 		return err
@@ -485,13 +406,13 @@ func (r *SingleClusterReconciler) validateAndReconcileAccessControl(
 	return nil
 }
 
-func (r *SingleClusterReconciler) updateStatus() error {
+func (r *SingleClusterReconciler) updateStatus(ctx context.Context) error {
 	r.Log.Info("Update status for AerospikeCluster")
 
 	// Get the old object, it may have been updated in between.
 	newAeroCluster := &asdbv1.AerospikeCluster{}
 	if err := r.Get(
-		context.TODO(), types.NamespacedName{
+		ctx, types.NamespacedName{
 			Name: r.aeroCluster.Name, Namespace: r.aeroCluster.Namespace,
 		}, newAeroCluster,
 	); err != nil {
@@ -514,63 +435,12 @@ func (r *SingleClusterReconciler) updateStatus() error {
 	newAeroCluster.Status.AerospikeClusterStatusSpec = *specToStatus
 	newAeroCluster.Status.Phase = asdbv1.AerospikeClusterCompleted
 
-	// Carry forward conditions from r.aeroCluster (which is kept in sync by setConditions calls).
-	// We must deep-copy the slice: patchStatus diffs r.aeroCluster (old) vs newAeroCluster (new).
-	// A plain slice assignment shares the backing array, so in-place mutations by
-	// SetStatusCondition would modify both old and new, producing no diff.
-	newAeroCluster.Status.Conditions = make([]metav1.Condition, len(r.aeroCluster.Status.Conditions))
-	copy(newAeroCluster.Status.Conditions, r.aeroCluster.Status.Conditions)
-
-	// Set Ready=True on the success path.
-	// ObservedGeneration is only bumped if the condition actually changed.
-	readyCondition := metav1.Condition{
-		Type:    string(asdbv1.AerospikeClusterConditionReady),
-		Status:  metav1.ConditionTrue,
-		Reason:  asdbv1.AerospikeClusterReasonReconcileComplete,
-		Message: "Cluster reconcile completed successfully",
-	}
-	if conditionNeedsUpdate(
-		apimeta.FindStatusCondition(newAeroCluster.Status.Conditions, readyCondition.Type),
-		&readyCondition,
-	) {
-		readyCondition.ObservedGeneration = r.aeroCluster.Generation
-		apimeta.SetStatusCondition(&newAeroCluster.Status.Conditions, readyCondition)
-	}
-
-	// All operations are done at this point; set each operation condition to False.
-	// ObservedGeneration is only bumped when the condition transitions away from False
-	// (i.e. was True during this reconcile), keeping stale conditions honest.
-	// Paused is also cleared here: a successful reconcile means the cluster is not paused.
-	for _, opCond := range []struct {
-		condType string
-		reason   string
-	}{
-		{string(asdbv1.AerospikeClusterConditionScalingUp), asdbv1.AerospikeClusterReasonNotScalingUp},
-		{string(asdbv1.AerospikeClusterConditionScalingDown), asdbv1.AerospikeClusterReasonNotScalingDown},
-		{string(asdbv1.AerospikeClusterConditionUpgrading), asdbv1.AerospikeClusterReasonNotUpgrading},
-		{string(asdbv1.AerospikeClusterConditionRollingRestart), asdbv1.AerospikeClusterReasonNotRollingRestart},
-		{string(asdbv1.AerospikeClusterConditionPaused), asdbv1.AerospikeClusterReasonNotPaused},
-	} {
-		proposed := metav1.Condition{
-			Type:   opCond.condType,
-			Status: metav1.ConditionFalse,
-			Reason: opCond.reason,
-		}
-		if conditionNeedsUpdate(
-			apimeta.FindStatusCondition(newAeroCluster.Status.Conditions, proposed.Type),
-			&proposed,
-		) {
-			proposed.ObservedGeneration = r.aeroCluster.Generation
-			apimeta.SetStatusCondition(&newAeroCluster.Status.Conditions, proposed)
-		}
-	}
-
 	// If IsReadinessProbeEnabled is not enabled, then only check for cluster readiness.
 	// This is to avoid checking cluster readiness for every reconcile as once it is enabled, it will not be disabled.
 	if !newAeroCluster.Status.IsReadinessProbeEnabled {
-		clusterReadinessEnable, gErr := r.getClusterReadinessStatus()
+		clusterReadinessEnable, gErr := r.getClusterReadinessStatus(ctx)
 		if gErr != nil {
-			return fmt.Errorf("failed to get cluster readiness status: %v", gErr)
+			return fmt.Errorf("get cluster readiness status: %w", gErr)
 		}
 
 		newAeroCluster.Status.IsReadinessProbeEnabled = clusterReadinessEnable
@@ -579,9 +449,9 @@ func (r *SingleClusterReconciler) updateStatus() error {
 	selector := labels.SelectorFromSet(utils.LabelsForAerospikeCluster(newAeroCluster.Name))
 	newAeroCluster.Status.Selector = selector.String()
 
-	err = r.patchStatus(newAeroCluster)
+	err = r.patchStatus(ctx, newAeroCluster)
 	if err != nil {
-		return fmt.Errorf("error updating status: %w", err)
+		return fmt.Errorf("update status: %w", err)
 	}
 
 	r.aeroCluster = newAeroCluster
@@ -589,24 +459,23 @@ func (r *SingleClusterReconciler) updateStatus() error {
 	// Add the cluster phase metric
 	r.addClusterPhaseMetric()
 
-	r.Log.Info("Updated status", "status", newAeroCluster.Status)
+	r.Log.V(1).Info("Updated status", "status", newAeroCluster.Status)
 
 	return nil
 }
 
-func (r *SingleClusterReconciler) setStatusPhase(phase asdbv1.AerospikeClusterPhase) error {
+func (r *SingleClusterReconciler) setStatusPhase(ctx context.Context, phase asdbv1.AerospikeClusterPhase) error {
 	if r.aeroCluster.Status.Phase != phase {
 		if err := retry.RetryOnConflict(retry.DefaultRetry, func() error {
-			if err := r.Get(context.TODO(), utils.GetNamespacedName(r.aeroCluster), r.aeroCluster); err != nil {
+			if err := r.Get(ctx, utils.GetNamespacedName(r.aeroCluster), r.aeroCluster); err != nil {
 				return err
 			}
 
 			r.aeroCluster.Status.Phase = phase
 
-			return r.Client.Status().Update(context.Background(), r.aeroCluster)
+			return r.Client.Status().Update(ctx, r.aeroCluster)
 		}); err != nil {
-			r.Log.Error(err, fmt.Sprintf("Failed to set cluster status to %s", phase))
-			return err
+			return fmt.Errorf("set cluster status phase to %s: %w", phase, err)
 		}
 
 		r.addClusterPhaseMetric()
@@ -615,105 +484,8 @@ func (r *SingleClusterReconciler) setStatusPhase(phase asdbv1.AerospikeClusterPh
 	return nil
 }
 
-// conditionNeedsUpdate returns true when the proposed condition differs from the
-// existing one in Status, Reason, or Message. Only in that case should
-// ObservedGeneration (and possibly LastTransitionTime) be updated.
-// A nil existing condition always requires an update (condition is new).
-func conditionNeedsUpdate(existing, proposed *metav1.Condition) bool {
-	if existing == nil {
-		return true
-	}
-
-	return existing.Status != proposed.Status ||
-		existing.Reason != proposed.Reason ||
-		existing.Message != proposed.Message
-}
-
-// setConditions updates one or more conditions on the AerospikeCluster status in a single
-// Get+Update round trip, retrying on conflicts.
-// ObservedGeneration is stamped only when a condition's Status, Reason, or Message actually
-// changes — consistent with how LastTransitionTime behaves. Conditions already in the
-// desired state are left untouched (no ObservedGeneration bump, no API call).
-func (r *SingleClusterReconciler) setConditions(conditions ...metav1.Condition) error {
-	return retry.RetryOnConflict(retry.DefaultRetry, func() error {
-		if err := r.Get(context.TODO(), utils.GetNamespacedName(r.aeroCluster), r.aeroCluster); err != nil {
-			return err
-		}
-
-		anyChanged := false
-
-		for i := range conditions {
-			existing := apimeta.FindStatusCondition(
-				r.aeroCluster.Status.Conditions, conditions[i].Type,
-			)
-			if !conditionNeedsUpdate(existing, &conditions[i]) {
-				continue
-			}
-
-			conditions[i].ObservedGeneration = r.aeroCluster.Generation
-			apimeta.SetStatusCondition(&r.aeroCluster.Status.Conditions, conditions[i])
-
-			anyChanged = true
-		}
-
-		if !anyChanged {
-			return nil
-		}
-
-		return r.Client.Status().Update(context.Background(), r.aeroCluster)
-	})
-}
-
-// initializeConditionsIfNeeded pre-seeds all conditions on the very first reconcile
-// so that `kubectl wait --for=condition=Ready` and similar commands do not hang,
-// and the status shape is consistent from the start.
-func (r *SingleClusterReconciler) initializeConditionsIfNeeded() error {
-	if len(r.aeroCluster.Status.Conditions) > 0 {
-		return nil
-	}
-
-	now := metav1.Now()
-	gen := r.aeroCluster.Generation
-
-	seedConditions := []metav1.Condition{
-		{
-			Type:               string(asdbv1.AerospikeClusterConditionReady),
-			Status:             metav1.ConditionUnknown,
-			ObservedGeneration: gen,
-			LastTransitionTime: now,
-			Reason:             asdbv1.AerospikeClusterReasonInitializing,
-			Message:            "Cluster conditions not yet evaluated",
-		},
-	}
-
-	for _, opCond := range []struct {
-		condType string
-		reason   string
-	}{
-		{string(asdbv1.AerospikeClusterConditionScalingUp), asdbv1.AerospikeClusterReasonNotScalingUp},
-		{string(asdbv1.AerospikeClusterConditionScalingDown), asdbv1.AerospikeClusterReasonNotScalingDown},
-		{string(asdbv1.AerospikeClusterConditionUpgrading), asdbv1.AerospikeClusterReasonNotUpgrading},
-		{string(asdbv1.AerospikeClusterConditionRollingRestart), asdbv1.AerospikeClusterReasonNotRollingRestart},
-		{string(asdbv1.AerospikeClusterConditionPaused), asdbv1.AerospikeClusterReasonNotPaused},
-	} {
-		seedConditions = append(seedConditions, metav1.Condition{
-			Type:               opCond.condType,
-			Status:             metav1.ConditionFalse,
-			ObservedGeneration: gen,
-			LastTransitionTime: now,
-			Reason:             opCond.reason,
-		})
-	}
-
-	for i := range seedConditions {
-		apimeta.SetStatusCondition(&r.aeroCluster.Status.Conditions, seedConditions[i])
-	}
-
-	return r.Client.Status().Update(context.Background(), r.aeroCluster)
-}
-
-func (r *SingleClusterReconciler) getClusterReadinessStatus() (bool, error) {
-	podList, err := r.getClusterPodList()
+func (r *SingleClusterReconciler) getClusterReadinessStatus(ctx context.Context) (bool, error) {
+	podList, err := r.getClusterPodList(ctx)
 	if err != nil {
 		return false, err
 	}
@@ -735,7 +507,7 @@ func (r *SingleClusterReconciler) getClusterReadinessStatus() (bool, error) {
 	return true, nil
 }
 
-func (r *SingleClusterReconciler) updateAccessControlStatus() error {
+func (r *SingleClusterReconciler) updateAccessControlStatus(ctx context.Context) error {
 	if r.aeroCluster.Spec.AerospikeAccessControl == nil {
 		return nil
 	}
@@ -745,7 +517,7 @@ func (r *SingleClusterReconciler) updateAccessControlStatus() error {
 	// Get the old object, it may have been updated in between.
 	newAeroCluster := &asdbv1.AerospikeCluster{}
 	if err := r.Get(
-		context.TODO(), types.NamespacedName{
+		ctx, types.NamespacedName{
 			Name: r.aeroCluster.Name, Namespace: r.aeroCluster.Namespace,
 		}, newAeroCluster,
 	); err != nil {
@@ -762,22 +534,22 @@ func (r *SingleClusterReconciler) updateAccessControlStatus() error {
 
 	newAeroCluster.Status.AerospikeAccessControl = statusAerospikeAccessControl
 
-	if err := r.patchStatus(newAeroCluster); err != nil {
-		return fmt.Errorf("error updating status: %w", err)
+	if err := r.patchStatus(ctx, newAeroCluster); err != nil {
+		return fmt.Errorf("update access control status: %w", err)
 	}
 
-	r.Log.Info("Updated access control status", "status", newAeroCluster.Status)
+	r.Log.V(1).Info("Updated access control status", "status", newAeroCluster.Status)
 
 	return nil
 }
 
-func (r *SingleClusterReconciler) createStatus() error {
+func (r *SingleClusterReconciler) createStatus(ctx context.Context) error {
 	r.Log.Info("Creating status for AerospikeCluster")
 
 	// Get the old object, it may have been updated in between.
 	newAeroCluster := &asdbv1.AerospikeCluster{}
 	if err := r.Get(
-		context.TODO(), types.NamespacedName{
+		ctx, types.NamespacedName{
 			Name: r.aeroCluster.Name, Namespace: r.aeroCluster.Namespace,
 		}, newAeroCluster,
 	); err != nil {
@@ -789,100 +561,30 @@ func (r *SingleClusterReconciler) createStatus() error {
 	}
 
 	if err := r.Client.Status().Update(
-		context.TODO(), newAeroCluster,
+		ctx, newAeroCluster,
 	); err != nil {
-		return fmt.Errorf("error creating status: %v", err)
+		return fmt.Errorf("create status: %w", err)
 	}
 
 	return nil
 }
 
-func (r *SingleClusterReconciler) isNewCluster() (bool, error) {
-	if !r.IsStatusEmpty() {
-		// We have valid status, cluster cannot be new.
-		return false, nil
-	}
-
-	statefulSetList, err := r.getClusterSTSList()
-	if err != nil {
-		return false, err
-	}
-
-	// Cluster can have status nil and still have pods on failures.
-	// For cluster to be new there should be no pods in the cluster.
-	return len(statefulSetList.Items) == 0, nil
-}
-
-// hasClusterFailed returns (failed, inGracePeriod, error)
-// failed: true if cluster has truly failed and needs recovery
-// inGracePeriod: true if cluster has failed pods but within grace period
-// error: any error during the check
-func (r *SingleClusterReconciler) hasClusterFailed() (failed, inGracePeriod bool, err error) {
-	isNew, err := r.isNewCluster()
-	if err != nil {
-		// Checking cluster status failed.
-		return failed, inGracePeriod, err
-	}
-
-	if isNew {
-		// New clusters should not be considered failed.
-		return failed, inGracePeriod, nil
-	}
-
-	// Check if there are any pods running
-	pods, err := r.getClusterPodList()
-	if err != nil {
-		return failed, inGracePeriod, err
-	}
-
-	for idx := range pods.Items {
-		pod := &pods.Items[idx]
-
-		podState := utils.CheckPodFailedWithGrace(pod, true)
-		if podState.State == utils.PodHealthy {
-			// There is at least one pod that has not yet failed.
-			// It's possible that the containers are stuck doing a long disk
-			// initialization.
-			// Don't consider this cluster as failed and needing recovery
-			// as long as there is at least one running pod.
-			return false, false, nil
-		}
-
-		// Pod is failed, check if it's in grace period
-		if podState.State == utils.PodFailedInGrace {
-			inGracePeriod = true
-		}
-	}
-
-	// If we reach here, all pods are failed
-	if inGracePeriod {
-		// Return grace period state
-		return failed, inGracePeriod, nil
-	}
-
-	if r.IsStatusEmpty() {
-		return true, inGracePeriod, nil
-	}
-
-	return failed, inGracePeriod, nil
-}
-
-func (r *SingleClusterReconciler) patchStatus(newAeroCluster *asdbv1.AerospikeCluster) error {
+func (r *SingleClusterReconciler) patchStatus(ctx context.Context, newAeroCluster *asdbv1.AerospikeCluster) error {
 	oldAeroCluster := r.aeroCluster
 
 	oldJSON, err := json.Marshal(oldAeroCluster)
 	if err != nil {
-		return fmt.Errorf("error marshalling old status: %v", err)
+		return fmt.Errorf("marshal old status: %w", err)
 	}
 
 	newJSON, err := json.Marshal(newAeroCluster)
 	if err != nil {
-		return fmt.Errorf("error marshalling new status: %v", err)
+		return fmt.Errorf("marshal new status: %w", err)
 	}
 
 	jsonPatchPatch, err := jsonpatch.CreatePatch(oldJSON, newJSON)
 	if err != nil {
-		return fmt.Errorf("error creating json patch: %v", err)
+		return fmt.Errorf("create JSON patch: %w", err)
 	}
 
 	// Pick changes to the status object only.
@@ -906,25 +608,25 @@ func (r *SingleClusterReconciler) patchStatus(newAeroCluster *asdbv1.AerospikeCl
 	}
 
 	r.Log.V(1).Info(
-		"Filtered status patch ", "patch", filteredPatch, "oldObj.status",
-		oldAeroCluster.Status, "newObj.status", newAeroCluster.Status,
+		"Filtered status patch ", "patch", filteredPatch, "oldStatus",
+		oldAeroCluster.Status, "newStatus", newAeroCluster.Status,
 	)
 
 	jsonPatchJSON, err := json.Marshal(filteredPatch)
 	if err != nil {
-		return fmt.Errorf("error marshalling json patch: %v", err)
+		return fmt.Errorf("marshal JSON patch: %w", err)
 	}
 
 	patch := client.RawPatch(types.JSONPatchType, jsonPatchJSON)
 
 	if err = r.Client.Status().Patch(
-		context.TODO(), &asdbv1.AerospikeCluster{ObjectMeta: metav1.ObjectMeta{
+		ctx, &asdbv1.AerospikeCluster{ObjectMeta: metav1.ObjectMeta{
 			Name:      oldAeroCluster.Name,
 			Namespace: oldAeroCluster.Namespace,
 		}}, patch,
 		client.FieldOwner(patchFieldOwner),
 	); err != nil {
-		return fmt.Errorf("error patching status: %v", err)
+		return fmt.Errorf("patch status: %w", err)
 	}
 
 	// FIXME: Json unmarshal used by above client.Status(),
@@ -948,37 +650,34 @@ func (r *SingleClusterReconciler) patchStatus(newAeroCluster *asdbv1.AerospikeCl
 // validation for ip and port.
 //
 // Such cases warrant a cluster recreate to recover after the user corrects the configuration.
-func (r *SingleClusterReconciler) recoverFailedCreate() error {
-	r.Log.Info("Forcing a cluster recreate as status is nil. The cluster could be unreachable due to bad configuration.")
+func (r *SingleClusterReconciler) recoverFailedCreate(ctx context.Context) error {
+	r.Log.Info("Forcing a cluster recreate as status is nil. The cluster could be unreachable due to bad configuration")
 
 	// Delete all statefulsets and everything related so that it can be properly created and updated in next run.
-	statefulSetList, err := r.getClusterSTSList()
+	statefulSetList, err := r.getClusterSTSList(ctx)
 	if err != nil {
-		return fmt.Errorf(
-			"error getting statefulsets while forcing recreate of the cluster as status is nil: %v",
-			err,
-		)
+		return fmt.Errorf("get StatefulSets while forcing recreate of cluster (status is nil): %w", err)
 	}
 
 	r.Log.V(1).Info(
-		"Found statefulset for cluster. Need to delete them", "nSTS",
+		"Found StatefulSet for cluster. Need to delete them", "nSTS",
 		len(statefulSetList.Items),
 	)
 
 	for idx := range statefulSetList.Items {
 		statefulset := &statefulSetList.Items[idx]
-		if err := r.deleteSTS(statefulset); err != nil {
+		if err := r.deleteSTS(ctx, statefulset); err != nil {
 			return fmt.Errorf(
-				"error deleting statefulset while forcing recreate of the cluster as status is nil: %v",
-				err,
+				"delete StatefulSet %s while forcing recreate of cluster (status is nil): %w",
+				utils.GetNamespacedNameString(statefulset), err,
 			)
 		}
 	}
 
 	// Delete all PVCs for the cluster unconditionally, regardless of the cascadeDelete flag on
 	// individual volumes. During a failed-create recovery the cluster must start completely fresh.
-	if err := r.deleteAllClusterPVCsForce(); err != nil {
-		return fmt.Errorf("failed to delete cluster PVCs during recover: %v", err)
+	if err := r.deleteAllClusterPVCsForce(ctx); err != nil {
+		return fmt.Errorf("delete cluster PVCs while forcing recreate: %w", err)
 	}
 
 	// Clear pod status, mesh references, and per-pod services.
@@ -988,9 +687,12 @@ func (r *SingleClusterReconciler) recoverFailedCreate() error {
 	for rackIdx := range rackStateList {
 		state := rackStateList[rackIdx]
 
-		pods, err := r.getRackPodList(state.Rack.ID, state.Rack.Revision)
+		pods, err := r.getRackPodList(ctx, state.Rack.ID, state.Rack.Revision)
 		if err != nil {
-			return fmt.Errorf("failed recover failed cluster: %v", err)
+			return fmt.Errorf(
+				"list Pods for rack %d during failed cluster recovery: %w",
+				state.Rack.ID, err,
+			)
 		}
 
 		newPodNames := make([]string, 0)
@@ -998,8 +700,11 @@ func (r *SingleClusterReconciler) recoverFailedCreate() error {
 			newPodNames = append(newPodNames, pods.Items[podIdx].Name)
 		}
 
-		if err := r.cleanupPodMeshAndStatus(newPodNames); err != nil {
-			return fmt.Errorf("failed recover failed cluster: %v", err)
+		if err := r.cleanupPodMeshAndStatus(ctx, newPodNames); err != nil {
+			return fmt.Errorf(
+				"clean up Pod mesh and status for rack %d during failed cluster recovery: %w",
+				state.Rack.ID, err,
+			)
 		}
 	}
 
@@ -1009,35 +714,35 @@ func (r *SingleClusterReconciler) recoverFailedCreate() error {
 	// ACL status is left intact, the operator would attempt to authenticate with
 	// those old credentials on the newly recreated nodes, causing info commands
 	// to fail.
-	if err := r.clearAerospikeAccessControlStatus(); err != nil {
-		return fmt.Errorf("failed to clear access control status during cluster recovery: %v", err)
+	if err := r.clearAerospikeAccessControlStatus(ctx); err != nil {
+		return fmt.Errorf("clear access control status during cluster recovery: %w", err)
 	}
 
-	return fmt.Errorf("forcing recreate of the cluster as status is nil")
+	return fmt.Errorf("forcing recreate of cluster: status is nil")
 }
 
 // clearAerospikeAccessControlStatus sets AerospikeAccessControl to nil in the
 // CR status. This is called during recoverFailedCreate so that the operator
 // does not attempt to authenticate with stale credentials against freshly
 // recreated Aerospike nodes that have no user data.
-func (r *SingleClusterReconciler) clearAerospikeAccessControlStatus() error {
+func (r *SingleClusterReconciler) clearAerospikeAccessControlStatus(ctx context.Context) error {
 	if r.aeroCluster.Status.AerospikeAccessControl == nil {
 		return nil
 	}
 
 	newAeroCluster := &asdbv1.AerospikeCluster{}
 	if err := r.Get(
-		context.TODO(), types.NamespacedName{
+		ctx, types.NamespacedName{
 			Name: r.aeroCluster.Name, Namespace: r.aeroCluster.Namespace,
 		}, newAeroCluster,
 	); err != nil {
-		return err
+		return fmt.Errorf("get AerospikeCluster for access control status clear: %w", err)
 	}
 
 	newAeroCluster.Status.AerospikeAccessControl = nil
 
-	if err := r.patchStatus(newAeroCluster); err != nil {
-		return fmt.Errorf("error clearing access control status: %w", err)
+	if err := r.patchStatus(ctx, newAeroCluster); err != nil {
+		return fmt.Errorf("clear access control status: %w", err)
 	}
 
 	r.Log.Info("Cleared access control status for cluster recovery")
@@ -1045,7 +750,7 @@ func (r *SingleClusterReconciler) clearAerospikeAccessControlStatus() error {
 	return nil
 }
 
-func (r *SingleClusterReconciler) addFinalizer(finalizerName string) error {
+func (r *SingleClusterReconciler) addFinalizer(ctx context.Context, finalizerName string) error {
 	// The object is not being deleted, so if it does not have our finalizer,
 	// then lets add the finalizer and update the object. This is equivalent
 	// registering our finalizer.
@@ -1056,7 +761,7 @@ func (r *SingleClusterReconciler) addFinalizer(finalizerName string) error {
 			r.aeroCluster.Finalizers, finalizerName,
 		)
 
-		if err := r.Update(context.TODO(), r.aeroCluster); err != nil {
+		if err := r.Update(ctx, r.aeroCluster); err != nil {
 			return err
 		}
 	}
@@ -1064,13 +769,13 @@ func (r *SingleClusterReconciler) addFinalizer(finalizerName string) error {
 	return nil
 }
 
-func (r *SingleClusterReconciler) cleanUpAndRemoveFinalizer(finalizerName string) error {
+func (r *SingleClusterReconciler) cleanUpAndRemoveFinalizer(ctx context.Context, finalizerName string) error {
 	// The object is being deleted
 	if utils.ContainsString(
 		r.aeroCluster.Finalizers, finalizerName,
 	) {
 		// Handle any external dependency
-		if err := r.deleteExternalResources(); err != nil {
+		if err := r.deleteExternalResources(ctx); err != nil {
 			// If fail to delete the external dependency here, return with error
 			// so that it can be retried
 			return err
@@ -1081,7 +786,7 @@ func (r *SingleClusterReconciler) cleanUpAndRemoveFinalizer(finalizerName string
 			r.aeroCluster.Finalizers, finalizerName,
 		)
 
-		if err := r.Update(context.TODO(), r.aeroCluster); err != nil {
+		if err := r.Update(ctx, r.aeroCluster); err != nil {
 			return err
 		}
 	}
@@ -1090,29 +795,29 @@ func (r *SingleClusterReconciler) cleanUpAndRemoveFinalizer(finalizerName string
 	return nil
 }
 
-func (r *SingleClusterReconciler) deleteExternalResources() error {
+func (r *SingleClusterReconciler) deleteExternalResources(ctx context.Context) error {
 	// Delete should be idempotent
-	r.Log.Info("Removing pvc for removed cluster")
+	r.Log.Info("Removing PVC for removed cluster")
 
 	// Delete pvc for all rack storage
 	for idx := range r.aeroCluster.Spec.RackConfig.Racks {
 		rack := &r.aeroCluster.Spec.RackConfig.Racks[idx]
 
-		rackPVCItems, err := r.getRackPVCList(rack.ID, rack.Revision)
+		rackPVCItems, err := r.getRackPVCList(ctx, rack.ID, rack.Revision)
 		if err != nil {
-			return fmt.Errorf("could not find pvc for rack: %v", err)
+			return fmt.Errorf("find PVCs for rack %d: %w", rack.ID, err)
 		}
 
 		storage := rack.Storage
-		if _, err := r.removePVCsAsync(&storage, rackPVCItems); err != nil {
-			return fmt.Errorf("failed to remove cluster PVCs: %v", err)
+		if _, err := r.removePVCsAsync(ctx, &storage, rackPVCItems); err != nil {
+			return fmt.Errorf("remove PVCs for rack %d: %w", rack.ID, err)
 		}
 	}
 
 	// Delete PVCs for any remaining old removed racks
-	pvcItems, err := r.getClusterPVCList()
+	pvcItems, err := r.getClusterPVCList(ctx)
 	if err != nil {
-		return fmt.Errorf("could not find pvc for cluster: %v", err)
+		return fmt.Errorf("find PVC for cluster: %w", err)
 	}
 
 	// removePVCs should be passed only filtered pvc otherwise rack pvc may be removed using global storage
@@ -1143,64 +848,86 @@ func (r *SingleClusterReconciler) deleteExternalResources() error {
 
 	// Delete pvc for common storage.
 	if _, err := r.removePVCsAsync(
-		&r.aeroCluster.Spec.Storage, filteredPVCItems,
+		ctx, &r.aeroCluster.Spec.Storage, filteredPVCItems,
 	); err != nil {
-		return fmt.Errorf("failed to remove cluster PVCs: %v", err)
+		return fmt.Errorf("remove cluster PVCs: %w", err)
 	}
 
 	return nil
 }
 
-func (r *SingleClusterReconciler) handleClusterDeletion(finalizerName string) error {
+func (r *SingleClusterReconciler) handleClusterDeletion(ctx context.Context, finalizerName string) error {
 	r.Log.Info("Handle cluster deletion")
 
 	// The cluster is being deleted
-	if err := r.cleanUpAndRemoveFinalizer(finalizerName); err != nil {
-		r.Log.Error(err, "Failed to remove finalizer")
-		return err
+	if err := r.cleanUpAndRemoveFinalizer(ctx, finalizerName); err != nil {
+		return fmt.Errorf("remove finalizer: %w", err)
 	}
 
 	return nil
 }
 
-func (r *SingleClusterReconciler) checkPreviouslyFailedCluster() (bool, common.ReconcileResult) {
-	isNew, err := r.isNewCluster()
-	if err != nil {
-		return false, common.ReconcileError(fmt.Errorf("error determining if cluster is new: %v", err))
+func (r *SingleClusterReconciler) checkPreviouslyFailedCluster(ctx context.Context) (bool, common.ReconcileResult) {
+	// Fast path: non-empty status means the cluster was previously initialized.
+	if !r.IsStatusEmpty() {
+		return false, common.ReconcileSuccess()
 	}
 
-	if isNew {
-		r.Log.V(1).Info("It's a new cluster, create empty status object")
+	// Status is empty — distinguish a new cluster from a failed create via STS presence.
+	stsList, err := r.getClusterSTSList(ctx)
+	if err != nil {
+		return false, common.ReconcileError(err)
+	}
 
-		if err := r.createStatus(); err != nil {
+	if len(stsList.Items) == 0 {
+		r.Log.V(1).Info("New cluster, creating empty status object")
+
+		if err = r.createStatus(ctx); err != nil {
 			return false, common.ReconcileError(err)
 		}
-	} else {
-		r.Log.V(1).Info(
-			"It's not a new cluster, " +
-				"checking if it is failed and needs recovery",
-		)
 
-		hasFailed, inGracePeriod, err := r.hasClusterFailed()
-		if err != nil {
-			return false, common.ReconcileError(fmt.Errorf("error determining if cluster has failed: %v", err))
-		}
+		return false, common.ReconcileSuccess()
+	}
 
-		if hasFailed {
-			if err = r.recoverFailedCreate(); err != nil {
-				return hasFailed, common.ReconcileError(err)
-			}
+	// StatefulSets exist but status is empty: either the cluster is still being
+	// created or it failed during its initial create. Inspect pod states to
+	// decide whether to recover, requeue, or proceed normally.
+	r.Log.V(1).Info("Cluster status is empty with existing StatefulSets, checking Pod states")
 
-			return hasFailed, common.ReconcileSuccess()
-		}
+	pods, err := r.getClusterPodList(ctx)
+	if err != nil {
+		return false, common.ReconcileError(err)
+	}
 
-		if inGracePeriod {
-			r.Log.Info("Pods are failed but within grace period, requeueing...")
-			return false, common.ReconcileRequeueAfter(asdbv1.RequeueIntervalSeconds10)
+	inGracePeriod := false
+
+	for idx := range pods.Items {
+		podState := utils.CheckPodFailedWithGrace(&pods.Items[idx], true)
+
+		switch podState.State {
+		case utils.PodHealthy:
+			// At least one pod has not yet failed — the cluster is still coming
+			// up or recovering on its own. Don't trigger recreate.
+			return false, common.ReconcileSuccess()
+		case utils.PodFailedInGrace:
+			inGracePeriod = true
+		case utils.PodFailed:
+			// Hard-failed — keep iterating; grace-period pods take precedence.
 		}
 	}
 
-	return false, common.ReconcileSuccess()
+	if inGracePeriod {
+		r.Log.Info("Pods are failed but within grace period, requeueing")
+		return false, common.ReconcileRequeueAfter(asdbv1.RequeueIntervalSeconds10)
+	}
+
+	// All pods have hard-failed and status is empty — the cluster failed during
+	// its initial create and needs to be recovered.
+	if err := r.recoverFailedCreate(ctx); err != nil {
+		return true, common.ReconcileError(err)
+	}
+
+	return true, common.ReconcileSuccess()
 }
 
 func (r *SingleClusterReconciler) removedNamespaces(nodesNamespaces map[string][]string) []string {
@@ -1230,18 +957,16 @@ func (r *SingleClusterReconciler) IsStatusEmpty() bool {
 func (r *SingleClusterReconciler) migrateAerospikeCluster(ctx context.Context, hasFailed bool) error {
 	if !hasFailed {
 		if int(r.aeroCluster.Spec.Size) > len(r.aeroCluster.Status.Pods) {
-			return fmt.Errorf("cluster is not ready for migration, pod status is not populated")
+			return fmt.Errorf("cluster is not ready for migration, Pod status is not populated")
 		}
 
 		if err := r.migrateInitialisedVolumeNames(ctx); err != nil {
-			r.Log.Error(err, "Problem patching Initialised volumes")
-			return err
+			return fmt.Errorf("patch initialised volumes: %w", err)
 		}
 	}
 
 	if err := r.AddAPIVersionLabel(ctx); err != nil {
-		r.Log.Error(err, "Problem patching label")
-		return err
+		return fmt.Errorf("patch API version label: %w", err)
 	}
 
 	return nil
@@ -1250,9 +975,9 @@ func (r *SingleClusterReconciler) migrateAerospikeCluster(ctx context.Context, h
 func (r *SingleClusterReconciler) migrateInitialisedVolumeNames(ctx context.Context) error {
 	r.Log.Info("Migrating Initialised Volumes name to new format")
 
-	podList, err := r.getClusterPodList()
+	podList, err := r.getClusterPodList(ctx)
 	if err != nil {
-		if errors.IsNotFound(err) {
+		if apierrors.IsNotFound(err) {
 			// Request objects not found.
 			return nil
 		}
@@ -1266,7 +991,8 @@ func (r *SingleClusterReconciler) migrateInitialisedVolumeNames(ctx context.Cont
 		pod := &podList.Items[podIdx]
 
 		if _, ok := r.aeroCluster.Status.Pods[pod.Name]; !ok {
-			return fmt.Errorf("empty status found in CR for pod %s", pod.Name)
+			return fmt.Errorf("empty status for Pod %s in CR",
+				utils.GetNamespacedNameString(pod))
 		}
 
 		initializedVolumes := r.aeroCluster.Status.Pods[pod.Name].InitializedVolumes
@@ -1290,7 +1016,7 @@ func (r *SingleClusterReconciler) migrateInitialisedVolumeNames(ctx context.Cont
 				}
 
 				if pvcUID == "" {
-					return fmt.Errorf("found empty pvcUID for the volume %s", oldFormatInitVolNames[oldVolIdx])
+					return fmt.Errorf("volume %s: empty pvcUID", oldFormatInitVolNames[oldVolIdx])
 				}
 
 				// Appending volume name as <vol_name>@<pvcUID> in initializedVolumes list
@@ -1301,7 +1027,8 @@ func (r *SingleClusterReconciler) migrateInitialisedVolumeNames(ctx context.Cont
 		}
 
 		if len(initializedVolumes) > len(r.aeroCluster.Status.Pods[pod.Name].InitializedVolumes) {
-			r.Log.Info("Got updated initialised volumes list", "initVolumes", initializedVolumes, "podName", pod.Name)
+			r.Log.Info("Got updated initialised volumes list",
+				"initVolumes", initializedVolumes, "pod", utils.GetNamespacedName(pod))
 
 			patch1 := jsonpatch.PatchOperation{
 				Operation: "replace",

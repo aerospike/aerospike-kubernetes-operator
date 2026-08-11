@@ -1,0 +1,98 @@
+name: helm-lint-and-test
+
+on:
+  push:
+    branches:
+      - master
+    paths:
+      - "helm-charts/**"
+      - ".github/workflows/helm-lint-and-test.yaml"
+  pull_request:
+    branches:
+      - master
+    paths:
+      - "helm-charts/**"
+      - ".github/workflows/helm-lint-and-test.yaml"
+
+permissions:
+  contents: read
+  pull-requests: write
+  checks: write
+
+jobs:
+  helm-lint-and-test:
+    name: helm-lint-and-test
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        chart:
+          - aerospike-backup
+          - aerospike-backup-service
+          - aerospike-cluster
+          - aerospike-kubernetes-operator
+          - aerospike-restore
+    steps:
+      - name: Harden the runner (Audit all outbound calls)
+        uses: step-security/harden-runner@bf7454d06d71f1098171f2acdf0cd4708d7b5920 # v2.20.0
+        with:
+          egress-policy: audit
+
+      - name: Checkout code
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+
+      # Suggestion comments require posting to a PR with a write-capable GITHUB_TOKEN,
+      # which only same-repo PR runs get. Direct pushes have no PR to comment on, and
+      # fork PRs never get a write-capable token, so both of those just fail the check.
+      - name: Determine whether this run can post PR suggestions
+        id: can-suggest
+        run: |
+          if [ "${{ github.event_name }}" = "pull_request" ] && [ "${{ github.event.pull_request.head.repo.full_name }}" = "${{ github.repository }}" ]; then
+            can_suggest=true
+          else
+            can_suggest=false
+          fi
+          echo "value=$can_suggest" >> "$GITHUB_OUTPUT"
+
+      - name: Set up Helm
+        uses: azure/setup-helm@9bc31f4ebc9c6b171d7bfbaa5d006ae7abdb4310 # v5.0.1
+
+      # values.schema.json is generated from values.yaml by the "helm schema" plugin
+      # (config in each chart's .schema.yaml, installed via the same Makefile target
+      # developers use locally). Charts without a .schema.yaml are skipped.
+      - name: Regenerate values.schema.json for ${{ matrix.chart }}
+        if: hashFiles(format('helm-charts/{0}/.schema.yaml', matrix.chart)) != ''
+        run: make helm-schema CHART=${{ matrix.chart }}
+
+      - name: Suggest regenerated values.schema.json for ${{ matrix.chart }}
+        if: hashFiles(format('helm-charts/{0}/.schema.yaml', matrix.chart)) != '' && steps.can-suggest.outputs.value == 'true'
+        uses: reviewdog/action-suggester@2558ba17e65a9039e73764a73009fc05fef28a46 # v1.24.3
+        with:
+          tool_name: helm-values-schema-json
+          path: helm-charts/${{ matrix.chart }}
+          filter_mode: nofilter
+          fail_level: any
+          cleanup: true
+
+      - name: Fail if values.schema.json is stale for ${{ matrix.chart }}
+        if: hashFiles(format('helm-charts/{0}/.schema.yaml', matrix.chart)) != '' && steps.can-suggest.outputs.value != 'true'
+        run: |
+          set -euo pipefail
+          schema_path="helm-charts/${{ matrix.chart }}/values.schema.json"
+          if git diff --quiet -- "$schema_path"; then
+            echo "$schema_path is up to date"
+            exit 0
+          fi
+          echo "::error file=$schema_path::$schema_path is out of date. Run 'make helm-schema' locally and commit the result."
+          git diff -- "$schema_path"
+          exit 1
+
+      - name: Run helm lint on ${{ matrix.chart }}
+        run: helm lint helm-charts/${{ matrix.chart }}
+
+      - name: Run helm template on ${{ matrix.chart }}
+        run: helm template test-release helm-charts/${{ matrix.chart }} > /dev/null
+
+      - name: Run helm unittest on ${{ matrix.chart }}
+        if: hashFiles(format('helm-charts/{0}/tests/**', matrix.chart)) != ''
+        run: make helm-test CHART=${{ matrix.chart }}

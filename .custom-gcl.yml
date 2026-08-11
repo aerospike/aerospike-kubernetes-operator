@@ -1,0 +1,10 @@
+# Custom golangci-lint binary with logcheck plugin.
+# Built via `golangci-lint custom` (local: `make custom-gcl`; CI: auto-detected by golangci-lint-action@v9).
+# https://golangci-lint.run/docs/plugins/module-plugins/
+version: v2.10.1
+name: custom-gcl
+destination: ./bin
+plugins:
+  - module: "sigs.k8s.io/logtools"
+    import: "sigs.k8s.io/logtools/logcheck/gclplugin"
+    version: v0.10.1

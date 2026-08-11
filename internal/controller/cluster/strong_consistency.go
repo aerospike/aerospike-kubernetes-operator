@@ -1,6 +1,7 @@
 package cluster
 
 import (
+	"context"
 	"strconv"
 
 	gosets "github.com/deckarep/golang-set/v2"
@@ -12,7 +13,7 @@ import (
 )
 
 func (r *SingleClusterReconciler) getAndSetRoster(
-	policy *as.ClientPolicy, rosterNodeBlockList []string,
+	ctx context.Context, policy *as.ClientPolicy, rosterNodeBlockList []string,
 	ignorablePodNames sets.Set[string],
 ) error {
 	rackStateList := getConfiguredRackStateList(r.aeroCluster)
@@ -23,12 +24,12 @@ func (r *SingleClusterReconciler) getAndSetRoster(
 		blockedRackIDs.Add(strconv.Itoa(blockedRacks[idx].ID))
 	}
 
-	allHostConns, err := r.newAllHostConnWithOption(ignorablePodNames)
+	allHostConns, err := r.newAllHostConnWithOption(ctx, ignorablePodNames)
 	if err != nil {
 		return err
 	}
 
-	ignorableNamespaces, err := r.getIgnorableNamespaces(allHostConns)
+	ignorableNamespaces, err := r.getIgnorableNamespaces(ctx, allHostConns)
 	if err != nil {
 		return err
 	}
@@ -37,14 +38,15 @@ func (r *SingleClusterReconciler) getAndSetRoster(
 		ignorableNamespaces, blockedRackIDs)
 }
 
-func (r *SingleClusterReconciler) validateSCClusterState(policy *as.ClientPolicy, ignorablePodNames sets.Set[string],
+func (r *SingleClusterReconciler) validateSCClusterState(
+	ctx context.Context, policy *as.ClientPolicy, ignorablePodNames sets.Set[string],
 ) error {
-	allHostConns, err := r.newAllHostConnWithOption(ignorablePodNames)
+	allHostConns, err := r.newAllHostConnWithOption(ctx, ignorablePodNames)
 	if err != nil {
 		return err
 	}
 
-	ignorableNamespaces, err := r.getIgnorableNamespaces(allHostConns)
+	ignorableNamespaces, err := r.getIgnorableNamespaces(ctx, allHostConns)
 	if err != nil {
 		return err
 	}
@@ -77,9 +79,9 @@ func (r *SingleClusterReconciler) addedSCNamespaces(nodesNamespaces map[string][
 	return newAddedSCNamespaces.ToSlice()
 }
 
-func (r *SingleClusterReconciler) getIgnorableNamespaces(allHostConns []*deployment.HostConn) (
+func (r *SingleClusterReconciler) getIgnorableNamespaces(ctx context.Context, allHostConns []*deployment.HostConn) (
 	gosets.Set[string], error) {
-	nodesNamespaces, err := deployment.GetClusterNamespaces(r.Log, r.getClientPolicy(), allHostConns)
+	nodesNamespaces, err := deployment.GetClusterNamespaces(r.Log, r.getClientPolicy(ctx), allHostConns)
 	if err != nil {
 		return nil, err
 	}

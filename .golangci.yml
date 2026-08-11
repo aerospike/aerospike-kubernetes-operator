@@ -32,6 +32,8 @@ linters:
     - unused
     - whitespace
     - wsl_v5
+    - errorlint
+    - logcheck
   settings:
     goconst:
       min-len: 2
@@ -62,6 +64,26 @@ linters:
       allow-first-in-block: true
       allow-whole-block: false
       branch-max-lines: 2
+    errorlint:
+      errorf: true
+      comparison: true
+      asserts: true
+    custom:
+      logcheck:
+        type: module
+        description: structured logging checker
+        original-url: sigs.k8s.io/logtools/logcheck
+        settings:
+          check:
+            structured: false
+            deprecations: false
+            contextual: false
+            with-helpers: false
+            parameters: false
+            key: true
+            verbosity-zero: true
+            verbosity-error: true
+            value: true
   exclusions:
     generated: lax
     presets:
@@ -78,6 +100,13 @@ linters:
           - staticcheck
         path: "test/"
         text: "dot imports"
+      # errorlint + logcheck: enforce on controllers only; existing linters stay repo-wide
+      # TODO: remove this path-except rule and enable errorlint + logcheck repo-wide once
+      # existing findings in api/v1, test/, etc. are fixed.
+      - linters:
+          - errorlint
+          - logcheck
+        path-except: (^|/)internal/controller/
 formatters:
   enable:
     - gofmt

@@ -1,0 +1,274 @@
+suite: values.schema.json edge cases — operator runtime behavior
+
+templates:
+  - templates/aerospike-operator-controller-manager-deployment.yaml
+
+tests:
+  # -- replicas --
+  - it: accepts replicas of 0 (scale down is allowed)
+    set:
+      replicas: 0
+    asserts:
+      - notFailedTemplate: {}
+
+  - it: accepts a typical replicas value
+    set:
+      replicas: 2
+    asserts:
+      - notFailedTemplate: {}
+
+  - it: rejects a negative replicas value
+    set:
+      replicas: -1
+    asserts:
+      - failedTemplate:
+          errorPattern: "at '/replicas': minimum: got -1, want 0"
+
+  # -- failedPodGracePeriodSeconds --
+  - it: accepts failedPodGracePeriodSeconds as a numeric string
+    set:
+      failedPodGracePeriodSeconds: "60"
+    asserts:
+      - notFailedTemplate: {}
+
+  - it: accepts failedPodGracePeriodSeconds as a bare integer
+    set:
+      failedPodGracePeriodSeconds: 60
+    asserts:
+      - notFailedTemplate: {}
+
+  - it: rejects failedPodGracePeriodSeconds integer of 0 (below minimum)
+    set:
+      failedPodGracePeriodSeconds: 0
+    asserts:
+      - failedTemplate:
+          errorPattern: "at '/failedPodGracePeriodSeconds': minimum: got 0, want 1"
+
+  # -- watchNamespaces --
+  - it: accepts an empty watchNamespaces (cluster-wide)
+    set:
+      watchNamespaces: ""
+    asserts:
+      - notFailedTemplate: {}
+
+  - it: accepts a single-namespace watchNamespaces
+    set:
+      watchNamespaces: "aerospike"
+    asserts:
+      - notFailedTemplate: {}
+
+  - it: accepts a comma-joined multi-namespace watchNamespaces
+    set:
+      watchNamespaces: "default,aerospike"
+    asserts:
+      - notFailedTemplate: {}
+
+  - it: rejects watchNamespaces with a double comma (empty segment)
+    set:
+      watchNamespaces: "ns1,,ns2"
+    asserts:
+      - failedTemplate:
+          errorPattern: "watchNamespaces.*does not match pattern"
+
+  - it: rejects watchNamespaces with an uppercase namespace
+    set:
+      watchNamespaces: "Ns1"
+    asserts:
+      - failedTemplate:
+          errorPattern: "watchNamespaces.*does not match pattern"
+
+  - it: rejects watchNamespaces with a leading hyphen
+    set:
+      watchNamespaces: "-ns1"
+    asserts:
+      - failedTemplate:
+          errorPattern: "watchNamespaces.*does not match pattern"
+
+  - it: rejects watchNamespaces with a trailing comma
+    set:
+      watchNamespaces: "ns1,"
+    asserts:
+      - failedTemplate:
+          errorPattern: "watchNamespaces.*does not match pattern"
+
+  # -- ignoreNamespaces --
+  - it: accepts a comma-joined multi-namespace ignoreNamespaces
+    set:
+      ignoreNamespaces: "kube-system,kube-node-lease"
+    asserts:
+      - notFailedTemplate: {}
+
+  - it: rejects ignoreNamespaces with the same invalid shape (shared pattern with watchNamespaces)
+    set:
+      ignoreNamespaces: "kube-system,,kube-node-lease"
+    asserts:
+      - failedTemplate:
+          errorPattern: "ignoreNamespaces.*does not match pattern"
+
+  # -- safePodEviction --
+  - it: accepts safePodEviction.enable as a boolean
+    set:
+      safePodEviction:
+        enable: true
+    asserts:
+      - notFailedTemplate: {}
+
+  - it: accepts safePodEviction.timeoutSeconds at the upper string boundary
+    set:
+      safePodEviction:
+        timeoutSeconds: "30"
+    asserts:
+      - notFailedTemplate: {}
+
+  - it: accepts safePodEviction.timeoutSeconds at the lower boundary
+    set:
+      safePodEviction:
+        timeoutSeconds: 1
+    asserts:
+      - notFailedTemplate: {}
+
+  # -- logging --
+  - it: accepts logging.development as a boolean
+    set:
+      logging:
+        development: false
+    asserts:
+      - notFailedTemplate: {}
+
+  - it: accepts logging.level as one of the fixed strings
+    set:
+      logging:
+        level: "debug"
+    asserts:
+      - notFailedTemplate: {}
+
+  - it: accepts logging.level as a bare positive integer
+    set:
+      logging:
+        level: 5
+    asserts:
+      - notFailedTemplate: {}
+
+  - it: rejects logging.level as a numeric-looking string (must be a real integer, not a string)
+    set:
+      logging:
+        level: "1"
+    asserts:
+      - failedTemplate:
+          errorPattern: "logging/level.*'anyOf' failed"
+
+  - it: accepts each valid logging.encoder
+    set:
+      logging:
+        encoder: console
+    asserts:
+      - notFailedTemplate: {}
+
+  - it: rejects an unknown logging.encoder
+    set:
+      logging:
+        encoder: "text"
+    asserts:
+      - failedTemplate:
+          errorPattern: "logging/encoder.*value must be one of"
+
+  - it: rejects logging.encoder with wrong casing
+    set:
+      logging:
+        encoder: "JSON"
+    asserts:
+      - failedTemplate:
+          errorPattern: "logging/encoder.*value must be one of"
+
+  # -- rbac --
+  # rbac.create itself is not a required field: the "required": ["create"] inside
+  # the if-block only scopes the conditional (so it doesn't vacuously match when
+  # create is absent) and does not force callers to set create.
+  - it: accepts rbac.create being entirely absent
+    set:
+      rbac: {}
+    asserts:
+      - notFailedTemplate: {}
+
+  - it: accepts rbac.create true without a serviceAccountName
+    set:
+      rbac:
+        create: true
+    asserts:
+      - notFailedTemplate: {}
+
+  # rbac.serviceAccountName has no minLength constraint on its own, but is required
+  # non-empty when rbac.create is false, since the Deployment then relies on the
+  # user-supplied service account existing. values.yaml always defines it (as ""),
+  # so the conditional surfaces as a minLength failure rather than a missing property.
+  - it: accepts an empty rbac.serviceAccountName when rbac.create is true (unused by the template)
+    set:
+      rbac:
+        create: true
+        serviceAccountName: ""
+    asserts:
+      - notFailedTemplate: {}
+
+  - it: accepts a non-empty rbac.serviceAccountName when rbac.create is true
+    set:
+      rbac:
+        create: true
+        serviceAccountName: "my-sa"
+    asserts:
+      - notFailedTemplate: {}
+
+  - it: rejects rbac.create false without an explicit serviceAccountName
+    set:
+      rbac:
+        create: false
+    asserts:
+      - failedTemplate:
+          errorPattern: "at '/rbac/serviceAccountName': minLength: got 0, want 1"
+
+  - it: rejects an empty rbac.serviceAccountName when rbac.create is false
+    set:
+      rbac:
+        create: false
+        serviceAccountName: ""
+    asserts:
+      - failedTemplate:
+          errorPattern: "at '/rbac/serviceAccountName': minLength: got 0, want 1"
+
+  - it: accepts a non-empty rbac.serviceAccountName when rbac.create is false
+    set:
+      rbac:
+        create: false
+        serviceAccountName: "my-sa"
+    asserts:
+      - notFailedTemplate: {}
+
+  # -- extraEnv --
+  - it: accepts an extraEnv key starting with underscore
+    set:
+      extraEnv:
+        _FOO: "bar"
+    asserts:
+      - notFailedTemplate: {}
+
+  - it: accepts an extraEnv key starting with character
+    set:
+      extraEnv:
+        "FOO": "bar"
+    asserts:
+      - notFailedTemplate: {}
+
+  - it: rejects an extraEnv key starting with a digit
+    set:
+      extraEnv:
+        9FOO: "bar"
+    asserts:
+      - failedTemplate:
+          errorPattern: "invalid propertyName '9FOO'"
+
+  - it: rejects a non-string extraEnv value
+    set:
+      extraEnv:
+        FOO: 123
+    asserts:
+      - failedTemplate:
+          errorPattern: "extraEnv/FOO.*got number, want string"

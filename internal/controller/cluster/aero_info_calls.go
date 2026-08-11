@@ -15,6 +15,7 @@ package cluster
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"time"
 
@@ -34,27 +35,37 @@ import (
 // Aerospike helper
 // ------------------------------------------------------------------------------------
 
-// waitForMultipleNodesSafeStopReady waits until the input pods are safe to stop,
-// skipping pods that are not running and present in ignorablePodNames for stability check.
-// The ignorablePodNames is the list of failed or pending pods that are either::
-// 1. going to be deleted eventually and are safe to ignore in stability checks
-// 2. given in ignorePodList by the user and are safe to ignore in stability checks
+// waitForMultipleNodesSafeStopReady waits until the input pods are safe to stop.
+// ignorablePodNames are pods whose Aerospike server is unreachable and are
+// skipped from cluster-operation queries (host connections, roster, quiesce).
+// Pods with a running server but a failing sidecar are not in this set; they are
+// included in all cluster-operation calls since their servers are still reachable.
 func (r *SingleClusterReconciler) waitForMultipleNodesSafeStopReady(
-	pods []*corev1.Pod, ignorablePodNames sets.Set[string],
+	ctx context.Context, pods []*corev1.Pod, ignorablePodNames sets.Set[string],
 ) common.ReconcileResult {
 	if len(pods) == 0 {
 		return common.ReconcileSuccess()
 	}
 
-	// Remove a node only if the cluster is stable
-	if err := r.waitForAllSTSToBeReady(ignorablePodNames); err != nil {
-		return common.ReconcileError(fmt.Errorf("failed to wait for cluster to be ready: %v", err))
+	// Wait for all non-ignorable pods to have their Aerospike server containers
+	// ready before making any cluster-level info calls. This replaces the old
+	// waitForAllSTSToBeReady pre-check (which required full pod readiness
+	// including sidecars). Server-only readiness is sufficient here — sidecar
+	// failures do not prevent the server from accepting info calls. The wait
+	// uses the same blocking-retry semantics (up to 18×10s) so that a pod which
+	// was just restarted in a previous batch has time to bring its server up
+	// before we attempt the migration/quiesce checks.
+	if err := r.waitForAllAerospikeServersReady(ctx, ignorablePodNames); err != nil {
+		return common.ReconcileError(
+			fmt.Errorf("wait for Aerospike server containers across all StatefulSets to be ready: %w", err),
+		)
 	}
 
 	// This doesn't make actual connection, only objects having connection info are created
-	allHostConns, err := r.newAllHostConnWithOption(ignorablePodNames)
+	allHostConns, err := r.newAllHostConnWithOption(ctx, ignorablePodNames)
 	if err != nil {
-		return common.ReconcileError(fmt.Errorf("failed to get hostConn for aerospike cluster nodes: %v", err))
+		return common.ReconcileError(fmt.Errorf(
+			"get host connections for cluster nodes: %w", err))
 	}
 
 	// Safety guard: if the cluster is degraded (some pods are failed/ignorable) and
@@ -68,12 +79,12 @@ func (r *SingleClusterReconciler) waitForMultipleNodesSafeStopReady(
 	if len(allHostConns) < 2 && ignorablePodNames.Len() > 0 {
 		return common.ReconcileError(fmt.Errorf(
 			"cluster is degraded: %d failed/ignorable pod(s) excluded, only %d reachable node(s) remain; "+
-				"refusing to proceed to prevent data loss — recover the failed pods first",
+				"refusing to proceed to prevent data loss — recover the failed Pods first",
 			ignorablePodNames.Len(), len(allHostConns),
 		))
 	}
 
-	policy := r.getClientPolicy()
+	policy := r.getClientPolicy(ctx)
 
 	r.Recorder.Eventf(
 		r.aeroCluster, corev1.EventTypeNormal, "WaitMigration",
@@ -86,12 +97,12 @@ func (r *SingleClusterReconciler) waitForMultipleNodesSafeStopReady(
 	}
 
 	// Setup roster after migration.
-	if err = r.getAndSetRoster(policy, r.aeroCluster.Spec.RosterNodeBlockList, ignorablePodNames); err != nil {
-		r.Log.Error(err, "Failed to set roster for cluster")
+	if err = r.getAndSetRoster(ctx, policy, r.aeroCluster.Spec.RosterNodeBlockList, ignorablePodNames); err != nil {
+		r.Log.Error(err, "Failed to set roster for cluster, will requeue")
 		return common.ReconcileRequeueAfter(1)
 	}
 
-	if err := r.quiescePods(policy, allHostConns, pods, ignorablePodNames); err != nil {
+	if err := r.quiescePods(ctx, policy, allHostConns, pods, ignorablePodNames); err != nil {
 		return common.ReconcileError(err)
 	}
 
@@ -99,13 +110,14 @@ func (r *SingleClusterReconciler) waitForMultipleNodesSafeStopReady(
 }
 
 // waitForMigrationToComplete waits for the migration to complete on all the nodes in the cluster.
-func (r *SingleClusterReconciler) waitForMigrationToComplete(policy *as.ClientPolicy,
+func (r *SingleClusterReconciler) waitForMigrationToComplete(ctx context.Context, policy *as.ClientPolicy,
 	ignorablePodNames sets.Set[string],
 ) common.ReconcileResult {
 	// This doesn't make actual connection, only objects having connection info are created
-	allHostConns, err := r.newAllHostConnWithOption(ignorablePodNames)
+	allHostConns, err := r.newAllHostConnWithOption(ctx, ignorablePodNames)
 	if err != nil {
-		return common.ReconcileError(fmt.Errorf("failed to get hostConn for aerospike cluster nodes: %v", err))
+		return common.ReconcileError(fmt.Errorf(
+			"get host connections for cluster nodes: %w", err))
 	}
 
 	r.Log.Info("Waiting for migration to complete")
@@ -114,6 +126,7 @@ func (r *SingleClusterReconciler) waitForMigrationToComplete(policy *as.ClientPo
 }
 
 func (r *SingleClusterReconciler) quiescePods(
+	ctx context.Context,
 	policy *as.ClientPolicy, allHostConns []*deployment.HostConn, pods []*corev1.Pod, ignorablePodNames sets.Set[string],
 ) error {
 	podList := make([]corev1.Pod, 0, len(pods))
@@ -127,7 +140,7 @@ func (r *SingleClusterReconciler) quiescePods(
 		return err
 	}
 
-	nodesNamespaces, err := deployment.GetClusterNamespaces(r.Log, r.getClientPolicy(), allHostConns)
+	nodesNamespaces, err := deployment.GetClusterNamespaces(r.Log, r.getClientPolicy(ctx), allHostConns)
 	if err != nil {
 		return err
 	}
@@ -178,14 +191,14 @@ func (r *SingleClusterReconciler) waitForClusterStability(
 }
 
 func (r *SingleClusterReconciler) tipClearHostname(
-	pod *corev1.Pod, clearPodName string,
+	ctx context.Context, pod *corev1.Pod, clearPodName string,
 ) error {
 	asConn := r.newAsConn(pod)
 
 	_, heartbeatTLSPort := asdbv1.GetHeartbeatTLSNameAndPort(r.aeroCluster.Spec.AerospikeConfig)
 	if heartbeatTLSPort != nil {
 		if err := asConn.TipClearHostname(
-			r.getClientPolicy(), getFQDNForPod(r.aeroCluster, clearPodName),
+			r.getClientPolicy(ctx), getFQDNForPod(r.aeroCluster, clearPodName),
 			int(*heartbeatTLSPort),
 		); err != nil {
 			return err
@@ -195,7 +208,7 @@ func (r *SingleClusterReconciler) tipClearHostname(
 	heartbeatPort := asdbv1.GetHeartbeatPort(r.aeroCluster.Spec.AerospikeConfig)
 	if heartbeatPort != nil {
 		if err := asConn.TipClearHostname(
-			r.getClientPolicy(), getFQDNForPod(r.aeroCluster, clearPodName),
+			r.getClientPolicy(ctx), getFQDNForPod(r.aeroCluster, clearPodName),
 			int(*heartbeatPort),
 		); err != nil {
 			return err
@@ -205,23 +218,23 @@ func (r *SingleClusterReconciler) tipClearHostname(
 	return nil
 }
 
-func (r *SingleClusterReconciler) alumniReset(pod *corev1.Pod) error {
+func (r *SingleClusterReconciler) alumniReset(ctx context.Context, pod *corev1.Pod) error {
 	asConn := r.newAsConn(pod)
-	return asConn.AlumniReset(r.getClientPolicy())
+	return asConn.AlumniReset(r.getClientPolicy(ctx))
 }
 
 // newAllHostConnWithOption returns connections to all pods in the cluster skipping pods that are not running and
 // present in ignorablePods.
-func (r *SingleClusterReconciler) newAllHostConnWithOption(ignorablePodNames sets.Set[string]) (
+func (r *SingleClusterReconciler) newAllHostConnWithOption(ctx context.Context, ignorablePodNames sets.Set[string]) (
 	[]*deployment.HostConn, error,
 ) {
-	podList, err := r.getClusterPodList()
+	podList, err := r.getClusterPodList(ctx)
 	if err != nil {
 		return nil, err
 	}
 
 	if len(podList.Items) == 0 {
-		return nil, fmt.Errorf("pod list empty")
+		return nil, fmt.Errorf("cluster Pod list is empty")
 	}
 
 	return r.newPodsHostConnWithOption(podList.Items, ignorablePodNames)
@@ -240,18 +253,19 @@ func (r *SingleClusterReconciler) newPodsHostConnWithOption(pods []corev1.Pod, i
 			continue
 		}
 
-		// Checking if all the container in the pod are ready or not
-		if !utils.IsPodRunningAndReady(pod) {
+		// Only the Aerospike server container needs to be running to accept info calls.
+		// Sidecar failures do not prevent the server from being reachable.
+		if !utils.IsAerospikeServerReady(pod) {
 			if ignorablePodNames.Has(pod.Name) {
-				// This pod is not running and ignorable.
+				// This pod's aerospike server is not running and it is marked ignorable.
 				r.Log.Info(
-					"Ignoring info call on non-running pod ", "pod", pod.Name,
+					"Ignoring info call on Pod with non-running server container", "pod", utils.GetNamespacedName(pod),
 				)
 
 				continue
 			}
 
-			return nil, fmt.Errorf("pod %v is not ready", pod.Name)
+			return nil, fmt.Errorf("pod %s server container is not running", utils.GetNamespacedNameString(pod))
 		}
 
 		asConn := r.newAsConn(pod)
@@ -277,7 +291,7 @@ func (r *SingleClusterReconciler) newAsConn(pod *corev1.Pod) *deployment.ASConn 
 		AerospikeHostName: host,
 		AerospikePort:     int(*port),
 		AerospikeTLSName:  tlsName,
-		Log:               r.Log.WithValues("host", pod.Name),
+		Log:               r.Log.WithValues("pod", utils.GetNamespacedName(pod)),
 	}
 
 	return asConn
@@ -288,6 +302,7 @@ func hostID(hostName string, hostPort int) string {
 }
 
 func (r *SingleClusterReconciler) setMigrateFillDelay(
+	ctx context.Context,
 	policy *as.ClientPolicy,
 	asConfig *asdbv1.AerospikeConfigSpec, setToZero bool, ignorablePodNames sets.Set[string],
 ) common.ReconcileResult {
@@ -316,11 +331,11 @@ func (r *SingleClusterReconciler) setMigrateFillDelay(
 	}
 
 	// This doesn't make actual connection, only objects having connection info are created
-	allHostConns, err := r.newAllHostConnWithOption(ignorablePodNames)
+	allHostConns, err := r.newAllHostConnWithOption(ctx, ignorablePodNames)
 	if err != nil {
 		return common.ReconcileError(
 			fmt.Errorf(
-				"failed to get hostConn for aerospike cluster nodes: %v", err,
+				"get host connections for cluster nodes: %w", err,
 			),
 		)
 	}
@@ -335,14 +350,15 @@ func (r *SingleClusterReconciler) setMigrateFillDelay(
 }
 
 func (r *SingleClusterReconciler) setDynamicConfig(
+	ctx context.Context,
 	dynamicConfDiffPerPod map[string]asconfig.DynamicConfigMap, pods []*corev1.Pod, ignorablePodNames sets.Set[string],
 ) common.ReconcileResult {
 	// This doesn't make actual connection, only objects having connection info are created
-	allHostConns, err := r.newAllHostConnWithOption(ignorablePodNames)
+	allHostConns, err := r.newAllHostConnWithOption(ctx, ignorablePodNames)
 	if err != nil {
 		return common.ReconcileError(
 			fmt.Errorf(
-				"failed to get hostConn for aerospike cluster nodes: %v", err,
+				"get host connections for cluster nodes: %w", err,
 			),
 		)
 	}
@@ -359,13 +375,13 @@ func (r *SingleClusterReconciler) setDynamicConfig(
 	if err != nil {
 		return common.ReconcileError(
 			fmt.Errorf(
-				"failed to get hostConn for aerospike cluster nodes: %v", err,
+				"get host connections for cluster nodes: %w", err,
 			),
 		)
 	}
 
 	if len(selectedHostConns) == 0 {
-		r.Log.Info("No pods selected for dynamic config change")
+		r.Log.Info("No Pods selected for dynamic config change")
 
 		return common.ReconcileSuccess()
 	}
@@ -374,15 +390,16 @@ func (r *SingleClusterReconciler) setDynamicConfig(
 		podName := podIPNameMap[host.ASConn.AerospikeHostName]
 
 		asConfCmds, err := asconfig.CreateSetConfigCmdList(r.Log, dynamicConfDiffPerPod[podName],
-			host.ASConn, r.getClientPolicy())
+			host.ASConn, r.getClientPolicy(ctx))
 		if err != nil {
 			// Assuming error returned here will not be a server error.
 			return common.ReconcileError(err)
 		}
 
-		r.Log.Info("Generated dynamic config commands", "commands", fmt.Sprintf("%v", asConfCmds), "pod", podName)
+		r.Log.Info("Generated dynamic config commands",
+			"commands", asConfCmds, "pod", utils.NewNamespacedName(r.aeroCluster.Namespace, podName))
 
-		if succeededCmds, err := deployment.SetConfigCommandsOnHosts(r.Log, r.getClientPolicy(), allHostConns,
+		if succeededCmds, err := deployment.SetConfigCommandsOnHosts(r.Log, r.getClientPolicy(ctx), allHostConns,
 			[]*deployment.HostConn{host}, asConfCmds); err != nil {
 			errorStatus := asdbv1.Failed
 
@@ -401,10 +418,14 @@ func (r *SingleClusterReconciler) setDynamicConfig(
 			patches = append(patches, patch)
 
 			if patchErr := r.patchPodStatus(
-				context.TODO(), patches,
+				ctx, patches,
 			); patchErr != nil {
 				return common.ReconcileError(
-					fmt.Errorf("error updating status: %v, dynamic config command error: %v", patchErr, err))
+					errors.Join(
+						fmt.Errorf("update status: %w", patchErr),
+						fmt.Errorf("apply dynamic config: %w", err),
+					),
+				)
 			}
 
 			return common.ReconcileError(err)
