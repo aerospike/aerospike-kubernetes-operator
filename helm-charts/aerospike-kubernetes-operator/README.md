@@ -8,17 +8,11 @@ A Helm chart for Aerospike Kubernetes Operator
 
 ## Usage
 
-<!-- ### Add Aerospike Helm Repository
+### Add Helm Repository
 
 ```sh
-helm repo add aerospike https://aerospike.github.io/aerospike-kubernetes-operator
-``` -->
-
-### Clone this repository
-
-```sh
-git clone https://github.com/aerospike/aerospike-kubernetes-operator.git
-cd aerospike-kubernetes-operator/helm-charts
+helm repo add aerospike https://aerospike.github.io/aerospike-kubernetes-enterprise
+helm repo update
 ```
 
 ### Deploy Cert-manager
@@ -29,7 +23,7 @@ Operator uses admission webhooks, which needs TLS certificates. These are issued
 
 ```sh
 # helm install <chartName> <chartPath> --namespace <namespace>
-helm install aerospike-kubernetes-operator ./aerospike-kubernetes-operator --set replicas=3
+helm install aerospike-kubernetes-operator aerospike/aerospike-kubernetes-operator --set replicas=3
 ```
 
 ## Configurations

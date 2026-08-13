@@ -9,11 +9,11 @@ A Helm chart for `AerospikeCluster` custom resource to be used with the Aerospik
 
 ## Usage
 
-### Clone this repository
+### Add Helm Repository
 
 ```sh
-git clone https://github.com/aerospike/aerospike-kubernetes-operator.git
-cd aerospike-kubernetes-operator/helm-charts
+helm repo add aerospike https://aerospike.github.io/aerospike-kubernetes-enterprise
+helm repo update
 ```
 
 ### Deploy Aerospike Cluster
@@ -29,7 +29,7 @@ kubectl create secret generic aerospike-secret --from-file=<path-to-features.con
 
 ```sh
 # helm install <chartName> <chartPath> --namespace <namespace>
-helm install aerospike ./aerospike-cluster --set devMode=true
+helm install aerospike aerospike/aerospike-cluster --set devMode=true
 ```
 
 
@@ -38,7 +38,7 @@ persistence. It is recommended to create a separate YAML file with configuration
 with `helm install`.*
 
 ```sh
-helm install aerospike ./aerospike-cluster/ \
+helm install aerospike aerospike/aerospike-cluster \
     -f <customized-values-yaml-file>
 ```
 
