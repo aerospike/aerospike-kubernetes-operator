@@ -5,9 +5,12 @@ import (
 	"fmt"
 	"reflect"
 	"strconv"
+	"strings"
 	"time"
 
 	"github.com/go-logr/logr"
+	. "github.com/onsi/ginkgo/v2"
+	. "github.com/onsi/gomega"
 	appsv1 "k8s.io/api/apps/v1"
 	corev1 "k8s.io/api/core/v1"
 	k8serrors "k8s.io/apimachinery/pkg/api/errors"
@@ -18,6 +21,8 @@ import (
 	"k8s.io/apimachinery/pkg/util/intstr"
 	"k8s.io/apimachinery/pkg/util/sets"
 	"k8s.io/apimachinery/pkg/util/wait"
+	"k8s.io/client-go/kubernetes"
+	"k8s.io/client-go/rest"
 	"k8s.io/client-go/util/retry"
 	"k8s.io/utils/ptr"
 	ctrl "sigs.k8s.io/controller-runtime"
@@ -28,6 +33,7 @@ import (
 	"github.com/aerospike/aerospike-kubernetes-operator/v4/pkg/utils"
 	"github.com/aerospike/aerospike-kubernetes-operator/v4/test"
 	lib "github.com/aerospike/aerospike-management-lib"
+	"github.com/aerospike/aerospike-management-lib/deployment"
 	"github.com/aerospike/aerospike-management-lib/info"
 )
 
@@ -366,7 +372,7 @@ func rollingRestartClusterTest(
 	}
 
 	// Verify that the change has been applied on the cluster.
-	return validateAerospikeConfigServiceClusterUpdate(
+	return ValidateAerospikeConfigServiceClusterUpdate(
 		log, k8sClient, ctx, clusterNamespacedName, []string{"indent-allocations"},
 	)
 }
@@ -523,7 +529,7 @@ func validatePodPortsUpdate(k8sClient client.Client, ctx goctx.Context,
 	return nil
 }
 
-func validateAerospikeConfigServiceClusterUpdate(
+func ValidateAerospikeConfigServiceClusterUpdate(
 	log logr.Logger, k8sClient client.Client, ctx goctx.Context,
 	clusterNamespacedName types.NamespacedName, updatedKeys []string,
 ) error {
@@ -1985,4 +1991,259 @@ func checkClientConnection(
 	}
 
 	return nil
+}
+
+// CrashingSidecar returns a sidecar container that immediately exits with a
+// non-zero code, simulating a permanently failing sidecar. The Aerospike server
+// container in the same pod continues to run normally.
+func CrashingSidecar() corev1.Container {
+	return corev1.Container{
+		Name:  "crashing-sidecar",
+		Image: "busybox:1.28",
+		Command: []string{
+			"sh", "-c", "echo 'sidecar starting'; exit 1",
+		},
+		Resources: corev1.ResourceRequirements{
+			Requests: corev1.ResourceList{
+				corev1.ResourceCPU:    resource.MustParse("10m"),
+				corev1.ResourceMemory: resource.MustParse("16Mi"),
+			},
+		},
+	}
+}
+
+// PodHasCrashingSidecar returns true if any non-server container in the pod is
+// in a crash-restart cycle. Kubernetes moves a failing container through several
+// states before it reaches CrashLoopBackOff (Running → Terminated/Error →
+// Waiting/Error → ... → Waiting/CrashLoopBackOff), so checking only for the
+// CrashLoopBackOff reason would miss the earlier restart cycles. Instead, we
+// use RestartCount > 0 combined with the container not currently being healthy
+// (not Running and not Ready) as a more reliable signal.
+func PodHasCrashingSidecar(pod *corev1.Pod) bool {
+	for idx := range pod.Status.ContainerStatuses {
+		cs := &pod.Status.ContainerStatuses[idx]
+		if cs.Name == asdbv1.AerospikeServerContainerName {
+			continue
+		}
+
+		if cs.RestartCount > 0 && !cs.Ready {
+			return true
+		}
+	}
+
+	return false
+}
+
+// SignalControlledSidecar returns a sidecar that runs healthy until the file
+// /signal/fail is created in its emptyDir volume. Once the file exists the
+// sidecar exits, and because the emptyDir persists across container restarts
+// the sidecar stays in permanent CrashLoopBackOff. Use with SignalVolumeForSidecar
+// and FailPodSidecar to inject sidecar failures on demand.
+func SignalControlledSidecar() corev1.Container {
+	return corev1.Container{
+		Name:  "signal-sidecar",
+		Image: "busybox:1.28",
+		Command: []string{
+			"sh", "-c",
+			`while true; do
+  if [ -f /signal/fail ]; then
+    echo "signal-sidecar: fail signal received, crashing"
+    exit 1
+  fi
+  sleep 5
+done`,
+		},
+		Resources: corev1.ResourceRequirements{
+			Requests: corev1.ResourceList{
+				corev1.ResourceCPU:    resource.MustParse("10m"),
+				corev1.ResourceMemory: resource.MustParse("16Mi"),
+			},
+		},
+	}
+}
+
+// SignalVolumeForSidecar returns the emptyDir VolumeSpec for SignalControlledSidecar.
+// The volume persists across container restarts so the fail signal survives a
+// container restart and keeps the sidecar in CrashLoopBackOff indefinitely.
+func SignalVolumeForSidecar() asdbv1.VolumeSpec {
+	return asdbv1.VolumeSpec{
+		Name: "sidecar-signal",
+		Source: asdbv1.VolumeSource{
+			EmptyDir: &corev1.EmptyDirVolumeSource{},
+		},
+		Sidecars: []asdbv1.VolumeAttachment{
+			{ContainerName: "signal-sidecar", Path: "/signal"},
+		},
+	}
+}
+
+// FailPodSidecar writes the fail signal into the named pod's signal-sidecar
+// container, triggering a permanent CrashLoopBackOff for that pod only.
+func FailPodSidecar(
+	clientset *kubernetes.Clientset, cfg *rest.Config, podNamespace, podName string,
+) error {
+	_, _, err := utils.Exec(
+		types.NamespacedName{Namespace: podNamespace, Name: podName},
+		"signal-sidecar",
+		[]string{"touch", "/signal/fail"},
+		clientset,
+		cfg,
+	)
+
+	return err
+}
+
+// AssertRollingRestartBlocked polls until exactly 1 pod has a crashing sidecar
+// (the first pod restarted) and expectedReadyCount pods are still fully ready
+// (not yet restarted). It then holds that condition consistently to prove the
+// rolling restart is genuinely blocked rather than transiently paused between
+// pod restarts. The container transitions through ContainerCreating and
+// Terminated/Error before Kubernetes applies exponential backoff and sets the
+// reason to "CrashLoopBackOff", which is why an Eventually precedes the
+// Consistently.
+func AssertRollingRestartBlocked(
+	k8sClient client.Client,
+	ctx goctx.Context,
+	clusterNamespacedName types.NamespacedName,
+	expectedReadyCount int,
+) {
+	GinkgoHelper()
+
+	check := func(g Gomega) {
+		cluster, err := getCluster(k8sClient, ctx, clusterNamespacedName)
+		g.Expect(err).ToNot(HaveOccurred())
+
+		podList, err := getClusterPodList(k8sClient, ctx, cluster)
+		g.Expect(err).ToNot(HaveOccurred())
+
+		crashingCount, readyCount := 0, 0
+
+		for idx := range podList.Items {
+			pod := &podList.Items[idx]
+			if PodHasCrashingSidecar(pod) {
+				crashingCount++
+				continue
+			}
+
+			if utils.IsPodRunningAndReady(pod) {
+				readyCount++
+			}
+		}
+
+		g.Expect(crashingCount).To(Equal(1),
+			"expected exactly 1 pod with a crashing sidecar; rolling restart should be blocked after the first pod")
+		g.Expect(readyCount).To(Equal(expectedReadyCount),
+			"expected %d pods to still be fully ready (not yet restarted)", expectedReadyCount)
+	}
+
+	Eventually(check, 5*time.Minute, 5*time.Second).Should(Succeed())
+	Consistently(check, 30*time.Second, 5*time.Second).Should(Succeed())
+}
+
+// VerifyCrashingSidecarOnAllPods polls until every pod in the cluster has its
+// sidecar in CrashLoopBackOff and the Aerospike server is reachable via a live
+// info call. expectedSize is asserted against the total pod count.
+func VerifyCrashingSidecarOnAllPods(
+	k8sClient client.Client,
+	ctx goctx.Context,
+	clusterNamespacedName types.NamespacedName,
+	expectedSize int,
+) {
+	GinkgoHelper()
+
+	Eventually(func(g Gomega) {
+		cluster, err := getCluster(k8sClient, ctx, clusterNamespacedName)
+		g.Expect(err).ToNot(HaveOccurred())
+
+		podList, err := getClusterPodList(k8sClient, ctx, cluster)
+		g.Expect(err).ToNot(HaveOccurred())
+		g.Expect(podList.Items).To(HaveLen(expectedSize))
+
+		for idx := range podList.Items {
+			pod := &podList.Items[idx]
+			g.Expect(PodHasCrashingSidecar(pod)).To(BeTrue(),
+				"expected sidecar to be crashing on pod %s", pod.Name)
+			_, err := requestInfoFromNode(logger, k8sClient, ctx, clusterNamespacedName, "node", pod.Name)
+			g.Expect(err).ToNot(HaveOccurred(),
+				"expected Aerospike server to be reachable on pod %s", pod.Name)
+		}
+	}, 3*time.Minute, 5*time.Second).Should(Succeed())
+}
+
+func getRoster(hostConn *deployment.HostConn, aerospikePolicy *as.ClientPolicy,
+	namespace string) (map[string]string, error) {
+	cmd := fmt.Sprintf("roster:namespace=%s", namespace)
+
+	res, err := hostConn.ASConn.RunInfo(aerospikePolicy, cmd)
+	if err != nil {
+		return nil, err
+	}
+
+	cmdOutput := res[cmd]
+
+	return deployment.ParseInfoIntoMap(cmdOutput, ":", "=")
+}
+
+// ValidateRoster verifies that the SC roster matches cluster pod membership and block list state.
+func ValidateRoster(k8sClient client.Client, ctx goctx.Context,
+	clusterNamespacedName types.NamespacedName, aeroNamespace string) {
+	aeroCluster, err := getCluster(k8sClient, ctx, clusterNamespacedName)
+	Expect(err).ToNot(HaveOccurred())
+
+	hostConns, err := newAllHostConn(logger, aeroCluster, k8sClient)
+	Expect(err).ToNot(HaveOccurred())
+
+	rosterNodesMap, err := getRoster(hostConns[0], getClientPolicy(aeroCluster, k8sClient), aeroNamespace)
+	Expect(err).ToNot(HaveOccurred())
+
+	// Roster is in uppercase, whereas nodeID is in lower case in server. Keep it in mind when comparing list
+	rosterStr := rosterNodesMap["roster"]
+	rosterList := strings.Split(rosterStr, ",")
+
+	// Check2 roster+blockList >= len(pods)
+	if len(rosterList)+len(aeroCluster.Spec.RosterNodeBlockList) < len(aeroCluster.Status.Pods) {
+		err := fmt.Errorf("roster len not matching pods list. "+
+			"roster %v, blockList %v, pods %v", rosterList, aeroCluster.Spec.RosterNodeBlockList, aeroCluster.Status.Pods)
+		Expect(err).ToNot(HaveOccurred())
+	}
+
+	rosterNodeBlockListSet := sets.NewString(aeroCluster.Spec.RosterNodeBlockList...)
+	podNodeIDSet := sets.NewString()
+
+	for podName := range aeroCluster.Status.Pods {
+		// Remove 0 from start of nodeID (we add this dummy rack)
+		podNodeIDSet.Insert(strings.ToUpper(strings.TrimLeft(aeroCluster.Status.Pods[podName].Aerospike.NodeID, "0")))
+	}
+
+	for _, rosterNode := range rosterList {
+		nodeID := strings.Split(rosterNode, "@")[0]
+		// Check1 roster should not have blocked pod
+		Expect(rosterNodeBlockListSet.Has(nodeID)).To(
+			BeFalse(), fmt.Sprintf("roster should not have blocked node. roster %v, blockList %v",
+				rosterNode, aeroCluster.Spec.RosterNodeBlockList))
+		// Check4 Scaledown: all the roster should be in pod list
+		Expect(podNodeIDSet.Has(nodeID)).To(
+			BeTrue(), fmt.Sprintf("roster node should be in pod list. roster %v, podNodeIDs %v", rosterNode, podNodeIDSet))
+	}
+
+	rosterListSet := sets.NewString(rosterList...)
+	// Check3 Scaleup: pod should be in roster or in blockList
+	for podName := range aeroCluster.Status.Pods {
+		nodeID := strings.ToUpper(strings.TrimLeft(aeroCluster.Status.Pods[podName].Aerospike.NodeID, "0"))
+		rackID, _, err := utils.GetRackIDAndRevisionFromPodName(clusterNamespacedName.Name, podName)
+		Expect(err).ToNot(HaveOccurred())
+
+		nodeRoster := nodeID
+		if rackID != 0 {
+			nodeRoster = nodeID + "@" + fmt.Sprint(rackID)
+		}
+
+		if !rosterNodeBlockListSet.Has(nodeID) &&
+			!rosterListSet.Has(nodeRoster) {
+			err := fmt.Errorf("pod not found in roster or blockList. roster %v,"+
+				" blockList %v, missing pod roster %v, rackID %v",
+				rosterList, aeroCluster.Spec.RosterNodeBlockList, nodeRoster, rackID)
+			Expect(err).ToNot(HaveOccurred())
+		}
+	}
 }

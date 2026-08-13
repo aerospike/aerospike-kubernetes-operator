@@ -950,7 +950,7 @@ func clusterWithMaxIgnorablePod(ctx goctx.Context) {
 						func() error {
 							return InterceptGomegaFailure(
 								func() {
-									validateRoster(k8sClient, ctx, clusterNamespacedName, scNamespace)
+									ValidateRoster(k8sClient, ctx, clusterNamespacedName, scNamespace)
 								},
 							)
 						}, 5*time.Minute, 10*time.Second,

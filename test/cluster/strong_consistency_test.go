@@ -3,7 +3,6 @@ package cluster
 import (
 	goctx "context"
 	"fmt"
-	"strings"
 	"time"
 
 	. "github.com/onsi/ginkgo/v2"
@@ -11,13 +10,9 @@ import (
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/types"
 	"k8s.io/apimachinery/pkg/util/intstr"
-	"k8s.io/apimachinery/pkg/util/sets"
 	"k8s.io/utils/ptr"
-	"sigs.k8s.io/controller-runtime/pkg/client"
 
-	as "github.com/aerospike/aerospike-client-go/v8"
 	asdbv1 "github.com/aerospike/aerospike-kubernetes-operator/v4/api/v1"
-	"github.com/aerospike/aerospike-kubernetes-operator/v4/pkg/utils"
 	"github.com/aerospike/aerospike-kubernetes-operator/v4/test"
 	"github.com/aerospike/aerospike-management-lib/deployment"
 )
@@ -72,7 +67,7 @@ var _ = Describe("SCMode", func() {
 
 			Expect(DeployCluster(k8sClient, ctx, aeroCluster)).ToNot(HaveOccurred())
 
-			validateRoster(k8sClient, ctx, clusterNamespacedName, scNamespace)
+			ValidateRoster(k8sClient, ctx, clusterNamespacedName, scNamespace)
 
 			validateLifecycleOperationInSCCluster(ctx, clusterNamespacedName, scNamespace)
 		})
@@ -86,7 +81,7 @@ var _ = Describe("SCMode", func() {
 
 			Expect(DeployCluster(k8sClient, ctx, aeroCluster)).ToNot(HaveOccurred())
 
-			validateRoster(k8sClient, ctx, clusterNamespacedName, scNamespace)
+			ValidateRoster(k8sClient, ctx, clusterNamespacedName, scNamespace)
 
 			validateLifecycleOperationInSCCluster(ctx, clusterNamespacedName, scNamespace)
 		})
@@ -109,7 +104,7 @@ var _ = Describe("SCMode", func() {
 
 			Expect(DeployCluster(k8sClient, ctx, aeroCluster)).ToNot(HaveOccurred())
 
-			validateRoster(k8sClient, ctx, clusterNamespacedName, scNamespace)
+			ValidateRoster(k8sClient, ctx, clusterNamespacedName, scNamespace)
 
 			validateLifecycleOperationInSCCluster(ctx, clusterNamespacedName, scNamespace)
 		})
@@ -132,7 +127,7 @@ var _ = Describe("SCMode", func() {
 
 			Expect(DeployCluster(k8sClient, ctx, aeroCluster)).ToNot(HaveOccurred())
 
-			validateRoster(k8sClient, ctx, clusterNamespacedName, scNamespace)
+			ValidateRoster(k8sClient, ctx, clusterNamespacedName, scNamespace)
 
 			By("Block rack 1 from roster")
 
@@ -210,7 +205,7 @@ var _ = Describe("SCMode", func() {
 				aeroCluster.Spec.Storage.Volumes, getStorageVolumeForAerospike(addedSCNs, path))
 
 			Expect(DeployCluster(k8sClient, ctx, aeroCluster)).ToNot(HaveOccurred())
-			validateRoster(k8sClient, ctx, clusterNamespacedName, scNamespace)
+			ValidateRoster(k8sClient, ctx, clusterNamespacedName, scNamespace)
 
 			By("Add new SC namespace")
 
@@ -219,8 +214,8 @@ var _ = Describe("SCMode", func() {
 				append(aeroCluster.Spec.AerospikeConfig.Value["namespaces"].([]interface{}), SCConf)
 
 			Expect(updateCluster(k8sClient, ctx, aeroCluster)).ToNot(HaveOccurred())
-			validateRoster(k8sClient, ctx, clusterNamespacedName, scNamespace)
-			validateRoster(k8sClient, ctx, clusterNamespacedName, addedSCNs)
+			ValidateRoster(k8sClient, ctx, clusterNamespacedName, scNamespace)
+			ValidateRoster(k8sClient, ctx, clusterNamespacedName, addedSCNs)
 
 			By("Add new non-SC namespace")
 
@@ -237,15 +232,15 @@ var _ = Describe("SCMode", func() {
 				append(aeroCluster.Spec.AerospikeConfig.Value["namespaces"].([]interface{}), conf)
 
 			Expect(updateCluster(k8sClient, ctx, aeroCluster)).ToNot(HaveOccurred())
-			validateRoster(k8sClient, ctx, clusterNamespacedName, scNamespace)
-			validateRoster(k8sClient, ctx, clusterNamespacedName, addedSCNs)
+			ValidateRoster(k8sClient, ctx, clusterNamespacedName, scNamespace)
+			ValidateRoster(k8sClient, ctx, clusterNamespacedName, addedSCNs)
 
 			By("Remove added namespaces")
 
 			aeroCluster.Spec.AerospikeConfig = getSCAerospikeConfig()
 
 			Expect(updateCluster(k8sClient, ctx, aeroCluster)).ToNot(HaveOccurred())
-			validateRoster(k8sClient, ctx, clusterNamespacedName, scNamespace)
+			ValidateRoster(k8sClient, ctx, clusterNamespacedName, scNamespace)
 		})
 
 		It("Should allow batch restart in the SC setup", func() {
@@ -266,14 +261,14 @@ var _ = Describe("SCMode", func() {
 
 			Expect(DeployCluster(k8sClient, ctx, aeroCluster)).ToNot(HaveOccurred())
 
-			validateRoster(k8sClient, ctx, clusterNamespacedName, scNamespace)
+			ValidateRoster(k8sClient, ctx, clusterNamespacedName, scNamespace)
 
 			By("RollingRestart")
 
 			err := rollingRestartClusterTest(logger, k8sClient, ctx, clusterNamespacedName)
 			Expect(err).ToNot(HaveOccurred())
 
-			validateRoster(k8sClient, ctx, clusterNamespacedName, scNamespace)
+			ValidateRoster(k8sClient, ctx, clusterNamespacedName, scNamespace)
 
 			By("Upgrade/Downgrade")
 			// don't change image, it upgrades
@@ -282,7 +277,7 @@ var _ = Describe("SCMode", func() {
 			)
 			Expect(err).ToNot(HaveOccurred())
 
-			validateRoster(k8sClient, ctx, clusterNamespacedName, scNamespace)
+			ValidateRoster(k8sClient, ctx, clusterNamespacedName, scNamespace)
 		})
 
 		It("Should allow MRT fields in SC namespace", func() {
@@ -461,7 +456,7 @@ func validateLifecycleOperationInSCCluster(
 	err := scaleUpClusterTest(k8sClient, ctx, clusterNamespacedName, 3)
 	Expect(err).ToNot(HaveOccurred())
 
-	validateRoster(k8sClient, ctx, clusterNamespacedName, scNamespace)
+	ValidateRoster(k8sClient, ctx, clusterNamespacedName, scNamespace)
 
 	By("Set roster blockList")
 
@@ -473,21 +468,21 @@ func validateLifecycleOperationInSCCluster(
 	Expect(err).ToNot(HaveOccurred())
 	// 1 - 1, 1,
 	// 2 - 1,
-	validateRoster(k8sClient, ctx, clusterNamespacedName, scNamespace)
+	ValidateRoster(k8sClient, ctx, clusterNamespacedName, scNamespace)
 
 	By("ScaleDown")
 
 	err = scaleDownClusterTest(k8sClient, ctx, clusterNamespacedName, 2)
 	Expect(err).ToNot(HaveOccurred())
 
-	validateRoster(k8sClient, ctx, clusterNamespacedName, scNamespace)
+	ValidateRoster(k8sClient, ctx, clusterNamespacedName, scNamespace)
 
 	By("RollingRestart")
 
 	err = rollingRestartClusterTest(logger, k8sClient, ctx, clusterNamespacedName)
 	Expect(err).ToNot(HaveOccurred())
 
-	validateRoster(k8sClient, ctx, clusterNamespacedName, scNamespace)
+	ValidateRoster(k8sClient, ctx, clusterNamespacedName, scNamespace)
 
 	By("Upgrade/Downgrade")
 	// don't change image, it upgrades, check old version
@@ -496,84 +491,7 @@ func validateLifecycleOperationInSCCluster(
 	)
 	Expect(err).ToNot(HaveOccurred())
 
-	validateRoster(k8sClient, ctx, clusterNamespacedName, scNamespace)
-}
-
-func validateRoster(k8sClient client.Client, ctx goctx.Context,
-	clusterNamespacedName types.NamespacedName, aeroNamespace string) {
-	aeroCluster, err := getCluster(k8sClient, ctx, clusterNamespacedName)
-	Expect(err).ToNot(HaveOccurred())
-
-	hostConns, err := newAllHostConn(logger, aeroCluster, k8sClient)
-	Expect(err).ToNot(HaveOccurred())
-
-	rosterNodesMap, err := getRoster(hostConns[0], getClientPolicy(aeroCluster, k8sClient), aeroNamespace)
-	Expect(err).ToNot(HaveOccurred())
-
-	// Roster is in uppercase, whereas nodeID is in lower case in server. Keep it in mind when comparing list
-	rosterStr := rosterNodesMap["roster"]
-	rosterList := strings.Split(rosterStr, ",")
-
-	// Check2 roster+blockList >= len(pods)
-	if len(rosterList)+len(aeroCluster.Spec.RosterNodeBlockList) < len(aeroCluster.Status.Pods) {
-		err := fmt.Errorf("roster len not matching pods list. "+
-			"roster %v, blockList %v, pods %v", rosterList, aeroCluster.Spec.RosterNodeBlockList, aeroCluster.Status.Pods)
-		Expect(err).ToNot(HaveOccurred())
-	}
-
-	rosterNodeBlockListSet := sets.NewString(aeroCluster.Spec.RosterNodeBlockList...)
-	podNodeIDSet := sets.NewString()
-
-	for podName := range aeroCluster.Status.Pods {
-		// Remove 0 from start of nodeID (we add this dummy rack)
-		podNodeIDSet.Insert(strings.ToUpper(strings.TrimLeft(aeroCluster.Status.Pods[podName].Aerospike.NodeID, "0")))
-	}
-
-	for _, rosterNode := range rosterList {
-		nodeID := strings.Split(rosterNode, "@")[0]
-		// Check1 roster should not have blocked pod
-		Expect(rosterNodeBlockListSet.Has(nodeID)).To(
-			BeFalse(), fmt.Sprintf("roster should not have blocked node. roster %v, blockList %v",
-				rosterNode, aeroCluster.Spec.RosterNodeBlockList))
-		// Check4 Scaledown: all the roster should be in pod list
-		Expect(podNodeIDSet.Has(nodeID)).To(
-			BeTrue(), fmt.Sprintf("roster node should be in pod list. roster %v, podNodeIDs %v", rosterNode, podNodeIDSet))
-	}
-
-	rosterListSet := sets.NewString(rosterList...)
-	// Check3 Scaleup: pod should be in roster or in blockList
-	for podName := range aeroCluster.Status.Pods {
-		nodeID := strings.ToUpper(strings.TrimLeft(aeroCluster.Status.Pods[podName].Aerospike.NodeID, "0"))
-		rackID, _, err := utils.GetRackIDAndRevisionFromPodName(clusterNamespacedName.Name, podName)
-		Expect(err).ToNot(HaveOccurred())
-
-		nodeRoster := nodeID
-		if rackID != 0 {
-			nodeRoster = nodeID + "@" + fmt.Sprint(rackID)
-		}
-
-		if !rosterNodeBlockListSet.Has(nodeID) &&
-			!rosterListSet.Has(nodeRoster) {
-			err := fmt.Errorf("pod not found in roster or blockList. roster %v,"+
-				" blockList %v, missing pod roster %v, rackID %v",
-				rosterList, aeroCluster.Spec.RosterNodeBlockList, nodeRoster, rackID)
-			Expect(err).ToNot(HaveOccurred())
-		}
-	}
-}
-
-func getRoster(hostConn *deployment.HostConn, aerospikePolicy *as.ClientPolicy,
-	namespace string) (map[string]string, error) {
-	cmd := fmt.Sprintf("roster:namespace=%s", namespace)
-
-	res, err := hostConn.ASConn.RunInfo(aerospikePolicy, cmd)
-	if err != nil {
-		return nil, err
-	}
-
-	cmdOutput := res[cmd]
-
-	return deployment.ParseInfoIntoMap(cmdOutput, ":", "=")
+	ValidateRoster(k8sClient, ctx, clusterNamespacedName, scNamespace)
 }
 
 func getSCAndNonSCAerospikeConfig() *asdbv1.AerospikeConfigSpec {
