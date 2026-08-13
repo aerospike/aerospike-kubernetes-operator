@@ -1,6 +1,9 @@
 package validation
 
-import "testing"
+import (
+	"strings"
+	"testing"
+)
 
 // networkConfWithTLS returns a network config declaring a single TLS
 // configuration named "dc1-tls", used as the xdr.dcs tls-name reference target.
@@ -14,9 +17,10 @@ func networkConfWithTLS() map[string]any {
 
 func TestValidateXdrConfig(t *testing.T) {
 	tests := []struct {
-		config  map[string]any
-		name    string
-		wantErr bool
+		config     map[string]any
+		name       string
+		wantErrMsg string
+		wantErr    bool
 	}{
 		{
 			name:    "no xdr section",
@@ -181,7 +185,8 @@ func TestValidateXdrConfig(t *testing.T) {
 					},
 				},
 			},
-			wantErr: true,
+			wantErr:    true,
+			wantErrMsg: "auth-mode is required when auth-user is set",
 		},
 		{
 			name: "auth-user set with auth-mode none",
@@ -199,7 +204,55 @@ func TestValidateXdrConfig(t *testing.T) {
 					},
 				},
 			},
-			wantErr: true,
+			wantErr:    true,
+			wantErrMsg: "auth-mode must not be 'none' when auth-user is set",
+		},
+		{
+			name: "auth-user set with auth-mode empty string is not currently rejected",
+			config: map[string]any{
+				"network": networkConfWithTLS(),
+				"xdr": map[string]any{
+					"dcs": []any{
+						//nolint:gosec // G101 test config path, not real credentials
+						map[string]any{
+							"name":               "dc1",
+							"auth-user":          "admin",
+							"auth-mode":          "",
+							"auth-password-file": "/etc/aerospike/secret/password.txt",
+						},
+					},
+				},
+			},
+			wantErr: false,
+		},
+		{
+			name: "dc entry missing name field without other issues",
+			config: map[string]any{
+				"network": networkConfWithTLS(),
+				"xdr": map[string]any{
+					"dcs": []any{
+						map[string]any{
+							"connector": true,
+						},
+					},
+				},
+			},
+			wantErr: false,
+		},
+		{
+			name: "dc entry missing name field surfaces empty name in error",
+			config: map[string]any{
+				"network": networkConfWithTLS(),
+				"xdr": map[string]any{
+					"dcs": []any{
+						map[string]any{
+							"tls-name": "unknown-tls",
+						},
+					},
+				},
+			},
+			wantErr:    true,
+			wantErrMsg: "xdr.dcs[].tls-name",
 		},
 		{
 			name: "auth-user set without auth-password-file",
@@ -380,6 +433,10 @@ func TestValidateXdrConfig(t *testing.T) {
 			err := validateXDRConfig(tt.config)
 			if (err != nil) != tt.wantErr {
 				t.Errorf("validateXdrConfig() error = %v, wantErr %v", err, tt.wantErr)
+			}
+
+			if tt.wantErrMsg != "" && (err == nil || !strings.Contains(err.Error(), tt.wantErrMsg)) {
+				t.Errorf("validateXdrConfig() error = %v, want message containing %q", err, tt.wantErrMsg)
 			}
 		})
 	}

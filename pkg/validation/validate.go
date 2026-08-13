@@ -17,6 +17,19 @@ import (
 var networkConnectionTypes = []string{asdbv1.ConfKeyNetworkService, asdbv1.ConfKeyNetworkHeartbeat,
 	asdbv1.ConfKeyNetworkFabric, asdbv1.ConfKeyNetworkAdmin}
 
+const (
+	xdrConfKeyDCs              = "dcs"
+	xdrConfKeyConnector        = "connector"
+	xdrConfKeyAuthUser         = "auth-user"
+	xdrConfKeyAuthPasswordFile = "auth-password-file"
+
+	xdrAuthModeNone             = "none"
+	xdrAuthModeInternal         = "internal"
+	xdrAuthModeExternal         = "external"
+	xdrAuthModeExternalInsecure = "external-insecure"
+	xdrAuthModePKI              = "pki"
+)
+
 // ValidateAerospikeConfig validates the aerospikeConfig.
 // It validates the schema, service, network, logging and namespace configurations.
 func ValidateAerospikeConfig(
@@ -184,10 +197,10 @@ func validateXDRConfig(config map[string]interface{}) error {
 		return fmt.Errorf("aerospikeConfig.xdr not a valid map %v", xdrConfInterface)
 	}
 
-	networkConf, _ := config["network"].(map[string]interface{})
+	networkConf, _ := config[asdbv1.ConfKeyNetwork].(map[string]interface{})
 	tlsNames := utils.GetNetworkTLSNames(networkConf)
 
-	dcListInterface, exists := xdrConf["dcs"]
+	dcListInterface, exists := xdrConf[xdrConfKeyDCs]
 	if !exists {
 		return nil
 	}
@@ -203,7 +216,7 @@ func validateXDRConfig(config map[string]interface{}) error {
 			return fmt.Errorf("aerospikeConfig.xdr.dcs entry not a valid map %v", dcConfInterface)
 		}
 
-		dcName := dcConf[asdbv1.ConfKeyName]
+		dcName, _ := dcConf[asdbv1.ConfKeyName].(string)
 
 		tlsNameInterface, tlsNameExists := dcConf[asdbv1.ConfKeyTLSName]
 
@@ -217,15 +230,14 @@ func validateXDRConfig(config map[string]interface{}) error {
 			}
 		}
 
-		isConnectorDC, _ := dcConf["connector"].(bool)
-		authPasswordFile, _ := dcConf["auth-password-file"].(string)
-		authUser, _ := dcConf["auth-user"].(string)
+		isConnectorDC, _ := dcConf[xdrConfKeyConnector].(bool)
+		authPasswordFile, _ := dcConf[xdrConfKeyAuthPasswordFile].(string)
+		authUser, _ := dcConf[xdrConfKeyAuthUser].(string)
 
 		authModeInterface, authModeExists := dcConf[asdbv1.ConfKeyAuthMode]
 		authMode, _ := authModeInterface.(string)
-		isAuthModeNone := !authModeExists || authMode == "none"
 
-		if isConnectorDC && authModeExists && authMode != "none" {
+		if isConnectorDC && authModeExists && authMode != xdrAuthModeNone {
 			return fmt.Errorf(
 				"xdr.dcs[%v]: auth-mode must be 'none' for 'connector' datacenters",
 				dcName,
@@ -246,15 +258,24 @@ func validateXDRConfig(config map[string]interface{}) error {
 			)
 		}
 
-		if authUser != "" && isAuthModeNone {
-			return fmt.Errorf(
-				"xdr.dcs[%v]: auth-mode must not be 'none' when auth-user is set",
-				dcName,
-			)
+		if authUser != "" {
+			if !authModeExists {
+				return fmt.Errorf(
+					"xdr.dcs[%v]: auth-mode is required when auth-user is set",
+					dcName,
+				)
+			}
+
+			if authMode == xdrAuthModeNone {
+				return fmt.Errorf(
+					"xdr.dcs[%v]: auth-mode must not be 'none' when auth-user is set",
+					dcName,
+				)
+			}
 		}
 
-		authModeNeedsCredentials := authMode == "internal" || authMode == "external" ||
-			authMode == "external-insecure"
+		authModeNeedsCredentials := authMode == xdrAuthModeInternal || authMode == xdrAuthModeExternal ||
+			authMode == xdrAuthModeExternalInsecure
 
 		if authModeNeedsCredentials && authUser == "" {
 			return fmt.Errorf(
@@ -277,7 +298,7 @@ func validateXDRConfig(config map[string]interface{}) error {
 			)
 		}
 
-		if authMode == "pki" && !tlsNameExists {
+		if authMode == xdrAuthModePKI && !tlsNameExists {
 			return fmt.Errorf(
 				"xdr.dcs[%v]: tls-name is required when auth-mode is '%s'",
 				dcName, authMode,
