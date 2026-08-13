@@ -66,8 +66,19 @@ const (
 	ConfKeyPort    = "port"
 
 	// XDR keys.
-	ConfKeyXdr      = "xdr"
-	ConfKeyAuthMode = "auth-mode"
+	ConfKeyXdr                 = "xdr"
+	ConfKeyAuthMode            = "auth-mode"
+	ConfKeyXdrDCs              = "dcs"
+	ConfKeyXdrConnector        = "connector"
+	ConfKeyXdrAuthUser         = "auth-user"
+	ConfKeyXdrAuthPasswordFile = "auth-password-file"
+
+	// XDR auth modes.
+	XdrAuthModeNone             = "none"
+	XdrAuthModeInternal         = "internal"
+	XdrAuthModeExternal         = "external"
+	XdrAuthModeExternalInsecure = "external-insecure"
+	XdrAuthModePKI              = "pki"
 
 	// Security keys.
 	ConfKeySecurity                    = "security"
