@@ -89,8 +89,6 @@ func newTestReconciler(
 	fakeClient := fake.NewClientBuilder().
 		WithScheme(scheme).
 		WithInterceptorFuncs(*funcs).
-		// Required for Status().Update/Patch to work; without it the fake client
-		// rejects status writes with a NotFound on the subresource.
 		WithStatusSubresource(&asdbv1.AerospikeCluster{}).
 		WithObjects(objects...).
 		Build()

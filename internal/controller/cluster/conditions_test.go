@@ -441,6 +441,46 @@ func TestSetStatusPhase(t *testing.T) {
 	}
 }
 
+// TestSetConditions_NeverDuplicatesAConditionType is the operator-side guarantee that replaces
+// an envtest assertion we had to drop: the CRD marks conditions as a list-map keyed on type, but
+// the API server only enforces that on newer versions — k8s 1.23, which CI still targets, accepts
+// a duplicate and stores both entries. So uniqueness cannot be delegated to the server.
+//
+// It holds here because every condition write goes through apimeta.SetStatusCondition, which
+// matches on type and updates in place rather than appending.
+func TestSetConditions_NeverDuplicatesAConditionType(t *testing.T) {
+	t.Parallel()
+
+	readyType := string(asdbv1.AerospikeClusterConditionReady)
+
+	ac := getMinimalCluster()
+	r := newTestReconciler(t, ac, &interceptor.Funcs{})
+
+	// Three writes of the same type with differing content, so each is a real change.
+	writes := []metav1.Condition{
+		{Type: readyType, Status: metav1.ConditionUnknown, Reason: asdbv1.AerospikeClusterReasonInitializing},
+		{Type: readyType, Status: metav1.ConditionFalse, Reason: asdbv1.AerospikeClusterReasonReconciling},
+		{Type: readyType, Status: metav1.ConditionTrue, Reason: asdbv1.AerospikeClusterReasonReconcileComplete},
+	}
+
+	if err := r.setConditions(context.TODO(), writes...); err != nil {
+		t.Fatalf("set conditions: %v", err)
+	}
+
+	conds := getCluster(t, r.Client, ac).Status.Conditions
+
+	if len(conds) != 1 {
+		t.Fatalf("want exactly 1 condition after 3 writes of the same type, got %d: %v", len(conds), conds)
+	}
+
+	// The last write must be the one that survived.
+	assertCondition(t, conds, &metav1.Condition{
+		Type:   readyType,
+		Status: metav1.ConditionTrue,
+		Reason: asdbv1.AerospikeClusterReasonReconcileComplete,
+	})
+}
+
 // ---- writeTerminalStatus ---------------------------------------------------
 
 func TestWriteTerminalStatus(t *testing.T) {
@@ -1086,6 +1126,8 @@ func reasonForOpCondition(t *testing.T, condType string) string {
 		return asdbv1.AerospikeClusterReasonUpgrading
 	case string(asdbv1.AerospikeClusterConditionRollingRestart):
 		return asdbv1.AerospikeClusterReasonRollingRestart
+	case string(asdbv1.AerospikeClusterConditionRackRevisionRollingOut):
+		return asdbv1.AerospikeClusterReasonRackRevisionRollingOut
 	default:
 		t.Fatalf("no True-state reason known for condition %q", condType)
 		return ""

@@ -50,6 +50,12 @@ type SingleClusterReconciler struct {
 	// wants: cluster deletion, spec.paused, and any failure before the rack loop all leave
 	// the conditions frozen at their last known state.
 	pendingOpReset sets.Set[string]
+	// revisionChangedRackIDs holds the IDs of racks undergoing a revision migration this pass, as
+	// categoriseRacks computed them from live StatefulSets. It is the single answer to "is this
+	// rack migrating". Keyed by rack ID rather than by revision.
+	// Set once in reconcileRacks before any rack function runs; nil on passes that never reach the
+	// rack loop, which reads as "nothing migrating" and is correct for those paths.
+	revisionChangedRackIDs sets.Set[int]
 	// stageReason names the reconcile stage Reconcile bailed out at, surfaced as the Ready
 	// condition's Reason by writeTerminalStatus. Read only when Reconcile returns an error, so
 	// a value left here by a requeue path is inert. Empty means no stage was recorded.
@@ -574,6 +580,10 @@ var operationConditions = []struct {
 	{string(asdbv1.AerospikeClusterConditionScalingDown), asdbv1.AerospikeClusterReasonNotScalingDown},
 	{string(asdbv1.AerospikeClusterConditionUpgrading), asdbv1.AerospikeClusterReasonNotUpgrading},
 	{string(asdbv1.AerospikeClusterConditionRollingRestart), asdbv1.AerospikeClusterReasonNotRollingRestart},
+	{
+		string(asdbv1.AerospikeClusterConditionRackRevisionRollingOut),
+		asdbv1.AerospikeClusterReasonNotRackRevisionRollingOut,
+	},
 }
 
 // initPendingOpConditionReset takes ownership of the operation conditions for this reconcile: every
@@ -665,11 +675,9 @@ func (r *SingleClusterReconciler) updateStatus(ctx context.Context) error {
 
 	// All operations are done at this point; set each operation condition to False.
 	//
-	// LOAD-BEARING, do not remove as redundant: on the success path this is the only place a
-	// condition claimed by a completed operation is cleared. opConditionsToClear omits claimed
-	// conditions by design, so an operation interrupted by an error keeps reporting. Clearing
-	// here also keeps it atomic with Ready=True, so the two can never be observed disagreeing.
-	// TestUpdateStatusClearsCompletedOperation pins this.
+	// On the success path this is the only place a condition claimed by a completed operation is cleared.
+	// opConditionsToClear omits claimed conditions by design, so an operation interrupted by an error keeps reporting.
+	// Clearing here also keeps it atomic with Ready=True, so the two can never be observed disagreeing.
 	for _, opCond := range operationConditions {
 		atRest := opConditionAtRest(opCond.condType, opCond.falseReason)
 		atRest.ObservedGeneration = r.aeroCluster.Generation
@@ -710,19 +718,8 @@ func (r *SingleClusterReconciler) updateStatus(ctx context.Context) error {
 // AerospikeCluster status in a single guarded merge patch. It is the shared primitive behind
 // setConditions, setStatusPhase, and writeTerminalStatus.
 //
-// ObservedGeneration is stamped on every proposed condition, because the field means "the
-// generation this condition's value was computed from". A freshly evaluated condition that
-// happens to be unchanged is still current, and leaving an old generation there would assert it
-// is stale — which is what makes it useless as a per-generation gate. apimeta.SetStatusCondition
-// only moves LastTransitionTime on a Status change, so restamping preserves transition history.
-//
 // Whether anything changed is decided by SetStatusCondition's own return value, applied to a
-// clone of just the conditions slice. That keeps the semantics identical to upstream's rather
-// than re-deriving them, and defers the two expensive CR DeepCopies until there is genuinely
-// something to write — batched operations requeue every second and mostly propose conditions
-// already in the desired state. metav1.Condition has no pointer fields, so slices.Clone is a
-// true deep copy and mutating the clone cannot touch r.aeroCluster.
-//
+// clone of just the conditions slice.
 // Phase is applied only when it differs. Only status fields and resourceVersion are copied back
 // onto r.aeroCluster, so the spec is never overwritten.
 func (r *SingleClusterReconciler) mergePatchStatus(
@@ -790,7 +787,7 @@ func (r *SingleClusterReconciler) setStatusPhase(ctx context.Context, phase asdb
 // maxConditionMessageLength bounds what we write into a condition's message. The CRD caps
 // the field at 32768; an AerospikeCluster error chain can embed config diffs and pod lists,
 // and an overlong message makes the API server reject the whole patch — which would lose the
-// phase=Error write riding along with it. Well under the cap, since these are read by humans.
+// phase=Error write riding along with it.
 const maxConditionMessageLength = 2048
 
 // truncateConditionMessage bounds msg, backing off to a rune boundary so the result stays

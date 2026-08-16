@@ -76,6 +76,12 @@ const (
 	// least one rack for config changes that cannot be applied dynamically.
 	AerospikeClusterConditionRollingRestart AerospikeClusterConditionType = "RollingRestart"
 
+	// AerospikeClusterConditionRackRevisionRollingOut indicates the operator is migrating at least one
+	// rack to a new revision: a StatefulSet for the new revision is created and the old one is
+	// drained. Reported separately from RollingRestart because the guarantees differ — the pods
+	// are not restarted in place, they get new PVCs and new identities and the data is rebuilt.
+	AerospikeClusterConditionRackRevisionRollingOut AerospikeClusterConditionType = "RackRevisionRollingOut"
+
 	// AerospikeClusterConditionPaused indicates reconciliation has been suspended
 	// via spec.paused=true. True = paused, False = actively reconciling.
 	AerospikeClusterConditionPaused AerospikeClusterConditionType = "Paused"
@@ -107,6 +113,13 @@ const (
 	// RollingRestart reasons
 	AerospikeClusterReasonRollingRestart    = "RollingRestart"
 	AerospikeClusterReasonNotRollingRestart = "NotRollingRestart"
+	// AerospikeClusterReasonK8sNodeBlockListEviction distinguishes a restart driven by
+	// spec.k8sNodeBlockList from one driven by a config change.
+	AerospikeClusterReasonK8sNodeBlockListEviction = "K8sNodeBlockListEviction"
+
+	// RackRevisionRollingOut reasons
+	AerospikeClusterReasonRackRevisionRollingOut    = "RackRevisionRollingOut"
+	AerospikeClusterReasonNotRackRevisionRollingOut = "NotRackRevisionRollingOut"
 
 	// Ready failure reasons naming the reconcile stage that failed. These replace the
 	// generic ReconcileFailed so consumers can tell a rack problem from an access-control

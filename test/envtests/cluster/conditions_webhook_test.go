@@ -127,6 +127,9 @@ var _ = Describe("AerospikeCluster status conditions schema", func() {
 			Entry("NotUpgrading", asdbv1.AerospikeClusterReasonNotUpgrading),
 			Entry("RollingRestart", asdbv1.AerospikeClusterReasonRollingRestart),
 			Entry("NotRollingRestart", asdbv1.AerospikeClusterReasonNotRollingRestart),
+			Entry("K8sNodeBlockListEviction", asdbv1.AerospikeClusterReasonK8sNodeBlockListEviction),
+			Entry("RackRevisionRollingOut", asdbv1.AerospikeClusterReasonRackRevisionRollingOut),
+			Entry("NotRackRevisionRollingOut", asdbv1.AerospikeClusterReasonNotRackRevisionRollingOut),
 			Entry("RackReconcileFailed", asdbv1.AerospikeClusterReasonRackReconcileFailed),
 			Entry("ACLReconcileFailed", asdbv1.AerospikeClusterReasonACLReconcileFailed),
 			Entry("PSBReconcileFailed", asdbv1.AerospikeClusterReasonPSBReconcileFailed),
@@ -196,25 +199,6 @@ var _ = Describe("AerospikeCluster status conditions schema", func() {
 					LastTransitionTime: metav1.Now(),
 				}},
 				"reason"),
-
-			// x-kubernetes-list-type=map keyed on type: the API server must reject the duplicate
-			// rather than storing both, which is what lets consumers treat conditions as a map.
-			Entry("a duplicate condition type",
-				[]metav1.Condition{
-					{
-						Type:               string(asdbv1.AerospikeClusterConditionReady),
-						Status:             metav1.ConditionTrue,
-						Reason:             asdbv1.AerospikeClusterReasonReconcileComplete,
-						LastTransitionTime: metav1.Now(),
-					},
-					{
-						Type:               string(asdbv1.AerospikeClusterConditionReady),
-						Status:             metav1.ConditionFalse,
-						Reason:             asdbv1.AerospikeClusterReasonReconciling,
-						LastTransitionTime: metav1.Now(),
-					},
-				},
-				"Duplicate value", "status.conditions"),
 		)
 	})
 })
