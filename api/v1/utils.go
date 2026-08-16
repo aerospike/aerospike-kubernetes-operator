@@ -47,11 +47,15 @@ const (
 
 const (
 	// Namespace keys.
-	ConfKeyNamespace         = "namespaces"
-	ConfKeyStorageEngine     = "storage-engine"
-	ConfKeyReplicationFactor = "replication-factor"
-	ConfKeyStrongConsistency = "strong-consistency"
-	ConfKeyName              = "name"
+	ConfKeyNamespace             = "namespaces"
+	ConfKeyStorageEngine         = "storage-engine"
+	ConfKeyReplicationFactor     = "replication-factor"
+	ConfKeyStrongConsistency     = "strong-consistency"
+	ConfKeyName                  = "name"
+	ConfigKeyIndexCheckpointPath = "index-checkpoint-path"
+	ConfKeyIndexType             = "index-type"
+	ConfKeyMounts                = "mounts"
+	ConfKeyType                  = "type"
 
 	// Network section keys.
 	ConfKeyNetwork          = "network"
@@ -118,6 +122,22 @@ const (
 	OverrideRackIDAnnotation                       = "aerospike.com/override-rack-id"
 	AerospikeAPIVersion                            = "v1"
 )
+
+// Preview feature names recognized by the server's --preview flag.
+const (
+	PreviewFeatureIndexCheckpoint = "index-checkpoint"
+)
+
+// PreviewFeatureInfo describes the server version range for an experimental feature.
+type PreviewFeatureInfo struct {
+	MinVersion string // first server version supporting this feature
+	GAVersion  string // server version where the flag is no longer needed ("" = still experimental)
+}
+
+// PreviewFeatureVersions maps known preview feature names to their version constraints.
+var PreviewFeatureVersions = map[string]PreviewFeatureInfo{
+	PreviewFeatureIndexCheckpoint: {MinVersion: "8.1.3.0", GAVersion: ""},
+}
 
 // GetConfiguredWorkDirectory returns the Aerospike work directory configured in aerospikeConfig.
 func GetConfiguredWorkDirectory(aerospikeConfigSpec AerospikeConfigSpec) string {

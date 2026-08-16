@@ -377,6 +377,14 @@ func validate(aslog logr.Logger, cluster *asdbv1.AerospikeCluster) (admission.Wa
 		return warnings, err
 	}
 
+	// Validate experimental features
+	expWarns, err := validatePreviewFeatures(cluster, version)
+	warnings = append(warnings, expWarns...)
+
+	if err != nil {
+		return warnings, err
+	}
+
 	// Validate rackConfig
 	warns, err := validateRackConfig(aslog, cluster, version)
 
@@ -1256,6 +1264,99 @@ func cgroupMemTrackingWarning(version string, conf map[string]interface{}) admis
 	return nil
 }
 
+// validatePreviewFeatures validates spec.previewFeatures: rejects unknown names, checks
+// server version compatibility, cross-checks with aerospikeConfig fields that require opt-in,
+// and warns when a feature has graduated to GA.
+func validatePreviewFeatures(cluster *asdbv1.AerospikeCluster, version string) (admission.Warnings, error) {
+	var warnings admission.Warnings
+
+	enabledSet := sets.New[string](cluster.Spec.PreviewFeatures...)
+
+	for _, name := range cluster.Spec.PreviewFeatures {
+		info, known := asdbv1.PreviewFeatureVersions[name]
+		if !known {
+			knownNames := make([]string, 0, len(asdbv1.PreviewFeatureVersions))
+			for k := range asdbv1.PreviewFeatureVersions {
+				knownNames = append(knownNames, k)
+			}
+
+			return warnings, fmt.Errorf(
+				"unknown experimental feature %q; known features: %v",
+				name, knownNames,
+			)
+		}
+
+		val, err := lib.CompareVersions(version, info.MinVersion)
+		if err != nil {
+			return warnings, fmt.Errorf("failed to check image version for experimental feature %q: %v", name, err)
+		}
+
+		if val < 0 {
+			return warnings, fmt.Errorf(
+				"experimental feature %q requires server version >= %s, but image version is %s",
+				name, info.MinVersion, version,
+			)
+		}
+
+		if info.GAVersion != "" {
+			gaVal, err := lib.CompareVersions(version, info.GAVersion)
+			if err == nil && gaVal >= 0 {
+				warnings = append(warnings, fmt.Sprintf(
+					"experimental feature %q graduated to GA in server version %s; "+
+						"you can remove it from spec.previewFeatures",
+					name, info.GAVersion,
+				))
+			}
+		}
+	}
+
+	// Cross-check: reject index-checkpoint-path in any namespace if the feature opt-in is missing.
+	if cluster.Spec.AerospikeConfig != nil {
+		if nsList, ok := cluster.Spec.AerospikeConfig.Value[asdbv1.ConfKeyNamespace]; ok {
+			for _, nsIface := range nsList.([]interface{}) {
+				nsConf := nsIface.(map[string]interface{})
+				if _, has := nsConf[asdbv1.ConfigKeyIndexCheckpointPath]; has {
+					if !enabledSet.Has(asdbv1.PreviewFeatureIndexCheckpoint) {
+						return warnings, fmt.Errorf(
+							"namespace %v has %s configured but %q is not listed in spec.previewFeatures",
+							nsConf[asdbv1.ConfKeyName], asdbv1.ConfigKeyIndexCheckpointPath,
+							asdbv1.PreviewFeatureIndexCheckpoint,
+						)
+					}
+				}
+			}
+		}
+	}
+
+	// Also check per-rack overrides.
+	for idx := range cluster.Spec.RackConfig.Racks {
+		rack := &cluster.Spec.RackConfig.Racks[idx]
+		if rack.InputAerospikeConfig == nil {
+			continue
+		}
+
+		nsList, ok := rack.InputAerospikeConfig.Value[asdbv1.ConfKeyNamespace]
+		if !ok {
+			continue
+		}
+
+		for _, nsIface := range nsList.([]interface{}) {
+			nsConf := nsIface.(map[string]interface{})
+			if _, has := nsConf[asdbv1.ConfigKeyIndexCheckpointPath]; has {
+				if !enabledSet.Has(asdbv1.PreviewFeatureIndexCheckpoint) {
+					return warnings, fmt.Errorf(
+						"rack %d namespace %v has %s configured but %q is not listed in spec.previewFeatures",
+						rack.ID, nsConf[asdbv1.ConfKeyName], asdbv1.ConfigKeyIndexCheckpointPath,
+						asdbv1.PreviewFeatureIndexCheckpoint,
+					)
+				}
+			}
+		}
+	}
+
+	return warnings, nil
+}
+
 func validateAerospikeConfig(
 	aslog logr.Logger, version string, configSpec *asdbv1.AerospikeConfigSpec,
 	storage *asdbv1.AerospikeStorageSpec, clSize int,
@@ -1272,11 +1373,15 @@ func validateAerospikeConfig(
 		return nil, err
 	}
 
-	if err := validateNamespaceConfig(configSpec.Value, storage); err != nil {
+	nsConfWarnings, err := validateNamespaceConfig(configSpec.Value, storage)
+	if err != nil {
 		return nil, err
 	}
 
-	return cgroupMemTrackingWarning(version, configSpec.Value), nil
+	warnings := append(admission.Warnings{}, nsConfWarnings...)
+	warnings = append(warnings, cgroupMemTrackingWarning(version, configSpec.Value)...)
+
+	return warnings, nil
 }
 
 func validateNetworkConfig(config map[string]interface{},
@@ -1371,13 +1476,15 @@ func readNamesFromLocalCertificate(clientCertSpec *asdbv1.AerospikeOperatorClien
 // as part of ValidateAerospikeConfig
 func validateNamespaceConfig(
 	config map[string]interface{}, storage *asdbv1.AerospikeStorageSpec,
-) error {
+) (admission.Warnings, error) {
+	var warnings admission.Warnings
+
 	nsConfInterfaceList := config[asdbv1.ConfKeyNamespace].([]interface{})
 
 	// Get list of all devices used in namespace. match it with namespace device list
 	blockStorageDeviceList, fileStorageList, err := getAerospikeStorageList(storage, true)
 	if err != nil {
-		return err
+		return warnings, err
 	}
 
 	for _, nsConfInterface := range nsConfInterfaceList {
@@ -1386,7 +1493,7 @@ func validateNamespaceConfig(
 
 		if nsStorage, ok := nsConf["storage-engine"]; ok {
 			if !validation.IsInMemoryNamespace(nsConf) && !validation.IsDeviceOrPmemNamespace(nsConf) {
-				return fmt.Errorf(
+				return warnings, fmt.Errorf(
 					"storage-engine not supported for namespace %v", nsConf,
 				)
 			}
@@ -1394,7 +1501,7 @@ func validateNamespaceConfig(
 			if devices, ok := nsStorage.(map[string]interface{})["devices"]; ok {
 				deviceSlice, ok := devices.([]interface{})
 				if !ok {
-					return fmt.Errorf(
+					return warnings, fmt.Errorf(
 						"namespace storage devices must be a list, got %T", devices,
 					)
 				}
@@ -1402,7 +1509,7 @@ func validateNamespaceConfig(
 				for _, device := range deviceSlice {
 					dev, ok := device.(string)
 					if !ok {
-						return fmt.Errorf(
+						return warnings, fmt.Errorf(
 							"namespace storage device must be a string, got %T", device,
 						)
 					}
@@ -1413,7 +1520,7 @@ func validateNamespaceConfig(
 					for _, d := range dList {
 						// Namespace device should be present in BlockStorage config section
 						if !utils.ContainsString(blockStorageDeviceList, d) {
-							return fmt.Errorf(
+							return warnings, fmt.Errorf(
 								"namespace storage device related devicePath %v not found in Storage config %v",
 								d, storage,
 							)
@@ -1425,7 +1532,7 @@ func validateNamespaceConfig(
 			if files, ok := nsStorage.(map[string]interface{})["files"]; ok {
 				fileSlice, ok := files.([]interface{})
 				if !ok {
-					return fmt.Errorf(
+					return warnings, fmt.Errorf(
 						"namespace storage files must be a list, got %T", files,
 					)
 				}
@@ -1433,7 +1540,7 @@ func validateNamespaceConfig(
 				for _, file := range fileSlice {
 					f, ok := file.(string)
 					if !ok {
-						return fmt.Errorf(
+						return warnings, fmt.Errorf(
 							"namespace storage file must be a string, got %T", file,
 						)
 					}
@@ -1446,7 +1553,7 @@ func validateNamespaceConfig(
 						if !isFileStorageConfiguredForDir(
 							fileStorageList, dirPath,
 						) {
-							return fmt.Errorf(
+							return warnings, fmt.Errorf(
 								"namespace storage file related mountPath %v not found in storage config %v",
 								dirPath, storage,
 							)
@@ -1455,7 +1562,7 @@ func validateNamespaceConfig(
 				}
 			}
 		} else {
-			return fmt.Errorf("storage-engine config is required for namespace")
+			return warnings, fmt.Errorf("storage-engine config is required for namespace")
 		}
 	}
 
@@ -1467,22 +1574,105 @@ func validateNamespaceConfig(
 			continue
 		}
 
-		if nsIndexStorage, ok := nsConf["index-type"]; ok {
-			if mounts, ok := nsIndexStorage.(map[string]interface{})["mounts"]; ok {
-				for _, mount := range mounts.([]interface{}) {
-					// Namespace index-type mount should be present in filesystem config section
-					if !utils.ContainsString(fileStorageList, mount.(string)) {
-						return fmt.Errorf(
-							"namespace index-type mount %v not found in Storage config %v",
-							mount, storage,
-						)
-					}
-				}
+		nsIndexStorage, ok := nsConf[asdbv1.ConfKeyIndexType]
+		if !ok {
+			continue
+		}
+
+		indexConf := nsIndexStorage.(map[string]interface{})
+		mounts, hasMounts := indexConf[asdbv1.ConfKeyMounts]
+
+		if !hasMounts {
+			continue
+		}
+
+		// pmem / flash: mounts must be PersistentVolume-backed filesystem paths.
+		for _, mount := range mounts.([]interface{}) {
+			mountPath := mount.(string)
+			if !utils.ContainsString(fileStorageList, mountPath) {
+				return warnings, fmt.Errorf(
+					"namespace index-type mount %v not found in Storage config %v",
+					mountPath, storage,
+				)
 			}
 		}
 	}
 
-	return nil
+	// Validate index-checkpoint-path: must be backed by a durable PersistentVolume-backed
+	// filesystem volume (i.e. a volume whose source is a PVC) in spec.storage, just like
+	// work-dir and feature-key-file paths. Each check below maps to a server-side startup
+	// crash (cfg_ee.c post_process_namespace) that is much cheaper to catch at admission —
+	// see docs/index-checkpoint.md change #24.
+	for _, nsConfInterface := range nsConfInterfaceList {
+		nsConf := nsConfInterface.(map[string]interface{})
+
+		checkpointPath, ok := nsConf[asdbv1.ConfigKeyIndexCheckpointPath]
+		if !ok {
+			continue
+		}
+
+		cpPath, ok := checkpointPath.(string)
+		if !ok || cpPath == "" {
+			continue
+		}
+
+		checkpointWarnings, err := validateIndexCheckpointVolume(storage, nsConf[asdbv1.ConfKeyName], cpPath)
+		warnings = append(warnings, checkpointWarnings...)
+
+		if err != nil {
+			return warnings, err
+		}
+	}
+
+	return warnings, nil
+}
+
+// validateIndexCheckpointVolume validates that the volume backing index-checkpoint-path is a
+// durable, PersistentVolumeClaim-backed filesystem volume. The server crashes at startup
+// (cfg_ee.c post_process_namespace) if the checkpoint directory is not on durable storage
+// (tmpfs/hugetlbfs are rejected via statfs) or is not owned by the server's effective uid.
+//
+// AKO cannot verify the second condition (filesystem ownership) at admission time — there is
+// no per-volume securityContext in VolumeSpec/PersistentVolumeSpec to inspect, only the
+// pod-level AerospikePodSpec.SecurityContext (fsGroup, etc.) and the per-container
+// AerospikeContainerSpec.SecurityContext, neither of which is sufficient on its own to
+// guarantee st_uid == geteuid() on the PVC's underlying filesystem. So that condition is
+// surfaced as a warning pointing at the init-container requirement (change #20) rather than
+// a hard rejection.
+func validateIndexCheckpointVolume(
+	storage *asdbv1.AerospikeStorageSpec, nsName interface{}, cpPath string,
+) (admission.Warnings, error) {
+	var warnings admission.Warnings
+
+	volume := asdbv1.GetVolumeForAerospikePath(storage, cpPath)
+	if volume == nil {
+		return warnings, fmt.Errorf(
+			"namespace index-checkpoint-path %q is not backed by any storage volume in spec.storage; "+
+				"add a PersistentVolume-backed filesystem volume whose aerospike.path is a parent of %q",
+			cpPath, cpPath,
+		)
+	}
+
+	if volume.Source.PersistentVolume == nil {
+		return warnings, fmt.Errorf(
+			"namespace index-checkpoint-path %q is backed by volume %q whose source is %s, not a "+
+				"persistentVolumeClaim; index-checkpoint-path requires durable PersistentVolume-backed "+
+				"storage — emptyDir (tmpfs when medium: Memory, and non-durable regardless), hostPath, "+
+				"secret, and configMap sources do not survive pod replacement and the server rejects a "+
+				"non-durable checkpoint directory at startup",
+			cpPath, volume.Name, describeVolumeSourceType(volume.Source),
+		)
+	}
+
+	if volume.Source.PersistentVolume.VolumeMode != v1.PersistentVolumeFilesystem {
+		return warnings, fmt.Errorf(
+			"namespace index-checkpoint-path %q is backed by volume %q with volumeMode %s; "+
+				"index-checkpoint-path requires a Filesystem-mode PersistentVolume",
+			cpPath, volume.Name, volume.Source.PersistentVolume.VolumeMode,
+		)
+	}
+
+	return warnings, nil
 }
 
 func validateAerospikeConfigUpdate(

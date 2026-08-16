@@ -116,3 +116,85 @@ func TestNewPodsHostConnWithOption(t *testing.T) {
 		})
 	}
 }
+
+func TestIsCheckpointStarted(t *testing.T) {
+	tests := []struct {
+		name      string
+		statusStr string
+		nsSet     sets.Set[string]
+		expected  bool
+	}{
+		{
+			name:      "single target namespace still none",
+			statusStr: "test:state=none:files=0/0",
+			nsSet:     sets.New[string]("test"),
+			expected:  false,
+		},
+		{
+			name:      "single target namespace copying",
+			statusStr: "test:state=copying:files=20/42",
+			nsSet:     sets.New[string]("test"),
+			expected:  true,
+		},
+		{
+			name:      "single target namespace done",
+			statusStr: "test:state=done:files=42/42",
+			nsSet:     sets.New[string]("test"),
+			expected:  true,
+		},
+		{
+			name:      "single target namespace failed",
+			statusStr: "test:state=failed:files=10/42",
+			nsSet:     sets.New[string]("test"),
+			expected:  true,
+		},
+		{
+			name:      "multiple namespaces, only non-target namespace has started",
+			statusStr: "test:state=none:files=0/0;other:state=copying:files=5/10",
+			nsSet:     sets.New[string]("test"),
+			expected:  false,
+		},
+		{
+			name:      "multiple namespaces, target namespace has started",
+			statusStr: "other:state=none:files=0/0;test:state=copying:files=5/10",
+			nsSet:     sets.New[string]("test", "other"),
+			expected:  true,
+		},
+		{
+			name:      "all target namespaces still none",
+			statusStr: "ns1:state=none:files=0/0;ns2:state=none:files=0/0",
+			nsSet:     sets.New[string]("ns1", "ns2"),
+			expected:  false,
+		},
+		{
+			name:      "empty status string",
+			statusStr: "",
+			nsSet:     sets.New[string]("test"),
+			expected:  false,
+		},
+		{
+			name:      "malformed entry without colon is skipped",
+			statusStr: "malformed-entry-no-colon",
+			nsSet:     sets.New[string]("test"),
+			expected:  false,
+		},
+		{
+			name:      "trailing semicolon and whitespace are tolerated",
+			statusStr: " test:state=copying:files=1/2; ",
+			nsSet:     sets.New[string]("test"),
+			expected:  true,
+		},
+	}
+
+	r := &SingleClusterReconciler{}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			result := r.isCheckpointStarted(tt.statusStr, tt.nsSet)
+			if result != tt.expected {
+				t.Errorf("isCheckpointStarted(%q, %v) = %v, expected %v",
+					tt.statusStr, tt.nsSet, result, tt.expected)
+			}
+		})
+	}
+}

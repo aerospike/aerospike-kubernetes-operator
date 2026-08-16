@@ -573,6 +573,179 @@ var _ = Describe("AerospikeCluster validation", func() {
 			})
 		})
 
+		Context("spec.aerospikeConfig (namespace index-checkpoint)", func() {
+			Context("negative", func() {
+				It("rejects index-checkpoint-path with server version < "+testutil.IndexCheckpointServerVersion, func() {
+					aeroCluster := testCluster.CreateAerospikeClusterPost640(
+						clusterNamespacedName, 1, testutil.LatestEnterpriseImage,
+					)
+					ns := aeroCluster.Spec.AerospikeConfig.Value[asdbv1.ConfKeyNamespace].([]interface{})[0].(map[string]interface{})
+					ns["index-checkpoint-path"] = "/mnt/index-ckpt"
+					aeroCluster.Spec.PreviewFeatures = []string{asdbv1.PreviewFeatureIndexCheckpoint}
+
+					err := envtests.K8sClient.Create(ctx, aeroCluster)
+					Expect(err).To(HaveOccurred())
+
+					envtests.NewStatusErrorMatcher().
+						WithMessageSubstrings(testutil.WebhookErrorPrefix,
+							"experimental feature", "requires server version").
+						Validate(err)
+				})
+
+				It("rejects index-checkpoint-threads out of range [1,16]", func() {
+					aeroCluster := testCluster.CreateAerospikeClusterPost640(
+						clusterNamespacedName, 1, testutil.GetEnterpriseImage(testutil.IndexCheckpointServerVersion),
+					)
+					ns := aeroCluster.Spec.AerospikeConfig.Value[asdbv1.ConfKeyNamespace].([]interface{})[0].(map[string]interface{})
+					ns["index-checkpoint-path"] = "/mnt/index-ckpt"
+					ns["index-checkpoint-threads"] = 0 // below minimum of 1
+					aeroCluster.Spec.PreviewFeatures = []string{asdbv1.PreviewFeatureIndexCheckpoint}
+
+					err := envtests.K8sClient.Create(ctx, aeroCluster)
+					Expect(err).To(HaveOccurred())
+
+					envtests.NewStatusErrorMatcher().
+						WithMessageSubstrings(testutil.WebhookErrorPrefix,
+							"aerospikeConfig not valid: generated config not valid for version").
+						Validate(err)
+				})
+
+				It("rejects index-checkpoint-path without experimentalFeatures opt-in", func() {
+					aeroCluster := testCluster.CreateAerospikeClusterPost640(
+						clusterNamespacedName, 1, testutil.GetEnterpriseImage(testutil.IndexCheckpointServerVersion),
+					)
+					ns := aeroCluster.Spec.AerospikeConfig.Value[asdbv1.ConfKeyNamespace].([]interface{})[0].(map[string]interface{})
+					ns["index-checkpoint-path"] = "/opt/aerospike/index-ckpt"
+
+					err := envtests.K8sClient.Create(ctx, aeroCluster)
+					Expect(err).To(HaveOccurred())
+
+					envtests.NewStatusErrorMatcher().
+						WithMessageSubstrings(testutil.WebhookErrorPrefix,
+							"index-checkpoint-path", "not listed in spec.experimentalFeatures").
+						Validate(err)
+				})
+
+				It("rejects unknown experimental feature name", func() {
+					aeroCluster := testCluster.CreateAerospikeClusterPost640(
+						clusterNamespacedName, 1, testutil.LatestEnterpriseImage,
+					)
+					aeroCluster.Spec.PreviewFeatures = []string{"nonexistent-feature"}
+
+					err := envtests.K8sClient.Create(ctx, aeroCluster)
+					Expect(err).To(HaveOccurred())
+
+					envtests.NewStatusErrorMatcher().
+						WithMessageSubstrings(testutil.WebhookErrorPrefix,
+							"unknown experimental feature").
+						Validate(err)
+				})
+
+				It("rejects index-checkpoint-path backed by an emptyDir volume", func() {
+					aeroCluster := testCluster.CreateAerospikeClusterPost640(
+						clusterNamespacedName, 1, testutil.GetEnterpriseImage(testutil.IndexCheckpointServerVersion),
+					)
+					ns := aeroCluster.Spec.AerospikeConfig.Value[asdbv1.ConfKeyNamespace].([]interface{})[0].(map[string]interface{})
+					ns["index-checkpoint-path"] = "/mnt/index-ckpt"
+					aeroCluster.Spec.PreviewFeatures = []string{asdbv1.PreviewFeatureIndexCheckpoint}
+					aeroCluster.Spec.Storage.Volumes = append(aeroCluster.Spec.Storage.Volumes, asdbv1.VolumeSpec{
+						Name: "index-ckpt",
+						Source: asdbv1.VolumeSource{
+							EmptyDir: &v1.EmptyDirVolumeSource{},
+						},
+						Aerospike: &asdbv1.AerospikeServerVolumeAttachment{
+							Path: "/mnt/index-ckpt",
+						},
+					})
+
+					err := envtests.K8sClient.Create(ctx, aeroCluster)
+					Expect(err).To(HaveOccurred())
+
+					envtests.NewStatusErrorMatcher().
+						WithMessageSubstrings(testutil.WebhookErrorPrefix,
+							"index-checkpoint-path", "\"/mnt/index-ckpt\"", "not a persistentVolumeClaim", "emptyDir").
+						Validate(err)
+				})
+
+				It("rejects index-checkpoint-path backed by a hostPath volume", func() {
+					aeroCluster := testCluster.CreateAerospikeClusterPost640(
+						clusterNamespacedName, 1, testutil.GetEnterpriseImage(testutil.IndexCheckpointServerVersion),
+					)
+					ns := aeroCluster.Spec.AerospikeConfig.Value[asdbv1.ConfKeyNamespace].([]interface{})[0].(map[string]interface{})
+					ns["index-checkpoint-path"] = "/mnt/index-ckpt"
+					aeroCluster.Spec.PreviewFeatures = []string{asdbv1.PreviewFeatureIndexCheckpoint}
+					aeroCluster.Spec.Storage.Volumes = append(aeroCluster.Spec.Storage.Volumes, asdbv1.VolumeSpec{
+						Name: "index-ckpt",
+						Source: asdbv1.VolumeSource{
+							HostPath: &v1.HostPathVolumeSource{Path: "/mnt/index-ckpt"},
+						},
+						Aerospike: &asdbv1.AerospikeServerVolumeAttachment{
+							Path: "/mnt/index-ckpt",
+							AttachmentOptions: asdbv1.AttachmentOptions{
+								MountOptions: asdbv1.MountOptions{ReadOnly: ptr.To(true)},
+							},
+						},
+					})
+
+					err := envtests.K8sClient.Create(ctx, aeroCluster)
+					Expect(err).To(HaveOccurred())
+
+					envtests.NewStatusErrorMatcher().
+						WithMessageSubstrings(testutil.WebhookErrorPrefix,
+							"index-checkpoint-path", "not a persistentVolumeClaim", "hostPath").
+						Validate(err)
+				})
+			})
+
+			Context("positive", func() {
+				BeforeEach(func() {
+					envtests.GlobalWarnings.Reset()
+				})
+
+				It("allows index-checkpoint-path and index-checkpoint-threads for version >= "+testutil.IndexCheckpointServerVersion, func() {
+					aeroCluster := testCluster.CreateAerospikeClusterPost640(
+						clusterNamespacedName, 1, testutil.GetEnterpriseImage(testutil.IndexCheckpointServerVersion),
+					)
+					ns := aeroCluster.Spec.AerospikeConfig.Value[asdbv1.ConfKeyNamespace].([]interface{})[0].(map[string]interface{})
+					ns["index-checkpoint-path"] = "/opt/aerospike/index-ckpt"
+					ns["index-checkpoint-threads"] = 4
+					aeroCluster.Spec.PreviewFeatures = []string{asdbv1.PreviewFeatureIndexCheckpoint}
+
+					Expect(envtests.K8sClient.Create(ctx, aeroCluster)).To(Succeed())
+				})
+
+				It("allows index-checkpoint-path backed by a PersistentVolume-backed (PVC) volume and "+
+					"warns about the init-container chown requirement", func() {
+					aeroCluster := testCluster.CreateAerospikeClusterPost640(
+						clusterNamespacedName, 1, testutil.GetEnterpriseImage(testutil.IndexCheckpointServerVersion),
+					)
+					ns := aeroCluster.Spec.AerospikeConfig.Value[asdbv1.ConfKeyNamespace].([]interface{})[0].(map[string]interface{})
+					ns["index-checkpoint-path"] = "/mnt/index-ckpt"
+					aeroCluster.Spec.PreviewFeatures = []string{asdbv1.PreviewFeatureIndexCheckpoint}
+					aeroCluster.Spec.Storage.Volumes = append(aeroCluster.Spec.Storage.Volumes, asdbv1.VolumeSpec{
+						Name: "index-ckpt",
+						Source: asdbv1.VolumeSource{
+							PersistentVolume: &asdbv1.PersistentVolumeSpec{
+								Size:         resource.MustParse("1Gi"),
+								StorageClass: testutil.StorageClass,
+								VolumeMode:   v1.PersistentVolumeFilesystem,
+							},
+						},
+						Aerospike: &asdbv1.AerospikeServerVolumeAttachment{
+							Path: "/mnt/index-ckpt",
+						},
+					})
+
+					Expect(envtests.WarningK8sClient.Create(ctx, aeroCluster)).ToNot(HaveOccurred())
+					Expect(envtests.GlobalWarnings.Warnings).To(ContainElement(And(
+						ContainSubstring("index-checkpoint-path"),
+						ContainSubstring("chowned"),
+						ContainSubstring("change #20"),
+					)))
+				})
+			})
+		})
+
 		Context("spec.aerospikeConfig", func() {
 			Context("negative", func() {
 				It("rejects empty aerospikeConfig", func() {

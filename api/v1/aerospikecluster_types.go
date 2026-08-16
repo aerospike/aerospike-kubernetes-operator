@@ -202,6 +202,13 @@ type AerospikeClusterSpec struct { //nolint:govet // for readability
 	// +optional
 	Operations []OperationSpec `json:"operations,omitempty"`
 
+	// PreviewFeatures is a list of Aerospike server preview feature names to enable via the
+	// --preview startup flag. Features gated behind this flag (e.g. "index-checkpoint")
+	// will cause the server to crash at startup if the flag is not present.
+	// +operator-sdk:csv:customresourcedefinitions:type=spec,displayName="Preview Features"
+	// +optional
+	PreviewFeatures []string `json:"previewFeatures,omitempty"`
+
 	// EnableRackIDOverride enables dynamic allocation of rack IDs to pods after they get scheduled.
 	// When enabled, the operator checks for the existence of the
 	// aerospike.com/override-rack-id annotation in the pod. When a pod has this annotation is

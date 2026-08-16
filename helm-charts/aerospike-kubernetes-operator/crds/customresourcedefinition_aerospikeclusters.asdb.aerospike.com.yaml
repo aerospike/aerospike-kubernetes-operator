@@ -5402,6 +5402,14 @@ spec:
                       type: object
                     type: array
                 type: object
+              previewFeatures:
+                description: |-
+                  PreviewFeatures is a list of Aerospike server preview feature names to enable via the
+                  --preview startup flag. Features gated behind this flag (e.g. "index-checkpoint")
+                  will cause the server to crash at startup if the flag is not present.
+                items:
+                  type: string
+                type: array
               rackConfig:
                 description: |-
                   RackConfig Configures the operator to deploy rack aware Aerospike cluster.
