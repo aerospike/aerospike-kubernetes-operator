@@ -42,20 +42,25 @@ import (
 // 1. going to be deleted eventually and are safe to ignore in stability checks
 // 2. given in ignorePodList by the user and are safe to ignore in stability checks
 //
-// mfdDelay is the target migrate-fill-delay value; drainBeforeStability controls whether MFD is
-// zeroed before the stability check. Both are computed by mfdDelayForRestart (rolling restart /
-// upgrade) or set directly by the scale-down path.
+// migrateFillDelay is the target migrate-fill-delay value; drainBeforeStability controls whether
+// MFD is zeroed before the stability check. Both are computed by mfdDelayForRestart (rolling
+// restart / upgrade) or set directly by the scale-down path.
 //
-//   - drainBeforeStability == true: MFD was transiently raised (override or
-//     DeleteLocalStorageOnRestart path); zero it first so that fills held from the previous
-//     quiesce can drain, then raise to mfdDelay before the next quiesce.
+//   - drainBeforeStability == true, migrateFillDelay > 0 (rolling restart with override or
+//     DeleteLocalStorageOnRestart): MFD was transiently raised by the previous iteration; zero it
+//     first so that fills held from the previous quiesce can drain, then raise to migrateFillDelay
+//     before the next quiesce to suppress fills for the upcoming pod restart.
+//   - drainBeforeStability == true, migrateFillDelay == 0 (scale-down): zero MFD before the
+//     stability check so that any fills held from a prior rolling restart (or a previous
+//     scale-down step) can drain quickly. MFD is never raised before quiesce — once a node is
+//     permanently removed we want fills to proceed immediately.
 //   - drainBeforeStability == false: MFD was not transiently raised; skip the drain step and go
-//     straight to the stability check. mfdDelay is still raised before quiesce when > 0 (used to
-//     restore MFD to the aerospikeConfig value after a prior scale-down zero, or as a no-op when
-//     the DynamicMigrateFillDelay guard detects the value is already correct).
+//     straight to the stability check. migrateFillDelay is still raised before quiesce when > 0
+//     (used to restore MFD to the aerospikeConfig value after a prior scale-down zero, or as a
+//     no-op when the DynamicMigrateFillDelay guard detects the value is already correct).
 func (r *SingleClusterReconciler) waitForMultipleNodesSafeStopReady(
 	ctx context.Context, pods []*corev1.Pod, ignorablePodNames sets.Set[string],
-	mfdDelay int, drainBeforeStability bool,
+	migrateFillDelay int, drainBeforeStability bool,
 ) common.ReconcileResult {
 	if len(pods) == 0 {
 		return common.ReconcileSuccess()
@@ -117,12 +122,12 @@ func (r *SingleClusterReconciler) waitForMultipleNodesSafeStopReady(
 		return common.ReconcileRequeueAfter(1)
 	}
 
-	// Raise MFD to mfdDelay before quiesce. This is either the OverrideMigrateFillDelay value
-	// (suppresses fills while the pod is absent) or the aerospikeConfig value (restores MFD to
-	// the steady-state after a prior scale-down zero). Skipped when mfdDelay==0 (scale-down or
-	// configMFD not set) — fills should proceed at full speed in those cases.
-	if mfdDelay > 0 {
-		if res := r.setMigrateFillDelay(ctx, policy, mfdDelay, ignorablePodNames); !res.IsSuccess {
+	// Raise MFD to migrateFillDelay before quiesce. This is either the OverrideMigrateFillDelay
+	// value (suppresses fills while the pod is absent) or the aerospikeConfig value (restores MFD
+	// to the steady-state after a prior scale-down zero). Skipped when migrateFillDelay==0
+	// (scale-down or configMFD not set) — fills should proceed at full speed in those cases.
+	if migrateFillDelay > 0 {
+		if res := r.setMigrateFillDelay(ctx, policy, migrateFillDelay, ignorablePodNames); !res.IsSuccess {
 			return res
 		}
 	}

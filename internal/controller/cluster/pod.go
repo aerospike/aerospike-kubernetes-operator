@@ -341,16 +341,16 @@ func (r *SingleClusterReconciler) rollingRestartPods(
 	if len(activePods) != 0 {
 		r.Log.Info("Restart active Pods", "pods", getPodNames(activePods))
 
-		mfdDelay, drainBeforeStability, err := r.mfdDelayForRestart(rackState, podsToRestart, restartTypeMap)
+		migrateFillDelay, drainBeforeStability, err := r.mfdDelayForRestart(rackState, podsToRestart, restartTypeMap)
 		if err != nil {
 			return common.ReconcileError(fmt.Errorf(
 				"resolve migrate-fill-delay for rack %d: %w", rackState.Rack.ID, err))
 		}
 
-		r.Log.Info(fmt.Sprintf("migrate-fill-delay for Pod restart: %d (drain=%v)", mfdDelay, drainBeforeStability))
+		r.Log.Info(fmt.Sprintf("migrate-fill-delay for Pod restart: %d (drain=%v)", migrateFillDelay, drainBeforeStability))
 
 		if res := r.waitForMultipleNodesSafeStopReady(ctx, activePods, ignorablePodNames,
-			mfdDelay, drainBeforeStability); !res.IsSuccess {
+			migrateFillDelay, drainBeforeStability); !res.IsSuccess {
 			return res
 		}
 
@@ -699,15 +699,15 @@ func (r *SingleClusterReconciler) safelyDeletePodsAndEnsureImageUpdated(
 	if len(activePods) != 0 {
 		r.Log.Info("Restart active Pods with updated container image", "pods", getPodNames(activePods))
 
-		mfdDelay, drainBeforeStability, err := r.mfdDelayForRestart(rackState, podsToUpdate, nil)
+		migrateFillDelay, drainBeforeStability, err := r.mfdDelayForRestart(rackState, podsToUpdate, nil)
 		if err != nil {
 			return common.ReconcileError(err)
 		}
 
-		r.Log.Info(fmt.Sprintf("migrate-fill-delay for Pod upgrade: %d (drain=%v)", mfdDelay, drainBeforeStability))
+		r.Log.Info(fmt.Sprintf("migrate-fill-delay for Pod upgrade: %d (drain=%v)", migrateFillDelay, drainBeforeStability))
 
 		if res := r.waitForMultipleNodesSafeStopReady(ctx, activePods, ignorablePodNames,
-			mfdDelay, drainBeforeStability); !res.IsSuccess {
+			migrateFillDelay, drainBeforeStability); !res.IsSuccess {
 			return res
 		}
 

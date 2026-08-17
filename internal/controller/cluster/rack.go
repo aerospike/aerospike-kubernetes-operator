@@ -958,7 +958,7 @@ func (r *SingleClusterReconciler) scaleDownRack(
 	// Ignore safe stop check if all pods in the batch are not running.
 	// Ignore migrate-fill-delay if pod is not running. Deleting this pod will not lead to any migration.
 	if isAnyPodRunningAndReady {
-		// mfdDelay=0: do not raise MFD before quiesce — for scale-down, fills should proceed
+		// migrateFillDelay=0: do not raise MFD before quiesce — for scale-down, fills should proceed
 		// immediately once the node is permanently removed.
 		// drainBeforeStability=true: always zero MFD first so any previously raised value is
 		// cleared and fills can drain before the stability check.
@@ -2212,11 +2212,12 @@ func (r *SingleClusterReconciler) handleFailedPodsInRack(
 			"rackID", rackState.Rack.ID, "rackRevision", rackState.Rack.Revision,
 			"failedPods", getPodNames(failedPods))
 
-		// Revert MFD only when at least one pod has a definitive failure (crash, image error, or
-		// PodFailed phase). If ALL failed pods are merely Unschedulable, the user may have set a
-		// large OverrideMigrateFillDelay precisely to tolerate the pod being absent while a node
-		// is coming up — reverting MFD in that case defeats the purpose of the override.
-		if hasDefinitiveFailure(failedPods) {
+		// Revert MFD only when the user has configured OverrideMigrateFillDelay AND at least one
+		// pod has a definitive failure (crash, image error, or PodFailed phase). Without an
+		// override, MFD was never raised above the config value so there is nothing to revert.
+		// If ALL failed pods are merely Unschedulable, preserve the override — the user may have
+		// set a large value precisely to tolerate a pod being absent while a node is coming up.
+		if r.aeroCluster.Spec.RestartStrategy.GetOverrideMigrateFillDelay() > 0 && hasDefinitiveFailure(failedPods) {
 			// Include failed pod names in the ignorable set so that the info call inside
 			// revertMFDToConfig skips their (dead) Aerospike nodes and doesn't fail.
 			ignorableWithFailed := ignorablePodNames.Union(podNamesToSet(failedPods))

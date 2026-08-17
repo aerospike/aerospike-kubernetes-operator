@@ -216,8 +216,7 @@ type AerospikeClusterSpec struct { //nolint:govet // for readability
 }
 
 // RestartStrategy configures transient operator behaviour applied around a rolling pod restart or
-// upgrade. Settings here are applied dynamically before the first pod is taken down and reverted
-// once all pods have rejoined; they are never persisted in aerospike.conf.
+// upgrade.
 type RestartStrategy struct {
 	// OverrideMigrateFillDelay is the duration in seconds that AKO temporarily sets as the
 	// migrate-fill-delay on the Aerospike cluster before restarting pods. This delays migration
