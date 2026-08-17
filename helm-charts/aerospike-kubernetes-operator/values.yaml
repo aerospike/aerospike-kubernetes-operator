@@ -1,74 +1,100 @@
-## Number of operator replicas
-replicas: 2
+# Default values for Aerospike Kubernetes Operator.
 
-## Operator image
-operatorImage:
-  repository: aerospike/aerospike-kubernetes-operator
-  tag: 4.5.0
-  pullPolicy: IfNotPresent
+# -- (Optional) Override the chart name used in generated resource names
+nameOverride: ""
 
-## In case the above image is pulled from a registry that requires
-## authentication, a secret containing credentials can be added
-## imagePullSecrets:
-##   - secret_with_credentials_to_custom_registry
-imagePullSecrets: {}
+# -- (Optional) Override the fully qualified name used for generated resource names
+fullnameOverride: ""
 
-## Create RBAC resources
-rbac:
-  create: true
-  # serviceAccountName: "default"
+# -- Number of operator replicas to deploy
+replicas: 2 # @schema required; minimum: 0
 
-## Ports
-healthPort: 8081
-metricsPort: 8443
+# -- Operator image
+operatorImage: # @schema required; additionalProperties: false
+  repository: aerospike/aerospike-kubernetes-operator # @schema required; minLength: 1
+  tag: 4.5.0 # @schema required; minLength: 1
+  pullPolicy: IfNotPresent # @schema required
 
-## Create certificates
-certs:
-  webhook:
-    create: true
-    webhookServerCertSecretName: "webhook-server-cert"
-  metrics:
-    create: false
+# -- In case the above image is pulled from a registry that requires
+# authentication, a secret containing credentials can be added
+# imagePullSecrets:
+#   - secret_with_credentials_to_custom_registry
+imagePullSecrets: [] # @schema anyOf: [{type: array, items: {type: string}}, {type: object}]
+
+# @schema allOf: [{type: object}, {if: {properties: {create: {const: false}}, required: [create]}, then: {properties: {serviceAccountName: {minLength: 1}}, required: [serviceAccountName]}}]
+# @schema additionalProperties: false
+# -- RBAC resource creation for the operator
+rbac: # @schema required
+  # -- Create RBAC resources and a service account for the operator
+  create: true # @schema required
+  # -- Name of an existing service account to use when rbac.create is false
+  serviceAccountName: ""
+
+# -- Port for the operator's health probe bind address
+healthPort: 8081 # @schema required; minimum: 1; maximum: 65535
+
+# -- Port for the operator's metrics bind address
+metricsPort: 8443 # @schema required; minimum: 1; maximum: 65535
+
+# -- Certificate configuration for the webhook and metrics endpoints
+certs: # @schema required; additionalProperties: false
+  # -- Webhook server certificate configuration
+  webhook: # @schema required; additionalProperties: false
+    create: true # @schema required
+    # -- Name of the secret holding the webhook server certificate
+    webhookServerCertSecretName: "webhook-server-cert" # @schema required; minLength: 1
+
+  # @schema allOf: [{type: object}, {if: {properties: {create: {const: true}}, required: [create]}, then: {properties: {metricsServerCertSecretName: {minLength: 1}}, required: [metricsServerCertSecretName]}}]
+  # @schema additionalProperties: false
+  # -- Metrics server certificate configuration
+  metrics: # @schema required
+    create: false # @schema required
+    # -- Name of the secret holding the metrics server certificate
     metricsServerCertSecretName: "metrics-server-cert"
 
-## Operator manager logging (controller-runtime / Zap)
-## development must stay set; level/encoder are optional (uncomment or use --set).
-logging:
-  development: true
-  # level: debug
-  # encoder: console
+# -- Operator manager logging (controller-runtime / Zap)
+# development must stay set; level/encoder are optional (update value or use --set).
+logging: # @schema required; additionalProperties: false
+  development: true # @schema required
+  # -- (Optional) Zap log level (--zap-log-level): debug, info, error, panic, or a positive integer for custom verbosity. Empty leaves the flag off
+  level: "" # @schema anyOf: [{enum: ["", debug, info, error, panic]}, {type: integer, minimum: 1}]
+  # -- (Optional) Zap log encoder (--zap-encoder). Empty leaves the flag off
+  encoder: "" # @schema enum: ["", json, console]
 
-## Operator manager /metrics (--metrics-secure)
-## Always passed in the Deployment args for clarity; defaults to TLS on (`true`).
-metrics:
-  secure: true
+# -- Operator manager /metrics endpoint configuration
+# Always passed in the Deployment args for clarity; defaults to TLS on (`true`).
+metrics: # @schema required; additionalProperties: false
+  secure: true # @schema required
 
-##  Operator configurations
+# @schema required; pattern:^$|^[a-z0-9]([-a-z0-9]*[a-z0-9])?(,[a-z0-9]([-a-z0-9]*[a-z0-9])?)*$
+# -- Comma-separated (no spaces) list of namespaces to watch for Aerospike custom resources
 watchNamespaces: "default,aerospike"
 
-# Namespaces to ignore. Only used for eviction webhook
+# @schema pattern:^$|^[a-z0-9]([-a-z0-9]*[a-z0-9])?(,[a-z0-9]([-a-z0-9]*[a-z0-9])?)*$
+# -- Comma-separated (no spaces) list of namespaces to ignore. Only used for eviction webhook
 ignoreNamespaces: "kube-system,kube-node-lease"
 
-# Enable the eviction webhook to safely block Aerospike pod evictions during node maintenance
+# @schema allOf: [{type: object}, {if: {properties: {enable: {const: true}}, required: [enable]}, then: {required: [timeoutSeconds]}}]
+# @schema additionalProperties: false
+# -- Enable the eviction webhook to safely block Aerospike pod evictions during node maintenance
 # Also enables Prometheus metrics: aerospike_ako_eviction_webhook_requests_total (labels: eviction_namespace, decision)
-safePodEviction:
-  enable: false
-  # Eviction webhook timeout in seconds
-  timeoutSeconds: "20"
+safePodEviction: # @schema required
+  enable: false # @schema required
+  timeoutSeconds: "20" # @schema anyOf: [{type: string, "pattern": "^([1-9]|[12][0-9]|30)$"}, {type: integer}]
 
-# Grace period to delete/recover failed pods (in seconds)
-failedPodGracePeriodSeconds: "60"
+# -- Grace period to delete/recover failed pods (in seconds)
+failedPodGracePeriodSeconds: "60" # @schema anyOf: [{type: string,"pattern": "^[1-9][0-9]*$"}, {type: integer, minimum: 1}]
 
-# Registry used to pull aerospike-init image
-aerospikeKubernetesInitRegistry: "docker.io"
+# -- Registry used to pull aerospike-init image
+aerospikeKubernetesInitRegistry: "docker.io" # @schema required; minLength: 1
 
-# Namespace in registry used to pull aerospike-init image
-aerospikeKubernetesInitRegistryNamespace: "aerospike"
+# -- Namespace in registry used to pull aerospike-init image
+aerospikeKubernetesInitRegistryNamespace: "aerospike" # @schema required; minLength: 1
 
-# Name and tag of aerospike-init image
-aerospikeKubernetesInitNameTag: "aerospike-kubernetes-init:2.5.3"
+# -- Name and tag of aerospike-init image
+aerospikeKubernetesInitNameTag: "aerospike-kubernetes-init:2.5.3" # @schema required; pattern:^\S+:\S+$
 
-## Resources - limits / requests
+# -- Resources - limits / requests
 resources:
   limits:
     cpu: 400m
@@ -77,65 +103,79 @@ resources:
     cpu: 10m
     memory: 64Mi
 
-## Affinity rules
+# -- Affinity rules
 affinity: {}
-  # nodeAffinity:
-  #   requiredDuringSchedulingIgnoredDuringExecution:
-  #     nodeSelectorTerms:
-  #     - matchExpressions:
-  #       - key: kubernetes.io/hostname
-  #         operator: In
-  #         values:
-  #         - <Kubernetes Host>
+# nodeAffinity:
+#   requiredDuringSchedulingIgnoredDuringExecution:
+#     nodeSelectorTerms:
+#     - matchExpressions:
+#       - key: kubernetes.io/hostname
+#         operator: In
+#         values:
+#         - <Kubernetes Host>
 
-## Extra environment variables that will be passed into the operator pods
+# @schema additionalProperties: {type: string}
+# @schema allOf: [{type: object}, {propertyNames: {pattern: "^[-._a-zA-Z][-._a-zA-Z0-9]*$"}}]
+# -- Extra environment variables that will be passed into the operator pods
 extraEnv: {}
 
-## Node selector
+# -- Node selector
 nodeSelector: {}
 
-## Tolerations
+# -- Tolerations
 tolerations: []
 
-## Deployment annotations and labels
-## Deployment labels are inherited by the pods automatically
+# -- Deployment annotations
 annotations: {}
+
+# -- Deployment labels are inherited by the pods automatically
 labels: {}
 
-## Pod annotations and labels
+# -- Pod annotations
 podAnnotations: {}
+
+# -- Pod labels
 podLabels: {}
 
-## Service configuration
-metricsService:
-  # labels: {}
-  # annotations: {}
-  port: 8443
-  type: ClusterIP
+# -- Service configuration
+metricsService: # @schema required; additionalProperties: false
+  port: 8443 # @schema required; minimum: 1; maximum: 65535
+  type: ClusterIP # @schema required
+  # -- (Optional) Extra labels for the service
+  labels: {}
+  # -- (Optional) Extra annotations for the service
+  annotations: {}
 
-webhookService:
-  # labels: {}
-  # annotations: {}
-  port: 443
-  targetPort: 9443
-  type: ClusterIP
+# -- Service configuration
+webhookService: # @schema required; additionalProperties: false
+  port: 443 # @schema required; minimum: 1; maximum: 65535
+  targetPort: 9443 # @schema required; minimum: 1; maximum: 65535
+  # -- Kubernetes Service type
+  type: ClusterIP # @schema required
+  # -- (Optional) Extra labels for the service
+  labels: {}
+  # -- (Optional) Extra annotations for the service
+  annotations: {}
 
-## Pod security context
+# -- Pod security context
 podSecurityContext: {}
 
-## Container security context
+# -- Container security context
 securityContext:
   allowPrivilegeEscalation: false
 
+# -- Liveness probe configuration
 livenessProbe:
-   initialDelaySeconds: 15
-   periodSeconds: 20
-   timeoutSeconds: 1
-   successThreshold: 1
-   failureThreshold: 3
+  initialDelaySeconds: 15
+  periodSeconds: 20
+  timeoutSeconds: 1
+  successThreshold: 1
+  failureThreshold: 3
+
+# -- Readiness probe configuration
 readinessProbe:
-   initialDelaySeconds: 5
-   periodSeconds: 10
-   timeoutSeconds: 1
-   successThreshold: 1
-   failureThreshold: 3
+  initialDelaySeconds: 5
+  periodSeconds: 10
+  timeoutSeconds: 1
+  successThreshold: 1
+  failureThreshold: 3

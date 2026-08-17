@@ -1,0 +1,224 @@
+suite: values.schema.json edge cases — networking (ports and services)
+
+templates:
+  - templates/aerospike-operator-controller-manager-deployment.yaml
+
+tests:
+  # -- healthPort --
+  - it: accepts healthPort at the lower boundary
+    set:
+      healthPort: 1
+    asserts:
+      - notFailedTemplate: {}
+
+  - it: accepts healthPort at the upper boundary
+    set:
+      healthPort: 65535
+    asserts:
+      - notFailedTemplate: {}
+
+  - it: rejects healthPort below the minimum
+    set:
+      healthPort: 0
+    asserts:
+      - failedTemplate:
+          errorPattern: "at '/healthPort': minimum: got 0, want 1"
+
+  - it: rejects healthPort above the maximum
+    set:
+      healthPort: 65536
+    asserts:
+      - failedTemplate:
+          errorPattern: "at '/healthPort': maximum: got 65,536, want 65,535"
+
+  - it: rejects a negative healthPort
+    set:
+      healthPort: -1
+    asserts:
+      - failedTemplate:
+          errorPattern: "at '/healthPort': minimum: got -1, want 1"
+
+  # -- metricsPort --
+  - it: accepts metricsPort at the lower boundary
+    set:
+      metricsPort: 1
+    asserts:
+      - notFailedTemplate: {}
+
+  - it: accepts metricsPort at the upper boundary
+    set:
+      metricsPort: 65535
+    asserts:
+      - notFailedTemplate: {}
+
+  - it: rejects metricsPort below the minimum
+    set:
+      metricsPort: 0
+    asserts:
+      - failedTemplate:
+          errorPattern: "at '/metricsPort': minimum: got 0, want 1"
+
+  - it: rejects metricsPort above the maximum
+    set:
+      metricsPort: 65536
+    asserts:
+      - failedTemplate:
+          errorPattern: "at '/metricsPort': maximum: got 65,536, want 65,535"
+
+  # -- metricsService --
+  - it: accepts metricsService.port at the lower boundary
+    set:
+      metricsService:
+        port: 1
+    asserts:
+      - notFailedTemplate: {}
+
+  - it: accepts metricsService.port at the upper boundary
+    set:
+      metricsService:
+        port: 65535
+    asserts:
+      - notFailedTemplate: {}
+
+  - it: rejects metricsService.port below the minimum
+    set:
+      metricsService:
+        port: 0
+    asserts:
+      - failedTemplate:
+          errorPattern: "at '/metricsService/port': minimum: got 0, want 1"
+
+  - it: rejects metricsService.port above the maximum
+    set:
+      metricsService:
+        port: 65536
+    asserts:
+      - failedTemplate:
+          errorPattern: "at '/metricsService/port': maximum: got 65,536, want 65,535"
+
+  - it: accepts each valid metricsService.type
+    set:
+      metricsService:
+        type: LoadBalancer
+    asserts:
+      - notFailedTemplate: {}
+
+  - it: accepts arbitrary objects for metricsService passthrough fields (labels, annotations)
+    set:
+      metricsService:
+        labels:
+          foo: bar
+        annotations:
+          foo: bar
+    asserts:
+      - notFailedTemplate: {}
+
+  - it: rejects a non-object value for metricsService.labels
+    set:
+      metricsService:
+        labels: "not-an-object"
+    asserts:
+      - failedTemplate:
+          errorPattern: "metricsService/labels.*got string, want object"
+
+  - it: rejects a non-object value for metricsService.annotations
+    set:
+      metricsService:
+        annotations: "not-an-object"
+    asserts:
+      - failedTemplate:
+          errorPattern: "metricsService/annotations.*got string, want object"
+
+  # -- webhookService --
+  - it: accepts webhookService.port at the lower boundary
+    set:
+      webhookService:
+        port: 1
+    asserts:
+      - notFailedTemplate: {}
+
+  - it: accepts webhookService.port at the upper boundary
+    set:
+      webhookService:
+        port: 65535
+    asserts:
+      - notFailedTemplate: {}
+
+  - it: rejects webhookService.port below the minimum
+    set:
+      webhookService:
+        port: 0
+    asserts:
+      - failedTemplate:
+          errorPattern: "at '/webhookService/port': minimum: got 0, want 1"
+
+  - it: rejects webhookService.port above the maximum
+    set:
+      webhookService:
+        port: 65536
+    asserts:
+      - failedTemplate:
+          errorPattern: "at '/webhookService/port': maximum: got 65,536, want 65,535"
+
+  - it: accepts webhookService.targetPort at the lower boundary
+    set:
+      webhookService:
+        targetPort: 1
+    asserts:
+      - notFailedTemplate: {}
+
+  - it: accepts webhookService.targetPort at the upper boundary
+    set:
+      webhookService:
+        targetPort: 65535
+    asserts:
+      - notFailedTemplate: {}
+
+  - it: rejects webhookService.targetPort below the minimum
+    set:
+      webhookService:
+        targetPort: 0
+    asserts:
+      - failedTemplate:
+          errorPattern: "at '/webhookService/targetPort': minimum: got 0, want 1"
+
+  - it: rejects webhookService.targetPort above the maximum
+    set:
+      webhookService:
+        targetPort: 65536
+    asserts:
+      - failedTemplate:
+          errorPattern: "at '/webhookService/targetPort': maximum: got 65,536, want 65,535"
+
+  - it: accepts each valid webhookService.type
+    set:
+      webhookService:
+        type: NodePort
+    asserts:
+      - notFailedTemplate: {}
+
+  - it: accepts arbitrary objects for webhookService passthrough fields (labels, annotations)
+    set:
+      webhookService:
+        labels:
+          foo: bar
+        annotations:
+          foo: bar
+    asserts:
+      - notFailedTemplate: {}
+
+  - it: rejects a non-object value for webhookService.labels
+    set:
+      webhookService:
+        labels: "not-an-object"
+    asserts:
+      - failedTemplate:
+          errorPattern: "webhookService/labels.*got string, want object"
+
+  - it: rejects a non-object value for webhookService.annotations
+    set:
+      webhookService:
+        annotations: "not-an-object"
+    asserts:
+      - failedTemplate:
+          errorPattern: "webhookService/annotations.*got string, want object"

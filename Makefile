@@ -197,6 +197,43 @@ env-test-backup-service: fmt vet setup-envtest ## Run backup service envtests.
 .PHONY: env-test-restore
 env-test-restore: fmt vet setup-envtest ## Run restore envtests.
 	export KUBEBUILDER_ASSETS="$(shell $(ENVTEST) use $(ENVTEST_K8S_VERSION) --bin-dir $(LOCALBIN) -p path)"; cd $(shell pwd)/test/envtests/restore && mkdir -p ../../test-results && go run github.com/onsi/ginkgo/v2/ginkgo -r --focus "$(FOCUS)" -coverprofile envcover.out -timeout=1h0m0s --junit-report=../../test-results/junit-envtests-restore.xml -- . ${ARGS}
+
+##@ Helm
+
+.PHONY: helm-unittest-plugin
+helm-unittest-plugin: ## Install the pinned helm-unittest plugin locally, replacing any other version.
+	@helm plugin list 2>/dev/null | awk '$$1 == "unittest" { print $$2 }' | grep -qx '$(HELM_UNITTEST_VERSION)' || { \
+		helm plugin uninstall unittest >/dev/null 2>&1 || true; \
+		helm plugin install https://github.com/helm-unittest/helm-unittest $(HELM_VERIFY_FLAG) --version v$(HELM_UNITTEST_VERSION); \
+	}
+
+.PHONY: helm-test
+helm-test: helm-unittest-plugin ## Run helm-unittest for CHART (default: every chart with a tests/ dir). Usage: make helm-test [CHART=chart-name]
+	@for chart in $(if $(CHART),helm-charts/$(CHART),helm-charts/*/); do \
+		chart="$${chart%/}"; \
+		if [ -d "$$chart/tests" ]; then \
+			echo "==> helm unittest $$chart"; \
+			helm unittest "$$chart" || exit 1; \
+		fi; \
+	done
+
+.PHONY: helm-schema-plugin
+helm-schema-plugin: ## Install the pinned "helm schema" plugin locally, replacing any other version.
+	@helm plugin list 2>/dev/null | awk '$$1 == "schema" { print $$2 }' | grep -qx '$(HELM_SCHEMA_VERSION)' || { \
+		helm plugin uninstall schema >/dev/null 2>&1 || true; \
+		helm plugin install https://github.com/losisin/helm-values-schema-json $(HELM_VERIFY_FLAG) --version v$(HELM_SCHEMA_VERSION); \
+	}
+
+.PHONY: helm-schema
+helm-schema: helm-schema-plugin ## Regenerate values.schema.json for CHART (default: every chart with a .schema.yaml). Usage: make helm-schema [CHART=chart-name]
+	@for chart in $(if $(CHART),helm-charts/$(CHART),helm-charts/*/); do \
+		chart="$${chart%/}"; \
+		if [ -f "$$chart/.schema.yaml" ]; then \
+			echo "==> helm schema $$chart"; \
+			(cd "$$chart" && helm schema) || exit 1; \
+		fi; \
+	done
+
 ##@ Build
 
 .PHONY: build
@@ -288,6 +325,13 @@ ENVTEST_VERSION := $(shell go list -m -f "{{ .Version }}" sigs.k8s.io/controller
 #ENVTEST_K8S_VERSION is the version of Kubernetes to use for setting up ENVTEST binaries (i.e. 1.31)
 ENVTEST_K8S_VERSION := $(shell go list -m -f "{{ .Version }}" k8s.io/api | awk -F'[v.]' '{printf "1.%d", $$3}')
 GOLANGCI_LINT_VERSION ?= v2.10.1
+# Helm plugin versions, without the leading "v" ("helm plugin list" reports them unprefixed).
+HELM_UNITTEST_VERSION ?= 1.1.2
+HELM_SCHEMA_VERSION ?= 2.5.0
+# Helm v3's "helm plugin install" has no --verify flag; Helm v4 requires --verify=false
+# to install plugins from a git URL (git sources don't support signature verification).
+HELM_MAJOR_VERSION := $(shell helm version --template '{{.Version}}' 2>/dev/null | sed -E 's/^v([0-9]+).*/\1/')
+HELM_VERIFY_FLAG := $(shell [ "$(HELM_MAJOR_VERSION)" -ge 4 ] 2>/dev/null && echo --verify=false)
 # Set the Operator SDK version to use. By default, what is installed on the system is used.
 # This is useful for CI or a project to utilize a specific version of the operator-sdk toolkit.
 OPERATOR_SDK_VERSION ?= v1.41.1

@@ -311,7 +311,8 @@ func (r *SingleClusterReconciler) createOrUpdatePodService(ctx context.Context, 
 				Labels:      podService.Metadata.Labels,
 			},
 			Spec: corev1.ServiceSpec{
-				Type: corev1.ServiceTypeNodePort,
+				PublishNotReadyAddresses: true,
+				Type:                     corev1.ServiceTypeNodePort,
 				Selector: map[string]string{
 					"statefulset.kubernetes.io/pod-name": pName,
 				},
@@ -590,6 +591,15 @@ func (r *SingleClusterReconciler) updateService(
 	}
 
 	if r.areServicePortsUpdated(service) {
+		needsUpdate = true
+	}
+
+	// Ensure PublishNotReadyAddresses is set. This field is always required for
+	// both the headless and per-pod NodePort services so that pods are reachable
+	// before they become Ready (e.g. during rolling restarts). It may be absent
+	// on services created by older AKO versions and must be backfilled on upgrade.
+	if !service.Spec.PublishNotReadyAddresses {
+		service.Spec.PublishNotReadyAddresses = true
 		needsUpdate = true
 	}
 

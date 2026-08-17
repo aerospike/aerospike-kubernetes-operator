@@ -4,7 +4,7 @@ metadata:
   name: aerospikebackupservice-sample
   namespace: aerospike
 spec:
-  image: aerospike/aerospike-backup-service:3.5.0
+  image: aerospike/aerospike-backup-service:3.6.1
   config:
     service:
       http:
@@ -12,6 +12,7 @@ spec:
     backup-policies:
       test-policy:
         parallel: 3
+        compact: true
       test-policy1:
         parallel: 3
     storage:

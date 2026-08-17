@@ -190,6 +190,12 @@ type AerospikeClusterSpec struct { //nolint:govet // for readability
 	// +optional
 	Paused *bool `json:"paused,omitempty"`
 
+	// IgnoreSidecarFailure controls whether cluster operations are blocked when a
+	// sidecar container is failing but the Aerospike server container is still running.
+	// +operator-sdk:csv:customresourcedefinitions:type=spec,displayName="Ignore Sidecar Failure"
+	// +optional
+	IgnoreSidecarFailure *bool `json:"ignoreSidecarFailure,omitempty"`
+
 	// Operations is a list of on-demand operations to be performed on the Aerospike cluster.
 	// +operator-sdk:csv:customresourcedefinitions:type=spec,displayName="Operations"
 	// +kubebuilder:validation:MaxItems:=1
@@ -1017,6 +1023,11 @@ type AerospikeClusterStatusSpec struct { //nolint:govet // for readability
 	// +optional
 	EnableRackIDOverride *bool `json:"enableRackIDOverride,omitempty"`
 
+	// IgnoreSidecarFailure controls whether cluster operations are blocked when a
+	// sidecar container is failing but the Aerospike server container is still running.
+	// +optional
+	IgnoreSidecarFailure *bool `json:"ignoreSidecarFailure,omitempty"`
+
 	// IsReadinessProbeEnabled tells whether the readiness probe is present in all pods or not.
 	// Moreover, PodDisruptionBudget should be created for the Aerospike cluster only when this field is enabled.
 	// +optional
@@ -1481,6 +1492,11 @@ func CopySpecToStatus(spec *AerospikeClusterSpec) (*AerospikeClusterStatusSpec, 
 		status.DisablePDB = &disablePDB
 	}
 
+	if spec.IgnoreSidecarFailure != nil {
+		ignoreSidecarFailure := *spec.IgnoreSidecarFailure
+		status.IgnoreSidecarFailure = &ignoreSidecarFailure
+	}
+
 	// Storage
 	statusPodSpec := lib.DeepCopy(&spec.PodSpec).(*AerospikePodSpec)
 	status.PodSpec = *statusPodSpec
@@ -1606,6 +1622,11 @@ func CopyStatusToSpec(status *AerospikeClusterStatusSpec) (*AerospikeClusterSpec
 	if status.DisablePDB != nil {
 		disablePDB := *status.DisablePDB
 		spec.DisablePDB = &disablePDB
+	}
+
+	if status.IgnoreSidecarFailure != nil {
+		ignoreSidecarFailure := *status.IgnoreSidecarFailure
+		spec.IgnoreSidecarFailure = &ignoreSidecarFailure
 	}
 
 	// Storage

@@ -246,6 +246,82 @@ func (r *SingleClusterReconciler) deleteSTS(ctx context.Context, st *appsv1.Stat
 	return r.Delete(ctx, st)
 }
 
+func (r *SingleClusterReconciler) waitForSTSPodsServerReady(
+	ctx context.Context, st *appsv1.StatefulSet, ignorablePodNames sets.Set[string],
+) error {
+	const (
+		podStatusMaxRetry      = 18
+		podStatusRetryInterval = time.Second * 10
+	)
+
+	r.Log.Info(
+		"Waiting for server Container to be ready across all Pods of StatefulSet",
+		"statefulSet", utils.GetNamespacedName(st),
+		"maxWaitTimePerPod", podStatusRetryInterval*time.Duration(podStatusMaxRetry),
+	)
+
+	for podIndex := int32(0); podIndex < *st.Spec.Replicas; podIndex++ {
+		podName := getSTSPodName(st.Name, podIndex)
+
+		if ignorablePodNames.Has(podName) {
+			continue
+		}
+
+		pod := &corev1.Pod{}
+
+		// Wait up to 10s for the pod object to appear.
+		for i := 0; i < 5; i++ {
+			if err := r.Get(
+				ctx,
+				types.NamespacedName{Name: podName, Namespace: st.Namespace},
+				pod,
+			); err == nil {
+				break
+			}
+
+			time.Sleep(time.Second * 2)
+		}
+
+		var isReady bool
+
+		for i := 0; i < podStatusMaxRetry; i++ {
+			r.Log.V(1).Info("Checking Aerospike server container ready", "pod", utils.NamespacedName(st.Namespace, podName))
+
+			if err := r.Get(
+				ctx,
+				types.NamespacedName{Name: podName, Namespace: st.Namespace},
+				pod,
+			); err != nil {
+				return fmt.Errorf("get Pod %s: %w", utils.NamespacedName(st.Namespace, podName), err)
+			}
+
+			if podState := utils.CheckServerFailedWithGrace(pod, false); podState.State == utils.PodFailed {
+				return fmt.Errorf("server container in Pod %s failed: %s",
+					utils.NamespacedName(st.Namespace, podName), podState.Reason)
+			}
+
+			if utils.IsAerospikeServerReady(pod) {
+				isReady = true
+
+				r.Log.Info("Aerospike server container is ready", "pod", utils.GetNamespacedName(pod))
+
+				break
+			}
+
+			time.Sleep(podStatusRetryInterval)
+		}
+
+		if !isReady {
+			return fmt.Errorf(
+				"server container in Pod %s did not become ready, status: %v",
+				utils.NamespacedName(st.Namespace, podName), pod.Status.ContainerStatuses,
+			)
+		}
+	}
+
+	return r.waitForSTSReplicasConverged(ctx, st)
+}
+
 func (r *SingleClusterReconciler) waitForSTSToBeReady(
 	ctx context.Context, st *appsv1.StatefulSet, ignorablePodNames sets.Set[string],
 ) error {
@@ -327,43 +403,52 @@ func (r *SingleClusterReconciler) waitForSTSToBeReady(
 
 	// Check for statefulset at the end,
 	// if we check before pods then we would not know status of individual pods
-	const (
-		stsStatusMaxRetry      = 10
-		stsStatusRetryInterval = time.Second * 2
-	)
-
-	var updated bool
-
-	for i := 0; i < stsStatusMaxRetry; i++ {
-		time.Sleep(stsStatusRetryInterval)
-
-		r.Log.V(1).Info("Check StatefulSet status is updated or not")
-
-		if err := r.Get(
-			ctx,
-			types.NamespacedName{Name: st.Name, Namespace: st.Namespace}, st,
-		); err != nil {
-			return err
-		}
-
-		if *st.Spec.Replicas == st.Status.Replicas {
-			updated = true
-			break
-		}
-
-		r.Log.V(1).Info(
-			"StatefulSet spec.replica not matching status.replica", "status",
-			st.Status.Replicas, "spec", *st.Spec.Replicas,
-		)
-	}
-
-	if !updated {
-		return fmt.Errorf("status for StatefulSet is not updated")
+	if err := r.waitForSTSReplicasConverged(ctx, st); err != nil {
+		return err
 	}
 
 	r.Log.Info("StatefulSet is ready")
 
 	return nil
+}
+
+// waitForSTSReplicasConverged polls until st.Status.Replicas matches
+// st.Spec.Replicas, ensuring the K8s STS controller has accounted for all
+// replicas before the caller proceeds.
+func (r *SingleClusterReconciler) waitForSTSReplicasConverged(
+	ctx context.Context, st *appsv1.StatefulSet,
+) error {
+	const (
+		stsStatusMaxRetry      = 10
+		stsStatusRetryInterval = time.Second * 2
+	)
+
+	for i := 0; i < stsStatusMaxRetry; i++ {
+		if err := r.Get(
+			ctx,
+			types.NamespacedName{Name: st.Name, Namespace: st.Namespace},
+			st,
+		); err != nil {
+			return fmt.Errorf("get StatefulSet %s while checking replica status: %w",
+				utils.GetNamespacedNameString(st), err)
+		}
+
+		if *st.Spec.Replicas == st.Status.Replicas {
+			return nil
+		}
+
+		r.Log.V(1).Info(
+			"StatefulSet spec.replicas not matching status.replicas, retrying",
+			"statefulSet", utils.GetNamespacedName(st),
+			"specReplicas", *st.Spec.Replicas,
+			"statusReplicas", st.Status.Replicas,
+		)
+
+		time.Sleep(stsStatusRetryInterval)
+	}
+
+	return fmt.Errorf("StatefulSet %s status.replicas did not converge to spec.replicas (%d)",
+		utils.GetNamespacedNameString(st), *st.Spec.Replicas)
 }
 
 func (r *SingleClusterReconciler) getSTS(ctx context.Context, rackState *RackState) (*appsv1.StatefulSet, error) {
@@ -1120,6 +1205,48 @@ func (r *SingleClusterReconciler) waitForAllSTSToBeReady(
 	return nil
 }
 
+// waitForAllAerospikeServersReady waits for the Aerospike server container's
+// ready state to be true on every non-ignorable pod across all cluster
+// StatefulSets. It does NOT require sidecars or other containers to be ready.
+// Pods whose names are in ignorablePodNames are skipped entirely; sidecar-failed
+// pods are NOT skipped because their server containers are still reachable.
+func (r *SingleClusterReconciler) waitForAllAerospikeServersReady(
+	ctx context.Context, ignorablePodNames sets.Set[string]) error {
+	r.Log.Info("Waiting for Aerospike server containers across all STSs to be ready")
+
+	allRackIdentifiers := sets.NewString()
+
+	for idx := range r.aeroCluster.Status.RackConfig.Racks {
+		rack := &r.aeroCluster.Status.RackConfig.Racks[idx]
+		allRackIdentifiers.Insert(utils.GetRackIdentifier(rack.ID, rack.Revision))
+	}
+
+	for idx := range r.aeroCluster.Spec.RackConfig.Racks {
+		rack := &r.aeroCluster.Spec.RackConfig.Racks[idx]
+		allRackIdentifiers.Insert(utils.GetRackIdentifier(rack.ID, rack.Revision))
+	}
+
+	for rackIdentifier := range allRackIdentifiers {
+		st := &appsv1.StatefulSet{}
+		stsName := utils.GetNamespacedNameForSTSOrConfigMap(r.aeroCluster, rackIdentifier)
+
+		if err := r.Get(ctx, stsName, st); err != nil {
+			if !errors.IsNotFound(err) {
+				return err
+			}
+
+			// Skip if a sts not found. It may have been deleted and status may not have been updated yet
+			continue
+		}
+
+		if err := r.waitForSTSPodsServerReady(ctx, st, ignorablePodNames); err != nil {
+			return err
+		}
+	}
+
+	return nil
+}
+
 func (r *SingleClusterReconciler) getClusterSTSList(ctx context.Context) (
 	*appsv1.StatefulSetList, error,
 ) {
@@ -1207,9 +1334,21 @@ func (r *SingleClusterReconciler) updateAerospikeInitContainerImage(
 				container.Image,
 			)
 
-			statefulSet.Spec.Template.Spec.InitContainers[idx].Image = desiredImage
+			// Re-fetch inside RetryOnConflict so a stale resourceVersion does
+			// not cause a permanent conflict error.
+			nsName := types.NamespacedName{Name: statefulSet.Name, Namespace: statefulSet.Namespace}
 
-			if err := r.Update(ctx, statefulSet, common.UpdateOption); err != nil {
+			if err := retry.RetryOnConflict(retry.DefaultRetry, func() error {
+				current := &appsv1.StatefulSet{}
+				if err := r.Get(ctx, nsName, current); err != nil {
+					return err
+				}
+
+				current.Spec.Template.Spec.InitContainers[idx].Image = desiredImage
+				*statefulSet = *current
+
+				return r.Update(ctx, current, common.UpdateOption)
+			}); err != nil {
 				return fmt.Errorf(
 					"update StatefulSet %s: %w",
 					utils.GetNamespacedNameString(statefulSet),

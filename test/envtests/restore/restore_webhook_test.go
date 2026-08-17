@@ -180,3 +180,62 @@ var _ = Describe("AerospikeRestore CRD schema marker validation", Ordered, func(
 		})
 	})
 })
+
+// Each spec here needs its own AerospikeBackupService because the storage override cases
+// differ in whether the restore routine exists in the backup service config.
+var _ = Describe("AerospikeRestore config webhook validation", func() {
+	ctx := context.TODO()
+
+	var (
+		restoreNsNm types.NamespacedName
+		absNsNm     types.NamespacedName
+	)
+
+	BeforeEach(func() {
+		restoreNsNm = uniqueNamespacedName("restore-config")
+		absNsNm = uniqueNamespacedName("abs-restore-config")
+	})
+
+	AfterEach(func() {
+		deleteRestore(ctx, restoreNsNm)
+		backupconfig.DeleteStubBackupService(ctx, envtests.K8sClient, absNsNm)
+	})
+
+	Context("Deploy validation", func() {
+		Context("spec.config (timestamp restore storage override)", func() {
+			Context("positive", func() {
+				It("accepts source-name override for timestamp restore", func() {
+					Expect(backupconfig.CreateStubBackupService(ctx, envtests.K8sClient, absNsNm,
+						backupconfig.DefaultRestoreMergedConfig())).To(Succeed())
+
+					config := minimalTimestampRestoreConfigMap()
+					config[asdbv1beta1.SourceNameKey] = "local"
+
+					restore := buildRestoreCR(restoreNsNm, absNsNm, asdbv1beta1.Timestamp)
+					restore.Spec.Config = runtime.RawExtension{
+						Raw: backupconfig.MustMarshalConfig(config),
+					}
+
+					Expect(envtests.K8sClient.Create(ctx, restore)).To(Succeed())
+				})
+
+				It("accepts source-name override when routine is absent from local ABS config (BKRS-212 cross-region)", func() {
+					// Base config has no backup-routines; routine exists only in the restore request.
+					Expect(backupconfig.CreateStubBackupService(ctx, envtests.K8sClient, absNsNm,
+						backupconfig.BackupServiceBaseConfig())).To(Succeed())
+
+					config := minimalTimestampRestoreConfigMap()
+					config[asdbv1beta1.RoutineKey] = "remote-region-routine"
+					config[asdbv1beta1.SourceNameKey] = "local"
+
+					restore := buildRestoreCR(restoreNsNm, absNsNm, asdbv1beta1.Timestamp)
+					restore.Spec.Config = runtime.RawExtension{
+						Raw: backupconfig.MustMarshalConfig(config),
+					}
+
+					Expect(envtests.K8sClient.Create(ctx, restore)).To(Succeed())
+				})
+			})
+		})
+	})
+})

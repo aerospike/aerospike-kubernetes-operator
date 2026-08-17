@@ -7,6 +7,7 @@ import (
 	"fmt"
 	"net/http"
 
+	"github.com/aerospike/aerospike-backup-service/v3/pkg/dto"
 	"github.com/go-logr/logr"
 	corev1 "k8s.io/api/core/v1"
 	k8sRuntime "k8s.io/apimachinery/pkg/runtime"
@@ -219,7 +220,7 @@ func (r *SingleRestoreReconciler) checkRestoreStatus(ctx context.Context) error 
 	r.Log.Info("Restore status received", "status", restoreStatus, "jobID", jobID)
 
 	if status, ok := restoreStatus["status"]; ok {
-		r.aeroRestore.Status.Phase = statusToPhase(status.(string))
+		r.aeroRestore.Status.Phase = statusToPhase(r.Log, status.(string))
 	}
 
 	statusBytes, err := json.Marshal(restoreStatus)
@@ -333,17 +334,23 @@ func (r *SingleRestoreReconciler) cancelRestoreJob() error {
 	return nil
 }
 
-func statusToPhase(status string) asdbv1beta1.AerospikeRestorePhase {
-	switch status {
-	case "Done":
-		return asdbv1beta1.AerospikeRestoreCompleted
-
-	case "Running":
-		return asdbv1beta1.AerospikeRestoreInProgress
-
-	case "Failed":
-		return asdbv1beta1.AerospikeRestoreFailed
+func statusToPhase(log logr.Logger, status string) asdbv1beta1.AerospikeRestorePhase {
+	jobStatus, ok := dto.ParseJobStatus(status)
+	if !ok {
+		return ""
 	}
 
-	return ""
+	switch jobStatus {
+	case dto.RestoreRunning:
+		return asdbv1beta1.AerospikeRestoreInProgress
+	case dto.RestoreSuccess:
+		return asdbv1beta1.AerospikeRestoreCompleted
+	case dto.RestoreFailure, dto.RestoreCanceled:
+		return asdbv1beta1.AerospikeRestoreFailed
+	default:
+		log.Info("Unmapped ABS restore job status; update statusToPhase for new dto.JobStatus value",
+			"status", status, "jobStatus", jobStatus)
+
+		return ""
+	}
 }

@@ -11,7 +11,7 @@ nameOverride: ""
 ## Image is the image for the backup service.
 image:
   repository: aerospike/aerospike-backup-service
-  tag: "3.5.0"
+  tag: "3.6.1"
 
 ## Custom labels that will be applied on the AerospikeBackupService resource
 customLabels: {}
@@ -25,6 +25,7 @@ backupServiceConfig: {}
 #  backup-policies:
 #    test-policy:
 #      parallel: 3
+#      compact: true
 #  storage:
 #    local:
 #      local-storage:
