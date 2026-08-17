@@ -2,7 +2,6 @@ package cluster
 
 import (
 	"context"
-	"errors"
 	"fmt"
 	"reflect"
 	"sort"
@@ -247,11 +246,6 @@ func (r *SingleClusterReconciler) deleteSTS(ctx context.Context, st *appsv1.Stat
 	return r.Delete(ctx, st)
 }
 
-// errStsNotReady is returned when the wait loop exhausts all retries but the
-// pod is still starting up (not a failure — just slow). This is the only error
-// that should result in a requeue; everything else is a hard ReconcileError.
-var errStsNotReady = errors.New("STS pod not ready yet")
-
 // podStatusMaxRetry and podStatusRetryInterval control the polling behaviour of
 // waitForSTSPodsServerReady and waitForSTSToBeReady. They are package-level
 // variables (rather than local constants) so that unit tests can set them to
@@ -323,7 +317,7 @@ func (r *SingleClusterReconciler) waitForSTSPodsServerReady(
 
 		if !isReady {
 			return fmt.Errorf("pod %s not ready yet — server container not ready, containerStatuses: %v: %w",
-				utils.NamespacedName(st.Namespace, podName), pod.Status.ContainerStatuses, errStsNotReady)
+				utils.NamespacedName(st.Namespace, podName), pod.Status.ContainerStatuses, common.ErrSTSNotReady)
 		}
 	}
 
@@ -396,7 +390,7 @@ func (r *SingleClusterReconciler) waitForSTSToBeReady(
 
 		if !isReady {
 			return fmt.Errorf("pod %s not ready yet — resource not ready, conditions: %v: %w",
-				utils.GetNamespacedNameString(pod), pod.Status.Conditions, errStsNotReady)
+				utils.GetNamespacedNameString(pod), pod.Status.Conditions, common.ErrSTSNotReady)
 		}
 	}
 

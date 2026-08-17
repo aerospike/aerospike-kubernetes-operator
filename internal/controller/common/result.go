@@ -1,10 +1,16 @@
 package common
 
 import (
+	"errors"
 	"time"
 
 	"sigs.k8s.io/controller-runtime/pkg/reconcile"
 )
+
+// ErrSTSNotReady is returned when a StatefulSet wait loop exhausts all retries
+// but the pod is still starting up (not a failure — just slow). Callers branch
+// on this with errors.Is to requeue rather than hard-error.
+var ErrSTSNotReady = errors.New("STS pod not ready yet")
 
 const (
 	reconcileResultLogKey       = "result"

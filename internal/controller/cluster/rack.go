@@ -220,7 +220,7 @@ func (r *SingleClusterReconciler) waitForAllRacksReady(
 		}
 
 		if waitErr != nil {
-			if errors.Is(waitErr, errStsNotReady) {
+			if errors.Is(waitErr, common.ErrSTSNotReady) {
 				// Pod is still starting up — genuine timeout, requeue and check again.
 				// The wait is required in cases where scale up waits for a pod to
 				// terminate times out and event is re-queued.
@@ -2358,7 +2358,7 @@ func (r *SingleClusterReconciler) reconcileRevisionChangedRacks(
 
 	if asdbv1.GetBool(r.aeroCluster.Spec.IgnoreSidecarFailure) {
 		if err := r.waitForAllAerospikeServersReady(ctx, ignorablePodNames); err != nil {
-			if errors.Is(err, errStsNotReady) {
+			if errors.Is(err, common.ErrSTSNotReady) {
 				r.Log.Error(err, "Failed to wait for Aerospike server containers to be ready after rack migration, will requeue")
 				return common.ReconcileRequeueAfter(1)
 			}
@@ -2367,7 +2367,7 @@ func (r *SingleClusterReconciler) reconcileRevisionChangedRacks(
 		}
 	} else {
 		if err := r.waitForAllSTSToBeReady(ctx, ignorablePodNames); err != nil {
-			if errors.Is(err, errStsNotReady) {
+			if errors.Is(err, common.ErrSTSNotReady) {
 				r.Log.Error(err, "Failed to wait for StatefulSet to be ready after rack migration, will requeue")
 				return common.ReconcileRequeueAfter(1)
 			}
@@ -2490,9 +2490,13 @@ func classifyNotReadyPods(pods []*corev1.Pod) (crashed, stillNotReady []*corev1.
 	return
 }
 
-// reconcileResultForNotReadyPods returns the appropriate ReconcileResult for
-// the classified pod sets: ReconcileError for crashed pods, ReconcileRequeueAfter
-// for still-starting pods, and ReconcileSuccess when both sets are empty.
+// handleFailedPodsInRack inspects the pods for a rack and drives recovery in
+// two phases:
+//  1. Server-failed pods are passed to reconcileRack (bypassing batching and
+//     migration/quiesce checks) and then force-restarted if still stuck after
+//     the reconcile.
+//  2. Sidecar-failed pods (when IgnoreSidecarFailure is false) are passed to
+//     reconcileRack so that a matching config change can trigger a restart.
 func (r *SingleClusterReconciler) handleFailedPodsInRack(
 	ctx context.Context, found *appsv1.StatefulSet, rackState *RackState, ignorablePodNames sets.Set[string],
 ) common.ReconcileResult {

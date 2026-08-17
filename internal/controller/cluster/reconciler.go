@@ -279,7 +279,7 @@ func (r *SingleClusterReconciler) recoverIgnorablePods(
 		return common.ReconcileError(fmt.Errorf("list Pods: %w", gErr))
 	}
 
-	r.Log.Info("Try to recover failed/pending Pods if any")
+	r.Log.V(1).Info("Try to recover failed/pending Pods if any")
 
 	var deletedPodNames []string
 
@@ -312,7 +312,7 @@ func (r *SingleClusterReconciler) recoverIgnorablePods(
 
 	// No pods were failed — all ignorable pods are healthy.
 	if len(deletedPodNames) == 0 {
-		r.Log.Info("All ignorable pod(s) are healthy, requeuing")
+		r.Log.Info("All ignorable pods are healthy; re-entering normal reconcile")
 
 		return common.ReconcileRequeue()
 	}
@@ -374,7 +374,7 @@ func (r *SingleClusterReconciler) waitForIgnorablePodsRecovery(ctx context.Conte
 			}
 
 			if podState := utils.CheckServerFailedWithGrace(pod, false); podState.State == utils.PodFailed {
-				r.Log.Info("Ignorable pod server container failed during recovery",
+				r.Log.V(1).Info("Ignorable pod server container failed during recovery",
 					"pod", podName, "reason", podState.Reason)
 
 				failureReasons = append(failureReasons,
@@ -385,7 +385,7 @@ func (r *SingleClusterReconciler) waitForIgnorablePodsRecovery(ctx context.Conte
 			}
 
 			if utils.IsAerospikeServerReady(pod) {
-				r.Log.Info("Ignorable pod server container is ready", "pod", podName)
+				r.Log.V(1).Info("Ignorable pod server container is ready", "pod", podName)
 				awaitingRecovery.Delete(podName)
 			}
 		}
