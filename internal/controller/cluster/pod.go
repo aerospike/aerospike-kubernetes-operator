@@ -359,7 +359,7 @@ func (r *SingleClusterReconciler) rollingRestartPods(
 				"resolve migrate-fill-delay for rack %d: %w", rackState.Rack.ID, err))
 		}
 
-		r.Log.Info(fmt.Sprintf("migrate-fill-delay for Pod restart: %d (drain=%v)", migrateFillDelay, drainBeforeStability))
+		r.Log.Info("migrate-fill-delay for Pod restart", "delay", migrateFillDelay, "drain", drainBeforeStability)
 
 		if res := r.waitForMultipleNodesSafeStopReady(ctx, activePods, ignorablePodNames,
 			migrateFillDelay, drainBeforeStability); !res.IsSuccess {
@@ -746,12 +746,14 @@ func (r *SingleClusterReconciler) safelyDeletePodsAndEnsureImageUpdated(
 	if len(activePods) != 0 {
 		r.Log.Info("Restart active Pods with updated container image", "pods", getPodNames(activePods))
 
-		migrateFillDelay, drainBeforeStability, err := r.mfdDelayForRestart(rackState, podsToUpdate, nil)
+		// nil pods: restartTypeMap==nil signals the upgrade path where every pod is a full restart,
+		// so mfdDelayForRestart short-circuits immediately without inspecting the pod list.
+		migrateFillDelay, drainBeforeStability, err := r.mfdDelayForRestart(rackState, nil, nil)
 		if err != nil {
 			return common.ReconcileError(err)
 		}
 
-		r.Log.Info(fmt.Sprintf("migrate-fill-delay for Pod upgrade: %d (drain=%v)", migrateFillDelay, drainBeforeStability))
+		r.Log.Info("migrate-fill-delay for Pod upgrade", "delay", migrateFillDelay, "drain", drainBeforeStability)
 
 		if res := r.waitForMultipleNodesSafeStopReady(ctx, activePods, ignorablePodNames,
 			migrateFillDelay, drainBeforeStability); !res.IsSuccess {
@@ -2080,13 +2082,14 @@ func (r *SingleClusterReconciler) mfdDelayForRestart(rackState *RackState,
 }
 
 // revertMFDToConfig sets migrate-fill-delay back to the aerospike.conf configured value.
+// Racks[0] is used because webhook validation enforces migrate-fill-delay to be identical
+// across all racks (aerospikecluster_validating_webhook.go).
 func (r *SingleClusterReconciler) revertMFDToConfig(
 	ctx context.Context,
 	policy *as.ClientPolicy,
-	asConfig *asdbv1.AerospikeConfigSpec,
 	ignorablePodNames sets.Set[string],
 ) common.ReconcileResult {
-	configMFD, err := asdbv1.GetMigrateFillDelay(asConfig)
+	configMFD, err := asdbv1.GetMigrateFillDelay(&r.aeroCluster.Spec.RackConfig.Racks[0].AerospikeConfig)
 	if err != nil {
 		return common.ReconcileError(fmt.Errorf("read configMFD for revert: %w", err))
 	}

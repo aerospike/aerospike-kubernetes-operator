@@ -470,7 +470,10 @@ func GetMigrateFillDelay(asConfig *AerospikeConfigSpec) (int, error) {
 		return 0, nil
 	}
 
-	serviceConfig := asConfig.Value[ConfKeyService].(map[string]interface{})
+	serviceConfig, ok := asConfig.Value[ConfKeyService].(map[string]interface{})
+	if !ok {
+		return 0, nil
+	}
 
 	fillDelayIFace, exists := serviceConfig["migrate-fill-delay"]
 	if !exists {

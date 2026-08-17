@@ -22,6 +22,7 @@ import (
 	"github.com/stretchr/testify/require"
 	corev1 "k8s.io/api/core/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
+	"k8s.io/apimachinery/pkg/util/sets"
 	"sigs.k8s.io/controller-runtime/pkg/client/interceptor"
 
 	asdbv1 "github.com/aerospike/aerospike-kubernetes-operator/v4/api/v1"
@@ -82,6 +83,17 @@ func TestMFDDelayForRestart(t *testing.T) {
 			name:           "nil restartTypeMap with OverrideMigrateFillDelay assumes pod restart",
 			delay:          ptrInt64(120),
 			pods:           []*corev1.Pod{makePod("pod-0")},
+			restartTypeMap: nil,
+			wantDelay:      120,
+			wantDrain:      true,
+		},
+		{
+			// Upgrade path: safelyDeletePodsAndEnsureImageUpdated passes (nil, nil) because
+			// restartTypeMap==nil already signals "all pods are full restarts"; the pod list
+			// is never inspected and must be safe to omit.
+			name:           "upgrade path: nil pods + nil restartTypeMap → override, drain",
+			delay:          ptrInt64(120),
+			pods:           nil,
 			restartTypeMap: nil,
 			wantDelay:      120,
 			wantDrain:      true,
@@ -214,11 +226,6 @@ func TestMFDDelayForRestart(t *testing.T) {
 		})
 	}
 }
-=======
-	corev1 "k8s.io/api/core/v1"
-	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
-	"k8s.io/apimachinery/pkg/util/sets"
-)
 
 func TestGetServerFailedAndActivePods(t *testing.T) {
 	serverFailedPod := runningPod("server-fail", serverCrashLoopContainer())
