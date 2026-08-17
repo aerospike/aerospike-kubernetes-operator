@@ -28,6 +28,10 @@ func ReconcileSuccess() ReconcileResult {
 	return ReconcileResult{IsSuccess: true, Result: reconcile.Result{}}
 }
 
+func ReconcileRequeue() ReconcileResult {
+	return ReconcileResult{Result: reconcile.Result{Requeue: true}}
+}
+
 func ReconcileRequeueAfter(secs int) ReconcileResult {
 	t := time.Duration(secs) * time.Second
 

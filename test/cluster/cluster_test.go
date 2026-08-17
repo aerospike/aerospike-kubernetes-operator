@@ -621,15 +621,26 @@ func ScaleDownWithMigrateFillDelay(ctx goctx.Context) {
 					aeroCluster, err := getCluster(k8sClient, ctx, clusterNamespacedName)
 					Expect(err).ToNot(HaveOccurred())
 
-					aeroCluster.Spec.Size -= 2
+					// Pod -0 stays after scale-down (only -3 and -2 are removed).
+					failedPodName := aeroCluster.Name + "-" + strconv.Itoa(aeroCluster.Spec.RackConfig.Racks[0].ID) + "-0"
+
+					By("Marking a non-scale-down pod as failed")
+					Expect(markPodAsFailed(ctx, k8sClient, failedPodName, namespace)).ToNot(HaveOccurred())
+
+					By("Setting maxIgnorablePods=1 and triggering scale-down by 1")
+
+					maxIgnorable := intstr.FromInt32(1)
+					aeroCluster.Spec.RackConfig.MaxIgnorablePods = &maxIgnorable
+					aeroCluster.Spec.Size -= 1
+
 					err = k8sClient.Update(ctx, aeroCluster)
 					Expect(err).ToNot(HaveOccurred())
 
 					// verify that migrate-fill-delay is set to 0 while scaling down
-					firstPodName := aeroCluster.Name + "-" + strconv.Itoa(aeroCluster.Spec.RackConfig.Racks[0].ID) + "-0"
+					secondPodName := aeroCluster.Name + "-" + strconv.Itoa(aeroCluster.Spec.RackConfig.Racks[0].ID) + "-1"
 
 					err = validateMigrateFillDelay(ctx, k8sClient, logger, clusterNamespacedName, 0,
-						nil, firstPodName)
+						nil, secondPodName)
 					Expect(err).ToNot(HaveOccurred())
 
 					err = waitForAerospikeCluster(
@@ -640,7 +651,7 @@ func ScaleDownWithMigrateFillDelay(ctx goctx.Context) {
 
 					// verify that migrate-fill-delay is reverted to original value after scaling down
 					err = validateMigrateFillDelay(ctx, k8sClient, logger, clusterNamespacedName, migrateFillDelay,
-						nil, firstPodName)
+						nil, secondPodName)
 					Expect(err).ToNot(HaveOccurred())
 				},
 			)
@@ -993,6 +1004,88 @@ func clusterWithMaxIgnorablePod(ctx goctx.Context) {
 					Expect(err).ToNot(HaveOccurred())
 				},
 			)
+
+			It(
+				"Should recover multiple ignorable pods via batch deletion in a single reconcile pass",
+				func() {
+					// recoverIgnorablePods collects all failed ignorable pods in one
+					// loop, deletes them all, then waits for all of them together in a
+					// single 3-minute window. This test verifies that both pods are
+					// actually recovered and the cluster reaches Completed — confirming
+					// that the batch-delete path handles more than one pod at a time.
+					By("Scaling up cluster with 2")
+
+					err = scaleUpClusterTest(
+						k8sClient, ctx, clusterNamespacedName, 2,
+					)
+					Expect(err).ToNot(HaveOccurred())
+
+					By("Marking two pods as failed")
+
+					pod1Name := clusterNamespacedName.Name + "-1-0"
+					pod2Name := clusterNamespacedName.Name + "-1-1"
+
+					Expect(markPodAsFailed(ctx, k8sClient, pod1Name, clusterNamespacedName.Namespace)).ToNot(HaveOccurred())
+					Expect(markPodAsFailed(ctx, k8sClient, pod2Name, clusterNamespacedName.Namespace)).ToNot(HaveOccurred())
+
+					By("Waiting for both pods to have a failed server container")
+
+					for _, podName := range []string{pod1Name, pod2Name} {
+						nn := types.NamespacedName{Name: podName, Namespace: clusterNamespacedName.Namespace}
+
+						Eventually(func() bool {
+							pod := &v1.Pod{}
+							if gErr := k8sClient.Get(ctx, nn, pod); gErr != nil {
+								return false
+							}
+
+							return !utils.IsAerospikeServerReady(pod)
+						}, 3*time.Minute, 5*time.Second).Should(BeTrue(),
+							"pod %s should have a failed server container after image change", podName)
+					}
+
+					By("Setting MaxIgnorablePods=2 to trigger reconcile — both pods should be deleted and recovered together")
+
+					aeroCluster, gErr := getCluster(k8sClient, ctx, clusterNamespacedName)
+					Expect(gErr).ToNot(HaveOccurred())
+
+					val := intstr.FromInt32(2)
+					aeroCluster.Spec.RackConfig.MaxIgnorablePods = &val
+					Expect(k8sClient.Update(ctx, aeroCluster)).ToNot(HaveOccurred())
+
+					By("Verifying both pods recover — server container becomes ready after STS recreates them")
+
+					for _, podName := range []string{pod1Name, pod2Name} {
+						nn := types.NamespacedName{Name: podName, Namespace: clusterNamespacedName.Namespace}
+
+						Eventually(func(g Gomega) {
+							pod := &v1.Pod{}
+							g.Expect(k8sClient.Get(ctx, nn, pod)).ToNot(HaveOccurred())
+							g.Expect(utils.IsAerospikeServerReady(pod)).To(BeTrue(),
+								"pod %s server container should be ready after recovery", podName)
+						}, 3*time.Minute, 5*time.Second).Should(Succeed())
+					}
+
+					By("Verifying cluster reaches Completed")
+
+					err = waitForAerospikeCluster(
+						k8sClient, ctx, aeroCluster, int(aeroCluster.Spec.Size), retryInterval,
+						getTimeout(2),
+						[]asdbv1.AerospikeClusterPhase{asdbv1.AerospikeClusterCompleted},
+					)
+					Expect(err).ToNot(HaveOccurred())
+
+					By("Verifying SC roster includes all nodes — both recovered pods are back in the cluster")
+
+					Eventually(
+						func() error {
+							return InterceptGomegaFailure(func() {
+								validateRoster(k8sClient, ctx, clusterNamespacedName, scNamespace)
+							})
+						}, 5*time.Minute, 10*time.Second,
+					).Should(Succeed())
+				},
+			)
 		},
 	)
 
@@ -1013,23 +1106,15 @@ func clusterWithMaxIgnorablePod(ctx goctx.Context) {
 
 					By("Deploying a healthy cluster with Size=nodeCount and MultiPodPerHost=false")
 
-					pendingClusterName := fmt.Sprintf("recover-ignorable-%d", GinkgoParallelProcess())
-					pendingClusterNN := test.GetNamespacedName(pendingClusterName, namespace)
-
 					// Deploy with exactly nodeCount pods first so the cluster comes up healthy.
-					aeroCluster := createNonSCDummyAerospikeCluster(pendingClusterNN, n)
+					aeroCluster := createNonSCDummyAerospikeCluster(clusterNamespacedName, n)
 					aeroCluster.Spec.PodSpec.MultiPodPerHost = ptr.To(false)
 					randomizeServicePorts(aeroCluster, false, GinkgoParallelProcess())
 					Expect(DeployCluster(k8sClient, ctx, aeroCluster)).ToNot(HaveOccurred())
 
-					defer func() {
-						_ = DeleteCluster(k8sClient, ctx, aeroCluster)
-						_ = CleanupPVC(k8sClient, namespace, pendingClusterName)
-					}()
-
 					By("Scaling up by 1 beyond node count so one pod becomes permanently Pending, with MaxIgnorablePods=1")
 
-					aeroCluster, err = getCluster(k8sClient, ctx, pendingClusterNN)
+					aeroCluster, err = getCluster(k8sClient, ctx, clusterNamespacedName)
 					Expect(err).ToNot(HaveOccurred())
 
 					aeroCluster.Spec.Size++
@@ -1056,13 +1141,8 @@ func clusterWithMaxIgnorablePod(ctx goctx.Context) {
 						"expected at least one Pending pod after scale-up beyond node count")
 
 					By("Verifying cluster reaches Completed — pending pod treated as ignorable")
-
-					Eventually(func(g Gomega) {
-						cluster, clusterErr := getCluster(k8sClient, ctx, pendingClusterNN)
-						g.Expect(clusterErr).ToNot(HaveOccurred())
-						g.Expect(cluster.Status.Phase).To(Equal(asdbv1.AerospikeClusterCompleted),
-							"cluster must be Completed with the pending pod treated as ignorable")
-					}, 2*time.Minute, retryInterval).Should(Succeed())
+					Expect(waitForClusterPhase(k8sClient, ctx, clusterNamespacedName,
+						asdbv1.AerospikeClusterCompleted)).ToNot(HaveOccurred())
 				},
 			)
 		},

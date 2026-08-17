@@ -58,10 +58,9 @@ func (r *SingleClusterReconciler) reconcileRacks(ctx context.Context) common.Rec
 		racksToDelete, "ignorablePods", ignorablePodNames.UnsortedList(),
 	)
 
-	// Handle failed pods for each configured rack. For revision-changed racks
-	// the current-revision STS either does not exist yet or has 0 replicas, so
-	// handleFailedPodsInRack would see no pods; instead we check the old-revision
-	// STS pods directly and skip the new-revision STS lookup entirely.
+	// Handle failed pods for each configured rack. For revision-changed racks,
+	// handleFailedPodsInRack only inspects new-revision STS pods — old-revision
+	// STS pods are invisible to it. Check them explicitly before proceeding.
 	for idx := range configuredRacks {
 		state := &configuredRacks[idx]
 
@@ -92,10 +91,14 @@ func (r *SingleClusterReconciler) reconcileRacks(ctx context.Context) common.Rec
 
 	// All racks either passed handleFailedPodsInRack or had their old-revision
 	// pods verified as healthy. Restore InProgress so the rest of the reconcile
-	// loop can proceed.
+	// loop can proceed. Use a patch to avoid overwriting r.aeroCluster with a
+	// fresh Get mid-reconcile.
 	if r.aeroCluster.Status.Phase != asdbv1.AerospikeClusterInProgress {
-		if err = r.setStatusPhase(ctx, asdbv1.AerospikeClusterInProgress); err != nil {
-			return common.ReconcileError(err)
+		patch := client.MergeFrom(r.aeroCluster.DeepCopy())
+		r.aeroCluster.Status.Phase = asdbv1.AerospikeClusterInProgress
+
+		if err = r.Client.Status().Patch(ctx, r.aeroCluster, patch); err != nil {
+			return common.ReconcileError(fmt.Errorf("set cluster status phase to InProgress: %w", err))
 		}
 	}
 
@@ -217,8 +220,7 @@ func (r *SingleClusterReconciler) waitForAllRacksReady(
 		}
 
 		if waitErr != nil {
-			var notReady *stsNotReadyError
-			if errors.As(waitErr, &notReady) {
+			if errors.Is(waitErr, errStsNotReady) {
 				// Pod is still starting up — genuine timeout, requeue and check again.
 				// The wait is required in cases where scale up waits for a pod to
 				// terminate times out and event is re-queued.
@@ -235,10 +237,6 @@ func (r *SingleClusterReconciler) waitForAllRacksReady(
 
 				return common.ReconcileRequeueAfter(1)
 			}
-
-			// Pod failure or API error — hard error.
-			r.Log.Error(waitErr, "Error while waiting for StatefulSet to be ready",
-				"statefulSet", utils.GetNamespacedName(found))
 
 			return common.ReconcileError(waitErr)
 		}
@@ -1168,7 +1166,8 @@ func (r *SingleClusterReconciler) scaleDownRack(
 	// Capture the target size before the retry loop. If getSTS fails inside
 	// the closure, found is not updated, so *found.Spec.Replicas would be the
 	// stale pre-scale-down count — scaleDownTargetSize avoids that.
-	scaleDownTargetSize := *found.Spec.Replicas - batchLen
+	originalSize := *found.Spec.Replicas
+	scaleDownTargetSize := originalSize - batchLen
 
 	if err = retry.RetryOnConflict(retry.DefaultRetry, func() error {
 		current, getStsErr := r.getSTS(ctx, rackState)
@@ -1285,7 +1284,7 @@ func (r *SingleClusterReconciler) scaleDownRack(
 		r.aeroCluster, corev1.EventTypeNormal, "RackScaledDown",
 		eventRackScaleMessage(
 			"Scaled down", rackState.Rack.ID,
-			utils.GetNamespacedNameString(found), scaleDownTargetSize, *found.Spec.Replicas,
+			utils.GetNamespacedNameString(found), originalSize, scaleDownTargetSize,
 		),
 	)
 
@@ -2359,10 +2358,20 @@ func (r *SingleClusterReconciler) reconcileRevisionChangedRacks(
 
 	if asdbv1.GetBool(r.aeroCluster.Spec.IgnoreSidecarFailure) {
 		if err := r.waitForAllAerospikeServersReady(ctx, ignorablePodNames); err != nil {
+			if errors.Is(err, errStsNotReady) {
+				r.Log.Error(err, "Failed to wait for Aerospike server containers to be ready after rack migration, will requeue")
+				return common.ReconcileRequeueAfter(1)
+			}
+
 			return common.ReconcileError(err)
 		}
 	} else {
 		if err := r.waitForAllSTSToBeReady(ctx, ignorablePodNames); err != nil {
+			if errors.Is(err, errStsNotReady) {
+				r.Log.Error(err, "Failed to wait for StatefulSet to be ready after rack migration, will requeue")
+				return common.ReconcileRequeueAfter(1)
+			}
+
 			return common.ReconcileError(err)
 		}
 	}
@@ -2432,10 +2441,6 @@ func (r *SingleClusterReconciler) checkRackPodsHealthy(
 	serverFailedPods, _, _ := getServerFailedAndActivePods(nonIgnorablePods, false)
 
 	if len(serverFailedPods) != 0 {
-		r.Log.Info("Rack has server-failed Pods",
-			"rackID", rackID, "rackRevision", rackRevision,
-			"serverFailedPods", getPodNames(serverFailedPods))
-
 		return common.ReconcileError(
 			fmt.Errorf("rack %d-%s has server-failed pods: %s",
 				rackID, rackRevision, strings.Join(getPodNames(serverFailedPods), ", ")),
@@ -2446,20 +2451,48 @@ func (r *SingleClusterReconciler) checkRackPodsHealthy(
 		sidecarNotReadyPods := getSidecarNotReadyPods(nonIgnorablePods)
 
 		if len(sidecarNotReadyPods) != 0 {
-			r.Log.Info("Rack has sidecar-not-ready Pods",
-				"rackID", rackID, "rackRevision", rackRevision,
-				"sidecarNotReadyPods", getPodNames(sidecarNotReadyPods))
+			crashed, notCrashed := classifyNotReadyPods(sidecarNotReadyPods)
 
-			return common.ReconcileError(
-				fmt.Errorf("rack %d-%s has sidecar-not-ready pods: %s",
-					rackID, rackRevision, strings.Join(getPodNames(sidecarNotReadyPods), ", ")),
-			)
+			if len(crashed) != 0 {
+				return common.ReconcileError(
+					fmt.Errorf("rack %d-%s has sidecar-crashed pods: %s",
+						rackID, rackRevision, strings.Join(getPodNames(crashed), ", ")),
+				)
+			}
+
+			r.Log.Info("Rack has sidecar-not-ready pods, requeuing",
+				"rackID", rackID, "rackRevision", rackRevision,
+				"sidecarNotReadyPods", getPodNames(notCrashed))
+
+			return common.ReconcileRequeueAfter(asdbv1.RequeueIntervalSeconds60)
 		}
 	}
 
 	return common.ReconcileSuccess()
 }
 
+// classifyNotReadyPods splits pods into those that have hard-failed
+// (CheckPodFailed != nil) and those that are merely still starting up.
+// Ready pods are skipped.
+func classifyNotReadyPods(pods []*corev1.Pod) (crashed, stillNotReady []*corev1.Pod) {
+	for _, pod := range pods {
+		if utils.IsPodReady(pod) {
+			continue
+		}
+
+		if utils.CheckPodFailed(pod) != nil {
+			crashed = append(crashed, pod)
+		} else {
+			stillNotReady = append(stillNotReady, pod)
+		}
+	}
+
+	return
+}
+
+// reconcileResultForNotReadyPods returns the appropriate ReconcileResult for
+// the classified pod sets: ReconcileError for crashed pods, ReconcileRequeueAfter
+// for still-starting pods, and ReconcileSuccess when both sets are empty.
 func (r *SingleClusterReconciler) handleFailedPodsInRack(
 	ctx context.Context, found *appsv1.StatefulSet, rackState *RackState, ignorablePodNames sets.Set[string],
 ) common.ReconcileResult {
@@ -2587,19 +2620,7 @@ func (r *SingleClusterReconciler) handleFailedPodsInRack(
 		)
 	}
 
-	var crashedPods, stillNotReadyPods []*corev1.Pod
-
-	for _, pod := range getNonIgnorablePods(podList, ignorablePodNames) {
-		if utils.IsPodReady(pod) {
-			continue
-		}
-
-		if utils.CheckPodFailed(pod) != nil {
-			crashedPods = append(crashedPods, pod)
-		} else {
-			stillNotReadyPods = append(stillNotReadyPods, pod)
-		}
-	}
+	crashedPods, stillNotReadyPods := classifyNotReadyPods(getNonIgnorablePods(podList, ignorablePodNames))
 
 	if len(crashedPods) != 0 {
 		return common.ReconcileError(fmt.Errorf(
@@ -2613,7 +2634,7 @@ func (r *SingleClusterReconciler) handleFailedPodsInRack(
 			"rackID", rackState.Rack.ID, "rackRevision", rackState.Rack.Revision,
 			"notReadyPods", getPodNames(stillNotReadyPods))
 
-		return common.ReconcileRequeueAfter(60)
+		return common.ReconcileRequeueAfter(asdbv1.RequeueIntervalSeconds60)
 	}
 
 	return common.ReconcileSuccess()

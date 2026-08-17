@@ -512,7 +512,7 @@ var _ = Describe("SidecarFailure", func() {
 			// IgnoreSidecarFailure=false blocks when pod-0's sidecar is not ready.
 			Expect(k8sClient.Update(ctx, aeroCluster)).ToNot(HaveOccurred())
 
-			By("Verifying rolling restart is stuck in InProgress — sidecar failure blocks readiness wait")
+			By("Verifying rolling restart is stuck in Error — sidecar failure blocks readiness wait")
 
 			Expect(waitForClusterPhase(k8sClient, ctx, clusterNamespacedName,
 				asdbv1.AerospikeClusterError)).ToNot(HaveOccurred())
@@ -603,17 +603,10 @@ var _ = Describe("SidecarFailure", func() {
 
 		// When podFailure != nil (sidecar crashing) and a pod-level operation runs
 		// (upgradeRack sets podOpPerformed=true), checkPodsFailedAfterRackOp fires
-		// after the rolling restart and returns non-success — deferring scale-up
-		// for one reconcile cycle. The signal-controlled sidecar is used here
-		// because its failure is emptyDir-persisted: /signal/fail survives pod
-		// restarts, keeping the sidecar in stable CrashLoopBackOff across the
-		// entire rolling restart. exit 1 / exit 2 patterns would not be reliable
-		// because State.Waiting toggles with Running between backoff intervals,
-		// and the check might fire during a Running window where the sidecar
-		// appears healthy.
+		// after the rolling restart and returns non-success — deferring scale-up.
 		// Pod 2 (scale-up pod) gets a fresh emptyDir, so its sidecar is healthy —
 		// once IgnoreSidecarFailure=true is applied the cluster reaches Completed.
-		It("Should defer scale-up by one reconcile cycle when an image upgrade and sidecar failure coincide",
+		It("Should defer scale-up when a sidecar spec change and scale-up coincide and sidecar crashes",
 			func() {
 				By("Deploying a 2-node cluster with a signal-controlled sidecar (initially healthy)")
 
@@ -643,11 +636,6 @@ var _ = Describe("SidecarFailure", func() {
 				aeroCluster.Spec.Size = 3
 				Expect(k8sClient.Update(ctx, aeroCluster)).ToNot(HaveOccurred())
 
-				// upgradeRack runs (podOpPerformed=true). After the rolling restart
-				// completes, checkPodsFailedAfterRackOp detects the stable
-				// CrashLoopBackOff on pods 0 and 1 and returns non-success — scale-up
-				// is deferred. The next reconcile finds no pending upgrade, so
-				// podOpPerformed=false and scaleUpRack runs.
 				By("Confirming scale-up pod is absent while rolling restart is in progress")
 				Consistently(func(g Gomega) {
 					cluster, clusterErr := getCluster(k8sClient, ctx, clusterNamespacedName)

@@ -18,12 +18,15 @@ package cluster
 
 import (
 	"context"
+	"errors"
 	"testing"
 
 	appsv1 "k8s.io/api/apps/v1"
 	corev1 "k8s.io/api/core/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/util/sets"
+
+	asdbv1 "github.com/aerospike/aerospike-kubernetes-operator/v4/api/v1"
 )
 
 func replicaCount(n int32) *int32 { return &n }
@@ -111,6 +114,35 @@ func TestWaitForSTSPodsServerReady(t *testing.T) {
 
 		if err := r.waitForSTSPodsServerReady(context.Background(), multiSTS, ignorable); err != nil {
 			t.Errorf("expected nil when running pod + ignorable pod, got: %v", err)
+		}
+	})
+
+	t.Run("pod stuck in ContainerCreating exhausts retries and returns errStsNotReady", func(t *testing.T) {
+		// Override retry knobs so the test completes in < 1 ms.
+		origMax, origInterval := podStatusMaxRetry, podStatusRetryInterval
+		podStatusMaxRetry = 1
+		podStatusRetryInterval = 0
+
+		defer func() { podStatusMaxRetry, podStatusRetryInterval = origMax, origInterval }()
+
+		// Pod exists but server container is not ready (ContainerCreating — no
+		// State set, Ready=false). CheckServerFailedWithGrace returns PodHealthy
+		// for this state, so the function retries until the limit and wraps
+		// errStsNotReady.
+		pod := &corev1.Pod{
+			ObjectMeta: metav1.ObjectMeta{Name: stsName + "-0", Namespace: namespace},
+			Status: corev1.PodStatus{
+				Phase: corev1.PodPending,
+				ContainerStatuses: []corev1.ContainerStatus{
+					{Name: asdbv1.AerospikeServerContainerName, Ready: false},
+				},
+			},
+		}
+		r := newReconcilerWithObjects(scheme, aeroCluster, sts, pod)
+
+		err := r.waitForSTSPodsServerReady(context.Background(), sts, sets.New[string]())
+		if !errors.Is(err, errStsNotReady) {
+			t.Errorf("expected errStsNotReady for stuck pod, got: %v", err)
 		}
 	})
 }

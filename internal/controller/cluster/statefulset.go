@@ -2,6 +2,7 @@ package cluster
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"reflect"
 	"sort"
@@ -11,7 +12,7 @@ import (
 
 	appsv1 "k8s.io/api/apps/v1"
 	corev1 "k8s.io/api/core/v1"
-	"k8s.io/apimachinery/pkg/api/errors"
+	k8serrors "k8s.io/apimachinery/pkg/api/errors"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/labels"
 	"k8s.io/apimachinery/pkg/types"
@@ -246,26 +247,23 @@ func (r *SingleClusterReconciler) deleteSTS(ctx context.Context, st *appsv1.Stat
 	return r.Delete(ctx, st)
 }
 
-// stsNotReadyError is returned when the wait loop exhausts all retries but the
+// errStsNotReady is returned when the wait loop exhausts all retries but the
 // pod is still starting up (not a failure — just slow). This is the only error
 // that should result in a requeue; everything else is a hard ReconcileError.
-type stsNotReadyError struct {
-	podName string
-	reason  string
-}
+var errStsNotReady = errors.New("STS pod not ready yet")
 
-func (e *stsNotReadyError) Error() string {
-	return fmt.Sprintf("pod %s not ready yet: %s", e.podName, e.reason)
-}
+// podStatusMaxRetry and podStatusRetryInterval control the polling behaviour of
+// waitForSTSPodsServerReady and waitForSTSToBeReady. They are package-level
+// variables (rather than local constants) so that unit tests can set them to
+// small values and avoid multi-minute sleeps.
+var (
+	podStatusMaxRetry      = 18
+	podStatusRetryInterval = time.Second * 10
+)
 
 func (r *SingleClusterReconciler) waitForSTSPodsServerReady(
 	ctx context.Context, st *appsv1.StatefulSet, ignorablePodNames sets.Set[string],
 ) error {
-	const (
-		podStatusMaxRetry      = 18
-		podStatusRetryInterval = time.Second * 10
-	)
-
 	r.Log.Info(
 		"Waiting for server Container to be ready across all Pods of StatefulSet",
 		"statefulSet", utils.GetNamespacedName(st),
@@ -324,10 +322,8 @@ func (r *SingleClusterReconciler) waitForSTSPodsServerReady(
 		}
 
 		if !isReady {
-			return &stsNotReadyError{
-				podName: utils.NamespacedName(st.Namespace, podName),
-				reason:  fmt.Sprintf("server container not ready, containerStatuses: %v", pod.Status.ContainerStatuses),
-			}
+			return fmt.Errorf("pod %s not ready yet — server container not ready, containerStatuses: %v: %w",
+				utils.NamespacedName(st.Namespace, podName), pod.Status.ContainerStatuses, errStsNotReady)
 		}
 	}
 
@@ -337,11 +333,6 @@ func (r *SingleClusterReconciler) waitForSTSPodsServerReady(
 func (r *SingleClusterReconciler) waitForSTSToBeReady(
 	ctx context.Context, st *appsv1.StatefulSet, ignorablePodNames sets.Set[string],
 ) error {
-	const (
-		podStatusMaxRetry      = 18
-		podStatusRetryInterval = time.Second * 10
-	)
-
 	r.Log.Info(
 		"Waiting for StatefulSet to be ready", "waitTimePerPod",
 		podStatusRetryInterval*time.Duration(podStatusMaxRetry),
@@ -404,10 +395,8 @@ func (r *SingleClusterReconciler) waitForSTSToBeReady(
 		}
 
 		if !isReady {
-			return &stsNotReadyError{
-				podName: utils.GetNamespacedNameString(pod),
-				reason:  fmt.Sprintf("resource not ready, conditions: %v", pod.Status.Conditions),
-			}
+			return fmt.Errorf("pod %s not ready yet — resource not ready, conditions: %v: %w",
+				utils.GetNamespacedNameString(pod), pod.Status.Conditions, errStsNotReady)
 		}
 	}
 
@@ -488,7 +477,7 @@ func (r *SingleClusterReconciler) createSTSConfigMap(
 		}, confMap,
 	)
 	if err != nil {
-		if errors.IsNotFound(err) {
+		if k8serrors.IsNotFound(err) {
 			// build the aerospike config file based on the current spec
 			var configMapData map[string]string
 
@@ -1199,7 +1188,7 @@ func (r *SingleClusterReconciler) waitForAllSTSToBeReady(
 		stsName := utils.GetNamespacedNameForSTSOrConfigMap(r.aeroCluster, rackIdentifier)
 
 		if err := r.Get(ctx, stsName, st); err != nil {
-			if !errors.IsNotFound(err) {
+			if !k8serrors.IsNotFound(err) {
 				return err
 			}
 
@@ -1241,7 +1230,7 @@ func (r *SingleClusterReconciler) waitForAllAerospikeServersReady(
 		stsName := utils.GetNamespacedNameForSTSOrConfigMap(r.aeroCluster, rackIdentifier)
 
 		if err := r.Get(ctx, stsName, st); err != nil {
-			if !errors.IsNotFound(err) {
+			if !k8serrors.IsNotFound(err) {
 				return err
 			}
 

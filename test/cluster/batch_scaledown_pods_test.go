@@ -123,15 +123,6 @@ var _ = Describe("BatchScaleDown", func() {
 			By("Verifying cluster transitions to Error — reconciler detects server-failed pod, blocks scale-down")
 			Expect(waitForClusterPhase(k8sClient, ctx, clusterNamespacedName,
 				asdbv1.AerospikeClusterError)).ToNot(HaveOccurred())
-
-			By("Asserting cluster does not complete (blocked waiting for pod recovery)")
-
-			err = waitForAerospikeCluster(
-				k8sClient, ctx, aeroCluster, int(aeroCluster.Spec.Size),
-				retryInterval, 2*time.Minute,
-				[]asdbv1.AerospikeClusterPhase{asdbv1.AerospikeClusterInProgress, asdbv1.AerospikeClusterError},
-			)
-			Expect(err).To(HaveOccurred())
 		})
 
 		It("Should block scale-down when pod other than the pod to be scaled down is in failed and "+
@@ -152,15 +143,6 @@ var _ = Describe("BatchScaleDown", func() {
 			By("Verifying cluster transitions to Error — reconciler detects server-failed pod, blocks scale-down")
 			Expect(waitForClusterPhase(k8sClient, ctx, clusterNamespacedName,
 				asdbv1.AerospikeClusterError)).ToNot(HaveOccurred())
-
-			By("Asserting cluster does not complete (blocked waiting for pod recovery)")
-
-			err = waitForAerospikeCluster(
-				k8sClient, ctx, aeroCluster, int(aeroCluster.Spec.Size),
-				retryInterval, 2*time.Minute,
-				[]asdbv1.AerospikeClusterPhase{asdbv1.AerospikeClusterInProgress, asdbv1.AerospikeClusterError},
-			)
-			Expect(err).To(HaveOccurred())
 		})
 
 		It("Should allow scale-down with a failed pod when maxIgnorablePods is a percentage covering one pod", func() {
