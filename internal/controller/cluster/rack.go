@@ -694,31 +694,6 @@ func (r *SingleClusterReconciler) reconcileRack(
 		}
 	}
 
-	// Revert migrate-fill-delay only on the normal path and for sidecar-failed
-	// pods (server still running). Skip when recovering server-failed pods —
-	// the Aerospike server is unreachable on those pods so the info command
-	// would fail.
-	if podFailure == nil || !podFailure.isServerFailed {
-		// Revert migrate-fill-delay to the original value if it was set to 0 during scale down.
-		// Reset will be done if there is scale-down or Rack redistribution.
-		// This check won't cover a scenario where a scale-down operation was done and then reverted to the previous
-		// value before the scale down could complete.
-		if (r.aeroCluster.Status.Size > r.aeroCluster.Spec.Size) ||
-			(!r.IsStatusEmpty() && len(r.aeroCluster.Status.RackConfig.Racks) != len(r.aeroCluster.Spec.RackConfig.Racks)) {
-			if res = r.setMigrateFillDelay(
-				ctx, r.getClientPolicy(ctx), &rackState.Rack.AerospikeConfig, false,
-				nil,
-			); !res.IsSuccess {
-				if res.Err != nil {
-					res.Err = fmt.Errorf("revert migrate-fill-delay after scale down: %w",
-						res.Err)
-				}
-
-				return res
-			}
-		}
-	}
-
 	if err := r.updateAerospikeInitContainerImage(ctx, found); err != nil {
 		return common.ReconcileError(fmt.Errorf("update init container image for StatefulSet %s: %w",
 			utils.GetNamespacedNameString(found), err))
@@ -1088,22 +1063,12 @@ func (r *SingleClusterReconciler) scaleDownRack(
 	// Ignore safe stop check if all pods in the batch are not running.
 	// Ignore migrate-fill-delay if pod is not running. Deleting this pod will not lead to any migration.
 	if isAnyPodRunningAndReady {
-		if res := r.waitForMultipleNodesSafeStopReady(ctx, runningPods, ignorablePodNames); !res.IsSuccess {
+		// migrateFillDelay=0: do not raise MFD before quiesce — for scale-down, fills should proceed
+		// immediately once the node is permanently removed.
+		// drainBeforeStability=true: always zero MFD first so any previously raised value is
+		// cleared and fills can drain before the stability check.
+		if res := r.waitForMultipleNodesSafeStopReady(ctx, runningPods, ignorablePodNames, 0, true); !res.IsSuccess {
 			// The pod is running and is unsafe to terminate.
-			return found, res
-		}
-
-		// set migrate-fill-delay to 0 across all nodes of cluster to scale down fast
-		// setting migrate-fill-delay only if pod is running and ready.
-		// This check ensures that migrate-fill-delay is not set while processing failed racks.
-		// setting migrate-fill-delay will fail if there are any failed pod
-		if res := r.setMigrateFillDelay(
-			ctx, policy, &rackState.Rack.AerospikeConfig, true, ignorablePodNames,
-		); !res.IsSuccess {
-			if res.Err != nil {
-				res.Err = fmt.Errorf("set migrate-fill-delay to 0: %w", res.Err)
-			}
-
 			return found, res
 		}
 	}
@@ -2395,13 +2360,29 @@ func (r *SingleClusterReconciler) handleFailedPodsInRack(
 			"rackID", rackState.Rack.ID, "rackRevision", rackState.Rack.Revision,
 			"serverFailedPods", getPodNames(serverFailedPods))
 
+		// Revert MFD only when the user has configured OverrideMigrateFillDelay AND at least one
+		// pod has a definitive failure (crash, image error, or PodFailed phase). Without an
+		// override, MFD was never raised above the config value so there is nothing to revert.
+		// If ALL failed pods are merely Unschedulable, preserve the override — the user may have
+		// set a large value precisely to tolerate a pod being absent while a node is coming up.
+		if r.aeroCluster.Spec.RestartStrategy.GetOverrideMigrateFillDelay() > 0 && hasDefinitiveFailure(serverFailedPods) {
+			// Include failed pod names in the ignorable set so that the info call inside
+			// revertMFDToConfig skips their (dead) Aerospike nodes and doesn't fail.
+			ignorableWithFailed := ignorablePodNames.Union(podNamesToSet(serverFailedPods))
+			if res := r.revertMFDToConfig(
+				ctx, r.getClientPolicy(ctx), ignorableWithFailed,
+			); !res.IsSuccess {
+				return res
+			}
+		}
+
 		// Check res.Err rather than !res.IsSuccess intentionally. reconcileRack
 		// can return {IsSuccess: false, Err: nil} when checkPodsFailedAfterRackOp
 		// defers scale-up for one cycle (a pod is still failed after an upgrade
 		// or rolling restart). In that case there is no operation needed on failed pod — we still
 		// want to fall through to the re-fetch and force-restart logic below so
 		// that genuinely stuck server-failed pods can be force-restarted in the
-		// same reconcile cycle. Only a non-nil error should short-circuit here.
+		// same reconcile cycle.
 		if res := r.reconcileRack(
 			ctx, found, rackState, ignorablePodNames,
 			&failedPodsInfo{pods: serverFailedPods, isServerFailed: true},
