@@ -17,10 +17,10 @@ helm repo update
 
 ### Create Namespace
 
-Create the namespace where AKO will be installed. Replace the placeholder `NAMESPACE_NAME` with your own namespace name. If `--namespace` is not given during install, AKO uses a namespace called `default`.
+Create the namespace where AKO will be installed. Replace the placeholder `<namespace>` with your own namespace name. If `--namespace` is not given during install, AKO uses a namespace called `default`.
 
 ```sh
-kubectl create namespace NAMESPACE_NAME
+kubectl create namespace <namespace>
 ```
 
 ### Deploy Cert-manager
@@ -33,12 +33,8 @@ Install AKO on your Kubernetes cluster, pinning the chart `--version` to the rel
 
 ```sh
 # helm install <chartName> <chartPath> --namespace <namespace> --version <chartVersion>
-helm install aerospike-kubernetes-operator aerospike/aerospike-kubernetes-operator --namespace NAMESPACE_NAME --version 4.5.0 --set watchNamespaces="aerospike"
+helm install aerospike-kubernetes-operator aerospike/aerospike-kubernetes-operator --namespace <namespace> --version 4.5.0 --set watchNamespaces="aerospike"
 ```
-
-### Configure RBAC for Aerospike Cluster Pods
-
-AerospikeCluster pods run under a `ServiceAccount` named `aerospike-operator-controller-manager`, which must be bound to the `aerospike-cluster` ClusterRole (created by this chart) in every namespace where an `AerospikeCluster` will be deployed. See the [aerospike-cluster chart README](https://github.com/aerospike/aerospike-kubernetes-operator/blob/master/helm-charts/aerospike-cluster/README.md#create-a-serviceaccount-and-rbac-for-the-aerospike-cluster-pods) for the full setup steps.
 
 ## Configurations
 

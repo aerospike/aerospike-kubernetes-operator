@@ -35,7 +35,7 @@ Create a `ServiceAccount` named `aerospike-operator-controller-manager` in the t
 kubectl create serviceaccount aerospike-operator-controller-manager --namespace <namespace>
 ```
 
-Bind this ServiceAccount to the `aerospike-cluster` ClusterRole (created by the aerospike-kubernetes-operator helm chart). Use a `RoleBinding` if the cluster only needs to be accessed from within the same namespace, or a `ClusterRoleBinding` if it needs to be accessible across namespaces/externally.
+Bind this ServiceAccount to the `aerospike-cluster` ClusterRole (created by the aerospike-kubernetes-operator helm chart). Use a `RoleBinding` if the cluster only needs to be accessed from within the same Kubernetes cluster, or a `ClusterRoleBinding` if it needs to be accessible externally.
 
 ```sh
 # RoleBinding - scoped to <namespace>
@@ -59,14 +59,14 @@ kubectl create secret generic aerospike-secret --from-file=<path-to-features.con
 
 ```sh
 # helm install <chartName> <chartPath> --namespace <namespace>
-helm install aerospike aerospike/aerospike-cluster --namespace aerospike --set devMode=true
+helm install aerospike aerospike/aerospike-cluster --namespace <namespace> --set devMode=true
 ```
 
 _Note that this command assumes few defaults and deploys an aerospike cluster in **"dev"** mode with no data persistence. It is recommended to create a separate YAML file with configurations as per your requirements and use it
 with `helm install`._
 
 ```sh
-helm install aerospike aerospike/aerospike-cluster --namespace aerospike \
+helm install aerospike aerospike/aerospike-cluster --namespace <namespace> \
     -f <customized-values-yaml-file>
 ```
 
