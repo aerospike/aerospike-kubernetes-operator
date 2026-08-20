@@ -121,20 +121,31 @@ const (
 	AerospikeClusterReasonRackRevisionRollingOut    = "RackRevisionRollingOut"
 	AerospikeClusterReasonNotRackRevisionRollingOut = "NotRackRevisionRollingOut"
 
-	// Ready failure reasons naming the reconcile stage that failed. These replace the
-	// generic ReconcileFailed so consumers can tell a rack problem from an access-control
-	// or roster problem without parsing the condition message.
-	// When a rack operation is interrupted, the corresponding operation condition is left
-	// True, so RackReconcileFailed pairs with e.g. Upgrading=True to identify the operation.
-	AerospikeClusterReasonRackReconcileFailed     = "RackReconcileFailed"
-	AerospikeClusterReasonACLReconcileFailed      = "AccessControlReconcileFailed"
-	AerospikeClusterReasonPSBReconcileFailed      = "PodDisruptionBudgetReconcileFailed"
-	AerospikeClusterReasonServiceReconcileFailed  = "ServiceReconcileFailed"
-	AerospikeClusterReasonClusterConnectionFailed = "ClusterConnectionFailed"
-	AerospikeClusterReasonRosterSetFailed         = "RosterSetFailed"
-	AerospikeClusterReasonMFDSetFailed            = "MigrateFillDelayFailed"
-	AerospikeClusterReasonStatusUpdateFailed      = "StatusUpdateFailed"
-	AerospikeClusterReasonClusterSetupFailed      = "ClusterSetupFailed"
+	// Reasons set on Ready=False when a reconcile fails. Each one names the reconcile stage
+	// that failed. They are used instead of the generic ReconcileFailed so that a consumer can tell
+	// which stage broke by reading the Reason alone, without parsing the condition message.
+	// ReconcileFailed stays as the fallback for a failure that no stage claimed.
+	//
+	// A failure does not reset the operation conditions, so the failing stage and the operation
+	// it was serving are both readable: Ready=False/RackReconcileFailed together with
+	// Upgrading=True says the upgrade is the operation that failed.
+	AerospikeClusterReasonClusterSetupFailed     = "ClusterSetupFailed"
+	AerospikeClusterReasonRackReconcileFailed    = "RackReconcileFailed"
+	AerospikeClusterReasonACLReconcileFailed     = "AccessControlReconcileFailed"
+	AerospikeClusterReasonPDBReconcileFailed     = "PodDisruptionBudgetReconcileFailed"
+	AerospikeClusterReasonServiceReconcileFailed = "ServiceReconcileFailed"
+	AerospikeClusterReasonStatusUpdateFailed     = "StatusUpdateFailed"
+
+	// AerospikeClusterReasonPodStateFetchFailed covers the stages that only read Pod state from
+	// the Kubernetes API: listing Pods and building the per-Pod info connection targets from
+	// their status.
+	AerospikeClusterReasonPodStateFetchFailed = "PodStateFetchFailed"
+
+	// Asinfo command based failure reasons
+	AerospikeClusterReasonQuiesceUndoFailed = "QuiesceUndoFailed"
+	AerospikeClusterReasonReclusterFailed   = "ReclusterFailed"
+	AerospikeClusterReasonRosterSetFailed   = "RosterSetFailed"
+	AerospikeClusterReasonMFDSetFailed      = "MigrateFillDelaySetFailed"
 )
 
 // +kubebuilder:validation:Enum=Failed;PartiallyFailed;""

@@ -49,7 +49,7 @@ func (r *SingleClusterReconciler) reconcileRacks(ctx context.Context) common.Rec
 	}
 
 	// Store the ids of all revision changed racks
-	r.revisionChangedRackIDs = sets.KeySet(revisionChangedRacks)
+	r.computedState.revisionChangedRackIDs = sets.KeySet(revisionChangedRacks)
 
 	ignorablePodNames, err := r.getIgnorablePods(ctx, racksToDelete, configuredRacks)
 	if err != nil {
@@ -434,12 +434,10 @@ func (r *SingleClusterReconciler) upgradeOrRollingRestartRack(
 		}
 
 		if rollingRestartInfo.needRestart {
-			// Claimed here rather than inside rollingRestartRack, which doubles as the recovery
-			// mechanism handleFailedPodsInRack uses to force-restart a stuck pod. That force restart
-			// is not an operation the user asked for — it serves whatever operation is already in
-			// flight — so it must not claim this condition, or a stuck upgrade would report
-			// RollingRestart=True for a pod delete that is really upgrade recovery. Reaching this
-			// branch means a config change genuinely requires a restart.
+			// The exception to the rule that an operation function claims its own condition, as
+			// scaleUpRack, scaleDownRack, and upgradeRack all do. rollingRestartRack cannot,
+			// because it is also used as the recovery mechanism handleFailedPodsInRack to
+			// force-restart a stuck pod. handleFailedPodsInRack should not be able to set this condition.
 			if err := r.setConditions(ctx, metav1.Condition{
 				Type:    string(asdbv1.AerospikeClusterConditionRollingRestart),
 				Status:  metav1.ConditionTrue,
@@ -518,7 +516,7 @@ func (r *SingleClusterReconciler) upgradeOrRollingRestartRack(
 	// failed pods) or when neither condition applies — for example, when a pod
 	// fails due to an external reason and the user submits a pure scale-up.
 	// In that case scale-up should not be blocked by the unrelated failure.
-	if podFailure != nil && (podOpPerformed || r.revisionChangedRackIDs.Has(rackState.Rack.ID)) {
+	if podFailure != nil && (podOpPerformed || r.computedState.revisionChangedRackIDs.Has(rackState.Rack.ID)) {
 		if res := r.checkPodsFailedAfterRackOp(ctx, rackState, ignorablePodNames); !res.IsSuccess {
 			return found, res
 		}
@@ -797,10 +795,10 @@ func (r *SingleClusterReconciler) scaleUpRack(
 
 	// Suppressed for a rack under revision migration: there the scale-up is one step of a
 	// migration that also scales the old revision down, so claiming here would toggle ScalingUp
-	// and ScalingDown once per batch while the rack's size never changes. The migration reports
-	// itself as RackRevisionRollingOut for its whole duration. The check is per rack, so a genuine
-	// resize on a different rack in the same pass still reports normally.
-	if !r.revisionChangedRackIDs.Has(rackState.Rack.ID) {
+	// and ScalingDown once per batch as the two revisions trade Pods. The migration reports itself
+	// as RackRevisionRollingOut for its whole duration, and its message carries the progress
+	// towards the target size. This holds even when the rack is genuinely resized in the same pass
+	if !r.computedState.revisionChangedRackIDs.Has(rackState.Rack.ID) {
 		if err := r.setConditions(ctx, metav1.Condition{
 			Type:    string(asdbv1.AerospikeClusterConditionScalingUp),
 			Status:  metav1.ConditionTrue,
@@ -1044,7 +1042,7 @@ func (r *SingleClusterReconciler) scaleDownRack(
 	// also covers the deleteRacks call that drains the old revision's StatefulSet, since the set
 	// is keyed by rack ID and so matches both revisions. A rack genuinely removed from the spec is
 	// not in the set and still reports ScalingDown.
-	if !r.revisionChangedRackIDs.Has(rackState.Rack.ID) {
+	if !r.computedState.revisionChangedRackIDs.Has(rackState.Rack.ID) {
 		if err := r.setConditions(ctx, metav1.Condition{
 			Type:    string(asdbv1.AerospikeClusterConditionScalingDown),
 			Status:  metav1.ConditionTrue,
@@ -1481,16 +1479,17 @@ func (r *SingleClusterReconciler) handleK8sNodeBlockListPods(
 			"rollingUpdateBatchSize", r.aeroCluster.Spec.RackConfig.RollingUpdateBatchSize,
 		)
 
-		// K8sNodeBlockList is considered as rolling restart as pods with are coming back up with same name
+		// K8sNodeBlockList is reported as a rolling restart because the Pods come back up with the
+		// same names.
 		if len(podsBatch) > 0 {
 			if err := r.setConditions(ctx, metav1.Condition{
 				Type:   string(asdbv1.AerospikeClusterConditionRollingRestart),
 				Status: metav1.ConditionTrue,
 				Reason: asdbv1.AerospikeClusterReasonK8sNodeBlockListEviction,
-				Message: fmt.Sprintf(
+				Message: truncateConditionMessage(fmt.Sprintf(
 					"Restarting Pods %s of rack %d to move them off blocked Kubernetes nodes",
 					strings.Join(getPodNames(podsBatch), ", "), rackState.Rack.ID,
-				),
+				)),
 			}); err != nil {
 				return statefulSet, common.ReconcileError(err)
 			}

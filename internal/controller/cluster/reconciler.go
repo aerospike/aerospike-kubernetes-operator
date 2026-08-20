@@ -35,14 +35,10 @@ import (
 	"github.com/aerospike/aerospike-management-lib/deployment"
 )
 
-// SingleClusterReconciler reconciles a single AerospikeCluster
-type SingleClusterReconciler struct {
-	client.Client
-	Recorder    record.EventRecorder
-	aeroCluster *asdbv1.AerospikeCluster
-	KubeClient  *kubernetes.Clientset
-	KubeConfig  *rest.Config
-	Scheme      *k8sRuntime.Scheme
+// reconcileComputedState holds the state a single Reconcile call computes as it goes, as opposed
+// to the durable collaborators on SingleClusterReconciler. Every field is written mid-pass by one
+// stage and read by a later one, and none of it is meaningful outside the pass that produced it.
+type reconcileComputedState struct {
 	// pendingOpReset holds the operation conditions finishReconcile is allowed to clear on
 	// exit. A rack function that sets its condition True claims it, removing it from the set,
 	// so an operation still in flight across a requeue keeps reporting. See mergePatchStatus.
@@ -56,11 +52,24 @@ type SingleClusterReconciler struct {
 	// Set once in reconcileRacks before any rack function runs; nil on passes that never reach the
 	// rack loop, which reads as "nothing migrating" and is correct for those paths.
 	revisionChangedRackIDs sets.Set[int]
-	// stageReason names the reconcile stage Reconcile bailed out at, surfaced as the Ready
+	// failureReason names the reconcile stage Reconcile bailed out at, surfaced as the Ready
 	// condition's Reason by writeTerminalStatus. Read only when Reconcile returns an error, so
 	// a value left here by a requeue path is inert. Empty means no stage was recorded.
-	stageReason string
+	failureReason string
+}
+
+// SingleClusterReconciler reconciles a single AerospikeCluster.
+// The controller builds a fresh one per Reconcile call, so computedState carries nothing between passes.
+type SingleClusterReconciler struct {
+	client.Client
+	Recorder    record.EventRecorder
+	aeroCluster *asdbv1.AerospikeCluster
+	KubeClient  *kubernetes.Clientset
+	KubeConfig  *rest.Config
+	Scheme      *k8sRuntime.Scheme
 	Log         logr.Logger
+	// computedState holds everything this Reconcile call computes as it goes.
+	computedState reconcileComputedState
 }
 
 func (r *SingleClusterReconciler) asConfigLog() logr.Logger {
@@ -107,10 +116,13 @@ func (r *SingleClusterReconciler) Reconcile(ctx context.Context) (result ctrl.Re
 	// ones no rack function claims, per the policy set after the rack loop.
 	r.initPendingOpConditionReset()
 
-	// Mark Ready=False at the start of every reconcile so it doesn't stay True
-	// while operations are in progress.
-	if err := r.setConditions(
-		ctx, metav1.Condition{
+	// Mark Ready=False and phase=InProgress at the start of every reconcile so neither stays
+	// at its completed value while operations are in progress.
+	inProgress := asdbv1.AerospikeClusterInProgress
+
+	if err := r.mergePatchStatus(
+		ctx, &inProgress,
+		metav1.Condition{
 			Type:    string(asdbv1.AerospikeClusterConditionReady),
 			Status:  metav1.ConditionFalse,
 			Reason:  asdbv1.AerospikeClusterReasonReconciling,
@@ -123,17 +135,12 @@ func (r *SingleClusterReconciler) Reconcile(ctx context.Context) (result ctrl.Re
 			Message: "Reconciliation is active",
 		},
 	); err != nil {
-		return reconcile.Result{}, err
-	}
-
-	// Set the status to AerospikeClusterInProgress before starting any operations
-	if err := r.setStatusPhase(ctx, asdbv1.AerospikeClusterInProgress); err != nil {
-		return reconcile.Result{}, err
+		return reconcile.Result{}, fmt.Errorf("mark reconcile in progress: %w", err)
 	}
 
 	// The cluster is not being deleted, add finalizer if not added already
 	if err := r.addFinalizer(ctx, finalizerName); err != nil {
-		r.stageReason = asdbv1.AerospikeClusterReasonClusterSetupFailed
+		r.computedState.failureReason = asdbv1.AerospikeClusterReasonClusterSetupFailed
 
 		return reconcile.Result{}, fmt.Errorf("add finalizer: %w", err)
 	}
@@ -141,7 +148,9 @@ func (r *SingleClusterReconciler) Reconcile(ctx context.Context) (result ctrl.Re
 	// Handle previously failed cluster
 	hasFailed, res := r.checkPreviouslyFailedCluster(ctx)
 	if !res.IsSuccess {
-		r.stageReason = asdbv1.AerospikeClusterReasonClusterSetupFailed
+		if res.Err != nil {
+			r.computedState.failureReason = asdbv1.AerospikeClusterReasonClusterSetupFailed
+		}
 
 		return res.Result, res.Err
 	}
@@ -150,8 +159,6 @@ func (r *SingleClusterReconciler) Reconcile(ctx context.Context) (result ctrl.Re
 		r.Log.Info("Cluster migration is not needed")
 	} else {
 		if err := r.migrateAerospikeCluster(ctx, hasFailed); err != nil {
-			r.stageReason = asdbv1.AerospikeClusterReasonClusterSetupFailed
-
 			return reconcile.Result{}, err
 		}
 	}
@@ -163,7 +170,7 @@ func (r *SingleClusterReconciler) Reconcile(ctx context.Context) (result ctrl.Re
 			utils.GetNamespacedNameString(r.aeroCluster),
 		)
 
-		r.stageReason = asdbv1.AerospikeClusterReasonServiceReconcileFailed
+		r.computedState.failureReason = asdbv1.AerospikeClusterReasonServiceReconcileFailed
 
 		return reconcile.Result{}, fmt.Errorf("create or update headless Service: %w", err)
 	}
@@ -175,9 +182,9 @@ func (r *SingleClusterReconciler) Reconcile(ctx context.Context) (result ctrl.Re
 				r.aeroCluster, corev1.EventTypeWarning, "UpdateFailed",
 				"Failed to reconcile racks",
 			)
-		}
 
-		r.stageReason = asdbv1.AerospikeClusterReasonRackReconcileFailed
+			r.computedState.failureReason = asdbv1.AerospikeClusterReasonRackReconcileFailed
+		}
 
 		return res.Result, res.Err
 	}
@@ -189,7 +196,7 @@ func (r *SingleClusterReconciler) Reconcile(ctx context.Context) (result ctrl.Re
 			utils.GetNamespacedNameString(r.aeroCluster),
 		)
 
-		r.stageReason = asdbv1.AerospikeClusterReasonPSBReconcileFailed
+		r.computedState.failureReason = asdbv1.AerospikeClusterReasonPDBReconcileFailed
 
 		return reconcile.Result{}, fmt.Errorf("reconcile PodDisruptionBudget: %w", err)
 	}
@@ -201,14 +208,14 @@ func (r *SingleClusterReconciler) Reconcile(ctx context.Context) (result ctrl.Re
 			utils.NamespacedName(r.aeroCluster.Namespace, r.aeroCluster.Name+"-lb"),
 		)
 
-		r.stageReason = asdbv1.AerospikeClusterReasonServiceReconcileFailed
+		r.computedState.failureReason = asdbv1.AerospikeClusterReasonServiceReconcileFailed
 
 		return reconcile.Result{}, fmt.Errorf("reconcile LoadBalancer Service: %w", err)
 	}
 
 	ignorablePodNames, err := r.getIgnorablePods(ctx, nil, getConfiguredRackStateList(r.aeroCluster))
 	if err != nil {
-		r.stageReason = asdbv1.AerospikeClusterReasonClusterConnectionFailed
+		r.computedState.failureReason = asdbv1.AerospikeClusterReasonPodStateFetchFailed
 
 		return reconcile.Result{}, fmt.Errorf("determine ignorable Pods: %w", err)
 	}
@@ -217,7 +224,7 @@ func (r *SingleClusterReconciler) Reconcile(ctx context.Context) (result ctrl.Re
 	// It may have been left from previous steps
 	allHostConns, err := r.newAllHostConnWithOption(ctx, ignorablePodNames)
 	if err != nil {
-		r.stageReason = asdbv1.AerospikeClusterReasonClusterConnectionFailed
+		r.computedState.failureReason = asdbv1.AerospikeClusterReasonPodStateFetchFailed
 
 		return reconcile.Result{}, fmt.Errorf("get host connections for cluster nodes: %w", err)
 	}
@@ -226,7 +233,7 @@ func (r *SingleClusterReconciler) Reconcile(ctx context.Context) (result ctrl.Re
 		r.Log,
 		r.getClientPolicy(ctx), allHostConns,
 	); err != nil {
-		r.stageReason = asdbv1.AerospikeClusterReasonClusterConnectionFailed
+		r.computedState.failureReason = asdbv1.AerospikeClusterReasonQuiesceUndoFailed
 
 		return reconcile.Result{}, fmt.Errorf("undo quiesce state: %w", err)
 	}
@@ -239,7 +246,7 @@ func (r *SingleClusterReconciler) Reconcile(ctx context.Context) (result ctrl.Re
 			"Failed to set up access control",
 		)
 
-		r.stageReason = asdbv1.AerospikeClusterReasonACLReconcileFailed
+		r.computedState.failureReason = asdbv1.AerospikeClusterReasonACLReconcileFailed
 
 		return reconcile.Result{}, fmt.Errorf("reconcile access control: %w", err)
 	}
@@ -255,7 +262,7 @@ func (r *SingleClusterReconciler) Reconcile(ctx context.Context) (result ctrl.Re
 		false, ignorablePodNames,
 	); !res.IsSuccess {
 		if res.Err != nil {
-			r.stageReason = asdbv1.AerospikeClusterReasonMFDSetFailed
+			r.computedState.failureReason = asdbv1.AerospikeClusterReasonMFDSetFailed
 
 			return reconcile.Result{}, fmt.Errorf("revert migrate-fill-delay: %w", res.Err)
 		}
@@ -269,14 +276,16 @@ func (r *SingleClusterReconciler) Reconcile(ctx context.Context) (result ctrl.Re
 			r.Log,
 			policy, allHostConns,
 		); err != nil {
-			r.stageReason = asdbv1.AerospikeClusterReasonClusterConnectionFailed
+			r.computedState.failureReason = asdbv1.AerospikeClusterReasonReclusterFailed
 
 			return reconcile.Result{}, fmt.Errorf("run recluster: %w", err)
 		}
 	}
 
 	if res := r.ensureSCRoster(ctx, policy, allHostConns, ignorablePodNames); !res.IsSuccess {
-		r.stageReason = asdbv1.AerospikeClusterReasonRosterSetFailed
+		if res.Err != nil {
+			r.computedState.failureReason = asdbv1.AerospikeClusterReasonRosterSetFailed
+		}
 
 		return res.Result, res.Err
 	}
@@ -288,7 +297,7 @@ func (r *SingleClusterReconciler) Reconcile(ctx context.Context) (result ctrl.Re
 			"Failed to update status",
 		)
 
-		r.stageReason = asdbv1.AerospikeClusterReasonStatusUpdateFailed
+		r.computedState.failureReason = asdbv1.AerospikeClusterReasonStatusUpdateFailed
 
 		return reconcile.Result{}, fmt.Errorf("update AerospikeCluster status: %w", err)
 	}
@@ -357,8 +366,8 @@ func (r *SingleClusterReconciler) writeTerminalStatus(ctx context.Context, recEr
 		// Prefer the stage recorded by Reconcile so consumers can distinguish a rack problem
 		// from an access-control or roster problem without parsing the message.
 		reason := asdbv1.AerospikeClusterReasonReconcileFailed
-		if r.stageReason != "" {
-			reason = r.stageReason
+		if r.computedState.failureReason != "" {
+			reason = r.computedState.failureReason
 		}
 
 		conds = append(conds, metav1.Condition{
@@ -591,10 +600,10 @@ var operationConditions = []struct {
 // the pass is committed to doing work, so paths that bail out earlier (deletion, paused)
 // leave the conditions frozen.
 func (r *SingleClusterReconciler) initPendingOpConditionReset() {
-	r.pendingOpReset = sets.New[string]()
+	r.computedState.pendingOpReset = sets.New[string]()
 
 	for _, opCond := range operationConditions {
-		r.pendingOpReset.Insert(opCond.condType)
+		r.computedState.pendingOpReset.Insert(opCond.condType)
 	}
 }
 
@@ -618,7 +627,7 @@ func (r *SingleClusterReconciler) opConditionsToClear() []metav1.Condition {
 	conditions := make([]metav1.Condition, 0, len(operationConditions))
 
 	for _, opCond := range operationConditions {
-		if !r.pendingOpReset.Has(opCond.condType) {
+		if !r.computedState.pendingOpReset.Has(opCond.condType) {
 			continue
 		}
 
@@ -716,7 +725,8 @@ func (r *SingleClusterReconciler) updateStatus(ctx context.Context) error {
 
 // mergePatchStatus applies an optional phase change and any number of conditions to the
 // AerospikeCluster status in a single guarded merge patch. It is the shared primitive behind
-// setConditions, setStatusPhase, and writeTerminalStatus.
+// setConditions and writeTerminalStatus, and is called directly wherever a phase change and a
+// condition change must land together.
 //
 // Whether anything changed is decided by SetStatusCondition's own return value, applied to a
 // clone of just the conditions slice.
@@ -731,8 +741,8 @@ func (r *SingleClusterReconciler) mergePatchStatus(
 	// Never return early from this loop: every True condition must be claimed even when it
 	// needs no patch.
 	for i := range conditions {
-		if conditions[i].Status == metav1.ConditionTrue {
-			r.pendingOpReset.Delete(conditions[i].Type)
+		if conditions[i].Status == metav1.ConditionTrue && r.computedState.pendingOpReset != nil {
+			r.computedState.pendingOpReset.Delete(conditions[i].Type)
 		}
 
 		// Copy so the caller's input slice is not mutated.
@@ -770,15 +780,6 @@ func (r *SingleClusterReconciler) mergePatchStatus(
 
 	if phaseChanged {
 		r.addClusterPhaseMetric()
-	}
-
-	return nil
-}
-
-func (r *SingleClusterReconciler) setStatusPhase(ctx context.Context, phase asdbv1.AerospikeClusterPhase) error {
-	if err := r.mergePatchStatus(ctx, &phase); err != nil {
-		r.Log.Error(err, fmt.Sprintf("Failed to set cluster status to %s", phase))
-		return err
 	}
 
 	return nil

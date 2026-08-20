@@ -332,11 +332,11 @@ func TestMergePatchStatus_DoesNotMutateCallerCondition(t *testing.T) {
 	}
 }
 
-// ---- setConditions / setStatusPhase ----------------------------------------
+// ---- setConditions / mergePatchStatus --------------------------------------
 
-// Both are thin wrappers over mergePatchStatus, so they are covered only where they add
-// something: setConditions batching several conditions into one patch, and setStatusPhase's
-// error branch.
+// setConditions is a thin wrapper over mergePatchStatus, so it is covered only where it adds
+// something: batching several conditions into one patch. The phase half of mergePatchStatus is
+// covered separately, including its error branch.
 
 func TestSetConditions_SetsMultipleConditionsInOnePatch(t *testing.T) {
 	t.Parallel()
@@ -372,7 +372,7 @@ func TestSetConditions_SetsMultipleConditionsInOnePatch(t *testing.T) {
 	}
 }
 
-func TestSetStatusPhase(t *testing.T) {
+func TestMergePatchStatus_Phase(t *testing.T) {
 	t.Parallel()
 
 	testCases := []struct {
@@ -414,7 +414,7 @@ func TestSetStatusPhase(t *testing.T) {
 			r := newTestReconciler(t, ac, funcs)
 			initialRV := getCluster(t, r.Client, ac).ResourceVersion
 
-			err := r.setStatusPhase(context.TODO(), tc.want)
+			err := r.mergePatchStatus(context.TODO(), &tc.want)
 
 			if tc.failPatch {
 				if !errors.Is(err, errStatusPatch) {
@@ -490,12 +490,12 @@ func TestWriteTerminalStatus(t *testing.T) {
 	longErr := strings.Repeat("x", maxConditionMessageLength*2)
 
 	testCases := []struct {
-		name        string
-		recErr      error
-		stageReason string
-		wantPhase   asdbv1.AerospikeClusterPhase
-		wantReason  string
-		wantMessage string
+		name          string
+		recErr        error
+		failureReason string
+		wantPhase     asdbv1.AerospikeClusterPhase
+		wantReason    string
+		wantMessage   string
 		// wantMessageBounded asserts truncation rather than an exact string.
 		wantMessageBounded bool
 	}{
@@ -510,11 +510,11 @@ func TestWriteTerminalStatus(t *testing.T) {
 			// Reconcile records the stage it bailed out at before returning the error, so a rack
 			// problem can be told apart from an access-control or roster problem without parsing
 			// the message.
-			name:        "prefers the stage reason Reconcile recorded",
-			recErr:      errors.New("reconcile PodDisruptionBudget: nope"),
-			stageReason: asdbv1.AerospikeClusterReasonPSBReconcileFailed,
-			wantPhase:   asdbv1.AerospikeClusterError,
-			wantReason:  asdbv1.AerospikeClusterReasonPSBReconcileFailed,
+			name:          "prefers the stage reason Reconcile recorded",
+			recErr:        errors.New("reconcile PodDisruptionBudget: nope"),
+			failureReason: asdbv1.AerospikeClusterReasonPDBReconcileFailed,
+			wantPhase:     asdbv1.AerospikeClusterError,
+			wantReason:    asdbv1.AerospikeClusterReasonPDBReconcileFailed,
 		},
 		{
 			// The end-to-end half of TestTruncateConditionMessage: an oversized error must reach
@@ -534,7 +534,7 @@ func TestWriteTerminalStatus(t *testing.T) {
 
 			ac := getMinimalCluster()
 			r := newTestReconciler(t, ac, &interceptor.Funcs{})
-			r.stageReason = tc.stageReason
+			r.computedState.failureReason = tc.failureReason
 
 			if err := r.writeTerminalStatus(context.TODO(), tc.recErr); err != nil {
 				t.Fatalf("unexpected error: %v", err)
@@ -626,7 +626,7 @@ func TestClaimSurvivesAlreadyTrueCondition(t *testing.T) {
 		t.Errorf("expected no patch for an unchanged condition (%s → %s)", rvBefore, rv)
 	}
 
-	if r.pendingOpReset.Has(scalingUp) {
+	if r.computedState.pendingOpReset.Has(scalingUp) {
 		t.Error("ScalingUp was not claimed when the condition was already True")
 	}
 }
