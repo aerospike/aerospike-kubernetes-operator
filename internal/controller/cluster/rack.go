@@ -222,9 +222,9 @@ func (r *SingleClusterReconciler) waitForAllRacksReady(
 				// fall through,
 				// and might run reconcile steps common to all racks before the racks
 				// have scaled up.
-				waitMsg := "Failed to wait for StatefulSet to be ready, will requeue"
+				waitMsg := "Timed out waiting for StatefulSet to be ready, will requeue"
 				if ignoreSidecar {
-					waitMsg = "Failed to wait for Aerospike server containers to be ready, will requeue"
+					waitMsg = "Timed out waiting for Aerospike server containers to be ready, will requeue"
 				}
 
 				r.Log.Error(waitErr, waitMsg, "statefulSet", utils.GetNamespacedName(found))
@@ -2353,7 +2353,7 @@ func (r *SingleClusterReconciler) reconcileRevisionChangedRacks(
 	if asdbv1.GetBool(r.aeroCluster.Spec.IgnoreSidecarFailure) {
 		if err := r.waitForAllAerospikeServersReady(ctx, ignorablePodNames); err != nil {
 			if errors.Is(err, common.ErrStatefulSetNotReady) {
-				r.Log.Error(err, "Failed to wait for Aerospike server containers to be ready after rack migration, will requeue")
+				r.Log.Error(err, "Timed out waiting for Aerospike server containers to be ready after rack migration, will requeue")
 				return common.ReconcileRequeueAfter(1)
 			}
 
