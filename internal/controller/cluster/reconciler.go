@@ -20,7 +20,6 @@ import (
 	"k8s.io/client-go/kubernetes"
 	"k8s.io/client-go/rest"
 	"k8s.io/client-go/tools/record"
-	"k8s.io/client-go/util/retry"
 	ctrl "sigs.k8s.io/controller-runtime"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 	"sigs.k8s.io/controller-runtime/pkg/reconcile"
@@ -314,7 +313,7 @@ func (r *SingleClusterReconciler) recoverIgnorablePods(
 	if len(deletedPodNames) == 0 {
 		r.Log.Info("All ignorable pods are healthy; re-entering normal reconcile")
 
-		return common.ReconcileRequeue()
+		return common.ReconcileRequeueAfter(1)
 	}
 
 	// Wait for all deleted pods together within a single 3-minute window.
@@ -329,14 +328,14 @@ func (r *SingleClusterReconciler) recoverIgnorablePods(
 
 	if waitErr != nil {
 		// Re-failed — don't requeue; next reconcile will be triggered by a CR change.
-		r.Log.Error(waitErr, "One or more ignorable pods failed during recovery")
+		r.Log.Error(waitErr, "One or more ignorable pods failed during recovery, won't requeue")
 
 		return common.ReconcileSuccess()
 	}
 
 	r.Log.Info("Ignorable pods recovered, requeuing")
 
-	return common.ReconcileRequeue()
+	return common.ReconcileRequeueAfter(1)
 }
 
 // waitForIgnorablePodsRecovery polls all named pods together within a single
@@ -370,12 +369,12 @@ func (r *SingleClusterReconciler) waitForIgnorablePodsRecovery(ctx context.Conte
 					continue
 				}
 
-				return false, fmt.Errorf("get pod %s during recovery wait: %w", podName, err)
+				return false, fmt.Errorf("get Pod %s during recovery wait: %w", podName, err)
 			}
 
 			if podState := utils.CheckServerFailedWithGrace(pod, false); podState.State == utils.PodFailed {
 				r.Log.V(1).Info("Ignorable pod server container failed during recovery",
-					"pod", podName, "reason", podState.Reason)
+					"pod", utils.GetNamespacedName(pod), "reason", podState.Reason)
 
 				failureReasons = append(failureReasons,
 					fmt.Sprintf("%s: %s", podName, podState.Reason))
@@ -385,7 +384,7 @@ func (r *SingleClusterReconciler) waitForIgnorablePodsRecovery(ctx context.Conte
 			}
 
 			if utils.IsAerospikeServerReady(pod) {
-				r.Log.V(1).Info("Ignorable pod server container is ready", "pod", podName)
+				r.Log.V(1).Info("Ignorable pod server container is ready", "pod", utils.GetNamespacedName(pod))
 				awaitingRecovery.Delete(podName)
 			}
 		}
@@ -551,21 +550,28 @@ func (r *SingleClusterReconciler) updateStatus(ctx context.Context) error {
 }
 
 func (r *SingleClusterReconciler) setStatusPhase(ctx context.Context, phase asdbv1.AerospikeClusterPhase) error {
-	if r.aeroCluster.Status.Phase != phase {
-		if err := retry.RetryOnConflict(retry.DefaultRetry, func() error {
-			if err := r.Get(ctx, utils.GetNamespacedName(r.aeroCluster), r.aeroCluster); err != nil {
-				return err
-			}
-
-			r.aeroCluster.Status.Phase = phase
-
-			return r.Client.Status().Update(ctx, r.aeroCluster)
-		}); err != nil {
-			return fmt.Errorf("set cluster status phase to %s: %w", phase, err)
-		}
-
-		r.addClusterPhaseMetric()
+	if r.aeroCluster.Status.Phase == phase {
+		return nil
 	}
+
+	// Two deep copies so that:
+	//   - base and target share the same resourceVersion → it never appears in
+	//     the diff → no 409 conflicts, no retry needed.
+	//   - The server response is written into target (the throwaway copy) and
+	//     r.aeroCluster is never overwritten mid-reconcile.
+	// MergeFrom produces {"status":{"phase":"..."}} — a merge patch that creates
+	// /status if it doesn't exist yet (safe for brand-new clusters), and only
+	// touches the phase key (no other status fields are nulled out).
+	base := r.aeroCluster.DeepCopy()
+	target := r.aeroCluster.DeepCopy()
+	target.Status.Phase = phase
+
+	if err := r.Client.Status().Patch(ctx, target, client.MergeFrom(base)); err != nil {
+		return fmt.Errorf("set cluster status phase to %s: %w", phase, err)
+	}
+
+	r.aeroCluster.Status.Phase = phase
+	r.addClusterPhaseMetric()
 
 	return nil
 }

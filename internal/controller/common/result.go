@@ -7,10 +7,10 @@ import (
 	"sigs.k8s.io/controller-runtime/pkg/reconcile"
 )
 
-// ErrSTSNotReady is returned when a StatefulSet wait loop exhausts all retries
+// ErrStatefulSetNotReady is returned when a StatefulSet wait loop exhausts all retries
 // but the pod is still starting up (not a failure — just slow). Callers branch
-// on this with errors.Is to requeue rather than hard-error.
-var ErrSTSNotReady = errors.New("STS pod not ready yet")
+// on errors.Is to requeue rather than hard-error.
+var ErrStatefulSetNotReady = errors.New("StatefulSet pod not ready yet")
 
 const (
 	reconcileResultLogKey       = "result"
@@ -32,10 +32,6 @@ func (r ReconcileResult) GetResult() (reconcile.Result, error) {
 
 func ReconcileSuccess() ReconcileResult {
 	return ReconcileResult{IsSuccess: true, Result: reconcile.Result{}}
-}
-
-func ReconcileRequeue() ReconcileResult {
-	return ReconcileResult{Result: reconcile.Result{Requeue: true}}
 }
 
 func ReconcileRequeueAfter(secs int) ReconcileResult {

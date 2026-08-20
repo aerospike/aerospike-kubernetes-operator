@@ -118,7 +118,7 @@ func TestWaitForSTSPodsServerReady(t *testing.T) {
 		}
 	})
 
-	t.Run("pod stuck in ContainerCreating exhausts retries and returns ErrSTSNotReady", func(t *testing.T) {
+	t.Run("pod stuck in ContainerCreating exhausts retries and returns ErrStatefulSetNotReady", func(t *testing.T) {
 		// Override retry knobs so the test completes in < 1 ms.
 		origMax, origInterval := podStatusMaxRetry, podStatusRetryInterval
 		podStatusMaxRetry = 1
@@ -129,7 +129,7 @@ func TestWaitForSTSPodsServerReady(t *testing.T) {
 		// Pod exists but server container is not ready (ContainerCreating — no
 		// State set, Ready=false). CheckServerFailedWithGrace returns PodHealthy
 		// for this state, so the function retries until the limit and wraps
-		// common.ErrSTSNotReady.
+		// common.ErrStatefulSetNotReady.
 		pod := &corev1.Pod{
 			ObjectMeta: metav1.ObjectMeta{Name: stsName + "-0", Namespace: namespace},
 			Status: corev1.PodStatus{
@@ -142,8 +142,8 @@ func TestWaitForSTSPodsServerReady(t *testing.T) {
 		r := newReconcilerWithObjects(scheme, aeroCluster, sts, pod)
 
 		err := r.waitForSTSPodsServerReady(context.Background(), sts, sets.New[string]())
-		if !errors.Is(err, common.ErrSTSNotReady) {
-			t.Errorf("expected common.ErrSTSNotReady for stuck pod, got: %v", err)
+		if !errors.Is(err, common.ErrStatefulSetNotReady) {
+			t.Errorf("expected common.ErrStatefulSetNotReady for stuck pod, got: %v", err)
 		}
 	})
 }

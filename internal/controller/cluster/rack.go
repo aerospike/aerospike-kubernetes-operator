@@ -91,15 +91,9 @@ func (r *SingleClusterReconciler) reconcileRacks(ctx context.Context) common.Rec
 
 	// All racks either passed handleFailedPodsInRack or had their old-revision
 	// pods verified as healthy. Restore InProgress so the rest of the reconcile
-	// loop can proceed. Use a patch to avoid overwriting r.aeroCluster with a
-	// fresh Get mid-reconcile.
-	if r.aeroCluster.Status.Phase != asdbv1.AerospikeClusterInProgress {
-		patch := client.MergeFrom(r.aeroCluster.DeepCopy())
-		r.aeroCluster.Status.Phase = asdbv1.AerospikeClusterInProgress
-
-		if err = r.Client.Status().Patch(ctx, r.aeroCluster, patch); err != nil {
-			return common.ReconcileError(fmt.Errorf("set cluster status phase to InProgress: %w", err))
-		}
+	// loop can proceed.
+	if err = r.setStatusPhase(ctx, asdbv1.AerospikeClusterInProgress); err != nil {
+		return common.ReconcileError(fmt.Errorf("set cluster status phase to InProgress: %w", err))
 	}
 
 	for idx := range configuredRacks {
@@ -220,7 +214,7 @@ func (r *SingleClusterReconciler) waitForAllRacksReady(
 		}
 
 		if waitErr != nil {
-			if errors.Is(waitErr, common.ErrSTSNotReady) {
+			if errors.Is(waitErr, common.ErrStatefulSetNotReady) {
 				// Pod is still starting up — genuine timeout, requeue and check again.
 				// The wait is required in cases where scale up waits for a pod to
 				// terminate times out and event is re-queued.
@@ -2358,7 +2352,7 @@ func (r *SingleClusterReconciler) reconcileRevisionChangedRacks(
 
 	if asdbv1.GetBool(r.aeroCluster.Spec.IgnoreSidecarFailure) {
 		if err := r.waitForAllAerospikeServersReady(ctx, ignorablePodNames); err != nil {
-			if errors.Is(err, common.ErrSTSNotReady) {
+			if errors.Is(err, common.ErrStatefulSetNotReady) {
 				r.Log.Error(err, "Failed to wait for Aerospike server containers to be ready after rack migration, will requeue")
 				return common.ReconcileRequeueAfter(1)
 			}
@@ -2367,8 +2361,8 @@ func (r *SingleClusterReconciler) reconcileRevisionChangedRacks(
 		}
 	} else {
 		if err := r.waitForAllSTSToBeReady(ctx, ignorablePodNames); err != nil {
-			if errors.Is(err, common.ErrSTSNotReady) {
-				r.Log.Error(err, "Failed to wait for StatefulSet to be ready after rack migration, will requeue")
+			if errors.Is(err, common.ErrStatefulSetNotReady) {
+				r.Log.Error(err, "Timed out waiting for StatefulSet to be ready after rack migration, will requeue")
 				return common.ReconcileRequeueAfter(1)
 			}
 
@@ -2492,7 +2486,7 @@ func classifyNotReadyPods(pods []*corev1.Pod) (crashed, stillNotReady []*corev1.
 
 // handleFailedPodsInRack inspects the pods for a rack and drives recovery in
 // two phases:
-//  1. Server-failed pods are passed to reconcileRack (bypassing batching and
+//  1. Server-failed pods are passed to reconcileRack (bypassing
 //     migration/quiesce checks) and then force-restarted if still stuck after
 //     the reconcile.
 //  2. Sidecar-failed pods (when IgnoreSidecarFailure is false) are passed to

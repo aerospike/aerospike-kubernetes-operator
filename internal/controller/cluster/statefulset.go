@@ -317,7 +317,7 @@ func (r *SingleClusterReconciler) waitForSTSPodsServerReady(
 
 		if !isReady {
 			return fmt.Errorf("pod %s not ready yet — server container not ready, containerStatuses: %v: %w",
-				utils.NamespacedName(st.Namespace, podName), pod.Status.ContainerStatuses, common.ErrSTSNotReady)
+				utils.NamespacedName(st.Namespace, podName), pod.Status.ContainerStatuses, common.ErrStatefulSetNotReady)
 		}
 	}
 
@@ -390,7 +390,7 @@ func (r *SingleClusterReconciler) waitForSTSToBeReady(
 
 		if !isReady {
 			return fmt.Errorf("pod %s not ready yet — resource not ready, conditions: %v: %w",
-				utils.GetNamespacedNameString(pod), pod.Status.Conditions, common.ErrSTSNotReady)
+				utils.GetNamespacedNameString(pod), pod.Status.Conditions, common.ErrStatefulSetNotReady)
 		}
 	}
 
