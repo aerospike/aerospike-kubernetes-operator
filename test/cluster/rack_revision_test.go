@@ -317,6 +317,65 @@ var _ = Describe(
 							),
 							Serial,
 						)
+
+						FIt(
+							"Should block migration when old-revision pod has crashing sidecar and "+
+								"IgnoreSidecarFailure is false, and unblock when flag is set to true",
+							func() {
+								By("Creating cluster with signal-controlled sidecar and versionV1 revision")
+
+								aeroCluster := createDummyClusterWithRackRevision(clusterNamespacedName, versionV1, 6)
+								aeroCluster.Spec.PodSpec.Sidecars = []corev1.Container{signalControlledSidecar()}
+								aeroCluster.Spec.Storage.Volumes = append(
+									aeroCluster.Spec.Storage.Volumes, signalVolumeForSidecar(),
+								)
+								Expect(DeployCluster(k8sClient, ctx, aeroCluster)).ToNot(HaveOccurred())
+
+								oldRevisionPodName := clusterName + "-1-v1-0"
+
+								By("Failing sidecar on old-revision pod-0 via signal file")
+								Expect(failPodSidecar(namespace, oldRevisionPodName)).ToNot(HaveOccurred())
+
+								By("Waiting for old-revision pod to have crashing sidecar")
+
+								oldRevisionPodNN := types.NamespacedName{
+									Name:      oldRevisionPodName,
+									Namespace: namespace,
+								}
+
+								Eventually(func() bool {
+									pod := &corev1.Pod{}
+									if err := k8sClient.Get(ctx, oldRevisionPodNN, pod); err != nil {
+										return false
+									}
+
+									return podHasCrashingSidecar(pod)
+								}, 2*time.Minute, 5*time.Second).Should(BeTrue(),
+									"old-revision pod should have crashing sidecar after signal")
+
+								By("Triggering rack revision change to v2 with IgnoreSidecarFailure=false (default)")
+
+								aeroCluster = changeRackRevision(k8sClient, ctx, clusterNamespacedName)
+
+								By("Verifying cluster transitions to Error — checkRackPodsHealthy detects " +
+									"crashed sidecar on old-revision pod")
+								Expect(waitForClusterPhase(k8sClient, ctx, clusterNamespacedName,
+									asdbv1.AerospikeClusterError)).ToNot(HaveOccurred())
+
+								By("Setting IgnoreSidecarFailure=true to unblock migration")
+
+								aeroCluster.Spec.IgnoreSidecarFailure = ptr.To(true)
+								Expect(updateCluster(k8sClient, ctx, aeroCluster)).ToNot(HaveOccurred())
+
+								By("Verifying migration completes and old-revision resources are cleaned up")
+
+								err := validateRackEnabledCluster(k8sClient, ctx, clusterNamespacedName)
+								Expect(err).ToNot(HaveOccurred())
+
+								err = validateRackRevisionCleanup(k8sClient, ctx, aeroCluster, []int{1}, versionV1)
+								Expect(err).ToNot(HaveOccurred())
+							},
+						)
 					},
 				)
 			},

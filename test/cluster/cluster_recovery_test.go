@@ -150,6 +150,10 @@ var _ = Describe("ACL failed-create recovery validation", func() {
 				err := patchStatusAerospikeAccessControl(ctx, k8sClient, clusterNamespacedName, staleACL)
 				Expect(err).To(Succeed())
 
+				By("Verifying cluster transitions to Error — pods cannot start with unavailable image")
+				Expect(waitForClusterPhase(k8sClient, ctx, clusterNamespacedName,
+					asdbv1.AerospikeClusterError)).ToNot(HaveOccurred())
+
 				aeroCluster, err = getCluster(k8sClient, ctx, clusterNamespacedName)
 				Expect(err).ToNot(HaveOccurred())
 				Expect(reflect.DeepEqual(aeroCluster.Spec.AerospikeAccessControl, specACL)).To(BeTrue(),

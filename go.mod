@@ -1,11 +1,11 @@
 module github.com/aerospike/aerospike-kubernetes-operator/v4
 
-go 1.25.10
+go 1.25.12
 
 require (
 	github.com/aerospike/aerospike-backup-service/v3 v3.6.1
 	github.com/aerospike/aerospike-client-go/v8 v8.7.0
-	github.com/aerospike/aerospike-management-lib v1.11.1
+	github.com/aerospike/aerospike-management-lib v1.11.2-0.20260805093858-64e7c2da43e2
 	github.com/asaskevich/govalidator v0.0.0-20210307081110-f21760c49a8d
 	github.com/deckarep/golang-set/v2 v2.9.0
 	github.com/evanphx/json-patch v5.9.11+incompatible

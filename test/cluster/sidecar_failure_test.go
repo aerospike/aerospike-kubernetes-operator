@@ -45,18 +45,14 @@ func crashingSidecar() corev1.Container {
 
 // waitForClusterPhase polls until the cluster reaches one of the given phases
 // or the timeout expires.
-func waitForClusterPhase(
-	k8sClient client.Client, ctx goctx.Context,
-	clusterNamespacedName types.NamespacedName,
-	timeout time.Duration,
-	phases ...asdbv1.AerospikeClusterPhase,
-) error {
+func waitForClusterPhase(k8sClient client.Client, ctx goctx.Context, clusterNamespacedName types.NamespacedName,
+	phases ...asdbv1.AerospikeClusterPhase) error {
 	phaseSet := make(map[asdbv1.AerospikeClusterPhase]struct{}, len(phases))
 	for _, p := range phases {
 		phaseSet[p] = struct{}{}
 	}
 
-	return wait.PollUntilContextTimeout(ctx, retryInterval, timeout, true,
+	return wait.PollUntilContextTimeout(ctx, retryInterval, 2*time.Minute, true,
 		func(ctx goctx.Context) (bool, error) {
 			cluster := &asdbv1.AerospikeCluster{}
 			if err := k8sClient.Get(ctx, clusterNamespacedName, cluster); err != nil {
@@ -214,6 +210,10 @@ var _ = Describe("SidecarFailure", func() {
 			// Apply the update without waiting for Completed.
 			Expect(k8sClient.Update(ctx, aeroCluster)).ToNot(HaveOccurred())
 
+			By("Verifying cluster transitions to Error — sidecar failure with IgnoreSidecarFailure=false triggers Error phase")
+			Expect(waitForClusterPhase(k8sClient, ctx, clusterNamespacedName,
+				asdbv1.AerospikeClusterError)).ToNot(HaveOccurred())
+
 			By("Verifying the rolling restart is blocked at exactly one pod — sidecar failure has not propagated further")
 
 			assertRollingRestartBlocked(k8sClient, ctx, clusterNamespacedName, int(aeroCluster.Spec.Size)-1)
@@ -252,6 +252,10 @@ var _ = Describe("SidecarFailure", func() {
 			aeroCluster.Spec.PodSpec.Sidecars = []corev1.Container{crashingSidecar()}
 			aeroCluster.Spec.IgnoreSidecarFailure = ptr.To(false)
 			Expect(k8sClient.Update(ctx, aeroCluster)).ToNot(HaveOccurred())
+
+			By("Verifying cluster transitions to Error — sidecar failure with IgnoreSidecarFailure=false triggers Error phase")
+			Expect(waitForClusterPhase(k8sClient, ctx, clusterNamespacedName,
+				asdbv1.AerospikeClusterError)).ToNot(HaveOccurred())
 
 			By("Waiting for rolling restart to stall — exactly 1 pod has crashing sidecar, 1 pod still fully ready")
 
@@ -397,6 +401,11 @@ var _ = Describe("SidecarFailure", func() {
 			aeroCluster.Spec.AerospikeConfig.Value[asdbv1.ConfKeyService].(map[string]interface{})["proto-fd-max"] = int64(20000)
 			Expect(k8sClient.Update(ctx, aeroCluster)).ToNot(HaveOccurred())
 
+			By("Verifying cluster transitions to Error — sidecar failure with IgnoreSidecarFailure=false" +
+				" blocks rolling restart and sets Error phase")
+			Expect(waitForClusterPhase(k8sClient, ctx, clusterNamespacedName,
+				asdbv1.AerospikeClusterError)).ToNot(HaveOccurred())
+
 			By("Verifying the entire cluster stalls — exactly 1 pod has crashing sidecar, 3 pods still fully ready")
 
 			// Pod-0 in rack-1 gets the new spec first and enters CrashLoopBackOff.
@@ -494,7 +503,7 @@ var _ = Describe("SidecarFailure", func() {
 			aeroCluster, err = getCluster(k8sClient, ctx, clusterNamespacedName)
 			Expect(err).ToNot(HaveOccurred())
 
-			maxIgnorable := intstr.FromInt(1)
+			maxIgnorable := intstr.FromInt32(1)
 			aeroCluster.Spec.RackConfig.MaxIgnorablePods = &maxIgnorable
 			aeroCluster.Spec.IgnoreSidecarFailure = ptr.To(false)
 			aeroCluster.Spec.AerospikeConfig.Value[asdbv1.ConfKeyService].(map[string]interface{})["proto-fd-max"] = int64(20000)
@@ -503,11 +512,10 @@ var _ = Describe("SidecarFailure", func() {
 			// IgnoreSidecarFailure=false blocks when pod-0's sidecar is not ready.
 			Expect(k8sClient.Update(ctx, aeroCluster)).ToNot(HaveOccurred())
 
-			By("Verifying rolling restart is stuck in InProgress — sidecar failure blocks readiness wait")
+			By("Verifying rolling restart is stuck in Error — sidecar failure blocks readiness wait")
 
 			Expect(waitForClusterPhase(k8sClient, ctx, clusterNamespacedName,
-				2*time.Minute, asdbv1.AerospikeClusterInProgress),
-			).ToNot(HaveOccurred())
+				asdbv1.AerospikeClusterError)).ToNot(HaveOccurred())
 
 			By("Setting IgnoreSidecarFailure=true and verifying rolling restart completes")
 
@@ -595,17 +603,10 @@ var _ = Describe("SidecarFailure", func() {
 
 		// When podFailure != nil (sidecar crashing) and a pod-level operation runs
 		// (upgradeRack sets podOpPerformed=true), checkPodsFailedAfterRackOp fires
-		// after the rolling restart and returns non-success — deferring scale-up
-		// for one reconcile cycle. The signal-controlled sidecar is used here
-		// because its failure is emptyDir-persisted: /signal/fail survives pod
-		// restarts, keeping the sidecar in stable CrashLoopBackOff across the
-		// entire rolling restart. exit 1 / exit 2 patterns would not be reliable
-		// because State.Waiting toggles with Running between backoff intervals,
-		// and the check might fire during a Running window where the sidecar
-		// appears healthy.
+		// after the rolling restart and returns non-success — deferring scale-up.
 		// Pod 2 (scale-up pod) gets a fresh emptyDir, so its sidecar is healthy —
 		// once IgnoreSidecarFailure=true is applied the cluster reaches Completed.
-		It("Should defer scale-up by one reconcile cycle when an image upgrade and sidecar failure coincide",
+		It("Should defer scale-up when a sidecar spec change and scale-up coincide and sidecar crashes",
 			func() {
 				By("Deploying a 2-node cluster with a signal-controlled sidecar (initially healthy)")
 
@@ -635,11 +636,6 @@ var _ = Describe("SidecarFailure", func() {
 				aeroCluster.Spec.Size = 3
 				Expect(k8sClient.Update(ctx, aeroCluster)).ToNot(HaveOccurred())
 
-				// upgradeRack runs (podOpPerformed=true). After the rolling restart
-				// completes, checkPodsFailedAfterRackOp detects the stable
-				// CrashLoopBackOff on pods 0 and 1 and returns non-success — scale-up
-				// is deferred. The next reconcile finds no pending upgrade, so
-				// podOpPerformed=false and scaleUpRack runs.
 				By("Confirming scale-up pod is absent while rolling restart is in progress")
 				Consistently(func(g Gomega) {
 					cluster, clusterErr := getCluster(k8sClient, ctx, clusterNamespacedName)
@@ -653,6 +649,11 @@ var _ = Describe("SidecarFailure", func() {
 							"scale-up pod must not appear while the upgrade rolling restart is running")
 					}
 				}, 30*time.Second, 5*time.Second).Should(Succeed())
+
+				By("Verifying cluster transitions to Error — crashing sidecar " +
+					"(IgnoreSidecarFailure unset) triggers Error phase")
+				Expect(waitForClusterPhase(k8sClient, ctx, clusterNamespacedName,
+					asdbv1.AerospikeClusterError)).ToNot(HaveOccurred())
 
 				By("Applying IgnoreSidecarFailure=true to let the cluster reach Completed")
 
