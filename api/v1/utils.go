@@ -59,6 +59,7 @@ const (
 	ConfKeyNetworkFabric    = "fabric"
 	ConfKeyNetworkAdmin     = "admin"
 	ConfKeyNetworkInfo      = "info"
+	ConfKeyNetworkTLS       = "tls"
 
 	// Ports and TLS keys.
 	ConfKeyTLSName = "tls-name"
@@ -67,9 +68,9 @@ const (
 
 	// XDR keys.
 	ConfKeyXdr                 = "xdr"
-	ConfKeyAuthMode            = "auth-mode"
 	ConfKeyXdrDCs              = "dcs"
 	ConfKeyXdrConnector        = "connector"
+	ConfKeyXdrAuthMode         = "auth-mode"
 	ConfKeyXdrAuthUser         = "auth-user"
 	ConfKeyXdrAuthPasswordFile = "auth-password-file"
 
@@ -429,6 +430,27 @@ func GetTLSNameAndPort(
 	}
 
 	return tlsName, port
+}
+
+// GetNetworkTLSNames returns the set of TLS configuration names defined in network.tls,
+// used to check that xdr.dcs[].tls-name references an existing entry.
+func GetNetworkTLSNames(networkConf map[string]interface{}) sets.Set[string] {
+	tlsNames := sets.Set[string]{}
+
+	tlsConfList, ok := networkConf[ConfKeyNetworkTLS].([]interface{})
+	if !ok {
+		return tlsNames
+	}
+
+	for _, tlsConfInt := range tlsConfList {
+		if tlsConf, ok := tlsConfInt.(map[string]interface{}); ok {
+			if tlsName, ok := tlsConf[ConfKeyName].(string); ok {
+				tlsNames.Insert(tlsName)
+			}
+		}
+	}
+
+	return tlsNames
 }
 
 func GetServicePort(aeroConf *AerospikeConfigSpec) *int32 {

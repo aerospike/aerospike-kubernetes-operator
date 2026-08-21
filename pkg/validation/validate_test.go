@@ -240,7 +240,7 @@ func TestValidateXdrConfig(t *testing.T) {
 			wantErr: false,
 		},
 		{
-			name: "dc entry missing name field surfaces empty name in error",
+			name: "dc entry missing name field falls back to list index in error",
 			config: map[string]any{
 				"network": networkConfWithTLS(),
 				"xdr": map[string]any{
@@ -252,7 +252,7 @@ func TestValidateXdrConfig(t *testing.T) {
 				},
 			},
 			wantErr:    true,
-			wantErrMsg: "xdr.dcs[].tls-name",
+			wantErrMsg: "xdr.dcs[0].tls-name",
 		},
 		{
 			name: "auth-user set without auth-password-file",

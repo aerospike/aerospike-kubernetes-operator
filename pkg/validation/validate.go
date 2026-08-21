@@ -3,6 +3,7 @@ package validation
 import (
 	"fmt"
 	"reflect"
+	"strconv"
 	"strings"
 
 	validate "github.com/asaskevich/govalidator"
@@ -10,7 +11,6 @@ import (
 	"k8s.io/apimachinery/pkg/util/sets"
 
 	asdbv1 "github.com/aerospike/aerospike-kubernetes-operator/v4/api/v1"
-	"github.com/aerospike/aerospike-kubernetes-operator/v4/pkg/utils"
 	"github.com/aerospike/aerospike-management-lib/asconfig"
 )
 
@@ -124,15 +124,13 @@ func validateNetworkConfig(networkConf map[string]interface{}) error {
 		return fmt.Errorf("network.service section not found in config")
 	}
 
-	tlsNames := sets.Set[string]{}
+	tlsNames := asdbv1.GetNetworkTLSNames(networkConf)
+
 	// network.tls conf
 	if _, ok := networkConf["tls"]; ok {
 		tlsConfList := networkConf["tls"].([]interface{})
 		for _, tlsConfInt := range tlsConfList {
 			tlsConf := tlsConfInt.(map[string]interface{})
-			if tlsName, ok := tlsConf["name"]; ok {
-				tlsNames.Insert(tlsName.(string))
-			}
 
 			if _, ok := tlsConf["ca-path"]; ok {
 				if _, ok1 := tlsConf["ca-file"]; ok1 {
@@ -185,7 +183,7 @@ func validateXDRConfig(config map[string]interface{}) error {
 	}
 
 	networkConf, _ := config[asdbv1.ConfKeyNetwork].(map[string]interface{})
-	tlsNames := utils.GetNetworkTLSNames(networkConf)
+	tlsNames := asdbv1.GetNetworkTLSNames(networkConf)
 
 	dcListInterface, exists := xdrConf[asdbv1.ConfKeyXdrDCs]
 	if !exists {
@@ -197,100 +195,147 @@ func validateXDRConfig(config map[string]interface{}) error {
 		return fmt.Errorf("aerospikeConfig.xdr.dcs not a valid list %v", dcListInterface)
 	}
 
-	for _, dcConfInterface := range dcList {
+	for idx, dcConfInterface := range dcList {
 		dcConf, ok := dcConfInterface.(map[string]interface{})
 		if !ok {
 			return fmt.Errorf("aerospikeConfig.xdr.dcs entry not a valid map %v", dcConfInterface)
 		}
 
 		dcName, _ := dcConf[asdbv1.ConfKeyName].(string)
-
-		tlsNameInterface, tlsNameExists := dcConf[asdbv1.ConfKeyTLSName]
-
-		if tlsNameExists {
-			tlsName, _ := tlsNameInterface.(string)
-			if !tlsNames.Has(tlsName) {
-				return fmt.Errorf(
-					"xdr.dcs[%v].tls-name '%s' must refer the TLS configuration defined in network.tls",
-					dcName, tlsName,
-				)
-			}
+		if dcName == "" {
+			dcName = strconv.Itoa(idx)
 		}
 
-		isConnectorDC, _ := dcConf[asdbv1.ConfKeyXdrConnector].(bool)
-		authPasswordFile, _ := dcConf[asdbv1.ConfKeyXdrAuthPasswordFile].(string)
-		authUser, _ := dcConf[asdbv1.ConfKeyXdrAuthUser].(string)
+		if err := validateXDRDC(dcConf, dcName, tlsNames); err != nil {
+			return err
+		}
+	}
 
-		authModeInterface, authModeExists := dcConf[asdbv1.ConfKeyAuthMode]
-		authMode, _ := authModeInterface.(string)
+	return nil
+}
 
-		if isConnectorDC && authModeExists && authMode != asdbv1.XdrAuthModeNone {
+// validateXDRDC validates a single entry in the xdr.dcs list. dcID identifies the
+// datacenter in error messages, either its configured name or its list index.
+func validateXDRDC(dcConf map[string]interface{}, dcID string, tlsNames sets.Set[string]) error {
+	tlsNameSet, err := validateXDRDCTLSName(dcConf, dcID, tlsNames)
+	if err != nil {
+		return err
+	}
+
+	if err := validateXDRDCConnector(dcConf, dcID); err != nil {
+		return err
+	}
+
+	return validateXDRDCAuth(dcConf, dcID, tlsNameSet)
+}
+
+// validateXDRDCTLSName validates the tls-name field of a single xdr.dcs entry and
+// reports whether it is set, so callers can factor that into later checks (e.g. PKI auth).
+func validateXDRDCTLSName(dcConf map[string]interface{}, dcID string, tlsNames sets.Set[string]) (bool, error) {
+	tlsNameInterface, tlsNameExists := dcConf[asdbv1.ConfKeyTLSName]
+	tlsName, _ := tlsNameInterface.(string)
+	tlsNameSet := tlsNameExists && tlsName != ""
+
+	if tlsNameSet && !tlsNames.Has(tlsName) {
+		return false, fmt.Errorf(
+			"xdr.dcs[%s].tls-name %q must refer the TLS configuration defined in network.tls",
+			dcID, tlsName,
+		)
+	}
+
+	return tlsNameSet, nil
+}
+
+// validateXDRDCConnector validates the restrictions that apply when a xdr.dcs entry
+// is marked as a 'connector' datacenter.
+func validateXDRDCConnector(dcConf map[string]interface{}, dcID string) error {
+	isConnectorDC, _ := dcConf[asdbv1.ConfKeyXdrConnector].(bool)
+	if !isConnectorDC {
+		return nil
+	}
+
+	authModeInterface, authModeExists := dcConf[asdbv1.ConfKeyXdrAuthMode]
+	authMode, _ := authModeInterface.(string)
+
+	if authModeExists && authMode != asdbv1.XdrAuthModeNone {
+		return fmt.Errorf(
+			"xdr.dcs[%s]: %s must be 'none' for 'connector' datacenters",
+			dcID, asdbv1.ConfKeyXdrAuthMode,
+		)
+	}
+
+	if authPasswordFile, _ := dcConf[asdbv1.ConfKeyXdrAuthPasswordFile].(string); authPasswordFile != "" {
+		return fmt.Errorf(
+			"xdr.dcs[%s]: %s is not allowed for 'connector' datacenters",
+			dcID, asdbv1.ConfKeyXdrAuthPasswordFile,
+		)
+	}
+
+	if authUser, _ := dcConf[asdbv1.ConfKeyXdrAuthUser].(string); authUser != "" {
+		return fmt.Errorf(
+			"xdr.dcs[%s]: %s is not allowed for 'connector' datacenters",
+			dcID, asdbv1.ConfKeyXdrAuthUser,
+		)
+	}
+
+	return nil
+}
+
+// validateXDRDCAuth validates the auth-mode/auth-user/auth-password-file combination
+// of a single xdr.dcs entry. tlsNameSet reflects whether tls-name is configured, which
+// is required when auth-mode is 'pki'.
+func validateXDRDCAuth(dcConf map[string]interface{}, dcID string, tlsNameSet bool) error {
+	authPasswordFile, _ := dcConf[asdbv1.ConfKeyXdrAuthPasswordFile].(string)
+	authUser, _ := dcConf[asdbv1.ConfKeyXdrAuthUser].(string)
+
+	authModeInterface, authModeExists := dcConf[asdbv1.ConfKeyXdrAuthMode]
+	authMode, _ := authModeInterface.(string)
+
+	if authUser != "" {
+		if !authModeExists {
 			return fmt.Errorf(
-				"xdr.dcs[%v]: auth-mode must be 'none' for 'connector' datacenters",
-				dcName,
+				"xdr.dcs[%s]: %s is required when %s is set",
+				dcID, asdbv1.ConfKeyXdrAuthMode, asdbv1.ConfKeyXdrAuthUser,
 			)
 		}
 
-		if isConnectorDC && authPasswordFile != "" {
+		if authMode == asdbv1.XdrAuthModeNone {
 			return fmt.Errorf(
-				"xdr.dcs[%v]: auth-password-file is not allowed for 'connector' datacenters",
-				dcName,
+				"xdr.dcs[%s]: %s must not be 'none' when %s is set",
+				dcID, asdbv1.ConfKeyXdrAuthMode, asdbv1.ConfKeyXdrAuthUser,
 			)
 		}
+	}
 
-		if isConnectorDC && authUser != "" {
-			return fmt.Errorf(
-				"xdr.dcs[%v]: auth-user is not allowed for 'connector' datacenters",
-				dcName,
-			)
-		}
+	authModeNeedsCredentials := authMode == asdbv1.XdrAuthModeInternal || authMode == asdbv1.XdrAuthModeExternal ||
+		authMode == asdbv1.XdrAuthModeExternalInsecure
 
-		if authUser != "" {
-			if !authModeExists {
-				return fmt.Errorf(
-					"xdr.dcs[%v]: auth-mode is required when auth-user is set",
-					dcName,
-				)
-			}
+	if authModeNeedsCredentials && authUser == "" {
+		return fmt.Errorf(
+			"xdr.dcs[%s]: %s is required when %s is '%s'",
+			dcID, asdbv1.ConfKeyXdrAuthUser, asdbv1.ConfKeyXdrAuthMode, authMode,
+		)
+	}
 
-			if authMode == asdbv1.XdrAuthModeNone {
-				return fmt.Errorf(
-					"xdr.dcs[%v]: auth-mode must not be 'none' when auth-user is set",
-					dcName,
-				)
-			}
-		}
+	if authUser != "" && authPasswordFile == "" {
+		return fmt.Errorf(
+			"xdr.dcs[%s]: %s is set but %s is missing",
+			dcID, asdbv1.ConfKeyXdrAuthUser, asdbv1.ConfKeyXdrAuthPasswordFile,
+		)
+	}
 
-		authModeNeedsCredentials := authMode == asdbv1.XdrAuthModeInternal || authMode == asdbv1.XdrAuthModeExternal ||
-			authMode == asdbv1.XdrAuthModeExternalInsecure
+	if authUser == "" && authPasswordFile != "" {
+		return fmt.Errorf(
+			"xdr.dcs[%s]: %s is set but %s is missing",
+			dcID, asdbv1.ConfKeyXdrAuthPasswordFile, asdbv1.ConfKeyXdrAuthUser,
+		)
+	}
 
-		if authModeNeedsCredentials && authUser == "" {
-			return fmt.Errorf(
-				"xdr.dcs[%v]: auth-user is required when auth-mode is '%s'",
-				dcName, authMode,
-			)
-		}
-
-		if authUser != "" && authPasswordFile == "" {
-			return fmt.Errorf(
-				"xdr.dcs[%v]: auth-user is set but auth-password-file is missing",
-				dcName,
-			)
-		}
-
-		if authUser == "" && authPasswordFile != "" {
-			return fmt.Errorf(
-				"xdr.dcs[%v]: auth-password-file is set but auth-user is missing",
-				dcName,
-			)
-		}
-
-		if authMode == asdbv1.XdrAuthModePKI && !tlsNameExists {
-			return fmt.Errorf(
-				"xdr.dcs[%v]: tls-name is required when auth-mode is '%s'",
-				dcName, authMode,
-			)
-		}
+	if authMode == asdbv1.XdrAuthModePKI && !tlsNameSet {
+		return fmt.Errorf(
+			"xdr.dcs[%s]: %s is required when %s is '%s'",
+			dcID, asdbv1.ConfKeyTLSName, asdbv1.ConfKeyXdrAuthMode, authMode,
+		)
 	}
 
 	return nil
