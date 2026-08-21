@@ -26,6 +26,11 @@ import (
 var _ = Describe("AerospikeCluster validation", func() {
 	const (
 		clusterName = "invalid-cluster"
+
+		// ipv6ProbeNodeName is the node these specs seed to steer the webhook's node
+		// IPv6 capability check, and ipv6NodeInternalIP is a ULA address it advertises.
+		ipv6ProbeNodeName  = "envtests-ipv6-probe-node"
+		ipv6NodeInternalIP = "fd00::a"
 	)
 
 	ctx := context.TODO()
@@ -639,7 +644,12 @@ var _ = Describe("AerospikeCluster validation", func() {
 			})
 
 			Context("negative", func() {
-				It("rejects setting advertise-ipv6", func() {
+				It("rejects setting advertise-ipv6 when no node is IPv6-capable", func() {
+					// An IPv4-only node makes this a genuine capability check rather than
+					// a cluster that simply has no nodes.
+					createNodeWithInternalIP(ctx, ipv6ProbeNodeName, "10.101.0.10")
+					DeferCleanup(func() { deleteNode(ctx, ipv6ProbeNodeName) })
+
 					aeroCluster := testCluster.CreateDummyAerospikeCluster(clusterNamespacedName, 1)
 					aeroCluster.Spec.AerospikeConfig.Value[asdbv1.ConfKeyService].(map[string]interface{})["advertise-ipv6"] = true
 
@@ -650,7 +660,31 @@ var _ = Describe("AerospikeCluster validation", func() {
 					// Webhook response validation
 					envtests.NewStatusErrorMatcher().
 						WithMessageSubstrings(testutil.WebhookErrorPrefix,
-							"advertise-ipv6 is not supported").
+							"advertise-ipv6 requires an IPv6-capable Kubernetes cluster",
+							"no Kubernetes node reports an IPv6 InternalIP address").
+						Validate(err)
+				})
+
+				// Schema validation runs before the advertise-ipv6 guard, so a non-boolean
+				// is reported as a schema error rather than reaching the guard's own type
+				// check. This spec pins that ordering; the guard's type check is covered by
+				// the unit tests in pkg/validation.
+				It("rejects a non-boolean advertise-ipv6 as a schema error", func() {
+					createNodeWithInternalIP(ctx, ipv6ProbeNodeName, ipv6NodeInternalIP)
+					DeferCleanup(func() { deleteNode(ctx, ipv6ProbeNodeName) })
+
+					aeroCluster := testCluster.CreateDummyAerospikeCluster(clusterNamespacedName, 1)
+					aeroCluster.Spec.AerospikeConfig.Value[asdbv1.ConfKeyService].(map[string]interface{})["advertise-ipv6"] = "true"
+
+					// Deploy cluster
+					err := envtests.K8sClient.Create(ctx, aeroCluster)
+					Expect(err).To(HaveOccurred())
+
+					// Webhook response validation
+					envtests.NewStatusErrorMatcher().
+						WithMessageSubstrings(testutil.WebhookErrorPrefix,
+							"config schema error",
+							"(root).service.advertise-ipv6 Invalid type. Expected: boolean, given: string").
 						Validate(err)
 				})
 
@@ -733,6 +767,19 @@ var _ = Describe("AerospikeCluster validation", func() {
 				})
 			})
 			Context("positive", func() {
+				It("accepts setting advertise-ipv6 when a node is IPv6-capable", func() {
+					createNodeWithInternalIP(ctx, ipv6ProbeNodeName, ipv6NodeInternalIP)
+					DeferCleanup(func() { deleteNode(ctx, ipv6ProbeNodeName) })
+
+					// Size 2 satisfies the default replication-factor 2 of the dummy
+					// cluster, which the rejection specs never have to clear.
+					aeroCluster := testCluster.CreateDummyAerospikeCluster(clusterNamespacedName, 2)
+					aeroCluster.Spec.AerospikeConfig.Value[asdbv1.ConfKeyService].(map[string]interface{})["advertise-ipv6"] = true
+
+					// Deploy cluster
+					Expect(envtests.K8sClient.Create(ctx, aeroCluster)).ToNot(HaveOccurred())
+				})
+
 				It("does not warn when cgroup-mem-tracking is true "+
 					"(version >= "+testutil.CgroupMemTrackingServerVersion+")", func() {
 					aeroCluster := testCluster.CreateAerospikeClusterPost640(

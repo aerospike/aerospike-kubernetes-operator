@@ -58,6 +58,10 @@ import (
 // K8sClient is the Kubernetes client for envtests. Exported for use by subpackages (e.g. envtests/cluster).
 // var K8sClient client.Client
 
+// NodeIPv6CacheTTL is the node IPv6 capability cache window used by the webhook under test.
+// Specs that seed or remove IPv6 nodes should poll for at least this long.
+const NodeIPv6CacheTTL = 100 * time.Millisecond
+
 // Package-level vars used by envtests and set by SetupTestEnv.
 var (
 	testEnv         *envtest.Environment
@@ -144,7 +148,11 @@ func SetupTestEnv() {
 	Expect(err).NotTo(HaveOccurred())
 
 	EvictionWebhook = evictionwebhook.SetupEvictionWebhookWithManager(mgr)
-	err = webhookv1.SetupAerospikeClusterWebhookWithManager(mgr)
+	// A short node IPv6 capability TTL lets specs seed or remove IPv6 nodes and observe
+	// the effect on admission without waiting out the production cache window.
+	err = webhookv1.SetupAerospikeClusterWebhookWithManager(
+		mgr, webhookv1.WithNodeIPv6CacheTTL(NodeIPv6CacheTTL),
+	)
 	Expect(err).NotTo(HaveOccurred())
 	err = webhookv1beta1.SetupAerospikeBackupServiceWebhookWithManager(mgr)
 	Expect(err).NotTo(HaveOccurred())
