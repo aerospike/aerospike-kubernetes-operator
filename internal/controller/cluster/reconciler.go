@@ -39,12 +39,12 @@ import (
 // to the durable collaborators on SingleClusterReconciler. Every field is written mid-pass by one
 // stage and read by a later one, and none of it is meaningful outside the pass that produced it.
 type reconcileComputedState struct {
-	// pendingOpReset holds the operation conditions finishReconcile is allowed to clear on
-	// exit. A rack function that sets its condition True claims it, removing it from the set,
-	// so an operation still in flight across a requeue keeps reporting. See mergePatchStatus.
-	// nil means clear nothing, which is what every path that never reaches the rack loop
-	// wants: cluster deletion, spec.paused, and any failure before the rack loop all leave
-	// the conditions frozen at their last known state.
+	// pendingOpReset holds the operation conditions finishReconcile is allowed to clear on exit.
+	// A rack function that sets its condition True claims it, removing it from the set, so an
+	// operation still in flight keeps reporting. See mergePatchStatus.
+	// nil means clear nothing. It is armed immediately before the rack loop — the only code that
+	// claims — so cluster deletion, spec.paused, and every stage ahead of the rack loop leave the
+	// conditions frozen at their last known state.
 	pendingOpReset sets.Set[string]
 	// revisionChangedRackIDs holds the IDs of racks undergoing a revision migration this pass, as
 	// categoriseRacks computed them from live StatefulSets. It is the single answer to "is this
@@ -112,10 +112,6 @@ func (r *SingleClusterReconciler) Reconcile(ctx context.Context) (result ctrl.Re
 			})
 	}
 
-	// From here on this pass owns the operation conditions: finishReconcile clears whichever
-	// ones no rack function claims, per the policy set after the rack loop.
-	r.initPendingOpConditionReset()
-
 	// Mark Ready=False and phase=InProgress at the start of every reconcile so neither stays
 	// at its completed value while operations are in progress.
 	inProgress := asdbv1.AerospikeClusterInProgress
@@ -174,6 +170,10 @@ func (r *SingleClusterReconciler) Reconcile(ctx context.Context) (result ctrl.Re
 
 		return reconcile.Result{}, fmt.Errorf("create or update headless Service: %w", err)
 	}
+
+	// From here on this pass owns the operation conditions: finishReconcile clears whichever
+	// ones no rack function claims, per the policy set after the rack loop.
+	r.initPendingOpConditionReset()
 
 	// Reconcile all racks
 	if res := r.reconcileRacks(ctx); !res.IsSuccess {
@@ -350,39 +350,32 @@ func (r *SingleClusterReconciler) handleTerminatingCluster(ctx context.Context) 
 	return nil
 }
 
-// writeTerminalStatus applies everything the exit path owes the status object in a single
-// patch: the operation conditions this pass may clear, plus — on failure — Ready=False naming
-// the stage that failed, and phase=Error. One patch means Ready and the operation conditions
-// can never be observed disagreeing.
+// A failed reconcile writes Ready=False naming the stage that failed, plus phase=Error. It doesn't
+// reset conditions in a failure path to keep the old conditions state intact.
+// A successful or requeueing pass resets whichever operation conditions no rack function claimed.
+// Doing it on requeue matters: a large upgrade or restart requeues once per batch for hours, and
+// waiting for the whole rack loop to succeed would leave a finished operation reporting True for
+// that entire time.
 func (r *SingleClusterReconciler) writeTerminalStatus(ctx context.Context, recErr error) error {
-	conds := r.opConditionsToClear()
-
-	var phase *asdbv1.AerospikeClusterPhase
-
-	if recErr != nil {
-		errorPhase := asdbv1.AerospikeClusterError
-		phase = &errorPhase
-
-		// Prefer the stage recorded by Reconcile so consumers can distinguish a rack problem
-		// from an access-control or roster problem without parsing the message.
-		reason := asdbv1.AerospikeClusterReasonReconcileFailed
-		if r.computedState.failureReason != "" {
-			reason = r.computedState.failureReason
-		}
-
-		conds = append(conds, metav1.Condition{
-			Type:    string(asdbv1.AerospikeClusterConditionReady),
-			Status:  metav1.ConditionFalse,
-			Reason:  reason,
-			Message: truncateConditionMessage(recErr.Error()),
-		})
+	if recErr == nil {
+		return r.mergePatchStatus(ctx, nil, r.opConditionsToClear()...)
 	}
 
-	if phase == nil && len(conds) == 0 {
-		return nil
+	errorPhase := asdbv1.AerospikeClusterError
+
+	// Prefer the stage recorded by Reconcile so consumers can distinguish a rack problem
+	// from an access-control or roster problem without parsing the message.
+	reason := asdbv1.AerospikeClusterReasonReconcileFailed
+	if r.computedState.failureReason != "" {
+		reason = r.computedState.failureReason
 	}
 
-	return r.mergePatchStatus(ctx, phase, conds...)
+	return r.mergePatchStatus(ctx, &errorPhase, metav1.Condition{
+		Type:    string(asdbv1.AerospikeClusterConditionReady),
+		Status:  metav1.ConditionFalse,
+		Reason:  reason,
+		Message: truncateConditionMessage(recErr.Error()),
+	})
 }
 
 // ensureSCRoster handles Strong Consistency roster management.
@@ -596,9 +589,9 @@ var operationConditions = []struct {
 }
 
 // initPendingOpConditionReset takes ownership of the operation conditions for this reconcile: every
-// one of them becomes eligible for reset unless a rack function claims it. Called only once
-// the pass is committed to doing work, so paths that bail out earlier (deletion, paused)
-// leave the conditions frozen.
+// one of them becomes eligible for reset unless a rack function claims it.
+// Called immediately before the rack loop, deliberately as late as possible: every stage that runs
+// earlier doesn't claim any operation condition.
 func (r *SingleClusterReconciler) initPendingOpConditionReset() {
 	r.computedState.pendingOpReset = sets.New[string]()
 
@@ -619,7 +612,7 @@ func opConditionAtRest(condType, falseReason string) metav1.Condition {
 
 // opConditionsToClear returns the resting form of every operation condition this pass is
 // still allowed to clear. A condition claimed by a rack function is omitted, so an operation
-// interrupted by an error or spanning a requeue keeps reporting.
+// spanning a requeue keeps reporting.
 //
 // A claimed condition is omitted even when the operation completed: on the success path
 // updateStatus clears it, atomically with Ready=True.
