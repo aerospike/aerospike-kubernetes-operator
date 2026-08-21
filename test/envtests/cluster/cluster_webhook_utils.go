@@ -163,6 +163,22 @@ func rackNSOverride(devicePath string) *asdbv1.AerospikeConfigSpec {
 	}
 }
 
+// xdrDC returns an otherwise-valid xdr.dcs[] entry named dc1, merged with the given
+// fields under test (auth-mode, auth-user, auth-password-file, connector, tls-name, ...).
+func xdrDC(extra map[string]interface{}) map[string]interface{} {
+	dc := map[string]interface{}{
+		"name":               "dc1",
+		"node-address-ports": []interface{}{"aeroclusterdst-0-0 3000"},
+		"namespaces":         []interface{}{map[string]interface{}{"name": "test"}},
+	}
+
+	for k, v := range extra {
+		dc[k] = v
+	}
+
+	return dc
+}
+
 func deleteCluster(ctx context.Context, nsName types.NamespacedName) {
 	aeroCluster := &asdbv1.AerospikeCluster{
 		ObjectMeta: metav1.ObjectMeta{
