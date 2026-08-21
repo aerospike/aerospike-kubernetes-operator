@@ -98,8 +98,18 @@ var _ = Describe(
 						Expect(err).ToNot(HaveOccurred())
 
 						aeroCluster.Spec.K8sNodeBlockList = []string{oldK8sNode}
-						err = updateCluster(k8sClient, ctx, aeroCluster)
-						Expect(err).ToNot(HaveOccurred())
+						Expect(updateClusterWithNoWait(k8sClient, ctx, aeroCluster)).ToNot(HaveOccurred())
+
+						By("RollingRestart must be True with the blocklist reason")
+
+						validateCondition(ctx, clusterNamespacedName, asdbv1.AerospikeClusterConditionRollingRestart,
+							asdbv1.AerospikeClusterReasonK8sNodeBlockListEviction, podName)
+
+						Expect(waitForAerospikeCluster(
+							k8sClient, ctx, aeroCluster, int(aeroCluster.Spec.Size), retryInterval,
+							getTimeout(aeroCluster.Spec.Size),
+							[]asdbv1.AerospikeClusterPhase{asdbv1.AerospikeClusterCompleted},
+						)).ToNot(HaveOccurred())
 
 						By("Verifying if the pod is migrated to other nodes and pod pvcs are not deleted")
 						validatePodAndPVCMigration(ctx, podName, oldK8sNode, oldPvcInfo, false)
