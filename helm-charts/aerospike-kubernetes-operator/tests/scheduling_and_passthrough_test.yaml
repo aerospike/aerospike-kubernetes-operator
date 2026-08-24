@@ -1,0 +1,193 @@
+suite: values.schema.json edge cases — scheduling and k8s-native passthrough fields
+
+templates:
+  - templates/aerospike-operator-controller-manager-deployment.yaml
+
+tests:
+  # -- tolerations --
+  - it: accepts tolerations key/value as plain strings
+    set:
+      tolerations:
+        - key: "dedicated"
+          value: "aerospike"
+    asserts:
+      - notFailedTemplate: {}
+
+  - it: accepts a negative tolerationSeconds (means tolerated forever per Kubernetes semantics)
+    set:
+      tolerations:
+        - key: "dedicated"
+          tolerationSeconds: -5
+    asserts:
+      - notFailedTemplate: {}
+
+  - it: accepts a zero tolerationSeconds
+    set:
+      tolerations:
+        - key: "dedicated"
+          tolerationSeconds: 0
+    asserts:
+      - notFailedTemplate: {}
+
+  - it: accepts each valid tolerations operator
+    set:
+      tolerations:
+        - key: "dedicated"
+          operator: Exists
+    asserts:
+      - notFailedTemplate: {}
+
+  - it: accepts an empty tolerations effect (matches all effects)
+    set:
+      tolerations:
+        - key: "dedicated"
+          effect: ""
+    asserts:
+      - notFailedTemplate: {}
+
+  - it: accepts each valid tolerations effect
+    set:
+      tolerations:
+        - key: "dedicated"
+          effect: NoExecute
+    asserts:
+      - notFailedTemplate: {}
+
+  # -- affinity --
+  - it: accepts an arbitrary object for a passthrough field (affinity)
+    set:
+      affinity:
+        nodeAffinity: {}
+    asserts:
+      - notFailedTemplate: {}
+
+  - it: rejects a non-object value for a passthrough field (affinity)
+    set:
+      affinity: "not-an-object"
+    asserts:
+      - failedTemplate:
+          errorPattern: "affinity.*got string, want object"
+
+  # -- annotations --
+  - it: accepts an arbitrary object for a passthrough field (annotations)
+    set:
+      annotations:
+        foo: bar
+    asserts:
+      - notFailedTemplate: {}
+
+  - it: rejects a non-object value for a passthrough field (annotations)
+    set:
+      annotations: "not-an-object"
+    asserts:
+      - failedTemplate:
+          errorPattern: "annotations.*got string, want object"
+
+  # -- labels --
+  - it: accepts an arbitrary object for a passthrough field (labels)
+    set:
+      labels:
+        foo: bar
+    asserts:
+      - notFailedTemplate: {}
+
+  - it: rejects a non-object value for a passthrough field (labels)
+    set:
+      labels: "not-an-object"
+    asserts:
+      - failedTemplate:
+          errorPattern: "labels.*got string, want object"
+
+  # -- nodeSelector --
+  - it: accepts an arbitrary object for a passthrough field (nodeSelector)
+    set:
+      nodeSelector:
+        disktype: ssd
+    asserts:
+      - notFailedTemplate: {}
+
+  - it: rejects a non-object value for a passthrough field (nodeSelector)
+    set:
+      nodeSelector: "not-an-object"
+    asserts:
+      - failedTemplate:
+          errorPattern: "nodeSelector.*got string, want object"
+
+  # -- podAnnotations --
+  - it: accepts an arbitrary object for a passthrough field (podAnnotations)
+    set:
+      podAnnotations:
+        foo: bar
+    asserts:
+      - notFailedTemplate: {}
+
+  - it: rejects a non-object value for a passthrough field (podAnnotations)
+    set:
+      podAnnotations: "not-an-object"
+    asserts:
+      - failedTemplate:
+          errorPattern: "podAnnotations.*got string, want object"
+
+  # -- podLabels --
+  - it: accepts an arbitrary object for a passthrough field (podLabels)
+    set:
+      podLabels:
+        foo: bar
+    asserts:
+      - notFailedTemplate: {}
+
+  - it: rejects a non-object value for a passthrough field (podLabels)
+    set:
+      podLabels: "not-an-object"
+    asserts:
+      - failedTemplate:
+          errorPattern: "podLabels.*got string, want object"
+
+  # -- podSecurityContext --
+  - it: accepts an arbitrary object for a passthrough field (podSecurityContext)
+    set:
+      podSecurityContext:
+        runAsNonRoot: true
+    asserts:
+      - notFailedTemplate: {}
+
+  - it: rejects a non-object value for a passthrough field (podSecurityContext)
+    set:
+      podSecurityContext: "not-an-object"
+    asserts:
+      - failedTemplate:
+          errorPattern: "podSecurityContext.*got string, want object"
+
+  # -- imagePullSecrets --
+  - it: accepts the default empty array
+    asserts:
+      - notFailedTemplate: {}
+
+  - it: accepts an array of secret name strings
+    set:
+      imagePullSecrets:
+        - secret_with_credentials_to_custom_registry
+    asserts:
+      - notFailedTemplate: {}
+
+  - it: accepts an object for backwards compatibility (deprecated, to be removed in a future major release)
+    set:
+      imagePullSecrets:
+        secret_with_credentials_to_custom_registry: {}
+    asserts:
+      - notFailedTemplate: {}
+
+  - it: rejects a non-array non-object value
+    set:
+      imagePullSecrets: "not-valid"
+    asserts:
+      - failedTemplate:
+          errorPattern: "imagePullSecrets.*got string, want array"
+
+  # -- securityContext --
+  - it: accepts securityContext.allowPrivilegeEscalation as a boolean
+    set:
+      securityContext:
+        allowPrivilegeEscalation: true
+    asserts:
+      - notFailedTemplate: {}

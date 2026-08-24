@@ -1,0 +1,26 @@
+# yaml-language-server: $schema=https://github.com/losisin/helm-values-schema-json/raw/refs/heads/main/config.schema.json
+#
+# Config for the "helm schema" plugin (https://github.com/losisin/helm-values-schema-json).
+# values.schema.json is GENERATED from values.yaml — do not edit it by hand.
+# Validation rules live in "# @schema" comments in values.yaml; run "helm schema"
+# from this directory after changing values.yaml.
+
+values:
+  - values.yaml
+
+draft: 2020
+indent: 4
+output: values.schema.json
+
+# Descriptions come from helm-docs style "# -- ..." comments.
+useHelmDocs: true
+
+# Deliberately left at the default (false). Turning it on closes *every* object in
+# the schema, which breaks the Kubernetes passthrough fields (affinity, annotations,
+# labels, nodeSelector, podAnnotations, podLabels, podSecurityContext, probes) that
+# must accept arbitrary keys. Objects that should be closed opt in individually with
+# "# @schema additionalProperties: false" in values.yaml.
+noAdditionalProperties: false
+
+schemaRoot:
+  additionalProperties: true

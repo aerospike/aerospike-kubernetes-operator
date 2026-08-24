@@ -1,0 +1,135 @@
+suite: values.schema.json edge cases — image and registry
+
+templates:
+  - templates/aerospike-operator-controller-manager-deployment.yaml
+
+tests:
+  # -- aerospikeKubernetesInitNameTag --
+  - it: accepts a plain name:tag reference
+    set:
+      aerospikeKubernetesInitNameTag: "aerospike-kubernetes-init:2.5.3"
+    asserts:
+      - notFailedTemplate: {}
+
+  - it: accepts a digest-style reference (name@sha256:digest)
+    set:
+      aerospikeKubernetesInitNameTag: "name@sha256:abcdef0123"
+    asserts:
+      - notFailedTemplate: {}
+
+  - it: rejects a tag reference with no colon at all
+    set:
+      aerospikeKubernetesInitNameTag: "nametag"
+    asserts:
+      - failedTemplate:
+          errorPattern: "aerospikeKubernetesInitNameTag.*does not match pattern"
+
+  - it: rejects a trailing colon with nothing after it
+    set:
+      aerospikeKubernetesInitNameTag: "name:"
+    asserts:
+      - failedTemplate:
+          errorPattern: "aerospikeKubernetesInitNameTag.*does not match pattern"
+
+  - it: rejects a leading colon with nothing before it
+    set:
+      aerospikeKubernetesInitNameTag: ":tag"
+    asserts:
+      - failedTemplate:
+          errorPattern: "aerospikeKubernetesInitNameTag.*does not match pattern"
+
+  - it: rejects a reference containing whitespace
+    set:
+      aerospikeKubernetesInitNameTag: "name tag:foo"
+    asserts:
+      - failedTemplate:
+          errorPattern: "aerospikeKubernetesInitNameTag.*does not match pattern"
+
+  # -- aerospikeKubernetesInitRegistry --
+  - it: accepts a non-empty aerospikeKubernetesInitRegistry
+    set:
+      aerospikeKubernetesInitRegistry: "my-registry.example.com"
+    asserts:
+      - notFailedTemplate: {}
+
+  - it: rejects an empty aerospikeKubernetesInitRegistry
+    set:
+      aerospikeKubernetesInitRegistry: ""
+    asserts:
+      - failedTemplate:
+          errorPattern: "at '/aerospikeKubernetesInitRegistry': minLength: got 0, want 1"
+
+  # -- aerospikeKubernetesInitRegistryNamespace --
+  - it: accepts a non-empty aerospikeKubernetesInitRegistryNamespace
+    set:
+      aerospikeKubernetesInitRegistryNamespace: "my-namespace"
+    asserts:
+      - notFailedTemplate: {}
+
+  - it: rejects an empty aerospikeKubernetesInitRegistryNamespace
+    set:
+      aerospikeKubernetesInitRegistryNamespace: ""
+    asserts:
+      - failedTemplate:
+          errorPattern: "at '/aerospikeKubernetesInitRegistryNamespace': minLength: got 0, want 1"
+
+  # -- operatorImage --
+  - it: accepts a custom operatorImage.repository string
+    set:
+      operatorImage:
+        repository: "my-org/my-operator"
+    asserts:
+      - notFailedTemplate: {}
+
+  - it: rejects a non-string operatorImage.repository
+    set:
+      operatorImage:
+        repository: 123
+    asserts:
+      - failedTemplate:
+          errorPattern: "operatorImage/repository.*got number, want string"
+
+  - it: accepts a custom operatorImage.tag string
+    set:
+      operatorImage:
+        tag: "5.0.0"
+    asserts:
+      - notFailedTemplate: {}
+
+  - it: rejects a non-string operatorImage.tag
+    set:
+      operatorImage:
+        tag: 5.0
+    asserts:
+      - failedTemplate:
+          errorPattern: "operatorImage/tag.*got number, want string"
+
+  - it: accepts each valid operatorImage.pullPolicy
+    set:
+      operatorImage:
+        pullPolicy: Never
+    asserts:
+      - notFailedTemplate: {}
+
+  # -- imagePullSecrets --
+  - it: accepts an empty imagePullSecrets array
+    set:
+      imagePullSecrets: []
+    asserts:
+      - notFailedTemplate: {}
+
+  - it: accepts imagePullSecrets as a list of strings
+    set:
+      imagePullSecrets:
+        - secret1
+        - secret2
+    asserts:
+      - notFailedTemplate: {}
+
+  - it: rejects imagePullSecrets items that are not strings
+    set:
+      imagePullSecrets:
+        - 123
+    asserts:
+      - failedTemplate:
+          errorPattern: "imagePullSecrets/0.*got number, want string"
