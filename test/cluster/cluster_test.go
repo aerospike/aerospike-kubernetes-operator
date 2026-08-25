@@ -589,7 +589,7 @@ func ScaleDownWithMigrateFillDelay(ctx goctx.Context) {
 	Context(
 		"ScaleDownWithMigrateFillDelay", func() {
 			clusterNamespacedName := test.GetNamespacedName(
-				"migrate-fill-delay-cluster", namespace,
+				fmt.Sprintf("migrate-fill-delay-cluster-%d", GinkgoParallelProcess()), namespace,
 			)
 			migrateFillDelay := int64(120)
 

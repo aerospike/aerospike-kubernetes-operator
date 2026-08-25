@@ -117,6 +117,13 @@ var _ = Describe(
 								err := deleteStatefulSet(k8sClient, ctx, clusterNamespacedName, versionV1, 1)
 								Expect(err).ToNot(HaveOccurred())
 
+								err = waitForAerospikeCluster(
+									k8sClient, ctx, aeroCluster, int(aeroCluster.Spec.Size), retryInterval,
+									getTimeout(aeroCluster.Spec.Size),
+									[]asdbv1.AerospikeClusterPhase{asdbv1.AerospikeClusterCompleted},
+								)
+								Expect(err).ToNot(HaveOccurred())
+
 								// Validate final state
 								err = validateRackEnabledCluster(k8sClient, ctx, clusterNamespacedName)
 								Expect(err).ToNot(HaveOccurred())
