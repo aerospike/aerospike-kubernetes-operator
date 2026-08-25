@@ -193,7 +193,6 @@ var _ = Describe(
 								newRevSTSName := GetNamespacedNameForSTS(blockedCluster, utils.GetRackIdentifier(1, versionV2))
 								newRevSTS := &appsv1.StatefulSet{}
 								stsErr := k8sClient.Get(ctx, newRevSTSName, newRevSTS)
-
 								if stsErr == nil {
 									Expect(ptr.Deref(newRevSTS.Spec.Replicas, 0)).To(BeNumerically("==", 0),
 										"new-revision StatefulSet must not scale up while the old-revision pod blocks migration")
