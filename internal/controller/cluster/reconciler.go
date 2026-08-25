@@ -313,7 +313,7 @@ func (r *SingleClusterReconciler) recoverIgnorablePods(
 	if len(deletedPodNames) == 0 {
 		r.Log.Info("All ignorable pods are healthy; re-entering normal reconcile")
 
-		return common.ReconcileRequeueAfter(1)
+		return common.ReconcileRequeueAfter(10)
 	}
 
 	// Wait for all deleted pods together within a single 3-minute window.

@@ -318,7 +318,7 @@ var _ = Describe(
 							Serial,
 						)
 
-						FIt(
+						It(
 							"Should block migration when old-revision pod has crashing sidecar and "+
 								"IgnoreSidecarFailure is false, and unblock when flag is set to true",
 							func() {
