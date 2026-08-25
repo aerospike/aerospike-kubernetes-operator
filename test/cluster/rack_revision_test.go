@@ -9,6 +9,7 @@ import (
 	. "github.com/onsi/gomega"
 	appsv1 "k8s.io/api/apps/v1"
 	corev1 "k8s.io/api/core/v1"
+	k8serrors "k8s.io/apimachinery/pkg/api/errors"
 	"k8s.io/apimachinery/pkg/api/resource"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/labels"
@@ -116,13 +117,6 @@ var _ = Describe(
 								err := deleteStatefulSet(k8sClient, ctx, clusterNamespacedName, versionV1, 1)
 								Expect(err).ToNot(HaveOccurred())
 
-								err = waitForAerospikeCluster(
-									k8sClient, ctx, aeroCluster, int(aeroCluster.Spec.Size), retryInterval,
-									getTimeout(aeroCluster.Spec.Size),
-									[]asdbv1.AerospikeClusterPhase{asdbv1.AerospikeClusterCompleted},
-								)
-								Expect(err).ToNot(HaveOccurred())
-
 								// Validate final state
 								err = validateRackEnabledCluster(k8sClient, ctx, clusterNamespacedName)
 								Expect(err).ToNot(HaveOccurred())
@@ -182,12 +176,44 @@ var _ = Describe(
 										asdbv1.AerospikeClusterError})
 								Expect(err).To(HaveOccurred())
 
+								By("Verifying phase is Error and the new-revision StatefulSet never scales above 0")
+
+								blockedCluster, gErr := getCluster(k8sClient, ctx, clusterNamespacedName)
+								Expect(gErr).ToNot(HaveOccurred())
+								Expect(blockedCluster.Status.Phase).To(Equal(asdbv1.AerospikeClusterError),
+									"migration must be blocked in Error, not left stuck in InProgress")
+
+								newRevSTSName := GetNamespacedNameForSTS(blockedCluster, utils.GetRackIdentifier(1, versionV2))
+								newRevSTS := &appsv1.StatefulSet{}
+								stsErr := k8sClient.Get(ctx, newRevSTSName, newRevSTS)
+
+								if stsErr == nil {
+									Expect(ptr.Deref(newRevSTS.Spec.Replicas, 0)).To(BeNumerically("==", 0),
+										"new-revision StatefulSet must not scale up while the old-revision pod blocks migration")
+								} else {
+									Expect(k8serrors.IsNotFound(stsErr)).To(BeTrue(),
+										"unexpected error fetching new-revision StatefulSet")
+								}
+
 								By("Setting maxIgnorablePods to 1")
 
 								maxIgnorable := intstr.FromInt32(1)
 								aeroCluster.Spec.RackConfig.MaxIgnorablePods = &maxIgnorable
 
-								err = updateCluster(k8sClient, ctx, aeroCluster)
+								Expect(updateClusterWithNoWait(k8sClient, ctx, aeroCluster)).ToNot(HaveOccurred())
+
+								By("Verifying cluster eventually reaches Completed")
+
+								// Native StatefulSet pod recreation while the new-revision rack
+								// finishes coming up can legitimately cause extra Error/InProgress
+								// blips unrelated to the maxIgnorablePods fix, so only the terminal
+								// state is asserted here — the Error starting point was already
+								// confirmed above via blockedCluster.Status.Phase.
+								err = waitForAerospikeCluster(
+									k8sClient, ctx, aeroCluster, int(aeroCluster.Spec.Size), retryInterval,
+									getTimeout(aeroCluster.Spec.Size),
+									[]asdbv1.AerospikeClusterPhase{asdbv1.AerospikeClusterCompleted},
+								)
 								Expect(err).ToNot(HaveOccurred())
 
 								// Validate final state

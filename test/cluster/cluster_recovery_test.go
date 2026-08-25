@@ -154,13 +154,26 @@ var _ = Describe("ACL failed-create recovery validation", func() {
 				Expect(waitForClusterPhase(k8sClient, ctx, clusterNamespacedName,
 					asdbv1.AerospikeClusterError)).ToNot(HaveOccurred())
 
+				By("Verifying cluster never reaches Completed while the stale ACL remains")
+				// StatefulSet-driven pod restarts can legitimately flip the phase
+				// between Error and InProgress, so only rule out ever reaching
+				// Completed — the image stays unavailable for the whole window.
+				Consistently(func(g Gomega) {
+					cluster, cErr := getCluster(k8sClient, ctx, clusterNamespacedName)
+					g.Expect(cErr).ToNot(HaveOccurred())
+					g.Expect(cluster.Status.Phase).To(BeElementOf(
+						asdbv1.AerospikeClusterError, asdbv1.AerospikeClusterInProgress),
+						"phase must not reach Completed while the stale ACL and bad image block recovery")
+				}, 2*time.Minute, 10*time.Second).Should(Succeed())
+
 				aeroCluster, err = getCluster(k8sClient, ctx, clusterNamespacedName)
 				Expect(err).ToNot(HaveOccurred())
 				Expect(reflect.DeepEqual(aeroCluster.Spec.AerospikeAccessControl, specACL)).To(BeTrue(),
 					"spec aerospikeAccessControl must be unchanged by recovery")
 
-				Expect(aeroCluster.Status.AerospikeAccessControl).NotTo(BeNil(),
-					"precondition: stale ACL snapshot must be present in status before recovery")
+				Expect(aeroCluster.Status.AerospikeAccessControl).To(BeNil(),
+					"stale AerospikeAccessControl status left from a prior wipe must be cleared by "+
+						"failed-create recovery")
 
 				aeroCluster.Spec.Image = validImage
 
