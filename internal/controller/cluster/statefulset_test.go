@@ -20,10 +20,13 @@ import (
 	"context"
 	"testing"
 
+	"github.com/stretchr/testify/assert"
 	appsv1 "k8s.io/api/apps/v1"
 	corev1 "k8s.io/api/core/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/util/sets"
+
+	asdbv1 "github.com/aerospike/aerospike-kubernetes-operator/v4/api/v1"
 )
 
 func replicaCount(n int32) *int32 { return &n }
@@ -112,5 +115,179 @@ func TestWaitForSTSPodsServerReady(t *testing.T) {
 		if err := r.waitForSTSPodsServerReady(context.Background(), multiSTS, ignorable); err != nil {
 			t.Errorf("expected nil when running pod + ignorable pod, got: %v", err)
 		}
+	})
+}
+
+// TestGetFinalVolumeAttachmentsForVolume validates the selective init-container
+// auto-mount logic introduced to avoid mounting irrelevant volumes (ConfigMap,
+// Secret, EmptyDir without an Aerospike path) in the aerospike-init container.
+//
+// Rules under test:
+//   - PV volumes (block or filesystem) are always auto-mounted in the init container.
+//   - Non-PV volumes with an Aerospike attachment are auto-mounted (the init container
+//     needs them to set up the workdir).
+//   - Non-PV volumes without an Aerospike attachment are NOT auto-mounted; the init
+//     container has no code that touches them.
+//   - Explicit volume.InitContainers entries are always honoured regardless of the
+//     above rules.
+func TestGetFinalVolumeAttachmentsForVolume(t *testing.T) {
+	const workDir = "/opt/aerospike"
+
+	// hasInitContainerAutoMount returns true when the returned initContainerAttachments
+	// contains the automatic aerospike-init attachment (identified by ContainerName).
+	hasInitContainerAutoMount := func(attachments []asdbv1.VolumeAttachment) bool {
+		for _, a := range attachments {
+			if a.ContainerName == asdbv1.AerospikeInitContainerName {
+				return true
+			}
+		}
+
+		return false
+	}
+
+	t.Run("PV block volume is auto-mounted in init container", func(t *testing.T) {
+		vol := &asdbv1.VolumeSpec{
+			Name: "block-vol",
+			Source: asdbv1.VolumeSource{
+				PersistentVolume: &asdbv1.PersistentVolumeSpec{
+					VolumeMode: corev1.PersistentVolumeBlock,
+				},
+			},
+		}
+
+		initAttachments, _ := getFinalVolumeAttachmentsForVolume(vol, workDir)
+
+		assert.True(t, hasInitContainerAutoMount(initAttachments),
+			"PV block volume must be auto-mounted in the init container for wiping")
+	})
+
+	t.Run("PV filesystem volume is auto-mounted in init container", func(t *testing.T) {
+		vol := &asdbv1.VolumeSpec{
+			Name: "fs-vol",
+			Source: asdbv1.VolumeSource{
+				PersistentVolume: &asdbv1.PersistentVolumeSpec{
+					VolumeMode: corev1.PersistentVolumeFilesystem,
+				},
+			},
+		}
+
+		initAttachments, _ := getFinalVolumeAttachmentsForVolume(vol, workDir)
+
+		assert.True(t, hasInitContainerAutoMount(initAttachments),
+			"PV filesystem volume must be auto-mounted in the init container for initialization")
+	})
+
+	t.Run("non-PV volume with Aerospike attachment is auto-mounted in init container", func(t *testing.T) {
+		vol := &asdbv1.VolumeSpec{
+			Name: "hostpath-workdir",
+			Source: asdbv1.VolumeSource{
+				HostPath: &corev1.HostPathVolumeSource{Path: "/mnt/data"},
+			},
+			Aerospike: &asdbv1.AerospikeServerVolumeAttachment{
+				Path: "/opt/aerospike/data",
+			},
+		}
+
+		initAttachments, _ := getFinalVolumeAttachmentsForVolume(vol, workDir)
+
+		assert.True(t, hasInitContainerAutoMount(initAttachments),
+			"non-PV volume used by Aerospike must be auto-mounted so the init container can set up the workdir")
+	})
+
+	t.Run("ConfigMap volume without Aerospike attachment is NOT auto-mounted in init container", func(t *testing.T) {
+		vol := &asdbv1.VolumeSpec{
+			Name: "sidecar-config",
+			Source: asdbv1.VolumeSource{
+				ConfigMap: &corev1.ConfigMapVolumeSource{
+					LocalObjectReference: corev1.LocalObjectReference{Name: "my-config"},
+				},
+			},
+		}
+
+		initAttachments, _ := getFinalVolumeAttachmentsForVolume(vol, workDir)
+
+		assert.False(t, hasInitContainerAutoMount(initAttachments),
+			"ConfigMap volume not used by Aerospike must not be auto-mounted in the init container")
+	})
+
+	t.Run("Secret volume without Aerospike attachment is NOT auto-mounted in init container", func(t *testing.T) {
+		vol := &asdbv1.VolumeSpec{
+			Name: "sidecar-secret",
+			Source: asdbv1.VolumeSource{
+				Secret: &corev1.SecretVolumeSource{SecretName: "my-secret"},
+			},
+		}
+
+		initAttachments, _ := getFinalVolumeAttachmentsForVolume(vol, workDir)
+
+		assert.False(t, hasInitContainerAutoMount(initAttachments),
+			"Secret volume not used by Aerospike must not be auto-mounted in the init container")
+	})
+
+	t.Run("EmptyDir volume without Aerospike attachment is NOT auto-mounted in init container", func(t *testing.T) {
+		vol := &asdbv1.VolumeSpec{
+			Name:   "scratch",
+			Source: asdbv1.VolumeSource{EmptyDir: &corev1.EmptyDirVolumeSource{}},
+		}
+
+		initAttachments, _ := getFinalVolumeAttachmentsForVolume(vol, workDir)
+
+		assert.False(t, hasInitContainerAutoMount(initAttachments),
+			"EmptyDir volume not used by Aerospike must not be auto-mounted in the init container")
+	})
+
+	t.Run("explicit volume.InitContainers entries are always honoured", func(t *testing.T) {
+		const customInitContainer = "my-custom-init"
+
+		vol := &asdbv1.VolumeSpec{
+			Name:   "sidecar-config",
+			Source: asdbv1.VolumeSource{ConfigMap: &corev1.ConfigMapVolumeSource{}},
+			InitContainers: []asdbv1.VolumeAttachment{
+				{ContainerName: customInitContainer, Path: "/custom/path"},
+			},
+		}
+
+		initAttachments, _ := getFinalVolumeAttachmentsForVolume(vol, workDir)
+
+		// The aerospike-init auto-mount must be absent, but the explicit user entry must be present.
+		assert.False(t, hasInitContainerAutoMount(initAttachments),
+			"aerospike-init auto-mount must not appear for a non-PV, non-Aerospike volume")
+
+		found := false
+
+		for _, a := range initAttachments {
+			if a.ContainerName == customInitContainer {
+				found = true
+				break
+			}
+		}
+
+		assert.True(t, found, "explicit volume.InitContainers entry must always be included")
+	})
+
+	t.Run("auto-mount path uses volume name as path segment", func(t *testing.T) {
+		const volName = "my-pv"
+
+		vol := &asdbv1.VolumeSpec{
+			Name: volName,
+			Source: asdbv1.VolumeSource{
+				PersistentVolume: &asdbv1.PersistentVolumeSpec{
+					VolumeMode: corev1.PersistentVolumeFilesystem,
+				},
+			},
+		}
+
+		initAttachments, _ := getFinalVolumeAttachmentsForVolume(vol, workDir)
+
+		for _, a := range initAttachments {
+			if a.ContainerName == asdbv1.AerospikeInitContainerName {
+				assert.Equal(t, "/"+volName, a.Path,
+					"auto-mount path must be /<volumeName>")
+
+				return
+			}
+		}
+
+		t.Fatal("aerospike-init auto-mount attachment not found")
 	})
 }

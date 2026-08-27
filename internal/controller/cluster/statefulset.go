@@ -1613,7 +1613,7 @@ func getFinalVolumeAttachmentsForVolume(volume *asdbv1.VolumeSpec, workDirPath s
 	// Create dummy attachment for initContainer
 	initVolumePath := "/" + volume.Name // Using volume name for initContainer
 
-	// All volumes should be mounted in init container to allow initialization
+	// User-specified init container attachments are always honoured.
 	initContainerAttachments = append(
 		initContainerAttachments, volume.InitContainers...,
 	)
@@ -1654,9 +1654,18 @@ func getFinalVolumeAttachmentsForVolume(volume *asdbv1.VolumeSpec, workDirPath s
 		}
 	}
 
-	initContainerAttachments = append(
-		initContainerAttachments, aerosikeInitContainerAttachment,
-	)
+	// Auto-mount in the init container only for volumes it actually needs to access:
+	// - PersistentVolumes: the init container must wipe/initialize them before ASD starts.
+	// - Volumes with an Aerospike attachment: the init container sets up the workdir (smd,
+	//   usr/udf/lua) under them.
+	// Non-PV volumes that are not used by Aerospike (e.g. ConfigMap/Secret sidecars) have
+	// no role in the init container and are skipped; they remain accessible via the explicit
+	// volume.InitContainers field if a user ever needs them there.
+	if volume.Source.PersistentVolume != nil || volume.Aerospike != nil {
+		initContainerAttachments = append(
+			initContainerAttachments, aerosikeInitContainerAttachment,
+		)
+	}
 
 	return initContainerAttachments, containerAttachments
 }

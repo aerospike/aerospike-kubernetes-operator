@@ -347,3 +347,163 @@ func TestCreateEmptyRack_DeletesSTSWhenReadinessFails(t *testing.T) {
 	err := r.Get(context.TODO(), types.NamespacedName{Name: "test-cluster-1", Namespace: "test-ns"}, &appsv1.StatefulSet{})
 	require.Error(t, err, "the StatefulSet created by createSTS should have been deleted by the cleanup path")
 }
+
+// TestIsVolumeAttachmentRemoved validates the volume-attachment-removed detection used by
+// isRackStorageUpdatedInAeroCluster. Key invariants after the allConfiguredInitContainers
+// refactor:
+//
+//  1. The aerospike-init container is never in configuredContainers, so its volume mounts
+//     are always skipped — no rolling restart is triggered by init-container mount changes.
+//  2. User-defined init containers ARE in configuredContainers; removing a volume from their
+//     mounts does trigger a rolling restart.
+//  3. Injected init containers (not in configuredContainers) are always skipped.
+func TestIsVolumeAttachmentRemoved(t *testing.T) {
+	newReconciler := func(ac *asdbv1.AerospikeCluster) *SingleClusterReconciler {
+		return newTestReconciler(t, ac, &interceptor.Funcs{})
+	}
+
+	newAC := func() *asdbv1.AerospikeCluster {
+		return newTestAerospikeCluster(namespace, clusterName)
+	}
+
+	pvVolumeSpec := func(name string) asdbv1.VolumeSpec {
+		return asdbv1.VolumeSpec{
+			Name: name,
+			Source: asdbv1.VolumeSource{
+				PersistentVolume: &asdbv1.PersistentVolumeSpec{
+					VolumeMode: corev1.PersistentVolumeFilesystem,
+				},
+			},
+			Aerospike: &asdbv1.AerospikeServerVolumeAttachment{Path: "/opt/aerospike/" + name},
+		}
+	}
+
+	cmVolumeSpec := func(name string) asdbv1.VolumeSpec {
+		return asdbv1.VolumeSpec{
+			Name:   name,
+			Source: asdbv1.VolumeSource{ConfigMap: &corev1.ConfigMapVolumeSource{}},
+		}
+	}
+
+	t.Run("aerospike-init container mounts are never flagged as removed", func(t *testing.T) {
+		// A pod whose aerospike-init container has a volume mount for "data-vol".
+		// Even though "data-vol" is absent from allConfiguredInitContainers, the
+		// aerospike-init container itself is not in configuredContainers so it is
+		// skipped entirely.
+		pod := &corev1.Pod{
+			Spec: corev1.PodSpec{
+				InitContainers: []corev1.Container{
+					{
+						Name: asdbv1.AerospikeInitContainerName,
+						VolumeMounts: []corev1.VolumeMount{
+							{Name: "data-vol", MountPath: "/workdir/filesystem-volumes/data-vol"},
+						},
+					},
+				},
+			},
+		}
+
+		r := newReconciler(newAC())
+
+		// configuredContainers does NOT contain aerospike-init (post-refactor).
+		removed := r.isVolumeAttachmentRemoved(
+			[]asdbv1.VolumeSpec{pvVolumeSpec("data-vol")},
+			nil,
+			[]string{},
+			pod.Spec.InitContainers,
+			true,
+		)
+
+		require.False(t, removed,
+			"aerospike-init mounts must never trigger a rolling restart — the container is not in configuredContainers")
+	})
+
+	t.Run("user-defined init container volume present in storage — no restart", func(t *testing.T) {
+		const customInit = "my-custom-init"
+
+		vol := cmVolumeSpec("cfg-vol")
+		vol.InitContainers = []asdbv1.VolumeAttachment{
+			{ContainerName: customInit, Path: "/cfg"},
+		}
+
+		pod := &corev1.Pod{
+			Spec: corev1.PodSpec{
+				InitContainers: []corev1.Container{
+					{
+						Name:         customInit,
+						VolumeMounts: []corev1.VolumeMount{{Name: "cfg-vol", MountPath: "/cfg"}},
+					},
+				},
+			},
+		}
+
+		r := newReconciler(newAC())
+
+		removed := r.isVolumeAttachmentRemoved(
+			[]asdbv1.VolumeSpec{vol},
+			nil,
+			[]string{customInit},
+			pod.Spec.InitContainers,
+			true,
+		)
+
+		require.False(t, removed, "volume still present in storage must not trigger a rolling restart")
+	})
+
+	t.Run("user-defined init container volume removed from storage — rolling restart triggered", func(t *testing.T) {
+		const customInit = "my-custom-init"
+
+		// Pod still has cfg-vol mounted, but storage no longer lists it.
+		pod := &corev1.Pod{
+			Spec: corev1.PodSpec{
+				InitContainers: []corev1.Container{
+					{
+						Name:         customInit,
+						VolumeMounts: []corev1.VolumeMount{{Name: "cfg-vol", MountPath: "/cfg"}},
+					},
+				},
+			},
+		}
+
+		r := newReconciler(newAC())
+
+		// rackStatusVolumes contains cfg-vol so the operator knows it was previously managed.
+		removed := r.isVolumeAttachmentRemoved(
+			[]asdbv1.VolumeSpec{},
+			[]asdbv1.VolumeSpec{cmVolumeSpec("cfg-vol")},
+			[]string{customInit},
+			pod.Spec.InitContainers,
+			true,
+		)
+
+		require.True(t, removed,
+			"volume removed from storage while still mounted in a user-defined init container must trigger a rolling restart")
+	})
+
+	t.Run("injected init container is always skipped — no restart", func(t *testing.T) {
+		// An injected container (e.g. Istio) mounts a volume not in storage.
+		pod := &corev1.Pod{
+			Spec: corev1.PodSpec{
+				InitContainers: []corev1.Container{
+					{
+						Name:         "istio-init",
+						VolumeMounts: []corev1.VolumeMount{{Name: "injected-vol", MountPath: "/etc/istio"}},
+					},
+				},
+			},
+		}
+
+		r := newReconciler(newAC())
+
+		// configuredContainers does not include "istio-init".
+		removed := r.isVolumeAttachmentRemoved(
+			[]asdbv1.VolumeSpec{},
+			nil,
+			[]string{},
+			pod.Spec.InitContainers,
+			true,
+		)
+
+		require.False(t, removed, "injected init container mounts must never trigger a rolling restart")
+	})
+}

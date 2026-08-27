@@ -1579,19 +1579,18 @@ func (r *SingleClusterReconciler) isRackStorageUpdatedInAeroCluster(
 	}
 
 	// Check for removed volumeAttachments
-	allConfiguredInitContainers := []string{
-		asdbv1.
-			AerospikeInitContainerName,
-	}
 	allConfiguredContainers := []string{asdbv1.AerospikeServerContainerName}
 
 	for idx := range r.aeroCluster.Spec.PodSpec.Sidecars {
 		allConfiguredContainers = append(allConfiguredContainers, r.aeroCluster.Spec.PodSpec.Sidecars[idx].Name)
 	}
 
-	// Include InitContainers (excluding placeholder)
+	// Collect user-defined init containers. The aerospike-init container is intentionally
+	// excluded because isVolumeAttachmentRemoved skips it unconditionally — its volume
+	// mounts are not individually tracked in storage spec.
+	var allConfiguredInitContainers []string
+
 	for idx := range r.aeroCluster.Spec.PodSpec.InitContainers {
-		// Skip placeholder (aerospike-init) as it's not a real container in the spec
 		if r.aeroCluster.Spec.PodSpec.InitContainers[idx].Name != asdbv1.AerospikeInitContainerName {
 			allConfiguredInitContainers = append(
 				allConfiguredInitContainers, r.aeroCluster.Spec.PodSpec.InitContainers[idx].Name,
@@ -1791,12 +1790,11 @@ func (r *SingleClusterReconciler) isVolumeAttachmentRemoved(
 	// TODO: Deal with injected volumes later.
 	for idx := range podContainers {
 		container := &podContainers[idx]
-		if isInitContainers && container.Name == asdbv1.AerospikeInitContainerName {
-			// InitContainer has all the volumes mounted, there is no specific entry in storage for initContainer
-			continue
-		}
 
-		// Skip injected containers.
+		// Skip containers not owned by the operator (injected sidecars, etc.).
+		// Note: for init containers, aerospike-init is intentionally absent from
+		// configuredContainers — its volume mounts are operator-managed and not
+		// individually tracked in the storage spec.
 		if !utils.ContainsString(configuredContainers, container.Name) {
 			continue
 		}
