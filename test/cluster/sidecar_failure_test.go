@@ -52,7 +52,7 @@ func waitForClusterPhase(k8sClient client.Client, ctx goctx.Context, clusterName
 		phaseSet[p] = struct{}{}
 	}
 
-	return wait.PollUntilContextTimeout(ctx, retryInterval, 5*time.Minute, true,
+	return wait.PollUntilContextTimeout(ctx, retryInterval, 10*time.Minute, true,
 		func(ctx goctx.Context) (bool, error) {
 			cluster := &asdbv1.AerospikeCluster{}
 			if err := k8sClient.Get(ctx, clusterNamespacedName, cluster); err != nil {
