@@ -32,6 +32,8 @@ const (
 	ReasonRegistryUnavailable = "RegistryUnavailable"
 	// ReasonCompleted is the terminated reason for a container that exited successfully (exit code 0).
 	ReasonCompleted = "Completed"
+	// ReasonOOMKilled is the terminated reason for a container that exited due to OOM (exit code 137).
+	ReasonOOMKilled = "OOMKilled"
 )
 
 // NamespacedName return namespaced name

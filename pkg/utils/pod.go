@@ -286,10 +286,10 @@ func Exec(podNamespacedName types.NamespacedName, container string, cmd []string
 }
 
 // isTerminatedWithError indicates whether a container's terminated reason corresponds to a failure.
-// A container terminates with reason "Completed" on a successful (exit code 0) exit; any other
-// terminated reason (e.g. "Error", "OOMKilled", "ContainerCannotRun", "DeadlineExceeded") is a failure.
+// Except a container that terminates with reason "Completed" or "OOMKilled"; any other
+// terminated reason is a failure.
 func isTerminatedWithError(reason string) bool {
-	return reason != "" && reason != ReasonCompleted
+	return reason != "" && reason != ReasonCompleted && reason != ReasonOOMKilled
 }
 
 // isWaitingWithError indicates whether a container's waiting reason corresponds to a failure.
