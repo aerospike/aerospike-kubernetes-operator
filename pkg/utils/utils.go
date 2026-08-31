@@ -30,6 +30,8 @@ const (
 	ReasonErrImagePull = "ErrImagePull"
 	// ReasonRegistryUnavailable is the http error when pulling image from registry.
 	ReasonRegistryUnavailable = "RegistryUnavailable"
+	// ReasonCompleted is the terminated reason for a container that exited successfully (exit code 0).
+	ReasonCompleted = "Completed"
 )
 
 // NamespacedName return namespaced name
