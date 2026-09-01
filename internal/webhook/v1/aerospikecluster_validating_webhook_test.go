@@ -48,6 +48,7 @@ func TestGetXDRAuthPasswordFilePaths(t *testing.T) {
 		},
 		{
 			name: "dc with auth-password-file",
+			//nolint:gosec // G101 test config path, not real credentials
 			spec: xdrConfigSpec([]interface{}{
 				map[string]interface{}{
 					"name":               "DC1",
@@ -67,6 +68,7 @@ func TestGetXDRAuthPasswordFilePaths(t *testing.T) {
 		},
 		{
 			name: "dc with empty name is skipped even if auth-password-file is set",
+			//nolint:gosec // G101 test config path, not real credentials
 			spec: xdrConfigSpec([]interface{}{
 				map[string]interface{}{
 					"name":               "",
@@ -77,6 +79,7 @@ func TestGetXDRAuthPasswordFilePaths(t *testing.T) {
 		},
 		{
 			name: "multiple dcs, only named ones with the field contribute paths",
+			//nolint:gosec // G101 test config path, not real credentials
 			spec: xdrConfigSpec([]interface{}{
 				map[string]interface{}{
 					"name":               "DC1",
@@ -142,6 +145,7 @@ func storageWithVolume(mountPath string) *asdbv1.AerospikeStorageSpec {
 func TestValidateRequiredFileStorageForAerospikeConfig_XDRAuthPasswordFile(t *testing.T) {
 	t.Run("mounted auth-password-file passes", func(t *testing.T) {
 		config := serviceConfigSpec()
+		//nolint:gosec // G101 test config path, not real credentials
 		config[asdbv1.ConfKeyXdr] = map[string]interface{}{
 			asdbv1.ConfKeyXdrDCs: []interface{}{
 				map[string]interface{}{
@@ -160,6 +164,7 @@ func TestValidateRequiredFileStorageForAerospikeConfig_XDRAuthPasswordFile(t *te
 
 	t.Run("unmounted auth-password-file fails", func(t *testing.T) {
 		config := serviceConfigSpec()
+		//nolint:gosec // G101 test config path, not real credentials
 		config[asdbv1.ConfKeyXdr] = map[string]interface{}{
 			asdbv1.ConfKeyXdrDCs: []interface{}{
 				map[string]interface{}{
@@ -179,6 +184,7 @@ func TestValidateRequiredFileStorageForAerospikeConfig_XDRAuthPasswordFile(t *te
 
 	t.Run("env prefixed auth-password-file skips mount check", func(t *testing.T) {
 		config := serviceConfigSpec()
+		//nolint:gosec // G101 test config path, not real credentials
 		config[asdbv1.ConfKeyXdr] = map[string]interface{}{
 			asdbv1.ConfKeyXdrDCs: []interface{}{
 				map[string]interface{}{
@@ -215,6 +221,7 @@ func TestValidateRequiredFileStorageForAerospikeConfig_XDRAuthPasswordFile(t *te
 
 	t.Run("vault prefixed auth-password-file skips mount check", func(t *testing.T) {
 		config := serviceConfigSpec()
+		//nolint:gosec // G101 test config path, not real credentials
 		config[asdbv1.ConfKeyXdr] = map[string]interface{}{
 			asdbv1.ConfKeyXdrDCs: []interface{}{
 				map[string]interface{}{
@@ -233,6 +240,7 @@ func TestValidateRequiredFileStorageForAerospikeConfig_XDRAuthPasswordFile(t *te
 
 	t.Run("dc with empty name is not validated", func(t *testing.T) {
 		config := serviceConfigSpec()
+		//nolint:gosec // G101 test config path, not real credentials
 		config[asdbv1.ConfKeyXdr] = map[string]interface{}{
 			asdbv1.ConfKeyXdrDCs: []interface{}{
 				map[string]interface{}{

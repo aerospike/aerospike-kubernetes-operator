@@ -707,7 +707,8 @@ var _ = Describe("AerospikeCluster validation", func() {
 					// Webhook response validation
 					envtests.NewStatusErrorMatcher().
 						WithMessageSubstrings(testutil.WebhookErrorPrefix,
-							"feature-key-file paths or tls paths or default-password-file path are not mounted",
+							"feature-key-file paths or tls paths or default-password-file path or "+
+								"xdr.dcs auth-password-file path are not mounted",
 							"- create an entry for '/randompath/features.conf' in 'storage.volumes'").
 						Validate(err)
 				})
@@ -863,7 +864,8 @@ var _ = Describe("AerospikeCluster validation", func() {
 
 					envtests.NewStatusErrorMatcher().
 						WithMessageSubstrings("\"vaerospikecluster.kb.io\"",
-							"feature-key-file paths or tls paths or default-password-file path are not mounted",
+							"feature-key-file paths or tls paths or default-password-file path or "+
+								"xdr.dcs auth-password-file path are not mounted",
 							"secrets:Test-secret:Key",
 						).
 						Validate(err)
@@ -888,7 +890,8 @@ var _ = Describe("AerospikeCluster validation", func() {
 
 					envtests.NewStatusErrorMatcher().
 						WithMessageSubstrings("\"vaerospikecluster.kb.io\"",
-							"feature-key-file paths or tls paths or default-password-file path are not mounted",
+							"feature-key-file paths or tls paths or default-password-file path or "+
+								"xdr.dcs auth-password-file path are not mounted",
 							"secrets:Test-secret:Key",
 						).
 						Validate(err)
@@ -917,7 +920,7 @@ var _ = Describe("AerospikeCluster validation", func() {
 						testutil.WebhookErrorPrefix, "must refer the TLS configuration defined in network.tls"),
 					Entry("connector dc with non-none auth-mode",
 						map[string]interface{}{"connector": true, "auth-mode": "internal"},
-						testutil.WebhookErrorPrefix, "auth-mode must be 'none' for 'connector' datacenters"),
+						testutil.WebhookErrorPrefix, "auth-mode must be 'none' or omitted for 'connector' datacenters"),
 					//nolint:gosec // G101 test config path, not real credentials
 					Entry("connector dc with auth-password-file set",
 						map[string]interface{}{
@@ -945,7 +948,6 @@ var _ = Describe("AerospikeCluster validation", func() {
 						testutil.WebhookErrorPrefix, "tls-name is required when auth-mode is 'pki'"),
 				)
 
-				//nolint:gosec // G101 test config path, not real credentials
 				It("rejects xdr.dcs auth-password-file path not in storage volumes", func() {
 					aeroCluster := testCluster.CreateAerospikeClusterPost640(
 						clusterNamespacedName, 1, testutil.LatestEnterpriseImage,
@@ -1014,7 +1016,7 @@ var _ = Describe("AerospikeCluster validation", func() {
 							"auth-mode": "internal", "auth-user": "admin",
 							"auth-password-file": "vault:auth-password",
 						}),
-					//nolint:gosec // G101 test config path, not real credentials
+
 					Entry("auth-mode internal with secrets-prefixed auth-password-file (mount not required)",
 						map[string]interface{}{
 							"auth-mode": "internal", "auth-user": "admin",
@@ -1022,7 +1024,6 @@ var _ = Describe("AerospikeCluster validation", func() {
 						}),
 				)
 
-				//nolint:gosec // G101 test config path, not real credentials
 				It("allows xdr.dcs auth-password-file path mounted via storage volumes", func() {
 					aeroCluster := testCluster.CreateAerospikeClusterPost640(
 						clusterNamespacedName, 1, testutil.LatestEnterpriseImage,
