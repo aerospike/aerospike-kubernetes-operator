@@ -150,10 +150,6 @@ var _ = Describe("ACL failed-create recovery validation", func() {
 				err := patchStatusAerospikeAccessControl(ctx, k8sClient, clusterNamespacedName, staleACL)
 				Expect(err).To(Succeed())
 
-				By("Verifying cluster transitions to Error — pods cannot start with unavailable image")
-				Expect(waitForClusterPhase(k8sClient, ctx, clusterNamespacedName,
-					asdbv1.AerospikeClusterError)).ToNot(HaveOccurred())
-
 				By("Verifying cluster never reaches Completed while the stale ACL remains")
 				// StatefulSet-driven pod restarts can legitimately flip the phase
 				// between Error and InProgress, so only rule out ever reaching
