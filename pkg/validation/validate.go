@@ -285,15 +285,15 @@ func validateXDRDCConnector(dcConf map[string]interface{}, dcID string) error {
 
 // validateXDRDCAuth validates the auth-mode/auth-user/auth-password-file combination
 // of a single xdr.dcs entry. tlsNameSet reflects whether tls-name is configured, which
-// is required when auth-mode is 'pki'.
+// is required when auth-mode is 'pki' or 'external'.
 func validateXDRDCAuth(dcConf map[string]interface{}, dcID string, tlsNameSet bool) error {
 	authPasswordFile, _ := dcConf[asdbv1.ConfKeyXdrAuthPasswordFile].(string)
 	authUser, _ := dcConf[asdbv1.ConfKeyXdrAuthUser].(string)
 
 	authModeInterface, authModeExists := dcConf[asdbv1.ConfKeyXdrAuthMode]
-	authMode, _ := authModeInterface.(string)
+	authMode, authModeIsString := authModeInterface.(string)
 
-	if authUser != "" && !authModeExists {
+	if authUser != "" && (!authModeExists || !authModeIsString || authMode == "") {
 		return fmt.Errorf(
 			"xdr.dcs[%s]: %s is required when %s is set",
 			dcID, asdbv1.ConfKeyXdrAuthMode, asdbv1.ConfKeyXdrAuthUser,
@@ -314,6 +314,13 @@ func validateXDRDCAuth(dcConf map[string]interface{}, dcID string, tlsNameSet bo
 			return fmt.Errorf(
 				"xdr.dcs[%s]: %s is required when %s is '%s'",
 				dcID, asdbv1.ConfKeyXdrAuthUser, asdbv1.ConfKeyXdrAuthMode, authMode,
+			)
+		}
+
+		if authMode == asdbv1.XdrAuthModeExternal && !tlsNameSet {
+			return fmt.Errorf(
+				"xdr.dcs[%s]: %s is required when %s is '%s'",
+				dcID, asdbv1.ConfKeyTLSName, asdbv1.ConfKeyXdrAuthMode, authMode,
 			)
 		}
 

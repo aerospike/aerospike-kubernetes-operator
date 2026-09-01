@@ -363,7 +363,7 @@ func TestValidateXdrConfig(t *testing.T) {
 					},
 				},
 			},
-			wantErr: false,
+			wantErr: true,
 		},
 		{
 			name: "auth-mode external with auth-user and tls-name",

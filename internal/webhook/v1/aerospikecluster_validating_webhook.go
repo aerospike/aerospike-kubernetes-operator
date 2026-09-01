@@ -1770,7 +1770,12 @@ func getXDRAuthPasswordFilePaths(configSpec asdbv1.AerospikeConfigSpec) []string
 		return nil
 	}
 
-	dcListInterface, ok := xdrConf.(map[string]interface{})[asdbv1.ConfKeyXdrDCs]
+	xdrConfMap, ok := xdrConf.(map[string]interface{})
+	if !ok {
+		return nil
+	}
+
+	dcListInterface, ok := xdrConfMap[asdbv1.ConfKeyXdrDCs]
 	if !ok || dcListInterface == nil {
 		return nil
 	}
