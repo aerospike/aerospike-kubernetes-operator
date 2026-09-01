@@ -946,6 +946,13 @@ var _ = Describe("AerospikeCluster validation", func() {
 					Entry("auth-mode pki without tls-name",
 						map[string]interface{}{"auth-mode": "pki"},
 						testutil.WebhookErrorPrefix, "tls-name is required when auth-mode is 'pki'"),
+					//nolint:gosec // G101 test config path, not real credentials
+					Entry("auth-mode external without tls-name",
+						map[string]interface{}{
+							"auth-mode": "external", "auth-user": "admin",
+							"auth-password-file": "/etc/aerospike/secret/password.txt",
+						},
+						testutil.WebhookErrorPrefix, "tls-name is required when auth-mode is 'external'"),
 				)
 
 				It("rejects xdr.dcs auth-password-file path not in storage volumes", func() {
@@ -999,9 +1006,16 @@ var _ = Describe("AerospikeCluster validation", func() {
 					Entry("auth-mode pki with tls-name but no auth-user",
 						map[string]interface{}{"auth-mode": "pki", "tls-name": "aerospike-a-0.test-runner"}),
 					//nolint:gosec // G101 test config path, not real credentials
-					Entry("auth-mode external with auth-user/auth-password-file but no tls-name",
+					Entry("auth-mode external with auth-user/auth-password-file/tls-name",
 						map[string]interface{}{
 							"auth-mode": "external", "auth-user": "admin",
+							"auth-password-file": "/etc/aerospike/secret/password.txt",
+							"tls-name":           "aerospike-a-0.test-runner",
+						}),
+					//nolint:gosec // G101 test config path, not real credentials
+					Entry("auth-mode external-insecure with auth-user/auth-password-file but no tls-name",
+						map[string]interface{}{
+							"auth-mode": "external-insecure", "auth-user": "admin",
 							"auth-password-file": "/etc/aerospike/secret/password.txt",
 						}),
 					//nolint:gosec // G101 test config path, not real credentials
