@@ -62,9 +62,13 @@ const (
 	ConfKeyNetworkTLS       = "tls"
 
 	// Ports and TLS keys.
-	ConfKeyTLSName = "tls-name"
-	ConfKeyTLSPort = "tls-port"
-	ConfKeyPort    = "port"
+	ConfKeyTLSName    = "tls-name"
+	ConfKeyTLSPort    = "tls-port"
+	ConfKeyPort       = "port"
+	ConfKeyTLSCAPath  = "ca-path"
+	ConfKeyTLSCAFile  = "ca-file"
+	ConfKeyTLSCert    = "cert-file"
+	ConfKeyTLSKeyFile = "key-file"
 
 	// XDR keys.
 	ConfKeyXdr                 = "xdr"
@@ -432,8 +436,7 @@ func GetTLSNameAndPort(
 	return tlsName, port
 }
 
-// GetNetworkTLSNames returns the set of TLS configuration names defined in network.tls,
-// used to check that xdr.dcs[].tls-name references an existing entry.
+// GetNetworkTLSNames returns the set of TLS configuration names defined in network.tls.
 func GetNetworkTLSNames(networkConf map[string]interface{}) sets.Set[string] {
 	tlsNames := sets.Set[string]{}
 

@@ -944,6 +944,29 @@ var _ = Describe("AerospikeCluster validation", func() {
 						map[string]interface{}{"auth-mode": "pki"},
 						testutil.WebhookErrorPrefix, "tls-name is required when auth-mode is 'pki'"),
 				)
+
+				//nolint:gosec // G101 test config path, not real credentials
+				It("rejects xdr.dcs auth-password-file path not in storage volumes", func() {
+					aeroCluster := testCluster.CreateAerospikeClusterPost640(
+						clusterNamespacedName, 1, testutil.LatestEnterpriseImage,
+					)
+					aeroCluster.Spec.AerospikeConfig.Value[asdbv1.ConfKeyXdr] = map[string]interface{}{
+						"dcs": []interface{}{xdrDC(map[string]interface{}{
+							"auth-mode": "internal", "auth-user": "admin",
+							"auth-password-file": "/randompath/password.txt",
+						})},
+					}
+
+					err := envtests.K8sClient.Create(ctx, aeroCluster)
+					Expect(err).To(HaveOccurred())
+
+					envtests.NewStatusErrorMatcher().
+						WithMessageSubstrings(testutil.WebhookErrorPrefix,
+							"feature-key-file paths or tls paths or default-password-file path or "+
+								"xdr.dcs auth-password-file path are not mounted",
+							"- create an entry for '/randompath/password.txt' in 'storage.volumes'").
+						Validate(err)
+				})
 			})
 
 			Context("positive", func() {
@@ -979,7 +1002,53 @@ var _ = Describe("AerospikeCluster validation", func() {
 							"auth-mode": "external", "auth-user": "admin",
 							"auth-password-file": "/etc/aerospike/secret/password.txt",
 						}),
+					//nolint:gosec // G101 test config path, not real credentials
+					Entry("auth-mode internal with env-prefixed auth-password-file (mount not required)",
+						map[string]interface{}{
+							"auth-mode": "internal", "auth-user": "admin",
+							"auth-password-file": "env:XDR_AUTH_PWD",
+						}),
+					//nolint:gosec // G101 test config path, not real credentials
+					Entry("auth-mode internal with vault-prefixed auth-password-file (mount not required)",
+						map[string]interface{}{
+							"auth-mode": "internal", "auth-user": "admin",
+							"auth-password-file": "vault:auth-password",
+						}),
+					//nolint:gosec // G101 test config path, not real credentials
+					Entry("auth-mode internal with secrets-prefixed auth-password-file (mount not required)",
+						map[string]interface{}{
+							"auth-mode": "internal", "auth-user": "admin",
+							"auth-password-file": "secrets:AerospikeSecrets:AuthPassword",
+						}),
 				)
+
+				//nolint:gosec // G101 test config path, not real credentials
+				It("allows xdr.dcs auth-password-file path mounted via storage volumes", func() {
+					aeroCluster := testCluster.CreateAerospikeClusterPost640(
+						clusterNamespacedName, 1, testutil.LatestEnterpriseImage,
+					)
+					aeroCluster.Spec.AerospikeConfig.Value[asdbv1.ConfKeyXdr] = map[string]interface{}{
+						"dcs": []interface{}{xdrDC(map[string]interface{}{
+							"auth-mode": "internal", "auth-user": "admin",
+							"auth-password-file": "/randompath/password.txt",
+						})},
+					}
+					aeroCluster.Spec.Storage.Volumes = append(aeroCluster.Spec.Storage.Volumes, asdbv1.VolumeSpec{
+						Name: "xdr-auth-password",
+						Source: asdbv1.VolumeSource{
+							PersistentVolume: &asdbv1.PersistentVolumeSpec{
+								Size:         resource.MustParse("1Gi"),
+								StorageClass: testutil.StorageClass,
+								VolumeMode:   v1.PersistentVolumeFilesystem,
+							},
+						},
+						Aerospike: &asdbv1.AerospikeServerVolumeAttachment{
+							Path: "/randompath",
+						},
+					})
+
+					Expect(envtests.K8sClient.Create(ctx, aeroCluster)).To(Succeed())
+				})
 			})
 		})
 

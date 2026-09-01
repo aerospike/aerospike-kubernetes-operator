@@ -1660,6 +1660,7 @@ func validateRequiredFileStorageForAerospikeConfig(
 	configSpec asdbv1.AerospikeConfigSpec, storage *asdbv1.AerospikeStorageSpec,
 ) error {
 	featureKeyFilePaths := getFeatureKeyFilePaths(configSpec)
+	xdrAuthPasswordFilePaths := getXDRAuthPasswordFilePaths(configSpec)
 	nonCAPaths, caPaths := getTLSFilePaths(configSpec)
 	defaultPassFilePath := asdbv1.GetDefaultPasswordFilePath(&configSpec)
 
@@ -1670,6 +1671,12 @@ func validateRequiredFileStorageForAerospikeConfig(
 
 	for _, path := range featureKeyFilePaths {
 		if !isSecretManagerPath(path) {
+			allPaths = append(allPaths, path)
+		}
+	}
+
+	for _, path := range xdrAuthPasswordFilePaths {
+		if !isSecretManagerPath(path) && !isEnvPath(path) {
 			allPaths = append(allPaths, path)
 		}
 	}
@@ -1695,8 +1702,8 @@ func validateRequiredFileStorageForAerospikeConfig(
 		volume := asdbv1.GetVolumeForAerospikePath(storage, filepath.Dir(path))
 		if volume == nil {
 			return fmt.Errorf(
-				"feature-key-file paths or tls paths or default-password-file path "+
-					"are not mounted - create an entry for '%s' in 'storage.volumes'",
+				"feature-key-file paths or tls paths or default-password-file path or "+
+					"xdr.dcs auth-password-file path are not mounted - create an entry for '%s' in 'storage.volumes'",
 				path,
 			)
 		}
@@ -1755,6 +1762,50 @@ func getFeatureKeyFilePaths(configSpec asdbv1.AerospikeConfigSpec) []string {
 	return nil
 }
 
+func getXDRAuthPasswordFilePaths(configSpec asdbv1.AerospikeConfigSpec) []string {
+	config := configSpec.Value
+
+	xdrConf, ok := config[asdbv1.ConfKeyXdr]
+	if !ok || xdrConf == nil {
+		return nil
+	}
+
+	dcListInterface, ok := xdrConf.(map[string]interface{})[asdbv1.ConfKeyXdrDCs]
+	if !ok || dcListInterface == nil {
+		return nil
+	}
+
+	dcList, ok := dcListInterface.([]interface{})
+	if !ok {
+		return nil
+	}
+
+	var paths []string
+
+	for _, dcConfInterface := range dcList {
+		dcConf, ok := dcConfInterface.(map[string]interface{})
+		if !ok {
+			continue
+		}
+
+		dcName, _ := dcConf[asdbv1.ConfKeyName].(string)
+		if dcName == "" {
+			// aerospike-management-lib silently drops a dc with no name when
+			// flattening the config, so it never reaches the deployed
+			// aerospike.conf. Skip validating it here too.
+			continue
+		}
+
+		if path, ok := dcConf[asdbv1.ConfKeyXdrAuthPasswordFile]; ok {
+			if pathStr, ok := path.(string); ok && pathStr != "" {
+				paths = append(paths, pathStr)
+			}
+		}
+	}
+
+	return paths
+}
+
 func getTLSFilePaths(configSpec asdbv1.AerospikeConfigSpec) (nonCAPaths, caPaths []string) {
 	config := configSpec.Value
 
@@ -1789,6 +1840,11 @@ func getTLSFilePaths(configSpec asdbv1.AerospikeConfigSpec) (nonCAPaths, caPaths
 // isSecretManagerPath indicates if the given path is a Secret Manager's unique identifier path
 func isSecretManagerPath(path string) bool {
 	return strings.HasPrefix(path, "secrets:") || strings.HasPrefix(path, "vault:")
+}
+
+// isEnvPath indicates if the given path refers to an environment variable rather than a file.
+func isEnvPath(path string) bool {
+	return strings.HasPrefix(path, "env:") || strings.HasPrefix(path, "env-b64:")
 }
 
 // isFileStorageConfiguredForDir indicates if file storage is configured for dir.

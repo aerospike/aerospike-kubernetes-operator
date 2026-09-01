@@ -208,25 +208,7 @@ func TestValidateXdrConfig(t *testing.T) {
 			wantErrMsg: "auth-mode must not be 'none' when auth-user is set",
 		},
 		{
-			name: "auth-user set with auth-mode empty string is not currently rejected",
-			config: map[string]any{
-				"network": networkConfWithTLS(),
-				"xdr": map[string]any{
-					"dcs": []any{
-						//nolint:gosec // G101 test config path, not real credentials
-						map[string]any{
-							"name":               "dc1",
-							"auth-user":          "admin",
-							"auth-mode":          "",
-							"auth-password-file": "/etc/aerospike/secret/password.txt",
-						},
-					},
-				},
-			},
-			wantErr: false,
-		},
-		{
-			name: "dc entry missing name field without other issues",
+			name: "dc entry missing name field is skipped",
 			config: map[string]any{
 				"network": networkConfWithTLS(),
 				"xdr": map[string]any{
@@ -240,7 +222,7 @@ func TestValidateXdrConfig(t *testing.T) {
 			wantErr: false,
 		},
 		{
-			name: "dc entry missing name field falls back to list index in error",
+			name: "dc entry missing name field is skipped even with other issues",
 			config: map[string]any{
 				"network": networkConfWithTLS(),
 				"xdr": map[string]any{
@@ -251,8 +233,7 @@ func TestValidateXdrConfig(t *testing.T) {
 					},
 				},
 			},
-			wantErr:    true,
-			wantErrMsg: "xdr.dcs[0].tls-name",
+			wantErr: false,
 		},
 		{
 			name: "auth-user set without auth-password-file",
@@ -332,6 +313,24 @@ func TestValidateXdrConfig(t *testing.T) {
 				},
 			},
 			wantErr: false,
+		},
+		{
+			name: "auth-mode pki with auth-user is rejected",
+			config: map[string]any{
+				"network": networkConfWithTLS(),
+				"xdr": map[string]any{
+					"dcs": []any{
+						map[string]any{
+							"name":      "dc1",
+							"auth-mode": "pki",
+							"auth-user": "admin",
+							"tls-name":  "dc1-tls",
+						},
+					},
+				},
+			},
+			wantErr:    true,
+			wantErrMsg: "auth-user is not allowed when auth-mode is 'pki'",
 		},
 		{
 			name: "auth-mode pki without tls-name",
