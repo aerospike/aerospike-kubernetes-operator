@@ -207,8 +207,6 @@ var _ = Describe(
 								maxIgnorable := intstr.FromInt32(1)
 								aeroCluster.Spec.RackConfig.MaxIgnorablePods = &maxIgnorable
 
-								Expect(updateClusterWithNoWait(k8sClient, ctx, aeroCluster)).ToNot(HaveOccurred())
-
 								By("Verifying cluster eventually reaches Completed")
 
 								// Native StatefulSet pod recreation while the new-revision rack
@@ -216,12 +214,7 @@ var _ = Describe(
 								// blips unrelated to the maxIgnorablePods fix, so only the terminal
 								// state is asserted here — the Error starting point was already
 								// confirmed above via blockedCluster.Status.Phase.
-								err = waitForAerospikeCluster(
-									k8sClient, ctx, aeroCluster, int(aeroCluster.Spec.Size), retryInterval,
-									getTimeout(aeroCluster.Spec.Size),
-									[]asdbv1.AerospikeClusterPhase{asdbv1.AerospikeClusterCompleted},
-								)
-								Expect(err).ToNot(HaveOccurred())
+								Expect(updateCluster(k8sClient, ctx, aeroCluster)).ToNot(HaveOccurred())
 
 								// Validate final state
 								err = validateRackEnabledCluster(k8sClient, ctx, clusterNamespacedName)

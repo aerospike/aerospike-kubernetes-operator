@@ -551,6 +551,7 @@ func (r *SingleClusterReconciler) updateStatus(ctx context.Context) error {
 
 func (r *SingleClusterReconciler) setStatusPhase(ctx context.Context, phase asdbv1.AerospikeClusterPhase) error {
 	if r.aeroCluster.Status.Phase == phase {
+		r.addClusterPhaseMetric()
 		return nil
 	}
 

@@ -655,44 +655,6 @@ func ScaleDownWithMigrateFillDelay(ctx goctx.Context) {
 					Expect(err).ToNot(HaveOccurred())
 				},
 			)
-
-			It(
-				"Should block scale-down and go to Error when a pod is failed and maxIgnorablePods is not set", func() {
-					aeroCluster, err := getCluster(k8sClient, ctx, clusterNamespacedName)
-					Expect(err).ToNot(HaveOccurred())
-
-					// Pod -0 stays after scale-down (only -3 is removed).
-					failedPodName := aeroCluster.Name + "-" + strconv.Itoa(aeroCluster.Spec.RackConfig.Racks[0].ID) + "-0"
-
-					By("Marking a non-scale-down pod as failed")
-					Expect(markPodAsFailed(ctx, k8sClient, failedPodName, namespace)).ToNot(HaveOccurred())
-
-					By("Triggering scale-down by 1 without maxIgnorablePods")
-
-					aeroCluster.Spec.Size -= 1
-
-					err = k8sClient.Update(ctx, aeroCluster)
-					Expect(err).ToNot(HaveOccurred())
-
-					By("Verifying cluster transitions to Error — failed pod blocks the migrate-fill-delay revert " +
-						"and scale-down")
-					Expect(waitForClusterPhase(k8sClient, ctx, clusterNamespacedName,
-						asdbv1.AerospikeClusterError)).ToNot(HaveOccurred())
-
-					By("Verifying scale-down never happened and migrate-fill-delay stays at its original value")
-
-					healthyPodName := aeroCluster.Name + "-" + strconv.Itoa(aeroCluster.Spec.RackConfig.Racks[0].ID) + "-1"
-
-					err = validateMigrateFillDelay(ctx, k8sClient, logger, clusterNamespacedName, migrateFillDelay,
-						nil, healthyPodName)
-					Expect(err).ToNot(HaveOccurred())
-
-					aeroCluster, err = getCluster(k8sClient, ctx, clusterNamespacedName)
-					Expect(err).ToNot(HaveOccurred())
-					Expect(aeroCluster.Status.Size).To(Equal(int32(4)),
-						"scale-down must not proceed while blocked in Error")
-				},
-			)
 		},
 	)
 }
