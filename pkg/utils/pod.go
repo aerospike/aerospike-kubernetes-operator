@@ -139,18 +139,33 @@ func checkContainerFailures(pod *corev1.Pod, includeSidecarFailures bool) string
 	}
 
 	for idx := range statuses {
-		container := &statuses[idx]
-		if waiting := container.State.Waiting; waiting != nil &&
-			(isPodImageError(waiting.Reason) || isPodCrashError(waiting.Reason) || isPodError(waiting.Reason)) {
-			return fmt.Sprintf(
-				"pod failed message in container %s: %s reason: %s",
-				container.Name, waiting.Message, waiting.Reason,
-			)
+		if reason := containerFailureReason(&statuses[idx]); reason != "" {
+			return reason
 		}
 	}
 
 	// no failure state was found
 	return ""
+}
+
+// containerFailureReason returns a human-readable failure reason if the container's Terminated or
+// Waiting state indicates a failure, or an empty string if the container is not in a failure state.
+func containerFailureReason(container *corev1.ContainerStatus) string {
+	switch {
+	case container.State.Terminated != nil && isTerminatedWithError(container.State.Terminated.Reason):
+		terminated := container.State.Terminated
+		return formatContainerFailureReason(container.Name, terminated.Message, terminated.Reason)
+	case container.State.Waiting != nil && isWaitingWithError(container.State.Waiting.Reason):
+		waiting := container.State.Waiting
+		return formatContainerFailureReason(container.Name, waiting.Message, waiting.Reason)
+	default:
+		return ""
+	}
+}
+
+// formatContainerFailureReason formats a container failure message consistently for all failure states.
+func formatContainerFailureReason(containerName, message, reason string) string {
+	return fmt.Sprintf("pod failed message in container %s: %s reason: %s", containerName, message, reason)
 }
 
 // IsAerospikeServerReady returns true if the Aerospike server container's
@@ -268,6 +283,18 @@ func Exec(podNamespacedName types.NamespacedName, container string, cmd []string
 	)
 
 	return stdout.String(), stderr.String(), err
+}
+
+// isTerminatedWithError indicates whether a container's terminated reason corresponds to a failure.
+// Except a container that terminates with reason "Completed" or "OOMKilled"; any other
+// terminated reason is a failure.
+func isTerminatedWithError(reason string) bool {
+	return reason != "" && reason != ReasonCompleted && reason != ReasonOOMKilled
+}
+
+// isWaitingWithError indicates whether a container's waiting reason corresponds to a failure.
+func isWaitingWithError(reason string) bool {
+	return isPodImageError(reason) || isPodCrashError(reason) || isPodError(reason)
 }
 
 // isPodImageError indicates whether the specified reason corresponds to an error while pulling or inspecting a

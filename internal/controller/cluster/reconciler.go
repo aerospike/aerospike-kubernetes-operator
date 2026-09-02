@@ -8,6 +8,7 @@ import (
 	"reflect"
 	"slices"
 	"strings"
+	"time"
 	"unicode/utf8"
 
 	"github.com/go-logr/logr"
@@ -112,26 +113,28 @@ func (r *SingleClusterReconciler) Reconcile(ctx context.Context) (result ctrl.Re
 			})
 	}
 
-	// Mark Ready=False and phase=InProgress at the start of every reconcile so neither stays
-	// at its completed value while operations are in progress.
-	inProgress := asdbv1.AerospikeClusterInProgress
+	// Mark Ready=False and phase=InProgress at the start of every reconcile
+	// but only if the cluster is not already in an error state.
+	if r.aeroCluster.Status.Phase != asdbv1.AerospikeClusterError {
+		inProgress := asdbv1.AerospikeClusterInProgress
 
-	if err := r.mergePatchStatus(
-		ctx, &inProgress,
-		metav1.Condition{
-			Type:    string(asdbv1.AerospikeClusterConditionReady),
-			Status:  metav1.ConditionFalse,
-			Reason:  asdbv1.AerospikeClusterReasonReconciling,
-			Message: "Reconcile in progress",
-		},
-		metav1.Condition{
-			Type:    string(asdbv1.AerospikeClusterConditionPaused),
-			Status:  metav1.ConditionFalse,
-			Reason:  asdbv1.AerospikeClusterReasonNotPaused,
-			Message: "Reconciliation is active",
-		},
-	); err != nil {
-		return reconcile.Result{}, fmt.Errorf("mark reconcile in progress: %w", err)
+		if err := r.mergePatchStatus(
+			ctx, &inProgress,
+			metav1.Condition{
+				Type:    string(asdbv1.AerospikeClusterConditionReady),
+				Status:  metav1.ConditionFalse,
+				Reason:  asdbv1.AerospikeClusterReasonReconciling,
+				Message: "Reconcile in progress",
+			},
+			metav1.Condition{
+				Type:    string(asdbv1.AerospikeClusterConditionPaused),
+				Status:  metav1.ConditionFalse,
+				Reason:  asdbv1.AerospikeClusterReasonNotPaused,
+				Message: "Reconciliation is active",
+			},
+		); err != nil {
+			return reconcile.Result{}, fmt.Errorf("mark reconcile in progress: %w", err)
+		}
 	}
 
 	// The cluster is not being deleted, add finalizer if not added already
@@ -439,56 +442,138 @@ func (r *SingleClusterReconciler) recoverIgnorablePods(
 		return common.ReconcileError(fmt.Errorf("list Pods: %w", gErr))
 	}
 
-	r.Log.Info("Try to recover failed/pending Pods if any")
+	r.Log.V(1).Info("Try to recover failed/pending Pods if any")
 
-	var (
-		anyPodFailed    bool
-		requeueInterval int
+	var deletedPodNames []string
+
+	// Delete all failed ignorable pods in one pass; collect their names for
+	// a single shared recovery wait after the loop.
+	for idx := range podList.Items {
+		if !ignorablePodNames.Has(podList.Items[idx].Name) {
+			continue
+		}
+
+		if podState := utils.CheckServerFailedWithGrace(&podList.Items[idx], false); podState.State != utils.PodFailed {
+			continue
+		}
+
+		if err := r.createOrUpdatePodServiceIfNeeded(ctx, []string{podList.Items[idx].Name}); err != nil {
+			return common.ReconcileError(err)
+		}
+
+		if err := r.Delete(ctx, &podList.Items[idx]); err != nil {
+			return common.ReconcileError(fmt.Errorf(
+				"delete Pod %s: %w",
+				utils.GetNamespacedNameString(&podList.Items[idx]), err,
+			))
+		}
+
+		r.Log.Info("Deleted Pod", "pod", utils.GetNamespacedName(&podList.Items[idx]))
+
+		deletedPodNames = append(deletedPodNames, podList.Items[idx].Name)
+	}
+
+	// No pods were failed — all ignorable pods are healthy.
+	if len(deletedPodNames) == 0 {
+		r.Log.Info("All ignorable pods are healthy; re-entering normal reconcile")
+
+		return common.ReconcileRequeueAfter(10)
+	}
+
+	// Wait for all deleted pods together within a single 3-minute window.
+	allReady, waitErr := r.waitForIgnorablePodsRecovery(ctx, deletedPodNames)
+
+	if !allReady && waitErr == nil {
+		// Timeout — some pods still not ready after 3 minutes.
+		r.Log.Info("Some ignorable pods not ready after 3 minutes, will requeue")
+
+		return common.ReconcileRequeueAfter(asdbv1.RequeueIntervalSeconds10)
+	}
+
+	if waitErr != nil {
+		// Re-failed — don't requeue; next reconcile will be triggered by a CR change.
+		r.Log.Error(waitErr, "One or more ignorable pods failed during recovery, won't requeue")
+
+		return common.ReconcileSuccess()
+	}
+
+	r.Log.Info("Ignorable pods recovered, requeuing")
+
+	return common.ReconcileRequeueAfter(1)
+}
+
+// waitForIgnorablePodsRecovery polls all named pods together within a single
+// 3-minute window (18 × 10 s), resolving each pod as soon as its outcome is
+// known. Returns:
+//   - (true, nil)  — every pod's server container became ready
+//   - (false, nil) — timeout elapsed with at least one pod still not ready
+//   - (false, err) — at least one pod's server container entered a hard-failed
+//     state; remaining pods may still be pending or ready
+func (r *SingleClusterReconciler) waitForIgnorablePodsRecovery(ctx context.Context, podNames []string) (bool, error) {
+	const (
+		maxRetries    = 18 // 18 * 10s = 3 minutes
+		retryInterval = 10 * time.Second
 	)
 
-	// Try to recover failed/pending pods by deleting them if grace period is over.
-	for idx := range podList.Items {
-		if ignorablePodNames.Has(podList.Items[idx].Name) {
-			podState := utils.CheckServerFailedWithGrace(&podList.Items[idx], true)
+	awaitingRecovery := sets.New(podNames...)
 
-			if podState.State != utils.PodHealthy {
-				anyPodFailed = true
+	var failureReasons []string
 
-				if podState.State == utils.PodFailedInGrace {
-					r.Log.Info(
-						"Pod is in failed state but within grace period, will not delete",
-						"pod", utils.GetNamespacedName(&podList.Items[idx]),
-					)
+	for i := 0; i < maxRetries; i++ {
+		for podName := range awaitingRecovery {
+			pod := &corev1.Pod{}
 
-					requeueInterval = asdbv1.RequeueIntervalSeconds10
-
+			if err := r.Get(
+				ctx,
+				types.NamespacedName{Name: podName, Namespace: r.aeroCluster.Namespace},
+				pod,
+			); err != nil {
+				if apierrors.IsNotFound(err) {
+					// Still terminating / not yet recreated — keep waiting.
 					continue
 				}
 
-				// Pod has failed and grace period is over
-				if err := r.createOrUpdatePodServiceIfNeeded(ctx, []string{podList.Items[idx].Name}); err != nil {
-					return common.ReconcileError(err)
-				}
+				return false, fmt.Errorf("get Pod %s during recovery wait: %w", utils.GetNamespacedNameString(pod), err)
+			}
 
-				if err := r.Delete(ctx, &podList.Items[idx]); err != nil {
-					return common.ReconcileError(fmt.Errorf(
-						"delete Pod %s: %w",
-						utils.GetNamespacedNameString(&podList.Items[idx]), err,
-					))
-				}
+			if podState := utils.CheckServerFailedWithGrace(pod, false); podState.State == utils.PodFailed {
+				r.Log.V(1).Info("Ignorable pod server container failed during recovery",
+					"pod", utils.GetNamespacedName(pod), "reason", podState.Reason)
 
-				r.Log.Info("Deleted Pod", "pod", utils.GetNamespacedName(&podList.Items[idx]))
+				failureReasons = append(failureReasons,
+					fmt.Sprintf("%s: %s", podName, podState.Reason))
+				awaitingRecovery.Delete(podName)
+
+				continue
+			}
+
+			if utils.IsAerospikeServerReady(pod) {
+				r.Log.V(1).Info("Ignorable pod server container is ready", "pod", utils.GetNamespacedName(pod))
+				awaitingRecovery.Delete(podName)
 			}
 		}
+
+		if len(awaitingRecovery) == 0 {
+			if len(failureReasons) > 0 {
+				return false, fmt.Errorf("pods failed during recovery: %s",
+					strings.Join(failureReasons, "; "))
+			}
+
+			return true, nil
+		}
+
+		r.Log.V(1).Info("Waiting for ignorable pods to recover",
+			"pods", awaitingRecovery.UnsortedList(), "attempt", i+1)
+
+		time.Sleep(retryInterval)
 	}
 
-	if anyPodFailed {
-		r.Log.Info("Found failed/pending Pod(s), requeuing")
-	} else {
-		r.Log.Info("Found ignorable Pod(s), requeuing")
+	if len(failureReasons) > 0 {
+		return false, fmt.Errorf("pods failed during recovery: %s",
+			strings.Join(failureReasons, "; "))
 	}
 
-	return common.ReconcileRequeueAfter(requeueInterval)
+	return false, nil
 }
 
 func (r *SingleClusterReconciler) validateAndReconcileAccessControl(
@@ -750,6 +835,7 @@ func (r *SingleClusterReconciler) mergePatchStatus(
 	phaseChanged := phase != nil && r.aeroCluster.Status.Phase != *phase
 
 	if !condChanged && !phaseChanged {
+		r.addClusterPhaseMetric()
 		return nil
 	}
 

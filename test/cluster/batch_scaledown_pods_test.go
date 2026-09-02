@@ -98,9 +98,13 @@ var _ = Describe("BatchScaleDown", func() {
 	})
 
 	Context("When a pod in the scale-down batch is failed", func() {
+		migrateFillDelay := int64(120)
+
 		BeforeEach(
 			func() {
 				aeroCluster := createNonSCDummyAerospikeCluster(clusterNamespacedName, 4)
+				aeroCluster.Spec.AerospikeConfig.Value[asdbv1.ConfKeyService].(map[string]interface{})["migrate-fill-delay"] =
+					migrateFillDelay
 				Expect(DeployCluster(k8sClient, ctx, aeroCluster)).ToNot(HaveOccurred())
 			},
 		)
@@ -120,14 +124,9 @@ var _ = Describe("BatchScaleDown", func() {
 			aeroCluster.Spec.Size--
 			Expect(k8sClient.Update(ctx, aeroCluster)).ToNot(HaveOccurred())
 
-			By("Asserting cluster does not complete (blocked waiting for pod recovery)")
-
-			err = waitForAerospikeCluster(
-				k8sClient, ctx, aeroCluster, int(aeroCluster.Spec.Size),
-				retryInterval, 2*time.Minute,
-				[]asdbv1.AerospikeClusterPhase{asdbv1.AerospikeClusterInProgress, asdbv1.AerospikeClusterError},
-			)
-			Expect(err).To(HaveOccurred())
+			By("Verifying cluster transitions to Error — reconciler detects server-failed pod, blocks scale-down")
+			Expect(waitForClusterPhase(k8sClient, ctx, clusterNamespacedName,
+				asdbv1.AerospikeClusterError)).ToNot(HaveOccurred())
 		})
 
 		It("Should block scale-down when pod other than the pod to be scaled down is in failed and "+
@@ -145,14 +144,22 @@ var _ = Describe("BatchScaleDown", func() {
 			aeroCluster.Spec.Size--
 			Expect(k8sClient.Update(ctx, aeroCluster)).ToNot(HaveOccurred())
 
-			By("Asserting cluster does not complete (blocked waiting for pod recovery)")
+			By("Verifying cluster transitions to Error — reconciler detects server-failed pod, blocks scale-down")
+			Expect(waitForClusterPhase(k8sClient, ctx, clusterNamespacedName,
+				asdbv1.AerospikeClusterError)).ToNot(HaveOccurred())
 
-			err = waitForAerospikeCluster(
-				k8sClient, ctx, aeroCluster, int(aeroCluster.Spec.Size),
-				retryInterval, 2*time.Minute,
-				[]asdbv1.AerospikeClusterPhase{asdbv1.AerospikeClusterInProgress, asdbv1.AerospikeClusterError},
-			)
-			Expect(err).To(HaveOccurred())
+			By("Verifying scale-down never happened and migrate-fill-delay stays at its original value")
+
+			healthyPodName := clusterName + "-0-0"
+
+			err = validateMigrateFillDelay(ctx, k8sClient, logger, clusterNamespacedName, migrateFillDelay,
+				nil, healthyPodName)
+			Expect(err).ToNot(HaveOccurred())
+
+			aeroCluster, err = getCluster(k8sClient, ctx, clusterNamespacedName)
+			Expect(err).ToNot(HaveOccurred())
+			Expect(aeroCluster.Status.Size).To(Equal(int32(4)),
+				"scale-down must not proceed while blocked in Error")
 		})
 
 		It("Should allow scale-down with a failed pod when maxIgnorablePods is a percentage covering one pod", func() {
