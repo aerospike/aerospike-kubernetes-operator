@@ -3,6 +3,7 @@ package cluster
 import (
 	"context"
 	"fmt"
+	"time"
 
 	. "github.com/onsi/ginkgo/v2"
 	. "github.com/onsi/gomega"
@@ -11,6 +12,7 @@ import (
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/types"
 	"k8s.io/utils/ptr"
+	"sigs.k8s.io/controller-runtime/pkg/client"
 
 	asdbv1 "github.com/aerospike/aerospike-kubernetes-operator/v4/api/v1"
 	"github.com/aerospike/aerospike-kubernetes-operator/v4/test"
@@ -172,6 +174,47 @@ func deleteCluster(ctx context.Context, nsName types.NamespacedName) {
 	}
 	// Delete the cluster after each test
 	Expect(testCluster.DeleteCluster(envtests.K8sClient, ctx, aeroCluster)).ToNot(HaveOccurred())
+}
+
+// createNodeWithInternalIP creates a node whose only InternalIP is the given address.
+// The validating webhook reads node addresses to decide whether the cluster can carry
+// IPv6 traffic, so this is how a spec chooses which side of that check it exercises.
+func createNodeWithInternalIP(ctx context.Context, name, internalIP string) {
+	node := &corev1.Node{
+		ObjectMeta: metav1.ObjectMeta{
+			Name: name,
+		},
+	}
+	Expect(envtests.K8sClient.Create(ctx, node)).ToNot(HaveOccurred())
+
+	// Addresses live on the status subresource, so they need a second write.
+	node.Status.Addresses = []corev1.NodeAddress{
+		{
+			Type:    corev1.NodeInternalIP,
+			Address: internalIP,
+		},
+	}
+	Expect(envtests.K8sClient.Status().Update(ctx, node)).ToNot(HaveOccurred())
+
+	expireNodeIPv6Cache()
+}
+
+func deleteNode(ctx context.Context, name string) {
+	node := &corev1.Node{
+		ObjectMeta: metav1.ObjectMeta{
+			Name: name,
+		},
+	}
+	Expect(client.IgnoreNotFound(envtests.K8sClient.Delete(ctx, node))).ToNot(HaveOccurred())
+
+	expireNodeIPv6Cache()
+}
+
+// expireNodeIPv6Cache waits out the webhook's node IPv6 capability cache so the next
+// admission re-reads node addresses. Specs run serially, so nothing repopulates the
+// cache in the meantime.
+func expireNodeIPv6Cache() {
+	time.Sleep(3 * envtests.NodeIPv6CacheTTL)
 }
 
 func patchFirstPVStorageClassSpec(storage *asdbv1.AerospikeStorageSpec) {

@@ -1,6 +1,7 @@
 package validation
 
 import (
+	"errors"
 	"fmt"
 	"reflect"
 	"strings"
@@ -16,10 +17,20 @@ import (
 var networkConnectionTypes = []string{asdbv1.ConfKeyNetworkService, asdbv1.ConfKeyNetworkHeartbeat,
 	asdbv1.ConfKeyNetworkFabric, asdbv1.ConfKeyNetworkAdmin}
 
+// confKeyAdvertiseIPv6 is the aerospikeConfig.service parameter that makes Aerospike
+// advertise its IPv6 address to mesh peers instead of its IPv4 address.
+const confKeyAdvertiseIPv6 = "advertise-ipv6"
+
 // ValidateAerospikeConfig validates the aerospikeConfig.
 // It validates the schema, service, network, logging and namespace configurations.
+// ipv6Capable reports whether the Kubernetes cluster has at least one IPv6-capable node.
+// It gates advertise-ipv6, which can only work where the pods have IPv6 addresses to advertise.
+// ipv6ProbeErr, when non-nil, is the reason node IPv6 capability could not be determined;
+// the advertise-ipv6 rejection then reports that failure instead of claiming no node is
+// IPv6-capable.
 func ValidateAerospikeConfig(
-	aslog logr.Logger, version string, config map[string]interface{}, clSize int,
+	aslog logr.Logger, version string, config map[string]interface{}, clSize int, ipv6Capable bool,
+	ipv6ProbeErr error,
 ) error {
 	if config == nil {
 		return fmt.Errorf("aerospikeConfig cannot be empty")
@@ -37,8 +48,8 @@ func ValidateAerospikeConfig(
 		)
 	}
 
-	if val, exists := serviceConf["advertise-ipv6"]; exists && val.(bool) {
-		return fmt.Errorf("advertise-ipv6 is not supported")
+	if err := validateAdvertiseIPv6(serviceConf, ipv6Capable, ipv6ProbeErr); err != nil {
+		return err
 	}
 
 	// TODO: Shouldn't be set by user, confirm this
@@ -651,6 +662,41 @@ func ValidateAerospikeConfigSchema(
 	return nil
 }
 
+// validateAdvertiseIPv6 rejects advertise-ipv6 on a cluster that cannot carry IPv6 traffic.
+// Aerospike needs it to form an IPv6 mesh, so it is only rejected where the pods would have
+// no IPv6 address to advertise to their peers. When ipv6ProbeErr is non-nil the capability
+// is unknown rather than absent, and the rejection reports the probe failure instead.
+func validateAdvertiseIPv6(serviceConf map[string]interface{}, ipv6Capable bool, ipv6ProbeErr error) error {
+	val, exists := serviceConf[confKeyAdvertiseIPv6]
+	if !exists {
+		return nil
+	}
+
+	advertiseIPv6, isBool := val.(bool)
+	if !isBool {
+		return fmt.Errorf(
+			"aerospikeConfig.service.%s must be a boolean, got %T (%v)", confKeyAdvertiseIPv6, val, val,
+		)
+	}
+
+	if advertiseIPv6 && !ipv6Capable {
+		if ipv6ProbeErr != nil {
+			return fmt.Errorf(
+				"aerospikeConfig.service.%s requires an IPv6-capable Kubernetes cluster, "+
+					"but node IPv6 capability could not be determined: %w",
+				confKeyAdvertiseIPv6, ipv6ProbeErr,
+			)
+		}
+
+		return errors.New(
+			"aerospikeConfig.service." + confKeyAdvertiseIPv6 + " requires an IPv6-capable Kubernetes cluster, " +
+				"but no Kubernetes node reports an IPv6 InternalIP address",
+		)
+	}
+
+	return nil
+}
+
 func isValueUpdated(m1, m2 map[string]interface{}, key string) bool {
 	val1, ok1 := m1[key]
 	val2, ok2 := m2[key]
@@ -667,11 +713,12 @@ func isValueUpdated(m1, m2 map[string]interface{}, key string) bool {
 // It also validates the update of tls, network and namespace configurations.
 func ValidateAerospikeConfigUpdate(
 	aslog logr.Logger, version string,
-	oldConfig, newConfig map[string]interface{}, clSize int,
+	oldConfig, newConfig map[string]interface{}, clSize int, ipv6Capable bool,
+	ipv6ProbeErr error,
 ) error {
 	aslog.Info("Validate AerospikeConfig update")
 
-	if err := ValidateAerospikeConfig(aslog, version, newConfig, clSize); err != nil {
+	if err := ValidateAerospikeConfig(aslog, version, newConfig, clSize, ipv6Capable, ipv6ProbeErr); err != nil {
 		return err
 	}
 

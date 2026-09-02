@@ -47,6 +47,30 @@ import (
 
 // +kubebuilder:object:generate=false
 type AerospikeClusterCustomValidator struct {
+	ipv6Prober *nodeIPv6Prober
+}
+
+// ipv6Capable reports whether the cluster has IPv6-capable nodes, which gates the
+// advertise-ipv6 Aerospike setting. A non-nil probe error is the reason capability
+// could not be determined; the cluster is then reported as not IPv6-capable.
+//
+// The value is only consulted when advertise-ipv6 is requested, so an unprobeable
+// cluster keeps rejecting that one setting instead of failing every admission.
+func (acv *AerospikeClusterCustomValidator) ipv6Capable(
+	ctx context.Context, aslog logr.Logger,
+) (bool, error) {
+	if acv.ipv6Prober == nil {
+		return false, nil
+	}
+
+	capable, err := acv.ipv6Prober.IPv6Capable(ctx)
+	if err != nil {
+		aslog.Error(err, "Failed to determine node IPv6 capability, treating cluster as not IPv6-capable")
+
+		return false, err
+	}
+
+	return capable, nil
 }
 
 //nolint:lll // for readability
@@ -55,13 +79,16 @@ type AerospikeClusterCustomValidator struct {
 var _ admission.Validator[*asdbv1.AerospikeCluster] = &AerospikeClusterCustomValidator{}
 
 // ValidateCreate implements admission.Validator so a webhook will be registered for the type
-func (acv *AerospikeClusterCustomValidator) ValidateCreate(_ context.Context, aerospikeCluster *asdbv1.AerospikeCluster,
+func (acv *AerospikeClusterCustomValidator) ValidateCreate(ctx context.Context,
+	aerospikeCluster *asdbv1.AerospikeCluster,
 ) (admission.Warnings, error) {
 	aslog := logf.Log.WithName(asdbv1.ClusterNamespacedName(aerospikeCluster))
 
 	aslog.Info("Validate create")
 
-	warns, vErr := validate(aslog, aerospikeCluster)
+	ipv6Capable, ipv6ProbeErr := acv.ipv6Capable(ctx, aslog)
+
+	warns, vErr := validate(aslog, aerospikeCluster, ipv6Capable, ipv6ProbeErr)
 	if vErr != nil {
 		return warns, vErr
 	}
@@ -222,7 +249,7 @@ func (acv *AerospikeClusterCustomValidator) ValidateDelete(_ context.Context, ae
 }
 
 // ValidateUpdate implements admission.Validator so a webhook will be registered for the type
-func (acv *AerospikeClusterCustomValidator) ValidateUpdate(_ context.Context,
+func (acv *AerospikeClusterCustomValidator) ValidateUpdate(ctx context.Context,
 	oldObject,
 	aerospikeCluster *asdbv1.AerospikeCluster,
 ) (admission.Warnings, error) {
@@ -232,7 +259,9 @@ func (acv *AerospikeClusterCustomValidator) ValidateUpdate(_ context.Context,
 
 	var warnings admission.Warnings
 
-	warns, vErr := validate(aslog, aerospikeCluster)
+	ipv6Capable, ipv6ProbeErr := acv.ipv6Capable(ctx, aslog)
+
+	warns, vErr := validate(aslog, aerospikeCluster, ipv6Capable, ipv6ProbeErr)
 	warnings = append(warnings, warns...)
 
 	if vErr != nil {
@@ -326,7 +355,9 @@ func (acv *AerospikeClusterCustomValidator) ValidateUpdate(_ context.Context,
 	return warnings, nil
 }
 
-func validate(aslog logr.Logger, cluster *asdbv1.AerospikeCluster) (admission.Warnings, error) {
+func validate(
+	aslog logr.Logger, cluster *asdbv1.AerospikeCluster, ipv6Capable bool, ipv6ProbeErr error,
+) (admission.Warnings, error) {
 	aslog.V(1).Info("Validate AerospikeCluster spec", "obj.Spec", cluster.Spec)
 
 	var warnings admission.Warnings
@@ -378,7 +409,7 @@ func validate(aslog logr.Logger, cluster *asdbv1.AerospikeCluster) (admission.Wa
 	}
 
 	// Validate rackConfig
-	warns, err := validateRackConfig(aslog, cluster, version)
+	warns, err := validateRackConfig(aslog, cluster, version, ipv6Capable, ipv6ProbeErr)
 
 	warnings = append(warnings, warns...)
 	if err != nil {
@@ -938,7 +969,7 @@ func validateResourceAndLimits(
 }
 
 func validateRackConfig(aslog logr.Logger, cluster *asdbv1.AerospikeCluster,
-	version string) (admission.Warnings, error) {
+	version string, ipv6Capable bool, ipv6ProbeErr error) (admission.Warnings, error) {
 	var warnings admission.Warnings
 
 	// If EnableRackIDOverride is enabled, only single rack is allowed
@@ -1032,7 +1063,7 @@ func validateRackConfig(aslog logr.Logger, cluster *asdbv1.AerospikeCluster,
 
 		configWarns, err = validateAerospikeConfig(aslog, version,
 			&rack.AerospikeConfig, &rack.Storage, int(cluster.Spec.Size),
-			cluster.Spec.OperatorClientCertSpec,
+			cluster.Spec.OperatorClientCertSpec, ipv6Capable, ipv6ProbeErr,
 		)
 		warnings = append(warnings, configWarns...)
 
@@ -1259,11 +1290,11 @@ func cgroupMemTrackingWarning(version string, conf map[string]interface{}) admis
 func validateAerospikeConfig(
 	aslog logr.Logger, version string, configSpec *asdbv1.AerospikeConfigSpec,
 	storage *asdbv1.AerospikeStorageSpec, clSize int,
-	clientCert *asdbv1.AerospikeOperatorClientCertSpec,
+	clientCert *asdbv1.AerospikeOperatorClientCertSpec, ipv6Capable bool, ipv6ProbeErr error,
 ) (admission.Warnings, error) {
 	// It validates the aerospikeConfig schema and generic aerospikeConfig fields
 	if err := validation.ValidateAerospikeConfig(
-		aslog, version, configSpec.Value, clSize,
+		aslog, version, configSpec.Value, clSize, ipv6Capable, ipv6ProbeErr,
 	); err != nil {
 		return nil, err
 	}
