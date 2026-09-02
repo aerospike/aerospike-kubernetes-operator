@@ -213,6 +213,38 @@ type AerospikeClusterSpec struct { //nolint:govet // for readability
 	// +operator-sdk:csv:customresourcedefinitions:type=spec,displayName="Enable Rack ID Override"
 	// +optional
 	EnableRackIDOverride *bool `json:"enableRackIDOverride,omitempty"`
+
+	// RestartStrategy configures transient operator behaviour applied around a rolling pod restart
+	// or upgrade.
+	// +operator-sdk:csv:customresourcedefinitions:type=spec,displayName="Restart Strategy"
+	// +optional
+	RestartStrategy *RestartStrategy `json:"restartStrategy,omitempty"`
+}
+
+// RestartStrategy configures transient operator behaviour applied around a rolling pod restart or
+// upgrade.
+type RestartStrategy struct {
+	// OverrideMigrateFillDelay is the duration in seconds that AKO temporarily sets as the
+	// migrate-fill-delay on the Aerospike cluster before restarting pods. This delays migration
+	// fills while a pod is down, giving the cluster time to avoid unnecessary data movement
+	// during short maintenance windows. Once the pod restarts and rejoins the cluster, AKO
+	// resets migrate-fill-delay to 0 so that rebalancing can proceed immediately.
+	// This field only takes effect when a pod restart (not a warm restart) is required.
+	// This settings are applied dynamically before the first pod is taken down and
+	// reverted once all pods have rejoined; they are never written to aerospike.conf.
+	// +operator-sdk:csv:customresourcedefinitions:type=spec,displayName="Override Migrate Fill Delay"
+	// +kubebuilder:validation:Minimum=0
+	// +optional
+	OverrideMigrateFillDelay *int64 `json:"overrideMigrateFillDelay,omitempty"`
+}
+
+// GetOverrideMigrateFillDelay returns OverrideMigrateFillDelay or 0 when the receiver or the field is nil.
+func (rs *RestartStrategy) GetOverrideMigrateFillDelay() int64 {
+	if rs == nil || rs.OverrideMigrateFillDelay == nil {
+		return 0
+	}
+
+	return *rs.OverrideMigrateFillDelay
 }
 
 type OperationKind string
@@ -1058,11 +1090,16 @@ type AerospikeClusterStatusSpec struct { //nolint:govet // for readability
 	// Operations is a list of on-demand operation to be performed on the Aerospike cluster.
 	// +optional
 	Operations []OperationSpec `json:"operations,omitempty"`
+
+	// RestartStrategy configures transient operator behaviour applied around a rolling pod restart
+	// or upgrade.
+	// +optional
+	RestartStrategy *RestartStrategy `json:"restartStrategy,omitempty"`
 }
 
 // AerospikeClusterStatus defines the observed state of AerospikeCluster
 // +k8s:openapi-gen=true
-type AerospikeClusterStatus struct { //nolint:govet // for readability
+type AerospikeClusterStatus struct {
 	// INSERT ADDITIONAL STATUS FIELD - define observed state of cluster
 	// Add custom validation
 	// using kubebuilder tags: https://book-v1.book.kubebuilder.io/beyond_basics/generating_crd.html
@@ -1087,6 +1124,13 @@ type AerospikeClusterStatus struct { //nolint:govet // for readability
 	// Selector specifies the label selector for the Aerospike pods.
 	// +optional
 	Selector string `json:"selector,omitempty"`
+
+	// DynamicMigrateFillDelay is the migrate-fill-delay value most recently applied dynamically
+	// by AKO on the cluster. This reflects the live value on the server, which may differ from
+	// aerospikeConfig.service.migrate-fill-delay during rolling restarts, upgrades, or scale-down.
+	// Defaults to the aerospikeConfig.service.migrate-fill-delay value on cluster creation.
+	// +optional
+	DynamicMigrateFillDelay int64 `json:"dynamicMigrateFillDelay,omitempty"`
 }
 
 // AerospikeNetworkType specifies the type of network address to use.
@@ -1351,7 +1395,7 @@ type AerospikePodStatus struct { //nolint:govet // for readability
 // +kubebuilder:metadata:annotations="aerospike-kubernetes-operator/version=4.5.0"
 //
 //nolint:lll // for readability
-type AerospikeCluster struct { //nolint:govet // for readability
+type AerospikeCluster struct {
 	metav1.TypeMeta   `json:",inline"`
 	metav1.ObjectMeta `json:"metadata,omitempty"`
 
@@ -1497,6 +1541,10 @@ func CopySpecToStatus(spec *AerospikeClusterSpec) (*AerospikeClusterStatusSpec, 
 		status.Operations = *operations
 	}
 
+	if spec.RestartStrategy != nil {
+		status.RestartStrategy = spec.RestartStrategy.DeepCopy()
+	}
+
 	return &status, nil
 }
 
@@ -1622,6 +1670,10 @@ func CopyStatusToSpec(status *AerospikeClusterStatusSpec) (*AerospikeClusterSpec
 	if len(status.Operations) != 0 {
 		operations := lib.DeepCopy(&status.Operations).(*[]OperationSpec)
 		spec.Operations = *operations
+	}
+
+	if status.RestartStrategy != nil {
+		spec.RestartStrategy = status.RestartStrategy.DeepCopy()
 	}
 
 	return &spec, nil

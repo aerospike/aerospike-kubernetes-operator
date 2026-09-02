@@ -8734,6 +8734,25 @@ spec:
                       pods that can be scaled down simultaneously
                     x-kubernetes-int-or-string: true
                 type: object
+              restartStrategy:
+                description: |-
+                  RestartStrategy configures transient operator behaviour applied around a rolling pod restart
+                  or upgrade.
+                properties:
+                  overrideMigrateFillDelay:
+                    description: |-
+                      OverrideMigrateFillDelay is the duration in seconds that AKO temporarily sets as the
+                      migrate-fill-delay on the Aerospike cluster before restarting pods. This delays migration
+                      fills while a pod is down, giving the cluster time to avoid unnecessary data movement
+                      during short maintenance windows. Once the pod restarts and rejoins the cluster, AKO
+                      resets migrate-fill-delay to 0 so that rebalancing can proceed immediately.
+                      This field only takes effect when a pod restart (not a warm restart) is required.
+                      This settings are applied dynamically before the first pod is taken down and
+                      reverted once all pods have rejoined; they are never written to aerospike.conf.
+                    format: int64
+                    minimum: 0
+                    type: integer
+                type: object
               rosterNodeBlockList:
                 description: RosterNodeBlockList is a list of blocked nodeIDs from
                   roster in a strong-consistency setup
@@ -9702,6 +9721,14 @@ spec:
                 description: Disable the PodDisruptionBudget creation for the Aerospike
                   cluster.
                 type: boolean
+              dynamicMigrateFillDelay:
+                description: |-
+                  DynamicMigrateFillDelay is the migrate-fill-delay value most recently applied dynamically
+                  by AKO on the cluster. This reflects the live value on the server, which may differ from
+                  aerospikeConfig.service.migrate-fill-delay during rolling restarts, upgrades, or scale-down.
+                  Defaults to the aerospikeConfig.service.migrate-fill-delay value on cluster creation.
+                format: int64
+                type: integer
               enableDynamicConfigUpdate:
                 description: |-
                   EnableDynamicConfigUpdate enables dynamic config update flow of the operator.
@@ -18357,6 +18384,25 @@ spec:
                       otherwise to an implementation-defined value. Requests cannot exceed Limits.
                       More info: https://kubernetes.io/docs/concepts/configuration/manage-resources-containers/
                     type: object
+                type: object
+              restartStrategy:
+                description: |-
+                  RestartStrategy configures transient operator behaviour applied around a rolling pod restart
+                  or upgrade.
+                properties:
+                  overrideMigrateFillDelay:
+                    description: |-
+                      OverrideMigrateFillDelay is the duration in seconds that AKO temporarily sets as the
+                      migrate-fill-delay on the Aerospike cluster before restarting pods. This delays migration
+                      fills while a pod is down, giving the cluster time to avoid unnecessary data movement
+                      during short maintenance windows. Once the pod restarts and rejoins the cluster, AKO
+                      resets migrate-fill-delay to 0 so that rebalancing can proceed immediately.
+                      This field only takes effect when a pod restart (not a warm restart) is required.
+                      This settings are applied dynamically before the first pod is taken down and
+                      reverted once all pods have rejoined; they are never written to aerospike.conf.
+                    format: int64
+                    minimum: 0
+                    type: integer
                 type: object
               rosterNodeBlockList:
                 description: RosterNodeBlockList is a list of blocked nodeIDs from

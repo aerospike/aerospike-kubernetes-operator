@@ -211,13 +211,9 @@ func (r *SingleClusterReconciler) Reconcile(ctx context.Context) (result ctrl.Re
 	// Use policy from spec after setting up access control
 	policy := r.getClientPolicy(ctx)
 
-	// Revert migrate-fill-delay to the original value if it was set to a different value while processing racks.
-	// Passing the first rack from the list as all the racks will have the same migrate-fill-delay
-	// Redundant safe check to revert migrate-fill-delay if the previous revert operation missed/skipped somehow
-	if res := r.setMigrateFillDelay(
-		ctx, policy, &r.aeroCluster.Spec.RackConfig.Racks[0].AerospikeConfig,
-		false, ignorablePodNames,
-	); !res.IsSuccess {
+	// Revert migrate-fill-delay to the aerospikeConfig value as a final safety net in case any
+	// per-rack revert was missed (e.g. AKO crashed mid-reconcile with MFD at the override value).
+	if res := r.revertMFDToConfig(ctx, policy, ignorablePodNames); !res.IsSuccess {
 		if res.Err != nil {
 			return reconcile.Result{}, fmt.Errorf("revert migrate-fill-delay: %w", res.Err)
 		}
@@ -434,6 +430,13 @@ func (r *SingleClusterReconciler) updateStatus(ctx context.Context) error {
 
 	newAeroCluster.Status.AerospikeClusterStatusSpec = *specToStatus
 	newAeroCluster.Status.Phase = asdbv1.AerospikeClusterCompleted
+
+	// setMigrateFillDelay persists DynamicMigrateFillDelay immediately to the API server and
+	// re-fetches r.aeroCluster, so this field is always up-to-date before updateStatus runs.
+	// The reconciler safety-net call at line 222 also handles fresh-cluster initialisation:
+	// if configMFD > 0 the guard fails and the info call sets DynamicMigrateFillDelay;
+	// if configMFD == 0 it stays 0, which is already the correct value.
+	newAeroCluster.Status.DynamicMigrateFillDelay = r.aeroCluster.Status.DynamicMigrateFillDelay
 
 	// If IsReadinessProbeEnabled is not enabled, then only check for cluster readiness.
 	// This is to avoid checking cluster readiness for every reconcile as once it is enabled, it will not be disabled.
