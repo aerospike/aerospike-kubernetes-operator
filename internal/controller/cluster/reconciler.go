@@ -369,7 +369,7 @@ func (r *SingleClusterReconciler) waitForIgnorablePodsRecovery(ctx context.Conte
 					continue
 				}
 
-				return false, fmt.Errorf("get Pod %s during recovery wait: %w", podName, err)
+				return false, fmt.Errorf("get Pod %s during recovery wait: %w", utils.GetNamespacedNameString(pod), err)
 			}
 
 			if podState := utils.CheckServerFailedWithGrace(pod, false); podState.State == utils.PodFailed {
