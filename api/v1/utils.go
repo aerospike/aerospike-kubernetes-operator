@@ -62,13 +62,13 @@ const (
 	ConfKeyNetworkTLS       = "tls"
 
 	// Ports and TLS keys.
-	ConfKeyTLSName    = "tls-name"
-	ConfKeyTLSPort    = "tls-port"
-	ConfKeyPort       = "port"
-	ConfKeyTLSCAPath  = "ca-path"
-	ConfKeyTLSCAFile  = "ca-file"
-	ConfKeyTLSCert    = "cert-file"
-	ConfKeyTLSKeyFile = "key-file"
+	ConfKeyTLSName     = "tls-name"
+	ConfKeyTLSPort     = "tls-port"
+	ConfKeyPort        = "port"
+	ConfKeyTLSCAPath   = "ca-path"
+	ConfKeyTLSCAFile   = "ca-file"
+	ConfKeyTLSCertFile = "cert-file"
+	ConfKeyTLSKeyFile  = "key-file"
 
 	// XDR keys.
 	ConfKeyXdr                 = "xdr"
@@ -366,6 +366,48 @@ func IsXdrEnabled(aerospikeConfigSpec AerospikeConfigSpec) bool {
 	xdrConf := aerospikeConfig[ConfKeyXdr]
 
 	return xdrConf != nil
+}
+
+// GetXDRDCs returns the named entries of xdr.dcs from the aerospikeConfig. A dc with
+// no name is skipped: aerospike-management-lib silently drops it when flattening the
+// config, so it never reaches the deployed aerospike.conf.
+func GetXDRDCs(aerospikeConfigSpec AerospikeConfigSpec) ([]map[string]interface{}, error) {
+	config := aerospikeConfigSpec.Value
+
+	xdrConfInterface, exists := config[ConfKeyXdr]
+	if !exists || xdrConfInterface == nil {
+		return nil, nil
+	}
+
+	xdrConf, ok := xdrConfInterface.(map[string]interface{})
+	if !ok {
+		return nil, fmt.Errorf("aerospikeConfig.xdr not a valid map %v", xdrConfInterface)
+	}
+
+	dcListInterface, exists := xdrConf[ConfKeyXdrDCs]
+	if !exists || dcListInterface == nil {
+		return nil, nil
+	}
+
+	dcList, ok := dcListInterface.([]interface{})
+	if !ok {
+		return nil, fmt.Errorf("aerospikeConfig.xdr.dcs not a valid list %v", dcListInterface)
+	}
+
+	dcs := make([]map[string]interface{}, 0, len(dcList))
+
+	for _, dcConfInterface := range dcList {
+		dcConf, ok := dcConfInterface.(map[string]interface{})
+		if !ok {
+			return nil, fmt.Errorf("aerospikeConfig.xdr.dcs entry not a valid map %v", dcConfInterface)
+		}
+
+		if name, _ := dcConf[ConfKeyName].(string); name != "" {
+			dcs = append(dcs, dcConf)
+		}
+	}
+
+	return dcs, nil
 }
 
 func ReadTLSAuthenticateClient(serviceConf map[string]interface{}) (

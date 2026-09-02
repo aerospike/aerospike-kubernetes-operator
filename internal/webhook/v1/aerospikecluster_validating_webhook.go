@@ -1676,7 +1676,7 @@ func validateRequiredFileStorageForAerospikeConfig(
 	}
 
 	for _, path := range xdrAuthPasswordFilePaths {
-		if !isSecretManagerPath(path) && !isEnvPath(path) {
+		if !isSecretManagerPath(path) {
 			allPaths = append(allPaths, path)
 		}
 	}
@@ -1763,44 +1763,14 @@ func getFeatureKeyFilePaths(configSpec asdbv1.AerospikeConfigSpec) []string {
 }
 
 func getXDRAuthPasswordFilePaths(configSpec asdbv1.AerospikeConfigSpec) []string {
-	config := configSpec.Value
-
-	xdrConf, ok := config[asdbv1.ConfKeyXdr]
-	if !ok || xdrConf == nil {
-		return nil
-	}
-
-	xdrConfMap, ok := xdrConf.(map[string]interface{})
-	if !ok {
-		return nil
-	}
-
-	dcListInterface, ok := xdrConfMap[asdbv1.ConfKeyXdrDCs]
-	if !ok || dcListInterface == nil {
-		return nil
-	}
-
-	dcList, ok := dcListInterface.([]interface{})
-	if !ok {
+	dcs, err := asdbv1.GetXDRDCs(configSpec)
+	if err != nil {
 		return nil
 	}
 
 	var paths []string
 
-	for _, dcConfInterface := range dcList {
-		dcConf, ok := dcConfInterface.(map[string]interface{})
-		if !ok {
-			continue
-		}
-
-		dcName, _ := dcConf[asdbv1.ConfKeyName].(string)
-		if dcName == "" {
-			// aerospike-management-lib silently drops a dc with no name when
-			// flattening the config, so it never reaches the deployed
-			// aerospike.conf. Skip validating it here too.
-			continue
-		}
-
+	for _, dcConf := range dcs {
 		if path, ok := dcConf[asdbv1.ConfKeyXdrAuthPasswordFile]; ok {
 			if pathStr, ok := path.(string); ok && pathStr != "" {
 				paths = append(paths, pathStr)
@@ -1845,11 +1815,6 @@ func getTLSFilePaths(configSpec asdbv1.AerospikeConfigSpec) (nonCAPaths, caPaths
 // isSecretManagerPath indicates if the given path is a Secret Manager's unique identifier path
 func isSecretManagerPath(path string) bool {
 	return strings.HasPrefix(path, "secrets:") || strings.HasPrefix(path, "vault:")
-}
-
-// isEnvPath indicates if the given path refers to an environment variable rather than a file.
-func isEnvPath(path string) bool {
-	return strings.HasPrefix(path, "env:") || strings.HasPrefix(path, "env-b64:")
 }
 
 // isFileStorageConfiguredForDir indicates if file storage is configured for dir.
