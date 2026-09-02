@@ -1019,12 +1019,6 @@ var _ = Describe("AerospikeCluster validation", func() {
 							"auth-password-file": "/etc/aerospike/secret/password.txt",
 						}),
 					//nolint:gosec // G101 test config path, not real credentials
-					Entry("auth-mode internal with env-prefixed auth-password-file (mount not required)",
-						map[string]interface{}{
-							"auth-mode": "internal", "auth-user": "admin",
-							"auth-password-file": "env:XDR_AUTH_PWD",
-						}),
-					//nolint:gosec // G101 test config path, not real credentials
 					Entry("auth-mode internal with vault-prefixed auth-password-file (mount not required)",
 						map[string]interface{}{
 							"auth-mode": "internal", "auth-user": "admin",

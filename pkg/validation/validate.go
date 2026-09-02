@@ -264,7 +264,7 @@ func validateXDRDCAuth(dcConf map[string]interface{}, dcName string, tlsNameSet 
 	authPasswordFile, _ := dcConf[asdbv1.ConfKeyXdrAuthPasswordFile].(string)
 	authUser, _ := dcConf[asdbv1.ConfKeyXdrAuthUser].(string)
 
-	authModeInterface, _ := dcConf[asdbv1.ConfKeyXdrAuthMode]
+	authModeInterface := dcConf[asdbv1.ConfKeyXdrAuthMode]
 	authMode, _ := authModeInterface.(string)
 
 	if authUser != "" && authMode == "" {
