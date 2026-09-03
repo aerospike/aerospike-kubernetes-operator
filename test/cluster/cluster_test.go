@@ -1243,7 +1243,7 @@ func clusterWithMaxIgnorablePod(ctx goctx.Context) {
 				aeroCluster.Spec.RackConfig.MaxIgnorablePods = &maxIgnorable
 				aeroCluster.Spec.Size--
 
-				Expect(k8sClient.Update(ctx, aeroCluster)).ToNot(HaveOccurred())
+				Expect(updateClusterWithNoWait(k8sClient, ctx, aeroCluster)).ToNot(HaveOccurred())
 
 				assertScaleDownBlocked(ctx, clusterNamespacedName, specSizeBeforeScaleDown, statusSizeBeforeScaleDown,
 					podCountBeforeScaleDown, 2*time.Minute, 1, victim)
