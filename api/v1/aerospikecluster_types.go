@@ -49,6 +49,102 @@ const (
 	AerospikeClusterError AerospikeClusterPhase = "Error"
 )
 
+// AerospikeClusterConditionType is the type for AerospikeCluster status conditions.
+type AerospikeClusterConditionType string
+
+const (
+	// AerospikeClusterConditionReady indicates the operator has successfully applied the
+	// current spec. It reflects reconcile outcome, not cluster health: a cluster that is
+	// serving traffic normally still reports Ready=False while an operation is in flight,
+	// and the Reason names the stage that is running or that failed.
+	AerospikeClusterConditionReady AerospikeClusterConditionType = "Ready"
+
+	// AerospikeClusterConditionScalingUp indicates the operator is adding pods to at least
+	// one rack. Rack-scoped: a rack redistribution or revision migration can set this with
+	// spec.size unchanged, and ScalingDown may be True at the same time for another rack.
+	AerospikeClusterConditionScalingUp AerospikeClusterConditionType = "ScalingUp"
+
+	// AerospikeClusterConditionScalingDown indicates the operator is removing pods from at
+	// least one rack. Rack-scoped in the same way as ScalingUp.
+	AerospikeClusterConditionScalingDown AerospikeClusterConditionType = "ScalingDown"
+
+	// AerospikeClusterConditionUpgrading indicates the operator is updating the image on at
+	// least one rack.
+	AerospikeClusterConditionUpgrading AerospikeClusterConditionType = "Upgrading"
+
+	// AerospikeClusterConditionRollingRestart indicates the operator is restarting pods on at
+	// least one rack for config changes that cannot be applied dynamically.
+	AerospikeClusterConditionRollingRestart AerospikeClusterConditionType = "RollingRestart"
+
+	// AerospikeClusterConditionRackRevisionRollingOut indicates the operator is migrating at least one
+	// rack to a new revision: a StatefulSet for the new revision is created and the old one is
+	// drained. Reported separately from RollingRestart because the guarantees differ — the pods
+	// are not restarted in place, they get new PVCs and new identities and the data is rebuilt.
+	AerospikeClusterConditionRackRevisionRollingOut AerospikeClusterConditionType = "RackRevisionRollingOut"
+
+	// AerospikeClusterConditionPaused indicates reconciliation has been suspended
+	// via spec.paused=true. True = paused, False = actively reconciling.
+	AerospikeClusterConditionPaused AerospikeClusterConditionType = "Paused"
+)
+
+// Reason constants for AerospikeCluster status conditions.
+const (
+	// Ready reasons
+	AerospikeClusterReasonReconcileComplete = "ReconcileComplete"
+	AerospikeClusterReasonReconciling       = "Reconciling"
+	AerospikeClusterReasonReconcileFailed   = "ReconcileFailed"
+	AerospikeClusterReasonInitializing      = "Initializing"
+	AerospikeClusterReasonPausedByUser      = "PausedByUser"
+	AerospikeClusterReasonTerminating       = "Terminating"
+
+	// Paused reasons
+	AerospikeClusterReasonNotPaused = "NotPaused"
+
+	// ScalingUp / ScalingDown reasons
+	AerospikeClusterReasonScalingUp      = "ScalingUp"
+	AerospikeClusterReasonNotScalingUp   = "NotScalingUp"
+	AerospikeClusterReasonScalingDown    = "ScalingDown"
+	AerospikeClusterReasonNotScalingDown = "NotScalingDown"
+
+	// Upgrading reasons
+	AerospikeClusterReasonUpgrading    = "Upgrading"
+	AerospikeClusterReasonNotUpgrading = "NotUpgrading"
+
+	// RollingRestart reasons
+	AerospikeClusterReasonRollingRestart    = "RollingRestart"
+	AerospikeClusterReasonNotRollingRestart = "NotRollingRestart"
+
+	// RackRevisionRollingOut reasons
+	AerospikeClusterReasonRackRevisionRollingOut    = "RackRevisionRollingOut"
+	AerospikeClusterReasonNotRackRevisionRollingOut = "NotRackRevisionRollingOut"
+
+	// Reasons set on Ready=False when a reconcile fails. Each one names the reconcile stage
+	// that failed. They are used instead of the generic ReconcileFailed so that a consumer can tell
+	// which stage broke by reading the Reason alone, without parsing the condition message.
+	// ReconcileFailed stays as the fallback for a failure that no stage claimed.
+	//
+	// A failure does not reset the operation conditions, so the failing stage and the operation
+	// it was serving are both readable: Ready=False/RackReconcileFailed together with
+	// Upgrading=True says the upgrade is the operation that failed.
+	AerospikeClusterReasonClusterSetupFailed     = "ClusterSetupFailed"
+	AerospikeClusterReasonRackReconcileFailed    = "RackReconcileFailed"
+	AerospikeClusterReasonACLReconcileFailed     = "AccessControlReconcileFailed"
+	AerospikeClusterReasonPDBReconcileFailed     = "PodDisruptionBudgetReconcileFailed"
+	AerospikeClusterReasonServiceReconcileFailed = "ServiceReconcileFailed"
+	AerospikeClusterReasonStatusUpdateFailed     = "StatusUpdateFailed"
+
+	// AerospikeClusterReasonPodStateFetchFailed covers the stages that only read Pod state from
+	// the Kubernetes API: listing Pods and building the per-Pod info connection targets from
+	// their status.
+	AerospikeClusterReasonPodStateFetchFailed = "PodStateFetchFailed"
+
+	// Asinfo command based failure reasons
+	AerospikeClusterReasonQuiesceUndoFailed = "QuiesceUndoFailed"
+	AerospikeClusterReasonReclusterFailed   = "ReclusterFailed"
+	AerospikeClusterReasonRosterSetFailed   = "RosterSetFailed"
+	AerospikeClusterReasonMFDSetFailed      = "MigrateFillDelaySetFailed"
+)
+
 // +kubebuilder:validation:Enum=Failed;PartiallyFailed;""
 type DynamicConfigUpdateStatus string
 
@@ -1070,8 +1166,13 @@ type AerospikeClusterStatus struct { //nolint:govet // for readability
 	// The current state of Aerospike cluster.
 	AerospikeClusterStatusSpec `json:",inline"`
 
-	// Details about the current condition of the AerospikeCluster resource.
-	// Conditions []apiextensions.CustomResourceDefinitionCondition `json:"conditions"`
+	// Conditions is a list of conditions representing the current state of the AerospikeCluster.
+	// +optional
+	// +listType=map
+	// +listMapKey=type
+	// +patchStrategy=merge
+	// +patchMergeKey=type
+	Conditions []metav1.Condition `json:"conditions,omitempty" patchStrategy:"merge" patchMergeKey:"type"`
 
 	// Pods has Aerospike specific status of the pods.
 	// This is map instead of the conventional map as list convention to allow each pod to patch update its own
@@ -1344,6 +1445,8 @@ type AerospikePodStatus struct { //nolint:govet // for readability
 // +kubebuilder:printcolumn:name="HostNetwork",type=boolean,JSONPath=`.spec.podSpec.hostNetwork`
 // +kubebuilder:printcolumn:name="Age",type="date",JSONPath=".metadata.creationTimestamp"
 // +kubebuilder:printcolumn:name="Phase",type="string",JSONPath=".status.phase"
+// +kubebuilder:printcolumn:name="Ready",type="string",JSONPath=".status.conditions[?(@.type=='Ready')].status"
+// +kubebuilder:printcolumn:name="Paused",type="string",JSONPath=".status.conditions[?(@.type=='Paused')].status"
 // +kubebuilder:subresource:scale:specpath=.spec.size,statuspath=.status.size,selectorpath=.status.selector
 
 // AerospikeCluster is the schema for the AerospikeCluster API

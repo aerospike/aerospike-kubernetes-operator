@@ -6,12 +6,15 @@ import (
 	"errors"
 	"fmt"
 	"reflect"
+	"slices"
 	"strings"
 	"time"
+	"unicode/utf8"
 
 	"github.com/go-logr/logr"
 	corev1 "k8s.io/api/core/v1"
 	apierrors "k8s.io/apimachinery/pkg/api/errors"
+	apimeta "k8s.io/apimachinery/pkg/api/meta"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/labels"
 	k8sRuntime "k8s.io/apimachinery/pkg/runtime"
@@ -33,7 +36,31 @@ import (
 	"github.com/aerospike/aerospike-management-lib/deployment"
 )
 
-// SingleClusterReconciler reconciles a single AerospikeCluster
+// reconcileComputedState holds the state a single Reconcile call computes as it goes, as opposed
+// to the durable collaborators on SingleClusterReconciler. Every field is written mid-pass by one
+// stage and read by a later one, and none of it is meaningful outside the pass that produced it.
+type reconcileComputedState struct {
+	// pendingOpReset holds the operation conditions finishReconcile is allowed to clear on exit.
+	// A rack function that sets its condition True claims it, removing it from the set, so an
+	// operation still in flight keeps reporting. See mergePatchStatus.
+	// nil means clear nothing. It is armed immediately before the rack loop — the only code that
+	// claims — so cluster deletion, spec.paused, and every stage ahead of the rack loop leave the
+	// conditions frozen at their last known state.
+	pendingOpReset sets.Set[string]
+	// revisionChangedRackIDs holds the IDs of racks undergoing a revision migration this pass, as
+	// categoriseRacks computed them from live StatefulSets. It is the single answer to "is this
+	// rack migrating". Keyed by rack ID rather than by revision.
+	// Set once in reconcileRacks before any rack function runs; nil on passes that never reach the
+	// rack loop, which reads as "nothing migrating" and is correct for those paths.
+	revisionChangedRackIDs sets.Set[int]
+	// failureReason names the reconcile stage Reconcile bailed out at, surfaced as the Ready
+	// condition's Reason by writeTerminalStatus. Read only when Reconcile returns an error, so
+	// a value left here by a requeue path is inert. Empty means no stage was recorded.
+	failureReason string
+}
+
+// SingleClusterReconciler reconciles a single AerospikeCluster.
+// The controller builds a fresh one per Reconcile call, so computedState carries nothing between passes.
 type SingleClusterReconciler struct {
 	client.Client
 	Recorder    record.EventRecorder
@@ -42,30 +69,12 @@ type SingleClusterReconciler struct {
 	KubeConfig  *rest.Config
 	Scheme      *k8sRuntime.Scheme
 	Log         logr.Logger
+	// computedState holds everything this Reconcile call computes as it goes.
+	computedState reconcileComputedState
 }
 
 func (r *SingleClusterReconciler) asConfigLog() logr.Logger {
 	return r.Log.WithName("lib.asconfig")
-}
-
-// finishReconcile logs the reconcile exit once at the boundary and sets the AerospikeCluster
-// error phase on failure. It holds controller-specific finish logic so it can grow independently.
-func (r *SingleClusterReconciler) finishReconcile(ctx context.Context, result ctrl.Result, recErr error) error {
-	logValues := common.ReconcileExitLogValues(result, recErr)
-
-	if recErr != nil {
-		if err := r.setStatusPhase(ctx, asdbv1.AerospikeClusterError); err != nil {
-			recErr = errors.Join(recErr, fmt.Errorf("set AerospikeCluster error phase: %w", err))
-		}
-
-		r.Log.Error(recErr, "Reconcile failed", logValues...)
-
-		return recErr
-	}
-
-	r.Log.Info("Reconcile completed", logValues...)
-
-	return nil
 }
 
 func (r *SingleClusterReconciler) Reconcile(ctx context.Context) (result ctrl.Result, recErr error) {
@@ -74,8 +83,6 @@ func (r *SingleClusterReconciler) Reconcile(ctx context.Context) (result ctrl.Re
 		r.aeroCluster.Status,
 	)
 
-	// Set the status phase to Error if the recErr is not nil
-	// recErr is only set when reconcile failure should result in Error phase of the cluster
 	defer func() {
 		// finishReconcile returns the error to assign here so we avoid *error params; recErr is Reconcile's named return.
 		recErr = r.finishReconcile(ctx, result, recErr)
@@ -83,51 +90,73 @@ func (r *SingleClusterReconciler) Reconcile(ctx context.Context) (result ctrl.Re
 
 	// Check DeletionTimestamp to see if the cluster is being deleted
 	if !r.aeroCluster.DeletionTimestamp.IsZero() {
-		r.Log.V(1).Info("Deleting AerospikeCluster")
-		// The cluster is being deleted
-		if err := r.handleClusterDeletion(ctx, finalizerName); err != nil {
-			r.Recorder.Eventf(
-				r.aeroCluster, corev1.EventTypeWarning, "DeleteFailed",
-				"Failed to delete cluster resources",
-			)
+		return reconcile.Result{}, r.handleTerminatingCluster(ctx)
+	}
 
-			return reconcile.Result{}, err
-		}
-
-		r.removeClusterPhaseMetric()
-
-		r.Recorder.Eventf(
-			r.aeroCluster, corev1.EventTypeNormal, "Deleted",
-			"Successfully deleted cluster resources",
-		)
-
-		// Stop reconciliation as the cluster is being deleted
-		return reconcile.Result{}, nil
+	// Pre-seed conditions on first reconcile so kubectl wait doesn't hang.
+	if err := r.initializeConditionsIfNeeded(ctx); err != nil {
+		return reconcile.Result{}, fmt.Errorf("initialize conditions: %w", err)
 	}
 
 	// Pause the reconciliation for the AerospikeCluster if the paused field is set to true.
 	// Deletion of the AerospikeCluster will not be paused.
 	if asdbv1.GetBool(r.aeroCluster.Spec.Paused) {
 		r.Log.Info("Reconciliation is paused for this AerospikeCluster")
-		return reconcile.Result{}, nil
+
+		// Pause should keep all old conditions as is
+		return reconcile.Result{}, r.setConditions(
+			ctx, metav1.Condition{
+				Type:    string(asdbv1.AerospikeClusterConditionPaused),
+				Status:  metav1.ConditionTrue,
+				Reason:  asdbv1.AerospikeClusterReasonPausedByUser,
+				Message: "Reconciliation is paused via spec.paused=true",
+			})
 	}
 
-	// Set the status to AerospikeClusterInProgress before starting any operations,
+	// Reset the Paused condition to False irrespective of CR phase if code flow reached this stage
+	if err := r.mergePatchStatus(
+		ctx, nil,
+		metav1.Condition{
+			Type:   string(asdbv1.AerospikeClusterConditionPaused),
+			Status: metav1.ConditionFalse,
+			Reason: asdbv1.AerospikeClusterReasonNotPaused,
+		},
+	); err != nil {
+		return reconcile.Result{}, fmt.Errorf("reset reconcile paused state: %w", err)
+	}
+
+	// Mark Ready=False and phase=InProgress at the start of every reconcile
 	// but only if the cluster is not already in an error state.
 	if r.aeroCluster.Status.Phase != asdbv1.AerospikeClusterError {
-		if err := r.setStatusPhase(ctx, asdbv1.AerospikeClusterInProgress); err != nil {
-			return reconcile.Result{}, err
+		inProgress := asdbv1.AerospikeClusterInProgress
+
+		if err := r.mergePatchStatus(
+			ctx, &inProgress,
+			metav1.Condition{
+				Type:    string(asdbv1.AerospikeClusterConditionReady),
+				Status:  metav1.ConditionFalse,
+				Reason:  asdbv1.AerospikeClusterReasonReconciling,
+				Message: "Reconcile in progress",
+			},
+		); err != nil {
+			return reconcile.Result{}, fmt.Errorf("mark reconcile in progress: %w", err)
 		}
 	}
 
 	// The cluster is not being deleted, add finalizer if not added already
 	if err := r.addFinalizer(ctx, finalizerName); err != nil {
+		r.computedState.failureReason = asdbv1.AerospikeClusterReasonClusterSetupFailed
+
 		return reconcile.Result{}, fmt.Errorf("add finalizer: %w", err)
 	}
 
 	// Handle previously failed cluster
 	hasFailed, res := r.checkPreviouslyFailedCluster(ctx)
 	if !res.IsSuccess {
+		if res.Err != nil {
+			r.computedState.failureReason = asdbv1.AerospikeClusterReasonClusterSetupFailed
+		}
+
 		return res.Result, res.Err
 	}
 
@@ -146,8 +175,14 @@ func (r *SingleClusterReconciler) Reconcile(ctx context.Context) (result ctrl.Re
 			utils.GetNamespacedNameString(r.aeroCluster),
 		)
 
+		r.computedState.failureReason = asdbv1.AerospikeClusterReasonServiceReconcileFailed
+
 		return reconcile.Result{}, fmt.Errorf("create or update headless Service: %w", err)
 	}
+
+	// From here on this pass owns the operation conditions: finishReconcile clears whichever
+	// ones no rack function claims, per the policy set after the rack loop.
+	r.initPendingOpConditionReset()
 
 	// Reconcile all racks
 	if res := r.reconcileRacks(ctx); !res.IsSuccess {
@@ -156,6 +191,8 @@ func (r *SingleClusterReconciler) Reconcile(ctx context.Context) (result ctrl.Re
 				r.aeroCluster, corev1.EventTypeWarning, "UpdateFailed",
 				"Failed to reconcile racks",
 			)
+
+			r.computedState.failureReason = asdbv1.AerospikeClusterReasonRackReconcileFailed
 		}
 
 		return res.Result, res.Err
@@ -168,6 +205,8 @@ func (r *SingleClusterReconciler) Reconcile(ctx context.Context) (result ctrl.Re
 			utils.GetNamespacedNameString(r.aeroCluster),
 		)
 
+		r.computedState.failureReason = asdbv1.AerospikeClusterReasonPDBReconcileFailed
+
 		return reconcile.Result{}, fmt.Errorf("reconcile PodDisruptionBudget: %w", err)
 	}
 
@@ -178,11 +217,15 @@ func (r *SingleClusterReconciler) Reconcile(ctx context.Context) (result ctrl.Re
 			utils.NamespacedName(r.aeroCluster.Namespace, r.aeroCluster.Name+"-lb"),
 		)
 
+		r.computedState.failureReason = asdbv1.AerospikeClusterReasonServiceReconcileFailed
+
 		return reconcile.Result{}, fmt.Errorf("reconcile LoadBalancer Service: %w", err)
 	}
 
 	ignorablePodNames, err := r.getIgnorablePods(ctx, nil, getConfiguredRackStateList(r.aeroCluster))
 	if err != nil {
+		r.computedState.failureReason = asdbv1.AerospikeClusterReasonPodStateFetchFailed
+
 		return reconcile.Result{}, fmt.Errorf("determine ignorable Pods: %w", err)
 	}
 
@@ -190,6 +233,8 @@ func (r *SingleClusterReconciler) Reconcile(ctx context.Context) (result ctrl.Re
 	// It may have been left from previous steps
 	allHostConns, err := r.newAllHostConnWithOption(ctx, ignorablePodNames)
 	if err != nil {
+		r.computedState.failureReason = asdbv1.AerospikeClusterReasonPodStateFetchFailed
+
 		return reconcile.Result{}, fmt.Errorf("get host connections for cluster nodes: %w", err)
 	}
 
@@ -197,6 +242,8 @@ func (r *SingleClusterReconciler) Reconcile(ctx context.Context) (result ctrl.Re
 		r.Log,
 		r.getClientPolicy(ctx), allHostConns,
 	); err != nil {
+		r.computedState.failureReason = asdbv1.AerospikeClusterReasonQuiesceUndoFailed
+
 		return reconcile.Result{}, fmt.Errorf("undo quiesce state: %w", err)
 	}
 
@@ -207,6 +254,8 @@ func (r *SingleClusterReconciler) Reconcile(ctx context.Context) (result ctrl.Re
 			r.aeroCluster, corev1.EventTypeWarning, ReasonACLUpdateFailed,
 			"Failed to set up access control",
 		)
+
+		r.computedState.failureReason = asdbv1.AerospikeClusterReasonACLReconcileFailed
 
 		return reconcile.Result{}, fmt.Errorf("reconcile access control: %w", err)
 	}
@@ -222,6 +271,8 @@ func (r *SingleClusterReconciler) Reconcile(ctx context.Context) (result ctrl.Re
 		false, ignorablePodNames,
 	); !res.IsSuccess {
 		if res.Err != nil {
+			r.computedState.failureReason = asdbv1.AerospikeClusterReasonMFDSetFailed
+
 			return reconcile.Result{}, fmt.Errorf("revert migrate-fill-delay: %w", res.Err)
 		}
 
@@ -234,21 +285,18 @@ func (r *SingleClusterReconciler) Reconcile(ctx context.Context) (result ctrl.Re
 			r.Log,
 			policy, allHostConns,
 		); err != nil {
+			r.computedState.failureReason = asdbv1.AerospikeClusterReasonReclusterFailed
+
 			return reconcile.Result{}, fmt.Errorf("run recluster: %w", err)
 		}
 	}
 
-	if asdbv1.IsClusterSCEnabled(r.aeroCluster) {
-		if !r.IsStatusEmpty() {
-			if res := r.waitForClusterStability(policy, allHostConns); !res.IsSuccess {
-				return res.Result, res.Err
-			}
+	if res := r.ensureSCRoster(ctx, policy, allHostConns, ignorablePodNames); !res.IsSuccess {
+		if res.Err != nil {
+			r.computedState.failureReason = asdbv1.AerospikeClusterReasonRosterSetFailed
 		}
 
-		// Setup roster
-		if err = r.getAndSetRoster(ctx, policy, r.aeroCluster.Spec.RosterNodeBlockList, ignorablePodNames); err != nil {
-			return reconcile.Result{}, fmt.Errorf("set roster: %w", err)
-		}
+		return res.Result, res.Err
 	}
 
 	// Update the AerospikeCluster status.
@@ -257,6 +305,8 @@ func (r *SingleClusterReconciler) Reconcile(ctx context.Context) (result ctrl.Re
 			r.aeroCluster, corev1.EventTypeWarning, ReasonStatusUpdateFailed,
 			"Failed to update status",
 		)
+
+		r.computedState.failureReason = asdbv1.AerospikeClusterReasonStatusUpdateFailed
 
 		return reconcile.Result{}, fmt.Errorf("update AerospikeCluster status: %w", err)
 	}
@@ -269,6 +319,126 @@ func (r *SingleClusterReconciler) Reconcile(ctx context.Context) (result ctrl.Re
 	}
 
 	return reconcile.Result{}, nil
+}
+
+// handleTerminatingCluster sets Ready=False/Terminating and drives cluster deletion.
+// Returns the result to be returned directly from Reconcile.
+func (r *SingleClusterReconciler) handleTerminatingCluster(ctx context.Context) error {
+	r.Log.V(1).Info("Deleting AerospikeCluster")
+
+	// Signal to observers that the cluster is no longer ready — it is being torn down.
+	if err := r.setConditions(ctx, metav1.Condition{
+		Type:    string(asdbv1.AerospikeClusterConditionReady),
+		Status:  metav1.ConditionFalse,
+		Reason:  asdbv1.AerospikeClusterReasonTerminating,
+		Message: "Cluster is being deleted",
+	}); err != nil {
+		// Log error and continue with the cluster deletion
+		r.Log.Error(err, "Failed to set Ready condition for terminating cluster")
+	}
+
+	if err := r.handleClusterDeletion(ctx, finalizerName); err != nil {
+		r.Recorder.Eventf(
+			r.aeroCluster, corev1.EventTypeWarning, "DeleteFailed",
+			"Unable to handle AerospikeCluster delete operations %s/%s",
+			r.aeroCluster.Namespace, r.aeroCluster.Name,
+		)
+
+		return err
+	}
+
+	r.removeClusterPhaseMetric()
+
+	r.Recorder.Eventf(
+		r.aeroCluster, corev1.EventTypeNormal, "Deleted",
+		"Deleted AerospikeCluster %s/%s", r.aeroCluster.Namespace,
+		r.aeroCluster.Name,
+	)
+
+	// Stop reconciliation as the cluster is being deleted
+	return nil
+}
+
+// A failed reconcile writes Ready=False naming the stage that failed, plus phase=Error. It doesn't
+// reset conditions in a failure path to keep the old conditions state intact.
+// A successful or requeueing pass resets whichever operation conditions no rack function claimed.
+// Doing it on requeue matters: a large upgrade or restart requeues once per batch for hours, and
+// waiting for the whole rack loop to succeed would leave a finished operation reporting True for
+// that entire time.
+func (r *SingleClusterReconciler) writeTerminalStatus(ctx context.Context, recErr error) error {
+	if recErr == nil {
+		return r.mergePatchStatus(ctx, nil, r.opConditionsToClear()...)
+	}
+
+	errorPhase := asdbv1.AerospikeClusterError
+
+	// Prefer the stage recorded by Reconcile so consumers can distinguish a rack problem
+	// from an access-control or roster problem without parsing the message.
+	reason := asdbv1.AerospikeClusterReasonReconcileFailed
+	if r.computedState.failureReason != "" {
+		reason = r.computedState.failureReason
+	}
+
+	return r.mergePatchStatus(ctx, &errorPhase, metav1.Condition{
+		Type:    string(asdbv1.AerospikeClusterConditionReady),
+		Status:  metav1.ConditionFalse,
+		Reason:  reason,
+		Message: truncateConditionMessage(recErr.Error()),
+	})
+}
+
+// ensureSCRoster handles Strong Consistency roster management.
+// For non-SC clusters it is a no-op. For SC clusters it waits for cluster
+// stability (when status is already populated) and then applies the roster.
+func (r *SingleClusterReconciler) ensureSCRoster(
+	ctx context.Context,
+	policy *as.ClientPolicy,
+	allHostConns []*deployment.HostConn,
+	ignorablePodNames sets.Set[string],
+) common.ReconcileResult {
+	if !asdbv1.IsClusterSCEnabled(r.aeroCluster) {
+		return common.ReconcileSuccess()
+	}
+
+	if !r.IsStatusEmpty() {
+		if res := r.waitForClusterStability(policy, allHostConns); !res.IsSuccess {
+			return res
+		}
+	}
+
+	if err := r.getAndSetRoster(ctx, policy, r.aeroCluster.Spec.RosterNodeBlockList, ignorablePodNames); err != nil {
+		return common.ReconcileError(fmt.Errorf("set roster: %w", err))
+	}
+
+	return common.ReconcileSuccess()
+}
+
+// finishReconcile runs at end of Reconcile; return value is assigned to Reconcile's named recErr in defer.
+func (r *SingleClusterReconciler) finishReconcile(ctx context.Context, result ctrl.Result, recErr error) error {
+	logValues := common.ReconcileExitLogValues(result, recErr)
+
+	statusErr := r.writeTerminalStatus(ctx, recErr)
+
+	if recErr != nil {
+		if statusErr != nil {
+			recErr = errors.Join(
+				recErr,
+				fmt.Errorf("set AerospikeCluster error status: %w", statusErr),
+			)
+		}
+
+		r.Log.Error(recErr, "Reconcile failed", logValues...)
+
+		return recErr
+	}
+
+	if statusErr != nil {
+		return fmt.Errorf("reset operation conditions: %w", statusErr)
+	}
+
+	r.Log.Info("Reconcile completed", logValues...)
+
+	return nil
 }
 
 func (r *SingleClusterReconciler) recoverIgnorablePods(
@@ -491,6 +661,66 @@ func (r *SingleClusterReconciler) validateAndReconcileAccessControl(
 	return nil
 }
 
+// operationConditions lists the "operation in progress" conditions
+// paired with the reason used when each is in its resting (False) state.
+// Paused is intentionally excluded: it reflects a user action (spec.paused=true),
+// not an operator-driven operation.
+var operationConditions = []struct {
+	condType    string
+	falseReason string
+}{
+	{string(asdbv1.AerospikeClusterConditionScalingUp), asdbv1.AerospikeClusterReasonNotScalingUp},
+	{string(asdbv1.AerospikeClusterConditionScalingDown), asdbv1.AerospikeClusterReasonNotScalingDown},
+	{string(asdbv1.AerospikeClusterConditionUpgrading), asdbv1.AerospikeClusterReasonNotUpgrading},
+	{string(asdbv1.AerospikeClusterConditionRollingRestart), asdbv1.AerospikeClusterReasonNotRollingRestart},
+	{
+		string(asdbv1.AerospikeClusterConditionRackRevisionRollingOut),
+		asdbv1.AerospikeClusterReasonNotRackRevisionRollingOut,
+	},
+}
+
+// initPendingOpConditionReset takes ownership of the operation conditions for this reconcile: every
+// one of them becomes eligible for reset unless a rack function claims it.
+// Called immediately before the rack loop, deliberately as late as possible: every stage that runs
+// earlier doesn't claim any operation condition.
+func (r *SingleClusterReconciler) initPendingOpConditionReset() {
+	r.computedState.pendingOpReset = sets.New[string]()
+
+	for _, opCond := range operationConditions {
+		r.computedState.pendingOpReset.Insert(opCond.condType)
+	}
+}
+
+// opConditionAtRest returns the resting (False) form of an operation condition. Shared so the
+// first-reconcile seed and the exit-path clear cannot drift on status or reason.
+func opConditionAtRest(condType, falseReason string) metav1.Condition {
+	return metav1.Condition{
+		Type:   condType,
+		Status: metav1.ConditionFalse,
+		Reason: falseReason,
+	}
+}
+
+// opConditionsToClear returns the resting form of every operation condition this pass is
+// still allowed to clear. A condition claimed by a rack function is omitted, so an operation
+// spanning a requeue keeps reporting.
+//
+// A claimed condition is omitted even when the operation completed: on the success path
+// updateStatus clears it, atomically with Ready=True.
+func (r *SingleClusterReconciler) opConditionsToClear() []metav1.Condition {
+	conditions := make([]metav1.Condition, 0, len(operationConditions))
+
+	for _, opCond := range operationConditions {
+		if !r.computedState.pendingOpReset.Has(opCond.condType) {
+			continue
+		}
+
+		conditions = append(conditions, opConditionAtRest(opCond.condType, opCond.falseReason))
+	}
+
+	return conditions
+}
+
 func (r *SingleClusterReconciler) updateStatus(ctx context.Context) error {
 	r.Log.Info("Update status for AerospikeCluster")
 
@@ -519,6 +749,34 @@ func (r *SingleClusterReconciler) updateStatus(ctx context.Context) error {
 
 	newAeroCluster.Status.AerospikeClusterStatusSpec = *specToStatus
 	newAeroCluster.Status.Phase = asdbv1.AerospikeClusterCompleted
+
+	// Carry forward conditions from r.aeroCluster (which is kept in sync by setConditions calls).
+	// We must deep-copy the slice: patchStatus diffs r.aeroCluster (old) vs newAeroCluster (new).
+	// A plain slice assignment shares the backing array, so in-place mutations by
+	// SetStatusCondition would modify both old and new, producing no diff.
+	newAeroCluster.Status.Conditions = slices.Clone(r.aeroCluster.Status.Conditions)
+
+	// Set Ready=True on the success path. ObservedGeneration is always stamped — see
+	// mergePatchStatus for why. patchStatus diffs the result, so an unchanged condition is free.
+	apimeta.SetStatusCondition(&newAeroCluster.Status.Conditions, metav1.Condition{
+		Type:               string(asdbv1.AerospikeClusterConditionReady),
+		Status:             metav1.ConditionTrue,
+		ObservedGeneration: r.aeroCluster.Generation,
+		Reason:             asdbv1.AerospikeClusterReasonReconcileComplete,
+		Message:            "Cluster reconcile completed successfully",
+	})
+
+	// All operations are done at this point; set each operation condition to False.
+	//
+	// On the success path this is the only place a condition claimed by a completed operation is cleared.
+	// opConditionsToClear omits claimed conditions by design, so an operation interrupted by an error keeps reporting.
+	// Clearing here also keeps it atomic with Ready=True, so the two can never be observed disagreeing.
+	for _, opCond := range operationConditions {
+		atRest := opConditionAtRest(opCond.condType, opCond.falseReason)
+		atRest.ObservedGeneration = r.aeroCluster.Generation
+
+		apimeta.SetStatusCondition(&newAeroCluster.Status.Conditions, atRest)
+	}
 
 	// If IsReadinessProbeEnabled is not enabled, then only check for cluster readiness.
 	// This is to avoid checking cluster readiness for every reconcile as once it is enabled, it will not be disabled.
@@ -549,32 +807,130 @@ func (r *SingleClusterReconciler) updateStatus(ctx context.Context) error {
 	return nil
 }
 
-func (r *SingleClusterReconciler) setStatusPhase(ctx context.Context, phase asdbv1.AerospikeClusterPhase) error {
-	if r.aeroCluster.Status.Phase == phase {
+// mergePatchStatus applies an optional phase change and any number of conditions to the
+// AerospikeCluster status in a single guarded merge patch. It is the shared primitive behind
+// setConditions and writeTerminalStatus, and is called directly wherever a phase change and a
+// condition change must land together.
+//
+// Whether anything changed is decided by SetStatusCondition's own return value, applied to a
+// clone of just the conditions slice.
+// Phase is applied only when it differs. Only status fields and resourceVersion are copied back
+// onto r.aeroCluster, so the spec is never overwritten.
+func (r *SingleClusterReconciler) mergePatchStatus(
+	ctx context.Context, phase *asdbv1.AerospikeClusterPhase, conditions ...metav1.Condition,
+) error {
+	candidate := slices.Clone(r.aeroCluster.Status.Conditions)
+	condChanged := false
+
+	// Never return early from this loop: every True condition must be claimed even when it
+	// needs no patch.
+	for i := range conditions {
+		if conditions[i].Status == metav1.ConditionTrue && r.computedState.pendingOpReset != nil {
+			r.computedState.pendingOpReset.Delete(conditions[i].Type)
+		}
+
+		// Copy so the caller's input slice is not mutated.
+		cond := conditions[i]
+		cond.ObservedGeneration = r.aeroCluster.Generation
+
+		if apimeta.SetStatusCondition(&candidate, cond) {
+			condChanged = true
+		}
+	}
+
+	phaseChanged := phase != nil && r.aeroCluster.Status.Phase != *phase
+
+	if !condChanged && !phaseChanged {
 		r.addClusterPhaseMetric()
 		return nil
 	}
 
-	// Two deep copies so that:
-	//   - base and target share the same resourceVersion → it never appears in
-	//     the diff → no 409 conflicts, no retry needed.
-	//   - The server response is written into target (the throwaway copy) and
-	//     r.aeroCluster is never overwritten mid-reconcile.
-	// MergeFrom produces {"status":{"phase":"..."}} — a merge patch that creates
-	// /status if it doesn't exist yet (safe for brand-new clusters), and only
-	// touches the phase key (no other status fields are nulled out).
-	base := r.aeroCluster.DeepCopy()
-	target := r.aeroCluster.DeepCopy()
-	target.Status.Phase = phase
+	patchTarget := r.aeroCluster.DeepCopy()
+	patch := client.MergeFrom(r.aeroCluster.DeepCopy())
 
-	if err := r.Client.Status().Patch(ctx, target, client.MergeFrom(base)); err != nil {
-		return fmt.Errorf("set cluster status phase to %s: %w", phase, err)
+	patchTarget.Status.Conditions = candidate
+
+	if phaseChanged {
+		patchTarget.Status.Phase = *phase
 	}
 
-	r.aeroCluster.Status.Phase = phase
-	r.addClusterPhaseMetric()
+	if err := r.Client.Status().Patch(ctx, patchTarget, patch); err != nil {
+		return err
+	}
+
+	// Copy back only status and resourceVersion so r.aeroCluster.Spec is never overwritten.
+	r.aeroCluster.Status.Conditions = patchTarget.Status.Conditions
+	r.aeroCluster.Status.Phase = patchTarget.Status.Phase
+	r.aeroCluster.ResourceVersion = patchTarget.ResourceVersion
+
+	if phaseChanged {
+		r.addClusterPhaseMetric()
+	}
 
 	return nil
+}
+
+// maxConditionMessageLength bounds what we write into a condition's message. The CRD caps
+// the field at 32768; an AerospikeCluster error chain can embed config diffs and pod lists,
+// and an overlong message makes the API server reject the whole patch — which would lose the
+// phase=Error write riding along with it.
+const maxConditionMessageLength = 2048
+
+// truncateConditionMessage bounds msg, backing off to a rune boundary so the result stays
+// valid UTF-8 (invalid UTF-8 in a JSON string is itself rejected).
+func truncateConditionMessage(msg string) string {
+	if len(msg) <= maxConditionMessageLength {
+		return msg
+	}
+
+	const suffix = "... (truncated)"
+
+	cut := maxConditionMessageLength - len(suffix)
+	for cut > 0 && !utf8.RuneStart(msg[cut]) {
+		cut--
+	}
+
+	return msg[:cut] + suffix
+}
+
+// setConditions updates one or more conditions on the AerospikeCluster status using a
+// merge patch.
+// ObservedGeneration is stamped only when a condition's Status, Reason, or Message actually
+// changes — consistent with how LastTransitionTime behaves. Conditions already in the
+// desired state are left untouched (no ObservedGeneration bump, no API call).
+func (r *SingleClusterReconciler) setConditions(ctx context.Context, conditions ...metav1.Condition) error {
+	return r.mergePatchStatus(ctx, nil, conditions...)
+}
+
+// initializeConditionsIfNeeded pre-seeds all conditions on the very first reconcile
+// so that `kubectl wait --for=condition=Ready` and similar commands do not hang,
+// and the status shape is consistent from the start.
+func (r *SingleClusterReconciler) initializeConditionsIfNeeded(ctx context.Context) error {
+	if len(r.aeroCluster.Status.Conditions) > 0 {
+		return nil
+	}
+
+	seedConditions := []metav1.Condition{
+		{
+			Type:    string(asdbv1.AerospikeClusterConditionReady),
+			Status:  metav1.ConditionUnknown,
+			Reason:  asdbv1.AerospikeClusterReasonInitializing,
+			Message: "Cluster conditions not yet evaluated",
+		},
+		// Paused is not an operation condition but still needs an initial resting state.
+		{
+			Type:   string(asdbv1.AerospikeClusterConditionPaused),
+			Status: metav1.ConditionFalse,
+			Reason: asdbv1.AerospikeClusterReasonNotPaused,
+		},
+	}
+
+	// Every operation condition seeds in the same resting state the exit path clears to.
+	for _, opCond := range operationConditions {
+		seedConditions = append(seedConditions, opConditionAtRest(opCond.condType, opCond.falseReason))
+	}
+
+	return r.setConditions(ctx, seedConditions...)
 }
 
 func (r *SingleClusterReconciler) getClusterReadinessStatus(ctx context.Context) (bool, error) {
