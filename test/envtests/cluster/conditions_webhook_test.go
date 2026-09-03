@@ -127,7 +127,6 @@ var _ = Describe("AerospikeCluster status conditions schema", func() {
 			Entry("NotUpgrading", asdbv1.AerospikeClusterReasonNotUpgrading),
 			Entry("RollingRestart", asdbv1.AerospikeClusterReasonRollingRestart),
 			Entry("NotRollingRestart", asdbv1.AerospikeClusterReasonNotRollingRestart),
-			Entry("K8sNodeBlockListEviction", asdbv1.AerospikeClusterReasonK8sNodeBlockListEviction),
 			Entry("RackRevisionRollingOut", asdbv1.AerospikeClusterReasonRackRevisionRollingOut),
 			Entry("NotRackRevisionRollingOut", asdbv1.AerospikeClusterReasonNotRackRevisionRollingOut),
 			Entry("RackReconcileFailed", asdbv1.AerospikeClusterReasonRackReconcileFailed),

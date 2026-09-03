@@ -96,8 +96,18 @@ func (r *SingleClusterReconciler) reconcileRacks(ctx context.Context) common.Rec
 	// All racks either passed handleFailedPodsInRack or had their old-revision
 	// pods verified as healthy. Restore InProgress so the rest of the reconcile
 	// loop can proceed.
-	if err = r.setStatusPhase(ctx, asdbv1.AerospikeClusterInProgress); err != nil {
-		return common.ReconcileError(fmt.Errorf("set cluster status phase to InProgress: %w", err))
+	inProgress := asdbv1.AerospikeClusterInProgress
+
+	if err = r.mergePatchStatus(
+		ctx, &inProgress,
+		metav1.Condition{
+			Type:    string(asdbv1.AerospikeClusterConditionReady),
+			Status:  metav1.ConditionFalse,
+			Reason:  asdbv1.AerospikeClusterReasonReconciling,
+			Message: "Reconcile in progress",
+		},
+	); err != nil {
+		return common.ReconcileError(fmt.Errorf("mark reconcile in progress: %w", err))
 	}
 
 	for idx := range configuredRacks {
@@ -475,7 +485,7 @@ func (r *SingleClusterReconciler) upgradeOrRollingRestartRack(
 				Type:    string(asdbv1.AerospikeClusterConditionRollingRestart),
 				Status:  metav1.ConditionTrue,
 				Reason:  asdbv1.AerospikeClusterReasonRollingRestart,
-				Message: fmt.Sprintf("Rolling restart of rack %d", rackState.Rack.ID),
+				Message: fmt.Sprintf("Rolling restart rack %d", rackState.Rack.ID),
 			}); err != nil {
 				return found, common.ReconcileError(err)
 			}
@@ -1514,12 +1524,14 @@ func (r *SingleClusterReconciler) handleK8sNodeBlockListPods(
 		)
 
 		// K8sNodeBlockList is reported as a rolling restart because the Pods come back up with the
-		// same names.
+		// same names. It shares the generic RollingRestart reason: a blocked-node Pod is normally
+		// claimed by getRollingRestartTypeMap and restarted on the rolling-restart path.
+		// This code flow is only reachable for ignorable pods.
 		if len(podsBatch) > 0 {
 			if err := r.setConditions(ctx, metav1.Condition{
 				Type:   string(asdbv1.AerospikeClusterConditionRollingRestart),
 				Status: metav1.ConditionTrue,
-				Reason: asdbv1.AerospikeClusterReasonK8sNodeBlockListEviction,
+				Reason: asdbv1.AerospikeClusterReasonRollingRestart,
 				Message: truncateConditionMessage(fmt.Sprintf(
 					"Restarting Pods %s of rack %d to move them off blocked Kubernetes nodes",
 					strings.Join(getPodNames(podsBatch), ", "), rackState.Rack.ID,

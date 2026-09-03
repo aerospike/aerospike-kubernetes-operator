@@ -113,6 +113,19 @@ func (r *SingleClusterReconciler) Reconcile(ctx context.Context) (result ctrl.Re
 			})
 	}
 
+	// Reset the Paused condition to False irrespective of CR phase if code flow reached this stage
+	if err := r.mergePatchStatus(
+		ctx, nil,
+		metav1.Condition{
+			Type:    string(asdbv1.AerospikeClusterConditionPaused),
+			Status:  metav1.ConditionFalse,
+			Reason:  asdbv1.AerospikeClusterReasonNotPaused,
+			Message: "Reconciliation is active",
+		},
+	); err != nil {
+		return reconcile.Result{}, fmt.Errorf("reset reconcile paused state: %w", err)
+	}
+
 	// Mark Ready=False and phase=InProgress at the start of every reconcile
 	// but only if the cluster is not already in an error state.
 	if r.aeroCluster.Status.Phase != asdbv1.AerospikeClusterError {
@@ -125,12 +138,6 @@ func (r *SingleClusterReconciler) Reconcile(ctx context.Context) (result ctrl.Re
 				Status:  metav1.ConditionFalse,
 				Reason:  asdbv1.AerospikeClusterReasonReconciling,
 				Message: "Reconcile in progress",
-			},
-			metav1.Condition{
-				Type:    string(asdbv1.AerospikeClusterConditionPaused),
-				Status:  metav1.ConditionFalse,
-				Reason:  asdbv1.AerospikeClusterReasonNotPaused,
-				Message: "Reconciliation is active",
 			},
 		); err != nil {
 			return reconcile.Result{}, fmt.Errorf("mark reconcile in progress: %w", err)

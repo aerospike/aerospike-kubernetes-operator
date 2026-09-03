@@ -100,10 +100,12 @@ var _ = Describe(
 						aeroCluster.Spec.K8sNodeBlockList = []string{oldK8sNode}
 						Expect(updateClusterWithNoWait(k8sClient, ctx, aeroCluster)).ToNot(HaveOccurred())
 
-						By("RollingRestart must be True with the blocklist reason")
+						By("RollingRestart must be True while the Pod is moved off the blocked node")
 
+						// Pods on blocked nodes are claimed by getRollingRestartTypeMap and moved on the
+						// rolling-restart path, so the condition carries the generic RollingRestart reason.
 						validateCondition(ctx, clusterNamespacedName, asdbv1.AerospikeClusterConditionRollingRestart,
-							asdbv1.AerospikeClusterReasonK8sNodeBlockListEviction, podName)
+							asdbv1.AerospikeClusterReasonRollingRestart, "Rolling restart rack 2")
 
 						Expect(waitForAerospikeCluster(
 							k8sClient, ctx, aeroCluster, int(aeroCluster.Spec.Size), retryInterval,

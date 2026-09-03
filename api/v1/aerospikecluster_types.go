@@ -113,9 +113,6 @@ const (
 	// RollingRestart reasons
 	AerospikeClusterReasonRollingRestart    = "RollingRestart"
 	AerospikeClusterReasonNotRollingRestart = "NotRollingRestart"
-	// AerospikeClusterReasonK8sNodeBlockListEviction distinguishes a restart driven by
-	// spec.k8sNodeBlockList from one driven by a config change.
-	AerospikeClusterReasonK8sNodeBlockListEviction = "K8sNodeBlockListEviction"
 
 	// RackRevisionRollingOut reasons
 	AerospikeClusterReasonRackRevisionRollingOut    = "RackRevisionRollingOut"
