@@ -60,14 +60,31 @@ const (
 	ConfKeyNetworkFabric    = "fabric"
 	ConfKeyNetworkAdmin     = "admin"
 	ConfKeyNetworkInfo      = "info"
+	ConfKeyNetworkTLS       = "tls"
 
 	// Ports and TLS keys.
-	ConfKeyTLSName = "tls-name"
-	ConfKeyTLSPort = "tls-port"
-	ConfKeyPort    = "port"
+	ConfKeyTLSName     = "tls-name"
+	ConfKeyTLSPort     = "tls-port"
+	ConfKeyPort        = "port"
+	ConfKeyTLSCAPath   = "ca-path"
+	ConfKeyTLSCAFile   = "ca-file"
+	ConfKeyTLSCertFile = "cert-file"
+	ConfKeyTLSKeyFile  = "key-file"
 
 	// XDR keys.
-	ConfKeyXdr = "xdr"
+	ConfKeyXdr                 = "xdr"
+	ConfKeyXdrDCs              = "dcs"
+	ConfKeyXdrConnector        = "connector"
+	ConfKeyXdrAuthMode         = "auth-mode"
+	ConfKeyXdrAuthUser         = "auth-user"
+	ConfKeyXdrAuthPasswordFile = "auth-password-file"
+
+	// XDR auth modes.
+	XdrAuthModeNone             = "none"
+	XdrAuthModeInternal         = "internal"
+	XdrAuthModeExternal         = "external"
+	XdrAuthModeExternalInsecure = "external-insecure"
+	XdrAuthModePKI              = "pki"
 
 	// Security keys.
 	ConfKeySecurity                    = "security"
@@ -352,6 +369,48 @@ func IsXdrEnabled(aerospikeConfigSpec AerospikeConfigSpec) bool {
 	return xdrConf != nil
 }
 
+// GetXDRDCs returns the named entries of xdr.dcs from the aerospikeConfig. A dc with
+// no name is skipped: aerospike-management-lib silently drops it when flattening the
+// config, so it never reaches the deployed aerospike.conf.
+func GetXDRDCs(aerospikeConfigSpec AerospikeConfigSpec) ([]map[string]interface{}, error) {
+	config := aerospikeConfigSpec.Value
+
+	xdrConfInterface, exists := config[ConfKeyXdr]
+	if !exists || xdrConfInterface == nil {
+		return nil, nil
+	}
+
+	xdrConf, ok := xdrConfInterface.(map[string]interface{})
+	if !ok {
+		return nil, fmt.Errorf("aerospikeConfig.xdr not a valid map %v", xdrConfInterface)
+	}
+
+	dcListInterface, exists := xdrConf[ConfKeyXdrDCs]
+	if !exists || dcListInterface == nil {
+		return nil, nil
+	}
+
+	dcList, ok := dcListInterface.([]interface{})
+	if !ok {
+		return nil, fmt.Errorf("aerospikeConfig.xdr.dcs not a valid list %v", dcListInterface)
+	}
+
+	dcs := make([]map[string]interface{}, 0, len(dcList))
+
+	for _, dcConfInterface := range dcList {
+		dcConf, ok := dcConfInterface.(map[string]interface{})
+		if !ok {
+			return nil, fmt.Errorf("aerospikeConfig.xdr.dcs entry not a valid map %v", dcConfInterface)
+		}
+
+		if name, _ := dcConf[ConfKeyName].(string); name != "" {
+			dcs = append(dcs, dcConf)
+		}
+	}
+
+	return dcs, nil
+}
+
 func ReadTLSAuthenticateClient(serviceConf map[string]interface{}) (
 	[]string, error,
 ) {
@@ -418,6 +477,26 @@ func GetTLSNameAndPort(
 	}
 
 	return tlsName, port
+}
+
+// GetNetworkTLSNames returns the set of TLS configuration names defined in network.tls.
+func GetNetworkTLSNames(networkConf map[string]interface{}) sets.Set[string] {
+	tlsNames := sets.Set[string]{}
+
+	tlsConfList, ok := networkConf[ConfKeyNetworkTLS].([]interface{})
+	if !ok {
+		return tlsNames
+	}
+
+	for _, tlsConfInt := range tlsConfList {
+		if tlsConf, ok := tlsConfInt.(map[string]interface{}); ok {
+			if tlsName, ok := tlsConf[ConfKeyName].(string); ok {
+				tlsNames.Insert(tlsName)
+			}
+		}
+	}
+
+	return tlsNames
 }
 
 func GetServicePort(aeroConf *AerospikeConfigSpec) *int32 {
