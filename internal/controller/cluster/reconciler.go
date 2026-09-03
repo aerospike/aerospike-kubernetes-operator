@@ -117,10 +117,9 @@ func (r *SingleClusterReconciler) Reconcile(ctx context.Context) (result ctrl.Re
 	if err := r.mergePatchStatus(
 		ctx, nil,
 		metav1.Condition{
-			Type:    string(asdbv1.AerospikeClusterConditionPaused),
-			Status:  metav1.ConditionFalse,
-			Reason:  asdbv1.AerospikeClusterReasonNotPaused,
-			Message: "Reconciliation is active",
+			Type:   string(asdbv1.AerospikeClusterConditionPaused),
+			Status: metav1.ConditionFalse,
+			Reason: asdbv1.AerospikeClusterReasonNotPaused,
 		},
 	); err != nil {
 		return reconcile.Result{}, fmt.Errorf("reset reconcile paused state: %w", err)
