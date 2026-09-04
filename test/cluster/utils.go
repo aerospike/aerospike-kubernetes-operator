@@ -779,6 +779,14 @@ func CleanupPVC(k8sClient client.Client, ns, clName string) error {
 	return nil
 }
 
+// isRetriableAPIError reports whether err is a transient apiserver error (e.g. a momentary
+// etcd/apiserver hiccup) that a caller polling for cluster/pod/PVC state should retry rather
+// than treat as a hard failure.
+func isRetriableAPIError(err error) bool {
+	return errors.IsInternalError(err) || errors.IsServerTimeout(err) ||
+		errors.IsTimeout(err) || errors.IsTooManyRequests(err)
+}
+
 func getSTSList(
 	aeroCluster *asdbv1.AerospikeCluster, k8sClient client.Client,
 ) (*appsv1.StatefulSetList, error) {

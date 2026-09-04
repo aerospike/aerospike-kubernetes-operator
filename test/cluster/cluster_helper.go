@@ -780,6 +780,11 @@ func DeleteCluster(
 			k8sClient, ctx, clusterNamespacedName,
 		)
 		if err != nil {
+			if isRetriableAPIError(err) {
+				time.Sleep(time.Second)
+				continue
+			}
+
 			return err
 		}
 		// Pods still may exist in terminating state for some time even if CR is deleted. Keeping them breaks some
@@ -788,6 +793,11 @@ func DeleteCluster(
 			k8sClient, ctx, aeroCluster,
 		)
 		if err != nil {
+			if isRetriableAPIError(err) {
+				time.Sleep(time.Second)
+				continue
+			}
+
 			return err
 		}
 
@@ -802,6 +812,11 @@ func DeleteCluster(
 	for {
 		newPVCList, err := getAeroClusterPVCList(aeroCluster, k8sClient)
 		if err != nil {
+			if isRetriableAPIError(err) {
+				time.Sleep(time.Second)
+				continue
+			}
+
 			return fmt.Errorf("error getting PVCs: %v", err)
 		}
 
