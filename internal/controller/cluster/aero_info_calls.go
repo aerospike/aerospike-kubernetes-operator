@@ -17,7 +17,6 @@ import (
 	"context"
 	"errors"
 	"fmt"
-	"strings"
 	"time"
 
 	corev1 "k8s.io/api/core/v1"
@@ -28,9 +27,9 @@ import (
 	"github.com/aerospike/aerospike-kubernetes-operator/v4/internal/controller/common"
 	"github.com/aerospike/aerospike-kubernetes-operator/v4/pkg/jsonpatch"
 	"github.com/aerospike/aerospike-kubernetes-operator/v4/pkg/utils"
-	"github.com/aerospike/aerospike-kubernetes-operator/v4/pkg/validation"
 	"github.com/aerospike/aerospike-management-lib/asconfig"
 	"github.com/aerospike/aerospike-management-lib/deployment"
+	"github.com/aerospike/aerospike-management-lib/info"
 )
 
 // ------------------------------------------------------------------------------------
@@ -443,190 +442,243 @@ func (r *SingleClusterReconciler) setDynamicConfig(
 	return common.ReconcileSuccess()
 }
 
-// triggerIndexCheckpointShutdown sends checkpoint-shutdown to every pod in
-// pods, then polls checkpoint-status for the whole batch together, for up to
-// ~1 minute. It is called once per batch of pods that are about to be deleted,
-// before any of them are touched — mirroring the trigger-once-for-the-batch
-// shape already used by quiescePods / waitForMultipleNodesSafeStopReady,
-// rather than interleaving a per-pod trigger+wait inside the delete loop.
-// Serializing per pod would mean a single slow checkpoint blocks the rest of
-// the batch from even starting theirs, even though each pod's checkpoint save
-// runs concurrently on its own independent server process.
-//
-// It is called on every reconcile pass before pod deletion and is
-// intentionally idempotent, checking checkpoint-status before deciding
-// whether to send checkpoint-shutdown at all, per pod:
-//
-//   - If checkpoint-status already reports a non-"none" state for any
-//     checkpoint-enabled namespace (isCheckpointStarted), checkpoint-shutdown
-//     was already accepted on a prior pass (or this is a mixed batch where a
-//     sibling pod's trigger loop aborted before reaching this pod). The
-//     shutdown call is skipped entirely for that pod — there is no reason to
-//     send a command we already know the admin-port gate will reject (see
-//     "Admin-port gate" in docs/index-checkpoint.md: once checkpoint-shutdown
-//     has fired, the server returns FORBIDDEN for every info command except
-//     checkpoint-status).
-//   - Otherwise checkpoint-shutdown is sent as normal. It's still handled
-//     defensively (isCheckpointShutdownInProgress) in case of a genuine
-//     race — status read "none" a moment before a concurrent trigger landed
-//     — or because the checkpoint-status precheck itself failed and this
-//     call is a fail-open retry.
-//   - If the checkpoint-status precheck call itself fails (info error,
-//     empty/malformed response), this fails open toward attempting
-//     checkpoint-shutdown anyway, since that command is safely idempotent on
-//     the server side regardless of prior state.
-//   - If a server container was restarted (OOM, crash) between reconcile
-//     passes, the fresh process reports checkpoint-status state=none again,
-//     so the precheck correctly falls through to sending checkpoint-shutdown
-//     and starting a new checkpoint — no annotation or other out-of-band
-//     state is required.
-//
-// If no namespace has index-checkpoint-path configured, or pods is empty, this
-// is a no-op returning ReconcileSuccess immediately.
-//
-// rackState is used to resolve the effective per-rack aerospikeConfig, which
-// may differ from the spec-level config when per-rack overrides are present.
-// It is shared by every pod in the batch (all belong to the same rack), so the
-// checkpoint-enabled namespace set only needs to be resolved once.
-//
-// A checkpoint-shutdown RPC failure on any pod aborts the whole batch
-// immediately, before triggering the remaining pods — the same
-// first-failure-aborts-the-batch behaviour every other pre-delete step in this
-// file already follows (handleNSOrDeviceRemoval, deleteLocalPVCs, r.Delete).
-// Nothing destructive happens to any pod in the batch until this call
-// succeeds for all of them, so aborting early is always safe to retry.
-func (r *SingleClusterReconciler) triggerIndexCheckpointShutdown(
+// skipCheckpointCmdFmt opts one namespace out of the cluster-wide
+// index-checkpoint-path. skip-checkpoint is the only dynamic index-checkpoint key.
+const skipCheckpointCmdFmt = "set-config:context=namespace;namespace=%s;skip-checkpoint=true"
+
+// checkpointParkTimeoutSec is the post-save park the server holds while waiting
+// for AKO's SIGTERM, passed to CheckpointSave (1..3600 s; the server's own default is 300 s).
+// Sized to cover several of AKO's poll+requeue cycles (~120 s each: a ~60 s poll
+// window, then ReconcileRequeueAfter(60)) so a slow multi-GB checkpoint is not
+// abandoned mid-copy, while keeping the self-heal bound short. On expiry asd
+// exits on its own, the container restarts inside the same pod sandbox — the
+// SysV segments survive, so it warm-restarts — and reports state=none again.
+// That costs one redundant checkpoint but never wedges the reconcile.
+// The server treats this as write-once for the in-flight checkpoint.
+const checkpointParkTimeoutSec = 600
+
+// triggerIndexCheckpointSave sends checkpoint-save to every pod in pods, then polls
+// checkpoint-status for the whole batch together. Called once per batch, before any pod
+// is touched.
+// Idempotence comes from the server, the save is sent unconditionally, and the response classified,
+// so a pod already saving, or fresh save, both resolve correctly with no additional state.
+// Checkpointing is skipped for namespace if
+// 1. Data-size is changes
+// 2. Namespace is not in checkpointEnabledNSs
+// 3. Namespace is removed or the checkpoint path is changed
+func (r *SingleClusterReconciler) triggerIndexCheckpointSave(
 	ctx context.Context,
 	pods []*corev1.Pod, rackState *RackState,
 ) common.ReconcileResult {
-	checkpointEnabledNSs := validation.GetIndexCheckpointNamespaces(rackState.Rack.AerospikeConfig.Value)
-	if len(checkpointEnabledNSs) == 0 || len(pods) == 0 {
+	rackStatus := r.getRackStatus(rackState)
+	if rackStatus == nil {
+		return common.ReconcileSuccess()
+	}
+
+	eligibleNSs, skipNSs := r.splitCheckpointNamespaces(rackStatus, rackState.Rack)
+	if len(eligibleNSs) == 0 || len(pods) == 0 {
+		if len(skipNSs) != 0 {
+			r.Log.Info("Skipping index checkpoint save, no namespace's checkpoint would be read",
+				"skippedNamespaces", skipNSs)
+		}
+
 		return common.ReconcileSuccess()
 	}
 
 	policy := r.getClientPolicy(ctx)
-	nsSet := sets.New[string](checkpointEnabledNSs...)
 
-	// The server always operates on ALL namespaces that have
-	// index-checkpoint-path configured; there is no per-namespace form of the
-	// command.
+	r.skipCheckpointForNamespaces(pods, skipNSs, policy)
+
+	// No checkpoint-status precheck: the server answers a re-issue idempotently so an already-saving pod
+	// classifies as CheckpointSaveAccepted below
 	for _, pod := range pods {
-		asConn := r.newAsConn(pod)
-
-		alreadyStarted, err := r.checkpointAlreadyStarted(asConn, policy, nsSet)
-		if err != nil {
-			return common.ReconcileError(fmt.Errorf(
-				"check checkpoint-status before triggering checkpoint-shutdown for pod %s: %w",
-				utils.GetNamespacedName(pod), err))
-		}
-
-		if alreadyStarted {
-			r.Log.V(1).Info("checkpoint-shutdown already in progress, skipping trigger and polling status",
-				"pod", pod.Name)
-			continue
-		}
-
-		// TODO: check the restore of the command before continuing
-		_, err = asConn.RunInfo(policy, "checkpoint-save")
+		verdict, err := r.newAsConn(pod).CheckpointSave(policy, checkpointParkTimeoutSec)
 		if err != nil {
 			// Network-level failure (connection error, timeout, EOF).
 			return common.ReconcileError(
-				fmt.Errorf("checkpoint-shutdown on pod %s: %w", pod.Name, err),
+				fmt.Errorf("checkpoint-save on pod %s: %w", pod.Name, err),
 			)
 		}
 
-		// "OK" or any other response — checkpoint just started.
-		r.Log.Info("Index checkpoint shutdown triggered",
-			"pod", pod.Name, "namespaces", checkpointEnabledNSs)
+		switch verdict {
+		case deployment.CheckpointSaveRejected:
+			return common.ReconcileError(fmt.Errorf(
+				"checkpoint-save rejected by pod %s", utils.GetNamespacedName(pod)))
 
-		r.Recorder.Eventf(
-			r.aeroCluster, corev1.EventTypeNormal, "IndexCheckpoint",
-			"Index checkpoint shutdown triggered for pod %s namespaces %v",
-			pod.Name, checkpointEnabledNSs,
-		)
+		case deployment.CheckpointSaveAccepted:
+			// Running, finished, or failed — the poll below distinguishes them, and a
+			// failed save gets its IndexCheckpointFailed event from there with the
+			// namespace list.
+			r.Log.Info("Index checkpoint save already accepted, polling status",
+				"pod", utils.GetNamespacedName(pod))
+
+		case deployment.CheckpointSaveNothingToDo:
+			// The running config disagrees with the rack status AKO derived its
+			// namespace set from. Retrying cannot fix it, and no checkpoint was
+			// possible, so proceed rather than wedge the restart — but say so
+			// loudly, since a shadowless memory namespace loses its data this way.
+			r.Log.Info("Server reports no checkpointing namespace, proceeding without a checkpoint",
+				"pod", utils.GetNamespacedName(pod), "expectedNamespaces", eligibleNSs)
+
+		case deployment.CheckpointSaveTriggered:
+			r.Log.Info("Index checkpoint save triggered",
+				"pod", utils.GetNamespacedName(pod), "namespaces", eligibleNSs,
+				"parkTimeoutSeconds", checkpointParkTimeoutSec)
+		}
 	}
 
-	return r.waitForIndexCheckpointDone(ctx, pods, checkpointEnabledNSs)
+	return r.waitForIndexCheckpointDone(ctx, pods)
 }
 
-// checkpointAlreadyStarted queries checkpoint-status on a single pod and
-// reports whether checkpoint-shutdown has already been accepted for any
-// namespace in nsSet. On any info error or empty/malformed response, it
-// returns (false, err): the caller fails open toward attempting
-// checkpoint-shutdown directly — which is safely idempotent regardless — but
-// the error is returned rather than swallowed so the caller can still log it.
-func (r *SingleClusterReconciler) checkpointAlreadyStarted(
-	asConn *deployment.ASConn, policy *as.ClientPolicy, nsSet sets.Set[string],
-) (bool, error) {
-	resp, err := asConn.RunInfo(policy, "checkpoint-status")
-	if err != nil {
-		return false, err
+// splitCheckpointNamespaces divides the namespaces the running servers are
+// checkpointing into those still worth saving (eligibleNSs) and those to opt out (skipNSs).
+//
+// A namespace is skipped when the replacement pod will never usably read its checkpoint:
+//   - the cluster-wide path moved, so it lands at the abandoned path;
+//   - the namespace stopped checkpointing in the spec (removed, skip-checkpoint,);
+//   - its in-memory data layout changed — a different data-size, or storage backing
+//     gained or lost, so the checkpoint no longer describes the layout the replacement pod will have.
+func (r *SingleClusterReconciler) splitCheckpointNamespaces(
+	rackStatus, rackSpec *asdbv1.Rack,
+) (eligibleNSs, skipNSs []string) {
+	statusNSs := asdbv1.GetIndexCheckpointNamespaces(rackStatus.AerospikeConfig.Value)
+	if len(statusNSs) == 0 {
+		return nil, nil
 	}
 
-	statusStr, ok := resp["checkpoint-status"]
-	if !ok || statusStr == "" {
-		return false, fmt.Errorf("empty checkpoint-status response")
+	// The path is cluster-wide, so a change to it invalidates every namespace's checkpoint
+	// at once.
+	if asdbv1.GetIndexCheckpointPath(rackStatus.AerospikeConfig.Value) !=
+		asdbv1.GetIndexCheckpointPath(rackSpec.AerospikeConfig.Value) {
+		r.Log.Info("Excluding every namespace from the imminent index checkpoint save: "+
+			"the cluster-wide index-checkpoint-path moved, so every checkpoint would land "+
+			"at the abandoned path", "namespaces", statusNSs)
+
+		return nil, statusNSs
 	}
 
-	return r.isCheckpointStarted(statusStr, nsSet), nil
+	specNSs := sets.New[string](asdbv1.GetIndexCheckpointNamespaces(rackSpec.AerospikeConfig.Value)...)
+
+	oldSizes := asdbv1.GetInMemoryNsDataSizes(rackStatus.AerospikeConfig.Value)
+	newSizes := asdbv1.GetInMemoryNsDataSizes(rackSpec.AerospikeConfig.Value)
+
+	for _, ns := range statusNSs {
+		oldSize := oldSizes[ns]
+		newSize := newSizes[ns]
+
+		switch {
+		case !specNSs.Has(ns):
+			r.Log.Info("Excluding namespace from the imminent index checkpoint save: it "+
+				"stopped checkpointing (removed from the CR, skip-checkpoint set)", "namespace", ns)
+
+			skipNSs = append(skipNSs, ns)
+
+		case oldSize != newSize:
+			// data-size changes make the checkpoint incompatible with the replacement pod, so skip it.
+			// Moving from pure in-memory data to disk backing makes the checkpoint incompatible with the
+			// replacement pod, so skip it.
+			r.Log.Info("Excluding namespace from the imminent index checkpoint save: its "+
+				"in-memory data layout changed, so the checkpoint save would be rejected",
+				"namespace", ns, "oldDataSize", oldSize, "newDataSize", newSize)
+
+			skipNSs = append(skipNSs, ns)
+
+		default:
+			eligibleNSs = append(eligibleNSs, ns)
+		}
+	}
+
+	return eligibleNSs, skipNSs
 }
 
-// waitForIndexCheckpointDone polls checkpoint-status on every pod in pods,
-// together, for up to ~1 minute (6 × 10 s) total — not per pod, since each
-// pod's checkpoint save runs concurrently on its own server process, so
-// there's no reason to wait on them one at a time. Pods that report a terminal
-// state (done or failed) drop out of polling; the remaining ones keep getting
-// polled every retryInterval until all are terminal or the window expires. The
-// parked server keeps its info port open, so a reachable port reporting
-// state=done or state=failed means that pod's checkpoint has finished.
-// Transient info errors are retried within the window. If the window expires
-// with any pod still not terminal, it returns ReconcileRequeueAfter(60) so the
-// outer reconcile loop retries after 60 seconds without blocking the worker
-// goroutine.
-func (r *SingleClusterReconciler) waitForIndexCheckpointDone(ctx context.Context, pods []*corev1.Pod,
-	namespaces []string) common.ReconcileResult {
+// skipCheckpointForNamespaces opts each namespace out of the imminent save by
+// setting skip-checkpoint dynamically on every pod in the batch. Must run BEFORE
+// checkpoint-save — once the save fires, set-config is FORBIDDEN for the whole park.
+// A FORBIDDEN reply here is expected on a resumed pass: that pod is already parked.
+// Failures are logged, never fatal, and that is safe in one direction only: a failed
+// set-config leaves the namespace checkpointing.
+func (r *SingleClusterReconciler) skipCheckpointForNamespaces(
+	pods []*corev1.Pod, skippedNss []string, policy *as.ClientPolicy,
+) {
+	if len(skippedNss) == 0 {
+		return
+	}
+
+	for _, pod := range pods {
+		asConn := r.newAsConn(pod)
+
+		for _, ns := range skippedNss {
+			cmd := fmt.Sprintf(skipCheckpointCmdFmt, ns)
+
+			resp, err := asConn.RunInfo(policy, cmd)
+			if err != nil {
+				r.Log.V(1).Info("Could not set skip-checkpoint, namespace will be checkpointed needlessly",
+					"pod", pod.Name, "namespace", ns, "error", err)
+
+				continue
+			}
+
+			if respVal := resp[cmd]; info.IsInfoErrorResponse(respVal) {
+				r.Log.V(1).Info("skip-checkpoint rejected, namespace will be checkpointed needlessly",
+					"pod", pod.Name, "namespace", ns, "response", respVal)
+
+				continue
+			}
+
+			// Why each namespace was excluded is a per-rack decision, logged once by
+			// the caller; this line is per pod and only confirms the opt-out landed.
+			r.Log.Info("Excluded namespace from the imminent index checkpoint save",
+				"pod", pod.Name, "namespace", ns)
+		}
+	}
+}
+
+// waitForIndexCheckpointDone polls checkpoint-status on every pod together
+// Pods that report a terminal state (done or failed) drop out of polling; the
+// remaining ones keep getting polled until all are terminal or the window
+// expires. Transient info errors and server-side rejections are retried
+// within the window.
+func (r *SingleClusterReconciler) waitForIndexCheckpointDone(
+	ctx context.Context, pods []*corev1.Pod,
+) common.ReconcileResult {
 	const (
-		// TODO: rever it to 6 and 10 seconds after testing
-		maxRetry      = 1
-		retryInterval = 5 * time.Second
+		maxRetry      = 6
+		retryInterval = 10 * time.Second
 	)
 
 	policy := r.getClientPolicy(ctx)
-	nsSet := sets.New[string](namespaces...)
 	pending := make([]*corev1.Pod, len(pods))
 	copy(pending, pods)
 
 	for i := 0; i < maxRetry && len(pending) > 0; i++ {
 		r.Log.V(1).Info("Waiting for index checkpoint to complete",
 			"pods", getPodNames(pending), "attempt", i+1)
-		time.Sleep(retryInterval)
 
 		stillPending := make([]*corev1.Pod, 0, len(pending))
 
 		for _, pod := range pending {
-			asConn := r.newAsConn(pod)
-
-			resp, err := asConn.RunInfo(policy, "checkpoint-status")
+			statuses, err := r.newAsConn(pod).CheckpointStatus(policy)
 			if err != nil {
-				// The parked server keeps its info port open; an error here is a
-				// transient glitch. Log and retry within the current polling window.
-				r.Log.Error(err, "checkpoint-status info call failed, will retry", "pod", pod.Name)
+				r.Log.V(1).Info("checkpoint-status unavailable, will retry",
+					"pod", utils.GetNamespacedName(pod), "error", err)
 				stillPending = append(stillPending, pod)
 
 				continue
 			}
 
-			statusStr, ok := resp["checkpoint-status"]
-			if !ok || statusStr == "" {
-				r.Log.V(1).Info("Empty checkpoint-status response, will retry", "pod", pod.Name)
-				stillPending = append(stillPending, pod)
+			// An empty map is the server's "no namespace is checkpointing" answer, not an error
+			if len(statuses) == 0 {
+				r.Log.Info("Server reports no checkpointing namespace, nothing to wait for",
+					"pod", utils.GetNamespacedName(pod))
 
 				continue
 			}
 
-			done, failedNSs := r.isIndexCheckpointDone(statusStr, nsSet)
+			done, failedNSs := checkpointDone(statuses)
 			if !done {
-				r.Log.V(1).Info("Index checkpoint still in progress", "pod", pod.Name, "status", statusStr)
+				r.Log.Info("Index checkpoint in progress", "pod", utils.GetNamespacedName(pod),
+					"status", statuses)
+
 				stillPending = append(stillPending, pod)
 
 				continue
@@ -634,97 +686,59 @@ func (r *SingleClusterReconciler) waitForIndexCheckpointDone(ctx context.Context
 
 			if len(failedNSs) > 0 {
 				r.Log.Info("Index checkpoint failed for one or more namespaces, falling back to cold restart",
-					"pod", pod.Name, "failedNamespaces", failedNSs, "status", statusStr)
+					"pod", utils.GetNamespacedName(pod), "failedNamespaces", failedNSs, "status", statuses)
 				r.Recorder.Eventf(
 					r.aeroCluster, corev1.EventTypeWarning, "IndexCheckpointFailed",
 					"Index checkpoint failed for pod %s namespaces %v; proceeding with cold restart",
-					pod.Name, failedNSs,
+					utils.GetNamespacedName(pod), failedNSs,
 				)
 			} else {
-				r.Log.Info("Index checkpoint complete, proceeding with pod delete", "pod", pod.Name)
+				r.Log.Info("Index checkpoint complete, proceeding with pod delete",
+					"pod", utils.GetNamespacedName(pod))
 			}
 		}
 
 		pending = stillPending
+
+		time.Sleep(retryInterval)
 	}
 
 	if len(pending) > 0 {
 		pendingNames := getPodNames(pending)
-		r.Log.Info("Index checkpoint not done within polling window, requeueing reconcile", "pods", pendingNames)
-		r.Recorder.Eventf(
-			r.aeroCluster, corev1.EventTypeNormal, "IndexCheckpoint",
-			"Index checkpoint still in progress for pods %v, requeueing after 60s", pendingNames,
-		)
+		r.Log.Info("Index checkpoint not done within polling window, requeueing reconcile",
+			"pods", pendingNames)
 
-		// TODO: Change this to 60s
-		return common.ReconcileRequeueAfter(1)
+		return common.ReconcileRequeueAfter(60)
 	}
 
 	return common.ReconcileSuccess()
 }
 
-// isIndexCheckpointDone returns (true, failedNSs) only when EVERY namespace
-// in nsSet has been reported with a terminal state (state=done or state=failed)
-// in the checkpoint-status response string. failedNSs lists any namespaces that
-// reported state=failed so the caller can emit a warning before proceeding with
-// a cold restart. It returns (false, nil) while any target namespace is still
-// copying, not yet started, or entirely absent from the response — the latter
-// guards against a partial/early response causing a premature pod delete before
-// the copy has finished.
-// Response format: "ns1:state=done:files=42/42;ns2:state=copying:files=20/42"
-func (r *SingleClusterReconciler) isIndexCheckpointDone(statusStr string,
-	nsSet sets.Set[string]) (done bool, failedNSs []string) {
-	seen := sets.New[string]()
-
-	for _, entry := range strings.Split(statusStr, ";") {
-		entry = strings.TrimSpace(entry)
-		colonIdx := strings.Index(entry, ":")
-
-		if colonIdx < 0 {
-			continue
-		}
-
-		ns := entry[:colonIdx]
-		if !nsSet.Has(ns) {
-			continue
-		}
-
-		rest := entry[colonIdx+1:]
-		if strings.Contains(rest, "state=copying") || strings.Contains(rest, "state=none") {
+// checkpointDone reports whether this pod's checkpoint has finished and which namespaces failed.
+// failedNSs lists reported namespaces in state=failed, so the caller can warn before proceeding with a cold restart.
+func checkpointDone(
+	statuses map[string]deployment.CheckpointNamespaceStatus,
+) (done bool, failedNSs []string) {
+	for ns, status := range statuses {
+		if !status.IsTerminal() {
 			return false, nil
 		}
 
-		seen.Insert(ns)
-
-		if strings.Contains(rest, "state=failed") {
+		if status.State == deployment.CheckpointStateFailed {
 			failedNSs = append(failedNSs, ns)
 		}
-	}
-
-	// Every target namespace must have reported a terminal state. If any is
-	// missing from the response the checkpoint is not provably complete yet, so
-	// keep polling rather than risk deleting the pod mid-copy.
-	if seen.Len() < nsSet.Len() {
-		return false, nil
 	}
 
 	return true, failedNSs
 }
 
-// isCheckpointStarted returns true if any namespace in nsSet is reported with
-// a state other than "none" in a checkpoint-status response, meaning
-// checkpoint-shutdown has already been issued to this pod (possibly in a
-// prior, timed-out reconcile pass).
-func (r *SingleClusterReconciler) isCheckpointStarted(statusStr string, nsSet sets.Set[string]) bool {
-	for _, entry := range strings.Split(statusStr, ";") {
-		entry = strings.TrimSpace(entry)
-		colonIdx := strings.Index(entry, ":")
-
-		if colonIdx < 0 {
-			continue
-		}
-
-		if ns := entry[:colonIdx]; nsSet.Has(ns) && !strings.Contains(entry[colonIdx+1:], "state=none") {
+// checkpointStarted reports whether a checkpoint save has been issued to this pod.
+// Any reported namespace in a state other than "none" proves it: the trigger sets the
+// checkpoint flag on every namespace that resolved a path at once, so a single non-none
+// state means this pod's save fired and it is parked.
+func checkpointStarted(statuses map[string]deployment.CheckpointNamespaceStatus) bool {
+	for _, status := range statuses {
+		if status.State != deployment.CheckpointStateNone {
 			return true
 		}
 	}
@@ -732,41 +746,57 @@ func (r *SingleClusterReconciler) isCheckpointStarted(statusStr string, nsSet se
 	return false
 }
 
-// allPodsAlreadyCheckpointing reports whether every pod in pods already has
-// checkpoint-shutdown in flight, by querying checkpoint-status directly on
-// each pod. There is no persisted state for this: it is derived live every
-// call, matching triggerIndexCheckpointShutdown's idempotent design.
-//
-// It returns false (never skip the normal safe-stop path) if the rack has no
-// checkpoint-enabled namespaces, pods is empty, or any pod's checkpoint
-// status can't be confirmed as started -- including info-call failures,
-// which fail safe toward re-running the ordinary stability/roster/quiesce
-// checks. This also self-heals the case where a checkpointing pod's
-// container was restarted (OOM, crash) between reconcile passes: the fresh
-// process reports state=none again, so this correctly falls through to the
-// normal safe-stop path instead of wrongly assuming the checkpoint is still
-// in flight.
-func (r *SingleClusterReconciler) allPodsAlreadyCheckpointing(
-	ctx context.Context, pods []*corev1.Pod, rackState *RackState) bool {
-	checkpointEnabledNSs := validation.GetIndexCheckpointNamespaces(rackState.Rack.AerospikeConfig.Value)
-	if len(checkpointEnabledNSs) == 0 || len(pods) == 0 {
+// filterCheckpointingPods returns the list of pods which are already checkpointing by checking the checkpoint-status.
+func (r *SingleClusterReconciler) filterCheckpointingPods(
+	ctx context.Context, pods []*corev1.Pod, rackState *RackState,
+) []*corev1.Pod {
+	rackStatus := r.getRackStatus(rackState)
+	if rackStatus == nil {
+		return nil
+	}
+
+	// This check won't cover scenarios where there are no namespaces to checkpoint i.e. checkpointing is disabled in
+	// spec during an update.
+	if len(asdbv1.GetIndexCheckpointNamespaces(rackStatus.AerospikeConfig.Value)) == 0 || len(pods) == 0 {
+		return nil
+	}
+
+	policy := r.getClientPolicy(ctx)
+
+	var parked []*corev1.Pod
+
+	for _, pod := range pods {
+		if r.podCheckpointStarted(pod, policy) {
+			parked = append(parked, pod)
+		}
+	}
+
+	return parked
+}
+
+// resumeParkedCheckpointPods narrows a batch to its checkpoint-parked subset, if any.
+// When there are partial checkpointed pods in a batch, then only those pods are returned and
+// remaining pods are deferred.
+func (r *SingleClusterReconciler) resumeParkedCheckpointPods(
+	ctx context.Context, activePods, eligible []*corev1.Pod, rackState *RackState,
+) (batch []*corev1.Pod, deferred int, resuming bool) {
+	parked := r.filterCheckpointingPods(ctx, eligible, rackState)
+	if len(parked) == 0 {
+		return activePods, 0, false
+	}
+
+	return parked, len(activePods) - len(parked), true
+}
+
+// podCheckpointStarted reports whether this pod has a checkpoint save in flight for
+// any namespace in nsSet. Anything short of a clean, affirmative answer is false.
+func (r *SingleClusterReconciler) podCheckpointStarted(
+	pod *corev1.Pod, policy *as.ClientPolicy,
+) bool {
+	statuses, err := r.newAsConn(pod).CheckpointStatus(policy)
+	if err != nil {
 		return false
 	}
 
-	nsSet := sets.New[string](checkpointEnabledNSs...)
-	policy := r.getClientPolicy(ctx)
-
-	for _, pod := range pods {
-		resp, err := r.newAsConn(pod).RunInfo(policy, "checkpoint-status")
-		if err != nil {
-			return false
-		}
-
-		statusStr, ok := resp["checkpoint-status"]
-		if !ok || statusStr == "" || !r.isCheckpointStarted(statusStr, nsSet) {
-			return false
-		}
-	}
-
-	return true
+	return checkpointStarted(statuses)
 }

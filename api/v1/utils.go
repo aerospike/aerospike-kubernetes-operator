@@ -47,15 +47,20 @@ const (
 
 const (
 	// Namespace keys.
-	ConfKeyNamespace             = "namespaces"
-	ConfKeyStorageEngine         = "storage-engine"
-	ConfKeyReplicationFactor     = "replication-factor"
-	ConfKeyStrongConsistency     = "strong-consistency"
-	ConfKeyName                  = "name"
-	ConfigKeyIndexCheckpointPath = "index-checkpoint-path"
-	ConfKeyIndexType             = "index-type"
-	ConfKeyMounts                = "mounts"
-	ConfKeyType                  = "type"
+	ConfKeyNamespace         = "namespaces"
+	ConfKeyStorageEngine     = "storage-engine"
+	ConfKeyReplicationFactor = "replication-factor"
+	ConfKeyStrongConsistency = "strong-consistency"
+	ConfKeyName              = "name"
+	ConfKeyIndexType         = "index-type"
+	ConfKeySindexType        = "sindex-type"
+	ConfKeyMounts            = "mounts"
+	ConfKeyType              = "type"
+	ConfKeyDataSize          = "data-size"
+	// ConfKeySkipCheckpoint is the only dynamic index-checkpoint key.
+	ConfKeySkipCheckpoint             = "skip-checkpoint"
+	ConfKeyIndexCheckpointThreads     = "index-checkpoint-threads"
+	ConfKeyIndexCheckpointCompression = "index-checkpoint-compression"
 
 	// Network section keys.
 	ConfKeyNetwork          = "network"
@@ -95,9 +100,10 @@ const (
 	confKeySecurityDefaultPasswordFile = "default-password-file"
 
 	// Service section keys.
-	ConfKeyService             = "service"
-	confKeyWorkDirectory       = "work-directory"
-	ConfigKeyCgroupMemTracking = "cgroup-mem-tracking"
+	ConfKeyService                    = "service"
+	confKeyWorkDirectory              = "work-directory"
+	ConfigKeyCgroupMemTracking        = "cgroup-mem-tracking"
+	ConfKeyServiceIndexCheckpointPath = "index-checkpoint-path"
 
 	// Defaults.
 	DefaultWorkDirectory = "/opt/aerospike"
@@ -128,10 +134,10 @@ const (
 	PreviewFeatureIndexCheckpoint = "index-checkpoint"
 )
 
-// PreviewFeatureInfo describes the server version range for an experimental feature.
+// PreviewFeatureInfo describes the server version range for a preview feature.
 type PreviewFeatureInfo struct {
 	MinVersion string // first server version supporting this feature
-	GAVersion  string // server version where the flag is no longer needed ("" = still experimental)
+	GAVersion  string // server version where the flag is no longer needed ("" = still preview)
 }
 
 // PreviewFeatureVersions maps known preview feature names to their version constraints.
@@ -656,29 +662,35 @@ func DistributeItems(totalItems, totalGroups int32) []int32 {
 	return topology
 }
 
-// getAllNamespaceNames collects all unique plain namespace names across every
-// rack in the spec.
-func GetAllNamespaceNames(spec *AerospikeClusterSpec) sets.Set[string] {
-	nsNames := make(sets.Set[string])
+// GetNamespaceNamesFromConfig returns every namespace name in one aerospikeConfig.
+func GetNamespaceNamesFromConfig(aerospikeConfig map[string]interface{}) []string {
+	namespaces, ok := aerospikeConfig[ConfKeyNamespace].([]interface{})
+	if !ok {
+		return nil
+	}
 
-	for idx := range spec.RackConfig.Racks {
-		rack := &spec.RackConfig.Racks[idx]
+	var result []string
 
-		nsList, ok := rack.AerospikeConfig.Value[ConfKeyNamespace].([]interface{})
+	for _, ns := range namespaces {
+		nsConf, ok := ns.(map[string]interface{})
 		if !ok {
 			continue
 		}
 
-		for _, nsInterface := range nsList {
-			ns, ok := nsInterface.(map[string]interface{})
-			if !ok {
-				continue
-			}
-
-			if name, ok := ns[ConfKeyName].(string); ok {
-				nsNames.Insert(name)
-			}
+		if name, ok := nsConf[ConfKeyName].(string); ok && name != "" {
+			result = append(result, name)
 		}
+	}
+
+	return result
+}
+
+// GetAllNamespaceNames collects all unique plain namespace names across every rack in the spec.
+func GetAllNamespaceNames(spec *AerospikeClusterSpec) sets.Set[string] {
+	nsNames := make(sets.Set[string])
+
+	for idx := range spec.RackConfig.Racks {
+		nsNames.Insert(GetNamespaceNamesFromConfig(spec.RackConfig.Racks[idx].AerospikeConfig.Value)...)
 	}
 
 	return nsNames
@@ -779,4 +791,47 @@ func GetClientAuthMode(authMode AerospikeAuthMode) as.AuthMode {
 
 func IsAuthModeInternal(authMode AerospikeAuthMode) bool {
 	return authMode == AerospikeAuthModeInternal || authMode == ""
+}
+
+// GetNamespaceDataSize returns a namespace's storage-engine data-size. The value is
+// returned as-is rather than normalised to a number: it only ever feeds an equality
+// check, and the config schema has already validated its type.
+func GetNamespaceDataSize(namespaceConf map[string]interface{}) (size interface{}, ok bool) {
+	storageConf, ok := namespaceConf[ConfKeyStorageEngine].(map[string]interface{})
+	if !ok {
+		return nil, false
+	}
+
+	size, ok = storageConf[ConfKeyDataSize]
+
+	return size, ok
+}
+
+// GetInMemoryNsDataSizes maps namespace name to storage-engine data-size, for
+// pure in-memory namespaces only
+func GetInMemoryNsDataSizes(aerospikeConfig map[string]interface{}) map[string]interface{} {
+	nsList, ok := aerospikeConfig[ConfKeyNamespace].([]interface{})
+	if !ok {
+		return nil
+	}
+
+	sizes := make(map[string]interface{}, len(nsList))
+
+	for _, nsIface := range nsList {
+		nsConf, ok := nsIface.(map[string]interface{})
+		if !ok {
+			continue
+		}
+
+		name, ok := nsConf[ConfKeyName].(string)
+		if !ok {
+			continue
+		}
+
+		if size, ok := GetNamespaceDataSize(nsConf); ok {
+			sizes[name] = size
+		}
+	}
+
+	return sizes
 }

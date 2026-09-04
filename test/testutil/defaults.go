@@ -17,11 +17,11 @@ const (
 	Pre810ServerVersion = "8.0.0.0"
 	// CgroupMemTrackingServerVersion is the minimum Aerospike server version that requires
 	// aerospikeConfig.service.cgroup-mem-tracking to be set to true.
-	CgroupMemTrackingServerVersion    = "8.1.2.0"
+	CgroupMemTrackingServerVersion = "8.1.2.0"
 	// IndexCheckpointServerVersion is the minimum Aerospike server version that
 	// supports the index-checkpoint-path / index-checkpoint-threads namespace
 	// configuration keys.
-	IndexCheckpointServerVersion = "8.1.3.0"
+	IndexCheckpointServerVersion      = "8.1.3.0"
 	InvalidImageVersion               = "3.0.0.4"
 	StorageClass                      = "ssd"
 	ClusterNameConfig                 = "cluster-name"

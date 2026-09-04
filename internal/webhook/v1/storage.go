@@ -467,27 +467,6 @@ func isSafeChange(oldVolume, newVolume *asdbv1.VolumeSpec) bool {
 	return reflect.DeepEqual(oldPV, newPV)
 }
 
-// describeVolumeSourceType returns a human-readable name for whichever source is set on a
-// VolumeSource, for use in validation error messages. "persistentVolume" is the source that
-// results in AKO provisioning a PVC for the volume; every other source is non-durable or
-// otherwise unsuitable for index-checkpoint-path.
-func describeVolumeSourceType(source asdbv1.VolumeSource) string {
-	switch {
-	case source.PersistentVolume != nil:
-		return "persistentVolume"
-	case source.EmptyDir != nil:
-		return "emptyDir"
-	case source.HostPath != nil:
-		return "hostPath"
-	case source.Secret != nil:
-		return "secret"
-	case source.ConfigMap != nil:
-		return "configMap"
-	default:
-		return "unknown"
-	}
-}
-
 func validateStorageVolumeSource(volume *asdbv1.VolumeSpec) error {
 	source := volume.Source
 	sourceCount := 0
