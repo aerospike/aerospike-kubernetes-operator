@@ -31,6 +31,33 @@ func uniqueNamespacedName(suffix string) types.NamespacedName {
 	return test.GetNamespacedName(name, testutil.DefaultNamespace)
 }
 
+// setNamespaceReplicationFactor sets replication-factor on cluster and rack configs.
+func setNamespaceReplicationFactor(cluster *asdbv1.AerospikeCluster, rf int) {
+	setRF := func(config map[string]interface{}) {
+		nsList, ok := config[asdbv1.ConfKeyNamespace].([]interface{})
+		if !ok {
+			return
+		}
+
+		for idx := range nsList {
+			ns, ok := nsList[idx].(map[string]interface{})
+			if !ok {
+				continue
+			}
+
+			ns[asdbv1.ConfKeyReplicationFactor] = rf
+		}
+	}
+
+	if cluster.Spec.AerospikeConfig != nil {
+		setRF(cluster.Spec.AerospikeConfig.Value)
+	}
+
+	for idx := range cluster.Spec.RackConfig.Racks {
+		setRF(cluster.Spec.RackConfig.Racks[idx].AerospikeConfig.Value)
+	}
+}
+
 // apNamespaceMemoryDataSizeOnly returns an AP namespace with pure in-memory storage (no devices/files).
 func apNamespaceMemoryDataSizeOnly(name string, rf int) map[string]interface{} {
 	return map[string]interface{}{

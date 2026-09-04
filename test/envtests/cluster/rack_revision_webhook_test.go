@@ -25,6 +25,8 @@ import (
 	corev1 "k8s.io/api/core/v1"
 	"k8s.io/apimachinery/pkg/api/resource"
 	"k8s.io/apimachinery/pkg/types"
+	"k8s.io/apimachinery/pkg/util/intstr"
+	"k8s.io/utils/ptr"
 
 	asdbv1 "github.com/aerospike/aerospike-kubernetes-operator/v4/api/v1"
 	"github.com/aerospike/aerospike-kubernetes-operator/v4/test"
@@ -364,7 +366,8 @@ var _ = Describe("Rack revision webhook validation", func() {
 				// 2) Status records baseline v1 storage; spec rolls back to v1 but keeps expanded
 				//    storage — must be rejected (it needs status row so validateRackUpdate can compare).
 				It("rejects rollback of rack revision after storage expansion (revision bump bypass)", func() {
-					aeroCluster := testCluster.CreateDummyAerospikeCluster(clusterNamespacedName, 2)
+					// Dummy cluster is SC RF 2; size 3 so the bump clears the floor.
+					aeroCluster := testCluster.CreateDummyAerospikeCluster(clusterNamespacedName, 3)
 					rackSt := aeroCluster.Spec.Storage.DeepCopy()
 					aeroCluster.Spec.Storage = asdbv1.AerospikeStorageSpec{}
 					aeroCluster.Spec.RackConfig = asdbv1.RackConfig{
@@ -431,7 +434,8 @@ var _ = Describe("Rack revision webhook validation", func() {
 					clusterName20 := strings.Repeat("a", 20)
 					cName = test.GetNamespacedName(clusterName20, clusterNamespacedName.Namespace)
 
-					aeroCluster := testCluster.CreateDummyAerospikeCluster(cName, 2)
+					// Size 3 so the bump clears the vertical-scaling floor.
+					aeroCluster := testCluster.CreateDummyAerospikeCluster(cName, 3)
 					aeroCluster.Spec.RackConfig = asdbv1.RackConfig{
 						Namespaces: []string{"test"},
 						Racks:      []asdbv1.Rack{{ID: 1, Revision: "v1"}},
@@ -489,7 +493,8 @@ var _ = Describe("Rack revision webhook validation", func() {
 					clusterName20 := strings.Repeat("b", 20)
 					cName = test.GetNamespacedName(clusterName20, clusterNamespacedName.Namespace)
 
-					aeroCluster := testCluster.CreateDummyAerospikeCluster(cName, 2)
+					// Size 3 so the bump clears the vertical-scaling floor.
+					aeroCluster := testCluster.CreateDummyAerospikeCluster(cName, 3)
 					aeroCluster.Spec.RackConfig = asdbv1.RackConfig{
 						Namespaces: []string{"test"},
 						Racks: []asdbv1.Rack{
@@ -515,12 +520,203 @@ var _ = Describe("Rack revision webhook validation", func() {
 							"reduce by 13",
 						).Validate(err)
 				})
+
+				// Vertical scaling: spec-only; batch is sized against the first rack.
+				It("rejects a revision bump on a single-node SC cluster", func() {
+					cName = uniqueNamespacedName("vscale-sc-single")
+					// SC size 1 requires RF 1; the size-1 rule fires first.
+					aeroCluster := testCluster.CreateDummyAerospikeCluster(cName, 1)
+					setNamespaceReplicationFactor(aeroCluster, 1)
+					aeroCluster.Spec.RackConfig = asdbv1.RackConfig{
+						Namespaces: []string{"test"},
+						Racks:      []asdbv1.Rack{{ID: 1, Revision: "v1"}},
+					}
+					Expect(envtests.K8sClient.Create(ctx, aeroCluster)).To(Succeed())
+
+					current, err := testCluster.GetCluster(envtests.K8sClient, ctx, cName)
+					Expect(err).ToNot(HaveOccurred())
+
+					current.Spec.RackConfig.Racks[0].Revision = newRackRevision
+					err = envtests.K8sClient.Update(ctx, current)
+					Expect(err).To(HaveOccurred())
+					envtests.NewStatusErrorMatcher().
+						WithMessageSubstrings(
+							testutil.WebhookErrorPrefix,
+							"vertical scaling (rack revision change) is not allowed",
+							"spec.size is 1",
+						).Validate(err)
+				})
+
+				It("rejects a revision bump on a single-node AP cluster", func() {
+					cName = uniqueNamespacedName("vscale-ap-single")
+					aeroCluster := testCluster.CreateDummyAerospikeClusterWithRF(cName, 1, 2)
+					aeroCluster.Spec.RackConfig = asdbv1.RackConfig{
+						Namespaces: []string{"test"},
+						Racks:      []asdbv1.Rack{{ID: 1, Revision: "v1"}},
+					}
+					Expect(envtests.K8sClient.Create(ctx, aeroCluster)).To(Succeed())
+
+					current, err := testCluster.GetCluster(envtests.K8sClient, ctx, cName)
+					Expect(err).ToNot(HaveOccurred())
+
+					current.Spec.RackConfig.Racks[0].Revision = newRackRevision
+					err = envtests.K8sClient.Update(ctx, current)
+					Expect(err).To(HaveOccurred())
+					envtests.NewStatusErrorMatcher().
+						WithMessageSubstrings(
+							testutil.WebhookErrorPrefix,
+							"vertical scaling (rack revision change) is not allowed",
+							"spec.size is 1",
+						).Validate(err)
+				})
+
+				It("rejects a revision bump when an SC namespace is at replication-factor 1", func() {
+					cName = uniqueNamespacedName("vscale-sc-rf1")
+					aeroCluster := testCluster.CreateDummyAerospikeCluster(cName, 3)
+					setNamespaceReplicationFactor(aeroCluster, 1)
+					aeroCluster.Spec.RackConfig = asdbv1.RackConfig{
+						Namespaces: []string{"test"},
+						Racks:      []asdbv1.Rack{{ID: 1, Revision: "v1"}},
+					}
+					Expect(envtests.K8sClient.Create(ctx, aeroCluster)).To(Succeed())
+
+					current, err := testCluster.GetCluster(envtests.K8sClient, ctx, cName)
+					Expect(err).ToNot(HaveOccurred())
+
+					current.Spec.RackConfig.Racks[0].Revision = newRackRevision
+					err = envtests.K8sClient.Update(ctx, current)
+					Expect(err).To(HaveOccurred())
+					envtests.NewStatusErrorMatcher().
+						WithMessageSubstrings(
+							testutil.WebhookErrorPrefix,
+							"vertical scaling (rack revision change) is not allowed",
+							`namespace "test" has replication-factor 1`,
+						).Validate(err)
+				})
+
+				It("rejects a revision bump when an AP namespace is at replication-factor 1", func() {
+					cName = uniqueNamespacedName("vscale-ap-rf1")
+					aeroCluster := testCluster.CreateDummyAerospikeClusterWithRF(cName, 3, 1)
+					aeroCluster.Spec.RackConfig = asdbv1.RackConfig{
+						Namespaces: []string{"test"},
+						Racks:      []asdbv1.Rack{{ID: 1, Revision: "v1"}},
+					}
+					Expect(envtests.K8sClient.Create(ctx, aeroCluster)).To(Succeed())
+
+					current, err := testCluster.GetCluster(envtests.K8sClient, ctx, cName)
+					Expect(err).ToNot(HaveOccurred())
+
+					current.Spec.RackConfig.Racks[0].Revision = newRackRevision
+					err = envtests.K8sClient.Update(ctx, current)
+					Expect(err).To(HaveOccurred())
+					envtests.NewStatusErrorMatcher().
+						WithMessageSubstrings(
+							testutil.WebhookErrorPrefix,
+							"vertical scaling (rack revision change) is not allowed",
+							`namespace "test" has replication-factor 1`,
+						).Validate(err)
+				})
+
+				It("rejects a three-rack revision bump at full batch when survivors fall below RF", func() {
+					cName = uniqueNamespacedName("vscale-sc-floor")
+					// [2,2,2]; 100% batch leaves 4, below RF 5.
+					aeroCluster := testCluster.CreateDummyAerospikeCluster(cName, 6)
+					setNamespaceReplicationFactor(aeroCluster, 5)
+					aeroCluster.Spec.RackConfig = asdbv1.RackConfig{
+						Namespaces:             []string{"test"},
+						RollingUpdateBatchSize: ptr.To(intstr.FromString("100%")),
+						Racks: []asdbv1.Rack{
+							{ID: 1, Revision: "v1"},
+							{ID: 2, Revision: "v1"},
+							{ID: 3, Revision: "v1"},
+						},
+					}
+					Expect(envtests.K8sClient.Create(ctx, aeroCluster)).To(Succeed())
+
+					current, err := testCluster.GetCluster(envtests.K8sClient, ctx, cName)
+					Expect(err).ToNot(HaveOccurred())
+
+					current.Spec.RackConfig.Racks[0].Revision = newRackRevision
+					err = envtests.K8sClient.Update(ctx, current)
+					Expect(err).To(HaveOccurred())
+					envtests.NewStatusErrorMatcher().
+						WithMessageSubstrings(
+							testutil.WebhookErrorPrefix,
+							"vertical scaling (rack revision change) is not allowed",
+							"2 of 6 nodes would go down",
+							"leaving 4",
+							`strong-consistency namespace "test"`,
+							"replication-factor 5",
+						).Validate(err)
+				})
+
+				It("rejects a two-rack revision bump at full batch when survivors are half the roster", func() {
+					cName = uniqueNamespacedName("vscale-sc-maj-2r")
+					// [2,2]; 100% batch leaves 2 of 4, which is not a majority.
+					aeroCluster := testCluster.CreateDummyAerospikeCluster(cName, 4)
+					aeroCluster.Spec.RackConfig = asdbv1.RackConfig{
+						Namespaces:             []string{"test"},
+						RollingUpdateBatchSize: ptr.To(intstr.FromString("100%")),
+						Racks: []asdbv1.Rack{
+							{ID: 1, Revision: "v1"},
+							{ID: 2, Revision: "v1"},
+						},
+					}
+					Expect(envtests.K8sClient.Create(ctx, aeroCluster)).To(Succeed())
+
+					current, err := testCluster.GetCluster(envtests.K8sClient, ctx, cName)
+					Expect(err).ToNot(HaveOccurred())
+
+					current.Spec.RackConfig.Racks[0].Revision = newRackRevision
+					err = envtests.K8sClient.Update(ctx, current)
+					Expect(err).To(HaveOccurred())
+					envtests.NewStatusErrorMatcher().
+						WithMessageSubstrings(
+							testutil.WebhookErrorPrefix,
+							"vertical scaling (rack revision change) is not allowed",
+							"2 of 4 nodes would go down",
+							"leaving 2",
+							"majority",
+						).Validate(err)
+				})
+
+				It("rejects a three-rack revision bump at full batch when survivors are half the roster", func() {
+					cName = uniqueNamespacedName("vscale-sc-maj-3r")
+					// [2,1,1]; 100% batch leaves 2 of 4, which is not a majority.
+					aeroCluster := testCluster.CreateDummyAerospikeCluster(cName, 4)
+					aeroCluster.Spec.RackConfig = asdbv1.RackConfig{
+						Namespaces:             []string{"test"},
+						RollingUpdateBatchSize: ptr.To(intstr.FromString("100%")),
+						Racks: []asdbv1.Rack{
+							{ID: 1, Revision: "v1"},
+							{ID: 2, Revision: "v1"},
+							{ID: 3, Revision: "v1"},
+						},
+					}
+					Expect(envtests.K8sClient.Create(ctx, aeroCluster)).To(Succeed())
+
+					current, err := testCluster.GetCluster(envtests.K8sClient, ctx, cName)
+					Expect(err).ToNot(HaveOccurred())
+
+					current.Spec.RackConfig.Racks[0].Revision = newRackRevision
+					err = envtests.K8sClient.Update(ctx, current)
+					Expect(err).To(HaveOccurred())
+					envtests.NewStatusErrorMatcher().
+						WithMessageSubstrings(
+							testutil.WebhookErrorPrefix,
+							"vertical scaling (rack revision change) is not allowed",
+							"2 of 4 nodes would go down",
+							"leaving 2",
+							"majority",
+						).Validate(err)
+				})
 			})
 
 			Context("positive", func() {
 				It("allows update that changes rack InputStorage when rack Revision changes"+
 					"and status does not imply a conflict", func() {
-					aeroCluster := testCluster.CreateDummyAerospikeCluster(clusterNamespacedName, 2)
+					// Dummy cluster is SC RF 2; size 3 so the bump clears the floor.
+					aeroCluster := testCluster.CreateDummyAerospikeCluster(clusterNamespacedName, 3)
 					s1 := aeroCluster.Spec.Storage.DeepCopy()
 					aeroCluster.Spec.Storage = asdbv1.AerospikeStorageSpec{}
 					aeroCluster.Spec.RackConfig = asdbv1.RackConfig{
@@ -563,7 +759,8 @@ var _ = Describe("Rack revision webhook validation", func() {
 				It("allows UPDATE when revision grows but stays within the Pod label value model", func() {
 					// "abc" + short STS; label << 63.
 					cName = test.GetNamespacedName(threeCharClusterName, clusterNamespacedName.Namespace)
-					aeroCluster := testCluster.CreateDummyAerospikeCluster(cName, 2)
+					// Size 3 so the bump clears the vertical-scaling floor.
+					aeroCluster := testCluster.CreateDummyAerospikeCluster(cName, 3)
 					aeroCluster.Spec.RackConfig = asdbv1.RackConfig{
 						Namespaces: []string{"test"},
 						Racks:      []asdbv1.Rack{{ID: 1, Revision: "v1"}},
@@ -583,14 +780,15 @@ var _ = Describe("Rack revision webhook validation", func() {
 				It("allows UPDATE when one rack has zero pods under DistributeItems"+
 					"(validateActualPodNames skips rackSize 0)", func() {
 					cName = uniqueNamespacedName("actpod-zero-rack")
-					// DistributeItems(2, 3) → [1,1,0]: only rack 1 and 2 gets a pod; rack 3 must be skipped.
-					aeroCluster := testCluster.CreateDummyAerospikeCluster(cName, 2)
+					// [1,1,1,0]: skip rack 4. Size 3 also clears the SC RF 2 floor.
+					aeroCluster := testCluster.CreateDummyAerospikeCluster(cName, 3)
 					aeroCluster.Spec.RackConfig = asdbv1.RackConfig{
 						Namespaces: []string{"test"},
 						Racks: []asdbv1.Rack{
 							{ID: 1, Revision: "v1"},
 							{ID: 2, Revision: "v1"},
 							{ID: 3, Revision: "v1"},
+							{ID: 4, Revision: "v1"},
 						},
 					}
 
@@ -599,9 +797,101 @@ var _ = Describe("Rack revision webhook validation", func() {
 					current, err := testCluster.GetCluster(envtests.K8sClient, ctx, cName)
 					Expect(err).ToNot(HaveOccurred())
 
-					// Only touch the rack that actually has pods; rack 3 remains unused by the distribution.
+					// Only touch racks that actually have pods; rack 4 remains unused by the distribution.
 					current.Spec.RackConfig.Racks[0].Revision = newRackRevision
 					current.Spec.RackConfig.Racks[1].Revision = newRackRevision
+					Expect(envtests.K8sClient.Update(ctx, current)).To(Succeed())
+				})
+
+				It("allows a three-rack revision bump at full batch when survivors meet RF", func() {
+					cName = uniqueNamespacedName("vscale-sc-ok")
+					// Same topology as the reject case; RF 3 so 4 survivors suffice.
+					aeroCluster := testCluster.CreateDummyAerospikeCluster(cName, 6)
+					setNamespaceReplicationFactor(aeroCluster, 3)
+					aeroCluster.Spec.RackConfig = asdbv1.RackConfig{
+						Namespaces:             []string{"test"},
+						RollingUpdateBatchSize: ptr.To(intstr.FromString("100%")),
+						Racks: []asdbv1.Rack{
+							{ID: 1, Revision: "v1"},
+							{ID: 2, Revision: "v1"},
+							{ID: 3, Revision: "v1"},
+						},
+					}
+					Expect(envtests.K8sClient.Create(ctx, aeroCluster)).To(Succeed())
+
+					current, err := testCluster.GetCluster(envtests.K8sClient, ctx, cName)
+					Expect(err).ToNot(HaveOccurred())
+
+					current.Spec.RackConfig.Racks[0].Revision = newRackRevision
+					Expect(envtests.K8sClient.Update(ctx, current)).To(Succeed())
+				})
+
+				It("allows an AP revision bump even when survivors fall below RF", func() {
+					cName = uniqueNamespacedName("vscale-ap-floor")
+					// AP has no RF floor; 4 of 6 survivors at RF 5 is allowed.
+					aeroCluster := testCluster.CreateDummyAerospikeClusterWithRF(cName, 6, 5)
+					aeroCluster.Spec.RackConfig = asdbv1.RackConfig{
+						Namespaces:             []string{"test"},
+						RollingUpdateBatchSize: ptr.To(intstr.FromString("100%")),
+						Racks: []asdbv1.Rack{
+							{ID: 1, Revision: "v1"},
+							{ID: 2, Revision: "v1"},
+							{ID: 3, Revision: "v1"},
+						},
+					}
+					Expect(envtests.K8sClient.Create(ctx, aeroCluster)).To(Succeed())
+
+					current, err := testCluster.GetCluster(envtests.K8sClient, ctx, cName)
+					Expect(err).ToNot(HaveOccurred())
+
+					current.Spec.RackConfig.Racks[0].Revision = newRackRevision
+					Expect(envtests.K8sClient.Update(ctx, current)).To(Succeed())
+				})
+
+				It("allows a resize that changes no rack revision", func() {
+					cName = uniqueNamespacedName("vscale-resize-only")
+					// Resize-only is not vertical scaling.
+					aeroCluster := testCluster.CreateDummyAerospikeCluster(cName, 6)
+					setNamespaceReplicationFactor(aeroCluster, 5)
+					aeroCluster.Spec.RackConfig = asdbv1.RackConfig{
+						Namespaces:             []string{"test"},
+						RollingUpdateBatchSize: ptr.To(intstr.FromString("100%")),
+						Racks: []asdbv1.Rack{
+							{ID: 1, Revision: "v1"},
+							{ID: 2, Revision: "v1"},
+							{ID: 3, Revision: "v1"},
+						},
+					}
+					Expect(envtests.K8sClient.Create(ctx, aeroCluster)).To(Succeed())
+
+					current, err := testCluster.GetCluster(envtests.K8sClient, ctx, cName)
+					Expect(err).ToNot(HaveOccurred())
+
+					current.Spec.Size = 9
+					Expect(envtests.K8sClient.Update(ctx, current)).To(Succeed())
+				})
+
+				It("allows adding a new rack that carries a revision", func() {
+					cName = uniqueNamespacedName("vscale-new-rack")
+					// New rack with a revision is not a migration.
+					aeroCluster := testCluster.CreateDummyAerospikeCluster(cName, 6)
+					setNamespaceReplicationFactor(aeroCluster, 5)
+					aeroCluster.Spec.RackConfig = asdbv1.RackConfig{
+						Namespaces:             []string{"test"},
+						RollingUpdateBatchSize: ptr.To(intstr.FromString("100%")),
+						Racks: []asdbv1.Rack{
+							{ID: 1, Revision: "v1"},
+							{ID: 2, Revision: "v1"},
+						},
+					}
+					Expect(envtests.K8sClient.Create(ctx, aeroCluster)).To(Succeed())
+
+					current, err := testCluster.GetCluster(envtests.K8sClient, ctx, cName)
+					Expect(err).ToNot(HaveOccurred())
+
+					current.Spec.RackConfig.Racks = append(
+						current.Spec.RackConfig.Racks, asdbv1.Rack{ID: 3, Revision: newRackRevision},
+					)
 					Expect(envtests.K8sClient.Update(ctx, current)).To(Succeed())
 				})
 			})

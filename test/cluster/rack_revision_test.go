@@ -413,7 +413,9 @@ var _ = Describe(
 
 				BeforeEach(
 					func() {
-						aeroCluster := createDummyClusterWithRackRevision(clusterNamespacedName, versionV1, 2)
+						// Size 3 over 2 racks keeps 2 nodes up during the first revision
+						// bump, clearing the vertical scaling floor for SC RF 2.
+						aeroCluster := createDummyClusterWithRackRevision(clusterNamespacedName, versionV1, 3)
 						Expect(DeployCluster(k8sClient, ctx, aeroCluster)).ToNot(HaveOccurred())
 					},
 				)
