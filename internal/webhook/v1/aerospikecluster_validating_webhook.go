@@ -1585,26 +1585,17 @@ func validateNamespaceConfig(
 			continue
 		}
 
-		nsIndexStorage, ok := nsConf[asdbv1.ConfKeyIndexType]
-		if !ok {
-			continue
-		}
-
-		indexConf := nsIndexStorage.(map[string]interface{})
-		mounts, hasMounts := indexConf[asdbv1.ConfKeyMounts]
-
-		if !hasMounts {
-			continue
-		}
-
-		// pmem / flash: mounts must be PersistentVolume-backed filesystem paths.
-		for _, mount := range mounts.([]interface{}) {
-			mountPath := mount.(string)
-			if !utils.ContainsString(fileStorageList, mountPath) {
-				return fmt.Errorf(
-					"namespace index-type mount %v not found in Storage config %v",
-					mountPath, storage,
-				)
+		if nsIndexStorage, ok := nsConf["index-type"]; ok {
+			if mounts, ok := nsIndexStorage.(map[string]interface{})["mounts"]; ok {
+				for _, mount := range mounts.([]interface{}) {
+					// Namespace index-type mount should be present in filesystem config section
+					if !utils.ContainsString(fileStorageList, mount.(string)) {
+						return fmt.Errorf(
+							"namespace index-type mount %v not found in Storage config %v",
+							mount, storage,
+						)
+					}
+				}
 			}
 		}
 	}
@@ -1654,10 +1645,10 @@ func validateIndexCheckpointVolume(
 
 	if volume.Source.PersistentVolume == nil {
 		return fmt.Errorf(
-			"service index-checkpoint-path %q is backed by volume %q whose source is %s, not a "+
+			"service index-checkpoint-path %q is backed by volume %q whose source is not a "+
 				"persistentVolumeClaim; index-checkpoint-path requires durable PersistentVolume-backed "+
 				"storage",
-			cpPath, volume.Name, describeVolumeSourceType(volume.Source),
+			cpPath, volume.Name,
 		)
 	}
 
