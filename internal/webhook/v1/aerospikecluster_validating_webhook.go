@@ -310,6 +310,10 @@ func (acv *AerospikeClusterCustomValidator) ValidateUpdate(_ context.Context,
 		return warnings, err
 	}
 
+	if err := validateVerticalScaling(oldObject, aerospikeCluster); err != nil {
+		return warnings, err
+	}
+
 	// Validate actual pod names to catch silent DNS label overflows at runtime.
 	// This uses real rack IDs, real revisions, and the real max ordinal (Size-1),
 	// so it only rejects what would actually fail — not a conservative estimate.
@@ -871,6 +875,130 @@ func validateConcurrentRackRevisions(oldObj, newObj *asdbv1.AerospikeCluster) er
 	}
 
 	return nil
+}
+
+// validateVerticalScaling rejects a rack revision change that would leave too few
+// nodes standing while a rack's pods are replaced.
+//
+// Inputs are spec-only. Size 1 and replication-factor 1 are rejected in AP and SC.
+// The RF floor and roster-majority checks are SC only (pkg/validation already
+// allows AP size < RF). The worst batch is the first rack: DistributeItems always
+// gives it the most pods.
+func validateVerticalScaling(oldObj, newObj *asdbv1.AerospikeCluster) error {
+	// New racks and non-revision updates are not vertical scaling.
+	if !hasRackRevisionChange(oldObj.Spec.RackConfig.Racks, newObj.Spec.RackConfig.Racks) {
+		return nil
+	}
+
+	// AP and SC: replacing the only node takes the cluster down.
+	if newObj.Spec.Size == 1 {
+		return fmt.Errorf(
+			"vertical scaling (rack revision change) is not allowed: spec.size is 1, so the only node would go down",
+		)
+	}
+
+	nsConfs := getNsConfForNamespaces(newObj.Spec.RackConfig)
+	nsNames := sets.List(sets.KeySet(nsConfs))
+
+	// AP and SC. validateBatchSize already rejects RF 1 when a batch is set; this
+	// covers the unset-batch case (one pod per pass).
+	for _, nsName := range nsNames {
+		if nsConfs[nsName].replicationFactor == 1 {
+			return fmt.Errorf(
+				"vertical scaling (rack revision change) is not allowed: namespace %q has "+
+					"replication-factor 1, so no replica remains while pods are replaced",
+				nsName,
+			)
+		}
+	}
+
+	// SC only: survivors must stay at or above RF, and more than half the roster.
+	leaving := podsLeavingFirstRack(newObj)
+	survivors := newObj.Spec.Size - leaving
+	hasSC := false
+
+	for _, nsName := range nsNames {
+		if !nsConfs[nsName].scEnabled {
+			continue
+		}
+
+		hasSC = true
+
+		if int(survivors) < nsConfs[nsName].replicationFactor {
+			return fmt.Errorf(
+				"vertical scaling (rack revision change) is not allowed: %d of %d nodes "+
+					"would go down, leaving %d for strong-consistency namespace %q "+
+					"(needs replication-factor %d)",
+				leaving, newObj.Spec.Size, survivors, nsName,
+				nsConfs[nsName].replicationFactor,
+			)
+		}
+	}
+
+	if hasSC && survivors <= newObj.Spec.Size/2 {
+		return fmt.Errorf(
+			"vertical scaling (rack revision change) is not allowed: %d of %d nodes "+
+				"would go down, leaving %d, which is not a majority of the "+
+				"strong-consistency roster",
+			leaving, newObj.Spec.Size, survivors,
+		)
+	}
+
+	return nil
+}
+
+// hasRackRevisionChange is true when an existing rack's revision changed. A newly
+// added rack is not vertical scaling. A revert counts.
+func hasRackRevisionChange(oldRacks, newRacks []asdbv1.Rack) bool {
+	oldRevisions := make(map[int]string, len(oldRacks))
+
+	for idx := range oldRacks {
+		oldRevisions[oldRacks[idx].ID] = oldRacks[idx].Revision
+	}
+
+	for idx := range newRacks {
+		oldRevision, existed := oldRevisions[newRacks[idx].ID]
+		if existed && oldRevision != newRacks[idx].Revision {
+			return true
+		}
+	}
+
+	return false
+}
+
+// podsLeavingFirstRack is the largest delete batch in the cluster: DistributeItems
+// always puts the most pods on spec index 0.
+func podsLeavingFirstRack(cluster *asdbv1.AerospikeCluster) int32 {
+	batch := cluster.Spec.RackConfig.RollingUpdateBatchSize
+	racks := cluster.Spec.RackConfig.Racks
+
+	if len(racks) == 0 {
+		return clampedBatch(batch, cluster.Spec.Size)
+	}
+
+	topology := asdbv1.DistributeItems(cluster.Spec.Size, utils.Len32(racks))
+
+	return clampedBatch(batch, topology[0])
+}
+
+// clampedBatch resolves rollingUpdateBatchSize against a rack size. Round-up matches
+// the reconciler replica step; unset becomes 1; result is capped at the rack size.
+func clampedBatch(batch *intstr.IntOrString, base int32) int32 {
+	if base < 1 {
+		return 0
+	}
+
+	value, _ := intstr.GetScaledValueFromIntOrPercent(batch, int(base), true)
+
+	if value >= int(base) {
+		return base
+	}
+
+	if value < 1 {
+		return 1
+	}
+
+	return int32(value) //nolint:gosec // above zero and below base, itself an int32 pod count
 }
 
 // TODO: FIX
