@@ -26,6 +26,15 @@ import (
 var _ = Describe("AerospikeCluster validation", func() {
 	const (
 		clusterName = "invalid-cluster"
+
+		// Mount path used by the index-checkpoint cases that supply their own
+		// backing volume, both as the namespace's index-checkpoint-path and as the
+		// volume's aerospike.path.
+		indexCheckpointPath = "/mnt/index-ckpt"
+
+		// index-checkpoint-path under the default workdir volume, for cases that
+		// exercise config-schema validation rather than volume backing.
+		indexCheckpointWorkdirPath = "/opt/aerospike/index-ckpt"
 	)
 
 	ctx := context.TODO()
@@ -573,14 +582,13 @@ var _ = Describe("AerospikeCluster validation", func() {
 			})
 		})
 
-		Context("spec.aerospikeConfig (namespace index-checkpoint)", func() {
+		Context("spec.aerospikeConfig (index-checkpoint)", func() {
 			Context("negative", func() {
 				It("rejects index-checkpoint-path with server version < "+testutil.IndexCheckpointServerVersion, func() {
 					aeroCluster := testCluster.CreateAerospikeClusterPost640(
 						clusterNamespacedName, 1, testutil.LatestEnterpriseImage,
 					)
-					ns := aeroCluster.Spec.AerospikeConfig.Value[asdbv1.ConfKeyNamespace].([]interface{})[0].(map[string]interface{})
-					ns["index-checkpoint-path"] = "/mnt/index-ckpt"
+					setCheckpointPath(aeroCluster, indexCheckpointPath)
 					aeroCluster.Spec.PreviewFeatures = []string{asdbv1.PreviewFeatureIndexCheckpoint}
 
 					err := envtests.K8sClient.Create(ctx, aeroCluster)
@@ -588,7 +596,7 @@ var _ = Describe("AerospikeCluster validation", func() {
 
 					envtests.NewStatusErrorMatcher().
 						WithMessageSubstrings(testutil.WebhookErrorPrefix,
-							"experimental feature", "requires server version").
+							"preview feature", "requires server version").
 						Validate(err)
 				})
 
@@ -596,9 +604,10 @@ var _ = Describe("AerospikeCluster validation", func() {
 					aeroCluster := testCluster.CreateAerospikeClusterPost640(
 						clusterNamespacedName, 1, testutil.GetEnterpriseImage(testutil.IndexCheckpointServerVersion),
 					)
-					ns := aeroCluster.Spec.AerospikeConfig.Value[asdbv1.ConfKeyNamespace].([]interface{})[0].(map[string]interface{})
-					ns["index-checkpoint-path"] = "/mnt/index-ckpt"
-					ns["index-checkpoint-threads"] = 0 // below minimum of 1
+					setCheckpointPath(aeroCluster, indexCheckpointPath)
+					firstNamespace :=
+						aeroCluster.Spec.AerospikeConfig.Value[asdbv1.ConfKeyNamespace].([]interface{})[0].(map[string]interface{})
+					firstNamespace[asdbv1.ConfKeyIndexCheckpointThreads] = 0 // below minimum of 1
 					aeroCluster.Spec.PreviewFeatures = []string{asdbv1.PreviewFeatureIndexCheckpoint}
 
 					err := envtests.K8sClient.Create(ctx, aeroCluster)
@@ -610,23 +619,44 @@ var _ = Describe("AerospikeCluster validation", func() {
 						Validate(err)
 				})
 
-				It("rejects index-checkpoint-path without experimentalFeatures opt-in", func() {
+				It("rejects service index-checkpoint-path without previewFeatures opt-in", func() {
 					aeroCluster := testCluster.CreateAerospikeClusterPost640(
 						clusterNamespacedName, 1, testutil.GetEnterpriseImage(testutil.IndexCheckpointServerVersion),
 					)
-					ns := aeroCluster.Spec.AerospikeConfig.Value[asdbv1.ConfKeyNamespace].([]interface{})[0].(map[string]interface{})
-					ns["index-checkpoint-path"] = "/opt/aerospike/index-ckpt"
+					setCheckpointPath(aeroCluster, indexCheckpointWorkdirPath)
 
 					err := envtests.K8sClient.Create(ctx, aeroCluster)
 					Expect(err).To(HaveOccurred())
 
 					envtests.NewStatusErrorMatcher().
 						WithMessageSubstrings(testutil.WebhookErrorPrefix,
-							"index-checkpoint-path", "not listed in spec.experimentalFeatures").
+							"index-checkpoint-path", "not listed in spec.previewFeatures").
 						Validate(err)
 				})
 
-				It("rejects unknown experimental feature name", func() {
+				DescribeTable("rejects a namespace index-checkpoint key without previewFeatures opt-in",
+					func(key string, value interface{}) {
+						aeroCluster := testCluster.CreateAerospikeClusterPost640(
+							clusterNamespacedName, 1, testutil.GetEnterpriseImage(testutil.IndexCheckpointServerVersion),
+						)
+						firstNamespace :=
+							aeroCluster.Spec.AerospikeConfig.Value[asdbv1.ConfKeyNamespace].([]interface{})[0].(map[string]interface{})
+						firstNamespace[key] = value
+
+						err := envtests.K8sClient.Create(ctx, aeroCluster)
+						Expect(err).To(HaveOccurred())
+
+						envtests.NewStatusErrorMatcher().
+							WithMessageSubstrings(testutil.WebhookErrorPrefix,
+								key, "not listed in spec.previewFeatures").
+							Validate(err)
+					},
+					Entry("skip-checkpoint", asdbv1.ConfKeySkipCheckpoint, true),
+					Entry("index-checkpoint-threads", asdbv1.ConfKeyIndexCheckpointThreads, 8),
+					Entry("index-checkpoint-compression", asdbv1.ConfKeyIndexCheckpointCompression, false),
+				)
+
+				It("rejects unknown preview feature name", func() {
 					aeroCluster := testCluster.CreateAerospikeClusterPost640(
 						clusterNamespacedName, 1, testutil.LatestEnterpriseImage,
 					)
@@ -637,7 +667,7 @@ var _ = Describe("AerospikeCluster validation", func() {
 
 					envtests.NewStatusErrorMatcher().
 						WithMessageSubstrings(testutil.WebhookErrorPrefix,
-							"unknown experimental feature").
+							"unknown preview feature").
 						Validate(err)
 				})
 
@@ -645,8 +675,9 @@ var _ = Describe("AerospikeCluster validation", func() {
 					aeroCluster := testCluster.CreateAerospikeClusterPost640(
 						clusterNamespacedName, 1, testutil.GetEnterpriseImage(testutil.IndexCheckpointServerVersion),
 					)
-					ns := aeroCluster.Spec.AerospikeConfig.Value[asdbv1.ConfKeyNamespace].([]interface{})[0].(map[string]interface{})
-					ns["index-checkpoint-path"] = "/mnt/index-ckpt"
+
+					svc := aeroCluster.Spec.AerospikeConfig.Value[asdbv1.ConfKeyService].(map[string]interface{})
+					svc[asdbv1.ConfKeyServiceIndexCheckpointPath] = indexCheckpointPath
 					aeroCluster.Spec.PreviewFeatures = []string{asdbv1.PreviewFeatureIndexCheckpoint}
 					aeroCluster.Spec.Storage.Volumes = append(aeroCluster.Spec.Storage.Volumes, asdbv1.VolumeSpec{
 						Name: "index-ckpt",
@@ -654,7 +685,7 @@ var _ = Describe("AerospikeCluster validation", func() {
 							EmptyDir: &v1.EmptyDirVolumeSource{},
 						},
 						Aerospike: &asdbv1.AerospikeServerVolumeAttachment{
-							Path: "/mnt/index-ckpt",
+							Path: indexCheckpointPath,
 						},
 					})
 
@@ -671,16 +702,16 @@ var _ = Describe("AerospikeCluster validation", func() {
 					aeroCluster := testCluster.CreateAerospikeClusterPost640(
 						clusterNamespacedName, 1, testutil.GetEnterpriseImage(testutil.IndexCheckpointServerVersion),
 					)
-					ns := aeroCluster.Spec.AerospikeConfig.Value[asdbv1.ConfKeyNamespace].([]interface{})[0].(map[string]interface{})
-					ns["index-checkpoint-path"] = "/mnt/index-ckpt"
+					svc := aeroCluster.Spec.AerospikeConfig.Value[asdbv1.ConfKeyService].(map[string]interface{})
+					svc[asdbv1.ConfKeyServiceIndexCheckpointPath] = indexCheckpointPath
 					aeroCluster.Spec.PreviewFeatures = []string{asdbv1.PreviewFeatureIndexCheckpoint}
 					aeroCluster.Spec.Storage.Volumes = append(aeroCluster.Spec.Storage.Volumes, asdbv1.VolumeSpec{
 						Name: "index-ckpt",
 						Source: asdbv1.VolumeSource{
-							HostPath: &v1.HostPathVolumeSource{Path: "/mnt/index-ckpt"},
+							HostPath: &v1.HostPathVolumeSource{Path: indexCheckpointPath},
 						},
 						Aerospike: &asdbv1.AerospikeServerVolumeAttachment{
-							Path: "/mnt/index-ckpt",
+							Path: indexCheckpointPath,
 							AttachmentOptions: asdbv1.AttachmentOptions{
 								MountOptions: asdbv1.MountOptions{ReadOnly: ptr.To(true)},
 							},
@@ -702,46 +733,70 @@ var _ = Describe("AerospikeCluster validation", func() {
 					envtests.GlobalWarnings.Reset()
 				})
 
-				It("allows index-checkpoint-path and index-checkpoint-threads for version >= "+testutil.IndexCheckpointServerVersion, func() {
+				It("allows index-checkpoint-path and index-checkpoint-threads for version >= "+
+					testutil.IndexCheckpointServerVersion, func() {
 					aeroCluster := testCluster.CreateAerospikeClusterPost640(
 						clusterNamespacedName, 1, testutil.GetEnterpriseImage(testutil.IndexCheckpointServerVersion),
 					)
-					ns := aeroCluster.Spec.AerospikeConfig.Value[asdbv1.ConfKeyNamespace].([]interface{})[0].(map[string]interface{})
-					ns["index-checkpoint-path"] = "/opt/aerospike/index-ckpt"
-					ns["index-checkpoint-threads"] = 4
+					setCheckpointPath(aeroCluster, indexCheckpointWorkdirPath)
+					firstNamespace :=
+						aeroCluster.Spec.AerospikeConfig.Value[asdbv1.ConfKeyNamespace].([]interface{})[0].(map[string]interface{})
+					firstNamespace[asdbv1.ConfKeyIndexCheckpointThreads] = 4
 					aeroCluster.Spec.PreviewFeatures = []string{asdbv1.PreviewFeatureIndexCheckpoint}
 
 					Expect(envtests.K8sClient.Create(ctx, aeroCluster)).To(Succeed())
 				})
 
-				It("allows index-checkpoint-path backed by a PersistentVolume-backed (PVC) volume and "+
-					"warns about the init-container chown requirement", func() {
+				It("allows index-checkpoint-compression for version >= "+
+					testutil.IndexCheckpointServerVersion, func() {
 					aeroCluster := testCluster.CreateAerospikeClusterPost640(
 						clusterNamespacedName, 1, testutil.GetEnterpriseImage(testutil.IndexCheckpointServerVersion),
 					)
-					ns := aeroCluster.Spec.AerospikeConfig.Value[asdbv1.ConfKeyNamespace].([]interface{})[0].(map[string]interface{})
-					ns["index-checkpoint-path"] = "/mnt/index-ckpt"
+					setCheckpointPath(aeroCluster, indexCheckpointWorkdirPath)
+					firstNamespace :=
+						aeroCluster.Spec.AerospikeConfig.Value[asdbv1.ConfKeyNamespace].([]interface{})[0].(map[string]interface{})
+					firstNamespace[asdbv1.ConfKeyIndexCheckpointCompression] = false
 					aeroCluster.Spec.PreviewFeatures = []string{asdbv1.PreviewFeatureIndexCheckpoint}
-					aeroCluster.Spec.Storage.Volumes = append(aeroCluster.Spec.Storage.Volumes, asdbv1.VolumeSpec{
-						Name: "index-ckpt",
-						Source: asdbv1.VolumeSource{
-							PersistentVolume: &asdbv1.PersistentVolumeSpec{
-								Size:         resource.MustParse("1Gi"),
-								StorageClass: testutil.StorageClass,
-								VolumeMode:   v1.PersistentVolumeFilesystem,
-							},
-						},
-						Aerospike: &asdbv1.AerospikeServerVolumeAttachment{
-							Path: "/mnt/index-ckpt",
-						},
-					})
 
-					Expect(envtests.WarningK8sClient.Create(ctx, aeroCluster)).ToNot(HaveOccurred())
-					Expect(envtests.GlobalWarnings.Warnings).To(ContainElement(And(
-						ContainSubstring("index-checkpoint-path"),
-						ContainSubstring("chowned"),
-						ContainSubstring("change #20"),
-					)))
+					Expect(envtests.K8sClient.Create(ctx, aeroCluster)).To(Succeed())
+				})
+
+				It("allows skip-checkpoint on a namespace", func() {
+					aeroCluster := testCluster.CreateAerospikeClusterPost640(
+						clusterNamespacedName, 1, testutil.GetEnterpriseImage(testutil.IndexCheckpointServerVersion),
+					)
+					setCheckpointPath(aeroCluster, indexCheckpointWorkdirPath)
+					firstNamespace :=
+						aeroCluster.Spec.AerospikeConfig.Value[asdbv1.ConfKeyNamespace].([]interface{})[0].(map[string]interface{})
+					firstNamespace[asdbv1.ConfKeySkipCheckpoint] = true
+					aeroCluster.Spec.PreviewFeatures = []string{asdbv1.PreviewFeatureIndexCheckpoint}
+
+					Expect(envtests.K8sClient.Create(ctx, aeroCluster)).To(Succeed())
+				})
+
+				It("allows skip-checkpoint without any index-checkpoint-path", func() {
+					aeroCluster := testCluster.CreateAerospikeClusterPost640(
+						clusterNamespacedName, 1, testutil.GetEnterpriseImage(testutil.IndexCheckpointServerVersion),
+					)
+					firstNamespace :=
+						aeroCluster.Spec.AerospikeConfig.Value[asdbv1.ConfKeyNamespace].([]interface{})[0].(map[string]interface{})
+					firstNamespace[asdbv1.ConfKeySkipCheckpoint] = false
+					aeroCluster.Spec.PreviewFeatures = []string{asdbv1.PreviewFeatureIndexCheckpoint}
+
+					Expect(envtests.K8sClient.Create(ctx, aeroCluster)).To(Succeed())
+				})
+
+				It("allows index-checkpoint-threads at the server's default of 16", func() {
+					aeroCluster := testCluster.CreateAerospikeClusterPost640(
+						clusterNamespacedName, 1, testutil.GetEnterpriseImage(testutil.IndexCheckpointServerVersion),
+					)
+					setCheckpointPath(aeroCluster, indexCheckpointWorkdirPath)
+					firstNamespace :=
+						aeroCluster.Spec.AerospikeConfig.Value[asdbv1.ConfKeyNamespace].([]interface{})[0].(map[string]interface{})
+					firstNamespace[asdbv1.ConfKeyIndexCheckpointThreads] = 16
+					aeroCluster.Spec.PreviewFeatures = []string{asdbv1.PreviewFeatureIndexCheckpoint}
+
+					Expect(envtests.K8sClient.Create(ctx, aeroCluster)).To(Succeed())
 				})
 			})
 		})
@@ -2240,3 +2295,22 @@ var _ = Describe("AerospikeCluster validation", func() {
 		})
 	})
 })
+
+// setCheckpointPath sets the cluster-wide aerospikeConfig.service.index-checkpoint-path.
+// It is a service-context key, not a namespace one.
+func setCheckpointPath(aeroCluster *asdbv1.AerospikeCluster, path string) {
+	svc := aeroCluster.Spec.AerospikeConfig.Value[asdbv1.ConfKeyService].(map[string]interface{})
+	svc[asdbv1.ConfKeyServiceIndexCheckpointPath] = path
+
+	aeroCluster.Spec.Storage.Volumes = append(aeroCluster.Spec.Storage.Volumes, asdbv1.VolumeSpec{
+		Name: "checkpoint-volume",
+		Source: asdbv1.VolumeSource{
+			PersistentVolume: &asdbv1.PersistentVolumeSpec{
+				Size:         resource.MustParse("1Gi"),
+				StorageClass: testutil.StorageClass,
+				VolumeMode:   v1.PersistentVolumeFilesystem,
+			},
+		},
+		Aerospike: &asdbv1.AerospikeServerVolumeAttachment{Path: path},
+	})
+}

@@ -22,6 +22,8 @@ import (
 	corev1 "k8s.io/api/core/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/util/sets"
+
+	"github.com/aerospike/aerospike-management-lib/deployment"
 )
 
 // TestNewPodsHostConnWithOption verifies the classification logic inside
@@ -117,83 +119,125 @@ func TestNewPodsHostConnWithOption(t *testing.T) {
 	}
 }
 
-func TestIsCheckpointStarted(t *testing.T) {
+// TestCheckpointStarted covers AKO's parked-detection over the parsed statuses.
+func TestCheckpointStarted(t *testing.T) {
+	status := func(state string) deployment.CheckpointNamespaceStatus {
+		return deployment.CheckpointNamespaceStatus{State: state}
+	}
+
 	tests := []struct {
-		name      string
-		statusStr string
-		nsSet     sets.Set[string]
-		expected  bool
+		statuses map[string]deployment.CheckpointNamespaceStatus
+		name     string
+		expected bool
 	}{
 		{
-			name:      "single target namespace still none",
-			statusStr: "test:state=none:files=0/0",
-			nsSet:     sets.New[string]("test"),
-			expected:  false,
+			name:     "still none",
+			statuses: map[string]deployment.CheckpointNamespaceStatus{"test": status(deployment.CheckpointStateNone)},
+			expected: false,
 		},
 		{
-			name:      "single target namespace copying",
-			statusStr: "test:state=copying:files=20/42",
-			nsSet:     sets.New[string]("test"),
-			expected:  true,
+			name:     "copying",
+			statuses: map[string]deployment.CheckpointNamespaceStatus{"test": status(deployment.CheckpointStateCopying)},
+			expected: true,
 		},
 		{
-			name:      "single target namespace done",
-			statusStr: "test:state=done:files=42/42",
-			nsSet:     sets.New[string]("test"),
-			expected:  true,
+			name:     "done",
+			statuses: map[string]deployment.CheckpointNamespaceStatus{"test": status(deployment.CheckpointStateDone)},
+			expected: true,
 		},
 		{
-			name:      "single target namespace failed",
-			statusStr: "test:state=failed:files=10/42",
-			nsSet:     sets.New[string]("test"),
-			expected:  true,
+			name:     "failed still counts as started",
+			statuses: map[string]deployment.CheckpointNamespaceStatus{"test": status(deployment.CheckpointStateFailed)},
+			expected: true,
 		},
 		{
-			name:      "multiple namespaces, only non-target namespace has started",
-			statusStr: "test:state=none:files=0/0;other:state=copying:files=5/10",
-			nsSet:     sets.New[string]("test"),
-			expected:  false,
+			// The trigger sets the flag on every configured namespace at once, so one
+			// non-none state proves the pod is parked even if others lag.
+			name: "one of several has moved",
+			statuses: map[string]deployment.CheckpointNamespaceStatus{
+				"a": status(deployment.CheckpointStateNone),
+				"b": status(deployment.CheckpointStateCopying),
+			},
+			expected: true,
 		},
 		{
-			name:      "multiple namespaces, target namespace has started",
-			statusStr: "other:state=none:files=0/0;test:state=copying:files=5/10",
-			nsSet:     sets.New[string]("test", "other"),
-			expected:  true,
-		},
-		{
-			name:      "all target namespaces still none",
-			statusStr: "ns1:state=none:files=0/0;ns2:state=none:files=0/0",
-			nsSet:     sets.New[string]("ns1", "ns2"),
-			expected:  false,
-		},
-		{
-			name:      "empty status string",
-			statusStr: "",
-			nsSet:     sets.New[string]("test"),
-			expected:  false,
-		},
-		{
-			name:      "malformed entry without colon is skipped",
-			statusStr: "malformed-entry-no-colon",
-			nsSet:     sets.New[string]("test"),
-			expected:  false,
-		},
-		{
-			name:      "trailing semicolon and whitespace are tolerated",
-			statusStr: " test:state=copying:files=1/2; ",
-			nsSet:     sets.New[string]("test"),
-			expected:  true,
+			name:     "no statuses at all",
+			statuses: map[string]deployment.CheckpointNamespaceStatus{},
+			expected: false,
 		},
 	}
 
-	r := &SingleClusterReconciler{}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			if result := checkpointStarted(tt.statuses); result != tt.expected {
+				t.Errorf("checkpointStarted(%v) = %v, expected %v",
+					tt.statuses, result, tt.expected)
+			}
+		})
+	}
+}
+
+// TestCheckpointDone pins that the wait is driven entirely by what the server reports —
+// no expected set — so a namespace AKO does not know about still holds the pod back.
+func TestCheckpointDone(t *testing.T) {
+	status := func(state string) deployment.CheckpointNamespaceStatus {
+		return deployment.CheckpointNamespaceStatus{State: state}
+	}
+
+	tests := []struct {
+		statuses     map[string]deployment.CheckpointNamespaceStatus
+		name         string
+		wantFailed   []string
+		expectedDone bool
+	}{
+		{
+			name:         "all done",
+			statuses:     map[string]deployment.CheckpointNamespaceStatus{"a": status(deployment.CheckpointStateDone)},
+			expectedDone: true,
+		},
+		{
+			// One still copying holds the whole pod back — the anti-premature-delete rule.
+			name: "one still copying blocks the pod",
+			statuses: map[string]deployment.CheckpointNamespaceStatus{
+				"a": status(deployment.CheckpointStateDone),
+				"b": status(deployment.CheckpointStateCopying),
+			},
+			expectedDone: false,
+		},
+		{
+			name: "failed namespaces are reported but terminal",
+			statuses: map[string]deployment.CheckpointNamespaceStatus{
+				"a": status(deployment.CheckpointStateDone),
+				"b": status(deployment.CheckpointStateFailed),
+			},
+			expectedDone: true,
+			wantFailed:   []string{"b"},
+		},
+		{
+			// An unrecognised state must NOT count as terminal.
+			name:         "unknown state is not terminal",
+			statuses:     map[string]deployment.CheckpointNamespaceStatus{"a": status("verifying")},
+			expectedDone: false,
+		},
+		{
+			// Vacuously done. The caller handles "the server reports nothing" before
+			// reaching here, since an empty map means the node checkpoints nothing.
+			name:         "no statuses",
+			statuses:     map[string]deployment.CheckpointNamespaceStatus{},
+			expectedDone: true,
+		},
+	}
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			result := r.isCheckpointStarted(tt.statusStr, tt.nsSet)
-			if result != tt.expected {
-				t.Errorf("isCheckpointStarted(%q, %v) = %v, expected %v",
-					tt.statusStr, tt.nsSet, result, tt.expected)
+			done, failed := checkpointDone(tt.statuses)
+
+			if done != tt.expectedDone {
+				t.Fatalf("checkpointDone() done = %v, expected %v", done, tt.expectedDone)
+			}
+
+			if len(failed) != len(tt.wantFailed) {
+				t.Errorf("failedNSs = %v, expected %v", failed, tt.wantFailed)
 			}
 		})
 	}

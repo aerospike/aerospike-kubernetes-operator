@@ -337,7 +337,7 @@ func (r *SingleClusterReconciler) rollingRestartPods(
 	failedPods, failedWithinGracePeriodPods, activePods := getServerFailedAndActivePods(podsToRestart, true)
 
 	// Failed pods are always restarted as failure recovery regardless of the outer operation
-	// (upgrade, k8sNodeBlockList, planned rolling restart) — they failed for an unknown reason
+	// (upgrade, k8sNodeBlockList, planned rolling restart) — they failed for an unknown reason,
 	// and their local disk data must be protected.
 	if len(failedPods) != 0 {
 		r.Log.Info("Restart failed Pods", "pods", getPodNames(failedPods))
@@ -347,25 +347,23 @@ func (r *SingleClusterReconciler) rollingRestartPods(
 		}
 	}
 
-	// Here activePods should be those pods where server pod is running, irrespective of sidecars status.
-	// ignorablePodNames should only have those pods where server container is failing
+	deferredPods := 0
 
+	// Here activePods should be those pods where the server pod is running, irrespective of sidecars status.
+	// ignorablePodNames should only have those pods where the server container is failing
 	if len(activePods) != 0 {
 		r.Log.Info("Restart active Pods", "pods", getPodNames(activePods))
 
-		// If every checkpoint-eligible pod in this batch already has
-		// checkpoint-shutdown in flight (e.g. this reconcile pass is resuming
-		// after a checkpoint-status poll timeout from a prior pass), skip the
-		// safe-stop preamble and the pre-restart migrate-fill-delay revert
-		// below entirely: both issue ordinary info commands against every pod
-		// in the batch, and a pod that's already checkpoint-parked answers
-		// only checkpoint-status — everything else returns FORBIDDEN. Quiesce,
-		// roster, and stability were already verified in the pass that first
-		// triggered the checkpoint, and checkpoint-shutdown itself triggers no
-		// new migrations, so re-running those checks here is both unsafe
-		// (against the parked pod) and redundant.
+		// A checkpoint-parked pod must skip all the safety checks because the pod has already left the cluster
+		// and info commands on the parked pod answer with FORBIDDEN.
+		// When only some pods are parked, that subset becomes this reconciles's batch and the rest pods are
+		// deferred.
 		checkpointEligiblePods := podsWithRestartType(activePods, restartTypeMap, podRestart)
-		resumingCheckpoint := r.allPodsAlreadyCheckpointing(ctx, checkpointEligiblePods, rackState)
+
+		var resumingCheckpoint bool
+
+		activePods, deferredPods, resumingCheckpoint = r.resumeParkedCheckpointPods(
+			ctx, activePods, checkpointEligiblePods, rackState)
 
 		var (
 			setMigrateFillDelay bool
@@ -376,6 +374,7 @@ func (r *SingleClusterReconciler) rollingRestartPods(
 			if res := r.waitForMultipleNodesSafeStopReady(ctx, activePods, ignorablePodNames); !res.IsSuccess {
 				return res
 			}
+
 			setMigrateFillDelay = r.shouldSetMigrateFillDelay(rackState, podsToRestart, restartTypeMap)
 
 			r.Log.Info(
@@ -388,21 +387,22 @@ func (r *SingleClusterReconciler) rollingRestartPods(
 				clientPolicy = r.getClientPolicy(ctx)
 
 				if res := r.setMigrateFillDelay(ctx, clientPolicy, &rackState.Rack.AerospikeConfig, false,
-				ignorablePodNames,
-			); !res.IsSuccess {
-				if res.Err != nil {
+					ignorablePodNames,
+				); !res.IsSuccess {
+					if res.Err != nil {
 						res.Err = fmt.Errorf(
-						"revert migrate-fill-delay for rack %d before restarting running Pods: %w",
-						rackState.Rack.ID, res.Err,
-					)
-				}
+							"revert migrate-fill-delay for rack %d before restarting running Pods: %w",
+							rackState.Rack.ID, res.Err,
+						)
+					}
 
 					return res
 				}
 			}
 		} else {
-			r.Log.Info("Checkpoint already in progress for all eligible pods in this batch, "+
-				"skipping redundant safe-stop checks", "pods", getPodNames(checkpointEligiblePods))
+			r.Log.Info("Resuming pods with an index checkpoint already in progress, "+
+				"skipping redundant safe-stop checks",
+				"pods", getPodNames(activePods), "deferredPods", deferredPods)
 		}
 
 		// Active pods are healthy — any restart of them is a planned operation.
@@ -433,6 +433,14 @@ func (r *SingleClusterReconciler) rollingRestartPods(
 		)
 
 		return common.ReconcileRequeueAfter(asdbv1.RequeueIntervalSeconds10)
+	}
+
+	// Only the parked subset was handled. Requeue so the deferred pods are re-batched
+	// and get a fresh preamble; success here would report the rack as done.
+	if deferredPods > 0 {
+		r.Log.Info("Deferring the rest of the batch to a later pass", "deferredPods", deferredPods)
+
+		return common.ReconcileRequeueAfter(1)
 	}
 
 	return common.ReconcileSuccess()
@@ -546,16 +554,13 @@ func (r *SingleClusterReconciler) restartPods(
 		return common.ReconcileError(err)
 	}
 
-	// Trigger and wait for index checkpoint once for the whole batch of
-	// podRestart pods, before any of them are touched — see
-	// triggerIndexCheckpointShutdown for why this is hoisted above the
-	// per-pod loop rather than interleaved with it.
-	// Skip checkpoint for failed pods — the server container is not
-	// running so the info port is unreachable.
+	// Skip checkpoint for failed pods. The server container is not running so the info port is unreachable.
 	if !isFailureRecovery {
 		checkpointPods := podsWithRestartType(podsToRestart, restartTypeMap, podRestart)
 
-		if result := r.triggerIndexCheckpointShutdown(ctx, checkpointPods, rackState); !result.IsSuccess {
+		// Trigger and wait for index checkpoint once for the whole batch of podRestart pods,
+		// before any of them are touched.
+		if result := r.triggerIndexCheckpointSave(ctx, checkpointPods, rackState); !result.IsSuccess {
 			return result
 		}
 	}
@@ -797,16 +802,20 @@ func (r *SingleClusterReconciler) safelyDeletePodsAndEnsureImageUpdated(
 		}
 	}
 
+	deferredPods := 0
+
 	if len(activePods) != 0 {
 		r.Log.Info("Restart active Pods with updated container image", "pods", getPodNames(activePods))
 
-		// See the equivalent comment in rollingRestartPods: if every pod in
-		// this batch already has checkpoint-shutdown in flight from a prior,
-		// timed-out reconcile pass, skip the safe-stop preamble and the
-		// pre-restart migrate-fill-delay revert below — both would otherwise
-		// issue ordinary info commands against an already checkpoint-parked
-		// pod, which only answers checkpoint-status.
-		resumingCheckpoint := r.allPodsAlreadyCheckpointing(ctx, activePods, rackState)
+		// A checkpoint-parked pod must skip all the safety checks because the pod has already left the cluster
+		// and info commands on the parked pod answer with FORBIDDEN.
+		// When only some pods are parked, that subset becomes this reconciles's batch and the rest pods are
+		// deferred.
+
+		var resumingCheckpoint bool
+
+		activePods, deferredPods, resumingCheckpoint = r.resumeParkedCheckpointPods(
+			ctx, activePods, activePods, rackState)
 
 		var (
 			setMigrateFillDelay bool
@@ -829,18 +838,19 @@ func (r *SingleClusterReconciler) safelyDeletePodsAndEnsureImageUpdated(
 				clientPolicy = r.getClientPolicy(ctx)
 
 				if res := r.setMigrateFillDelay(ctx, clientPolicy, &rackState.Rack.AerospikeConfig, false,
-				ignorablePodNames,
-			); !res.IsSuccess {
-				if res.Err != nil {
+					ignorablePodNames,
+				); !res.IsSuccess {
+					if res.Err != nil {
 						res.Err = fmt.Errorf("revert migrate-fill-delay: %w", res.Err)
-				}
+					}
 
 					return res
 				}
 			}
 		} else {
-			r.Log.Info("Checkpoint already in progress for all pods in this batch, "+
-				"skipping redundant safe-stop checks", "pods", getPodNames(activePods))
+			r.Log.Info("Resuming pods with an index checkpoint already in progress, "+
+				"skipping redundant safe-stop checks",
+				"pods", getPodNames(activePods), "deferredPods", deferredPods)
 		}
 
 		if res := r.deletePodAndEnsureImageUpdated(ctx, rackState, activePods, false); !res.IsSuccess {
@@ -871,6 +881,14 @@ func (r *SingleClusterReconciler) safelyDeletePodsAndEnsureImageUpdated(
 		return common.ReconcileRequeueAfter(asdbv1.RequeueIntervalSeconds10)
 	}
 
+	// Only the parked subset was handled. Requeue so the deferred pods are re-batched;
+	// success here would let upgradeRack take its "last batch" path and emit RackImageUpdated early.
+	if deferredPods > 0 {
+		r.Log.Info("Deferring the rest of the batch to a later pass", "deferredPods", deferredPods)
+
+		return common.ReconcileRequeueAfter(1)
+	}
+
 	return common.ReconcileSuccess()
 }
 
@@ -884,13 +902,11 @@ func (r *SingleClusterReconciler) deletePodAndEnsureImageUpdated(
 		return common.ReconcileError(err)
 	}
 
-	// Trigger and wait for index checkpoint once for the whole batch, before
-	// any pod is touched — see triggerIndexCheckpointShutdown for why this is
-	// hoisted above the per-pod delete loop rather than interleaved with it.
-	// Skip checkpoint for failed pods — the server container is not
-	// running so the info port is unreachable.
+	// Skip checkpoint for failed pods. The server container is not running so the info port is unreachable.
 	if !isFailureRecovery {
-		if result := r.triggerIndexCheckpointShutdown(ctx, podsToUpdate, rackState); !result.IsSuccess {
+		// Trigger and wait for index checkpoint once for the whole batch of podRestart pods,
+		// before any of them are touched.
+		if result := r.triggerIndexCheckpointSave(ctx, podsToUpdate, rackState); !result.IsSuccess {
 			return result
 		}
 	}
@@ -1453,6 +1469,15 @@ func (r *SingleClusterReconciler) handleNSOrDeviceRemoval(
 		return nil
 	}
 
+	// In case of checkpoint path change, the old path is useless and intermediate ops can leave stale files behind
+	// in the old path. Clean the path explicitly.
+	statusCkptPath := asdbv1.GetIndexCheckpointPath(rackStatus.AerospikeConfig.Value)
+	specCkptPath := asdbv1.GetIndexCheckpointPath(rackState.Rack.AerospikeConfig.Value)
+
+	if statusCkptPath != "" && statusCkptPath != specCkptPath {
+		removedFiles = append(removedFiles, statusCkptPath+"/*")
+	}
+
 	for _, statusNamespace := range rackStatus.AerospikeConfig.Value[asdbv1.ConfKeyNamespace].([]interface{}) {
 		namespaceFound := false
 
@@ -1548,15 +1573,6 @@ func (r *SingleClusterReconciler) handleNSOrDeviceRemoval(
 				removedFiles = append(removedFiles, statusMounts...)
 			}
 
-			if statusNamespace.(map[string]interface{})[asdbv1.ConfigKeyIndexCheckpointPath] != nil {
-				statusCheckpointPath := statusNamespace.(map[string]interface{})[asdbv1.ConfigKeyIndexCheckpointPath].(string)
-				specCheckpointPath, _ := specNamespace.(map[string]interface{})[asdbv1.ConfigKeyIndexCheckpointPath].(string)
-
-				if statusCheckpointPath != specCheckpointPath {
-					removedFiles = append(removedFiles, statusCheckpointPath+"/*")
-				}
-			}
-
 			break
 		}
 
@@ -1600,11 +1616,6 @@ func (r *SingleClusterReconciler) handleNSOrDeviceRemoval(
 						removedFiles = append(removedFiles, statusMounts[index]+"/*")
 					}
 				}
-			}
-
-			if statusNamespace.(map[string]interface{})[asdbv1.ConfigKeyIndexCheckpointPath] != nil {
-				checkpointPath := statusNamespace.(map[string]interface{})[asdbv1.ConfigKeyIndexCheckpointPath].(string)
-				removedFiles = append(removedFiles, checkpointPath+"/*")
 			}
 		}
 	}

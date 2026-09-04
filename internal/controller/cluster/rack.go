@@ -1654,6 +1654,17 @@ func (r *SingleClusterReconciler) isRackStorageUpdatedInAeroCluster(
 	return false
 }
 
+func (r *SingleClusterReconciler) getRackStatus(rackState *RackState) *asdbv1.Rack {
+	for idx := range r.aeroCluster.Status.RackConfig.Racks {
+		rack := &r.aeroCluster.Status.RackConfig.Racks[idx]
+		if rack.ID == rackState.Rack.ID && rack.Revision == rackState.Rack.Revision {
+			return rack
+		}
+	}
+
+	return nil
+}
+
 func (r *SingleClusterReconciler) getRackStatusVolumes(rackState *RackState) []asdbv1.VolumeSpec {
 	for idx := range r.aeroCluster.Status.RackConfig.Racks {
 		rack := &r.aeroCluster.Status.RackConfig.Racks[idx]

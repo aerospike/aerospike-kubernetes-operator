@@ -1377,10 +1377,11 @@ func (r *SingleClusterReconciler) updateAerospikeContainer(st *appsv1.StatefulSe
 	// This SecurityContext is for main aerospike container. Other sidecars can mention their own SecurityContext.
 	st.Spec.Template.Spec.Containers[0].SecurityContext = r.aeroCluster.Spec.PodSpec.AerospikeContainerSpec.SecurityContext
 
-	// Set --preview when spec.experimentalFeatures is non-empty.
-	// Kubernetes args replaces the Dockerfile CMD. The image CMD is ["asd"], so we
-	// explicitly pass "asd" as the first arg to enter entrypoint.sh's asd branch
-	// (network wait + --foreground) directly, rather than relying on option-prefix detection.
+	// Set --preview when spec.previewFeatures is non-empty.
+	// Kubernetes args REPLACES the image's Dockerfile CMD (["asd"]) while leaving the
+	// ENTRYPOINT (as-tini-static ... -- /entrypoint.sh) alone, so the container argv
+	// becomes "/entrypoint.sh --preview <features>" with no explicit "asd".
+	// The resulting argv also survives a warm restart.
 	if len(r.aeroCluster.Spec.PreviewFeatures) > 0 {
 		st.Spec.Template.Spec.Containers[0].Args = []string{
 			"--preview",
