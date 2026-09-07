@@ -1020,6 +1020,29 @@ func clusterWithMaxIgnorablePod(ctx goctx.Context) {
 					)
 					Expect(err).ToNot(HaveOccurred())
 
+					By("Waiting for post-scale-up handovers to settle before failing pods")
+
+					// scaleUpClusterTest returns as soon as the CR reports Completed,
+					// which the operator stamps in the same reconcile that expands the
+					// roster - partition handovers are still in flight for a few seconds
+					// after that. Failing two pods inside that window leaves affected
+					// partitions with no trusted copy and, with replication-factor 2, no
+					// permission to promote a subset, so the roster step fails and
+					// recoverIgnorablePods is never reached.
+					migrationsInProgress := func() int {
+						cluster, gErr := getCluster(k8sClient, ctx, clusterNamespacedName)
+						Expect(gErr).ToNot(HaveOccurred())
+
+						clusterPods, lErr := getPodList(cluster, k8sClient)
+						Expect(lErr).ToNot(HaveOccurred())
+
+						return getMigrationsInProgress(ctx, k8sClient, clusterNamespacedName, clusterPods)
+					}
+
+					Eventually(migrationsInProgress, 2*time.Minute, 5*time.Second).Should(BeZero())
+					// Guard against a transient zero at a rebalance regime transition.
+					Consistently(migrationsInProgress, 6*time.Second, 2*time.Second).Should(BeZero())
+
 					By("Marking two pods as failed")
 
 					pod1Name := clusterNamespacedName.Name + "-1-0"
@@ -1220,7 +1243,7 @@ func clusterWithMaxIgnorablePod(ctx goctx.Context) {
 				aeroCluster.Spec.RackConfig.MaxIgnorablePods = &maxIgnorable
 				aeroCluster.Spec.Size--
 
-				Expect(k8sClient.Update(ctx, aeroCluster)).ToNot(HaveOccurred())
+				Expect(updateClusterWithNoWait(k8sClient, ctx, aeroCluster)).ToNot(HaveOccurred())
 
 				assertScaleDownBlocked(ctx, clusterNamespacedName, specSizeBeforeScaleDown, statusSizeBeforeScaleDown,
 					podCountBeforeScaleDown, 2*time.Minute, 1, victim)

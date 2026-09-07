@@ -15,6 +15,9 @@ testbin/*
 test/config
 test/junit.xml
 
+# Ginkgo junit reports (test/test-results/junit-*.xml)
+test/test-results/
+
 # Test binary, build with `go test -c`
 *.test
 
