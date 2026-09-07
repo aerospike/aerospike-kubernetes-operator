@@ -319,7 +319,7 @@ CUSTOM_GCL = $(LOCALBIN)/custom-gcl
 
 ## Tool Versions
 KUSTOMIZE_VERSION ?= v5.6.0
-CONTROLLER_TOOLS_VERSION ?= v0.18.0
+CONTROLLER_TOOLS_VERSION ?= v0.22.0
 #ENVTEST_VERSION is the version of controller-runtime release branch to fetch the envtest setup script (i.e. release-0.20)
 ENVTEST_VERSION := $(shell go list -m -f "{{ .Version }}" sigs.k8s.io/controller-runtime | awk -F'[v.]' '{printf "release-%d.%d", $$2, $$3}')
 #ENVTEST_K8S_VERSION is the version of Kubernetes to use for setting up ENVTEST binaries (i.e. 1.31)
@@ -327,14 +327,14 @@ ENVTEST_K8S_VERSION := $(shell go list -m -f "{{ .Version }}" k8s.io/api | awk -
 GOLANGCI_LINT_VERSION ?= v2.13.2
 # Helm plugin versions, without the leading "v" ("helm plugin list" reports them unprefixed).
 HELM_UNITTEST_VERSION ?= 1.1.2
-HELM_SCHEMA_VERSION ?= 2.5.0
+HELM_SCHEMA_VERSION ?= 2.6.0
 # Helm v3's "helm plugin install" has no --verify flag; Helm v4 requires --verify=false
 # to install plugins from a git URL (git sources don't support signature verification).
 HELM_MAJOR_VERSION := $(shell helm version --template '{{.Version}}' 2>/dev/null | sed -E 's/^v([0-9]+).*/\1/')
 HELM_VERIFY_FLAG := $(shell [ "$(HELM_MAJOR_VERSION)" -ge 4 ] 2>/dev/null && echo --verify=false)
 # Set the Operator SDK version to use. By default, what is installed on the system is used.
 # This is useful for CI or a project to utilize a specific version of the operator-sdk toolkit.
-OPERATOR_SDK_VERSION ?= v1.41.1
+OPERATOR_SDK_VERSION ?= v1.42.3
 
 .PHONY: kustomize
 kustomize: $(KUSTOMIZE) ## Download kustomize locally if necessary.
