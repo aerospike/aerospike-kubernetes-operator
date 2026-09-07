@@ -22,6 +22,7 @@ import (
 	"k8s.io/client-go/tools/record"
 	ctrl "sigs.k8s.io/controller-runtime"
 	"sigs.k8s.io/controller-runtime/pkg/client"
+	"sigs.k8s.io/controller-runtime/pkg/controller/controllerutil"
 	"sigs.k8s.io/controller-runtime/pkg/reconcile"
 
 	as "github.com/aerospike/aerospike-client-go/v8"
@@ -844,22 +845,20 @@ func (r *SingleClusterReconciler) clearAerospikeAccessControlStatus(ctx context.
 }
 
 func (r *SingleClusterReconciler) addFinalizer(ctx context.Context, finalizerName string) error {
-	// The object is not being deleted, so if it does not have our finalizer,
-	// then lets add the finalizer and update the object. This is equivalent
-	// registering our finalizer.
-	if !utils.ContainsString(
-		r.aeroCluster.Finalizers, finalizerName,
-	) {
-		r.aeroCluster.Finalizers = append(
-			r.aeroCluster.Finalizers, finalizerName,
-		)
-
-		if err := r.Update(ctx, r.aeroCluster); err != nil {
-			return err
-		}
+	if controllerutil.ContainsFinalizer(r.aeroCluster, finalizerName) {
+		return nil
 	}
 
-	return nil
+	// Use a MergePatch so only the finalizers field is sent to the API server.
+	// A full Update carries the entire object body and its resourceVersion —
+	// any concurrent write (webhook, HPA controller, kubectl annotate, …) that
+	// bumped the resourceVersion between our Get and this call would produce a
+	// 409 conflict. A patch on the finalizers list doesn't conflict with
+	// unrelated concurrent changes to spec, labels, or annotations.
+	patch := client.MergeFrom(r.aeroCluster.DeepCopy())
+	controllerutil.AddFinalizer(r.aeroCluster, finalizerName)
+
+	return r.Patch(ctx, r.aeroCluster, patch)
 }
 
 func (r *SingleClusterReconciler) cleanUpAndRemoveFinalizer(ctx context.Context, finalizerName string) error {

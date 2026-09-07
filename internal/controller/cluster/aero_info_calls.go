@@ -31,6 +31,11 @@ import (
 	"github.com/aerospike/aerospike-management-lib/deployment"
 )
 
+// errEmptyPodList is returned by newAllHostConnWithOption when the cluster has
+// no pods yet (e.g. during initial cluster creation). Callers that need
+// graceful nil behaviour in that case should check with errors.Is.
+var errEmptyPodList = errors.New("cluster Pod list is empty")
+
 // ------------------------------------------------------------------------------------
 // Aerospike helper
 // ------------------------------------------------------------------------------------
@@ -234,7 +239,7 @@ func (r *SingleClusterReconciler) newAllHostConnWithOption(ctx context.Context, 
 	}
 
 	if len(podList.Items) == 0 {
-		return nil, fmt.Errorf("cluster Pod list is empty")
+		return nil, errEmptyPodList
 	}
 
 	return r.newPodsHostConnWithOption(podList.Items, ignorablePodNames)

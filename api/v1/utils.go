@@ -99,7 +99,16 @@ const (
 	AerospikeAPIVersionLabel                       = "aerospike.com/api-version"
 	EvictionBlockedAnnotation                      = "aerospike.com/eviction-blocked"
 	OverrideRackIDAnnotation                       = "aerospike.com/override-rack-id"
-	AerospikeAPIVersion                            = "v1"
+	// BatchQuiesceAnnotation is set on a pod by the operator after the
+	// cross-rack batch quiesce pre-pass successfully quiesces it. It lets
+	// subsequent reconcile cycles skip redundant Aerospike info calls when the
+	// pod is already quiesced. The annotation is removed by reconcileQuiesceUndo
+	// when the pod no longer needs to be quiesced.
+	BatchQuiesceAnnotation = "aerospike.com/quiesced-by-ako"
+	// BatchQuiesceAnnotationValue is the value stored in BatchQuiesceAnnotation
+	// when the annotation is active.
+	BatchQuiesceAnnotationValue = "true"
+	AerospikeAPIVersion         = "v1"
 )
 
 // GetConfiguredWorkDirectory returns the Aerospike work directory configured in aerospikeConfig.
