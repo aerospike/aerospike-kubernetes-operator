@@ -24,7 +24,7 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        k8s-version: ["1.36.4", "1.23"]
+        k8s-version: ["1.36", "1.23"]
     name: EnvTest (k8s ${{ matrix.k8s-version }})
     steps:
       - name: Harden the runner (Audit all outbound calls)
