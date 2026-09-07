@@ -18,10 +18,12 @@ package cluster
 
 import (
 	"context"
+	"fmt"
 	"testing"
 	"time"
 
 	"github.com/go-logr/logr"
+	"github.com/stretchr/testify/require"
 	appsv1 "k8s.io/api/apps/v1"
 	corev1 "k8s.io/api/core/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
@@ -29,6 +31,7 @@ import (
 	clientGoScheme "k8s.io/client-go/kubernetes/scheme"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 	"sigs.k8s.io/controller-runtime/pkg/client/fake"
+	"sigs.k8s.io/controller-runtime/pkg/client/interceptor"
 
 	asdbv1 "github.com/aerospike/aerospike-kubernetes-operator/v4/api/v1"
 	"github.com/aerospike/aerospike-kubernetes-operator/v4/pkg/utils"
@@ -198,5 +201,68 @@ func TestCheckPreviouslyFailedCluster(t *testing.T) {
 		if res.Result.RequeueAfter != wantAfter {
 			t.Errorf("expected RequeueAfter=%v, got %v", wantAfter, res.Result.RequeueAfter)
 		}
+	})
+}
+
+// TestSetStatusPhase covers the three paths of setStatusPhase:
+//
+//  1. Phase already matches — returns nil immediately, no API call issued.
+//  2. Phase differs — patches the API server and updates r.aeroCluster in memory.
+//  3. Patch fails — returns an error and leaves r.aeroCluster.Status.Phase unchanged.
+func TestSetStatusPhase(t *testing.T) {
+	scheme := newTestScheme()
+
+	t.Run("no-op when phase already matches", func(t *testing.T) {
+		aeroCluster := &asdbv1.AerospikeCluster{
+			ObjectMeta: metav1.ObjectMeta{Name: clusterName, Namespace: namespace},
+			Status:     asdbv1.AerospikeClusterStatus{Phase: asdbv1.AerospikeClusterInProgress},
+		}
+		// aeroCluster is intentionally absent from the fake store: any API call
+		// would return NotFound, proving the no-op path issues none.
+		r := newReconcilerWithObjects(scheme, aeroCluster)
+
+		err := r.setStatusPhase(context.Background(), asdbv1.AerospikeClusterInProgress)
+		require.NoError(t, err)
+		require.Equal(t, asdbv1.AerospikeClusterInProgress, r.aeroCluster.Status.Phase)
+	})
+
+	t.Run("patches API server and updates in-memory phase", func(t *testing.T) {
+		aeroCluster := &asdbv1.AerospikeCluster{
+			ObjectMeta: metav1.ObjectMeta{Name: clusterName, Namespace: namespace},
+		}
+		// Register the cluster in the fake store so Status().Patch() can locate it.
+		r := newReconcilerWithObjects(scheme, aeroCluster, aeroCluster)
+
+		err := r.setStatusPhase(context.Background(), asdbv1.AerospikeClusterInProgress)
+		require.NoError(t, err)
+
+		// In-memory phase must be updated immediately.
+		require.Equal(t, asdbv1.AerospikeClusterInProgress, r.aeroCluster.Status.Phase)
+
+		// The fake client's stored status must reflect the patch.
+		got := &asdbv1.AerospikeCluster{}
+		require.NoError(t, r.Get(context.Background(), client.ObjectKeyFromObject(aeroCluster), got))
+		require.Equal(t, asdbv1.AerospikeClusterInProgress, got.Status.Phase)
+	})
+
+	t.Run("error leaves in-memory phase unchanged", func(t *testing.T) {
+		aeroCluster := &asdbv1.AerospikeCluster{
+			ObjectMeta: metav1.ObjectMeta{Name: clusterName, Namespace: namespace},
+			Status:     asdbv1.AerospikeClusterStatus{Phase: asdbv1.AerospikeClusterCompleted},
+		}
+		patchErr := fmt.Errorf("simulated patch failure")
+		r := newTestReconciler(t, aeroCluster, &interceptor.Funcs{
+			SubResourcePatch: func(
+				_ context.Context, _ client.Client, _ string,
+				_ client.Object, _ client.Patch, _ ...client.SubResourcePatchOption,
+			) error {
+				return patchErr
+			},
+		}, aeroCluster)
+
+		err := r.setStatusPhase(context.Background(), asdbv1.AerospikeClusterInProgress)
+		require.Error(t, err)
+		// In-memory phase must NOT have changed.
+		require.Equal(t, asdbv1.AerospikeClusterCompleted, r.aeroCluster.Status.Phase)
 	})
 }

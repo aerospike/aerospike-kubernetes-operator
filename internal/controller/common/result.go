@@ -1,10 +1,16 @@
 package common
 
 import (
+	"errors"
 	"time"
 
 	"sigs.k8s.io/controller-runtime/pkg/reconcile"
 )
+
+// ErrStatefulSetNotReady is returned when a StatefulSet wait loop exhausts all retries
+// but the pod is still starting up (not a failure — just slow). Callers branch
+// on errors.Is to requeue rather than hard-error.
+var ErrStatefulSetNotReady = errors.New("StatefulSet pod not ready yet")
 
 const (
 	reconcileResultLogKey       = "result"
