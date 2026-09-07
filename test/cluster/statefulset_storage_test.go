@@ -424,8 +424,24 @@ var _ = Describe(
 								{ContainerName: "sidecar-consumer", Path: "/config"},
 							},
 						}
+
+						// HostPath volume mounted only in the sidecar — no Aerospike attachment.
+						// This specifically covers the KO-618 bug where HostPath volumes were
+						// unconditionally mounted in the aerospike-init container.
+						sidecarOnlyHostPathVol := asdbv1.VolumeSpec{
+							Name: "sidecar-hostpath",
+							Source: asdbv1.VolumeSource{
+								HostPath: &v1.HostPathVolumeSource{
+									Path: "/tmp/sidecar-data",
+								},
+							},
+							Sidecars: []asdbv1.VolumeAttachment{
+								{ContainerName: "sidecar-consumer", Path: "/hostdata"},
+							},
+						}
+
 						aeroCluster.Spec.Storage.Volumes = append(
-							aeroCluster.Spec.Storage.Volumes, sidecarOnlyVol,
+							aeroCluster.Spec.Storage.Volumes, sidecarOnlyVol, sidecarOnlyHostPathVol,
 						)
 
 						err = updateCluster(k8sClient, ctx, aeroCluster)
@@ -441,10 +457,12 @@ var _ = Describe(
 
 						for _, vm := range aerospikeInitContainer.VolumeMounts {
 							Expect(vm.Name).NotTo(Equal("sidecar-config"),
-								"non-PV sidecar-only volume must not be auto-mounted in the aerospike-init container")
+								"non-PV EmptyDir sidecar-only volume must not be auto-mounted in the aerospike-init container")
+							Expect(vm.Name).NotTo(Equal("sidecar-hostpath"),
+								"non-PV HostPath sidecar-only volume must not be auto-mounted in the aerospike-init container")
 						}
 
-						// The sidecar container must still have it mounted.
+						// The sidecar container must still have both volumes mounted.
 						sidecarContainer := test.GetContainerByName(
 							sts.Spec.Template.Spec.Containers, "sidecar-consumer",
 						)
@@ -452,7 +470,11 @@ var _ = Describe(
 
 						Expect(sidecarContainer.VolumeMounts).To(ContainElement(
 							HaveField("Name", "sidecar-config"),
-						), "sidecar-only volume must be mounted in the sidecar container")
+						), "EmptyDir sidecar-only volume must be mounted in the sidecar container")
+
+						Expect(sidecarContainer.VolumeMounts).To(ContainElement(
+							HaveField("Name", "sidecar-hostpath"),
+						), "HostPath sidecar-only volume must be mounted in the sidecar container")
 					},
 				)
 			},

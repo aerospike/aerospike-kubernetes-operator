@@ -1620,8 +1620,8 @@ func (r *SingleClusterReconciler) isRackStorageUpdatedInAeroCluster(
 	}
 
 	// Collect user-defined init containers. The aerospike-init container is intentionally
-	// excluded because isVolumeAttachmentRemoved skips it unconditionally — its volume
-	// mounts are not individually tracked in storage spec.
+	// excluded here so that isVolumeAttachmentRemoved never inspects its volume mounts —
+	// those mounts are operator-managed and are not individually tracked in the storage spec.
 	var allConfiguredInitContainers []string
 
 	for idx := range r.aeroCluster.Spec.PodSpec.InitContainers {
