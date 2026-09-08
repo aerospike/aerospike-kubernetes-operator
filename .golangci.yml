@@ -38,6 +38,7 @@ linters:
     goconst:
       min-len: 2
       min-occurrences: 3
+      ignore-tests: true
     gocritic:
       enabled-tags:
         - diagnostic
@@ -95,7 +96,11 @@ linters:
       - third_party$
       - builtin$
       - examples$
-    rules: # Allow dot imports (ST1001) in test code for Ginkgo/Gomega
+    rules:
+      - linters:
+          - goconst
+        path: ^test/
+      # Allow dot imports (ST1001) in test code for Ginkgo/Gomega
       - linters:
           - staticcheck
         path: "test/"
