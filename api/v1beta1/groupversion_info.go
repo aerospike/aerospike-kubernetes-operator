@@ -39,6 +39,7 @@ var (
 // SchemeBuilderType is a minimal, dependency-free replacement for the deprecated
 // sigs.k8s.io/controller-runtime/pkg/scheme.Builder, kept local so this api
 // package doesn't depend on controller-runtime.
+// +kubebuilder:object:generate=false
 type SchemeBuilderType struct {
 	GroupVersion schema.GroupVersion
 	runtime.SchemeBuilder
