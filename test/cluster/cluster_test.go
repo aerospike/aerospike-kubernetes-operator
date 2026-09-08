@@ -599,6 +599,12 @@ func ScaleDownWithMigrateFillDelay(ctx goctx.Context) {
 					aeroCluster.Spec.AerospikeConfig.Value[asdbv1.ConfKeyService].(map[string]interface{})["migrate-fill-delay"] =
 						migrateFillDelay
 					Expect(DeployCluster(k8sClient, ctx, aeroCluster)).ToNot(HaveOccurred())
+
+					// Load data so that scale-down triggers real migrations.
+					// Without data the migrate-fill-delay behaviour is a no-op.
+					aeroCluster, err := getCluster(k8sClient, ctx, clusterNamespacedName)
+					Expect(err).ToNot(HaveOccurred())
+					Expect(LoadBulkDataInCluster(aeroCluster, k8sClient, "test", 1000)).ToNot(HaveOccurred())
 				},
 			)
 
@@ -639,8 +645,9 @@ func ScaleDownWithMigrateFillDelay(ctx goctx.Context) {
 					// verify that migrate-fill-delay is set to 0 while scaling down
 					secondPodName := aeroCluster.Name + "-" + strconv.Itoa(aeroCluster.Spec.RackConfig.Racks[0].ID) + "-1"
 
+					retryInt := time.Second * 10
 					err = validateMigrateFillDelay(ctx, k8sClient, logger, clusterNamespacedName, 0,
-						nil, secondPodName)
+						&retryInt, secondPodName)
 					Expect(err).ToNot(HaveOccurred())
 
 					err = waitForAerospikeCluster(

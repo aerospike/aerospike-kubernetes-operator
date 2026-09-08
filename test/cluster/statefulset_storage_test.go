@@ -428,6 +428,8 @@ var _ = Describe(
 						// HostPath volume mounted only in the sidecar — no Aerospike attachment.
 						// This specifically covers the KO-618 bug where HostPath volumes were
 						// unconditionally mounted in the aerospike-init container.
+						// ReadOnly is required for HostPath volumes by the webhook.
+						readOnly := true
 						sidecarOnlyHostPathVol := asdbv1.VolumeSpec{
 							Name: "sidecar-hostpath",
 							Source: asdbv1.VolumeSource{
@@ -436,7 +438,15 @@ var _ = Describe(
 								},
 							},
 							Sidecars: []asdbv1.VolumeAttachment{
-								{ContainerName: "sidecar-consumer", Path: "/hostdata"},
+								{
+									ContainerName: "sidecar-consumer",
+									Path:          "/hostdata",
+									AttachmentOptions: asdbv1.AttachmentOptions{
+										MountOptions: asdbv1.MountOptions{
+											ReadOnly: &readOnly,
+										},
+									},
+								},
 							},
 						}
 
