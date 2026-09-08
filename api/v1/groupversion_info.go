@@ -30,22 +30,22 @@ var (
 	GroupVersion = schema.GroupVersion{Group: "asdb.aerospike.com", Version: "v1"}
 
 	// SchemeBuilder is used to add go types to the GroupVersionKind scheme
-	SchemeBuilder = &schemeBuilder{GroupVersion: GroupVersion}
+	SchemeBuilder = &SchemeBuilderType{GroupVersion: GroupVersion}
 
 	// AddToScheme adds the types in this group-version to the given scheme.
 	AddToScheme = SchemeBuilder.AddToScheme
 )
 
-// schemeBuilder is a minimal, dependency-free replacement for the deprecated
+// SchemeBuilderType is a minimal, dependency-free replacement for the deprecated
 // sigs.k8s.io/controller-runtime/pkg/scheme.Builder, kept local so this api
 // package doesn't depend on controller-runtime.
-type schemeBuilder struct {
+type SchemeBuilderType struct {
 	GroupVersion schema.GroupVersion
 	runtime.SchemeBuilder
 }
 
 // Register adds one or more objects to the SchemeBuilder so they can be added to a Scheme.
-func (bld *schemeBuilder) Register(object ...runtime.Object) *schemeBuilder {
+func (bld *SchemeBuilderType) Register(object ...runtime.Object) *SchemeBuilderType {
 	bld.SchemeBuilder.Register(func(scheme *runtime.Scheme) error {
 		scheme.AddKnownTypes(bld.GroupVersion, object...)
 		metav1.AddToGroupVersion(scheme, bld.GroupVersion)

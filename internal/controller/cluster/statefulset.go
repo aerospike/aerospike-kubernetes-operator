@@ -111,7 +111,7 @@ func (r *SingleClusterReconciler) createSTS(
 	)
 
 	tlsName, _ := asdbv1.GetServiceTLSNameAndPort(r.aeroCluster.Spec.AerospikeConfig)
-	envVarList := make([]corev1.EnvVar, 0, 8)
+	envVarList := make([]corev1.EnvVar, 0, 6)
 	envVarList = append(
 		envVarList,
 		newSTSEnvVar("MY_POD_NAME", "metadata.name"),
