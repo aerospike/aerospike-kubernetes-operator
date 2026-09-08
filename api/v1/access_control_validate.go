@@ -27,6 +27,12 @@ const (
 
 	// DefaultAdminPassword si default admin user password.
 	DefaultAdminPassword = "admin"
+
+	// userAdminRole is the predefined Aerospike role for user administration.
+	userAdminRole = "user-admin"
+
+	// sysAdminRole is the predefined Aerospike role for system administration.
+	sysAdminRole = "sys-admin"
 )
 
 // roleNameForbiddenChars are characters forbidden in role name.
@@ -37,8 +43,8 @@ var userNameForbiddenChars = []string{";", ":"}
 
 // PredefinedRoles are all roles predefined in Aerospike server.
 var PredefinedRoles = map[string]struct{}{
-	"user-admin":     {},
-	"sys-admin":      {},
+	userAdminRole:    {},
+	sysAdminRole:     {},
 	"data-admin":     {},
 	"read":           {},
 	"read-write":     {},
@@ -54,8 +60,8 @@ var PredefinedRoles = map[string]struct{}{
 
 // Expect at least one user with these required roles.
 var requiredRoles = []string{
-	"sys-admin",
-	"user-admin",
+	sysAdminRole,
+	userAdminRole,
 }
 
 // Privileges are all privilege string allowed in the spec and associated scopes.
@@ -65,8 +71,8 @@ var Privileges = map[string][]PrivilegeScope{
 	"read-write":     {Global, NamespaceSet},
 	"read-write-udf": {Global, NamespaceSet},
 	"data-admin":     {Global},
-	"sys-admin":      {Global},
-	"user-admin":     {Global},
+	sysAdminRole:     {Global},
+	userAdminRole:    {Global},
 	"truncate":       {Global, NamespaceSet},
 	"sindex-admin":   {Global},
 	"udf-admin":      {Global},

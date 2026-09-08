@@ -10,7 +10,6 @@ import (
 	"fmt"
 	"io/fs"
 	"os"
-	"path/filepath"
 	"time"
 
 	"github.com/go-logr/logr"
@@ -316,8 +315,33 @@ func appendCACertFromFileOrPath(
 		return serverPool
 	}
 
-	err := filepath.WalkDir(
-		caPath, func(path string, d fs.DirEntry, err error) error {
+	info, err := os.Stat(caPath)
+	if err != nil {
+		logrus.Info("Failed to stat CA path", "caPath: ", caPath)
+		return serverPool
+	}
+
+	if !info.IsDir() {
+		caData, err := os.ReadFile(caPath)
+		if err != nil {
+			logrus.Info("Failed to load CA cert file", "caPath: ", caPath)
+			return serverPool
+		}
+
+		serverPool.AppendCertsFromPEM(caData)
+
+		return serverPool
+	}
+
+	root, err := os.OpenRoot(caPath)
+	if err != nil {
+		logrus.Info("Failed to open CA path", "caPath: ", caPath)
+		return serverPool
+	}
+	defer root.Close()
+
+	err = fs.WalkDir(
+		root.FS(), ".", func(path string, d fs.DirEntry, err error) error {
 			if err != nil {
 				return err
 			}
@@ -325,7 +349,7 @@ func appendCACertFromFileOrPath(
 			if !d.IsDir() {
 				var caData []byte
 
-				if caData, err = os.ReadFile(path); err != nil {
+				if caData, err = root.ReadFile(path); err != nil {
 					return err
 				}
 

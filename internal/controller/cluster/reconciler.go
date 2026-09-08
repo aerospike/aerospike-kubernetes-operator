@@ -1124,7 +1124,7 @@ func (r *SingleClusterReconciler) migrateInitialisedVolumeNames(ctx context.Cont
 				"initVolumes", initializedVolumes, "pod", utils.GetNamespacedName(pod))
 
 			patch1 := jsonpatch.PatchOperation{
-				Operation: "replace",
+				Operation: patchOperationReplace,
 				Path:      "/status/pods/" + pod.Name + "/initializedVolumes",
 				Value:     initializedVolumes,
 			}

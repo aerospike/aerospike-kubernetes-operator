@@ -245,8 +245,34 @@ func (r *SingleClusterReconciler) appendCACertFromFileOrPath(
 	}
 
 	// caPath can be a file name as well as directory path containing cacert files.
-	err := filepath.WalkDir(
-		caPath, func(path string, d fs.DirEntry, err error) error {
+	info, err := os.Stat(caPath)
+	if err != nil {
+		r.Log.Error(err, "Failed to stat CA path.", "caPath", caPath)
+		return serverPool
+	}
+
+	if !info.IsDir() {
+		caData, err := os.ReadFile(caPath)
+		if err != nil {
+			r.Log.Error(err, "Failed to load CA cert file.", "caPath", caPath)
+			return serverPool
+		}
+
+		serverPool.AppendCertsFromPEM(caData)
+		r.Log.Info("Loaded CA certs from file", "caPath", caPath, "file", caPath)
+
+		return serverPool
+	}
+
+	root, err := os.OpenRoot(caPath)
+	if err != nil {
+		r.Log.Error(err, "Failed to open CA path.", "caPath", caPath)
+		return serverPool
+	}
+	defer root.Close()
+
+	err = fs.WalkDir(
+		root.FS(), ".", func(path string, d fs.DirEntry, err error) error {
 			if err != nil {
 				return err
 			}
@@ -254,7 +280,7 @@ func (r *SingleClusterReconciler) appendCACertFromFileOrPath(
 			if !d.IsDir() {
 				var caData []byte
 
-				if caData, err = os.ReadFile(path); err != nil {
+				if caData, err = root.ReadFile(path); err != nil {
 					return err
 				}
 

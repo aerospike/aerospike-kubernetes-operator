@@ -949,7 +949,7 @@ func (r *SingleClusterReconciler) updateSTSSchedulingPolicy(
 					LabelSelector: &metav1.LabelSelector{
 						MatchLabels: antiAffinityLabels,
 					},
-					TopologyKey: "kubernetes.io/hostname",
+					TopologyKey: corev1.LabelHostname,
 				},
 			},
 		}
@@ -996,7 +996,7 @@ func (r *SingleClusterReconciler) updateSTSSchedulingPolicy(
 	if rackState.Rack.NodeName != "" {
 		matchExpressions = append(
 			matchExpressions, corev1.NodeSelectorRequirement{
-				Key:      "kubernetes.io/hostname",
+				Key:      corev1.LabelHostname,
 				Operator: corev1.NodeSelectorOpIn,
 				Values:   []string{rackState.Rack.NodeName},
 			},
@@ -1006,7 +1006,7 @@ func (r *SingleClusterReconciler) updateSTSSchedulingPolicy(
 	if len(r.aeroCluster.Spec.K8sNodeBlockList) > 0 {
 		matchExpressions = append(
 			matchExpressions, corev1.NodeSelectorRequirement{
-				Key:      "kubernetes.io/hostname",
+				Key:      corev1.LabelHostname,
 				Operator: corev1.NodeSelectorOpNotIn,
 				Values:   r.aeroCluster.Spec.K8sNodeBlockList,
 			},
