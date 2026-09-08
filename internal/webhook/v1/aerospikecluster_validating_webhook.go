@@ -230,9 +230,9 @@ func (acv *AerospikeClusterCustomValidator) ValidateUpdate(_ context.Context,
 
 	aslog.Info("Validate update")
 
-	var warnings admission.Warnings
-
 	warns, vErr := validate(aslog, aerospikeCluster)
+
+	warnings := make(admission.Warnings, 0, len(warns))
 	warnings = append(warnings, warns...)
 
 	if vErr != nil {

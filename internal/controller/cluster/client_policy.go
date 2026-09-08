@@ -252,7 +252,9 @@ func (r *SingleClusterReconciler) appendCACertFromFileOrPath(
 	}
 
 	if !info.IsDir() {
-		caData, err := os.ReadFile(caPath)
+		var caData []byte
+
+		caData, err = os.ReadFile(caPath)
 		if err != nil {
 			r.Log.Error(err, "Failed to load CA cert file.", "caPath", caPath)
 			return serverPool

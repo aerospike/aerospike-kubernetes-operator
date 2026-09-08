@@ -322,7 +322,9 @@ func appendCACertFromFileOrPath(
 	}
 
 	if !info.IsDir() {
-		caData, err := os.ReadFile(caPath)
+		var caData []byte
+
+		caData, err = os.ReadFile(caPath)
 		if err != nil {
 			logrus.Info("Failed to load CA cert file", "caPath: ", caPath)
 			return serverPool

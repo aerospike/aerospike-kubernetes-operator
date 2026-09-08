@@ -1016,11 +1016,7 @@ func (r *SingleClusterReconciler) checkPreviouslyFailedCluster(ctx context.Conte
 
 	// All pods have hard-failed and status is empty — the cluster failed during
 	// its initial create and needs to be recovered.
-	if err := r.recoverFailedCreate(ctx); err != nil {
-		return true, common.ReconcileError(err)
-	}
-
-	return true, common.ReconcileSuccess()
+	return true, common.ReconcileError(r.recoverFailedCreate(ctx))
 }
 
 func (r *SingleClusterReconciler) removedNamespaces(nodesNamespaces map[string][]string) []string {
