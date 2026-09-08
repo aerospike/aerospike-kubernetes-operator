@@ -107,6 +107,12 @@ func (r *SingleClusterReconciler) waitForMultipleNodesSafeStopReady(
 		return common.ReconcileRequeueAfter(1)
 	}
 
+	// A roster change can trigger a second wave of data-rebalancing migrations.
+	// Wait for the cluster to stabilise again before quiescing nodes.
+	if res := r.waitForClusterStability(policy, allHostConns); !res.IsSuccess {
+		return res
+	}
+
 	if err := r.quiescePods(ctx, policy, allHostConns, pods, ignorablePodNames); err != nil {
 		return common.ReconcileError(err)
 	}
