@@ -18,11 +18,11 @@ import (
 // buildScaleDownTargets collects all scale-down candidate pods from both
 // explicitly scaled-down racks and racks being deleted entirely.
 //
-// Sources merged:
+// Sources iterated directly (no intermediate slice):
 //  1. scaledDownRacks — configured racks where STS.Replicas > spec.Size.
 //  2. racksToDelete — racks removed entirely (rack replacement / deletion).
-//     These carry a nil rackSTS; getAllScaleDownPods treats nil as Size=0 and
-//     returns all existing pods for the rack.
+//     A synthetic scaledDownRack with nil rackSTS is constructed inline;
+//     getAllScaleDownPods treats nil as Size=0 and returns all existing pods.
 //
 // This function is intentionally a pure collection step — it does not perform
 // any pod readiness checks. The readiness gate is applied later by
@@ -35,26 +35,36 @@ func (r *SingleClusterReconciler) buildScaleDownTargets(
 	scaledDownRacks []scaledDownRack,
 	racksToDelete []asdbv1.Rack,
 ) ([]*corev1.Pod, common.ReconcileResult) {
-	// Combine configured scale-down racks and fully-deleted racks in one pass.
-	allRacks := make([]scaledDownRack, len(scaledDownRacks), len(scaledDownRacks)+len(racksToDelete))
-	copy(allRacks, scaledDownRacks)
-
-	for idx := range racksToDelete {
-		rack := &racksToDelete[idx]
-		allRacks = append(allRacks, scaledDownRack{
-			rackSTS:   nil,
-			rackState: &RackState{Size: 0, Rack: rack},
-		})
-	}
-
 	var allTargets []*corev1.Pod
 
-	for idx := range allRacks {
-		removedPods, err := r.getAllScaleDownPods(ctx, allRacks[idx])
+	// Source 1: configured racks where STS.Replicas > spec.Size.
+	for idx := range scaledDownRacks {
+		removedPods, err := r.getAllScaleDownPods(ctx, scaledDownRacks[idx])
 		if err != nil {
 			return nil, common.ReconcileError(fmt.Errorf(
 				"get scale-down pods for rack %d: %w",
-				allRacks[idx].rackState.Rack.ID, err,
+				scaledDownRacks[idx].rackState.Rack.ID, err,
+			))
+		}
+
+		allTargets = append(allTargets, removedPods...)
+	}
+
+	// Source 2: racks removed entirely (rack replacement / deletion).
+	// Pass a nil rackSTS so getAllScaleDownPods treats the target size as 0
+	// and returns every existing pod for the rack.
+	for idx := range racksToDelete {
+		rack := &racksToDelete[idx]
+		entry := scaledDownRack{
+			rackSTS:   nil,
+			rackState: &RackState{Size: 0, Rack: rack},
+		}
+
+		removedPods, err := r.getAllScaleDownPods(ctx, entry)
+		if err != nil {
+			return nil, common.ReconcileError(fmt.Errorf(
+				"get scale-down pods for deleted rack %d: %w",
+				rack.ID, err,
 			))
 		}
 
@@ -201,7 +211,7 @@ func (r *SingleClusterReconciler) reconcileQuiesceUndo(
 	// the very start of reconcileRacks; a pod that was not-ready then may have
 	// recovered by now. Using a live check ensures recovered pods are included
 	// in allHostConns so InfoRecluster can always reach the principal.
-	var annotatedNonTargets []*corev1.Pod
+	var annotatedNonTargets []corev1.Pod
 
 	tolerantIgnorable := sets.New[string]()
 
@@ -214,7 +224,7 @@ func (r *SingleClusterReconciler) reconcileQuiesceUndo(
 
 		if !targetNames.Has(pod.Name) && pod.Annotations[asdbv1.BatchQuiesceAnnotation] ==
 			asdbv1.BatchQuiesceAnnotationValue {
-			annotatedNonTargets = append(annotatedNonTargets, pod)
+			annotatedNonTargets = append(annotatedNonTargets, *pod)
 		}
 	}
 
@@ -241,7 +251,7 @@ func (r *SingleClusterReconciler) reconcileQuiesceUndo(
 	// unquiescing, using the same tolerant ignorable set so non-running pods
 	// in annotatedNonTargets are silently skipped.
 	nonTargetHostConns, err := r.newPodsHostConnWithOption(
-		podsFromPtrs(annotatedNonTargets), tolerantIgnorable,
+		annotatedNonTargets, tolerantIgnorable,
 	)
 	if err != nil {
 		return common.ReconcileError(fmt.Errorf("build non-target host connections for quiesce-undo: %w", err))
@@ -259,25 +269,16 @@ func (r *SingleClusterReconciler) reconcileQuiesceUndo(
 	// Clear annotations only from the non-target pods we just unquiesced.
 	// Target pods keep their annotations; reconcileBatchQuiesce will re-use
 	// them for the fast-exit check.
-	for _, pod := range annotatedNonTargets {
-		if annErr := r.setPodQuiesceAnnotation(ctx, pod, false); annErr != nil {
+	// Use index-based iteration so &annotatedNonTargets[i] is a stable pointer
+	// into the slice (not a range-copy), which setPodQuiesceAnnotation requires.
+	for i := range annotatedNonTargets {
+		if annErr := r.setPodQuiesceAnnotation(ctx, &annotatedNonTargets[i], false); annErr != nil {
 			r.Log.Error(annErr, "Failed to remove quiesce annotation from pod; will retry next reconcile",
-				"pod", pod.Name)
+				"pod", annotatedNonTargets[i].Name)
 		}
 	}
 
 	return common.ReconcileSuccess()
-}
-
-// podsFromPtrs converts a slice of *corev1.Pod to []corev1.Pod so it can be
-// passed to helpers that operate on value slices.
-func podsFromPtrs(ptrs []*corev1.Pod) []corev1.Pod {
-	out := make([]corev1.Pod, len(ptrs))
-	for i, p := range ptrs {
-		out[i] = *p
-	}
-
-	return out
 }
 
 // reconcileBatchQuiesce is the cross-rack batch quiesce pre-pass. It runs
@@ -311,7 +312,9 @@ func (r *SingleClusterReconciler) reconcileBatchQuiesce(
 		return common.ReconcileSuccess()
 	}
 
-	// Filter ignorable pods out of the target list.
+	// Single pass: filter ignorable pods out of the target list AND check
+	// whether every remaining target already carries the BatchQuiesceAnnotation
+	// (the annotation-based fast-exit).
 	//
 	// A target pod can end up in ignorablePodNames from two independent sources:
 	//
@@ -324,15 +327,25 @@ func (r *SingleClusterReconciler) reconcileBatchQuiesce(
 	//     collected them.
 	//
 	// Both cases must be filtered out so that:
-	//   a. The annotation fast-exit below correctly detects that all remaining
+	//   a. The annotation fast-exit correctly detects that all remaining
 	//      (actually-quiesceable) targets are already annotated.
 	//   b. quiescePods is not asked to build a connection to an unreachable pod.
 	//   c. The annotation loop at the end does not stamp ignorable pods.
-	effectiveTargets := allTargets[:0:0] // reuse backing-array hint but start empty
+	//
+	// allTargets[:0] reuses the backing array: effectiveTargets is a strict
+	// left-to-right subset of allTargets, so overwriting while reading is safe.
+	effectiveTargets := allTargets[:0]
+	allAnnotated := true
 
 	for _, pod := range allTargets {
-		if !ignorablePodNames.Has(pod.Name) {
-			effectiveTargets = append(effectiveTargets, pod)
+		if ignorablePodNames.Has(pod.Name) {
+			continue
+		}
+
+		effectiveTargets = append(effectiveTargets, pod)
+
+		if pod.Annotations[asdbv1.BatchQuiesceAnnotation] != asdbv1.BatchQuiesceAnnotationValue {
+			allAnnotated = false
 		}
 	}
 
@@ -342,17 +355,6 @@ func (r *SingleClusterReconciler) reconcileBatchQuiesce(
 	}
 
 	allTargets = effectiveTargets
-
-	// Annotation-based fast-exit: if every target is already marked as
-	// quiesced by AKO, skip all Aerospike info calls.
-	allAnnotated := true
-
-	for _, pod := range allTargets {
-		if pod.Annotations[asdbv1.BatchQuiesceAnnotation] != asdbv1.BatchQuiesceAnnotationValue {
-			allAnnotated = false
-			break
-		}
-	}
 
 	if allAnnotated {
 		r.Log.V(1).Info("All scale-down targets already quiesced by AKO, skipping batch quiesce pre-pass",

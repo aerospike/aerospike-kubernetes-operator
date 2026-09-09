@@ -560,23 +560,6 @@ func TestAddFinalizer_IdempotentViaPatch(t *testing.T) {
 }
 
 // ══════════════════════════════════════════════════════════════════════════
-// podsFromPtrs
-// ══════════════════════════════════════════════════════════════════════════
-
-func TestPodsFromPtrs(t *testing.T) {
-	pods := []*corev1.Pod{
-		{ObjectMeta: metav1.ObjectMeta{Name: "a"}},
-		{ObjectMeta: metav1.ObjectMeta{Name: "b"}},
-	}
-
-	out := podsFromPtrs(pods)
-
-	require.Len(t, out, 2)
-	assert.Equal(t, "a", out[0].Name)
-	assert.Equal(t, "b", out[1].Name)
-}
-
-// ══════════════════════════════════════════════════════════════════════════
 // getAllScaleDownPods
 // ══════════════════════════════════════════════════════════════════════════
 
