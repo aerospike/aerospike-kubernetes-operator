@@ -23,9 +23,112 @@ Create the namespace where AKO will be installed. Replace the placeholder `<name
 kubectl create namespace <namespace>
 ```
 
-### Deploy Cert-manager
+### Deploy Cert-manager (conditional)
 
-Operator uses admission webhooks, which needs TLS certificates. These are issued by [cert-manager](https://cert-manager.io/docs/). Install cert-manager on your Kubernetes cluster using instructions [here](https://cert-manager.io/docs/installation/kubernetes/) before installing the operator.
+The operator uses admission webhooks, which need TLS certificates. How those certificates
+are provided is selected by `certs.webhook.provider`:
+
+| `certs.webhook.provider` | Who provides the certificate | cert-manager required |
+| --- | --- | --- |
+| `certManager` (default) | Chart creates a cert-manager `Issuer` and `Certificate`; cainjector fills in the `caBundle` | Yes |
+| `selfSigned` | Chart generates a CA and serving certificate and creates the `Secret` itself | No |
+| `external` | You pre-create the `Secret` and supply `certs.webhook.external.caBundle` | No |
+
+cert-manager is also required whenever `certs.metrics.create` is `true`, regardless of the
+webhook provider — the metrics certificate is cert-manager-only.
+
+If you set `certs.webhook.create: false` on 4.5.0 or earlier, leave it as it is: that
+combination still renders exactly what it did before — the chart creates no `Issuer` and
+no `Certificate`, but keeps the `cert-manager.io/inject-ca-from` annotation, so cainjector
+fills in the `caBundle` from the `Certificate` named `aerospike-operator-serving-cert` that
+you manage yourself. `certs.webhook.create` is deprecated but still honoured. Do not switch
+such a release to `provider: certManager` unless you also delete your own `Certificate`,
+because the chart would then create one with the same name and `secretName`.
+
+If you need cert-manager, install it using the instructions
+[here](https://cert-manager.io/docs/installation/kubernetes/) before installing the operator.
+
+#### provider: selfSigned (development and POC only)
+
+```sh
+helm install aerospike-kubernetes-operator aerospike/aerospike-kubernetes-operator \
+  --namespace <namespace> --set certs.webhook.provider=selfSigned
+```
+
+The chart generates the certificate and reuses the existing `Secret` on subsequent
+upgrades so that `helm upgrade` does not rotate it. Two caveats make this unsuitable for
+production:
+
+* The certificate is valid for 10 years and nothing renews it.
+* Its validity window starts at the clock of the machine that runs `helm`. If that clock
+  runs ahead of the cluster's, the API server sees the certificate as not yet valid and
+  rejects admission until the skew elapses.
+* Helm's `lookup` returns nothing under `helm template` and `--dry-run`, so a pipeline
+  that renders manifests and applies them regenerates the certificate on every apply.
+  Because the API server sees the new `caBundle` immediately while the operator pod picks
+  up the remounted `Secret` on kubelet's schedule, and the webhooks use
+  `failurePolicy: Fail`, that gap is a real admission outage. Use `certManager` or
+  `external` for GitOps.
+
+#### provider: external
+
+Pre-create the serving certificate `Secret` (default name `webhook-server-cert`) with
+`tls.crt` and `tls.key`, then pass the base64-encoded PEM of the CA that signed it:
+
+```sh
+# `< ca.crt` rather than `base64 ca.crt`, which BSD/macOS base64 rejects
+base64 < ca.crt > ca.b64
+
+helm install aerospike-kubernetes-operator aerospike/aerospike-kubernetes-operator \
+  --namespace <namespace> \
+  --set certs.webhook.provider=external \
+  --set-file certs.webhook.external.caBundle=ca.b64
+```
+
+Line wrapping and a trailing newline are both fine — the chart strips whitespace before
+rendering, because the API server itself decodes `caBundle` with strict base64.
+
+Note this is the CA certificate that signed the serving certificate, not the serving
+certificate itself; passing raw PEM is rejected at install time. The manager `Deployment`
+mounts the `Secret` unconditionally, so its pods stay in `ContainerCreating` until you
+create it.
+
+#### Switching an existing release between providers
+
+**To `selfSigned`.** This makes the chart the owner of the serving-certificate `Secret`,
+which it does not own under the other providers — under `certManager` that `Secret` belongs
+to cert-manager. Helm will not adopt a resource it does not own, so use one of the two
+routes below. With neither, the upgrade stops with Helm's own error naming the `Secret` and
+the ownership markers it is missing.
+
+*Preferred — let Helm adopt the existing `Secret`.* The chart reuses the certificate
+already in the `Secret`, so the served certificate does not change and there is no
+admission gap:
+
+```sh
+helm upgrade aerospike-kubernetes-operator ... --take-ownership \
+  --set certs.webhook.provider=selfSigned
+```
+
+*Or delete and regenerate.* Delete the cert-manager `Certificate` **first** — while it
+exists, cert-manager re-issues the `Secret` within seconds and the upgrade fails again:
+
+```sh
+kubectl delete certificate aerospike-operator-serving-cert -n <namespace> --ignore-not-found
+kubectl delete secret webhook-server-cert -n <namespace>
+helm upgrade ... --set certs.webhook.provider=selfSigned
+```
+
+This regenerates the certificate, so expect a brief admission outage: the API server sees
+the new `caBundle` immediately while the operator pod picks up the remounted `Secret` on
+kubelet's schedule.
+
+**Away from `selfSigned`** (to `certManager` or `external`) also has an outage window.
+Helm removes the inlined `caBundle` from every webhook entry and deletes the chart-owned
+`Secret`, and admission fails until cert-manager issues a new certificate, cainjector
+writes the CA into both webhook configurations, and the pod remounts the `Secret`. Confirm
+cert-manager is actually installed before switching to `certManager`, or the `Secret` is
+simply gone and the manager pods will not start.
 
 ### Deploy the Aerospike Kubernetes Operator
 
@@ -51,7 +154,9 @@ helm install aerospike-kubernetes-operator aerospike/aerospike-kubernetes-operat
 | `rbac.serviceAccountName`                   | If `rbac.create=false`, provide a service account name to be used with the operator deployment                                                                                                                            | `default`                                                                                                         |
 | `healthPort`                                | Health port                                                                                                                                                                                                               | `8081`                                                                                                            |
 | `metricsPort`                               | Metrics port                                                                                                                                                                                                              | `8443`                                                                                                            |
-| `certs.webhook.create`                      | When `true`, chart creates webhook TLS certificate resources via `cert-manager`                                                                                                                                           | `true`                                                                                                            |
+| `certs.webhook.provider`                    | How the webhook serving certificate is provided: `certManager`, `selfSigned` or `external`. Empty infers the mode from the deprecated `certs.webhook.create`                                                               | `""`                                                                                                              |
+| `certs.webhook.create`                      | **DEPRECATED**, use `certs.webhook.provider`. Only consulted when `provider` is empty; `false` keeps 4.5.0 behaviour                                                                                                                                     | `true`                                                                                                            |
+| `certs.webhook.external.caBundle`           | Base64-encoded PEM CA bundle that signed the webhook serving certificate. Required when `provider` is `external`; wrapping/trailing whitespace stripped                                                                              | `""`                                                                                                              |
 | `certs.webhook.webhookServerCertSecretName` | Kubernetes `Secret` name for webhook serving certificates                                                                                                                                                                 | `webhook-server-cert`                                                                                             |
 | `certs.metrics.create`                      | When `true`, chart creates metrics TLS certificate resources via `cert-manager` and mounts them on the manager                                                                                                            | `false`                                                                                                           |
 | `certs.metrics.metricsServerCertSecretName` | Kubernetes `Secret` name for metrics serving certificates                                                                                                                                                                 | `metrics-server-cert`                                                                                             |

@@ -1,0 +1,354 @@
+suite: webhook TLS provider modes
+
+templates:
+  - templates/aerospike-operator-selfsigned-issuer.yaml
+  - templates/aerospike-operator-webhook-serving-cert.yaml
+  - templates/aerospike-operator-webhook-selfsigned-secret.yaml
+  - templates/aerospike-operator-validating-webhook-configuration.yaml
+  - templates/aerospike-operator-mutating-webhook-configuration.yaml
+
+tests:
+  # ------------------------------------------------------------------------------
+  # 4.5.0 backward compatibility. These assert against what 4.5.0 actually rendered,
+  # not merely that rendering succeeds — an upgrade on either legacy path must not
+  # change a single field.
+  # ------------------------------------------------------------------------------
+  - it: "compat: provider unset + create=true renders the 4.5.0 cert-manager path"
+    set:
+      certs:
+        webhook:
+          create: true
+    asserts:
+      - hasDocuments:
+          count: 1
+        template: templates/aerospike-operator-selfsigned-issuer.yaml
+      - hasDocuments:
+          count: 1
+        template: templates/aerospike-operator-webhook-serving-cert.yaml
+      - hasDocuments:
+          count: 0
+        template: templates/aerospike-operator-webhook-selfsigned-secret.yaml
+      - equal:
+          path: metadata.annotations["cert-manager.io/inject-ca-from"]
+          value: NAMESPACE/aerospike-operator-serving-cert
+        template: templates/aerospike-operator-validating-webhook-configuration.yaml
+      - equal:
+          path: metadata.annotations["cert-manager.io/inject-ca-from"]
+          value: NAMESPACE/aerospike-operator-serving-cert
+        template: templates/aerospike-operator-mutating-webhook-configuration.yaml
+      - notExists:
+          path: webhooks[0].clientConfig.caBundle
+        template: templates/aerospike-operator-validating-webhook-configuration.yaml
+      - notExists:
+          path: webhooks[0].clientConfig.caBundle
+        template: templates/aerospike-operator-mutating-webhook-configuration.yaml
+
+  # In 4.5.0 create=false skipped the Issuer/Certificate but still emitted the
+  # annotation. It never meant "no cert-manager" — it meant "I create the Certificate
+  # named aerospike-operator-serving-cert myself".
+  - it: "compat: provider unset + create=false skips Issuer and Certificate but keeps the annotation"
+    set:
+      certs:
+        webhook:
+          create: false
+    asserts:
+      - hasDocuments:
+          count: 0
+        template: templates/aerospike-operator-selfsigned-issuer.yaml
+      - hasDocuments:
+          count: 0
+        template: templates/aerospike-operator-webhook-serving-cert.yaml
+      - hasDocuments:
+          count: 0
+        template: templates/aerospike-operator-webhook-selfsigned-secret.yaml
+      - equal:
+          path: metadata.annotations["cert-manager.io/inject-ca-from"]
+          value: NAMESPACE/aerospike-operator-serving-cert
+        template: templates/aerospike-operator-validating-webhook-configuration.yaml
+      - equal:
+          path: metadata.annotations["cert-manager.io/inject-ca-from"]
+          value: NAMESPACE/aerospike-operator-serving-cert
+        template: templates/aerospike-operator-mutating-webhook-configuration.yaml
+      - notExists:
+          path: webhooks[0].clientConfig.caBundle
+        template: templates/aerospike-operator-validating-webhook-configuration.yaml
+
+  # The Issuer is shared with the metrics certificate, so it must survive
+  # webhook.create=false when metrics.create is true.
+  - it: "compat: create=false + metrics.create=true still yields the shared Issuer"
+    set:
+      certs:
+        webhook:
+          create: false
+        metrics:
+          create: true
+    asserts:
+      - hasDocuments:
+          count: 1
+        template: templates/aerospike-operator-selfsigned-issuer.yaml
+      - equal:
+          path: metadata.name
+          value: aerospike-operator-selfsigned-issuer
+        template: templates/aerospike-operator-selfsigned-issuer.yaml
+      - hasDocuments:
+          count: 0
+        template: templates/aerospike-operator-webhook-serving-cert.yaml
+
+  # An absent or null `create` is NOT the 4.5.0 opt-out — 4.5.0's schema required the
+  # key, so that input could not exist there. It must fall through to the default rather
+  # than resolve to the legacy state, which would render no Certificate and no Secret.
+  - it: "compat: provider unset + create absent falls through to certManager"
+    set:
+      certs:
+        webhook:
+          create: null
+    asserts:
+      - hasDocuments:
+          count: 1
+        template: templates/aerospike-operator-selfsigned-issuer.yaml
+      - hasDocuments:
+          count: 1
+        template: templates/aerospike-operator-webhook-serving-cert.yaml
+      - equal:
+          path: metadata.name
+          value: aerospike-operator-serving-cert
+        template: templates/aerospike-operator-webhook-serving-cert.yaml
+      - hasDocuments:
+          count: 0
+        template: templates/aerospike-operator-webhook-selfsigned-secret.yaml
+
+  # ------------------------------------------------------------------------------
+  # Provider resolution
+  # ------------------------------------------------------------------------------
+  - it: "certManager: creates Issuer and Certificate, annotation, no caBundle"
+    set:
+      certs:
+        webhook:
+          provider: certManager
+    asserts:
+      - hasDocuments:
+          count: 1
+        template: templates/aerospike-operator-selfsigned-issuer.yaml
+      - hasDocuments:
+          count: 1
+        template: templates/aerospike-operator-webhook-serving-cert.yaml
+      - hasDocuments:
+          count: 0
+        template: templates/aerospike-operator-webhook-selfsigned-secret.yaml
+      - exists:
+          path: metadata.annotations["cert-manager.io/inject-ca-from"]
+        template: templates/aerospike-operator-validating-webhook-configuration.yaml
+      - notExists:
+          path: webhooks[0].clientConfig.caBundle
+        template: templates/aerospike-operator-validating-webhook-configuration.yaml
+
+  # provider wins over a contradictory create. This is the one path where adopting
+  # provider changes behaviour for an existing create=false user, so it is asserted
+  # explicitly rather than left implicit.
+  - it: "certManager: provider overrides a contradictory create=false"
+    set:
+      certs:
+        webhook:
+          provider: certManager
+          create: false
+    asserts:
+      - hasDocuments:
+          count: 1
+        template: templates/aerospike-operator-webhook-serving-cert.yaml
+      - equal:
+          path: metadata.name
+          value: aerospike-operator-serving-cert
+        template: templates/aerospike-operator-webhook-serving-cert.yaml
+
+  - it: "selfSigned: creates the Secret, no cert-manager resources, no annotation"
+    set:
+      certs:
+        webhook:
+          provider: selfSigned
+    asserts:
+      - hasDocuments:
+          count: 0
+        template: templates/aerospike-operator-selfsigned-issuer.yaml
+      - hasDocuments:
+          count: 0
+        template: templates/aerospike-operator-webhook-serving-cert.yaml
+      - hasDocuments:
+          count: 1
+        template: templates/aerospike-operator-webhook-selfsigned-secret.yaml
+      - equal:
+          path: type
+          value: kubernetes.io/tls
+        template: templates/aerospike-operator-webhook-selfsigned-secret.yaml
+      - equal:
+          path: metadata.name
+          value: webhook-server-cert
+        template: templates/aerospike-operator-webhook-selfsigned-secret.yaml
+      - exists:
+          path: data["tls.crt"]
+        template: templates/aerospike-operator-webhook-selfsigned-secret.yaml
+      - exists:
+          path: data["tls.key"]
+        template: templates/aerospike-operator-webhook-selfsigned-secret.yaml
+      - exists:
+          path: data["ca.crt"]
+        template: templates/aerospike-operator-webhook-selfsigned-secret.yaml
+      # cainjector would clobber the inlined bundle if cert-manager happens to be installed.
+      - notExists:
+          path: metadata.annotations["cert-manager.io/inject-ca-from"]
+        template: templates/aerospike-operator-validating-webhook-configuration.yaml
+      - notExists:
+          path: metadata.annotations["cert-manager.io/inject-ca-from"]
+        template: templates/aerospike-operator-mutating-webhook-configuration.yaml
+
+  # The Issuer is shared, so selfSigned must not suppress it when metrics needs it.
+  - it: "selfSigned: still yields the shared Issuer when metrics.create is true"
+    set:
+      certs:
+        webhook:
+          provider: selfSigned
+        metrics:
+          create: true
+    asserts:
+      - hasDocuments:
+          count: 1
+        template: templates/aerospike-operator-selfsigned-issuer.yaml
+
+  - it: "external: creates nothing and inlines the supplied caBundle"
+    set:
+      certs:
+        webhook:
+          provider: external
+          external:
+            caBundle: "LS0tLS1CRUdJTg=="
+    asserts:
+      - hasDocuments:
+          count: 0
+        template: templates/aerospike-operator-selfsigned-issuer.yaml
+      - hasDocuments:
+          count: 0
+        template: templates/aerospike-operator-webhook-serving-cert.yaml
+      - hasDocuments:
+          count: 0
+        template: templates/aerospike-operator-webhook-selfsigned-secret.yaml
+      - notExists:
+          path: metadata.annotations["cert-manager.io/inject-ca-from"]
+        template: templates/aerospike-operator-validating-webhook-configuration.yaml
+      - equal:
+          path: webhooks[0].clientConfig.caBundle
+          value: "LS0tLS1CRUdJTg=="
+        template: templates/aerospike-operator-validating-webhook-configuration.yaml
+
+  # ------------------------------------------------------------------------------
+  # caBundle must reach EVERY webhook entry. The mutating configuration is the one
+  # that gets forgotten: 5 validating entries (with safePodEviction) + 2 mutating.
+  # ------------------------------------------------------------------------------
+  - it: "external: caBundle reaches every default validating entry"
+    set:
+      certs:
+        webhook:
+          provider: external
+          external:
+            caBundle: "LS0tLS1CRUdJTg=="
+    template: templates/aerospike-operator-validating-webhook-configuration.yaml
+    asserts:
+      # lengthEqual guards the wildcard: an empty list would otherwise pass vacuously.
+      - lengthEqual:
+          path: webhooks
+          count: 4
+      - equal:
+          path: webhooks[*].clientConfig.caBundle
+          value: "LS0tLS1CRUdJTg=="
+
+  - it: "external: caBundle reaches the eviction entry too"
+    set:
+      certs:
+        webhook:
+          provider: external
+          external:
+            caBundle: "LS0tLS1CRUdJTg=="
+      safePodEviction:
+        enable: true
+        timeoutSeconds: 10
+    template: templates/aerospike-operator-validating-webhook-configuration.yaml
+    asserts:
+      - lengthEqual:
+          path: webhooks
+          count: 5
+      - equal:
+          path: webhooks[*].clientConfig.caBundle
+          value: "LS0tLS1CRUdJTg=="
+      - equal:
+          path: webhooks[4].name
+          value: vaerospikeeviction.kb.io
+
+  - it: "external: caBundle reaches both mutating entries"
+    set:
+      certs:
+        webhook:
+          provider: external
+          external:
+            caBundle: "LS0tLS1CRUdJTg=="
+    template: templates/aerospike-operator-mutating-webhook-configuration.yaml
+    asserts:
+      - lengthEqual:
+          path: webhooks
+          count: 2
+      - equal:
+          path: webhooks[*].clientConfig.caBundle
+          value: "LS0tLS1CRUdJTg=="
+
+  # Whitespace is stripped so `--set-file` from a `base64` file works (the API server
+  # decodes caBundle with strict base64 and would reject embedded newlines).
+  - it: "external: wrapped and trailing whitespace is stripped from caBundle"
+    set:
+      certs:
+        webhook:
+          provider: external
+          external:
+            caBundle: "LS0tLS1C\nRUdJTg==\n"
+    template: templates/aerospike-operator-validating-webhook-configuration.yaml
+    asserts:
+      - equal:
+          path: webhooks[*].clientConfig.caBundle
+          value: "LS0tLS1CRUdJTg=="
+
+  # ------------------------------------------------------------------------------
+  # selfSigned generates its material with Sprig, which is random per call, so the
+  # exact value cannot be asserted and two paths cannot be compared to each other in
+  # helm-unittest. What is checked here is that every consumer got a well-formed
+  # bundle. That all consumers get the SAME one is a property of routing every read
+  # through ako.webhookSelfSignedCert, which memoizes into .Values; Helm's render
+  # order is not deterministic, so reading .Values._akoWebhookSelfSignedCert directly
+  # from a template would race the template that populates it.
+  #
+  # lookup returns empty with no cluster, so these exercise the generate branch only.
+  # ------------------------------------------------------------------------------
+  - it: "selfSigned: every webhook entry and the Secret get a well-formed bundle"
+    set:
+      certs:
+        webhook:
+          provider: selfSigned
+      safePodEviction:
+        enable: true
+        timeoutSeconds: 10
+    asserts:
+      - lengthEqual:
+          path: webhooks
+          count: 5
+        template: templates/aerospike-operator-validating-webhook-configuration.yaml
+      - matchRegex:
+          path: webhooks[*].clientConfig.caBundle
+          pattern: "^[A-Za-z0-9+/]+={0,2}$"
+        template: templates/aerospike-operator-validating-webhook-configuration.yaml
+      - lengthEqual:
+          path: webhooks
+          count: 2
+        template: templates/aerospike-operator-mutating-webhook-configuration.yaml
+      - matchRegex:
+          path: webhooks[*].clientConfig.caBundle
+          pattern: "^[A-Za-z0-9+/]+={0,2}$"
+        template: templates/aerospike-operator-mutating-webhook-configuration.yaml
+      - matchRegex:
+          path: data["ca.crt"]
+          pattern: "^[A-Za-z0-9+/]+={0,2}$"
+        template: templates/aerospike-operator-webhook-selfsigned-secret.yaml

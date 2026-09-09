@@ -1,0 +1,171 @@
+suite: webhook selfSigned certificate reuse and Secret ownership
+
+# These exercise the branches of aerospike-kubernetes-operator.webhookSelfSignedCert that
+# depend on cluster state. `lookup` returns nothing in a plain render, so the Secret is
+# injected with helm-unittest's kubernetesProvider instead of being mocked away.
+#
+# tls.crt/tls.key/ca.crt below are base64 of "crt\n"/"key\n"/"ca\n" — the helper never
+# parses the material, it only moves it, so placeholders keep the fixtures readable.
+
+templates:
+  - templates/aerospike-operator-webhook-selfsigned-secret.yaml
+  - templates/aerospike-operator-validating-webhook-configuration.yaml
+
+tests:
+  # ------------------------------------------------------------------------------
+  # Reuse: an existing Secret owned by this release must be carried through
+  # byte-for-byte, or every helm upgrade silently rotates the serving certificate.
+  # ------------------------------------------------------------------------------
+  - it: reuses a release-owned Secret without altering the material
+    set:
+      certs:
+        webhook:
+          provider: selfSigned
+    kubernetesProvider:
+      scheme:
+        "v1/Secret":
+          gvr: { version: v1, resource: secrets }
+          namespaced: true
+      objects:
+        - kind: Secret
+          apiVersion: v1
+          metadata:
+            name: webhook-server-cert
+            namespace: NAMESPACE
+            labels:
+              app.kubernetes.io/managed-by: Helm
+            annotations:
+              meta.helm.sh/release-name: RELEASE-NAME
+              meta.helm.sh/release-namespace: NAMESPACE
+          data:
+            tls.crt: Y3J0Cg==
+            tls.key: a2V5Cg==
+            ca.crt: Y2EK
+    asserts:
+      - equal:
+          path: data["tls.crt"]
+          value: Y3J0Cg==
+        template: templates/aerospike-operator-webhook-selfsigned-secret.yaml
+      - equal:
+          path: data["tls.key"]
+          value: a2V5Cg==
+        template: templates/aerospike-operator-webhook-selfsigned-secret.yaml
+      - equal:
+          path: data["ca.crt"]
+          value: Y2EK
+        template: templates/aerospike-operator-webhook-selfsigned-secret.yaml
+      # The reused ca.crt must be what lands in every webhook clientConfig.
+      - equal:
+          path: webhooks[*].clientConfig.caBundle
+          value: Y2EK
+        template: templates/aerospike-operator-validating-webhook-configuration.yaml
+
+  # ------------------------------------------------------------------------------
+  # Incomplete Secret: a Secret pre-created for provider=external legitimately has no
+  # ca.crt. Reusing it would yield an empty caBundle and a silently broken webhook, so
+  # the helper must regenerate all three keys instead.
+  # ------------------------------------------------------------------------------
+  - it: regenerates when the existing Secret has no ca.crt
+    set:
+      certs:
+        webhook:
+          provider: selfSigned
+    kubernetesProvider:
+      scheme:
+        "v1/Secret":
+          gvr: { version: v1, resource: secrets }
+          namespaced: true
+      objects:
+        - kind: Secret
+          apiVersion: v1
+          metadata:
+            name: webhook-server-cert
+            namespace: NAMESPACE
+            labels:
+              app.kubernetes.io/managed-by: Helm
+            annotations:
+              meta.helm.sh/release-name: RELEASE-NAME
+              meta.helm.sh/release-namespace: NAMESPACE
+          data:
+            tls.crt: Y3J0Cg==
+            tls.key: a2V5Cg==
+    asserts:
+      - notEqual:
+          path: data["tls.crt"]
+          value: Y3J0Cg==
+        template: templates/aerospike-operator-webhook-selfsigned-secret.yaml
+      - exists:
+          path: data["ca.crt"]
+        template: templates/aerospike-operator-webhook-selfsigned-secret.yaml
+      - matchRegex:
+          path: data["ca.crt"]
+          pattern: "^[A-Za-z0-9+/]+={0,2}$"
+        template: templates/aerospike-operator-webhook-selfsigned-secret.yaml
+
+  # ------------------------------------------------------------------------------
+  # Ownership is deliberately NOT checked here. A template cannot see
+  # --take-ownership, so a check would abort at render time and block the migration
+  # path that avoids an admission outage. The chart reuses whatever complete material
+  # it finds and leaves adoption to Helm, which reports its own ownership error.
+  # ------------------------------------------------------------------------------
+  - it: reuses a cert-manager-owned Secret instead of refusing to render
+    set:
+      certs:
+        webhook:
+          provider: selfSigned
+    kubernetesProvider:
+      scheme:
+        "v1/Secret":
+          gvr: { version: v1, resource: secrets }
+          namespaced: true
+      objects:
+        - kind: Secret
+          apiVersion: v1
+          metadata:
+            name: webhook-server-cert
+            namespace: NAMESPACE
+            annotations:
+              cert-manager.io/certificate-name: aerospike-operator-serving-cert
+          data:
+            tls.crt: Y3J0Cg==
+            tls.key: a2V5Cg==
+            ca.crt: Y2EK
+    asserts:
+      - notFailedTemplate: {}
+      # Reusing rather than regenerating is what makes `helm upgrade --take-ownership`
+      # an outage-free migration: the served certificate never changes.
+      - equal:
+          path: data["tls.crt"]
+          value: Y3J0Cg==
+        template: templates/aerospike-operator-webhook-selfsigned-secret.yaml
+      - equal:
+          path: webhooks[*].clientConfig.caBundle
+          value: Y2EK
+        template: templates/aerospike-operator-validating-webhook-configuration.yaml
+
+  - it: renders for provider=external regardless of who owns the Secret
+    set:
+      certs:
+        webhook:
+          provider: external
+          external:
+            caBundle: "LS0tLS1CRUdJTg=="
+    kubernetesProvider:
+      scheme:
+        "v1/Secret":
+          gvr: { version: v1, resource: secrets }
+          namespaced: true
+      objects:
+        - kind: Secret
+          apiVersion: v1
+          metadata:
+            name: webhook-server-cert
+            namespace: NAMESPACE
+          data:
+            tls.crt: Y3J0Cg==
+            tls.key: a2V5Cg==
+    asserts:
+      - notFailedTemplate: {}
+      - hasDocuments:
+          count: 0
+        template: templates/aerospike-operator-webhook-selfsigned-secret.yaml

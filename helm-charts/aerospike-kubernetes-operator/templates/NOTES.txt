@@ -19,3 +19,52 @@ $ helm status {{ .Release.Name }} --namespace {{ .Release.Namespace }}
 $ helm get all {{ .Release.Name }} --namespace {{ .Release.Namespace }}
 
 $ kubectl get all --namespace {{ .Release.Namespace }} -l "release={{ .Release.Name }}, chart={{ $.Chart.Name }}"
+
+Webhook TLS
+{{- $provider := include "aerospike-kubernetes-operator.webhookCertProvider" . }}
+{{- if eq $provider "certManager" }}
+Mode: certManager — the chart created the cert-manager Issuer and Certificate, and
+cainjector fills in the caBundle on the webhook configurations.
+{{- if not .Values.certs.webhook.provider }}
+Note: certs.webhook.provider is unset, so the mode was inferred from certs.webhook.create.
+Set `certs.webhook.provider: certManager` to make this explicit.
+{{- end }}
+{{- else if eq $provider "legacyCertManager" }}
+Mode: cert-manager, with the chart creating neither the Issuer nor the Certificate
+(inferred from the deprecated certs.webhook.create=false). cainjector still fills in
+the caBundle, so you must supply a Certificate named aerospike-operator-serving-cert.
+
+[DEPRECATED] certs.webhook.create is deprecated and will be removed in a future
+release. This install relies on it. There is no `provider` value with these exact
+semantics — if you create the Certificate yourself, keep using create=false for now;
+if you want the chart to create it, set `certs.webhook.provider: certManager`.
+{{- else if eq $provider "selfSigned" }}
+{{- $cert := include "aerospike-kubernetes-operator.webhookSelfSignedCert" . | fromYaml }}
+Mode: selfSigned — cert-manager is not required.
+{{ if $cert.reused }}
+Reused the certificate already stored in Secret {{ .Values.certs.webhook.webhookServerCertSecretName }},
+so the serving certificate was NOT rotated by this release.
+{{- else }}
+Generated a new CA and serving certificate into Secret {{ .Values.certs.webhook.webhookServerCertSecretName }}.
+{{- end }}
+
+This mode is intended for development and POC installs:
+  * The certificate is valid for 10 years and nothing renews it.
+  * Its validity starts at the clock of the machine that ran helm. If that clock runs
+    ahead of the cluster's, the API server sees the certificate as not yet valid and
+    rejects admission until the skew elapses.
+  * `helm template` and `--dry-run` cannot read the existing Secret, so a
+    render-and-apply GitOps pipeline regenerates the certificate on every apply and
+    will cause admission outages. Use provider=certManager or provider=external there.
+{{- else if eq $provider "external" }}
+Mode: external — the chart created no certificate resources.
+
+Before the operator can start, Secret {{ .Values.certs.webhook.webhookServerCertSecretName }}
+must exist in namespace {{ .Release.Namespace }} with tls.crt and tls.key. The manager
+Deployment mounts it unconditionally, so its pods stay in ContainerCreating until it does.
+{{- end }}
+{{- if .Values.certs.metrics.create }}
+
+Note: certs.metrics.create is true, so cert-manager is required for the metrics
+certificate regardless of the webhook mode above.
+{{- end }}
