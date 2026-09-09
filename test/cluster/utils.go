@@ -18,7 +18,9 @@ import (
 	appsv1 "k8s.io/api/apps/v1"
 	corev1 "k8s.io/api/core/v1"
 	"k8s.io/apimachinery/pkg/api/errors"
+	apimeta "k8s.io/apimachinery/pkg/api/meta"
 	"k8s.io/apimachinery/pkg/api/resource"
+	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/labels"
 	"k8s.io/apimachinery/pkg/types"
 	"k8s.io/apimachinery/pkg/util/wait"
@@ -161,7 +163,7 @@ func isClusterStateValid(
 		return false
 	}
 
-	// Check for status selector only in case of Completed phase
+	// Check for status selector and conditions only in case of Completed phase
 	if phaseSet.Cardinality() == 1 && phaseSet.Contains(asdbv1.AerospikeClusterCompleted) {
 		selector := labels.SelectorFromSet(operatorUtils.LabelsForAerospikeCluster(newCluster.Name))
 
@@ -169,9 +171,89 @@ func isClusterStateValid(
 			pkgLog.Info("Cluster status selector is not correct", "name", aeroCluster.Name)
 			return false
 		}
+
+		if !areClusterConditionsValid(aeroCluster, newCluster) {
+			return false
+		}
 	}
 
 	pkgLog.Info("Cluster state is validated successfully", "name", aeroCluster.Name)
+
+	return true
+}
+
+// areClusterConditionsValid validates the terminal state every converged cluster must report.
+// Only called for the Completed phase, which is what makes it safe: updateStatus writes the
+// phase, Ready=True and the resting operation conditions in a single patch, so there is no window
+// where the phase has settled but the conditions have not.
+func areClusterConditionsValid(aeroCluster, newCluster *asdbv1.AerospikeCluster) bool {
+	conditions := newCluster.Status.Conditions
+
+	// Ready must report that the current spec was applied.
+	ready := apimeta.FindStatusCondition(conditions, string(asdbv1.AerospikeClusterConditionReady))
+	if ready == nil || ready.Status != metav1.ConditionTrue ||
+		ready.Reason != asdbv1.AerospikeClusterReasonReconcileComplete {
+		pkgLog.Info(
+			"Cluster Ready condition is not True/ReconcileComplete", "name", aeroCluster.Name,
+			"condition", ready,
+		)
+
+		return false
+	}
+
+	// No operation may still be reported once the cluster has converged. This is what catches a
+	// condition left True by a requeue or error path — the bug class the reset policy exists for.
+	type restingCondition struct {
+		condType asdbv1.AerospikeClusterConditionType
+		reason   string
+	}
+
+	requiredConditions := []restingCondition{
+		{asdbv1.AerospikeClusterConditionScalingUp, asdbv1.AerospikeClusterReasonNotScalingUp},
+		{asdbv1.AerospikeClusterConditionScalingDown, asdbv1.AerospikeClusterReasonNotScalingDown},
+		{asdbv1.AerospikeClusterConditionUpgrading, asdbv1.AerospikeClusterReasonNotUpgrading},
+		{asdbv1.AerospikeClusterConditionRollingRestart, asdbv1.AerospikeClusterReasonNotRollingRestart},
+		{asdbv1.AerospikeClusterConditionRackRevisionRollingOut, asdbv1.AerospikeClusterReasonNotRackRevisionRollingOut},
+	}
+
+	// Paused mirrors spec.paused. Skipped while paused, because a cluster paused after it had
+	// already converged keeps phase=Completed with Paused=True.
+	if !asdbv1.GetBool(aeroCluster.Spec.Paused) {
+		requiredConditions = append(requiredConditions,
+			restingCondition{asdbv1.AerospikeClusterConditionPaused, asdbv1.AerospikeClusterReasonNotPaused},
+		)
+	}
+
+	for _, required := range requiredConditions {
+		cond := apimeta.FindStatusCondition(conditions, string(required.condType))
+		if cond == nil || cond.Status != metav1.ConditionFalse || cond.Reason != required.reason {
+			pkgLog.Info(
+				"Condition is not at rest on a converged cluster", "name", aeroCluster.Name,
+				"conditionType", required.condType, "wantReason", required.reason, "condition", cond,
+			)
+
+			return false
+		}
+	}
+
+	// Every condition must have been evaluated against the current generation. This is the
+	// property that makes conditions usable as a per-generation gate: a consumer can wait for
+	// Ready=True with observedGeneration == metadata.generation and know the verdict is about the
+	// spec it submitted, not a previous one.
+	for idx := range conditions {
+		if conditions[idx].ObservedGeneration != newCluster.Generation {
+			pkgLog.Info(
+				"Condition observedGeneration is behind metadata.generation", "name", aeroCluster.Name,
+				"conditionType", conditions[idx].Type,
+				"observedGeneration", conditions[idx].ObservedGeneration,
+				"generation", newCluster.Generation,
+			)
+
+			return false
+		}
+	}
+
+	pkgLog.Info("Cluster status conditions are validated successfully", "name", aeroCluster.Name)
 
 	return true
 }

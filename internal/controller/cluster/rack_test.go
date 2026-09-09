@@ -5,7 +5,6 @@ import (
 	"fmt"
 	"testing"
 
-	"github.com/go-logr/logr"
 	"github.com/stretchr/testify/require"
 	appsv1 "k8s.io/api/apps/v1"
 	corev1 "k8s.io/api/core/v1"
@@ -13,81 +12,17 @@ import (
 	"k8s.io/apimachinery/pkg/runtime"
 	"k8s.io/apimachinery/pkg/types"
 	"k8s.io/apimachinery/pkg/util/sets"
-	clientgoscheme "k8s.io/client-go/kubernetes/scheme"
-	"k8s.io/client-go/tools/record"
 	"sigs.k8s.io/controller-runtime/pkg/client"
-	"sigs.k8s.io/controller-runtime/pkg/client/fake"
 	"sigs.k8s.io/controller-runtime/pkg/client/interceptor"
 
 	asdbv1 "github.com/aerospike/aerospike-kubernetes-operator/v4/api/v1"
 	"github.com/aerospike/aerospike-kubernetes-operator/v4/pkg/utils"
 )
 
-//nolint:unparam // for future use
-func newTestAerospikeCluster(namespace, name string) *asdbv1.AerospikeCluster {
-	aeroConfig := asdbv1.AerospikeConfigSpec{
-		Value: map[string]interface{}{
-			asdbv1.ConfKeyNetwork: map[string]interface{}{
-				asdbv1.ConfKeyNetworkService: map[string]interface{}{
-					asdbv1.ConfKeyPort: float64(3000),
-				},
-			},
-		},
-	}
-
-	// getFQDNsForCluster (invoked while building the ConfigMap) walks
-	// Spec.RackConfig.Racks to size each rack, so it must contain the same
-	// rack referenced by the RackState passed to createEmptyRack.
-	rack := asdbv1.Rack{
-		ID:              1,
-		AerospikeConfig: aeroConfig,
-	}
-
-	return &asdbv1.AerospikeCluster{
-		ObjectMeta: metav1.ObjectMeta{
-			Name:      name,
-			Namespace: namespace,
-		},
-		Spec: asdbv1.AerospikeClusterSpec{
-			Size:            1,
-			Image:           "aerospike/aerospike-server-enterprise:7.0.0.0",
-			AerospikeConfig: &aeroConfig,
-			RackConfig: asdbv1.RackConfig{
-				Racks: []asdbv1.Rack{rack},
-			},
-		},
-	}
-}
-
 func newTestRackState(aeroCluster *asdbv1.AerospikeCluster) *RackState {
 	return &RackState{
 		Rack: &aeroCluster.Spec.RackConfig.Racks[0],
 		Size: aeroCluster.Spec.Size,
-	}
-}
-
-func newTestReconciler(
-	t *testing.T, aeroCluster *asdbv1.AerospikeCluster, funcs *interceptor.Funcs,
-	existingObjects ...client.Object,
-) *SingleClusterReconciler {
-	t.Helper()
-
-	scheme := runtime.NewScheme()
-	require.NoError(t, asdbv1.AddToScheme(scheme))
-	require.NoError(t, clientgoscheme.AddToScheme(scheme))
-
-	fakeClient := fake.NewClientBuilder().
-		WithScheme(scheme).
-		WithInterceptorFuncs(*funcs).
-		WithObjects(existingObjects...).
-		Build()
-
-	return &SingleClusterReconciler{
-		Client:      fakeClient,
-		Log:         logr.Discard(),
-		Scheme:      scheme,
-		aeroCluster: aeroCluster,
-		Recorder:    record.NewFakeRecorder(10),
 	}
 }
 

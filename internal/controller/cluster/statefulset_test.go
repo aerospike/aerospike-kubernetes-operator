@@ -26,6 +26,7 @@ import (
 	corev1 "k8s.io/api/core/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/util/sets"
+	"sigs.k8s.io/controller-runtime/pkg/client/interceptor"
 
 	asdbv1 "github.com/aerospike/aerospike-kubernetes-operator/v4/api/v1"
 	"github.com/aerospike/aerospike-kubernetes-operator/v4/internal/controller/common"
@@ -42,7 +43,6 @@ func replicaCount(n int32) *int32 { return &n }
 func TestWaitForSTSPodsServerReady(t *testing.T) {
 	const stsName = clusterName + "-1"
 
-	scheme := newTestScheme()
 	aeroCluster := newTestAerospikeCluster(namespace, clusterName)
 
 	sts := &appsv1.StatefulSet{
@@ -52,7 +52,7 @@ func TestWaitForSTSPodsServerReady(t *testing.T) {
 	}
 
 	t.Run("ignorable pod is skipped without any k8s poll", func(t *testing.T) {
-		r := newReconcilerWithObjects(scheme, aeroCluster, sts)
+		r := newTestReconciler(t, aeroCluster, &interceptor.Funcs{}, sts)
 
 		// No pod is pre-created; if the function tried to Get it, fake client
 		// would return NotFound → error.  The ignorable-skip path must prevent
@@ -72,7 +72,7 @@ func TestWaitForSTSPodsServerReady(t *testing.T) {
 				ContainerStatuses: []corev1.ContainerStatus{serverContainer(true)},
 			},
 		}
-		r := newReconcilerWithObjects(scheme, aeroCluster, sts, pod)
+		r := newTestReconciler(t, aeroCluster, &interceptor.Funcs{}, sts, pod)
 
 		if err := r.waitForSTSPodsServerReady(context.Background(), sts, sets.New[string]()); err != nil {
 			t.Errorf("expected nil for running server container, got: %v", err)
@@ -87,7 +87,7 @@ func TestWaitForSTSPodsServerReady(t *testing.T) {
 				ContainerStatuses: []corev1.ContainerStatus{serverCrashLoopContainer()},
 			},
 		}
-		r := newReconcilerWithObjects(scheme, aeroCluster, sts, pod)
+		r := newTestReconciler(t, aeroCluster, &interceptor.Funcs{}, sts, pod)
 
 		if err := r.waitForSTSPodsServerReady(context.Background(), sts, sets.New[string]()); err == nil {
 			t.Error("expected an error for CrashLoopBackOff server container, got nil")
@@ -112,7 +112,7 @@ func TestWaitForSTSPodsServerReady(t *testing.T) {
 		// pod-1 is ignorable; no pod object is pre-created for it so any Get
 		// would return NotFound — the skip must fire before the Get.
 		ignorable := sets.New(stsName + "-1")
-		r := newReconcilerWithObjects(scheme, aeroCluster, multiSTS, pod0)
+		r := newTestReconciler(t, aeroCluster, &interceptor.Funcs{}, multiSTS, pod0)
 
 		if err := r.waitForSTSPodsServerReady(context.Background(), multiSTS, ignorable); err != nil {
 			t.Errorf("expected nil when running pod + ignorable pod, got: %v", err)
@@ -140,7 +140,7 @@ func TestWaitForSTSPodsServerReady(t *testing.T) {
 				},
 			},
 		}
-		r := newReconcilerWithObjects(scheme, aeroCluster, sts, pod)
+		r := newTestReconciler(t, aeroCluster, &interceptor.Funcs{}, sts, pod)
 
 		err := r.waitForSTSPodsServerReady(context.Background(), sts, sets.New[string]())
 		if !errors.Is(err, common.ErrStatefulSetNotReady) {
