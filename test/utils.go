@@ -29,6 +29,8 @@ func InitialiseClients(scheme *runtime.Scheme, cfg *rest.Config) (
 
 	// +kubebuilder:scaffold:scheme
 
+	//nolint:staticcheck // SA4023: client.New never returns a nil client today, but the check below
+	// guards against a future change to that function
 	k8sClient, err = client.New(
 		cfg, client.Options{Scheme: scheme},
 	)
@@ -36,6 +38,8 @@ func InitialiseClients(scheme *runtime.Scheme, cfg *rest.Config) (
 		return k8sClient, k8sClientSet, err
 	}
 
+	//nolint:staticcheck // SA4023: client.New never returns a nil client today, but the check
+	// guards against a future change to that function
 	if k8sClient == nil {
 		err = fmt.Errorf("k8sClient is nil")
 		return k8sClient, k8sClientSet, err

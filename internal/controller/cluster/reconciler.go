@@ -743,6 +743,11 @@ func (r *SingleClusterReconciler) patchStatus(ctx context.Context, newAeroCluste
 // validation for ip and port.
 //
 // Such cases warrant a cluster recreate to recover after the user corrects the configuration.
+//
+// This function always returns a non-nil error today, but callers still check err != nil
+// to guard against a future change to this function.
+//
+//nolint:staticcheck // SA4023
 func (r *SingleClusterReconciler) recoverFailedCreate(ctx context.Context) error {
 	r.Log.Info("Forcing a cluster recreate as status is nil. The cluster could be unreachable due to bad configuration")
 
@@ -1016,6 +1021,8 @@ func (r *SingleClusterReconciler) checkPreviouslyFailedCluster(ctx context.Conte
 
 	// All pods have hard-failed and status is empty — the cluster failed during
 	// its initial create and needs to be recovered.
+	//nolint:staticcheck // SA4023: recoverFailedCreate always returns a non-nil error today, but the check
+	// guards against a future change to that function
 	if err := r.recoverFailedCreate(ctx); err != nil {
 		return true, common.ReconcileError(err)
 	}
