@@ -36,7 +36,17 @@ func InitialiseClients(scheme *runtime.Scheme, cfg *rest.Config) (
 		return k8sClient, k8sClientSet, err
 	}
 
+	if k8sClient == nil {
+		err = fmt.Errorf("k8sClient is nil")
+		return k8sClient, k8sClientSet, err
+	}
+
 	k8sClientSet = kubernetes.NewForConfigOrDie(cfg)
+
+	if k8sClientSet == nil {
+		err = fmt.Errorf("k8sClientSet is nil")
+		return k8sClient, k8sClientSet, err
+	}
 
 	return k8sClient, k8sClientSet, nil
 }
