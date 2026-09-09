@@ -244,65 +244,74 @@ func (r *SingleClusterReconciler) appendCACertFromFileOrPath(
 		return serverPool
 	}
 
+	err := LoadCACertsFromFileOrPath(caPath, serverPool, func(filePath string) {
+		r.Log.Info("Loaded CA certs from file", "caPath", caPath, "file", filePath)
+	})
+	if err != nil {
+		r.Log.Error(err, "Failed to load CA certs.", "caPath", caPath)
+	}
+
+	return serverPool
+}
+
+// LoadCACertsFromFileOrPath loads PEM-encoded CA certificates from caPath - a single cert
+// file or a directory containing cert files - into serverPool.
+// onFileLoaded, if non-nil, is called with the path of each file after its certs
+// are appended, so callers can log with their own logger.
+func LoadCACertsFromFileOrPath(
+	caPath string, serverPool *x509.CertPool, onFileLoaded func(filePath string),
+) error {
 	// caPath can be a file name as well as directory path containing cacert files.
 	info, err := os.Stat(caPath)
 	if err != nil {
-		r.Log.Error(err, "Failed to stat CA path.", "caPath", caPath)
-		return serverPool
+		return fmt.Errorf("stat CA path %s: %w", caPath, err)
 	}
 
 	if !info.IsDir() {
-		var caData []byte
-
-		caData, err = os.ReadFile(caPath)
-		if err != nil {
-			r.Log.Error(err, "Failed to load CA cert file.", "caPath", caPath)
-			return serverPool
+		caData, readErr := os.ReadFile(caPath)
+		if readErr != nil {
+			return fmt.Errorf("read CA cert file %s: %w", caPath, readErr)
 		}
 
 		serverPool.AppendCertsFromPEM(caData)
-		r.Log.Info("Loaded CA certs from file", "caPath", caPath, "file", caPath)
 
-		return serverPool
+		if onFileLoaded != nil {
+			onFileLoaded(caPath)
+		}
+
+		return nil
 	}
 
 	root, err := os.OpenRoot(caPath)
 	if err != nil {
-		r.Log.Error(err, "Failed to open CA path.", "caPath", caPath)
-		return serverPool
+		return fmt.Errorf("open CA path %s: %w", caPath, err)
 	}
 	defer root.Close()
 
-	err = fs.WalkDir(
+	return fs.WalkDir(
 		root.FS(), ".", func(path string, d fs.DirEntry, err error) error {
 			if err != nil {
 				return err
 			}
 
-			if !d.IsDir() {
-				var caData []byte
+			if d.IsDir() {
+				return nil
+			}
 
-				if caData, err = root.ReadFile(path); err != nil {
-					return err
-				}
+			caData, err := root.ReadFile(path)
+			if err != nil {
+				return err
+			}
 
-				serverPool.AppendCertsFromPEM(caData)
-				r.Log.Info("Loaded CA certs from file",
-					"caPath", caPath,
-					"file", path,
-				)
+			serverPool.AppendCertsFromPEM(caData)
+
+			if onFileLoaded != nil {
+				onFileLoaded(path)
 			}
 
 			return nil
 		},
 	)
-	if err != nil {
-		r.Log.Error(
-			err, "Failed to load CA certs from dir.", "caPath", caPath,
-		)
-	}
-
-	return serverPool
 }
 
 func (r *SingleClusterReconciler) appendCACertFromSecret(
