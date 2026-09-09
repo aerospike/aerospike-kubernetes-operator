@@ -3,19 +3,24 @@ package cluster
 import (
 	"context"
 	"errors"
-	"fmt"
 	"strings"
 	"testing"
 	"unicode/utf8"
 
 	apimeta "k8s.io/apimachinery/pkg/api/meta"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
-	"k8s.io/apimachinery/pkg/types"
-	ctrl "sigs.k8s.io/controller-runtime"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 	"sigs.k8s.io/controller-runtime/pkg/client/interceptor"
 
 	asdbv1 "github.com/aerospike/aerospike-kubernetes-operator/v4/api/v1"
+)
+
+const (
+	readyType   = string(asdbv1.AerospikeClusterConditionReady)
+	scalingUp   = string(asdbv1.AerospikeClusterConditionScalingUp)
+	scalingDown = string(asdbv1.AerospikeClusterConditionScalingDown)
+	upgrading   = string(asdbv1.AerospikeClusterConditionUpgrading)
+	paused      = string(asdbv1.AerospikeClusterConditionPaused)
 )
 
 // ---- truncateConditionMessage ----------------------------------------------
@@ -90,7 +95,7 @@ func TestInitializeConditionsIfNeeded_SeedsAllConditions(t *testing.T) {
 	// Re-fetch to confirm the patch reached the fake API server.
 	conds := getCluster(t, r.Client, ac).Status.Conditions
 
-	// Ready + the four operation conditions + Paused.
+	// Ready + the five operation conditions + Paused.
 	expectedCount := 1 + len(operationConditions) + 1
 	if len(conds) != expectedCount {
 		t.Fatalf("want %d conditions, got %d: %v", expectedCount, len(conds), conds)
@@ -171,11 +176,8 @@ func TestInitializeConditionsIfNeeded_Idempotent(t *testing.T) {
 }
 
 // ---- mergePatchStatus ------------------------------------------------------
-
 func TestMergePatchStatus(t *testing.T) {
 	t.Parallel()
-
-	readyType := string(asdbv1.AerospikeClusterConditionReady)
 
 	testCases := []struct {
 		phase          *asdbv1.AerospikeClusterPhase // proposed
@@ -337,13 +339,23 @@ func TestMergePatchStatus_DoesNotMutateCallerCondition(t *testing.T) {
 // setConditions is a thin wrapper over mergePatchStatus, so it is covered only where it adds
 // something: batching several conditions into one patch. The phase half of mergePatchStatus is
 // covered separately, including its error branch.
-
 func TestSetConditions_SetsMultipleConditionsInOnePatch(t *testing.T) {
 	t.Parallel()
 
+	// Counting patches asserts the batching directly. It counts the number of status update done.
+	patches := 0
+
 	ac := getMinimalCluster()
-	r := newTestReconciler(t, ac, &interceptor.Funcs{})
-	initialRV := getCluster(t, r.Client, ac).ResourceVersion
+	r := newTestReconciler(t, ac, &interceptor.Funcs{
+		SubResourcePatch: func(
+			ctx context.Context, c client.Client, sub string, obj client.Object,
+			patch client.Patch, opts ...client.SubResourcePatchOption,
+		) error {
+			patches++
+
+			return c.SubResource(sub).Patch(ctx, obj, patch, opts...)
+		},
+	})
 
 	if err := r.setConditions(context.TODO(),
 		opConditionTrue(string(asdbv1.AerospikeClusterConditionScalingUp), asdbv1.AerospikeClusterReasonScalingUp),
@@ -354,9 +366,9 @@ func TestSetConditions_SetsMultipleConditionsInOnePatch(t *testing.T) {
 
 	got := getCluster(t, r.Client, ac)
 
-	scalingUp := findCondition(t, got.Status.Conditions, string(asdbv1.AerospikeClusterConditionScalingUp))
-	if scalingUp.Status != metav1.ConditionTrue {
-		t.Errorf("want ScalingUp=True, got %s", scalingUp.Status)
+	scalingUpCond := findCondition(t, got.Status.Conditions, string(asdbv1.AerospikeClusterConditionScalingUp))
+	if scalingUpCond.Status != metav1.ConditionTrue {
+		t.Errorf("want ScalingUp=True, got %s", scalingUpCond.Status)
 	}
 
 	ready := findCondition(t, got.Status.Conditions, string(asdbv1.AerospikeClusterConditionReady))
@@ -365,10 +377,8 @@ func TestSetConditions_SetsMultipleConditionsInOnePatch(t *testing.T) {
 	}
 
 	// Both conditions must arrive in a single patch, not one each.
-	if rv := got.ResourceVersion; rv == initialRV {
-		t.Fatal("no patch was issued")
-	} else if bumps := resourceVersionBumps(t, initialRV, rv); bumps != 1 {
-		t.Errorf("want 1 patch for 2 conditions, got %d", bumps)
+	if patches != 1 {
+		t.Errorf("want 1 patch for 2 conditions, got %d", patches)
 	}
 }
 
@@ -441,17 +451,8 @@ func TestMergePatchStatus_Phase(t *testing.T) {
 	}
 }
 
-// TestSetConditions_NeverDuplicatesAConditionType is the operator-side guarantee that replaces
-// an envtest assertion we had to drop: the CRD marks conditions as a list-map keyed on type, but
-// the API server only enforces that on newer versions — k8s 1.23, which CI still targets, accepts
-// a duplicate and stores both entries. So uniqueness cannot be delegated to the server.
-//
-// It holds here because every condition write goes through apimeta.SetStatusCondition, which
-// matches on type and updates in place rather than appending.
 func TestSetConditions_NeverDuplicatesAConditionType(t *testing.T) {
 	t.Parallel()
-
-	readyType := string(asdbv1.AerospikeClusterConditionReady)
 
 	ac := getMinimalCluster()
 	r := newTestReconciler(t, ac, &interceptor.Funcs{})
@@ -481,129 +482,18 @@ func TestSetConditions_NeverDuplicatesAConditionType(t *testing.T) {
 	})
 }
 
-// ---- writeTerminalStatus ---------------------------------------------------
-
-func TestWriteTerminalStatus(t *testing.T) {
-	t.Parallel()
-
-	readyType := string(asdbv1.AerospikeClusterConditionReady)
-	longErr := strings.Repeat("x", maxConditionMessageLength*2)
-
-	testCases := []struct {
-		name          string
-		recErr        error
-		failureReason string
-		wantPhase     asdbv1.AerospikeClusterPhase
-		wantReason    string
-		wantMessage   string
-		// wantMessageBounded asserts truncation rather than an exact string.
-		wantMessageBounded bool
-	}{
-		{
-			name:        "records the failure with the generic reason when no stage was recorded",
-			recErr:      errors.New("disk full"),
-			wantPhase:   asdbv1.AerospikeClusterError,
-			wantReason:  asdbv1.AerospikeClusterReasonReconcileFailed,
-			wantMessage: "disk full",
-		},
-		{
-			// Reconcile records the stage it bailed out at before returning the error, so a rack
-			// problem can be told apart from an access-control or roster problem without parsing
-			// the message.
-			name:          "prefers the stage reason Reconcile recorded",
-			recErr:        errors.New("reconcile PodDisruptionBudget: nope"),
-			failureReason: asdbv1.AerospikeClusterReasonPDBReconcileFailed,
-			wantPhase:     asdbv1.AerospikeClusterError,
-			wantReason:    asdbv1.AerospikeClusterReasonPDBReconcileFailed,
-		},
-		{
-			// The end-to-end half of TestTruncateConditionMessage: an oversized error must reach
-			// the condition already bounded, or the API server rejects the patch and the
-			// phase=Error write is lost with it.
-			name:               "truncates an oversized error message",
-			recErr:             errors.New(longErr),
-			wantPhase:          asdbv1.AerospikeClusterError,
-			wantReason:         asdbv1.AerospikeClusterReasonReconcileFailed,
-			wantMessageBounded: true,
-		},
-	}
-
-	for _, tc := range testCases {
-		t.Run(tc.name, func(t *testing.T) {
-			t.Parallel()
-
-			ac := getMinimalCluster()
-			r := newTestReconciler(t, ac, &interceptor.Funcs{})
-			r.computedState.failureReason = tc.failureReason
-
-			if err := r.writeTerminalStatus(context.TODO(), tc.recErr); err != nil {
-				t.Fatalf("unexpected error: %v", err)
-			}
-
-			got := getCluster(t, r.Client, ac)
-
-			if got.Status.Phase != tc.wantPhase {
-				t.Errorf("want phase %s, got %s", tc.wantPhase, got.Status.Phase)
-			}
-
-			assertCondition(t, got.Status.Conditions, &metav1.Condition{
-				Type:    readyType,
-				Status:  metav1.ConditionFalse,
-				Reason:  tc.wantReason,
-				Message: tc.wantMessage,
-			})
-
-			if tc.wantMessageBounded {
-				cond := findCondition(t, got.Status.Conditions, readyType)
-				if len(cond.Message) > maxConditionMessageLength {
-					t.Errorf("message not truncated: %d bytes", len(cond.Message))
-				}
-			}
-		})
-	}
-}
-
-// TestWriteTerminalStatus_SyncsBackToAeroCluster is separate from the table because it asserts on
-// the reconciler's in-memory copy rather than on what reached the API server. Downstream code
-// reads r.aeroCluster, so a missing copy-back would go unnoticed by every other test.
-func TestWriteTerminalStatus_SyncsBackToAeroCluster(t *testing.T) {
-	t.Parallel()
-
-	ac := getMinimalCluster()
-	r := newTestReconciler(t, ac, &interceptor.Funcs{})
-
-	if err := r.writeTerminalStatus(context.TODO(), errors.New("timeout")); err != nil {
-		t.Fatalf("unexpected error: %v", err)
-	}
-
-	if r.aeroCluster.Status.Phase != asdbv1.AerospikeClusterError {
-		t.Errorf("r.aeroCluster.Status.Phase not synced back: got %s", r.aeroCluster.Status.Phase)
-	}
-
-	cond := apimeta.FindStatusCondition(r.aeroCluster.Status.Conditions,
-		string(asdbv1.AerospikeClusterConditionReady))
-	if cond == nil {
-		t.Fatal("Ready condition not synced back to r.aeroCluster")
-	}
-
-	if cond.Status != metav1.ConditionFalse {
-		t.Errorf("r.aeroCluster Ready: want False, got %s", cond.Status)
-	}
-}
-
 // ---- operation condition claim and reset -----------------------------------
 
 // TestClaimSurvivesAlreadyTrueCondition pins the ordering inside mergePatchStatus: the claim
 // must be recorded even when the condition is already True and no patch is issued. Batch two
 // onwards of a batched operation hits exactly this path, and losing the claim there would let
 // the exit path clear a condition whose operation is still running.
-func TestClaimSurvivesAlreadyTrueCondition(t *testing.T) {
+func TestMergePatchStatus_ClaimsUnchangedTrueCondition(t *testing.T) {
 	t.Parallel()
 
-	scalingUp := string(asdbv1.AerospikeClusterConditionScalingUp)
-
 	ac := getMinimalCluster()
-	r := armedReconciler(t, ac)
+	r := newTestReconciler(t, ac, &interceptor.Funcs{})
+	r.initPendingOpConditionReset()
 
 	cond := opConditionTrue(scalingUp, asdbv1.AerospikeClusterReasonScalingUp)
 
@@ -637,11 +527,6 @@ func TestClaimSurvivesAlreadyTrueCondition(t *testing.T) {
 func TestResetOpConditions(t *testing.T) {
 	t.Parallel()
 
-	var (
-		scalingUp   = string(asdbv1.AerospikeClusterConditionScalingUp)
-		scalingDown = string(asdbv1.AerospikeClusterConditionScalingDown)
-	)
-
 	testCases := []struct {
 		// wantStatus is the expected status per condition type after the exit path runs.
 		wantStatus map[string]metav1.ConditionStatus
@@ -662,8 +547,7 @@ func TestResetOpConditions(t *testing.T) {
 			wantStatus: map[string]metav1.ConditionStatus{scalingUp: metav1.ConditionTrue},
 		},
 		{
-			// The rack-migration sequence: a previous pass left ScalingUp True and this pass
-			// claims ScalingDown. The unclaimed one must clear (the accumulation fix) and the
+			// Different operation per reconcile pass. The unclaimed one must clear (the accumulation fix) and the
 			// claimed one must survive (freeze-on-interruption).
 			name:     "clears unclaimed, keeps claimed",
 			seedTrue: []string{scalingUp},
@@ -733,19 +617,14 @@ func TestResetOpConditions(t *testing.T) {
 	}
 }
 
-// TestUpdateStatusClearsCompletedOperation pins the coupling that opConditionsToClear
-// deliberately leaves open. It never returns a claimed condition, so an operation interrupted by
-// an error keeps reporting. On the success path that job belongs to updateStatus, which clears
-// all four atomically with Ready=True. If that loop is ever removed as "redundant", a completed
-// operation's condition would stay True forever and this test is what catches it.
+// Update Status resets all five operations conditions
 func TestUpdateStatusClearsCompletedOperation(t *testing.T) {
 	t.Parallel()
 
-	upgrading := string(asdbv1.AerospikeClusterConditionUpgrading)
-
 	// updateStatus runs CopySpecToStatus, so this needs a cluster with a real spec.
 	ac := newTestAerospikeCluster(namespace, clusterName)
-	r := armedReconciler(t, ac)
+	r := newTestReconciler(t, ac, &interceptor.Funcs{})
+	r.initPendingOpConditionReset()
 
 	// A rack function claimed Upgrading during this pass and the operation completed.
 	if err := r.setConditions(context.TODO(),
@@ -783,8 +662,6 @@ func TestUpdateStatusClearsCompletedOperation(t *testing.T) {
 //     not reintroduce a write on every requeue.
 func TestObservedGenerationCatchesUpOnGenerationBump(t *testing.T) {
 	t.Parallel()
-
-	paused := string(asdbv1.AerospikeClusterConditionPaused)
 
 	ac := getMinimalCluster() // Generation: 1
 	r := newTestReconciler(t, ac, &interceptor.Funcs{})
@@ -840,204 +717,6 @@ func TestObservedGenerationCatchesUpOnGenerationBump(t *testing.T) {
 	}
 }
 
-// ---- finishReconcile -------------------------------------------------------
-
-// TestFinishReconcile covers how the exit path treats a failed status write, which differs by
-// path for a reason: on the error path the write carries phase=Error, so losing it means the
-// failure was never recorded anywhere. On the clean path there is no phase change to lose, but the
-// error is still surfaced — there is no SyncPeriod configured, so controller-runtime's 10-hour
-// default applies and "the next pass will retry it" could mean tomorrow.
-func TestFinishReconcile(t *testing.T) {
-	t.Parallel()
-
-	scalingUp := string(asdbv1.AerospikeClusterConditionScalingUp)
-	recErr := errors.New("rack reconcile blew up")
-
-	testCases := []struct {
-		recErr error
-		name   string
-		// wantPhase is checked only when set.
-		wantPhase asdbv1.AerospikeClusterPhase
-		// wantErrs are the errors that must all be present in the result.
-		wantErrs  []error
-		failPatch bool
-		// wantScalingUpCleared asserts the exit policy actually ran.
-		wantScalingUpCleared bool
-	}{
-		{
-			name:                 "clean pass applies the exit policy",
-			wantScalingUpCleared: true,
-		},
-		{
-			name:      "error path joins the status write failure onto the reconcile error",
-			recErr:    recErr,
-			failPatch: true,
-			wantErrs:  []error{recErr, errStatusPatch},
-		},
-		{
-			// The phase must stay put: writeTerminalStatus ran with a nil recErr, so it never
-			// touched it. This retries without mislabelling the cluster as Error.
-			name:      "clean pass surfaces a status write failure without changing the phase",
-			failPatch: true,
-			wantErrs:  []error{errStatusPatch},
-			wantPhase: asdbv1.AerospikeClusterCompleted,
-		},
-	}
-
-	for _, tc := range testCases {
-		t.Run(tc.name, func(t *testing.T) {
-			t.Parallel()
-
-			ac := getMinimalCluster()
-			ac.Status.Phase = asdbv1.AerospikeClusterCompleted
-			ac.Status.Conditions = []metav1.Condition{
-				opConditionTrue(scalingUp, asdbv1.AerospikeClusterReasonScalingUp),
-			}
-
-			funcs := &interceptor.Funcs{}
-			if tc.failPatch {
-				funcs = failingStatusPatch()
-			}
-
-			r := newTestReconciler(t, ac, funcs)
-			r.initPendingOpConditionReset() // armed, nothing claimed → the reset will patch
-
-			err := r.finishReconcile(context.TODO(), ctrl.Result{}, tc.recErr)
-
-			for _, want := range tc.wantErrs {
-				if !errors.Is(err, want) {
-					t.Errorf("result must contain %v, got %v", want, err)
-				}
-			}
-
-			if len(tc.wantErrs) == 0 && err != nil {
-				t.Errorf("unexpected error: %v", err)
-			}
-
-			got := getCluster(t, r.Client, ac)
-
-			if tc.wantPhase != "" && got.Status.Phase != tc.wantPhase {
-				t.Errorf("want phase %s, got %s", tc.wantPhase, got.Status.Phase)
-			}
-
-			if tc.wantScalingUpCleared {
-				cond := findCondition(t, got.Status.Conditions, scalingUp)
-				if cond.Status != metav1.ConditionFalse {
-					t.Errorf("exit policy not applied: ScalingUp=%s", cond.Status)
-				}
-			}
-		})
-	}
-}
-
-// ---- handleTerminatingCluster ----------------------------------------------
-
-func TestHandleTerminatingCluster(t *testing.T) {
-	t.Parallel()
-
-	errUpdate := errors.New("simulated finalizer removal failure")
-
-	testCases := []struct {
-		wantErr    error
-		name       string
-		finalizers []string
-		// failStatus makes the Ready=False/Terminating write fail.
-		failStatus bool
-		// failUpdate makes finalizer removal fail.
-		failUpdate bool
-		// wantTerminating asserts the condition reached the API server.
-		wantTerminating bool
-	}{
-		{
-			name:            "marks the cluster not ready while it is torn down",
-			wantTerminating: true,
-		},
-		{
-			// The object may already be gone, so a NotFound on the condition write is expected
-			// here and must never block finalizer removal.
-			name:       "continues when the condition write fails",
-			failStatus: true,
-		},
-		{
-			// Unlike the condition write, a failure to clean up and drop the finalizer has to
-			// surface, or the cluster would be released while its resources still exist.
-			name:       "propagates a deletion failure",
-			finalizers: []string{finalizerName},
-			failUpdate: true,
-			wantErr:    errUpdate,
-		},
-	}
-
-	for _, tc := range testCases {
-		t.Run(tc.name, func(t *testing.T) {
-			t.Parallel()
-
-			ac := getMinimalCluster()
-			ac.Finalizers = tc.finalizers
-
-			funcs := &interceptor.Funcs{}
-
-			switch {
-			case tc.failStatus:
-				funcs = failingStatusPatch()
-			case tc.failUpdate:
-				// Finalizer removal goes through a plain Update.
-				funcs = &interceptor.Funcs{
-					Update: func(
-						_ context.Context, _ client.WithWatch, _ client.Object, _ ...client.UpdateOption,
-					) error {
-						return errUpdate
-					},
-				}
-			}
-
-			r := newTestReconciler(t, ac, funcs)
-
-			err := r.handleTerminatingCluster(context.TODO())
-
-			if tc.wantErr != nil {
-				if !errors.Is(err, tc.wantErr) {
-					t.Fatalf("want %v surfaced, got %v", tc.wantErr, err)
-				}
-			} else if err != nil {
-				t.Fatalf("unexpected error: %v", err)
-			}
-
-			if tc.wantTerminating {
-				assertCondition(t, getCluster(t, r.Client, ac).Status.Conditions, &metav1.Condition{
-					Type:   string(asdbv1.AerospikeClusterConditionReady),
-					Status: metav1.ConditionFalse,
-					Reason: asdbv1.AerospikeClusterReasonTerminating,
-				})
-			}
-		})
-	}
-}
-
-// ---- ensureSCRoster --------------------------------------------------------
-
-// TestEnsureSCRoster_NoOpForNonSCCluster covers the path taken by every cluster without strong
-// consistency: it must not touch the roster or reach for a host connection, both of which would
-// need a live Aerospike server.
-func TestEnsureSCRoster_NoOpForNonSCCluster(t *testing.T) {
-	t.Parallel()
-
-	ac := newTestAerospikeCluster(namespace, clusterName)
-	// IsClusterSCEnabled reads rack 0's namespace list with an unchecked type assertion, so the
-	// key has to be present. A namespace without strong-consistency is the non-SC case.
-	ac.Spec.RackConfig.Racks[0].AerospikeConfig.Value[asdbv1.ConfKeyNamespace] = []interface{}{
-		map[string]interface{}{"name": "test"},
-	}
-
-	r := newTestReconciler(t, ac, &interceptor.Funcs{})
-
-	res := r.ensureSCRoster(context.TODO(), nil, nil, nil)
-
-	if !res.IsSuccess {
-		t.Errorf("want success for a non-SC cluster, got err=%v result=%+v", res.Err, res.Result)
-	}
-}
-
 // ---- helpers ---------------------------------------------------------------
 
 // errStatusPatch is returned by failingStatusPatch so tests can assert on it with errors.Is.
@@ -1085,19 +764,6 @@ func assertCondition(t *testing.T, conditions []metav1.Condition, want *metav1.C
 	}
 }
 
-// getMinimalCluster returns a cluster with no spec, which is all most condition tests need.
-// Generation is set because ObservedGeneration is stamped from it. Use
-// newTestAerospikeCluster when the code under test reads the spec (e.g. updateStatus).
-func getMinimalCluster() *asdbv1.AerospikeCluster {
-	return &asdbv1.AerospikeCluster{
-		ObjectMeta: metav1.ObjectMeta{
-			Name:       clusterName,
-			Namespace:  namespace,
-			Generation: minimalClusterGeneration,
-		},
-	}
-}
-
 // phasePtr returns a pointer to the given phase, making call sites cleaner.
 func phasePtr(p asdbv1.AerospikeClusterPhase) *asdbv1.AerospikeClusterPhase {
 	return &p
@@ -1134,29 +800,6 @@ func reasonForOpCondition(t *testing.T, condType string) string {
 	}
 }
 
-// armedReconciler returns a reconciler that has taken ownership of the operation conditions,
-// matching the state Reconcile is in once it passes the paused check.
-func armedReconciler(t *testing.T, ac *asdbv1.AerospikeCluster) *SingleClusterReconciler {
-	t.Helper()
-
-	r := newTestReconciler(t, ac, &interceptor.Funcs{})
-	r.initPendingOpConditionReset()
-
-	return r
-}
-
-// getCluster fetches ac from the fake API server.
-func getCluster(t *testing.T, c client.Client, ac *asdbv1.AerospikeCluster) *asdbv1.AerospikeCluster {
-	t.Helper()
-
-	got := &asdbv1.AerospikeCluster{}
-	if err := c.Get(t.Context(), types.NamespacedName{Name: ac.Name, Namespace: ac.Namespace}, got); err != nil {
-		t.Fatalf("get cluster: %v", err)
-	}
-
-	return got
-}
-
 // findCondition wraps apimeta.FindStatusCondition and fails the test when absent.
 func findCondition(t *testing.T, conditions []metav1.Condition, condType string) metav1.Condition {
 	t.Helper()
@@ -1168,21 +811,4 @@ func findCondition(t *testing.T, conditions []metav1.Condition, condType string)
 	}
 
 	return *c
-}
-
-// resourceVersionBumps reports how many writes happened between two fake-client
-// ResourceVersions. The fake client uses a monotonic integer, so the difference is the count.
-func resourceVersionBumps(t *testing.T, from, to string) int {
-	t.Helper()
-
-	var a, b int
-	if _, err := fmt.Sscanf(from, "%d", &a); err != nil {
-		t.Fatalf("parse ResourceVersion %q: %v", from, err)
-	}
-
-	if _, err := fmt.Sscanf(to, "%d", &b); err != nil {
-		t.Fatalf("parse ResourceVersion %q: %v", to, err)
-	}
-
-	return b - a
 }
