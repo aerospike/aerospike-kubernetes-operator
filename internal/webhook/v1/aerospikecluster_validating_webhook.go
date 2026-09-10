@@ -880,11 +880,13 @@ func validateConcurrentRackRevisions(oldObj, newObj *asdbv1.AerospikeCluster) er
 // validateVerticalScaling rejects a rack revision change that would leave too few
 // nodes standing while a rack's pods are replaced.
 //
-// Inputs are spec-only. Size 1 and replication-factor 1 are rejected in AP and SC.
-// The RF floor and roster-majority checks are SC only (pkg/validation already
-// allows AP size < RF). The worst batch is the first rack: DistributeItems always
-// gives it the most pods.
+// Inputs are spec-only. Size 1 and replication-factor <= 1 are rejected in AP and
+// SC. The survivors floor and roster-majority checks are SC only (pkg/validation
+// already allows AP size < RF). The worst batch is the first rack: DistributeItems
+// always gives it the most pods.
 func validateVerticalScaling(oldObj, newObj *asdbv1.AerospikeCluster) error {
+	const notAllowed = "vertical scaling (rack revision change) is not allowed"
+
 	// New racks and non-revision updates are not vertical scaling.
 	if !hasRackRevisionChange(oldObj.Spec.RackConfig.Racks, newObj.Spec.RackConfig.Racks) {
 		return nil
@@ -892,55 +894,44 @@ func validateVerticalScaling(oldObj, newObj *asdbv1.AerospikeCluster) error {
 
 	// AP and SC: replacing the only node takes the cluster down.
 	if newObj.Spec.Size == 1 {
-		return fmt.Errorf(
-			"vertical scaling (rack revision change) is not allowed: spec.size is 1, so the only node would go down",
-		)
+		return fmt.Errorf("%s: spec.size is 1, so the only node would go down", notAllowed)
 	}
 
-	nsConfs := getNsConfForNamespaces(newObj.Spec.RackConfig)
-	nsNames := sets.List(sets.KeySet(nsConfs))
+	summary := summarizeNsReplication(getNsConfForNamespaces(newObj.Spec.RackConfig))
 
 	// AP and SC. validateBatchSize already rejects RF 1 when a batch is set; this
 	// covers the unset-batch case (one pod per pass).
-	for _, nsName := range nsNames {
-		if nsConfs[nsName].replicationFactor == 1 {
-			return fmt.Errorf(
-				"vertical scaling (rack revision change) is not allowed: namespace %q has "+
-					"replication-factor 1, so no replica remains while pods are replaced",
-				nsName,
-			)
-		}
+	if summary.unreplicatedNs != "" {
+		return fmt.Errorf(
+			"%s: namespace %q has replication-factor %d, so no replica remains while pods are replaced",
+			notAllowed, summary.unreplicatedNs, summary.unreplicatedRF,
+		)
 	}
 
-	// SC only: survivors must stay at or above RF, and more than half the roster.
+	// An AP-only cluster has no survivors floor and no roster.
+	if !summary.hasSC() {
+		return nil
+	}
+
 	leaving := podsLeavingFirstRack(newObj)
 	survivors := newObj.Spec.Size - leaving
-	hasSC := false
 
-	for _, nsName := range nsNames {
-		if !nsConfs[nsName].scEnabled {
-			continue
-		}
-
-		hasSC = true
-
-		if int(survivors) < nsConfs[nsName].replicationFactor {
-			return fmt.Errorf(
-				"vertical scaling (rack revision change) is not allowed: %d of %d nodes "+
-					"would go down, leaving %d for strong-consistency namespace %q "+
-					"(needs replication-factor %d)",
-				leaving, newObj.Spec.Size, survivors, nsName,
-				nsConfs[nsName].replicationFactor,
-			)
-		}
+	// Survivors must clear the highest replication-factor of any SC namespace.
+	if int(survivors) < summary.strictestSCRF {
+		return fmt.Errorf(
+			"%s: %d of %d nodes would go down, leaving %d for strong-consistency "+
+				"namespace %q (needs replication-factor %d)",
+			notAllowed, leaving, newObj.Spec.Size, survivors,
+			summary.strictestSCNs, summary.strictestSCRF,
+		)
 	}
 
-	if hasSC && survivors <= newObj.Spec.Size/2 {
+	// Survivors must also be a majority of the roster.
+	if survivors <= newObj.Spec.Size/2 {
 		return fmt.Errorf(
-			"vertical scaling (rack revision change) is not allowed: %d of %d nodes "+
-				"would go down, leaving %d, which is not a majority of the "+
-				"strong-consistency roster",
-			leaving, newObj.Spec.Size, survivors,
+			"%s: %d of %d nodes would go down, leaving %d, which is not a majority of "+
+				"the strong-consistency roster",
+			notAllowed, leaving, newObj.Spec.Size, survivors,
 		)
 	}
 
@@ -966,28 +957,27 @@ func hasRackRevisionChange(oldRacks, newRacks []asdbv1.Rack) bool {
 	return false
 }
 
-// podsLeavingFirstRack is the largest delete batch in the cluster: DistributeItems
-// always puts the most pods on spec index 0.
+// podsLeavingFirstRack is the largest delete batch in the cluster. DistributeItems
+// gives spec index 0 the most pods, exactly ceil(size/racks), so the first rack's
+// size is all that is needed and the full topology is not worth building.
+//
+// The rack count is floored at 1 so the division is always safe. Reaching here
+// requires hasRackRevisionChange to have found a changed rack, which is only possible
+// when spec.rackConfig.racks is non-empty, and the mutating webhook's
+// setDefaultRackConf injects the default rack before that anyway. The floor therefore
+// only matters to direct callers such as unit tests, where it degenerates to treating
+// the whole cluster as one rack.
 func podsLeavingFirstRack(cluster *asdbv1.AerospikeCluster) int32 {
-	batch := cluster.Spec.RackConfig.RollingUpdateBatchSize
-	racks := cluster.Spec.RackConfig.Racks
+	racks := max(utils.Len32(cluster.Spec.RackConfig.Racks), 1)
+	firstRackSize := (cluster.Spec.Size + racks - 1) / racks
 
-	if len(racks) == 0 {
-		return clampedBatch(batch, cluster.Spec.Size)
-	}
-
-	topology := asdbv1.DistributeItems(cluster.Spec.Size, utils.Len32(racks))
-
-	return clampedBatch(batch, topology[0])
+	return clampedBatch(cluster.Spec.RackConfig.RollingUpdateBatchSize, firstRackSize)
 }
 
 // clampedBatch resolves rollingUpdateBatchSize against a rack size. Round-up matches
 // the reconciler replica step; unset becomes 1; result is capped at the rack size.
+// Callers must pass base >= 1.
 func clampedBatch(batch *intstr.IntOrString, base int32) int32 {
-	if base < 1 {
-		return 0
-	}
-
 	value, _ := intstr.GetScaledValueFromIntOrPercent(batch, int(base), true)
 
 	if value >= int(base) {
@@ -1297,6 +1287,81 @@ func getNsConfForNamespaces(rackConfig asdbv1.RackConfig) map[string]nsConf {
 	}
 
 	return nsConfs
+}
+
+// nsRFSummary reduces the per-namespace configs to the two thresholds
+// validateVerticalScaling needs. It holds two separate reductions because the two
+// rules have different scopes:
+//
+//   - replication-factor <= 1 is fatal in AP and in SC: no replica exists anywhere,
+//     so replacing any pod loses data. Reduced over every namespace.
+//   - the survivors floor is strong-consistency only, because pkg/validation
+//     deliberately allows an AP cluster smaller than its replication-factor. Folding
+//     AP in would let an AP namespace at RF 2 lower the floor for an SC namespace at
+//     RF 5.
+//
+// The floor reduces with max, not min: survivors must clear every SC namespace's
+// replication-factor, so the binding namespace is the one with the highest. Reducing
+// with min would admit an update that strands the strictest namespace — SC namespaces
+// at RF 3 and RF 5 with 4 survivors satisfy 3 but not 5. This is the opposite of
+// validateMaxUnavailable, which reduces with min because maxUnavailable is an upper
+// bound rather than a lower one.
+// Fields are grouped by type rather than by rule, because govet's fieldalignment
+// wants the strings ahead of the ints.
+type nsRFSummary struct {
+	// Namespace with RF <= 1, AP or SC; "" when every namespace has a replica.
+	// Drives the no-replica rejection, and names the namespace in it.
+	unreplicatedNs string
+
+	// SC namespace holding strictestSCRF; "" when no namespace is strongly
+	// consistent, which is also how hasSC reports an AP-only cluster.
+	strictestSCNs string
+
+	// unreplicatedNs's replication-factor, reported in the rejection so an
+	// unparsable 0 reads differently from a deliberate 1.
+	unreplicatedRF int
+
+	// Highest replication-factor across SC namespaces, and the floor survivors must
+	// clear; 0 when no namespace is strongly consistent. Highest rather than lowest
+	// because survivors have to satisfy every SC namespace at once.
+	strictestSCRF int
+}
+
+// hasSC is true when at least one namespace is strongly consistent.
+func (s *nsRFSummary) hasSC() bool {
+	return s.strictestSCNs != ""
+}
+
+// summarizeNsReplication reduces the namespace configs in a single pass. Ties break on
+// namespace name so a rejection message does not depend on Go's randomized map order.
+func summarizeNsReplication(nsConfs map[string]nsConf) nsRFSummary {
+	var summary nsRFSummary
+
+	for nsName, conf := range nsConfs {
+		// `<= 1` rather than `== 1` matches validateBatchSize and also catches the 0 that
+		// getNsConfForNamespaces leaves behind when replication-factor fails to parse. An
+		// unset replication-factor is already defaulted to 2 by
+		// validation.GetNamespaceReplicationFactor, and validate() rejects an unparsable
+		// one before ValidateUpdate reaches here, so this is belt and braces.
+		if conf.replicationFactor <= 1 &&
+			(summary.unreplicatedNs == "" || nsName < summary.unreplicatedNs) {
+			summary.unreplicatedNs = nsName
+			summary.unreplicatedRF = conf.replicationFactor
+		}
+
+		if !conf.scEnabled {
+			continue
+		}
+
+		if conf.replicationFactor > summary.strictestSCRF ||
+			(conf.replicationFactor == summary.strictestSCRF &&
+				(summary.strictestSCNs == "" || nsName < summary.strictestSCNs)) {
+			summary.strictestSCNs = nsName
+			summary.strictestSCRF = conf.replicationFactor
+		}
+	}
+
+	return summary
 }
 
 // getAllNamespaceNamesAndRFMap collects all unique namespace identifiers ("name@rackID") and

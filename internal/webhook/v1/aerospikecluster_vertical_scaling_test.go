@@ -409,7 +409,7 @@ func TestValidateVerticalScalingIgnoresBatchOnlyChange(t *testing.T) {
 	}
 }
 
-func TestValidateVerticalScalingChecksEverySCNamespace(t *testing.T) {
+func TestValidateVerticalScalingUsesStrictestSCNamespace(t *testing.T) {
 	// Mixed AP+SC: only the SC namespace's RF is a floor.
 	namespaces := []interface{}{
 		nsConfig("ap-ns", 6, false),
@@ -432,13 +432,97 @@ func TestValidateVerticalScalingChecksEverySCNamespace(t *testing.T) {
 		t.Errorf("expected the SC namespace to be named, got: %v", err)
 	}
 
+	if !strings.Contains(err.Error(), "replication-factor 5") {
+		t.Errorf("expected the SC namespace's RF to be the floor, got: %v", err)
+	}
+
 	if strings.Contains(err.Error(), "ap-ns") {
 		t.Errorf("expected the AP namespace not to drive the rejection, got: %v", err)
 	}
 }
 
+// TestValidateVerticalScalingIgnoresAPReplicationFactorBelowSC pins that an AP
+// namespace never lowers the floor. A reduction over every namespace would use the
+// AP namespace's RF 2 here and wrongly allow the update.
+func TestValidateVerticalScalingIgnoresAPReplicationFactorBelowSC(t *testing.T) {
+	namespaces := []interface{}{
+		nsConfig("ap-ns", 2, false),
+		nsConfig("sc-ns", 5, true),
+	}
+
+	// Size 6 over 3 racks with a full batch: 2 leave, 4 survive, below the SC RF 5.
+	oldObj := verticalScaleCluster(
+		6, []string{"v1", "v1", "v1"}, ptr.To(intstr.FromString("100%")), namespaces,
+	)
+	newObj := verticalScaleCluster(
+		6, []string{"v2", "v1", "v1"}, ptr.To(intstr.FromString("100%")), namespaces,
+	)
+
+	err := validateVerticalScaling(oldObj, newObj)
+	if err == nil {
+		t.Fatal("expected the SC namespace's RF 5 to reject, got nil")
+	}
+
+	for _, fragment := range []string{`"sc-ns"`, "replication-factor 5", "leaving 4"} {
+		if !strings.Contains(err.Error(), fragment) {
+			t.Errorf("expected the rejection to contain %q, got: %v", fragment, err)
+		}
+	}
+
+	if strings.Contains(err.Error(), "ap-ns") {
+		t.Errorf("expected the AP namespace not to drive the rejection, got: %v", err)
+	}
+}
+
+// TestValidateVerticalScalingUsesHighestSCReplicationFactor pins the direction of the
+// reduction across SC namespaces. Survivors must clear every SC namespace, so the
+// binding one is the highest RF; reducing with min would allow the rejecting case.
+func TestValidateVerticalScalingUsesHighestSCReplicationFactor(t *testing.T) {
+	namespaces := []interface{}{
+		nsConfig("sc-low", 3, true),
+		nsConfig("sc-high", 5, true),
+	}
+
+	t.Run("rejects when only the lower RF is met", func(t *testing.T) {
+		// Size 6 over 3 racks, full batch: 2 leave, 4 survive. Clears RF 3, not RF 5.
+		oldObj := verticalScaleCluster(
+			6, []string{"v1", "v1", "v1"}, ptr.To(intstr.FromString("100%")), namespaces,
+		)
+		newObj := verticalScaleCluster(
+			6, []string{"v2", "v1", "v1"}, ptr.To(intstr.FromString("100%")), namespaces,
+		)
+
+		err := validateVerticalScaling(oldObj, newObj)
+		if err == nil {
+			t.Fatal("expected the highest SC RF to reject, got nil")
+		}
+
+		for _, fragment := range []string{`"sc-high"`, "replication-factor 5", "leaving 4"} {
+			if !strings.Contains(err.Error(), fragment) {
+				t.Errorf("expected the rejection to contain %q, got: %v", fragment, err)
+			}
+		}
+	})
+
+	t.Run("allows when the highest RF is met", func(t *testing.T) {
+		// Size 8 over 3 racks, full batch: first rack holds 3, so 3 leave and 5
+		// survive, which meets RF 5 and is a majority of 8.
+		oldObj := verticalScaleCluster(
+			8, []string{"v1", "v1", "v1"}, ptr.To(intstr.FromString("100%")), namespaces,
+		)
+		newObj := verticalScaleCluster(
+			8, []string{"v2", "v1", "v1"}, ptr.To(intstr.FromString("100%")), namespaces,
+		)
+
+		if err := validateVerticalScaling(oldObj, newObj); err != nil {
+			t.Fatalf("expected 5 survivors to meet RF 5, got error: %v", err)
+		}
+	})
+}
+
 func TestDistributeItemsPutsMaximumOnFirstRack(t *testing.T) {
-	// First spec rack always has the most pods (worst batch).
+	// First spec rack always has the most pods (worst batch), and holds exactly
+	// ceil(size/racks) — the closed form podsLeavingFirstRack relies on.
 	for size := int32(1); size <= 12; size++ {
 		for racks := int32(1); racks <= 3; racks++ {
 			topology := asdbv1.DistributeItems(size, racks)
@@ -450,6 +534,13 @@ func TestDistributeItemsPutsMaximumOnFirstRack(t *testing.T) {
 						size, racks, idx, topology[idx], topology[0],
 					)
 				}
+			}
+
+			if want := (size + racks - 1) / racks; topology[0] != want {
+				t.Fatalf(
+					"size %d over %d racks: first rack holds %d pods, want ceil = %d",
+					size, racks, topology[0], want,
+				)
 			}
 		}
 	}
@@ -491,5 +582,42 @@ func TestPodsLeavingFirstRack(t *testing.T) {
 				t.Errorf("got %d pods leaving, want %d (topology %v)", got, test.want, topology)
 			}
 		})
+	}
+}
+
+// TestPodsLeavingFirstRackMatchesDistributeItems proves the closed form is equivalent
+// to indexing the topology DistributeItems builds, across the whole supported range.
+func TestPodsLeavingFirstRackMatchesDistributeItems(t *testing.T) {
+	batches := []*intstr.IntOrString{
+		nil,
+		ptr.To(intstr.FromInt32(1)),
+		ptr.To(intstr.FromInt32(10)),
+		ptr.To(intstr.FromString("50%")),
+		ptr.To(intstr.FromString("100%")),
+	}
+
+	for _, batch := range batches {
+		for size := int32(1); size <= 64; size++ {
+			for rackCount := 1; rackCount <= 8; rackCount++ {
+				revisions := make([]string, rackCount)
+				for idx := range revisions {
+					revisions[idx] = "v1"
+				}
+
+				cluster := verticalScaleCluster(
+					size, revisions, batch, []interface{}{nsConfig("test", 2, true)},
+				)
+
+				topology := asdbv1.DistributeItems(size, utils.Len32(cluster.Spec.RackConfig.Racks))
+				want := clampedBatch(batch, topology[0])
+
+				if got := podsLeavingFirstRack(cluster); got != want {
+					t.Fatalf(
+						"batch %v, size %d over %d racks: got %d, want %d (topology %v)",
+						batch, size, rackCount, got, want, topology,
+					)
+				}
+			}
+		}
 	}
 }
