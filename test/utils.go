@@ -33,10 +33,9 @@ func InitialiseClients(scheme *runtime.Scheme, cfg *rest.Config) (
 		cfg, client.Options{Scheme: scheme},
 	)
 	if err != nil {
-		return nil, nil, err
+		return k8sClient, k8sClientSet, err
 	}
 
-	// NewForConfigOrDie panics on failure, so k8sClientSet is always non-nil here.
 	k8sClientSet = kubernetes.NewForConfigOrDie(cfg)
 
 	return k8sClient, k8sClientSet, nil
