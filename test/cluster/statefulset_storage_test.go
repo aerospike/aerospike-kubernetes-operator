@@ -229,6 +229,19 @@ var _ = Describe(
 							BeTrue(), "Unable to find volume",
 						)
 
+						// Non-PV volumes with an Aerospike attachment must be auto-mounted in
+						// the aerospike-init container (it needs them to set up the workdir).
+						updatedSTS, err := getSTSFromRackID(aeroCluster, 0, "")
+						Expect(err).ToNot(HaveOccurred())
+
+						aerospikeInitContainer = test.GetContainerByName(
+							updatedSTS.Spec.Template.Spec.InitContainers, asdbv1.AerospikeInitContainerName,
+						)
+						Expect(aerospikeInitContainer).NotTo(BeNil(), "aerospike-init container not found in STS")
+						Expect(aerospikeInitContainer.VolumeMounts).To(ContainElement(
+							HaveField("Name", "newvolume"),
+						), "non-PV volume with Aerospike attachment must be auto-mounted in the aerospike-init container")
+
 						// Delete
 						newAeroCluster := createNonSCDummyAerospikeCluster(
 							clusterNamespacedName, 2,
@@ -383,6 +396,95 @@ var _ = Describe(
 						Expect(isPresent).To(
 							BeTrue(), "Unable to find volume",
 						)
+					},
+				)
+
+				It(
+					"Should not mount non-PV sidecar-only volumes in the aerospike-init container", func() {
+						// Non-PV volumes that are only attached to sidecars (no aerospike path)
+						// must NOT appear in the aerospike-init container's VolumeMounts.
+						// The init container has no code that touches these volumes.
+						aeroCluster, err := getCluster(k8sClient, ctx, clusterNamespacedName)
+						Expect(err).ToNot(HaveOccurred())
+
+						sidecar := v1.Container{
+							Name:    "sidecar-consumer",
+							Image:   "busybox:1.28",
+							Command: []string{"sh", "-c", "sleep 3600"},
+						}
+						aeroCluster.Spec.PodSpec.Sidecars = append(
+							aeroCluster.Spec.PodSpec.Sidecars, sidecar,
+						)
+
+						// EmptyDir volume mounted only in the sidecar — no Aerospike attachment.
+						sidecarOnlyVol := asdbv1.VolumeSpec{
+							Name:   "sidecar-config",
+							Source: asdbv1.VolumeSource{EmptyDir: &v1.EmptyDirVolumeSource{}},
+							Sidecars: []asdbv1.VolumeAttachment{
+								{ContainerName: "sidecar-consumer", Path: "/config"},
+							},
+						}
+
+						// HostPath volume mounted only in the sidecar — no Aerospike attachment.
+						// This specifically covers the KO-618 bug where HostPath volumes were
+						// unconditionally mounted in the aerospike-init container.
+						// ReadOnly is required for HostPath volumes by the webhook.
+						readOnly := true
+						sidecarOnlyHostPathVol := asdbv1.VolumeSpec{
+							Name: "sidecar-hostpath",
+							Source: asdbv1.VolumeSource{
+								HostPath: &v1.HostPathVolumeSource{
+									Path: "/tmp/sidecar-data",
+								},
+							},
+							Sidecars: []asdbv1.VolumeAttachment{
+								{
+									ContainerName: "sidecar-consumer",
+									Path:          "/hostdata",
+									AttachmentOptions: asdbv1.AttachmentOptions{
+										MountOptions: asdbv1.MountOptions{
+											ReadOnly: &readOnly,
+										},
+									},
+								},
+							},
+						}
+
+						aeroCluster.Spec.Storage.Volumes = append(
+							aeroCluster.Spec.Storage.Volumes, sidecarOnlyVol, sidecarOnlyHostPathVol,
+						)
+
+						err = updateCluster(k8sClient, ctx, aeroCluster)
+						Expect(err).ToNot(HaveOccurred())
+
+						sts, err := getSTSFromRackID(aeroCluster, 0, "")
+						Expect(err).ToNot(HaveOccurred())
+
+						aerospikeInitContainer := test.GetContainerByName(
+							sts.Spec.Template.Spec.InitContainers, asdbv1.AerospikeInitContainerName,
+						)
+						Expect(aerospikeInitContainer).NotTo(BeNil(), "aerospike-init container not found in STS")
+
+						for _, vm := range aerospikeInitContainer.VolumeMounts {
+							Expect(vm.Name).NotTo(Equal("sidecar-config"),
+								"non-PV EmptyDir sidecar-only volume must not be auto-mounted in the aerospike-init container")
+							Expect(vm.Name).NotTo(Equal("sidecar-hostpath"),
+								"non-PV HostPath sidecar-only volume must not be auto-mounted in the aerospike-init container")
+						}
+
+						// The sidecar container must still have both volumes mounted.
+						sidecarContainer := test.GetContainerByName(
+							sts.Spec.Template.Spec.Containers, "sidecar-consumer",
+						)
+						Expect(sidecarContainer).NotTo(BeNil(), "sidecar-consumer container not found in STS")
+
+						Expect(sidecarContainer.VolumeMounts).To(ContainElement(
+							HaveField("Name", "sidecar-config"),
+						), "EmptyDir sidecar-only volume must be mounted in the sidecar container")
+
+						Expect(sidecarContainer.VolumeMounts).To(ContainElement(
+							HaveField("Name", "sidecar-hostpath"),
+						), "HostPath sidecar-only volume must be mounted in the sidecar container")
 					},
 				)
 			},
