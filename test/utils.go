@@ -29,28 +29,15 @@ func InitialiseClients(scheme *runtime.Scheme, cfg *rest.Config) (
 
 	// +kubebuilder:scaffold:scheme
 
-	//nolint:staticcheck // SA4023: client.New never returns a nil client today, but the check below
-	// guards against a future change to that function
 	k8sClient, err = client.New(
 		cfg, client.Options{Scheme: scheme},
 	)
 	if err != nil {
-		return k8sClient, k8sClientSet, err
+		return nil, nil, err
 	}
 
-	//nolint:staticcheck // SA4023: client.New never returns a nil client today, but the check
-	// guards against a future change to that function
-	if k8sClient == nil {
-		err = fmt.Errorf("k8sClient is nil")
-		return k8sClient, k8sClientSet, err
-	}
-
+	// NewForConfigOrDie panics on failure, so k8sClientSet is always non-nil here.
 	k8sClientSet = kubernetes.NewForConfigOrDie(cfg)
-
-	if k8sClientSet == nil {
-		err = fmt.Errorf("k8sClientSet is nil")
-		return k8sClient, k8sClientSet, err
-	}
 
 	return k8sClient, k8sClientSet, nil
 }

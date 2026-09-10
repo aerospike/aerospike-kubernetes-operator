@@ -115,7 +115,3 @@ type AerospikeRestoreList struct {
 	metav1.ListMeta `json:"metadata,omitempty"`
 	Items           []AerospikeRestore `json:"items"`
 }
-
-func init() {
-	SchemeBuilder.Register(&AerospikeRestore{}, &AerospikeRestoreList{})
-}

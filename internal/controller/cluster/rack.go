@@ -735,10 +735,9 @@ func (r *SingleClusterReconciler) reconcileRack(
 		found, res = r.scaleDownRack(ctx, found, rackState, ignorablePodNames, nil)
 		if !res.IsSuccess {
 			if res.Err != nil {
-				r.Recorder.Eventf(
+				r.Recorder.Event(
 					r.aeroCluster, corev1.EventTypeWarning,
 					"RackScaleDownFailed",
-					"%s",
 					eventRackScaleFailureMessageWithCause(
 						"scale down", rackState.Rack.ID,
 						utils.GetNamespacedNameString(found), currentSize, desiredSize, res.Err,
@@ -795,9 +794,8 @@ func (r *SingleClusterReconciler) reconcileRack(
 		found, res = r.scaleUpRack(ctx, found, rackState)
 		if !res.IsSuccess {
 			if res.Err != nil {
-				r.Recorder.Eventf(
+				r.Recorder.Event(
 					r.aeroCluster, corev1.EventTypeWarning, "RackScaleUpFailed",
-					"%s",
 					eventRackScaleFailureMessageWithCause(
 						"scale up", rackState.Rack.ID,
 						utils.GetNamespacedNameString(found), currentSize, desiredSize, res.Err,
@@ -854,9 +852,8 @@ func (r *SingleClusterReconciler) scaleUpRack(
 		}
 	}
 
-	r.Recorder.Eventf(
+	r.Recorder.Event(
 		r.aeroCluster, corev1.EventTypeNormal, "RackScaleUp",
-		"%s",
 		eventRackScaleMessage(
 			"Scaling up", rackState.Rack.ID,
 			utils.GetNamespacedNameString(found), oldSz, desiredSize,
@@ -929,9 +926,8 @@ func (r *SingleClusterReconciler) scaleUpRack(
 		return found, common.ReconcileError(err)
 	}
 
-	r.Recorder.Eventf(
+	r.Recorder.Event(
 		r.aeroCluster, corev1.EventTypeNormal, "RackScaledUp",
-		"%s",
 		eventRackScaleMessage(
 			"Scaled up", rackState.Rack.ID,
 			utils.GetNamespacedNameString(found), oldSz, *found.Spec.Replicas,

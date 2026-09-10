@@ -919,10 +919,8 @@ func (r *SingleClusterReconciler) patchStatus(ctx context.Context, newAeroCluste
 //
 // Such cases warrant a cluster recreate to recover after the user corrects the configuration.
 //
-// This function always returns a non-nil error today, but callers still check err != nil
-// to guard against a future change to this function.
-//
-//nolint:staticcheck // SA4023
+// It returns nil once the teardown succeeds; the caller decides how to surface the recreate
+// to the reconcile loop.
 func (r *SingleClusterReconciler) recoverFailedCreate(ctx context.Context) error {
 	r.Log.Info("Forcing a cluster recreate as status is nil. The cluster could be unreachable due to bad configuration")
 
@@ -991,7 +989,7 @@ func (r *SingleClusterReconciler) recoverFailedCreate(ctx context.Context) error
 		return fmt.Errorf("clear access control status during cluster recovery: %w", err)
 	}
 
-	return fmt.Errorf("forcing recreate of cluster: status is nil")
+	return nil
 }
 
 // clearAerospikeAccessControlStatus sets AerospikeAccessControl to nil in the
@@ -1196,13 +1194,13 @@ func (r *SingleClusterReconciler) checkPreviouslyFailedCluster(ctx context.Conte
 
 	// All pods have hard-failed and status is empty — the cluster failed during
 	// its initial create and needs to be recovered.
-	//nolint:staticcheck // SA4023: recoverFailedCreate always returns a non-nil error today, but the check
-	// guards against a future change to that function
 	if err := r.recoverFailedCreate(ctx); err != nil {
 		return true, common.ReconcileError(err)
 	}
 
-	return true, common.ReconcileSuccess()
+	// The teardown succeeded, but the cluster still has no status. Error out so this
+	// reconcile ends here and the recreate happens on the next run.
+	return true, common.ReconcileError(fmt.Errorf("forcing recreate of cluster: status is nil"))
 }
 
 func (r *SingleClusterReconciler) removedNamespaces(nodesNamespaces map[string][]string) []string {
