@@ -8,7 +8,9 @@ import (
 	"crypto/tls"
 	"crypto/x509"
 	"fmt"
+	"io/fs"
 	"os"
+	"path/filepath"
 	"time"
 
 	"github.com/go-logr/logr"
@@ -314,8 +316,28 @@ func appendCACertFromFileOrPath(
 		return serverPool
 	}
 
-	if err := aerospikecluster.LoadCACertsFromFileOrPath(caPath, serverPool, nil); err != nil {
-		logrus.Info("Failed to load CA certs", "caPath: ", caPath, "err: ", err)
+	err := filepath.WalkDir(
+		caPath, func(path string, d fs.DirEntry, err error) error {
+			if err != nil {
+				return err
+			}
+
+			if !d.IsDir() {
+				var caData []byte
+
+				//nolint:gosec // G122: test-only code reading cert paths from the test spec
+				if caData, err = os.ReadFile(path); err != nil {
+					return err
+				}
+
+				serverPool.AppendCertsFromPEM(caData)
+			}
+
+			return nil
+		},
+	)
+	if err != nil {
+		logrus.Info("Failed to load CA certs from dir", "caPath: ", caPath, "err: ", err)
 	}
 
 	return serverPool

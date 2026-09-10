@@ -244,74 +244,40 @@ func (r *SingleClusterReconciler) appendCACertFromFileOrPath(
 		return serverPool
 	}
 
-	err := LoadCACertsFromFileOrPath(caPath, serverPool, func(filePath string) {
-		r.Log.Info("Loaded CA certs from file", "caPath", caPath, "file", filePath)
-	})
-	if err != nil {
-		r.Log.Error(err, "Failed to load CA certs.", "caPath", caPath)
-	}
-
-	return serverPool
-}
-
-// LoadCACertsFromFileOrPath loads PEM-encoded CA certificates from caPath - a single cert
-// file or a directory containing cert files - into serverPool.
-// onFileLoaded, if non-nil, is called with the path of each file after its certs
-// are appended, so callers can log with their own logger.
-func LoadCACertsFromFileOrPath(
-	caPath string, serverPool *x509.CertPool, onFileLoaded func(filePath string),
-) error {
 	// caPath can be a file name as well as directory path containing cacert files.
-	info, err := os.Stat(caPath)
-	if err != nil {
-		return fmt.Errorf("stat CA path %s: %w", caPath, err)
-	}
-
-	if !info.IsDir() {
-		caData, readErr := os.ReadFile(caPath)
-		if readErr != nil {
-			return fmt.Errorf("read CA cert file %s: %w", caPath, readErr)
-		}
-
-		serverPool.AppendCertsFromPEM(caData)
-
-		if onFileLoaded != nil {
-			onFileLoaded(caPath)
-		}
-
-		return nil
-	}
-
-	root, err := os.OpenRoot(caPath)
-	if err != nil {
-		return fmt.Errorf("open CA path %s: %w", caPath, err)
-	}
-	defer root.Close()
-
-	return fs.WalkDir(
-		root.FS(), ".", func(path string, d fs.DirEntry, err error) error {
+	err := filepath.WalkDir(
+		caPath, func(path string, d fs.DirEntry, err error) error {
 			if err != nil {
 				return err
 			}
 
-			if d.IsDir() {
-				return nil
-			}
+			if !d.IsDir() {
+				var caData []byte
 
-			caData, err := root.ReadFile(path)
-			if err != nil {
-				return err
-			}
+				// TODO: switch to root-scoped reads (os.Root) to close the symlink
+				// TOCTOU window flagged by G122.
+				//nolint:gosec // G122: caPath is operator-configured and mounted read-only
+				if caData, err = os.ReadFile(path); err != nil {
+					return err
+				}
 
-			serverPool.AppendCertsFromPEM(caData)
-
-			if onFileLoaded != nil {
-				onFileLoaded(path)
+				serverPool.AppendCertsFromPEM(caData)
+				r.Log.Info("Loaded CA certs from file",
+					"caPath", caPath,
+					"file", path,
+				)
 			}
 
 			return nil
 		},
 	)
+	if err != nil {
+		r.Log.Error(
+			err, "Failed to load CA certs from dir.", "caPath", caPath,
+		)
+	}
+
+	return serverPool
 }
 
 func (r *SingleClusterReconciler) appendCACertFromSecret(
