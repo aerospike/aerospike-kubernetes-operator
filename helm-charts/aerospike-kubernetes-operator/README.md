@@ -8,17 +8,19 @@ A Helm chart for Aerospike Kubernetes Operator
 
 ## Usage
 
-<!-- ### Add Aerospike Helm Repository
+### Add Helm Repository
 
 ```sh
-helm repo add aerospike https://aerospike.github.io/aerospike-kubernetes-operator
-``` -->
+helm repo add aerospike https://aerospike.github.io/aerospike-kubernetes-enterprise
+helm repo update
+```
 
-### Clone this repository
+### Create Namespace
+
+Create the namespace where AKO will be installed. Replace the placeholder `<namespace>` with your own namespace name. If `--namespace` is not given during install, AKO uses a namespace called `default`.
 
 ```sh
-git clone https://github.com/aerospike/aerospike-kubernetes-operator.git
-cd aerospike-kubernetes-operator/helm-charts
+kubectl create namespace <namespace>
 ```
 
 ### Deploy Cert-manager
@@ -27,9 +29,11 @@ Operator uses admission webhooks, which needs TLS certificates. These are issued
 
 ### Deploy the Aerospike Kubernetes Operator
 
+Install AKO on your Kubernetes cluster, pinning the chart `--version` to the release you want to install.
+
 ```sh
-# helm install <chartName> <chartPath> --namespace <namespace>
-helm install aerospike-kubernetes-operator ./aerospike-kubernetes-operator --set replicas=3
+# helm install <chartName> <chartPath> --namespace <namespace> --version <chartVersion>
+helm install aerospike-kubernetes-operator aerospike/aerospike-kubernetes-operator --namespace <namespace> --version 4.5.0 --set watchNamespaces="aerospike"
 ```
 
 ## Configurations

@@ -9,6 +9,7 @@ import (
 	. "github.com/onsi/gomega"
 	appsv1 "k8s.io/api/apps/v1"
 	corev1 "k8s.io/api/core/v1"
+	k8serrors "k8s.io/apimachinery/pkg/api/errors"
 	"k8s.io/apimachinery/pkg/api/resource"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/labels"
@@ -182,13 +183,38 @@ var _ = Describe(
 										asdbv1.AerospikeClusterError})
 								Expect(err).To(HaveOccurred())
 
+								By("Verifying phase is Error and the new-revision StatefulSet never scales above 0")
+
+								blockedCluster, gErr := getCluster(k8sClient, ctx, clusterNamespacedName)
+								Expect(gErr).ToNot(HaveOccurred())
+								Expect(blockedCluster.Status.Phase).To(Equal(asdbv1.AerospikeClusterError),
+									"migration must be blocked in Error, not left stuck in InProgress")
+
+								newRevSTSName := GetNamespacedNameForSTS(blockedCluster, utils.GetRackIdentifier(1, versionV2))
+								newRevSTS := &appsv1.StatefulSet{}
+
+								stsErr := k8sClient.Get(ctx, newRevSTSName, newRevSTS)
+								if stsErr == nil {
+									Expect(ptr.Deref(newRevSTS.Spec.Replicas, 0)).To(BeNumerically("==", 0),
+										"new-revision StatefulSet must not scale up while the old-revision pod blocks migration")
+								} else {
+									Expect(k8serrors.IsNotFound(stsErr)).To(BeTrue(),
+										"unexpected error fetching new-revision StatefulSet")
+								}
+
 								By("Setting maxIgnorablePods to 1")
 
 								maxIgnorable := intstr.FromInt32(1)
 								aeroCluster.Spec.RackConfig.MaxIgnorablePods = &maxIgnorable
 
-								err = updateCluster(k8sClient, ctx, aeroCluster)
-								Expect(err).ToNot(HaveOccurred())
+								By("Verifying cluster eventually reaches Completed")
+
+								// Native StatefulSet pod recreation while the new-revision rack
+								// finishes coming up can legitimately cause extra Error/InProgress
+								// blips unrelated to the maxIgnorablePods fix, so only the terminal
+								// state is asserted here — the Error starting point was already
+								// confirmed above via blockedCluster.Status.Phase.
+								Expect(updateCluster(k8sClient, ctx, aeroCluster)).ToNot(HaveOccurred())
 
 								// Validate final state
 								err = validateRackEnabledCluster(k8sClient, ctx, clusterNamespacedName)
@@ -317,6 +343,65 @@ var _ = Describe(
 							),
 							Serial,
 						)
+
+						It(
+							"Should block migration when old-revision pod has crashing sidecar and "+
+								"IgnoreSidecarFailure is false, and unblock when flag is set to true",
+							func() {
+								By("Creating cluster with signal-controlled sidecar and versionV1 revision")
+
+								aeroCluster := createDummyClusterWithRackRevision(clusterNamespacedName, versionV1, 6)
+								aeroCluster.Spec.PodSpec.Sidecars = []corev1.Container{signalControlledSidecar()}
+								aeroCluster.Spec.Storage.Volumes = append(
+									aeroCluster.Spec.Storage.Volumes, signalVolumeForSidecar(),
+								)
+								Expect(DeployCluster(k8sClient, ctx, aeroCluster)).ToNot(HaveOccurred())
+
+								oldRevisionPodName := clusterName + "-1-v1-0"
+
+								By("Failing sidecar on old-revision pod-0 via signal file")
+								Expect(failPodSidecar(namespace, oldRevisionPodName)).ToNot(HaveOccurred())
+
+								By("Waiting for old-revision pod to have crashing sidecar")
+
+								oldRevisionPodNN := types.NamespacedName{
+									Name:      oldRevisionPodName,
+									Namespace: namespace,
+								}
+
+								Eventually(func() bool {
+									pod := &corev1.Pod{}
+									if err := k8sClient.Get(ctx, oldRevisionPodNN, pod); err != nil {
+										return false
+									}
+
+									return podHasCrashingSidecar(pod)
+								}, 2*time.Minute, 5*time.Second).Should(BeTrue(),
+									"old-revision pod should have crashing sidecar after signal")
+
+								By("Triggering rack revision change to v2 with IgnoreSidecarFailure=false (default)")
+
+								aeroCluster = changeRackRevision(k8sClient, ctx, clusterNamespacedName)
+
+								By("Verifying cluster transitions to Error — checkRackPodsHealthy detects " +
+									"crashed sidecar on old-revision pod")
+								Expect(waitForClusterPhase(k8sClient, ctx, clusterNamespacedName,
+									asdbv1.AerospikeClusterError)).ToNot(HaveOccurred())
+
+								By("Setting IgnoreSidecarFailure=true to unblock migration")
+
+								aeroCluster.Spec.IgnoreSidecarFailure = ptr.To(true)
+								Expect(updateCluster(k8sClient, ctx, aeroCluster)).ToNot(HaveOccurred())
+
+								By("Verifying migration completes and old-revision resources are cleaned up")
+
+								err := validateRackEnabledCluster(k8sClient, ctx, clusterNamespacedName)
+								Expect(err).ToNot(HaveOccurred())
+
+								err = validateRackRevisionCleanup(k8sClient, ctx, aeroCluster, []int{1}, versionV1)
+								Expect(err).ToNot(HaveOccurred())
+							},
+						)
 					},
 				)
 			},
@@ -414,10 +499,34 @@ func testRackRevisionChangeWithStorageUpdate(
 	Expect(updateClusterWithNoWait(k8sClient, ctx, updatedCluster)).ToNot(HaveOccurred())
 
 	By(fmt.Sprintf("Validating gradual migration from %s to %s", fromRevision, toRevision))
+
+	validateCondition(
+		ctx, clusterNamespacedName,
+		asdbv1.AerospikeClusterConditionRackRevisionRollingOut,
+		asdbv1.AerospikeClusterReasonRackRevisionRollingOut, toRevision,
+	)
+
 	// Both rack revision StatefulSets should exist during migration
 	Eventually(func() bool {
 		return checkBothRevisionsExist(k8sClient, ctx, clusterNamespacedName, fromRevision, toRevision)
 	}, 10*time.Minute, 10*time.Second).Should(BeTrue())
+
+	By("Scale conditions must stay at rest for the whole migration")
+
+	Consistently(func() bool {
+		for _, condType := range []asdbv1.AerospikeClusterConditionType{
+			asdbv1.AerospikeClusterConditionScalingUp,
+			asdbv1.AerospikeClusterConditionScalingDown,
+		} {
+			cond, getErr := getCondition(ctx, clusterNamespacedName, condType)
+			if getErr != nil || cond == nil || cond.Status != metav1.ConditionFalse {
+				return false
+			}
+		}
+
+		return true
+	}, 1*time.Minute, 5*time.Second).Should(BeTrue(),
+		"a scale condition went True during a rack revision migration")
 
 	By("Waiting for the migration to complete")
 

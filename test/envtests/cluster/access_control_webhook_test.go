@@ -1014,7 +1014,8 @@ var _ = Describe("AerospikeCluster access control validation (envtests)", func()
 					}
 
 					expectDeployFailsACWebhook(ctx, aeroCluster,
-						"feature-key-file paths or tls paths or default-password-file path are not mounted",
+						"feature-key-file paths or tls paths or default-password-file path or "+
+							"xdr.dcs auth-password-file path are not mounted",
 						"create an entry for 'randompath' in 'storage.volumes'",
 						testutil.WebhookErrorPrefix)
 				})

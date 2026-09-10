@@ -9,14 +9,45 @@ A Helm chart for `AerospikeCluster` custom resource to be used with the Aerospik
 
 ## Usage
 
-### Clone this repository
+### Add Helm Repository
 
 ```sh
-git clone https://github.com/aerospike/aerospike-kubernetes-operator.git
-cd aerospike-kubernetes-operator/helm-charts
+helm repo add aerospike https://aerospike.github.io/aerospike-kubernetes-enterprise
+helm repo update
 ```
 
 ### Deploy Aerospike Cluster
+
+#### Create a namespace
+
+`<namespace>` used to install the aerospike chart must be included in `watchNamespaces` value of
+aerospike-kubernetes-operator's `values.yaml`.
+
+```sh
+kubectl create namespace <namespace>
+```
+
+#### Create a ServiceAccount and RBAC for the Aerospike cluster pods
+
+Create a `ServiceAccount` named `aerospike-operator-controller-manager` in the target namespace. This is the ServiceAccount used by the Aerospike cluster pods.
+
+```sh
+kubectl create serviceaccount aerospike-operator-controller-manager --namespace <namespace>
+```
+
+Bind this ServiceAccount to the `aerospike-cluster` ClusterRole (created by the aerospike-kubernetes-operator helm chart). Use a `RoleBinding` if the cluster only needs to be accessed from within the same Kubernetes cluster, or a `ClusterRoleBinding` if it needs to be accessible externally.
+
+```sh
+# RoleBinding - scoped to <namespace>
+kubectl create rolebinding aerospike-cluster --namespace <namespace> \
+    --clusterrole=aerospike-cluster --serviceaccount=<namespace>:aerospike-operator-controller-manager
+
+# OR ClusterRoleBinding - cluster-wide
+kubectl create clusterrolebinding aerospike-cluster \
+    --clusterrole=aerospike-cluster --serviceaccount=<namespace>:aerospike-operator-controller-manager
+```
+
+_For multiple namespaces, add additional `--serviceaccount=<namespace>:aerospike-operator-controller-manager` subjects to the same `ClusterRoleBinding` (edit it with `kubectl edit clusterrolebinding aerospike-cluster`)._
 
 #### Create a secret containing aerospike feature key file - `features.conf`
 
@@ -25,51 +56,48 @@ kubectl create secret generic aerospike-secret --from-file=<path-to-features.con
 ```
 
 #### Install the chart
-`<namespace>` used to install aerospike chart must be included in `watchNamespaces` value of aerospike-kubernetes-operator's `values.yaml`
 
 ```sh
 # helm install <chartName> <chartPath> --namespace <namespace>
-helm install aerospike ./aerospike-cluster --set devMode=true
+helm install aerospike aerospike/aerospike-cluster --namespace <namespace> --set devMode=true
 ```
 
-
-*Note that this command assumes few defaults and deploys an aerospike cluster in **"dev"** mode with no data
-persistence. It is recommended to create a separate YAML file with configurations as per your requirements and use it
-with `helm install`.*
+_Note that this command assumes few defaults and deploys an aerospike cluster in **"dev"** mode with no data persistence. It is recommended to create a separate YAML file with configurations as per your requirements and use it
+with `helm install`._
 
 ```sh
-helm install aerospike ./aerospike-cluster/ \
+helm install aerospike aerospike/aerospike-cluster --namespace <namespace> \
     -f <customized-values-yaml-file>
 ```
 
 ## Configurations
 
-| Name | Description                                                                                                                  | Default                                                   |
-| -- |------------------------------------------------------------------------------------------------------------------------------|-----------------------------------------------------------|
-| `replicas` | Aerospike cluster size                                                                                                       | `3`                                                       |
-| `image.repository` | Aerospike server container image repository                                                                                  | `aerospike/aerospike-server-enterprise`                   |
-| `image.tag` | Aerospike server container image tag                                                                                         | `8.1.2.0`                                                 |
-| `imagePullSecrets` | Secrets containing credentials to pull Aerospike container image from a private registry                                     | `{}` (nil)                                                |
-| `customLabels` | Custom labels to add on the aerospikecluster resource                                                                        | `{}` (nil)                                                |
-| `aerospikeAccessControl` | Aerospike access control configuration. Define users and roles to be created on the cluster.                                 | `{}` (nil)                                                |
-| `aerospikeConfig` | Aerospike configuration                                                                                                      | `{}` (nil)                                                |
-| `aerospikeNetworkPolicy` | Network policy (client access configuration)                                                                                 | `{}` (nil)                                                |
-| `commonName` | Base string for naming pods, services, stateful sets, etc.                                                                   | Release name truncated to 63 characters (without hyphens) |
-| `podSpec` | Aerospike pod spec configuration                                                                                             | `{}` (nil)                                                |
-| `rackConfig` | Aerospike rack configuration                                                                                                 | `{}` (nil)                                                |
-| `storage` | Aerospike pod storage configuration                                                                                          | `{}` (nil)                                                |
-| `validationPolicy` | Validation policy                                                                                                            | `{}` (nil)                                                |
-| `operatorClientCert` | Client certificates to connect to Aerospike                                                                                  | `{}` (nil)                                                |
-| `seedsFinderServices` | Service (e.g. loadbalancer) for Aerospike cluster discovery                                                                  | `{}` (nil)                                                |
-| `maxUnavailable` | maxUnavailable defines percentage/number of pods that can be allowed to go down or unavailable before application disruption | `1`                                                       |
-| `disablePDB` | Disable the PodDisruptionBudget creation for the Aerospike cluster                                                           | `false`                                                   |
+| Name                        | Description                                                                                                                  | Default                                                   |
+| --------------------------- | ---------------------------------------------------------------------------------------------------------------------------- | --------------------------------------------------------- |
+| `replicas`                  | Aerospike cluster size                                                                                                       | `3`                                                       |
+| `image.repository`          | Aerospike server container image repository                                                                                  | `aerospike/aerospike-server-enterprise`                   |
+| `image.tag`                 | Aerospike server container image tag                                                                                         | `8.1.2.0`                                                 |
+| `imagePullSecrets`          | Secrets containing credentials to pull Aerospike container image from a private registry                                     | `{}` (nil)                                                |
+| `customLabels`              | Custom labels to add on the aerospikecluster resource                                                                        | `{}` (nil)                                                |
+| `aerospikeAccessControl`    | Aerospike access control configuration. Define users and roles to be created on the cluster.                                 | `{}` (nil)                                                |
+| `aerospikeConfig`           | Aerospike configuration                                                                                                      | `{}` (nil)                                                |
+| `aerospikeNetworkPolicy`    | Network policy (client access configuration)                                                                                 | `{}` (nil)                                                |
+| `commonName`                | Base string for naming pods, services, stateful sets, etc.                                                                   | Release name truncated to 63 characters (without hyphens) |
+| `podSpec`                   | Aerospike pod spec configuration                                                                                             | `{}` (nil)                                                |
+| `rackConfig`                | Aerospike rack configuration                                                                                                 | `{}` (nil)                                                |
+| `storage`                   | Aerospike pod storage configuration                                                                                          | `{}` (nil)                                                |
+| `validationPolicy`          | Validation policy                                                                                                            | `{}` (nil)                                                |
+| `operatorClientCert`        | Client certificates to connect to Aerospike                                                                                  | `{}` (nil)                                                |
+| `seedsFinderServices`       | Service (e.g. loadbalancer) for Aerospike cluster discovery                                                                  | `{}` (nil)                                                |
+| `maxUnavailable`            | maxUnavailable defines percentage/number of pods that can be allowed to go down or unavailable before application disruption | `1`                                                       |
+| `disablePDB`                | Disable the PodDisruptionBudget creation for the Aerospike cluster                                                           | `false`                                                   |
 | `enableDynamicConfigUpdate` | enableDynamicConfigUpdate enables dynamic config update flow of the operator                                                 | `false`                                                   |
-| `enableRackIDOverride` | enableRackIDOverride enables allocation of rack IDs to Aerospike pods after they are scheduled on Kubernetes nodes           | `false`                                                   |
-| `rosterNodeBlockList` | rosterNodeBlockList is a list of blocked nodeIDs from roster in a strong-consistency setup                                   | `[]`                                                      |
-| `k8sNodeBlockList` | k8sNodeBlockList is a list of Kubernetes nodes which are not used for Aerospike pods                                         | `[]`                                                      |
-| `paused` | Pause reconciliation of the cluster                                                                                          | `false`                                                   |
-| `devMode` | Deploy Aerospike cluster in dev mode                                                                                         | `false`                                                   |
-| `operations` | Operations is a list of on-demand operations to be performed on the Aerospike cluster.                                       | `[]`                                                      |
+| `enableRackIDOverride`      | enableRackIDOverride enables allocation of rack IDs to Aerospike pods after they are scheduled on Kubernetes nodes           | `false`                                                   |
+| `rosterNodeBlockList`       | rosterNodeBlockList is a list of blocked nodeIDs from roster in a strong-consistency setup                                   | `[]`                                                      |
+| `k8sNodeBlockList`          | k8sNodeBlockList is a list of Kubernetes nodes which are not used for Aerospike pods                                         | `[]`                                                      |
+| `paused`                    | Pause reconciliation of the cluster                                                                                          | `false`                                                   |
+| `devMode`                   | Deploy Aerospike cluster in dev mode                                                                                         | `false`                                                   |
+| `operations`                | Operations is a list of on-demand operations to be performed on the Aerospike cluster.                                       | `[]`                                                      |
 
 ### Default values in "dev" mode (`devMode=true`):
 
@@ -104,12 +132,12 @@ podSpec:
 
 storage:
   volumes:
-  - name: aerospike-config-secret
-    source:
-      secret:
-        secretName: aerospike-secret
-    aerospike:
-      path: /etc/aerospike/secrets
+    - name: aerospike-config-secret
+      source:
+        secret:
+          secretName: aerospike-secret
+      aerospike:
+        path: /etc/aerospike/secrets
 
 validationPolicy:
   skipWorkDirValidate: true

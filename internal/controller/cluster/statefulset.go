@@ -11,7 +11,7 @@ import (
 
 	appsv1 "k8s.io/api/apps/v1"
 	corev1 "k8s.io/api/core/v1"
-	"k8s.io/apimachinery/pkg/api/errors"
+	k8serrors "k8s.io/apimachinery/pkg/api/errors"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/labels"
 	"k8s.io/apimachinery/pkg/types"
@@ -246,14 +246,18 @@ func (r *SingleClusterReconciler) deleteSTS(ctx context.Context, st *appsv1.Stat
 	return r.Delete(ctx, st)
 }
 
+// podStatusMaxRetry and podStatusRetryInterval control the polling behaviour of
+// waitForSTSPodsServerReady and waitForSTSToBeReady. They are package-level
+// variables (rather than local constants) so that unit tests can set them to
+// small values and avoid multi-minute sleeps.
+var (
+	podStatusMaxRetry      = 18
+	podStatusRetryInterval = time.Second * 10
+)
+
 func (r *SingleClusterReconciler) waitForSTSPodsServerReady(
 	ctx context.Context, st *appsv1.StatefulSet, ignorablePodNames sets.Set[string],
 ) error {
-	const (
-		podStatusMaxRetry      = 18
-		podStatusRetryInterval = time.Second * 10
-	)
-
 	r.Log.Info(
 		"Waiting for server Container to be ready across all Pods of StatefulSet",
 		"statefulSet", utils.GetNamespacedName(st),
@@ -312,10 +316,8 @@ func (r *SingleClusterReconciler) waitForSTSPodsServerReady(
 		}
 
 		if !isReady {
-			return fmt.Errorf(
-				"server container in Pod %s did not become ready, status: %v",
-				utils.NamespacedName(st.Namespace, podName), pod.Status.ContainerStatuses,
-			)
+			return fmt.Errorf("pod %s not ready yet — server container not ready, containerStatuses: %v: %w",
+				utils.NamespacedName(st.Namespace, podName), pod.Status.ContainerStatuses, common.ErrStatefulSetNotReady)
 		}
 	}
 
@@ -325,11 +327,6 @@ func (r *SingleClusterReconciler) waitForSTSPodsServerReady(
 func (r *SingleClusterReconciler) waitForSTSToBeReady(
 	ctx context.Context, st *appsv1.StatefulSet, ignorablePodNames sets.Set[string],
 ) error {
-	const (
-		podStatusMaxRetry      = 18
-		podStatusRetryInterval = time.Second * 10
-	)
-
 	r.Log.Info(
 		"Waiting for StatefulSet to be ready", "waitTimePerPod",
 		podStatusRetryInterval*time.Duration(podStatusMaxRetry),
@@ -376,9 +373,8 @@ func (r *SingleClusterReconciler) waitForSTSToBeReady(
 			}
 
 			if err := utils.CheckPodFailed(pod); err != nil {
-				return fmt.Errorf(
-					"check StatefulSet pod %s: %w", utils.NamespacedName(st.Namespace, podName), err,
-				)
+				return fmt.Errorf("pod %s failed: %w",
+					utils.NamespacedName(st.Namespace, podName), err)
 			}
 
 			if utils.IsPodRunningAndReady(pod) {
@@ -393,11 +389,8 @@ func (r *SingleClusterReconciler) waitForSTSToBeReady(
 		}
 
 		if !isReady {
-			statusErr := fmt.Errorf(
-				"status for Pod %s: resource not ready, conditions=%v",
-				utils.GetNamespacedNameString(pod), pod.Status.Conditions)
-
-			return statusErr
+			return fmt.Errorf("pod %s not ready yet — resource not ready, conditions: %v: %w",
+				utils.GetNamespacedNameString(pod), pod.Status.Conditions, common.ErrStatefulSetNotReady)
 		}
 	}
 
@@ -478,7 +471,7 @@ func (r *SingleClusterReconciler) createSTSConfigMap(
 		}, confMap,
 	)
 	if err != nil {
-		if errors.IsNotFound(err) {
+		if k8serrors.IsNotFound(err) {
 			// build the aerospike config file based on the current spec
 			var configMapData map[string]string
 
@@ -1189,7 +1182,7 @@ func (r *SingleClusterReconciler) waitForAllSTSToBeReady(
 		stsName := utils.GetNamespacedNameForSTSOrConfigMap(r.aeroCluster, rackIdentifier)
 
 		if err := r.Get(ctx, stsName, st); err != nil {
-			if !errors.IsNotFound(err) {
+			if !k8serrors.IsNotFound(err) {
 				return err
 			}
 
@@ -1231,7 +1224,7 @@ func (r *SingleClusterReconciler) waitForAllAerospikeServersReady(
 		stsName := utils.GetNamespacedNameForSTSOrConfigMap(r.aeroCluster, rackIdentifier)
 
 		if err := r.Get(ctx, stsName, st); err != nil {
-			if !errors.IsNotFound(err) {
+			if !k8serrors.IsNotFound(err) {
 				return err
 			}
 
@@ -1613,7 +1606,7 @@ func getFinalVolumeAttachmentsForVolume(volume *asdbv1.VolumeSpec, workDirPath s
 	// Create dummy attachment for initContainer
 	initVolumePath := "/" + volume.Name // Using volume name for initContainer
 
-	// All volumes should be mounted in init container to allow initialization
+	// User-specified init container attachments are always honoured.
 	initContainerAttachments = append(
 		initContainerAttachments, volume.InitContainers...,
 	)
@@ -1654,9 +1647,18 @@ func getFinalVolumeAttachmentsForVolume(volume *asdbv1.VolumeSpec, workDirPath s
 		}
 	}
 
-	initContainerAttachments = append(
-		initContainerAttachments, aerosikeInitContainerAttachment,
-	)
+	// Auto-mount in the init container only for volumes it actually needs to access:
+	// - PersistentVolumes: the init container must wipe/initialize them before ASD starts.
+	// - Volumes with an Aerospike attachment: the init container sets up the workdir (smd,
+	//   usr/udf/lua) under them.
+	// Non-PV volumes that are not used by Aerospike (e.g. ConfigMap/Secret sidecars) have
+	// no role in the init container and are skipped; they remain accessible via the explicit
+	// volume.InitContainers field if a user ever needs them there.
+	if volume.Source.PersistentVolume != nil || volume.Aerospike != nil {
+		initContainerAttachments = append(
+			initContainerAttachments, aerosikeInitContainerAttachment,
+		)
+	}
 
 	return initContainerAttachments, containerAttachments
 }

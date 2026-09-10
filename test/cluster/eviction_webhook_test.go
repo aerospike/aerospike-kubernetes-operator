@@ -11,6 +11,7 @@ import (
 	appsv1 "k8s.io/api/apps/v1"
 	corev1 "k8s.io/api/core/v1"
 	policyv1 "k8s.io/api/policy/v1"
+	"k8s.io/apimachinery/pkg/api/errors"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/types"
 	"k8s.io/apimachinery/pkg/util/wait"
@@ -283,6 +284,10 @@ func waitForPodRestart(ctx goctx.Context, podName, namespace, originalPodUID str
 				Namespace: namespace,
 			}, pod)
 			if err != nil {
+				if errors.IsNotFound(err) {
+					return false, nil
+				}
+
 				return false, err
 			}
 
