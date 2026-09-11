@@ -48,6 +48,9 @@ const (
 
 const minInitVersionForOverrideRackID = "2.5.0"
 
+// patchOperationReplace is the JSON patch "replace" operation.
+const patchOperationReplace = "replace"
+
 // mergeRestartType generates the updated restart type based on precedence.
 // podRestart > quickRestart > noRestartUpdateConf > noRestart
 func mergeRestartType(current, incoming RestartType) RestartType {
@@ -1548,7 +1551,7 @@ func (r *SingleClusterReconciler) handleNSOrDeviceRemovalPerPod(
 		patches := make([]jsonpatch.PatchOperation, 0, 1)
 
 		patch1 := jsonpatch.PatchOperation{
-			Operation: "replace",
+			Operation: patchOperationReplace,
 			Path:      "/status/pods/" + podName + "/dirtyVolumes",
 			Value:     sets.List(dirtyVolumes),
 		}

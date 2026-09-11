@@ -411,7 +411,7 @@ func (r *SingleClusterReconciler) setDynamicConfig(
 			patches := make([]jsonpatch.PatchOperation, 0, 1)
 
 			patch := jsonpatch.PatchOperation{
-				Operation: "replace",
+				Operation: patchOperationReplace,
 				Path:      "/status/pods/" + podName + "/dynamicConfigUpdateStatus",
 				Value:     errorStatus,
 			}

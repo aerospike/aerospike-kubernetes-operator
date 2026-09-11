@@ -4,7 +4,7 @@ kind: CustomResourceDefinition
 metadata:
   annotations:
     aerospike-kubernetes-operator/version: 4.5.0
-    controller-gen.kubebuilder.io/version: v0.18.0
+    controller-gen.kubebuilder.io/version: v0.22.0
   name: aerospikebackupservices.asdb.aerospike.com
 spec:
   group: asdb.aerospike.com
@@ -1173,7 +1173,6 @@ spec:
                               procMount denotes the type of proc mount to use for the containers.
                               The default value is Default which uses the container runtime defaults for
                               readonly paths and masked paths.
-                              This requires the ProcMountType feature flag to be enabled.
                               Note that this field cannot be set when spec.os.name is windows.
                             type: string
                           readOnlyRootFilesystem:
@@ -2622,7 +2621,6 @@ spec:
                               procMount denotes the type of proc mount to use for the containers.
                               The default value is Default which uses the container runtime defaults for
                               readonly paths and masked paths.
-                              This requires the ProcMountType feature flag to be enabled.
                               Note that this field cannot be set when spec.os.name is windows.
                             type: string
                           readOnlyRootFilesystem:

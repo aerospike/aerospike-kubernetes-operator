@@ -918,6 +918,9 @@ func (r *SingleClusterReconciler) patchStatus(ctx context.Context, newAeroCluste
 // validation for ip and port.
 //
 // Such cases warrant a cluster recreate to recover after the user corrects the configuration.
+//
+// It returns nil once the teardown succeeds; the caller decides how to surface the recreate
+// to the reconcile loop.
 func (r *SingleClusterReconciler) recoverFailedCreate(ctx context.Context) error {
 	r.Log.Info("Forcing a cluster recreate as status is nil. The cluster could be unreachable due to bad configuration")
 
@@ -986,7 +989,7 @@ func (r *SingleClusterReconciler) recoverFailedCreate(ctx context.Context) error
 		return fmt.Errorf("clear access control status during cluster recovery: %w", err)
 	}
 
-	return fmt.Errorf("forcing recreate of cluster: status is nil")
+	return nil
 }
 
 // clearAerospikeAccessControlStatus sets AerospikeAccessControl to nil in the
@@ -1195,7 +1198,9 @@ func (r *SingleClusterReconciler) checkPreviouslyFailedCluster(ctx context.Conte
 		return true, common.ReconcileError(err)
 	}
 
-	return true, common.ReconcileSuccess()
+	// The teardown succeeded, but the cluster still has no status. Error out so this
+	// reconcile ends here and the recreate happens on the next run.
+	return true, common.ReconcileError(fmt.Errorf("forcing recreate of cluster: status is nil"))
 }
 
 func (r *SingleClusterReconciler) removedNamespaces(nodesNamespaces map[string][]string) []string {
@@ -1299,7 +1304,7 @@ func (r *SingleClusterReconciler) migrateInitialisedVolumeNames(ctx context.Cont
 				"initVolumes", initializedVolumes, "pod", utils.GetNamespacedName(pod))
 
 			patch1 := jsonpatch.PatchOperation{
-				Operation: "replace",
+				Operation: patchOperationReplace,
 				Path:      "/status/pods/" + pod.Name + "/initializedVolumes",
 				Value:     initializedVolumes,
 			}

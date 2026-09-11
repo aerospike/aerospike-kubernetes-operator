@@ -1471,10 +1471,6 @@ type AerospikeClusterList struct {
 	Items           []AerospikeCluster `json:"items"`
 }
 
-func init() {
-	SchemeBuilder.Register(&AerospikeCluster{}, &AerospikeClusterList{})
-}
-
 // CopySpecToStatus copy spec in status. Spec to Status DeepCopy doesn't work. It fails in reflect lib.
 //
 //nolint:dupl // not duplicate

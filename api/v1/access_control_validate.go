@@ -37,8 +37,8 @@ var userNameForbiddenChars = []string{";", ":"}
 
 // PredefinedRoles are all roles predefined in Aerospike server.
 var PredefinedRoles = map[string]struct{}{
-	"user-admin":     {},
-	"sys-admin":      {},
+	"user-admin":     {}, //nolint:goconst // predefined role name reused across role/privilege maps
+	"sys-admin":      {}, //nolint:goconst // predefined role name reused across role/privilege maps
 	"data-admin":     {},
 	"read":           {},
 	"read-write":     {},

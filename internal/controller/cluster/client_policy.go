@@ -254,6 +254,9 @@ func (r *SingleClusterReconciler) appendCACertFromFileOrPath(
 			if !d.IsDir() {
 				var caData []byte
 
+				// TODO: switch to root-scoped reads (os.Root) to close the symlink
+				// TOCTOU window flagged by G122.
+				//nolint:gosec // G122: caPath is operator-configured and mounted read-only
 				if caData, err = os.ReadFile(path); err != nil {
 					return err
 				}
