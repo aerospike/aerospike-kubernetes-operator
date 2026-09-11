@@ -95,14 +95,78 @@
                 },
                 "webhook": {
                     "description": "Webhook server certificate configuration",
-                    "type": "object",
+                    "allOf": [
+                        {
+                            "type": "object"
+                        },
+                        {
+                            "if": {
+                                "required": [
+                                    "provider"
+                                ],
+                                "properties": {
+                                    "provider": {
+                                        "const": "external"
+                                    }
+                                }
+                            },
+                            "then": {
+                                "required": [
+                                    "external"
+                                ],
+                                "properties": {
+                                    "external": {
+                                        "required": [
+                                            "caBundle"
+                                        ],
+                                        "properties": {
+                                            "caBundle": {
+                                                "minLength": 1
+                                            }
+                                        }
+                                    }
+                                }
+                            }
+                        }
+                    ],
                     "required": [
-                        "create",
                         "webhookServerCertSecretName"
                     ],
                     "properties": {
+                        "certManager": {
+                            "description": "Reserved for future cert-manager tuning (issuerRef, duration, renewBefore)",
+                            "type": "object",
+                            "additionalProperties": false
+                        },
                         "create": {
+                            "description": "DEPRECATED: use `provider` instead. Only consulted when `provider` is empty. Removed in a future release.",
                             "type": "boolean"
+                        },
+                        "external": {
+                            "type": "object",
+                            "properties": {
+                                "caBundle": {
+                                    "description": "Base64-encoded PEM CA bundle that signed the webhook serving certificate (not the serving certificate itself). Required when provider is external. Surrounding and embedded whitespace is stripped before rendering, so wrapped",
+                                    "type": "string",
+                                    "pattern": "^[A-Za-z0-9+/\\s]*={0,2}\\s*$"
+                                }
+                            },
+                            "additionalProperties": false
+                        },
+                        "provider": {
+                            "description": "How the webhook serving certificate is provided. certManager: chart creates the cert-manager Issuer/Certificate (requires cert-manager). selfSigned: chart generates the cert and Secret itself. Dev/POC only, see README. external: you pre-create the Secret and supply external.caBundle. Empty infers the mode from the deprecated `create` flag (4.5.0 compatibility).",
+                            "type": "string",
+                            "enum": [
+                                "",
+                                "certManager",
+                                "selfSigned",
+                                "external"
+                            ]
+                        },
+                        "selfSigned": {
+                            "description": "Reserved for future self-signed tuning (duration). Dev/POC only",
+                            "type": "object",
+                            "additionalProperties": false
                         },
                         "webhookServerCertSecretName": {
                             "description": "Name of the secret holding the webhook server certificate",

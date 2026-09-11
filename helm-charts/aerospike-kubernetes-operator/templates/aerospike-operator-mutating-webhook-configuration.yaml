@@ -1,8 +1,11 @@
+{{- $caBundle := include "aerospike-kubernetes-operator.webhookCaBundle" . }}
 apiVersion: admissionregistration.k8s.io/v1
 kind: MutatingWebhookConfiguration
 metadata:
+  {{- if not $caBundle }}
   annotations:
     cert-manager.io/inject-ca-from: {{ .Release.Namespace }}/aerospike-operator-serving-cert
+  {{- end }}
   name: aerospike-operator-mutating-webhook-configuration
   labels:
     app: {{ template "aerospike-kubernetes-operator.fullname" . }}
@@ -16,6 +19,9 @@ webhooks:
       name: aerospike-operator-webhook-service
       namespace: {{ .Release.Namespace }}
       path: /mutate-asdb-aerospike-com-v1-aerospikecluster
+    {{- with $caBundle }}
+    caBundle: {{ . }}
+    {{- end }}
   failurePolicy: Fail
   {{- if .Values.watchNamespaces }}
   namespaceSelector:
@@ -46,6 +52,9 @@ webhooks:
       name: aerospike-operator-webhook-service
       namespace: {{ .Release.Namespace }}
       path: /mutate-asdb-aerospike-com-v1beta1-aerospikebackupservice
+    {{- with $caBundle }}
+    caBundle: {{ . }}
+    {{- end }}
   failurePolicy: Fail
   {{- if .Values.watchNamespaces }}
   namespaceSelector:
