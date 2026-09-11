@@ -310,6 +310,10 @@ func (acv *AerospikeClusterCustomValidator) ValidateUpdate(_ context.Context,
 		return warnings, err
 	}
 
+	if err := validateVerticalScaling(oldObject, aerospikeCluster); err != nil {
+		return warnings, err
+	}
+
 	// Validate actual pod names to catch silent DNS label overflows at runtime.
 	// This uses real rack IDs, real revisions, and the real max ordinal (Size-1),
 	// so it only rejects what would actually fail — not a conservative estimate.
@@ -871,6 +875,132 @@ func validateConcurrentRackRevisions(oldObj, newObj *asdbv1.AerospikeCluster) er
 	}
 
 	return nil
+}
+
+// validateVerticalScaling rejects a rack revision change that would leave too few
+// nodes standing while a rack's pods are replaced.
+//
+// Inputs are spec-only. Size 1 and replication-factor <= 1 are rejected in AP and
+// SC. The survivors floor and roster-majority checks are SC only (pkg/validation
+// already allows AP size < RF). The worst batch is the first rack: DistributeItems
+// always gives it the most pods.
+func validateVerticalScaling(oldObj, newObj *asdbv1.AerospikeCluster) error {
+	const notAllowed = "vertical scaling (rack revision change) is not allowed"
+
+	// New racks and non-revision updates are not vertical scaling.
+	if !hasRackRevisionChange(oldObj.Spec.RackConfig.Racks, newObj.Spec.RackConfig.Racks) {
+		return nil
+	}
+
+	// AP and SC: replacing the only node takes the cluster down.
+	if newObj.Spec.Size == 1 {
+		return fmt.Errorf("%s: spec.size is 1, so the only node would go down", notAllowed)
+	}
+
+	leaving := podsLeavingFirstRack(newObj)
+	survivors := newObj.Spec.Size - leaving
+
+	// Rejecting on the first namespace that breaks a rule means survivors have to
+	// satisfy every namespace.
+	for nsName, conf := range getNsConfForNamespaces(newObj.Spec.RackConfig) {
+		// AP and SC. validateBatchSize already rejects RF 1 when a batch is set; this
+		// covers the unset-batch case (one pod per pass).
+		if conf.replicationFactor <= 1 {
+			return fmt.Errorf(
+				"%s: namespace %q has replication-factor %d, so no replica remains while pods are replaced",
+				notAllowed, nsName, conf.replicationFactor,
+			)
+		}
+
+		// The remaining floors are strong-consistency only: pkg/validation already
+		// allows an AP cluster smaller than its replication-factor, and AP has no
+		// roster.
+		if !conf.scEnabled {
+			continue
+		}
+
+		if int(survivors) < conf.replicationFactor {
+			return fmt.Errorf(
+				"%s: %d of %d nodes would go down, leaving %d for strong-consistency "+
+					"namespace %q (needs replication-factor %d)",
+				notAllowed, leaving, newObj.Spec.Size, survivors, nsName, conf.replicationFactor,
+			)
+		}
+
+		if survivors <= newObj.Spec.Size/2 {
+			return fmt.Errorf(
+				"%s: %d of %d nodes would go down, leaving %d, which is not a majority of "+
+					"the strong-consistency roster",
+				notAllowed, leaving, newObj.Spec.Size, survivors,
+			)
+		}
+	}
+
+	return nil
+}
+
+// hasRackRevisionChange is true when an existing rack's revision changed. A newly
+// added rack is not vertical scaling. A revert counts.
+func hasRackRevisionChange(oldRacks, newRacks []asdbv1.Rack) bool {
+	oldRevisions := make(map[int]string, len(oldRacks))
+
+	for idx := range oldRacks {
+		oldRevisions[oldRacks[idx].ID] = oldRacks[idx].Revision
+	}
+
+	for idx := range newRacks {
+		oldRevision, existed := oldRevisions[newRacks[idx].ID]
+		if existed && oldRevision != newRacks[idx].Revision {
+			return true
+		}
+	}
+
+	return false
+}
+
+// podsLeavingFirstRack is the largest delete batch in the cluster. DistributeItems
+// gives spec index 0 the most pods, exactly ceil(size/racks), so the first rack's
+// size is all that is needed and the full topology is not worth building.
+//
+// The rack count is floored at 1 so the division is always safe. Reaching here
+// requires hasRackRevisionChange to have found a changed rack, which is only possible
+// when spec.rackConfig.racks is non-empty, and the mutating webhook's
+// setDefaultRackConf injects the default rack before that anyway. The floor therefore
+// only matters to direct callers such as unit tests, where it degenerates to treating
+// the whole cluster as one rack.
+func podsLeavingFirstRack(cluster *asdbv1.AerospikeCluster) int32 {
+	racks := max(utils.Len32(cluster.Spec.RackConfig.Racks), 1)
+
+	// Mirrors DistributeItems: every rack gets size/racks pods, then the remainder is
+	// handed out one pod at a time starting at index 0. So the first rack takes one
+	// extra whenever the split is uneven, which is both why it is the largest rack and
+	// why ceil(size/racks) is its exact pod count.
+	//
+	//	size 6 over 3 racks -> [2, 2, 2], first rack 2 (no remainder)
+	//	size 7 over 3 racks -> [3, 2, 2], first rack 3 (remainder 1 goes to index 0)
+	firstRackSize := cluster.Spec.Size / racks
+	if cluster.Spec.Size%racks != 0 {
+		firstRackSize++
+	}
+
+	return clampedBatch(cluster.Spec.RackConfig.RollingUpdateBatchSize, firstRackSize)
+}
+
+// clampedBatch resolves rollingUpdateBatchSize against a rack size. Round-up matches
+// the reconciler replica step; unset becomes 1; result is capped at the rack size.
+// Callers must pass base >= 1.
+func clampedBatch(batch *intstr.IntOrString, base int32) int32 {
+	value, _ := intstr.GetScaledValueFromIntOrPercent(batch, int(base), true)
+
+	if value >= int(base) {
+		return base
+	}
+
+	if value < 1 {
+		return 1
+	}
+
+	return int32(value) //nolint:gosec // above zero and below base, itself an int32 pod count
 }
 
 // TODO: FIX
