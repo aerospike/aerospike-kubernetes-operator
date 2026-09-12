@@ -434,7 +434,7 @@ var _ = Describe("Rack revision webhook validation", func() {
 					clusterName20 := strings.Repeat("a", 20)
 					cName = test.GetNamespacedName(clusterName20, clusterNamespacedName.Namespace)
 
-					// Size 3 so the bump clears the vertical-scaling floor.
+					// Size 3 so the bump clears the rack revision availability floor.
 					aeroCluster := testCluster.CreateDummyAerospikeCluster(cName, 3)
 					aeroCluster.Spec.RackConfig = asdbv1.RackConfig{
 						Namespaces: []string{"test"},
@@ -493,7 +493,7 @@ var _ = Describe("Rack revision webhook validation", func() {
 					clusterName20 := strings.Repeat("b", 20)
 					cName = test.GetNamespacedName(clusterName20, clusterNamespacedName.Namespace)
 
-					// Size 3 so the bump clears the vertical-scaling floor.
+					// Size 3 so the bump clears the rack revision availability floor.
 					aeroCluster := testCluster.CreateDummyAerospikeCluster(cName, 3)
 					aeroCluster.Spec.RackConfig = asdbv1.RackConfig{
 						Namespaces: []string{"test"},
@@ -521,9 +521,9 @@ var _ = Describe("Rack revision webhook validation", func() {
 						).Validate(err)
 				})
 
-				// Vertical scaling: spec-only; batch is sized against the first rack.
+				// Rack revision change: spec-only; batch is sized against the first rack.
 				It("rejects a revision bump on a single-node SC cluster", func() {
-					cName = uniqueNamespacedName("vscale-sc-single")
+					cName = uniqueNamespacedName("rackrev-sc-single")
 					// SC size 1 requires RF 1; the size-1 rule fires first.
 					aeroCluster := testCluster.CreateDummyAerospikeCluster(cName, 1)
 					setNamespaceReplicationFactor(aeroCluster, 1)
@@ -542,13 +542,13 @@ var _ = Describe("Rack revision webhook validation", func() {
 					envtests.NewStatusErrorMatcher().
 						WithMessageSubstrings(
 							testutil.WebhookErrorPrefix,
-							"vertical scaling (rack revision change) is not allowed",
+							"rack revision change is not allowed",
 							"spec.size is 1",
 						).Validate(err)
 				})
 
 				It("rejects a revision bump on a single-node AP cluster", func() {
-					cName = uniqueNamespacedName("vscale-ap-single")
+					cName = uniqueNamespacedName("rackrev-ap-single")
 					aeroCluster := testCluster.CreateDummyAerospikeClusterWithRF(cName, 1, 2)
 					aeroCluster.Spec.RackConfig = asdbv1.RackConfig{
 						Namespaces: []string{"test"},
@@ -565,13 +565,13 @@ var _ = Describe("Rack revision webhook validation", func() {
 					envtests.NewStatusErrorMatcher().
 						WithMessageSubstrings(
 							testutil.WebhookErrorPrefix,
-							"vertical scaling (rack revision change) is not allowed",
+							"rack revision change is not allowed",
 							"spec.size is 1",
 						).Validate(err)
 				})
 
 				It("rejects a revision bump when an SC namespace is at replication-factor 1", func() {
-					cName = uniqueNamespacedName("vscale-sc-rf1")
+					cName = uniqueNamespacedName("rackrev-sc-rf1")
 					aeroCluster := testCluster.CreateDummyAerospikeCluster(cName, 3)
 					setNamespaceReplicationFactor(aeroCluster, 1)
 					aeroCluster.Spec.RackConfig = asdbv1.RackConfig{
@@ -589,13 +589,13 @@ var _ = Describe("Rack revision webhook validation", func() {
 					envtests.NewStatusErrorMatcher().
 						WithMessageSubstrings(
 							testutil.WebhookErrorPrefix,
-							"vertical scaling (rack revision change) is not allowed",
+							"rack revision change is not allowed",
 							`namespace "test" has replication-factor 1`,
 						).Validate(err)
 				})
 
 				It("rejects a revision bump when an AP namespace is at replication-factor 1", func() {
-					cName = uniqueNamespacedName("vscale-ap-rf1")
+					cName = uniqueNamespacedName("rackrev-ap-rf1")
 					aeroCluster := testCluster.CreateDummyAerospikeClusterWithRF(cName, 3, 1)
 					aeroCluster.Spec.RackConfig = asdbv1.RackConfig{
 						Namespaces: []string{"test"},
@@ -612,13 +612,13 @@ var _ = Describe("Rack revision webhook validation", func() {
 					envtests.NewStatusErrorMatcher().
 						WithMessageSubstrings(
 							testutil.WebhookErrorPrefix,
-							"vertical scaling (rack revision change) is not allowed",
+							"rack revision change is not allowed",
 							`namespace "test" has replication-factor 1`,
 						).Validate(err)
 				})
 
 				It("rejects a three-rack revision bump at full batch when survivors fall below RF", func() {
-					cName = uniqueNamespacedName("vscale-sc-floor")
+					cName = uniqueNamespacedName("rackrev-sc-floor")
 					// [2,2,2]; 100% batch leaves 4, below RF 5.
 					aeroCluster := testCluster.CreateDummyAerospikeCluster(cName, 6)
 					setNamespaceReplicationFactor(aeroCluster, 5)
@@ -642,7 +642,7 @@ var _ = Describe("Rack revision webhook validation", func() {
 					envtests.NewStatusErrorMatcher().
 						WithMessageSubstrings(
 							testutil.WebhookErrorPrefix,
-							"vertical scaling (rack revision change) is not allowed",
+							"rack revision change is not allowed",
 							"2 of 6 nodes would go down",
 							"leaving 4",
 							`strong-consistency namespace "test"`,
@@ -650,8 +650,63 @@ var _ = Describe("Rack revision webhook validation", func() {
 						).Validate(err)
 				})
 
+				// A migration spans many reconciles and status only catches up on success, so a
+				// follow-up update that changes no revision must still be checked while pods
+				// are being replaced. Admitting one leaves the reconciler rollback-looping on
+				// unavailable partitions.
+				It("rejects a pure scale-down while a rack revision migration is in flight", func() {
+					cName = uniqueNamespacedName("rackrev-inflight-down")
+					aeroCluster := testCluster.CreateDummyAerospikeCluster(cName, 6)
+					setNamespaceReplicationFactor(aeroCluster, 3)
+					aeroCluster.Spec.RackConfig = asdbv1.RackConfig{
+						Namespaces:             []string{"test"},
+						RollingUpdateBatchSize: ptr.To(intstr.FromString("100%")),
+						Racks: []asdbv1.Rack{
+							{ID: 1, Revision: "v1"},
+							{ID: 2, Revision: "v1"},
+							{ID: 3, Revision: "v1"},
+						},
+					}
+					Expect(envtests.K8sClient.Create(ctx, aeroCluster)).To(Succeed())
+
+					// Seed the last reconciled state: all racks still at v1, size 6.
+					base, err := testCluster.GetCluster(envtests.K8sClient, ctx, cName)
+					Expect(err).ToNot(HaveOccurred())
+					statusSnap := base.DeepCopy()
+					statusSnap.Status.Size = 6
+					statusSnap.Status.RackConfig.Racks = []asdbv1.Rack{
+						{ID: 1, Revision: "v1"},
+						{ID: 2, Revision: "v1"},
+						{ID: 3, Revision: "v1"},
+					}
+					Expect(envtests.K8sClient.Status().Update(ctx, statusSnap)).To(Succeed())
+
+					// [2,2,2]; 100% batch leaves 4, which clears RF 3, so the bump is admitted.
+					current, err := testCluster.GetCluster(envtests.K8sClient, ctx, cName)
+					Expect(err).ToNot(HaveOccurred())
+					current.Spec.RackConfig.Racks[0].Revision = newRackRevision
+					Expect(envtests.K8sClient.Update(ctx, current)).To(Succeed())
+
+					// Rack 1 is now mid-migration (spec v2, status v1). Shrinking to 4 gives
+					// [2,1,1], so the same 100% batch leaves only 2 — below RF 3.
+					current, err = testCluster.GetCluster(envtests.K8sClient, ctx, cName)
+					Expect(err).ToNot(HaveOccurred())
+					current.Spec.Size = 4
+					err = envtests.K8sClient.Update(ctx, current)
+					Expect(err).To(HaveOccurred())
+					envtests.NewStatusErrorMatcher().
+						WithMessageSubstrings(
+							testutil.WebhookErrorPrefix,
+							"rack revision change is not allowed",
+							"2 of 4 nodes would go down",
+							"leaving 2",
+							`strong-consistency namespace "test"`,
+							"replication-factor 3",
+						).Validate(err)
+				})
+
 				It("rejects a two-rack revision bump at full batch when survivors are half the roster", func() {
-					cName = uniqueNamespacedName("vscale-sc-maj-2r")
+					cName = uniqueNamespacedName("rackrev-sc-maj-2r")
 					// [2,2]; 100% batch leaves 2 of 4, which is not a majority.
 					aeroCluster := testCluster.CreateDummyAerospikeCluster(cName, 4)
 					aeroCluster.Spec.RackConfig = asdbv1.RackConfig{
@@ -673,7 +728,7 @@ var _ = Describe("Rack revision webhook validation", func() {
 					envtests.NewStatusErrorMatcher().
 						WithMessageSubstrings(
 							testutil.WebhookErrorPrefix,
-							"vertical scaling (rack revision change) is not allowed",
+							"rack revision change is not allowed",
 							"2 of 4 nodes would go down",
 							"leaving 2",
 							"majority",
@@ -681,7 +736,7 @@ var _ = Describe("Rack revision webhook validation", func() {
 				})
 
 				It("rejects a three-rack revision bump at full batch when survivors are half the roster", func() {
-					cName = uniqueNamespacedName("vscale-sc-maj-3r")
+					cName = uniqueNamespacedName("rackrev-sc-maj-3r")
 					// [2,1,1]; 100% batch leaves 2 of 4, which is not a majority.
 					aeroCluster := testCluster.CreateDummyAerospikeCluster(cName, 4)
 					aeroCluster.Spec.RackConfig = asdbv1.RackConfig{
@@ -704,7 +759,7 @@ var _ = Describe("Rack revision webhook validation", func() {
 					envtests.NewStatusErrorMatcher().
 						WithMessageSubstrings(
 							testutil.WebhookErrorPrefix,
-							"vertical scaling (rack revision change) is not allowed",
+							"rack revision change is not allowed",
 							"2 of 4 nodes would go down",
 							"leaving 2",
 							"majority",
@@ -759,7 +814,7 @@ var _ = Describe("Rack revision webhook validation", func() {
 				It("allows UPDATE when revision grows but stays within the Pod label value model", func() {
 					// "abc" + short STS; label << 63.
 					cName = test.GetNamespacedName(threeCharClusterName, clusterNamespacedName.Namespace)
-					// Size 3 so the bump clears the vertical-scaling floor.
+					// Size 3 so the bump clears the rack revision availability floor.
 					aeroCluster := testCluster.CreateDummyAerospikeCluster(cName, 3)
 					aeroCluster.Spec.RackConfig = asdbv1.RackConfig{
 						Namespaces: []string{"test"},
@@ -804,7 +859,7 @@ var _ = Describe("Rack revision webhook validation", func() {
 				})
 
 				It("allows a three-rack revision bump at full batch when survivors meet RF", func() {
-					cName = uniqueNamespacedName("vscale-sc-ok")
+					cName = uniqueNamespacedName("rackrev-sc-ok")
 					// Same topology as the reject case; RF 3 so 4 survivors suffice.
 					aeroCluster := testCluster.CreateDummyAerospikeCluster(cName, 6)
 					setNamespaceReplicationFactor(aeroCluster, 3)
@@ -827,7 +882,7 @@ var _ = Describe("Rack revision webhook validation", func() {
 				})
 
 				It("allows an AP revision bump even when survivors fall below RF", func() {
-					cName = uniqueNamespacedName("vscale-ap-floor")
+					cName = uniqueNamespacedName("rackrev-ap-floor")
 					// AP has no RF floor; 4 of 6 survivors at RF 5 is allowed.
 					aeroCluster := testCluster.CreateDummyAerospikeClusterWithRF(cName, 6, 5)
 					aeroCluster.Spec.RackConfig = asdbv1.RackConfig{
@@ -849,8 +904,8 @@ var _ = Describe("Rack revision webhook validation", func() {
 				})
 
 				It("allows a resize that changes no rack revision", func() {
-					cName = uniqueNamespacedName("vscale-resize-only")
-					// Resize-only is not vertical scaling.
+					cName = uniqueNamespacedName("rackrev-resize-only")
+					// Resize-only is not a rack revision change.
 					aeroCluster := testCluster.CreateDummyAerospikeCluster(cName, 6)
 					setNamespaceReplicationFactor(aeroCluster, 5)
 					aeroCluster.Spec.RackConfig = asdbv1.RackConfig{
@@ -871,8 +926,42 @@ var _ = Describe("Rack revision webhook validation", func() {
 					Expect(envtests.K8sClient.Update(ctx, current)).To(Succeed())
 				})
 
+				// A populated status that agrees with spec means nothing is rolling, so the
+				// gate must stay shut exactly as it does when status is empty.
+				It("allows a resize when status agrees with the spec", func() {
+					cName = uniqueNamespacedName("rackrev-status-settled")
+					aeroCluster := testCluster.CreateDummyAerospikeCluster(cName, 12)
+					setNamespaceReplicationFactor(aeroCluster, 5)
+					aeroCluster.Spec.RackConfig = asdbv1.RackConfig{
+						Namespaces:             []string{"test"},
+						RollingUpdateBatchSize: ptr.To(intstr.FromString("100%")),
+						Racks: []asdbv1.Rack{
+							{ID: 1, Revision: "v1"},
+							{ID: 2, Revision: "v1"},
+							{ID: 3, Revision: "v1"},
+						},
+					}
+					Expect(envtests.K8sClient.Create(ctx, aeroCluster)).To(Succeed())
+
+					base, err := testCluster.GetCluster(envtests.K8sClient, ctx, cName)
+					Expect(err).ToNot(HaveOccurred())
+					statusSnap := base.DeepCopy()
+					statusSnap.Status.Size = 12
+					statusSnap.Status.RackConfig.Racks = []asdbv1.Rack{
+						{ID: 1, Revision: "v1"},
+						{ID: 2, Revision: "v1"},
+						{ID: 3, Revision: "v1"},
+					}
+					Expect(envtests.K8sClient.Status().Update(ctx, statusSnap)).To(Succeed())
+
+					current, err := testCluster.GetCluster(envtests.K8sClient, ctx, cName)
+					Expect(err).ToNot(HaveOccurred())
+					current.Spec.Size = 6
+					Expect(envtests.K8sClient.Update(ctx, current)).To(Succeed())
+				})
+
 				It("allows adding a new rack that carries a revision", func() {
-					cName = uniqueNamespacedName("vscale-new-rack")
+					cName = uniqueNamespacedName("rackrev-new-rack")
 					// New rack with a revision is not a migration.
 					aeroCluster := testCluster.CreateDummyAerospikeCluster(cName, 6)
 					setNamespaceReplicationFactor(aeroCluster, 5)

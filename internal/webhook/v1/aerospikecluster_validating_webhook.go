@@ -310,7 +310,7 @@ func (acv *AerospikeClusterCustomValidator) ValidateUpdate(_ context.Context,
 		return warnings, err
 	}
 
-	if err := validateVerticalScaling(oldObject, aerospikeCluster); err != nil {
+	if err := validateRackRevisionChange(oldObject, aerospikeCluster); err != nil {
 		return warnings, err
 	}
 
@@ -877,18 +877,43 @@ func validateConcurrentRackRevisions(oldObj, newObj *asdbv1.AerospikeCluster) er
 	return nil
 }
 
-// validateVerticalScaling rejects a rack revision change that would leave too few
+// validateRackRevisionChange rejects a rack revision change that would leave too few
 // nodes standing while a rack's pods are replaced.
 //
-// Inputs are spec-only. Size 1 and replication-factor <= 1 are rejected in AP and
-// SC. The survivors floor and roster-majority checks are SC only (pkg/validation
-// already allows AP size < RF). The worst batch is the first rack: DistributeItems
-// always gives it the most pods.
-func validateVerticalScaling(oldObj, newObj *asdbv1.AerospikeCluster) error {
-	const notAllowed = "vertical scaling (rack revision change) is not allowed"
+// The sizing inputs are spec-only: newObj.Spec.Size, the rack count and the batch describe
+// the cluster the user is asking for, which is the topology the reconciler will roll. The
+// gate additionally reads oldObj.Status.RackConfig so an in-flight migration keeps the
+// check armed. Size 1 and replication-factor <= 1 are rejected in AP and SC. The survivors
+// floor and roster-majority checks are SC only (pkg/validation already allows AP size < RF).
+// The worst batch is the first rack: DistributeItems always gives it the most pods.
+func validateRackRevisionChange(oldObj, newObj *asdbv1.AerospikeCluster) error {
+	const notAllowed = "rack revision change is not allowed"
 
-	// New racks and non-revision updates are not vertical scaling.
-	if !hasRackRevisionChange(oldObj.Spec.RackConfig.Racks, newObj.Spec.RackConfig.Racks) {
+	// A metadata-only update (finalizer add or removal, a label, a no-op re-apply) cannot
+	// change the plan the previous admission already vetted, so there is nothing new to
+	// check. The status comparison below would otherwise keep re-running the whole check on
+	// every such write for as long as a migration is in flight.
+	//
+	// Deleting the cluster is the case that matters. cleanUpAndRemoveFinalizer strips the
+	// finalizer with an ordinary Update, which this webhook sees like any other, and there
+	// is no metadata-only API call to exempt it:
+	//
+	//	1. a cluster is running on a build that predates this check, and a rack revision is
+	//	   bumped to a spec that would not pass it
+	//	2. the operator is upgraded while that migration is still rolling
+	//	3. kubectl delete -> the finalizer Update is rejected -> the cluster never finishes
+	//	   deleting, and someone has to edit finalizers by hand to free it
+	//
+	// Comparing the spec first keeps that path open: the stored spec was admitted once, and
+	// an update that does not touch it cannot have invalidated that verdict.
+	if reflect.DeepEqual(oldObj.Spec, newObj.Spec) {
+		return nil
+	}
+
+	// New racks and non-revision updates are not a rack revision change.
+	if !hasRackRevisionChange(
+		oldObj.Status.RackConfig.Racks, oldObj.Spec.RackConfig.Racks, newObj.Spec.RackConfig.Racks,
+	) {
 		return nil
 	}
 
@@ -939,23 +964,50 @@ func validateVerticalScaling(oldObj, newObj *asdbv1.AerospikeCluster) error {
 	return nil
 }
 
-// hasRackRevisionChange is true when an existing rack's revision changed. A newly
-// added rack is not vertical scaling. A revert counts.
-func hasRackRevisionChange(oldRacks, newRacks []asdbv1.Rack) bool {
-	oldRevisions := make(map[int]string, len(oldRacks))
+// hasRackRevisionChange is true when an existing rack's revision changed, judged against
+// both the previously admitted spec and the last reconciled status.
+//
+// The status arm matters because a migration spans many reconcile passes while
+// status.RackConfig is written only on a fully successful reconcile. Mid-migration the spec
+// revision is already the new value while the status revision is still the old one, so an
+// old-spec-to-new-spec diff alone sees no change, and a follow-up update — a pure resize,
+// say — would skip the check entirely while pods are still being replaced.
+//
+// Racks are keyed by ID rather than list position, because status may order them
+// differently from spec. A rack in neither the old spec nor the status is newly added and
+// is not a rack revision change. A revert counts: it still replaces every pod in the rack.
+func hasRackRevisionChange(statusRacks, oldSpecRacks, newSpecRacks []asdbv1.Rack) bool {
+	oldSpecRevisions := revisionsByRackID(oldSpecRacks)
+	statusRevisions := revisionsByRackID(statusRacks)
 
-	for idx := range oldRacks {
-		oldRevisions[oldRacks[idx].ID] = oldRacks[idx].Revision
-	}
+	for idx := range newSpecRacks {
+		rack := &newSpecRacks[idx]
 
-	for idx := range newRacks {
-		oldRevision, existed := oldRevisions[newRacks[idx].ID]
-		if existed && oldRevision != newRacks[idx].Revision {
+		// This update changes the rack's revision.
+		if oldRevision, existed := oldSpecRevisions[rack.ID]; existed && oldRevision != rack.Revision {
+			return true
+		}
+
+		// A migration for this rack is still in flight: the pods the operator has actually
+		// reconciled are at the status revision, not the spec one.
+		if reconciled, existed := statusRevisions[rack.ID]; existed && reconciled != rack.Revision {
 			return true
 		}
 	}
 
 	return false
+}
+
+// revisionsByRackID indexes racks by ID. IDs are unique in both spec and status, since
+// validateRackUpdate rejects duplicates.
+func revisionsByRackID(racks []asdbv1.Rack) map[int]string {
+	revisions := make(map[int]string, len(racks))
+
+	for idx := range racks {
+		revisions[racks[idx].ID] = racks[idx].Revision
+	}
+
+	return revisions
 }
 
 // podsLeavingFirstRack is the largest delete batch in the cluster. DistributeItems

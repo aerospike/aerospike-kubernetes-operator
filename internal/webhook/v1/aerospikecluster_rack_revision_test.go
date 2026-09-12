@@ -40,8 +40,8 @@ func nsConfig(name string, replicationFactor int, strongConsistency bool) map[st
 	return ns
 }
 
-// verticalScaleCluster builds racks numbered from 1 in spec-list order.
-func verticalScaleCluster(
+// rackRevisionCluster builds racks numbered from 1 in spec-list order.
+func rackRevisionCluster(
 	size int32, revisions []string, batch *intstr.IntOrString, namespaces []interface{},
 ) *asdbv1.AerospikeCluster {
 	racks := make([]asdbv1.Rack, 0, len(revisions))
@@ -69,17 +69,36 @@ func verticalScaleCluster(
 	}
 }
 
-func TestValidateVerticalScaling(t *testing.T) {
+// withStatusRevisions records revisions as the last reconciled state. Rack IDs match the
+// 1-based, spec-order IDs rackRevisionCluster assigns, so a status revision that differs
+// from the spec one marks that rack as mid-migration.
+func withStatusRevisions(cluster *asdbv1.AerospikeCluster, revisions []string) *asdbv1.AerospikeCluster {
+	racks := make([]asdbv1.Rack, 0, len(revisions))
+
+	for idx := range revisions {
+		racks = append(racks, asdbv1.Rack{ID: idx + 1, Revision: revisions[idx]})
+	}
+
+	cluster.Status.RackConfig.Racks = racks
+	cluster.Status.Size = cluster.Spec.Size
+
+	return cluster
+}
+
+func TestValidateRackRevisionChange(t *testing.T) {
 	tests := []struct {
-		name         string
-		batch        *intstr.IntOrString
-		oldRevisions []string
-		newRevisions []string
-		wantReject   []string
-		oldSize      int32
-		newSize      int32
-		rf           int
-		sc           bool
+		name string
+		// statusRevisions is the last reconciled revision per rack, applied to oldObj only.
+		// Nil means no status, i.e. a settled cluster or a first install.
+		statusRevisions []string
+		batch           *intstr.IntOrString
+		oldRevisions    []string
+		newRevisions    []string
+		wantReject      []string
+		oldSize         int32
+		newSize         int32
+		rf              int
+		sc              bool
 	}{
 		// Gate skipped (no revision change).
 		{
@@ -366,15 +385,37 @@ func TestValidateVerticalScaling(t *testing.T) {
 			batch:        ptr.To(intstr.FromString("100%")),
 			wantReject:   []string{"2 of 6 nodes"},
 		},
+
+		// In-flight migration: status still holds the revision the operator has actually
+		// reconciled, so a follow-up update must stay armed even when it changes no revision.
+		{
+			// Bump rack 1, then scale down before it finishes. [2,1,1] at size 4 means a
+			// full batch takes 2 of the 4 nodes down, leaving 2 for an RF 3 namespace.
+			name:            "rejects a scale-down while a rack revision migration is in flight",
+			statusRevisions: []string{"v1", "v1", "v1"},
+			oldSize:         6,
+			newSize:         4,
+			oldRevisions:    []string{"v2", "v1", "v1"},
+			newRevisions:    []string{"v2", "v1", "v1"},
+			rf:              3,
+			sc:              true,
+			batch:           ptr.To(intstr.FromString("100%")),
+			wantReject:      []string{"2 of 4 nodes", "leaving 2", "replication-factor 3"},
+		},
 	}
 
 	for _, test := range tests {
 		t.Run(test.name, func(t *testing.T) {
 			namespaces := []interface{}{nsConfig("test", test.rf, test.sc)}
-			oldObj := verticalScaleCluster(test.oldSize, test.oldRevisions, test.batch, namespaces)
-			newObj := verticalScaleCluster(test.newSize, test.newRevisions, test.batch, namespaces)
+			oldObj := rackRevisionCluster(test.oldSize, test.oldRevisions, test.batch, namespaces)
+			newObj := rackRevisionCluster(test.newSize, test.newRevisions, test.batch, namespaces)
 
-			err := validateVerticalScaling(oldObj, newObj)
+			// The gate reads the old object's status, matching validateConcurrentRackRevisions.
+			if test.statusRevisions != nil {
+				oldObj = withStatusRevisions(oldObj, test.statusRevisions)
+			}
+
+			err := validateRackRevisionChange(oldObj, newObj)
 
 			if len(test.wantReject) == 0 {
 				if err != nil {
@@ -397,33 +438,33 @@ func TestValidateVerticalScaling(t *testing.T) {
 	}
 }
 
-func TestValidateVerticalScalingIgnoresBatchOnlyChange(t *testing.T) {
-	// Batch-only updates are not vertical scaling.
+func TestValidateRackRevisionChangeIgnoresBatchOnlyChange(t *testing.T) {
+	// Batch-only updates are not a rack revision change.
 	revisions := []string{"v1", "v1", "v1"}
 	namespaces := []interface{}{nsConfig("test", 5, true)}
-	oldObj := verticalScaleCluster(6, revisions, ptr.To(intstr.FromInt32(1)), namespaces)
-	newObj := verticalScaleCluster(6, revisions, ptr.To(intstr.FromString("100%")), namespaces)
+	oldObj := rackRevisionCluster(6, revisions, ptr.To(intstr.FromInt32(1)), namespaces)
+	newObj := rackRevisionCluster(6, revisions, ptr.To(intstr.FromString("100%")), namespaces)
 
-	if err := validateVerticalScaling(oldObj, newObj); err != nil {
+	if err := validateRackRevisionChange(oldObj, newObj); err != nil {
 		t.Fatalf("expected a batch-only change to be allowed, got error: %v", err)
 	}
 }
 
-func TestValidateVerticalScalingUsesStrictestSCNamespace(t *testing.T) {
+func TestValidateRackRevisionChangeUsesStrictestSCNamespace(t *testing.T) {
 	// Mixed AP+SC: only the SC namespace's RF is a floor.
 	namespaces := []interface{}{
 		nsConfig("ap-ns", 6, false),
 		nsConfig("sc-ns", 5, true),
 	}
 
-	oldObj := verticalScaleCluster(
+	oldObj := rackRevisionCluster(
 		6, []string{"v1", "v1", "v1"}, ptr.To(intstr.FromString("100%")), namespaces,
 	)
-	newObj := verticalScaleCluster(
+	newObj := rackRevisionCluster(
 		6, []string{"v2", "v1", "v1"}, ptr.To(intstr.FromString("100%")), namespaces,
 	)
 
-	err := validateVerticalScaling(oldObj, newObj)
+	err := validateRackRevisionChange(oldObj, newObj)
 	if err == nil {
 		t.Fatal("expected the SC namespace to be rejected, got nil")
 	}
@@ -441,24 +482,24 @@ func TestValidateVerticalScalingUsesStrictestSCNamespace(t *testing.T) {
 	}
 }
 
-// TestValidateVerticalScalingIgnoresAPReplicationFactorBelowSC pins that an AP
+// TestValidateRackRevisionChangeIgnoresAPReplicationFactorBelowSC pins that an AP
 // namespace never lowers the floor. A reduction over every namespace would use the
 // AP namespace's RF 2 here and wrongly allow the update.
-func TestValidateVerticalScalingIgnoresAPReplicationFactorBelowSC(t *testing.T) {
+func TestValidateRackRevisionChangeIgnoresAPReplicationFactorBelowSC(t *testing.T) {
 	namespaces := []interface{}{
 		nsConfig("ap-ns", 2, false),
 		nsConfig("sc-ns", 5, true),
 	}
 
 	// Size 6 over 3 racks with a full batch: 2 leave, 4 survive, below the SC RF 5.
-	oldObj := verticalScaleCluster(
+	oldObj := rackRevisionCluster(
 		6, []string{"v1", "v1", "v1"}, ptr.To(intstr.FromString("100%")), namespaces,
 	)
-	newObj := verticalScaleCluster(
+	newObj := rackRevisionCluster(
 		6, []string{"v2", "v1", "v1"}, ptr.To(intstr.FromString("100%")), namespaces,
 	)
 
-	err := validateVerticalScaling(oldObj, newObj)
+	err := validateRackRevisionChange(oldObj, newObj)
 	if err == nil {
 		t.Fatal("expected the SC namespace's RF 5 to reject, got nil")
 	}
@@ -474,10 +515,10 @@ func TestValidateVerticalScalingIgnoresAPReplicationFactorBelowSC(t *testing.T) 
 	}
 }
 
-// TestValidateVerticalScalingUsesHighestSCReplicationFactor pins the direction of the
+// TestValidateRackRevisionChangeUsesHighestSCReplicationFactor pins the direction of the
 // reduction across SC namespaces. Survivors must clear every SC namespace, so the
 // binding one is the highest RF; reducing with min would allow the rejecting case.
-func TestValidateVerticalScalingUsesHighestSCReplicationFactor(t *testing.T) {
+func TestValidateRackRevisionChangeUsesHighestSCReplicationFactor(t *testing.T) {
 	namespaces := []interface{}{
 		nsConfig("sc-low", 3, true),
 		nsConfig("sc-high", 5, true),
@@ -485,14 +526,14 @@ func TestValidateVerticalScalingUsesHighestSCReplicationFactor(t *testing.T) {
 
 	t.Run("rejects when only the lower RF is met", func(t *testing.T) {
 		// Size 6 over 3 racks, full batch: 2 leave, 4 survive. Clears RF 3, not RF 5.
-		oldObj := verticalScaleCluster(
+		oldObj := rackRevisionCluster(
 			6, []string{"v1", "v1", "v1"}, ptr.To(intstr.FromString("100%")), namespaces,
 		)
-		newObj := verticalScaleCluster(
+		newObj := rackRevisionCluster(
 			6, []string{"v2", "v1", "v1"}, ptr.To(intstr.FromString("100%")), namespaces,
 		)
 
-		err := validateVerticalScaling(oldObj, newObj)
+		err := validateRackRevisionChange(oldObj, newObj)
 		if err == nil {
 			t.Fatal("expected the highest SC RF to reject, got nil")
 		}
@@ -507,14 +548,14 @@ func TestValidateVerticalScalingUsesHighestSCReplicationFactor(t *testing.T) {
 	t.Run("allows when the highest RF is met", func(t *testing.T) {
 		// Size 8 over 3 racks, full batch: first rack holds 3, so 3 leave and 5
 		// survive, which meets RF 5 and is a majority of 8.
-		oldObj := verticalScaleCluster(
+		oldObj := rackRevisionCluster(
 			8, []string{"v1", "v1", "v1"}, ptr.To(intstr.FromString("100%")), namespaces,
 		)
-		newObj := verticalScaleCluster(
+		newObj := rackRevisionCluster(
 			8, []string{"v2", "v1", "v1"}, ptr.To(intstr.FromString("100%")), namespaces,
 		)
 
-		if err := validateVerticalScaling(oldObj, newObj); err != nil {
+		if err := validateRackRevisionChange(oldObj, newObj); err != nil {
 			t.Fatalf("expected 5 survivors to meet RF 5, got error: %v", err)
 		}
 	})
@@ -571,7 +612,7 @@ func TestPodsLeavingFirstRack(t *testing.T) {
 				revisions[idx] = "v1"
 			}
 
-			cluster := verticalScaleCluster(
+			cluster := rackRevisionCluster(
 				test.size, revisions, test.batch, []interface{}{nsConfig("test", 2, true)},
 			)
 
@@ -604,7 +645,7 @@ func TestPodsLeavingFirstRackMatchesDistributeItems(t *testing.T) {
 					revisions[idx] = "v1"
 				}
 
-				cluster := verticalScaleCluster(
+				cluster := rackRevisionCluster(
 					size, revisions, batch, []interface{}{nsConfig("test", 2, true)},
 				)
 
@@ -619,5 +660,106 @@ func TestPodsLeavingFirstRackMatchesDistributeItems(t *testing.T) {
 				}
 			}
 		}
+	}
+}
+
+// TestValidateRackRevisionChangeIgnoresMetadataOnlyUpdate pins that an unchanged spec is never
+// re-validated. Without this the status arm would re-run the check on finalizer removal and
+// leave a mid-migration cluster stuck in Terminating.
+func TestValidateRackRevisionChangeIgnoresMetadataOnlyUpdate(t *testing.T) {
+	namespaces := []interface{}{nsConfig("test", 3, true)}
+	revisions := []string{"v2", "v1", "v1"}
+
+	// Size 4 at a full batch: this spec would be rejected if the check ran.
+	oldObj := withStatusRevisions(
+		rackRevisionCluster(4, revisions, ptr.To(intstr.FromString("100%")), namespaces),
+		[]string{"v1", "v1", "v1"},
+	)
+	newObj := rackRevisionCluster(4, revisions, ptr.To(intstr.FromString("100%")), namespaces)
+
+	newObj.Finalizers = nil
+	oldObj.Finalizers = []string{"asdb.aerospike.com/storage-finalizer"}
+
+	if err := validateRackRevisionChange(oldObj, newObj); err != nil {
+		t.Fatalf("expected a metadata-only update to be allowed, got error: %v", err)
+	}
+}
+
+func TestHasRackRevisionChange(t *testing.T) {
+	racks := func(pairs ...any) []asdbv1.Rack {
+		out := make([]asdbv1.Rack, 0, len(pairs)/2)
+		for idx := 0; idx < len(pairs); idx += 2 {
+			out = append(out, asdbv1.Rack{ID: pairs[idx].(int), Revision: pairs[idx+1].(string)})
+		}
+
+		return out
+	}
+
+	tests := []struct {
+		name    string
+		status  []asdbv1.Rack
+		oldSpec []asdbv1.Rack
+		newSpec []asdbv1.Rack
+		want    bool
+	}{
+		{
+			name:    "no change anywhere",
+			status:  racks(1, "v1"),
+			oldSpec: racks(1, "v1"),
+			newSpec: racks(1, "v1"),
+		},
+		{
+			name:    "spec arm: this update bumps the revision",
+			oldSpec: racks(1, "v1"),
+			newSpec: racks(1, "v2"),
+			want:    true,
+		},
+		{
+			name:    "spec arm: a revert counts",
+			status:  racks(1, "v1"),
+			oldSpec: racks(1, "v2"),
+			newSpec: racks(1, "v1"),
+			want:    true,
+		},
+		{
+			name:    "status arm alone: migration in flight, spec unchanged",
+			status:  racks(1, "v1"),
+			oldSpec: racks(1, "v2"),
+			newSpec: racks(1, "v2"),
+			want:    true,
+		},
+		{
+			name:    "a newly added rack is not a rack revision change",
+			status:  racks(1, "v1"),
+			oldSpec: racks(1, "v1"),
+			newSpec: racks(1, "v1", 2, "v9"),
+		},
+		{
+			name:    "a rack only in status is ignored",
+			status:  racks(1, "v1", 2, "v1"),
+			oldSpec: racks(1, "v1"),
+			newSpec: racks(1, "v1"),
+		},
+		{
+			name:    "empty status is inert",
+			oldSpec: racks(1, "v1"),
+			newSpec: racks(1, "v1"),
+		},
+		{
+			// Keyed by ID, not position: a positional comparison would read rack 2's
+			// status revision against rack 1's spec revision and wrongly fire.
+			name:    "status listed in the opposite order still keys by ID",
+			status:  racks(2, "v2", 1, "v1"),
+			oldSpec: racks(1, "v1", 2, "v2"),
+			newSpec: racks(1, "v1", 2, "v2"),
+		},
+	}
+
+	for _, test := range tests {
+		t.Run(test.name, func(t *testing.T) {
+			if got := hasRackRevisionChange(test.status, test.oldSpec, test.newSpec); got != test.want {
+				t.Errorf("got %v, want %v", got, test.want)
+			}
+		})
 	}
 }
