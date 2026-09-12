@@ -4,8 +4,8 @@ go 1.26.8
 
 require (
 	github.com/aerospike/aerospike-backup-service/v3 v3.6.1
-	github.com/aerospike/aerospike-client-go/v8 v8.7.0
-	github.com/aerospike/aerospike-management-lib v1.11.2-0.20260901195807-00532a4ccf2b
+	github.com/aerospike/aerospike-client-go/v8 v8.8.0
+	github.com/aerospike/aerospike-management-lib v1.11.2-0.20260911132439-d14f74b8d7ea
 	github.com/asaskevich/govalidator v0.0.0-20210307081110-f21760c49a8d
 	github.com/deckarep/golang-set/v2 v2.9.0
 	github.com/evanphx/json-patch v5.9.11+incompatible
@@ -14,7 +14,7 @@ require (
 	github.com/onsi/gomega v1.39.1
 	github.com/prometheus/client_golang v1.23.2
 	github.com/sirupsen/logrus v1.9.4
-	github.com/stretchr/testify v1.11.1
+	github.com/stretchr/testify v1.12.1
 	golang.org/x/crypto v0.53.0
 	k8s.io/api v0.36.4
 	k8s.io/apimachinery v0.36.4
@@ -28,7 +28,7 @@ require (
 require (
 	cel.dev/expr v0.25.1 // indirect
 	github.com/KyleBanks/depth v1.2.1 // indirect
-	github.com/Masterminds/semver/v3 v3.4.0 // indirect
+	github.com/Masterminds/semver/v3 v3.5.0 // indirect
 	github.com/aerospike/backup-go v0.11.0 // indirect
 	github.com/antlr4-go/antlr/v4 v4.13.0 // indirect
 	github.com/aws/aws-sdk-go-v2 v1.41.9 // indirect
@@ -96,7 +96,7 @@ require (
 	go.uber.org/multierr v1.11.0 // indirect
 	go.uber.org/zap v1.27.1 // indirect
 	go.yaml.in/yaml/v2 v2.4.3 // indirect
-	go.yaml.in/yaml/v3 v3.0.4 // indirect
+	go.yaml.in/yaml/v3 v3.0.5 // indirect
 	golang.org/x/exp v0.0.0-20251219203646-944ab1f22d93 // indirect
 	golang.org/x/mod v0.37.0 // indirect
 	golang.org/x/net v0.56.0 // indirect

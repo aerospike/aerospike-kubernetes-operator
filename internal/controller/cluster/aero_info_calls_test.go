@@ -17,14 +17,20 @@ limitations under the License.
 package cluster
 
 import (
+	"context"
+	"errors"
 	"testing"
 
+	"github.com/stretchr/testify/require"
 	corev1 "k8s.io/api/core/v1"
+	k8serrors "k8s.io/apimachinery/pkg/api/errors"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/util/sets"
-
-	"github.com/aerospike/aerospike-management-lib/deployment"
+	"sigs.k8s.io/controller-runtime/pkg/client"
 	"sigs.k8s.io/controller-runtime/pkg/client/interceptor"
+
+	asdbv1 "github.com/aerospike/aerospike-kubernetes-operator/v4/api/v1"
+	"github.com/aerospike/aerospike-management-lib/deployment"
 )
 
 // TestNewPodsHostConnWithOption verifies the classification logic inside
@@ -120,62 +126,67 @@ func TestNewPodsHostConnWithOption(t *testing.T) {
 	}
 }
 
-// TestCheckpointStarted covers AKO's parked-detection over the parsed statuses.
-func TestCheckpointStarted(t *testing.T) {
-	status := func(state string) deployment.CheckpointNamespaceStatus {
-		return deployment.CheckpointNamespaceStatus{State: state}
-	}
+// - Test the transient failures and recovery with retry
+// - Deleted pod should abort the retry loop
+func TestMarkPodCheckpointParked(t *testing.T) {
+	const containerID = "containerd://park-1111"
 
-	tests := []struct {
-		statuses map[string]deployment.CheckpointNamespaceStatus
-		name     string
-		expected bool
-	}{
-		{
-			name:     "still none",
-			statuses: map[string]deployment.CheckpointNamespaceStatus{"test": status(deployment.CheckpointStateNone)},
-			expected: false,
-		},
-		{
-			name:     "copying",
-			statuses: map[string]deployment.CheckpointNamespaceStatus{"test": status(deployment.CheckpointStateCopying)},
-			expected: true,
-		},
-		{
-			name:     "done",
-			statuses: map[string]deployment.CheckpointNamespaceStatus{"test": status(deployment.CheckpointStateDone)},
-			expected: true,
-		},
-		{
-			name:     "failed still counts as started",
-			statuses: map[string]deployment.CheckpointNamespaceStatus{"test": status(deployment.CheckpointStateFailed)},
-			expected: true,
-		},
-		{
-			// The trigger sets the flag on every configured namespace at once, so one
-			// non-none state proves the pod is parked even if others lag.
-			name: "one of several has moved",
-			statuses: map[string]deployment.CheckpointNamespaceStatus{
-				"a": status(deployment.CheckpointStateNone),
-				"b": status(deployment.CheckpointStateCopying),
+	newParkedPod := func() *corev1.Pod {
+		return &corev1.Pod{
+			ObjectMeta: metav1.ObjectMeta{Name: "pod-0", Namespace: namespace},
+			Status: corev1.PodStatus{
+				ContainerStatuses: []corev1.ContainerStatus{
+					{Name: asdbv1.AerospikeServerContainerName, ContainerID: containerID},
+				},
 			},
-			expected: true,
-		},
-		{
-			name:     "no statuses at all",
-			statuses: map[string]deployment.CheckpointNamespaceStatus{},
-			expected: false,
-		},
+		}
 	}
 
-	for _, tt := range tests {
-		t.Run(tt.name, func(t *testing.T) {
-			if result := checkpointStarted(tt.statuses); result != tt.expected {
-				t.Errorf("checkpointStarted(%v) = %v, expected %v",
-					tt.statuses, result, tt.expected)
-			}
+	t.Run("a transient patch failure is retried and the annotation still lands", func(t *testing.T) {
+		pod := newParkedPod()
+		failedOnce := false
+
+		r := newTestReconciler(t, newTestAerospikeCluster(namespace, clusterName), &interceptor.Funcs{
+			Patch: func(
+				ctx context.Context, c client.WithWatch, obj client.Object,
+				patch client.Patch, opts ...client.PatchOption,
+			) error {
+				if !failedOnce {
+					failedOnce = true
+					return errors.New("simulated transient API failure")
+				}
+
+				return c.Patch(ctx, obj, patch, opts...)
+			},
+		}, pod)
+
+		r.markPodCheckpointParked(context.TODO(), pod)
+
+		var got corev1.Pod
+
+		require.NoError(t, r.Get(context.TODO(), client.ObjectKeyFromObject(pod), &got))
+		require.Equal(t, containerID, got.Annotations[asdbv1.IndexCheckpointParkedAnnotation],
+			"the retried patch must still carry the annotation — an empty second patch is the regression")
+	})
+
+	t.Run("a deleted pod stops the retry immediately", func(t *testing.T) {
+		pod := newParkedPod()
+		patchCalls := 0
+
+		r := newTestReconciler(t, newTestAerospikeCluster(namespace, clusterName), &interceptor.Funcs{
+			Patch: func(
+				ctx context.Context, c client.WithWatch, obj client.Object,
+				patch client.Patch, opts ...client.PatchOption,
+			) error {
+				patchCalls++
+				return k8serrors.NewNotFound(corev1.Resource("pods"), obj.GetName())
+			},
 		})
-	}
+
+		r.markPodCheckpointParked(context.TODO(), pod)
+
+		require.Equal(t, 1, patchCalls, "NotFound must not be retried")
+	})
 }
 
 // TestCheckpointDone pins that the wait is driven entirely by what the server reports —
@@ -185,53 +196,70 @@ func TestCheckpointDone(t *testing.T) {
 		return deployment.CheckpointNamespaceStatus{State: state}
 	}
 
+	response := func(nss map[string]deployment.CheckpointNamespaceStatus) deployment.CheckpointResponse {
+		return deployment.CheckpointResponse{Namespaces: nss}
+	}
+
 	tests := []struct {
-		statuses     map[string]deployment.CheckpointNamespaceStatus
+		resp         deployment.CheckpointResponse
 		name         string
 		wantFailed   []string
 		expectedDone bool
 	}{
 		{
 			name:         "all done",
-			statuses:     map[string]deployment.CheckpointNamespaceStatus{"a": status(deployment.CheckpointStateDone)},
+			resp:         response(map[string]deployment.CheckpointNamespaceStatus{"a": status(deployment.CheckpointStateDone)}),
 			expectedDone: true,
 		},
 		{
 			// One still copying holds the whole pod back — the anti-premature-delete rule.
 			name: "one still copying blocks the pod",
-			statuses: map[string]deployment.CheckpointNamespaceStatus{
+			resp: response(map[string]deployment.CheckpointNamespaceStatus{
 				"a": status(deployment.CheckpointStateDone),
 				"b": status(deployment.CheckpointStateCopying),
-			},
+			}),
 			expectedDone: false,
 		},
 		{
 			name: "failed namespaces are reported but terminal",
-			statuses: map[string]deployment.CheckpointNamespaceStatus{
+			resp: response(map[string]deployment.CheckpointNamespaceStatus{
 				"a": status(deployment.CheckpointStateDone),
 				"b": status(deployment.CheckpointStateFailed),
-			},
+			}),
 			expectedDone: true,
 			wantFailed:   []string{"b"},
 		},
 		{
 			// An unrecognised state must NOT count as terminal.
 			name:         "unknown state is not terminal",
-			statuses:     map[string]deployment.CheckpointNamespaceStatus{"a": status("verifying")},
+			resp:         response(map[string]deployment.CheckpointNamespaceStatus{"a": status("verifying")}),
 			expectedDone: false,
 		},
 		{
-			// Vacuously done. The caller handles "the server reports nothing" before
-			// reaching here, since an empty map means the node checkpoints nothing.
+			// A node whose namespaces have ALL opted out parks without writing anything and
+			// reports no namespace record. It is done and must be deleted — it has left the
+			// cluster. Reading an empty response as "nothing to do" strands it until its
+			// park times out.
+			name: "parked with no namespaces is done",
+			resp: deployment.CheckpointResponse{
+				Namespaces: map[string]deployment.CheckpointNamespaceStatus{},
+				IsParked:   true,
+				ParkMS:     1500,
+			},
+			expectedDone: true,
+		},
+		{
+			// Vacuously done. The caller screens this out before reaching here — empty and
+			// NOT parked is a restarted asd, so there is nothing to delete.
 			name:         "no statuses",
-			statuses:     map[string]deployment.CheckpointNamespaceStatus{},
+			resp:         response(map[string]deployment.CheckpointNamespaceStatus{}),
 			expectedDone: true,
 		},
 	}
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			done, failed := checkpointDone(tt.statuses)
+			done, failed := checkpointDone(tt.resp)
 
 			if done != tt.expectedDone {
 				t.Fatalf("checkpointDone() done = %v, expected %v", done, tt.expectedDone)

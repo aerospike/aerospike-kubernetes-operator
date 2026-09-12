@@ -1622,7 +1622,7 @@ func validateIndexCheckpointConfig(
 		if !asdbv1.IsCheckpointUsableNamespaceName(name) {
 			return fmt.Errorf(
 				"namespace %q has a name unusable with service index-checkpoint-path: it must not "+
-					"be \".\" or \"..\", contain \"/\", or end in \".tmp\" or \".deleting\"."+
+					"be \".\" or \"..\", contain \"/\", or end in \".tmp\" or \".deleting\". "+
 					"Rename the namespace, or unset index-checkpoint-path", name,
 			)
 		}

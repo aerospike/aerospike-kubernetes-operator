@@ -80,6 +80,67 @@ func TestGetIndexCheckpointNamespaces(t *testing.T) {
 	}
 }
 
+func TestGetInMemoryNsDataSizes(t *testing.T) {
+	ns := func(name string, storageEngine map[string]interface{}) map[string]interface{} {
+		return map[string]interface{}{"name": name, "storage-engine": storageEngine}
+	}
+	conf := func(nss ...interface{}) map[string]interface{} {
+		return map[string]interface{}{"namespaces": nss}
+	}
+
+	const size = 8589934592 // 8 GiB
+
+	tests := []struct {
+		config   map[string]interface{}
+		expected map[string]int
+		name     string
+	}{
+		{
+			name:     "float64 value (the JSON-decode reality) is normalised",
+			config:   conf(ns("a", map[string]interface{}{"type": "memory", "data-size": float64(size)})),
+			expected: map[string]int{"a": size},
+		},
+		{
+			name:     "int64 value (a typed pipeline) normalises to the same int",
+			config:   conf(ns("a", map[string]interface{}{"type": "memory", "data-size": int64(size)})),
+			expected: map[string]int{"a": size},
+		},
+		{
+			name:     "no data-size (device namespace) stays out of the map",
+			config:   conf(ns("a", map[string]interface{}{"type": "device", "devices": []interface{}{"/dev/sda"}})),
+			expected: map[string]int{},
+		},
+		{
+			name:     "non-numeric data-size stays out of the map",
+			config:   conf(ns("a", map[string]interface{}{"type": "memory", "data-size": "8G"})),
+			expected: map[string]int{},
+		},
+		{
+			name: "mixed namespaces: only the ones with a numeric data-size appear",
+			config: conf(
+				ns("mem", map[string]interface{}{"type": "memory", "data-size": float64(size)}),
+				ns("dev", map[string]interface{}{"type": "device"}),
+			),
+			expected: map[string]int{"mem": size},
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			result := GetInMemoryNsDataSizes(tt.config)
+			if len(result) != len(tt.expected) {
+				t.Fatalf("GetInMemoryNsDataSizes() = %v, expected %v", result, tt.expected)
+			}
+
+			for name, want := range tt.expected {
+				if got, ok := result[name]; !ok || got != want {
+					t.Fatalf("GetInMemoryNsDataSizes()[%q] = %v (present=%v), expected %v", name, got, ok, want)
+				}
+			}
+		})
+	}
+}
+
 // TestGetIndexCheckpointPath pins that the path is read from the service section only.
 func TestGetIndexCheckpointPath(t *testing.T) {
 	tests := []struct {

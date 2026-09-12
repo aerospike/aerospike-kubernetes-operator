@@ -17,10 +17,14 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"strconv"
 	"time"
 
 	corev1 "k8s.io/api/core/v1"
+	k8serrors "k8s.io/apimachinery/pkg/api/errors"
 	"k8s.io/apimachinery/pkg/util/sets"
+	"k8s.io/client-go/util/retry"
+	"sigs.k8s.io/controller-runtime/pkg/client"
 
 	as "github.com/aerospike/aerospike-client-go/v8"
 	asdbv1 "github.com/aerospike/aerospike-kubernetes-operator/v4/api/v1"
@@ -92,8 +96,6 @@ func (r *SingleClusterReconciler) waitForMultipleNodesSafeStopReady(
 		"[rack-%s] Waiting for migrations to complete", pods[0].Labels[asdbv1.AerospikeRackIDLabel],
 	)
 
-	// TODO: can we skip stability checks if all pods are in quiesced state
-	// this means that previous reconcile quiesced the pod batch but failed later point in time.
 	// Check for cluster stability
 	if res := r.waitForClusterStability(policy, allHostConns); !res.IsSuccess {
 		return res
@@ -149,6 +151,88 @@ func (r *SingleClusterReconciler) quiescePods(
 	}
 
 	return deployment.InfoQuiesce(r.Log, policy, allHostConns, selectedHostConns, r.removedNamespaces(nodesNamespaces))
+}
+
+// reconcileCheckpointingPods completes any index-checkpoint park left in flight, cluster-wide.
+// A parked node is an obligation rather than a divergence: checkpoint-save is a point of no
+// return — the node has left the cluster and shut down its storage, so it cannot serve again
+// without a restart, and no comparison of spec against status will say so. Whatever parked it
+// may since have finished, been superseded, or been reverted; the pod must still be deleted.
+// Running this before the racks reconcile means no later phase ever meets a parked pod: the
+// safe-stop checks, scale-down and the batch logic all see either a healthy node or one that
+// is on its way back.
+func (r *SingleClusterReconciler) reconcileCheckpointingPods(
+	ctx context.Context, rackStates []RackState,
+) common.ReconcileResult {
+	podList, err := r.getClusterPodList(ctx)
+	if err != nil {
+		return common.ReconcileError(err)
+	}
+
+	parked := make([]*corev1.Pod, 0, len(podList.Items))
+	rackForPod := make(map[string]*RackState, len(podList.Items))
+
+	for idx := range podList.Items {
+		pod := &podList.Items[idx]
+		if !utils.IsPodCheckpointing(pod) {
+			continue
+		}
+
+		rackState := rackStateForPod(rackStates, pod)
+		if rackState == nil {
+			// Neither configured, mid-migration, nor being deleted — a pod from a rack the
+			// operator no longer tracks at all. Nothing here can resolve its storage config,
+			// so leave it: its park times out and the container restarts on its own.
+			r.Log.Info("Checkpoint-parked Pod belongs to no known rack, leaving its park to time out",
+				"pod", utils.GetNamespacedName(pod))
+
+			continue
+		}
+
+		parked = append(parked, pod)
+		rackForPod[pod.Name] = rackState
+	}
+
+	if len(parked) == 0 {
+		return common.ReconcileSuccess()
+	}
+
+	r.Log.Info("Completing in-flight index checkpoints", "pods", getPodNames(parked))
+
+	deleted, res := r.pollAndDeleteParkedPods(ctx, parked, rackForPod)
+
+	// Record whatever was deleted even when the poll ended in an error or a requeue —
+	// otherwise an on-demand operation never sees those restarts and re-parks the pods.
+	if err := r.updateOperationStatus(ctx, nil, getPodNames(deleted)); err != nil {
+		return common.ReconcileError(err)
+	}
+
+	if !res.IsSuccess {
+		// Error, or the 60s requeue for pods still copying.
+		return res
+	}
+
+	// Every park is discharged; settle the replacements before handing back to the racks.
+	if result := r.ensurePodsRunningAndReady(ctx, deleted); !result.IsSuccess {
+		return result
+	}
+
+	return common.ReconcileRequeueAfter(1)
+}
+
+// rackStateForPod matches a pod to its rack by the rack ID and revision labels.
+func rackStateForPod(rackStates []RackState, pod *corev1.Pod) *RackState {
+	rackID := pod.Labels[asdbv1.AerospikeRackIDLabel]
+	revision := pod.Labels[asdbv1.AerospikeRackRevisionLabel]
+
+	for idx := range rackStates {
+		rackState := &rackStates[idx]
+		if strconv.Itoa(rackState.Rack.ID) == rackID && rackState.Rack.Revision == revision {
+			return rackState
+		}
+	}
+
+	return nil
 }
 
 // TODO: Check only for migration
@@ -253,6 +337,17 @@ func (r *SingleClusterReconciler) newPodsHostConnWithOption(pods []corev1.Pod, i
 	for idx := range pods {
 		pod := &pods[idx]
 		if utils.IsPodTerminating(pod) {
+			continue
+		}
+
+		// A parked node has left the cluster and answers only the two checkpoint
+		// commands, so including it would fail every caller's info call. Excluding it
+		// is also what makes the expected size match the cluster_size the remaining
+		// nodes report.
+		if utils.IsPodCheckpointing(pod) {
+			r.Log.V(1).Info("Excluding checkpoint-parked Pod from cluster info calls",
+				"pod", utils.GetNamespacedName(pod))
+
 			continue
 		}
 
@@ -446,16 +541,13 @@ func (r *SingleClusterReconciler) setDynamicConfig(
 // index-checkpoint-path. skip-checkpoint is the only dynamic index-checkpoint key.
 const skipCheckpointCmdFmt = "set-config:context=namespace;namespace=%s;skip-checkpoint=true"
 
-// checkpointParkTimeoutSec is the post-save park the server holds while waiting
-// for AKO's SIGTERM, passed to CheckpointSave (1..3600 s; the server's own default is 300 s).
-// Sized to cover several of AKO's poll+requeue cycles (~120 s each: a ~60 s poll
-// window, then ReconcileRequeueAfter(60)) so a slow multi-GB checkpoint is not
-// abandoned mid-copy, while keeping the self-heal bound short. On expiry asd
-// exits on its own, the container restarts inside the same pod sandbox — the
-// SysV segments survive, so it warm-restarts — and reports state=none again.
-// That costs one redundant checkpoint but never wedges the reconcile.
-// The server treats this as write-once for the in-flight checkpoint.
-const checkpointParkTimeoutSec = 600
+// checkpointParkTimeoutSec is the park the server holds after the save, waiting for AKO's SIGTERM
+// Passed to CheckpointSave (1..3600 s; the server's own default is 300 s).
+// The clock starts once the copy has finished. It only has to cover
+// how long AKO takes to notice a finished checkpoint and delete the pod: the discharge
+// phase polls 6 × 10 s and then requeues for 60 s, so the copy is seen within ~70 s of
+// completing even in the worst alignment, and the delete follows in that same pass.
+const checkpointParkTimeoutSec = 300
 
 // triggerIndexCheckpointSave sends checkpoint-save to every pod in pods, then polls
 // checkpoint-status for the whole batch together. Called once per batch, before any pod
@@ -489,6 +581,8 @@ func (r *SingleClusterReconciler) triggerIndexCheckpointSave(
 
 	r.skipCheckpointForNamespaces(pods, skipNSs, policy)
 
+	var anyParked bool
+
 	// No checkpoint-status precheck: the server answers a re-issue idempotently so an already-saving pod
 	// classifies as CheckpointSaveAccepted below
 	for _, pod := range pods {
@@ -506,11 +600,14 @@ func (r *SingleClusterReconciler) triggerIndexCheckpointSave(
 				"checkpoint-save rejected by pod %s", utils.GetNamespacedName(pod)))
 
 		case deployment.CheckpointSaveAccepted:
-			// Running, finished, or failed — the poll below distinguishes them, and a
+			// Running, finished, or failed — the discharge phase distinguishes them, and a
 			// failed save gets its IndexCheckpointFailed event from there with the
 			// namespace list.
-			r.Log.Info("Index checkpoint save already accepted, polling status",
+			r.Log.Info("Index checkpoint save already accepted",
 				"pod", utils.GetNamespacedName(pod))
+			r.markPodCheckpointParked(ctx, pod)
+
+			anyParked = true
 
 		case deployment.CheckpointSaveNothingToDo:
 			// The running config disagrees with the rack status AKO derived its
@@ -524,10 +621,67 @@ func (r *SingleClusterReconciler) triggerIndexCheckpointSave(
 			r.Log.Info("Index checkpoint save triggered",
 				"pod", utils.GetNamespacedName(pod), "namespaces", eligibleNSs,
 				"parkTimeoutSeconds", checkpointParkTimeoutSec)
+			r.markPodCheckpointParked(ctx, pod)
+
+			anyParked = true
 		}
 	}
 
-	return r.waitForIndexCheckpointDone(ctx, pods)
+	// Requeue only when something actually checkpointing. Every pod answering NothingToDo means no
+	// node is holding a checkpoint, so falling through lets the caller delete in this pass;
+	// requeueing unconditionally would spin forever on a cluster whose running config never
+	// resolves a checkpoint path.
+	if anyParked {
+		return common.ReconcileRequeueAfter(1)
+	}
+
+	return common.ReconcileSuccess()
+}
+
+// markPodCheckpointParked records on the pod that its Aerospike node is checkpointing, so later
+// reconciles can tell it is out of the cluster without asking the server — which a parked node would refuse anyway.
+// Written only after checkpoint-save has been accepted, so the annotation can never claim
+// a park that did not happen. The reverse — a park with no annotation — is possible if the
+// patch cannot be written at all, and degrades to the pre-annotation behaviour: the node is
+// treated as a cluster member, so cluster info calls hit it and fail until its park times
+// out and it restarts. Failing the reconcile here would fix neither, so it is retried, then
+// reported as precisely as we can and left to self-heal.
+func (r *SingleClusterReconciler) markPodCheckpointParked(ctx context.Context, pod *corev1.Pod) {
+	containerID := utils.GetAerospikeServerContainerID(pod)
+	if containerID == "" {
+		r.Log.Info("No aerospike-server container ID, cannot record checkpoint park",
+			"pod", utils.GetNamespacedName(pod))
+
+		return
+	}
+
+	// Capture the base and set the annotation ONCE, before the retry — a base captured
+	// inside a retry of an already-mutated pod diffs to an empty patch.
+	patch := client.MergeFrom(pod.DeepCopy())
+
+	if pod.Annotations == nil {
+		pod.Annotations = map[string]string{}
+	}
+
+	pod.Annotations[asdbv1.IndexCheckpointParkedAnnotation] = containerID
+
+	if err := retry.OnError(retry.DefaultBackoff,
+		func(err error) bool { return !k8serrors.IsNotFound(err) },
+		func() error {
+			return r.Patch(ctx, pod, patch)
+		}); err != nil {
+		if k8serrors.IsNotFound(err) {
+			r.Log.Info("Pod deleted before the checkpoint park could be recorded, nothing to track",
+				"pod", utils.GetNamespacedName(pod))
+
+			return
+		}
+
+		r.Log.Error(err, "Failed to record the index checkpoint park. This node has left the "+
+			"cluster but AKO cannot tell, so cluster operations will fail until its park times "+
+			"out and the container restarts",
+			"pod", utils.GetNamespacedName(pod), "parkTimeoutSeconds", checkpointParkTimeoutSec)
+	}
 }
 
 // splitCheckpointNamespaces divides the namespaces the running servers are
@@ -594,9 +748,9 @@ func (r *SingleClusterReconciler) splitCheckpointNamespaces(
 // skipCheckpointForNamespaces opts each namespace out of the imminent save by
 // setting skip-checkpoint dynamically on every pod in the batch. Must run BEFORE
 // checkpoint-save — once the save fires, set-config is FORBIDDEN for the whole park.
-// A FORBIDDEN reply here is expected on a resumed pass: that pod is already parked.
-// Failures are logged, never fatal, and that is safe in one direction only: a failed
-// set-config leaves the namespace checkpointing.
+// Failures are logged at Error but never fatal: a failed set-config leaves the
+// namespace checkpointing, costing a redundant copy that stretches the park — worth
+// an operator's attention, not an aborted restart.
 func (r *SingleClusterReconciler) skipCheckpointForNamespaces(
 	pods []*corev1.Pod, skippedNss []string, policy *as.ClientPolicy,
 ) {
@@ -612,15 +766,16 @@ func (r *SingleClusterReconciler) skipCheckpointForNamespaces(
 
 			resp, err := asConn.RunInfo(policy, cmd)
 			if err != nil {
-				r.Log.V(1).Info("Could not set skip-checkpoint, namespace will be checkpointed needlessly",
-					"pod", pod.Name, "namespace", ns, "error", err)
+				r.Log.Error(err, "Could not set skip-checkpoint, namespace will be checkpointed needlessly",
+					"pod", utils.GetNamespacedName(pod), "namespace", ns)
 
 				continue
 			}
 
 			if respVal := resp[cmd]; info.IsInfoErrorResponse(respVal) {
-				r.Log.V(1).Info("skip-checkpoint rejected, namespace will be checkpointed needlessly",
-					"pod", pod.Name, "namespace", ns, "response", respVal)
+				r.Log.Error(fmt.Errorf("skip-checkpoint rejected"),
+					"Could not set skip-checkpoint, namespace will be checkpointed needlessly",
+					"pod", utils.GetNamespacedName(pod), "namespace", ns, "response", respVal)
 
 				continue
 			}
@@ -633,14 +788,16 @@ func (r *SingleClusterReconciler) skipCheckpointForNamespaces(
 	}
 }
 
-// waitForIndexCheckpointDone polls checkpoint-status on every pod together
-// Pods that report a terminal state (done or failed) drop out of polling; the
-// remaining ones keep getting polled until all are terminal or the window
-// expires. Transient info errors and server-side rejections are retried
-// within the window.
-func (r *SingleClusterReconciler) waitForIndexCheckpointDone(
-	ctx context.Context, pods []*corev1.Pod,
-) common.ReconcileResult {
+// pollAndDeleteParkedPods polls checkpoint-status across the parked pods and deletes each
+// pod as its save completes, acting on the same response that proved it.
+// Deleting per pod rather than after the whole batch so that skewed/slow sibling node doesn't slow the
+// whole batch leading to park timeout and asd exit.
+// Pods still copying stay pending; whatever remains at the window's end requeues. Deleted
+// pods are returned even alongside an error, so the caller's bookkeeping never loses a
+// delete that happened.
+func (r *SingleClusterReconciler) pollAndDeleteParkedPods(
+	ctx context.Context, pods []*corev1.Pod, rackForPod map[string]*RackState,
+) (deleted []*corev1.Pod, res common.ReconcileResult) {
 	const (
 		maxRetry      = 6
 		retryInterval = 10 * time.Second
@@ -651,33 +808,48 @@ func (r *SingleClusterReconciler) waitForIndexCheckpointDone(
 	copy(pending, pods)
 
 	for i := 0; i < maxRetry && len(pending) > 0; i++ {
-		r.Log.V(1).Info("Waiting for index checkpoint to complete",
+		r.Log.V(1).Info("Waiting for index checkpoints to complete",
 			"pods", getPodNames(pending), "attempt", i+1)
+
+		time.Sleep(retryInterval)
 
 		stillPending := make([]*corev1.Pod, 0, len(pending))
 
 		for _, pod := range pending {
-			statuses, err := r.newAsConn(pod).CheckpointStatus(policy)
-			if err != nil {
+			resp, err := r.newAsConn(pod).CheckpointStatus(policy)
+
+			switch {
+			case errors.Is(err, deployment.ErrCheckpointNotConfigured):
+				// The running server resolves no checkpoint path at all — its config
+				// disagrees with the rack status AKO derived its namespace set from.
+				// Retrying cannot change that, and there is no park to discharge.
+				r.Log.Info("Server reports index checkpoint is not configured, leaving Pod to the normal flow",
+					"pod", utils.GetNamespacedName(pod))
+
+				continue
+
+			case err != nil:
 				r.Log.V(1).Info("checkpoint-status unavailable, will retry",
 					"pod", utils.GetNamespacedName(pod), "error", err)
 				stillPending = append(stillPending, pod)
 
 				continue
-			}
 
-			// An empty map is the server's "no namespace is checkpointing" answer, not an error
-			if len(statuses) == 0 {
-				r.Log.Info("Server reports no checkpointing namespace, nothing to wait for",
+			case len(resp.Namespaces) == 0 && !resp.IsParked:
+				// Configured, checkpointing nothing, and NOT parked: a RESTARTED asd.
+				// Nothing to wait for and nothing to delete; the annotation check
+				// reclassifies it next pass. The PARKED form of an empty response falls
+				// through instead — see checkpointDone.
+				r.Log.Info("Server reports no checkpointing namespace and no park, leaving Pod to the normal flow",
 					"pod", utils.GetNamespacedName(pod))
 
 				continue
 			}
 
-			done, failedNSs := checkpointDone(statuses)
+			done, failedNSs := checkpointDone(resp)
 			if !done {
 				r.Log.Info("Index checkpoint in progress", "pod", utils.GetNamespacedName(pod),
-					"status", statuses)
+					"status", resp)
 
 				stillPending = append(stillPending, pod)
 
@@ -686,40 +858,50 @@ func (r *SingleClusterReconciler) waitForIndexCheckpointDone(
 
 			if len(failedNSs) > 0 {
 				r.Log.Info("Index checkpoint failed for one or more namespaces, falling back to cold restart",
-					"pod", utils.GetNamespacedName(pod), "failedNamespaces", failedNSs, "status", statuses)
+					"pod", utils.GetNamespacedName(pod), "failedNamespaces", failedNSs, "status", resp)
 				r.Recorder.Eventf(
 					r.aeroCluster, corev1.EventTypeWarning, "IndexCheckpointFailed",
 					"Index checkpoint failed for pod %s namespaces %v; proceeding with cold restart",
 					utils.GetNamespacedName(pod), failedNSs,
 				)
-			} else {
-				r.Log.Info("Index checkpoint complete, proceeding with pod delete",
-					"pod", utils.GetNamespacedName(pod))
 			}
+
+			// isFailureRecovery is false by construction: the checkpoint save is only
+			// triggered on the planned path, so a parked pod is never a failure-recovery pod.
+			if err := r.deletePodWithLocalPVCs(ctx, rackForPod[pod.Name], pod, false); err != nil {
+				return deleted, common.ReconcileError(err)
+			}
+
+			deleted = append(deleted, pod)
+			r.Recorder.Eventf(
+				r.aeroCluster, corev1.EventTypeNormal, "IndexCheckpoint",
+				"Index checkpoint complete, restarting Pod %s", utils.GetNamespacedName(pod),
+			)
 		}
 
 		pending = stillPending
-
-		time.Sleep(retryInterval)
 	}
 
 	if len(pending) > 0 {
-		pendingNames := getPodNames(pending)
 		r.Log.Info("Index checkpoint not done within polling window, requeueing reconcile",
-			"pods", pendingNames)
+			"pods", getPodNames(pending))
 
-		return common.ReconcileRequeueAfter(60)
+		return deleted, common.ReconcileRequeueAfter(60)
 	}
 
-	return common.ReconcileSuccess()
+	return deleted, common.ReconcileSuccess()
 }
 
 // checkpointDone reports whether this pod's checkpoint has finished and which namespaces failed.
 // failedNSs lists reported namespaces in state=failed, so the caller can warn before proceeding with a cold restart.
+// A parked node reporting NO namespaces is done: a node whose namespaces have all opted
+// out parks without writing anything, so there is nothing to wait for and it still has to
+// be deleted — it has left the cluster and cannot serve again. The caller screens out the
+// empty-and-not-parked response, which is a restarted asd rather than a finished save.
 func checkpointDone(
-	statuses map[string]deployment.CheckpointNamespaceStatus,
+	resp deployment.CheckpointResponse,
 ) (done bool, failedNSs []string) {
-	for ns, status := range statuses {
+	for ns, status := range resp.Namespaces {
 		if !status.IsTerminal() {
 			return false, nil
 		}
@@ -730,73 +912,4 @@ func checkpointDone(
 	}
 
 	return true, failedNSs
-}
-
-// checkpointStarted reports whether a checkpoint save has been issued to this pod.
-// Any reported namespace in a state other than "none" proves it: the trigger sets the
-// checkpoint flag on every namespace that resolved a path at once, so a single non-none
-// state means this pod's save fired and it is parked.
-func checkpointStarted(statuses map[string]deployment.CheckpointNamespaceStatus) bool {
-	for _, status := range statuses {
-		if status.State != deployment.CheckpointStateNone {
-			return true
-		}
-	}
-
-	return false
-}
-
-// filterCheckpointingPods returns the list of pods which are already checkpointing by checking the checkpoint-status.
-func (r *SingleClusterReconciler) filterCheckpointingPods(
-	ctx context.Context, pods []*corev1.Pod, rackState *RackState,
-) []*corev1.Pod {
-	rackStatus := r.getRackStatus(rackState)
-	if rackStatus == nil {
-		return nil
-	}
-
-	// This check won't cover scenarios where there are no namespaces to checkpoint i.e. checkpointing is disabled in
-	// spec during an update.
-	if len(asdbv1.GetIndexCheckpointNamespaces(rackStatus.AerospikeConfig.Value)) == 0 || len(pods) == 0 {
-		return nil
-	}
-
-	policy := r.getClientPolicy(ctx)
-
-	var parked []*corev1.Pod
-
-	for _, pod := range pods {
-		if r.podCheckpointStarted(pod, policy) {
-			parked = append(parked, pod)
-		}
-	}
-
-	return parked
-}
-
-// resumeParkedCheckpointPods narrows a batch to its checkpoint-parked subset, if any.
-// When there are partial checkpointed pods in a batch, then only those pods are returned and
-// remaining pods are deferred.
-func (r *SingleClusterReconciler) resumeParkedCheckpointPods(
-	ctx context.Context, activePods, eligible []*corev1.Pod, rackState *RackState,
-) (batch []*corev1.Pod, deferred int, resuming bool) {
-	parked := r.filterCheckpointingPods(ctx, eligible, rackState)
-	if len(parked) == 0 {
-		return activePods, 0, false
-	}
-
-	return parked, len(activePods) - len(parked), true
-}
-
-// podCheckpointStarted reports whether this pod has a checkpoint save in flight for
-// any namespace in nsSet. Anything short of a clean, affirmative answer is false.
-func (r *SingleClusterReconciler) podCheckpointStarted(
-	pod *corev1.Pod, policy *as.ClientPolicy,
-) bool {
-	statuses, err := r.newAsConn(pod).CheckpointStatus(policy)
-	if err != nil {
-		return false
-	}
-
-	return checkpointStarted(statuses)
 }

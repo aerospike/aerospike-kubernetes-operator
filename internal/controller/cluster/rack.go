@@ -62,6 +62,14 @@ func (r *SingleClusterReconciler) reconcileRacks(ctx context.Context) common.Rec
 		racksToDelete, "ignorablePods", ignorablePodNames.UnsortedList(),
 	)
 
+	// Finish any index-checkpointing pod before touching a rack, so nothing below has to cope
+	// with a node that has left the cluster.
+	if res = r.reconcileCheckpointingPods(
+		ctx, allRackStates(configuredRacks, revisionChangedRacks, racksToDelete),
+	); !res.IsSuccess {
+		return res
+	}
+
 	// Handle failed pods for each configured rack. For revision-changed racks,
 	// handleFailedPodsInRack only inspects new-revision STS pods — old-revision
 	// STS pods are invisible to it. Check them explicitly before proceeding.
@@ -2768,6 +2776,26 @@ func (r *SingleClusterReconciler) categoriseRacks(ctx context.Context) (configur
 	}
 
 	return configuredRacks, revisionChangedRacks, racksToDelete, err
+}
+
+// allRackStates returns every rack a live pod could belong to: the configured racks, the
+// outgoing revision of any rack mid-migration, and racks being deleted. Pods of the latter
+// two outlive their entry in the spec, so a spec-only view would not find their rack —
+// and it is their own rack's storage config that governs their PVCs, not the incoming one.
+func allRackStates(configuredRacks []RackState, revisionChangedRacks map[int]revisionChangedRack,
+	racksToDelete []asdbv1.Rack) []RackState {
+	rackStates := make([]RackState, 0, len(configuredRacks)+len(revisionChangedRacks)+len(racksToDelete))
+	rackStates = append(rackStates, configuredRacks...)
+
+	for id := range revisionChangedRacks {
+		rackStates = append(rackStates, *revisionChangedRacks[id].oldRack)
+	}
+
+	for idx := range racksToDelete {
+		rackStates = append(rackStates, RackState{Rack: &racksToDelete[idx]})
+	}
+
+	return rackStates
 }
 
 func getWorkDirSubPathVolumeMounts(basePath string) []asdbv1.VolumeAttachment {

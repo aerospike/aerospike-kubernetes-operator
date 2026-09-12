@@ -127,6 +127,9 @@ const (
 	EvictionBlockedAnnotation                      = "aerospike.com/eviction-blocked"
 	OverrideRackIDAnnotation                       = "aerospike.com/override-rack-id"
 	AerospikeAPIVersion                            = "v1"
+	// IndexCheckpointParkedAnnotation carries the aerospike-server container ID that was
+	// parked for an index checkpoint.
+	IndexCheckpointParkedAnnotation = "aerospike.com/index-checkpoint-parked"
 )
 
 // Preview feature names recognized by the server's --preview flag.
@@ -142,7 +145,7 @@ type PreviewFeatureInfo struct {
 
 // PreviewFeatureVersions maps known preview feature names to their version constraints.
 var PreviewFeatureVersions = map[string]PreviewFeatureInfo{
-	PreviewFeatureIndexCheckpoint: {MinVersion: "8.1.3.0", GAVersion: ""},
+	PreviewFeatureIndexCheckpoint: {MinVersion: "8.2.0.0", GAVersion: ""},
 }
 
 // GetConfiguredWorkDirectory returns the Aerospike work directory configured in aerospikeConfig.
@@ -793,29 +796,35 @@ func IsAuthModeInternal(authMode AerospikeAuthMode) bool {
 	return authMode == AerospikeAuthModeInternal || authMode == ""
 }
 
-// GetNamespaceDataSize returns a namespace's storage-engine data-size. The value is
-// returned as-is rather than normalised to a number: it only ever feeds an equality
-// check, and the config schema has already validated its type.
-func GetNamespaceDataSize(namespaceConf map[string]interface{}) (size interface{}, ok bool) {
+// GetNamespaceDataSize returns a namespace's storage-engine data-size in bytes.
+func GetNamespaceDataSize(namespaceConf map[string]interface{}) (size int, ok bool) {
 	storageConf, ok := namespaceConf[ConfKeyStorageEngine].(map[string]interface{})
 	if !ok {
-		return nil, false
+		return 0, false
 	}
 
-	size, ok = storageConf[ConfKeyDataSize]
+	sizeIface, ok := storageConf[ConfKeyDataSize]
+	if !ok {
+		return 0, false
+	}
 
-	return size, ok
+	size, err := GetIntType(sizeIface)
+	if err != nil {
+		return 0, false
+	}
+
+	return size, true
 }
 
 // GetInMemoryNsDataSizes maps namespace name to storage-engine data-size, for
 // pure in-memory namespaces only
-func GetInMemoryNsDataSizes(aerospikeConfig map[string]interface{}) map[string]interface{} {
+func GetInMemoryNsDataSizes(aerospikeConfig map[string]interface{}) map[string]int {
 	nsList, ok := aerospikeConfig[ConfKeyNamespace].([]interface{})
 	if !ok {
 		return nil
 	}
 
-	sizes := make(map[string]interface{}, len(nsList))
+	sizes := make(map[string]int, len(nsList))
 
 	for _, nsIface := range nsList {
 		nsConf, ok := nsIface.(map[string]interface{})

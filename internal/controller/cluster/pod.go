@@ -350,62 +350,40 @@ func (r *SingleClusterReconciler) rollingRestartPods(
 		}
 	}
 
-	deferredPods := 0
-
 	// Here activePods should be those pods where the server pod is running, irrespective of sidecars status.
 	// ignorablePodNames should only have those pods where the server container is failing
 	if len(activePods) != 0 {
 		r.Log.Info("Restart active Pods", "pods", getPodNames(activePods))
 
-		// A checkpoint-parked pod must skip all the safety checks because the pod has already left the cluster
-		// and info commands on the parked pod answer with FORBIDDEN.
-		// When only some pods are parked, that subset becomes this reconciles's batch and the rest pods are
-		// deferred.
-		checkpointEligiblePods := podsWithRestartType(activePods, restartTypeMap, podRestart)
+		if res := r.waitForMultipleNodesSafeStopReady(ctx, activePods, ignorablePodNames); !res.IsSuccess {
+			return res
+		}
 
-		var resumingCheckpoint bool
+		var clientPolicy *as.ClientPolicy
 
-		activePods, deferredPods, resumingCheckpoint = r.resumeParkedCheckpointPods(
-			ctx, activePods, checkpointEligiblePods, rackState)
+		setMigrateFillDelay := r.shouldSetMigrateFillDelay(rackState, podsToRestart, restartTypeMap)
 
-		var (
-			setMigrateFillDelay bool
-			clientPolicy        *as.ClientPolicy
+		r.Log.Info(
+			fmt.Sprintf("Adjust migrate-fill-delay prior to Pod restart: %t", setMigrateFillDelay),
 		)
 
-		if !resumingCheckpoint {
-			if res := r.waitForMultipleNodesSafeStopReady(ctx, activePods, ignorablePodNames); !res.IsSuccess {
+		// Revert migrate-fill-delay to the original value before restarting active pods.
+		// This will be a no-op in the first reconcile
+		if setMigrateFillDelay {
+			clientPolicy = r.getClientPolicy(ctx)
+
+			if res := r.setMigrateFillDelay(ctx, clientPolicy, &rackState.Rack.AerospikeConfig, false,
+				ignorablePodNames,
+			); !res.IsSuccess {
+				if res.Err != nil {
+					res.Err = fmt.Errorf(
+						"revert migrate-fill-delay for rack %d before restarting running Pods: %w",
+						rackState.Rack.ID, res.Err,
+					)
+				}
+
 				return res
 			}
-
-			setMigrateFillDelay = r.shouldSetMigrateFillDelay(rackState, podsToRestart, restartTypeMap)
-
-			r.Log.Info(
-				fmt.Sprintf("Adjust migrate-fill-delay prior to Pod restart: %t", setMigrateFillDelay),
-			)
-
-			// Revert migrate-fill-delay to the original value before restarting active pods.
-			// This will be a no-op in the first reconcile
-			if setMigrateFillDelay {
-				clientPolicy = r.getClientPolicy(ctx)
-
-				if res := r.setMigrateFillDelay(ctx, clientPolicy, &rackState.Rack.AerospikeConfig, false,
-					ignorablePodNames,
-				); !res.IsSuccess {
-					if res.Err != nil {
-						res.Err = fmt.Errorf(
-							"revert migrate-fill-delay for rack %d before restarting running Pods: %w",
-							rackState.Rack.ID, res.Err,
-						)
-					}
-
-					return res
-				}
-			}
-		} else {
-			r.Log.Info("Resuming pods with an index checkpoint already in progress, "+
-				"skipping redundant safe-stop checks",
-				"pods", getPodNames(activePods), "deferredPods", deferredPods)
 		}
 
 		// Active pods are healthy — any restart of them is a planned operation.
@@ -436,14 +414,6 @@ func (r *SingleClusterReconciler) rollingRestartPods(
 		)
 
 		return common.ReconcileRequeueAfter(asdbv1.RequeueIntervalSeconds10)
-	}
-
-	// Only the parked subset was handled. Requeue so the deferred pods are re-batched
-	// and get a fresh preamble; success here would report the rack as done.
-	if deferredPods > 0 {
-		r.Log.Info("Deferring the rest of the batch to a later pass", "deferredPods", deferredPods)
-
-		return common.ReconcileRequeueAfter(1)
 	}
 
 	return common.ReconcileSuccess()
@@ -589,14 +559,8 @@ func (r *SingleClusterReconciler) restartPods(
 
 			restartedASDPodNames = append(restartedASDPodNames, pod.Name)
 		case podRestart:
-			if r.isLocalPVCDeletionRequired(rackState, pod, isFailureRecovery) {
-				if err := r.deleteLocalPVCs(ctx, rackState, pod); err != nil {
-					return common.ReconcileError(err)
-				}
-			}
-
-			if err := r.Delete(ctx, pod); err != nil {
-				return common.ReconcileError(fmt.Errorf("delete Pod %s: %w", utils.GetNamespacedNameString(pod), err))
+			if err := r.deletePodWithLocalPVCs(ctx, rackState, pod, isFailureRecovery); err != nil {
+				return common.ReconcileError(err)
 			}
 
 			restartedPods = append(restartedPods, pod)
@@ -805,55 +769,34 @@ func (r *SingleClusterReconciler) safelyDeletePodsAndEnsureImageUpdated(
 		}
 	}
 
-	deferredPods := 0
-
 	if len(activePods) != 0 {
 		r.Log.Info("Restart active Pods with updated container image", "pods", getPodNames(activePods))
 
-		// A checkpoint-parked pod must skip all the safety checks because the pod has already left the cluster
-		// and info commands on the parked pod answer with FORBIDDEN.
-		// When only some pods are parked, that subset becomes this reconciles's batch and the rest pods are
-		// deferred.
+		if res := r.waitForMultipleNodesSafeStopReady(ctx, activePods, ignorablePodNames); !res.IsSuccess {
+			return res
+		}
 
-		var resumingCheckpoint bool
+		var clientPolicy *as.ClientPolicy
 
-		activePods, deferredPods, resumingCheckpoint = r.resumeParkedCheckpointPods(
-			ctx, activePods, activePods, rackState)
+		setMigrateFillDelay := r.shouldSetMigrateFillDelay(rackState, podsToUpdate, nil)
 
-		var (
-			setMigrateFillDelay bool
-			clientPolicy        *as.ClientPolicy
-		)
+		r.Log.Info(
+			fmt.Sprintf("Adjust migrate-fill-delay prior to Pod restart: %t", setMigrateFillDelay))
 
-		if !resumingCheckpoint {
-			if res := r.waitForMultipleNodesSafeStopReady(ctx, activePods, ignorablePodNames); !res.IsSuccess {
+		// Revert migrate-fill-delay to the original value before restarting active pods.
+		// This will be a no-op in the first reconcile
+		if setMigrateFillDelay {
+			clientPolicy = r.getClientPolicy(ctx)
+
+			if res := r.setMigrateFillDelay(ctx, clientPolicy, &rackState.Rack.AerospikeConfig, false,
+				ignorablePodNames,
+			); !res.IsSuccess {
+				if res.Err != nil {
+					res.Err = fmt.Errorf("revert migrate-fill-delay: %w", res.Err)
+				}
+
 				return res
 			}
-
-			setMigrateFillDelay = r.shouldSetMigrateFillDelay(rackState, podsToUpdate, nil)
-
-			r.Log.Info(
-				fmt.Sprintf("Adjust migrate-fill-delay prior to Pod restart: %t", setMigrateFillDelay))
-
-			// Revert migrate-fill-delay to the original value before restarting active pods.
-			// This will be a no-op in the first reconcile
-			if setMigrateFillDelay {
-				clientPolicy = r.getClientPolicy(ctx)
-
-				if res := r.setMigrateFillDelay(ctx, clientPolicy, &rackState.Rack.AerospikeConfig, false,
-					ignorablePodNames,
-				); !res.IsSuccess {
-					if res.Err != nil {
-						res.Err = fmt.Errorf("revert migrate-fill-delay: %w", res.Err)
-					}
-
-					return res
-				}
-			}
-		} else {
-			r.Log.Info("Resuming pods with an index checkpoint already in progress, "+
-				"skipping redundant safe-stop checks",
-				"pods", getPodNames(activePods), "deferredPods", deferredPods)
 		}
 
 		if res := r.deletePodAndEnsureImageUpdated(ctx, rackState, activePods, false); !res.IsSuccess {
@@ -884,14 +827,6 @@ func (r *SingleClusterReconciler) safelyDeletePodsAndEnsureImageUpdated(
 		return common.ReconcileRequeueAfter(asdbv1.RequeueIntervalSeconds10)
 	}
 
-	// Only the parked subset was handled. Requeue so the deferred pods are re-batched;
-	// success here would let upgradeRack take its "last batch" path and emit RackImageUpdated early.
-	if deferredPods > 0 {
-		r.Log.Info("Deferring the rest of the batch to a later pass", "deferredPods", deferredPods)
-
-		return common.ReconcileRequeueAfter(1)
-	}
-
 	return common.ReconcileSuccess()
 }
 
@@ -916,17 +851,10 @@ func (r *SingleClusterReconciler) deletePodAndEnsureImageUpdated(
 
 	// Delete pods
 	for _, pod := range podsToUpdate {
-		if r.isLocalPVCDeletionRequired(rackState, pod, isFailureRecovery) {
-			if err := r.deleteLocalPVCs(ctx, rackState, pod); err != nil {
-				return common.ReconcileError(err)
-			}
-		}
-
-		if err := r.Delete(ctx, pod); err != nil {
+		if err := r.deletePodWithLocalPVCs(ctx, rackState, pod, isFailureRecovery); err != nil {
 			return common.ReconcileError(err)
 		}
 
-		r.Log.V(1).Info("Pod deleted", "pod", utils.GetNamespacedName(pod))
 		r.Recorder.Eventf(
 			r.aeroCluster, corev1.EventTypeNormal, "PodWaitUpdate",
 			"[rack-%d] Waiting to update Pod %s",
@@ -935,6 +863,26 @@ func (r *SingleClusterReconciler) deletePodAndEnsureImageUpdated(
 	}
 
 	return r.ensurePodsImageUpdated(ctx, podsToUpdate)
+}
+
+// deletePodWithLocalPVCs deletes a pod, first removing its local PVCs when the rack
+// configuration or the pod's placement calls for it.
+func (r *SingleClusterReconciler) deletePodWithLocalPVCs(
+	ctx context.Context, rackState *RackState, pod *corev1.Pod, isFailureRecovery bool,
+) error {
+	if r.isLocalPVCDeletionRequired(rackState, pod, isFailureRecovery) {
+		if err := r.deleteLocalPVCs(ctx, rackState, pod); err != nil {
+			return err
+		}
+	}
+
+	if err := r.Delete(ctx, pod); err != nil {
+		return fmt.Errorf("delete Pod %s: %w", utils.GetNamespacedNameString(pod), err)
+	}
+
+	r.Log.V(1).Info("Pod deleted", "pod", utils.GetNamespacedName(pod))
+
+	return nil
 }
 
 func (r *SingleClusterReconciler) isLocalPVCDeletionRequired(
