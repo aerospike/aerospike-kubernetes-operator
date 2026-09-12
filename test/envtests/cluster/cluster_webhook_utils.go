@@ -31,6 +31,31 @@ func uniqueNamespacedName(suffix string) types.NamespacedName {
 	return test.GetNamespacedName(name, testutil.DefaultNamespace)
 }
 
+// setNamespaceReplicationFactor sets replication-factor on the cluster-level config. The
+// mutating webhook copies that into every rack, so racks need no separate handling — and
+// writing their computed AerospikeConfig directly would be discarded anyway, since
+// updateRacksAerospikeConfigFromGlobal rebuilds it from the global config and the rack's
+// InputAerospikeConfig.
+func setNamespaceReplicationFactor(cluster *asdbv1.AerospikeCluster, rf int) {
+	if cluster.Spec.AerospikeConfig == nil {
+		return
+	}
+
+	nsList, ok := cluster.Spec.AerospikeConfig.Value[asdbv1.ConfKeyNamespace].([]interface{})
+	if !ok {
+		return
+	}
+
+	for idx := range nsList {
+		ns, ok := nsList[idx].(map[string]interface{})
+		if !ok {
+			continue
+		}
+
+		ns[asdbv1.ConfKeyReplicationFactor] = rf
+	}
+}
+
 // apNamespaceMemoryDataSizeOnly returns an AP namespace with pure in-memory storage (no devices/files).
 func apNamespaceMemoryDataSizeOnly(name string, rf int) map[string]interface{} {
 	return map[string]interface{}{
