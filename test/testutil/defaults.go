@@ -17,7 +17,10 @@ const (
 	Pre810ServerVersion = "8.0.0.0"
 	// CgroupMemTrackingServerVersion is the minimum Aerospike server version that requires
 	// aerospikeConfig.service.cgroup-mem-tracking to be set to true.
-	CgroupMemTrackingServerVersion    = "8.1.2.0"
+	CgroupMemTrackingServerVersion = "8.1.2.0"
+	// IndexCheckpointServerVersion is the minimum Aerospike server version that supports the checkpointing feature
+	// configuration keys.
+	IndexCheckpointServerVersion      = "8.2.0.0"
 	InvalidImageVersion               = "3.0.0.4"
 	StorageClass                      = "ssd"
 	ClusterNameConfig                 = "cluster-name"
@@ -38,6 +41,11 @@ var (
 	Pre810FederalImage    = fmt.Sprintf("%s:%s", BaseFederalImage, Pre810ServerVersion)
 	LatestFederalImage    = fmt.Sprintf("%s:%s", BaseFederalImage, LatestServerVersion)
 	InvalidImage          = fmt.Sprintf("%s:%s", BaseEnterpriseImage, InvalidImageVersion)
+	// TODO: update this later
+	IndexCheckpointImage = "aerospike.jfrog.io/database-docker-test-local/aerospike-server-enterprise:" +
+		"8.2.0.0_20260911T220300Z"
+	// IndexCheckpointUpgradeImage is the image the index-checkpoint upgrade case upgrades to
+	IndexCheckpointUpgradeImage = IndexCheckpointImage
 )
 
 // GetEnterpriseImage returns the full image string for the default (or given)

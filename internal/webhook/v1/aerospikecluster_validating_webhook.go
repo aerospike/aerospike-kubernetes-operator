@@ -377,6 +377,14 @@ func validate(aslog logr.Logger, cluster *asdbv1.AerospikeCluster) (admission.Wa
 		return warnings, err
 	}
 
+	// Validate preview features
+	expWarns, err := validatePreviewFeatures(cluster, version)
+	warnings = append(warnings, expWarns...)
+
+	if err != nil {
+		return warnings, err
+	}
+
 	// Validate rackConfig
 	warns, err := validateRackConfig(aslog, cluster, version)
 
@@ -1256,6 +1264,112 @@ func cgroupMemTrackingWarning(version string, conf map[string]interface{}) admis
 	return nil
 }
 
+// validatePreviewFeatures validates spec.previewFeatures: rejects unknown names, checks
+// server version compatibility, cross-checks with aerospikeConfig fields that require opt-in,
+// and warns when a feature has graduated to GA.
+func validatePreviewFeatures(cluster *asdbv1.AerospikeCluster, version string) (admission.Warnings, error) {
+	var warnings admission.Warnings
+
+	enabledSet := sets.New[string](cluster.Spec.PreviewFeatures...)
+
+	for _, name := range cluster.Spec.PreviewFeatures {
+		info, known := asdbv1.PreviewFeatureVersions[name]
+		if !known {
+			knownNames := make([]string, 0, len(asdbv1.PreviewFeatureVersions))
+			for k := range asdbv1.PreviewFeatureVersions {
+				knownNames = append(knownNames, k)
+			}
+
+			return warnings, fmt.Errorf(
+				"unknown preview feature %q; known features: %v",
+				name, knownNames,
+			)
+		}
+
+		val, err := lib.CompareVersions(version, info.MinVersion)
+		if err != nil {
+			return warnings, fmt.Errorf("failed to check image version for preview feature %q: %v", name, err)
+		}
+
+		if val < 0 {
+			return warnings, fmt.Errorf(
+				"preview feature %q requires server version >= %s, but image version is %s",
+				name, info.MinVersion, version,
+			)
+		}
+
+		if info.GAVersion != "" {
+			gaVal, err := lib.CompareVersions(version, info.GAVersion)
+			if err == nil && gaVal >= 0 {
+				warnings = append(warnings, fmt.Sprintf(
+					"preview feature %q graduated to GA in server version %s; "+
+						"you can remove it from spec.previewFeatures",
+					name, info.GAVersion,
+				))
+			}
+		}
+	}
+
+	// Cross-check: every index-checkpoint config key requires the opt-in.
+	if !enabledSet.Has(asdbv1.PreviewFeatureIndexCheckpoint) {
+		for idx := range cluster.Spec.RackConfig.Racks {
+			rack := &cluster.Spec.RackConfig.Racks[idx]
+
+			if err := validateNoIndexCheckpointKeys(
+				rack.AerospikeConfig.Value, fmt.Sprintf("rack %d ", rack.ID),
+			); err != nil {
+				return warnings, err
+			}
+		}
+	}
+
+	return warnings, nil
+}
+
+// indexCheckpointNamespaceKeys are the namespace-context keys the server gates behind
+// --preview index-checkpoint. The path itself is service-context and checked separately.
+var indexCheckpointNamespaceKeys = []string{
+	asdbv1.ConfKeyIndexCheckpointThreads,
+	asdbv1.ConfKeyIndexCheckpointCompression,
+	asdbv1.ConfKeySkipCheckpoint,
+}
+
+// validateNoIndexCheckpointKeys rejects any index-checkpoint config key when
+// "index-checkpoint" is absent from spec.previewFeatures. All four are gated, not just the path.
+func validateNoIndexCheckpointKeys(config map[string]interface{}, scope string) error {
+	if serviceConf, ok := config[asdbv1.ConfKeyService].(map[string]interface{}); ok {
+		if _, has := serviceConf[asdbv1.ConfKeyServiceIndexCheckpointPath]; has {
+			return fmt.Errorf(
+				"%saerospikeConfig.service has %s configured but %q is not listed in spec.previewFeatures",
+				scope, asdbv1.ConfKeyServiceIndexCheckpointPath, asdbv1.PreviewFeatureIndexCheckpoint,
+			)
+		}
+	}
+
+	nsList, ok := config[asdbv1.ConfKeyNamespace].([]interface{})
+	if !ok {
+		return nil
+	}
+
+	for _, nsIface := range nsList {
+		nsConf, ok := nsIface.(map[string]interface{})
+		if !ok {
+			continue
+		}
+
+		for _, key := range indexCheckpointNamespaceKeys {
+			if _, has := nsConf[key]; has {
+				return fmt.Errorf(
+					"%snamespace %v has %s configured but %q is not listed in spec.previewFeatures",
+					scope, nsConf[asdbv1.ConfKeyName], key, asdbv1.PreviewFeatureIndexCheckpoint,
+				)
+			}
+		}
+	}
+
+	return nil
+}
+
 func validateAerospikeConfig(
 	aslog logr.Logger, version string, configSpec *asdbv1.AerospikeConfigSpec,
 	storage *asdbv1.AerospikeStorageSpec, clSize int,
@@ -1273,6 +1387,10 @@ func validateAerospikeConfig(
 	}
 
 	if err := validateNamespaceConfig(configSpec.Value, storage); err != nil {
+		return nil, err
+	}
+
+	if err := validateIndexCheckpointConfig(configSpec.Value, storage); err != nil {
 		return nil, err
 	}
 
@@ -1480,6 +1598,66 @@ func validateNamespaceConfig(
 				}
 			}
 		}
+	}
+
+	return nil
+}
+
+// validateIndexCheckpointConfig validates the cluster-wide index checkpoint config.
+func validateIndexCheckpointConfig(
+	config map[string]interface{}, storage *asdbv1.AerospikeStorageSpec,
+) error {
+	cpPath := asdbv1.GetIndexCheckpointPath(config)
+	if cpPath == "" {
+		return nil
+	}
+
+	if err := validateIndexCheckpointVolume(storage, cpPath); err != nil {
+		return err
+	}
+
+	// Every namespace must follow the server namespace name check once the global index-checkpoint-path is enabled.
+	// This ensures the namespace name doesn't conflict with go-live cleanup by asd at startup
+	for _, name := range asdbv1.GetNamespaceNamesFromConfig(config) {
+		if !asdbv1.IsCheckpointUsableNamespaceName(name) {
+			return fmt.Errorf(
+				"namespace %q has a name unusable with service index-checkpoint-path: it must not "+
+					"be \".\" or \"..\", contain \"/\", or end in \".tmp\" or \".deleting\". "+
+					"Rename the namespace, or unset index-checkpoint-path", name,
+			)
+		}
+	}
+
+	return nil
+}
+
+// validateIndexCheckpointVolume validates that the volume backing
+// aerospikeConfig.service.index-checkpoint-path is a durable, PersistentVolumeClaim-backed filesystem volume.
+func validateIndexCheckpointVolume(
+	storage *asdbv1.AerospikeStorageSpec, cpPath string,
+) error {
+	volume := asdbv1.GetVolumeForAerospikePath(storage, cpPath)
+	if volume == nil {
+		return fmt.Errorf(
+			"service index-checkpoint-path %q is not backed by any storage volume in spec.storage", cpPath,
+		)
+	}
+
+	if volume.Source.PersistentVolume == nil {
+		return fmt.Errorf(
+			"service index-checkpoint-path %q is backed by volume %q whose source is not a "+
+				"persistentVolumeClaim; index-checkpoint-path requires durable PersistentVolume-backed "+
+				"storage",
+			cpPath, volume.Name,
+		)
+	}
+
+	if volume.Source.PersistentVolume.VolumeMode != v1.PersistentVolumeFilesystem {
+		return fmt.Errorf(
+			"service index-checkpoint-path %q is backed by volume %q with volumeMode %s; "+
+				"index-checkpoint-path requires a Filesystem-mode PersistentVolume",
+			cpPath, volume.Name, volume.Source.PersistentVolume.VolumeMode,
+		)
 	}
 
 	return nil

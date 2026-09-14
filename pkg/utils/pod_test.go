@@ -561,3 +561,91 @@ func TestCheckPodFailed(t *testing.T) {
 		})
 	}
 }
+
+func TestIsPodCheckpointing(t *testing.T) {
+	const parkedID = "containerd://aaaa1111"
+
+	// pod builds a pod carrying the given annotation value and server container ID.
+	// An empty annotation value means the annotation is absent.
+	pod := func(annotation, containerID string) *corev1.Pod {
+		p := &corev1.Pod{
+			Status: corev1.PodStatus{
+				ContainerStatuses: []corev1.ContainerStatus{
+					{Name: "sidecar", ContainerID: "containerd://sidecar"},
+					{Name: asdbv1.AerospikeServerContainerName, ContainerID: containerID},
+				},
+			},
+		}
+		if annotation != "" {
+			p.Annotations = map[string]string{asdbv1.IndexCheckpointParkedAnnotation: annotation}
+		}
+
+		return p
+	}
+
+	tests := []struct {
+		pod      *corev1.Pod
+		name     string
+		expected bool
+	}{
+		{
+			name:     "no annotation: never parked",
+			pod:      pod("", parkedID),
+			expected: false,
+		},
+		{
+			name:     "annotation matches the running container: parked",
+			pod:      pod(parkedID, parkedID),
+			expected: true,
+		},
+		{
+			// The OOM/crash/park-timeout case: asd exited, kubelet restarted the
+			// container, so the park we recorded is over.
+			name:     "container restarted since the park: not parked",
+			pod:      pod(parkedID, "containerd://bbbb2222"),
+			expected: false,
+		},
+		{
+			// Mid-restart, before the new container ID is published.
+			name:     "container ID not yet published: not parked",
+			pod:      pod(parkedID, ""),
+			expected: false,
+		},
+		{
+			name: "no server container status: not parked",
+			pod: &corev1.Pod{
+				ObjectMeta: metav1.ObjectMeta{
+					Annotations: map[string]string{asdbv1.IndexCheckpointParkedAnnotation: parkedID},
+				},
+				Status: corev1.PodStatus{
+					ContainerStatuses: []corev1.ContainerStatus{
+						{Name: "sidecar", ContainerID: parkedID},
+					},
+				},
+			},
+			expected: false,
+		},
+		{
+			name: "empty annotation value: not parked",
+			pod: &corev1.Pod{
+				ObjectMeta: metav1.ObjectMeta{
+					Annotations: map[string]string{asdbv1.IndexCheckpointParkedAnnotation: ""},
+				},
+				Status: corev1.PodStatus{
+					ContainerStatuses: []corev1.ContainerStatus{
+						{Name: asdbv1.AerospikeServerContainerName, ContainerID: ""},
+					},
+				},
+			},
+			expected: false,
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			if result := IsPodCheckpointing(tt.pod); result != tt.expected {
+				t.Errorf("IsPodCheckpointing() = %v, expected %v", result, tt.expected)
+			}
+		})
+	}
+}
