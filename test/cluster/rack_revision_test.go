@@ -499,10 +499,34 @@ func testRackRevisionChangeWithStorageUpdate(
 	Expect(updateClusterWithNoWait(k8sClient, ctx, updatedCluster)).ToNot(HaveOccurred())
 
 	By(fmt.Sprintf("Validating gradual migration from %s to %s", fromRevision, toRevision))
+
+	validateCondition(
+		ctx, clusterNamespacedName,
+		asdbv1.AerospikeClusterConditionRackRevisionRollingOut,
+		asdbv1.AerospikeClusterReasonRackRevisionRollingOut, toRevision,
+	)
+
 	// Both rack revision StatefulSets should exist during migration
 	Eventually(func() bool {
 		return checkBothRevisionsExist(k8sClient, ctx, clusterNamespacedName, fromRevision, toRevision)
 	}, 10*time.Minute, 10*time.Second).Should(BeTrue())
+
+	By("Scale conditions must stay at rest for the whole migration")
+
+	Consistently(func() bool {
+		for _, condType := range []asdbv1.AerospikeClusterConditionType{
+			asdbv1.AerospikeClusterConditionScalingUp,
+			asdbv1.AerospikeClusterConditionScalingDown,
+		} {
+			cond, getErr := getCondition(ctx, clusterNamespacedName, condType)
+			if getErr != nil || cond == nil || cond.Status != metav1.ConditionFalse {
+				return false
+			}
+		}
+
+		return true
+	}, 1*time.Minute, 5*time.Second).Should(BeTrue(),
+		"a scale condition went True during a rack revision migration")
 
 	By("Waiting for the migration to complete")
 

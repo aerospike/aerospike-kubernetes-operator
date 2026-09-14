@@ -325,6 +325,7 @@ func appendCACertFromFileOrPath(
 			if !d.IsDir() {
 				var caData []byte
 
+				//nolint:gosec // G122: test-only code reading cert paths from the test spec
 				if caData, err = os.ReadFile(path); err != nil {
 					return err
 				}
@@ -336,7 +337,7 @@ func appendCACertFromFileOrPath(
 		},
 	)
 	if err != nil {
-		logrus.Info("\"Failed to load CA certs from dir", "caPath: ", caPath)
+		logrus.Info("Failed to load CA certs from dir", "caPath: ", caPath, "err: ", err)
 	}
 
 	return serverPool

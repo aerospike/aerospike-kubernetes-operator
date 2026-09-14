@@ -2,9 +2,7 @@ package cluster
 
 import (
 	goctx "context"
-	"crypto/rand"
 	"fmt"
-	"strconv"
 	"time"
 
 	. "github.com/onsi/ginkgo/v2"
@@ -14,7 +12,6 @@ import (
 	"k8s.io/apimachinery/pkg/util/wait"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 
-	as "github.com/aerospike/aerospike-client-go/v8"
 	asdbv1 "github.com/aerospike/aerospike-kubernetes-operator/v4/api/v1"
 	"github.com/aerospike/aerospike-kubernetes-operator/v4/test"
 )
@@ -199,65 +196,7 @@ var _ = Describe(
 func loadDataInCluster(
 	k8sClient client.Client, aeroCluster *asdbv1.AerospikeCluster,
 ) error {
-	asClient, err := getAerospikeClient(aeroCluster, k8sClient)
-	if err != nil {
-		return err
-	}
-
-	defer func() {
-		fmt.Println("Closing Aerospike client")
-		asClient.Close()
-	}()
-
-	keyPrefix := "testkey"
-
-	size := 100
-	bufferSize := 10000
-	token := make([]byte, bufferSize)
-
-	_, readErr := rand.Read(token)
-	if readErr != nil {
-		return readErr
-	}
-
-	pkgLog.Info(
-		"Loading record", "nodes", asClient.GetNodeNames(),
-	)
-
-	// The k8s services take time to come up so the timeouts are on the
-	// higher side.
-	wp := as.NewWritePolicy(0, 0)
-
-	// loads size * bufferSize data
-	for i := 0; i < size; i++ {
-		key, err := as.NewKey("test", "testset", keyPrefix+strconv.Itoa(i))
-		if err != nil {
-			return err
-		}
-
-		binMap := map[string]interface{}{
-			"testbin": token,
-		}
-
-		for j := 0; j < 1000; j++ {
-			err = asClient.Put(wp, key, binMap)
-			if err == nil {
-				break
-			}
-
-			time.Sleep(time.Second * 1)
-		}
-
-		if err != nil {
-			return err
-		}
-
-		fmt.Print(strconv.Itoa(i) + ", ")
-	}
-
-	fmt.Println("added records")
-
-	return nil
+	return LoadBulkDataInCluster(aeroCluster, k8sClient, "test", 100)
 }
 
 func waitForClusterScaleDown(

@@ -22,6 +22,7 @@ import (
 	corev1 "k8s.io/api/core/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/util/sets"
+	"sigs.k8s.io/controller-runtime/pkg/client/interceptor"
 )
 
 // TestNewPodsHostConnWithOption verifies the classification logic inside
@@ -36,7 +37,7 @@ import (
 //     reconcile loop retries rather than issuing incomplete cluster info calls.
 func TestNewPodsHostConnWithOption(t *testing.T) {
 	aeroCluster := newTestAerospikeCluster(namespace, clusterName)
-	r := newReconcilerWithObjects(newTestScheme(), aeroCluster)
+	r := newTestReconciler(t, aeroCluster, &interceptor.Funcs{})
 
 	// terminatingPod must be built directly (not through the fake client) because
 	// DeletionTimestamp is a server-managed field.

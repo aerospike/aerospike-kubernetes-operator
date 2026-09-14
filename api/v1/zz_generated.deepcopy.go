@@ -23,7 +23,7 @@ package v1
 import (
 	corev1 "k8s.io/api/core/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
-	runtime "k8s.io/apimachinery/pkg/runtime"
+	"k8s.io/apimachinery/pkg/runtime"
 	"k8s.io/apimachinery/pkg/util/intstr"
 )
 
@@ -242,6 +242,13 @@ func (in *AerospikeClusterSpec) DeepCopy() *AerospikeClusterSpec {
 func (in *AerospikeClusterStatus) DeepCopyInto(out *AerospikeClusterStatus) {
 	*out = *in
 	in.AerospikeClusterStatusSpec.DeepCopyInto(&out.AerospikeClusterStatusSpec)
+	if in.Conditions != nil {
+		in, out := &in.Conditions, &out.Conditions
+		*out = make([]metav1.Condition, len(*in))
+		for i := range *in {
+			(*in)[i].DeepCopyInto(&(*out)[i])
+		}
+	}
 	if in.Pods != nil {
 		in, out := &in.Pods, &out.Pods
 		*out = make(map[string]AerospikePodStatus, len(*in))

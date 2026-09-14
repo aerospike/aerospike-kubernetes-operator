@@ -111,14 +111,16 @@ func (r *SingleClusterReconciler) createSTS(
 	)
 
 	tlsName, _ := asdbv1.GetServiceTLSNameAndPort(r.aeroCluster.Spec.AerospikeConfig)
-	envVarList := []corev1.EnvVar{
+	envVarList := make([]corev1.EnvVar, 0, 6)
+	envVarList = append(
+		envVarList,
 		newSTSEnvVar("MY_POD_NAME", "metadata.name"),
 		newSTSEnvVar("MY_POD_NAMESPACE", "metadata.namespace"),
 		newSTSEnvVar("MY_POD_IP", "status.podIP"),
 		newSTSEnvVar("MY_HOST_IP", "status.hostIP"),
 		newSTSEnvVarStatic("MY_POD_TLS_NAME", tlsName),
 		newSTSEnvVarStatic("MY_POD_CLUSTER_NAME", r.aeroCluster.Name),
-	}
+	)
 
 	st := &appsv1.StatefulSet{
 		ObjectMeta: metav1.ObjectMeta{
@@ -949,7 +951,7 @@ func (r *SingleClusterReconciler) updateSTSSchedulingPolicy(
 					LabelSelector: &metav1.LabelSelector{
 						MatchLabels: antiAffinityLabels,
 					},
-					TopologyKey: "kubernetes.io/hostname",
+					TopologyKey: corev1.LabelHostname,
 				},
 			},
 		}
@@ -996,7 +998,7 @@ func (r *SingleClusterReconciler) updateSTSSchedulingPolicy(
 	if rackState.Rack.NodeName != "" {
 		matchExpressions = append(
 			matchExpressions, corev1.NodeSelectorRequirement{
-				Key:      "kubernetes.io/hostname",
+				Key:      corev1.LabelHostname,
 				Operator: corev1.NodeSelectorOpIn,
 				Values:   []string{rackState.Rack.NodeName},
 			},
@@ -1006,7 +1008,7 @@ func (r *SingleClusterReconciler) updateSTSSchedulingPolicy(
 	if len(r.aeroCluster.Spec.K8sNodeBlockList) > 0 {
 		matchExpressions = append(
 			matchExpressions, corev1.NodeSelectorRequirement{
-				Key:      "kubernetes.io/hostname",
+				Key:      corev1.LabelHostname,
 				Operator: corev1.NodeSelectorOpNotIn,
 				Values:   r.aeroCluster.Spec.K8sNodeBlockList,
 			},
@@ -1468,7 +1470,6 @@ func (r *SingleClusterReconciler) initializeSTSStorage(
 	rackState *RackState,
 ) {
 	// Initialize sts storage
-	//nolint:prealloc // no fixed size
 	var specVolumes []corev1.Volume
 
 	for idx := range st.Spec.Template.Spec.InitContainers {
@@ -1606,7 +1607,7 @@ func getFinalVolumeAttachmentsForVolume(volume *asdbv1.VolumeSpec, workDirPath s
 	// Create dummy attachment for initContainer
 	initVolumePath := "/" + volume.Name // Using volume name for initContainer
 
-	// All volumes should be mounted in init container to allow initialization
+	// User-specified init container attachments are always honoured.
 	initContainerAttachments = append(
 		initContainerAttachments, volume.InitContainers...,
 	)
@@ -1647,9 +1648,18 @@ func getFinalVolumeAttachmentsForVolume(volume *asdbv1.VolumeSpec, workDirPath s
 		}
 	}
 
-	initContainerAttachments = append(
-		initContainerAttachments, aerosikeInitContainerAttachment,
-	)
+	// Auto-mount in the init container only for volumes it actually needs to access:
+	// - PersistentVolumes: the init container must wipe/initialize them before ASD starts.
+	// - Volumes with an Aerospike attachment: the init container sets up the workdir (smd,
+	//   usr/udf/lua) under them.
+	// Non-PV volumes that are not used by Aerospike (e.g. ConfigMap/Secret sidecars) have
+	// no role in the init container and are skipped; they remain accessible via the explicit
+	// volume.InitContainers field if a user ever needs them there.
+	if volume.Source.PersistentVolume != nil || volume.Aerospike != nil {
+		initContainerAttachments = append(
+			initContainerAttachments, aerosikeInitContainerAttachment,
+		)
+	}
 
 	return initContainerAttachments, containerAttachments
 }

@@ -2,6 +2,7 @@ package cluster
 
 import (
 	goctx "context"
+	"crypto/rand"
 	"fmt"
 	"reflect"
 	"strconv"
@@ -780,6 +781,11 @@ func DeleteCluster(
 			k8sClient, ctx, clusterNamespacedName,
 		)
 		if err != nil {
+			if isRetriableAPIError(err) {
+				time.Sleep(time.Second)
+				continue
+			}
+
 			return err
 		}
 		// Pods still may exist in terminating state for some time even if CR is deleted. Keeping them breaks some
@@ -788,6 +794,11 @@ func DeleteCluster(
 			k8sClient, ctx, aeroCluster,
 		)
 		if err != nil {
+			if isRetriableAPIError(err) {
+				time.Sleep(time.Second)
+				continue
+			}
+
 			return err
 		}
 
@@ -802,6 +813,11 @@ func DeleteCluster(
 	for {
 		newPVCList, err := getAeroClusterPVCList(aeroCluster, k8sClient)
 		if err != nil {
+			if isRetriableAPIError(err) {
+				time.Sleep(time.Second)
+				continue
+			}
+
 			return fmt.Errorf("error getting PVCs: %v", err)
 		}
 
@@ -1772,6 +1788,59 @@ func WriteDataToCluster(
 			return err
 		}
 	}
+
+	return nil
+}
+
+// LoadBulkDataInCluster writes numKeys records of ~10 KB each into the given
+// Aerospike namespace. Use this in tests that need real data present so that
+// a scale-down (or restart) triggers actual partition migrations.
+func LoadBulkDataInCluster(
+	aeroCluster *asdbv1.AerospikeCluster,
+	k8sClient client.Client,
+	namespace string,
+	numKeys int,
+) error {
+	asClient, err := getAerospikeClient(aeroCluster, k8sClient)
+	if err != nil {
+		return err
+	}
+
+	defer asClient.Close()
+
+	pkgLog.Info("Loading bulk data", "nodes", asClient.GetNodeNames(), "namespace", namespace, "numKeys", numKeys)
+
+	const binSize = 10_000 // ~10 KB per record
+
+	token := make([]byte, binSize)
+	if _, err = rand.Read(token); err != nil {
+		return fmt.Errorf("generate random payload: %w", err)
+	}
+
+	wp := as.NewWritePolicy(0, 0)
+	binMap := as.BinMap{"testbin": token}
+
+	for i := 0; i < numKeys; i++ {
+		key, keyErr := as.NewKey(namespace, "testset", "testkey"+strconv.Itoa(i))
+		if keyErr != nil {
+			return fmt.Errorf("create key %d: %w", i, keyErr)
+		}
+
+		// Retry briefly in case a service endpoint is still warming up.
+		for j := 0; j < 10; j++ {
+			if err = asClient.Put(wp, key, binMap); err == nil {
+				break
+			}
+
+			time.Sleep(time.Second)
+		}
+
+		if err != nil {
+			return fmt.Errorf("put key %d after retries: %w", i, err)
+		}
+	}
+
+	pkgLog.Info("Bulk data load complete", "namespace", namespace, "numKeys", numKeys)
 
 	return nil
 }

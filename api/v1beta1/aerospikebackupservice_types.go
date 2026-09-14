@@ -187,10 +187,6 @@ type AerospikeBackupServiceList struct {
 	Items           []AerospikeBackupService `json:"items"`
 }
 
-func init() {
-	SchemeBuilder.Register(&AerospikeBackupService{}, &AerospikeBackupServiceList{})
-}
-
 // SecretMount specifies the secret and its corresponding volume mount options.
 type SecretMount struct {
 	// SecretName is the name of the secret to be mounted.
