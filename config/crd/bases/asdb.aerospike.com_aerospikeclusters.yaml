@@ -15028,6 +15028,13 @@ spec:
                   This is map instead of the conventional map as list convention to allow each pod to patch update its own
                   status. The map key is the name of the pod.
                 type: object
+              previewFeatures:
+                description: |-
+                  PreviewFeatures is the list of Aerospike server preview feature names the running
+                  cluster was started with, via the --preview flag.
+                items:
+                  type: string
+                type: array
               rackConfig:
                 description: |-
                   RackConfig Configures the operator to deploy rack aware Aerospike cluster.

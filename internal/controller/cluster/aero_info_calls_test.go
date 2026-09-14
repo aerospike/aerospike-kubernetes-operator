@@ -189,6 +189,134 @@ func TestMarkPodCheckpointParked(t *testing.T) {
 	})
 }
 
+// TestSplitCheckpointNamespaces pins the eligible/skip partition — AKO's entire contribution to the checkpoint decision.
+// The data-size arm is the one worth pinning hardest. A checkpoint written under the old
+// stripe geometry cannot be used by the replacement pod, and depending on what survived
+// the server either comes up empty or REFUSES TO BOOT.
+func TestSplitCheckpointNamespaces(t *testing.T) {
+	const ckptPath = "/mnt/index-ckpt"
+
+	// memNS is a shadowless in-memory namespace — the only kind that can carry data-size.
+	memNS := func(name string, dataSize int, skip bool) map[string]any {
+		ns := map[string]interface{}{
+			asdbv1.ConfKeyName: name,
+			asdbv1.ConfKeyStorageEngine: map[string]interface{}{
+				"type":                 "memory",
+				asdbv1.ConfKeyDataSize: dataSize,
+			},
+		}
+		if skip {
+			ns[asdbv1.ConfKeySkipCheckpoint] = true
+		}
+
+		return ns
+	}
+
+	// deviceNS carries no data-size at all: the key is legal only without storage backing.
+	deviceNS := func(name string) map[string]interface{} {
+		return map[string]interface{}{
+			asdbv1.ConfKeyName: name,
+			asdbv1.ConfKeyStorageEngine: map[string]interface{}{
+				"type":    "device",
+				"devices": []interface{}{"/test/dev/xvdf"},
+			},
+		}
+	}
+
+	rack := func(path string, namespaces ...map[string]interface{}) *asdbv1.Rack {
+		nsList := make([]interface{}, 0, len(namespaces))
+		for _, ns := range namespaces {
+			nsList = append(nsList, ns)
+		}
+
+		conf := map[string]interface{}{
+			asdbv1.ConfKeyNamespace: nsList,
+			asdbv1.ConfKeyService:   map[string]interface{}{},
+		}
+		if path != "" {
+			conf[asdbv1.ConfKeyService].(map[string]interface{})[asdbv1.ConfKeyServiceIndexCheckpointPath] = path
+		}
+
+		return &asdbv1.Rack{AerospikeConfig: asdbv1.AerospikeConfigSpec{Value: conf}}
+	}
+
+	const (
+		oldSize = 1073741824
+		newSize = 536870912
+	)
+
+	tests := []struct {
+		name         string
+		status, spec *asdbv1.Rack
+		wantEligible []string
+		wantSkip     []string
+	}{
+		{
+			name:         "nothing changed - every namespace stays eligible",
+			status:       rack(ckptPath, memNS("ckpt", oldSize, false), deviceNS("test")),
+			spec:         rack(ckptPath, memNS("ckpt", oldSize, false), deviceNS("test")),
+			wantEligible: []string{"ckpt", "test"},
+		},
+		{
+			//Only the resized namespace is opted out: the device-backed one is untouched
+			name:         "data-size changed - only that namespace is skipped",
+			status:       rack(ckptPath, memNS("ckpt", oldSize, false), deviceNS("test")),
+			spec:         rack(ckptPath, memNS("ckpt", newSize, false), deviceNS("test")),
+			wantEligible: []string{"test"},
+			wantSkip:     []string{"ckpt"},
+		},
+		{
+			// Gaining storage backing shows up as data-size DISAPPEARING, and is equally
+			// fatal to the checkpoint: the replacement takes the durably-backed hydrate
+			// arm, whose gate a brand-new backing cannot satisfy.
+			name:         "in-memory namespace gained storage backing - skipped",
+			status:       rack(ckptPath, memNS("ckpt", oldSize, false)),
+			spec:         rack(ckptPath, deviceNS("ckpt")),
+			wantEligible: nil,
+			wantSkip:     []string{"ckpt"},
+		},
+		{
+			name:         "namespace removed from the CR - skipped",
+			status:       rack(ckptPath, memNS("ckpt", oldSize, false), deviceNS("test")),
+			spec:         rack(ckptPath, deviceNS("test")),
+			wantEligible: []string{"test"},
+			wantSkip:     []string{"ckpt"},
+		},
+		{
+			name:         "skip-checkpoint set in the CR - skipped",
+			status:       rack(ckptPath, memNS("ckpt", oldSize, false), deviceNS("test")),
+			spec:         rack(ckptPath, memNS("ckpt", oldSize, true), deviceNS("test")),
+			wantEligible: []string{"test"},
+			wantSkip:     []string{"ckpt"},
+		},
+		{
+			// The path is cluster-wide, so moving it invalidates EVERY checkpoint at once.
+			// Distinct from the per-namespace arms: an empty eligible set short-circuits
+			// checkpoint-save entirely, so nothing parks.
+			name:     "checkpoint path moved - every namespace is skipped",
+			status:   rack(ckptPath, memNS("ckpt", oldSize, false), deviceNS("test")),
+			spec:     rack("/mnt/index-ckpt-alt", memNS("ckpt", oldSize, false), deviceNS("test")),
+			wantSkip: []string{"ckpt", "test"},
+		},
+		{
+			name:   "feature off in status - nothing to do",
+			status: rack("", memNS("ckpt", oldSize, false)),
+			spec:   rack("", memNS("ckpt", oldSize, false)),
+		},
+	}
+
+	r := newTestReconciler(t, newTestAerospikeCluster(namespace, clusterName), &interceptor.Funcs{})
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			eligible, skip := r.splitCheckpointNamespaces(tt.status, tt.spec)
+
+			require.ElementsMatch(t, tt.wantEligible, eligible, "eligible namespaces")
+			require.ElementsMatch(t, tt.wantSkip, skip, "skipped namespaces")
+		})
+	}
+}
+
 // TestCheckpointDone pins that the wait is driven entirely by what the server reports —
 // no expected set — so a namespace AKO does not know about still holds the pod back.
 func TestCheckpointDone(t *testing.T) {

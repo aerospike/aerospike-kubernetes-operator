@@ -18,6 +18,7 @@ import (
 	"errors"
 	"fmt"
 	"strconv"
+	"strings"
 	"time"
 
 	corev1 "k8s.io/api/core/v1"
@@ -861,8 +862,9 @@ func (r *SingleClusterReconciler) pollAndDeleteParkedPods(
 					"pod", utils.GetNamespacedName(pod), "failedNamespaces", failedNSs, "status", resp)
 				r.Recorder.Eventf(
 					r.aeroCluster, corev1.EventTypeWarning, "IndexCheckpointFailed",
-					"Index checkpoint failed for pod %s namespaces %v; proceeding with cold restart",
-					utils.GetNamespacedName(pod), failedNSs,
+					"[rack-%d] Index checkpoint failed for Pod %s namespaces %s; proceeding with cold restart",
+					rackForPod[pod.Name].Rack.ID, utils.GetNamespacedName(pod),
+					strings.Join(failedNSs, ", "),
 				)
 			}
 
@@ -873,9 +875,13 @@ func (r *SingleClusterReconciler) pollAndDeleteParkedPods(
 			}
 
 			deleted = append(deleted, pod)
+			savedNSs := sets.List(sets.KeySet(resp.Namespaces))
+
 			r.Recorder.Eventf(
 				r.aeroCluster, corev1.EventTypeNormal, "IndexCheckpoint",
-				"Index checkpoint complete, restarting Pod %s", utils.GetNamespacedName(pod),
+				"[rack-%d] Index checkpoint complete for Pod %s namespaces %s; restarting",
+				rackForPod[pod.Name].Rack.ID, utils.GetNamespacedName(pod),
+				strings.Join(savedNSs, ", "),
 			)
 		}
 
@@ -886,7 +892,7 @@ func (r *SingleClusterReconciler) pollAndDeleteParkedPods(
 		r.Log.Info("Index checkpoint not done within polling window, requeueing reconcile",
 			"pods", getPodNames(pending))
 
-		return deleted, common.ReconcileRequeueAfter(60)
+		return deleted, common.ReconcileRequeueAfter(10)
 	}
 
 	return deleted, common.ReconcileSuccess()
@@ -901,15 +907,18 @@ func (r *SingleClusterReconciler) pollAndDeleteParkedPods(
 func checkpointDone(
 	resp deployment.CheckpointResponse,
 ) (done bool, failedNSs []string) {
+	// Collected into a set so the returned order is stable.
+	failed := sets.New[string]()
+
 	for ns, status := range resp.Namespaces {
 		if !status.IsTerminal() {
 			return false, nil
 		}
 
 		if status.State == deployment.CheckpointStateFailed {
-			failedNSs = append(failedNSs, ns)
+			failed.Insert(ns)
 		}
 	}
 
-	return true, failedNSs
+	return true, sets.List(failed)
 }

@@ -1161,6 +1161,11 @@ type AerospikeClusterStatusSpec struct { //nolint:govet // for readability
 	// Operations is a list of on-demand operation to be performed on the Aerospike cluster.
 	// +optional
 	Operations []OperationSpec `json:"operations,omitempty"`
+
+	// PreviewFeatures is the list of Aerospike server preview feature names the running
+	// cluster was started with, via the --preview flag.
+	// +optional
+	PreviewFeatures []string `json:"previewFeatures,omitempty"`
 }
 
 // AerospikeClusterStatus defines the observed state of AerospikeCluster
@@ -1603,6 +1608,12 @@ func CopySpecToStatus(spec *AerospikeClusterSpec) (*AerospikeClusterStatusSpec, 
 		status.Operations = *operations
 	}
 
+	if len(spec.PreviewFeatures) != 0 {
+		previewFeatures := lib.DeepCopy(&spec.PreviewFeatures).(*[]string)
+
+		status.PreviewFeatures = *previewFeatures
+	}
+
 	return &status, nil
 }
 
@@ -1723,6 +1734,11 @@ func CopyStatusToSpec(status *AerospikeClusterStatusSpec) (*AerospikeClusterSpec
 	if len(status.K8sNodeBlockList) != 0 {
 		k8sNodeBlockList := lib.DeepCopy(&status.K8sNodeBlockList).(*[]string)
 		spec.K8sNodeBlockList = *k8sNodeBlockList
+	}
+
+	if len(status.PreviewFeatures) != 0 {
+		previewFeatures := lib.DeepCopy(&status.PreviewFeatures).(*[]string)
+		spec.PreviewFeatures = *previewFeatures
 	}
 
 	if len(status.Operations) != 0 {
