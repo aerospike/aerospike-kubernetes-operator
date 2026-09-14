@@ -54,13 +54,16 @@ func TestMFDDelayForRestart(t *testing.T) {
 		deleteLocalStorageOnRestart *bool
 		localStorageClasses         []string
 		localStorageVolumes         []asdbv1.VolumeSpec
-		// wantDelay: configMFD value (0 if unset) when pod restarts are needed; 0 when no pod
-		// restart is needed (warm-only / empty batch). >0 = override raise value.
-		// waitForMultipleNodesSafeStopReady raises to this value before quiesce (no-op via guard
-		// when already there); it is not a signal to skip MFD management.
+		// configMFD sets aerospikeConfig.service.migrate-fill-delay for the test rack.
+		// 0 (default) means the key is absent from the config, which GetMigrateFillDelay also returns as 0.
+		configMFD int
+		// wantDelay: value returned as the pre-quiesce MFD target.
+		//   - override value when OverrideMigrateFillDelay > 0 and a pod restart is needed
+		//   - configMFD in all other cases (including warm-only batches, which now return
+		//     configMFD so waitForMultipleNodesSafeStopReady can correct any stale elevated MFD)
 		wantDelay int
 		// wantDrain: true = MFD was transiently raised (override / DeleteLocalStorageOnRestart);
-		//            zero it before the stability check. false = no transient raise; skip drain.
+		//            zero it before the stability check. false = set to migrateFillDelay directly.
 		wantDrain bool
 	}{
 		{
@@ -115,6 +118,21 @@ func TestMFDDelayForRestart(t *testing.T) {
 				"pod-1": quickRestart,
 			},
 			wantDelay: 0,
+			wantDrain: false,
+		},
+		{
+			// Regression: a warm-only batch that follows a podRestart batch (in a previous
+			// reconcile) may find MFD still elevated at the override value. mfdDelayForRestart
+			// must return configMFD (not 0) so that waitForMultipleNodesSafeStopReady corrects
+			// MFD before the stability check, even when drainBeforeStability=false.
+			name:      "warm-only batch with non-zero configMFD → returns configMFD, no drain",
+			configMFD: 30,
+			pods:      []*corev1.Pod{makePod("pod-0"), makePod("pod-1")},
+			restartTypeMap: map[string]RestartType{
+				"pod-0": quickRestart,
+				"pod-1": quickRestart,
+			},
+			wantDelay: 30,
 			wantDrain: false,
 		},
 		{
@@ -211,6 +229,13 @@ func TestMFDDelayForRestart(t *testing.T) {
 			cluster := newTestAerospikeCluster("test-ns", "test-cluster")
 			if tc.delay != nil {
 				cluster.Spec.RestartStrategy = &asdbv1.RestartStrategy{OverrideMigrateFillDelay: tc.delay}
+			}
+
+			if tc.configMFD != 0 {
+				// Apply configMFD to both the cluster-level and rack-level AerospikeConfig so
+				// GetMigrateFillDelay reads the correct value regardless of which is used.
+				svcMap := cluster.Spec.RackConfig.Racks[0].AerospikeConfig.Value[asdbv1.ConfKeyService].(map[string]interface{})
+				svcMap[asdbv1.ConfKeyMigrateFillDelay] = tc.configMFD
 			}
 
 			rackState := newTestRackState(cluster)

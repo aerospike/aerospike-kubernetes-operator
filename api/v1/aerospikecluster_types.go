@@ -1195,13 +1195,43 @@ type AerospikeClusterStatusSpec struct { //nolint:govet // for readability
 
 // AerospikeClusterStatus defines the observed state of AerospikeCluster
 // +k8s:openapi-gen=true
-type AerospikeClusterStatus struct {
+type AerospikeClusterStatus struct { //nolint:govet // for readability
+	// INSERT ADDITIONAL STATUS FIELD - define observed state of cluster
+	// Add custom validation
+	// using kubebuilder tags: https://book-v1.book.kubebuilder.io/beyond_basics/generating_crd.html
+	// +nullable
+	// The current state of Aerospike cluster.
 	AerospikeClusterStatusSpec `json:",inline"`
-	Pods                       map[string]AerospikePodStatus `json:"pods" patchStrategy:"strategic"`
-	Phase                      AerospikeClusterPhase         `json:"phase,omitempty"`
-	Selector                   string                        `json:"selector,omitempty"`
-	Conditions                 []metav1.Condition            `json:"conditions,omitempty" patchStrategy:"merge" patchMergeKey:"type"`
-	DynamicMigrateFillDelay    int64                         `json:"dynamicMigrateFillDelay,omitempty"`
+
+	// Conditions is a list of conditions representing the current state of the AerospikeCluster.
+	// +optional
+	// +listType=map
+	// +listMapKey=type
+	// +patchStrategy=merge
+	// +patchMergeKey=type
+	Conditions []metav1.Condition `json:"conditions,omitempty" patchStrategy:"merge" patchMergeKey:"type"`
+
+	// Pods has Aerospike specific status of the pods.
+	// This is map instead of the conventional map as list convention to allow each pod to patch update its own
+	// status. The map key is the name of the pod.
+	// +patchStrategy=strategic
+	// +optional
+	Pods map[string]AerospikePodStatus `json:"pods" patchStrategy:"strategic"`
+
+	// Phase denotes the current phase of Aerospike cluster operation.
+	// +optional
+	Phase AerospikeClusterPhase `json:"phase,omitempty"`
+
+	// Selector specifies the label selector for the Aerospike pods.
+	// +optional
+	Selector string `json:"selector,omitempty"`
+
+	// DynamicMigrateFillDelay is the migrate-fill-delay value most recently applied dynamically
+	// by AKO on the cluster. This reflects the live value on the server, which may differ from
+	// aerospikeConfig.service.migrate-fill-delay during rolling restarts, upgrades, or scale-down.
+	// Defaults to the aerospikeConfig.service.migrate-fill-delay value on cluster creation.
+	// +optional
+	DynamicMigrateFillDelay int64 `json:"dynamicMigrateFillDelay,omitempty"`
 }
 
 // AerospikeNetworkType specifies the type of network address to use.

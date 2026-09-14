@@ -684,10 +684,13 @@ func podNamesToSet(pods []*corev1.Pod) sets.Set[string] {
 // OverrideMigrateFillDelay to tolerate a node being temporarily unavailable. Definitive failures
 // (PodFailed phase, CrashLoopBackOff, ImagePullBackOff, etc.) indicate the pod cannot start and
 // the MFD override should be reverted.
-func hasDefinitiveFailure(pods []*corev1.Pod) bool {
+func (r *SingleClusterReconciler) hasDefinitiveFailure(pods []*corev1.Pod) bool {
 	for idx := range pods {
-		isUnschedulable, _ := utils.IsPodReasonUnschedulable(pods[idx])
-		if !isUnschedulable {
+		isUnschedulable, reason := utils.IsPodReasonUnschedulable(pods[idx])
+		if isUnschedulable {
+			r.Log.V(1).Info("Pod is unschedulable, skipping MFD revert",
+				"pod", pods[idx].Name, "reason", reason)
+		} else {
 			return true
 		}
 	}
@@ -2019,18 +2022,16 @@ func (r *SingleClusterReconciler) getEvictionBlockedPods(ctx context.Context) (s
 }
 
 // mfdDelayForRestart returns the migrate-fill-delay value (delay) and a drainBeforeStability flag
-// to apply during a pod restart.
+// to pass to waitForMultipleNodesSafeStopReady.
 //
-// drainBeforeStability == true means MFD was (or will be) transiently raised above its
-// steady-state value, so the caller must zero MFD before the next stability check to let
-// previously held fills drain. It is true only when OverrideMigrateFillDelay is configured or the
-// (deprecated) DeleteLocalStorageOnRestart condition is met.
+// drainBeforeStability == true: MFD will be transiently raised above its steady-state value
+// (override or DeleteLocalStorageOnRestart path), so the caller must zero MFD before the next
+// stability check to let previously held fills drain, then raise to delay before quiesce.
 //
-// delay is the aerospikeConfig value (or 0 if unset) in all cases where pod restarts are needed.
-// waitForMultipleNodesSafeStopReady uses it to raise MFD back to the configured value before
-// quiesce (no-op when already there, thanks to the DynamicMigrateFillDelay guard).
-// When no pod restart is needed (warm-only batch), delay is 0 and drainBeforeStability is false —
-// waitForMultipleNodesSafeStopReady skips both the drain and the raise.
+// drainBeforeStability == false: no transient raise; MFD is set to delay (configMFD or 0)
+// directly before the stability check. This corrects any stale elevated MFD left by a previous
+// podRestart batch — including warm-only batches that follow a podRestart batch in a prior
+// reconcile. MFD is not raised again before quiesce (it is already at delay).
 //
 // restartTypeMap == nil signals the upgrade path, where every pod is a full pod restart.
 func (r *SingleClusterReconciler) mfdDelayForRestart(rackState *RackState,
@@ -2046,19 +2047,25 @@ func (r *SingleClusterReconciler) mfdDelayForRestart(rackState *RackState,
 		}
 	}
 
-	if !podRestartNeeded {
-		return 0, false, nil
-	}
-
-	// Condition 1: explicit override configured via RestartStrategy.
+	// Condition 1: explicit override configured via RestartStrategy. Check before GetMigrateFillDelay
+	// since override takes precedence and configMFD is not needed in this branch.
 	// drainBeforeStability=true: MFD will be transiently raised to suppress fills during restart.
-	if override := r.aeroCluster.Spec.RestartStrategy.GetOverrideMigrateFillDelay(); override > 0 {
-		return int(override), true, nil
+	if podRestartNeeded {
+		if override := r.aeroCluster.Spec.RestartStrategy.GetOverrideMigrateFillDelay(); override > 0 {
+			return int(override), true, nil
+		}
 	}
 
 	delay, err = asdbv1.GetMigrateFillDelay(&rackState.Rack.AerospikeConfig)
 	if err != nil {
 		return 0, false, err
+	}
+
+	if !podRestartNeeded {
+		// Warm-only batch: return configMFD so waitForMultipleNodesSafeStopReady can correct any
+		// stale elevated MFD left by a previous podRestart batch (DynamicMigrateFillDelay guard
+		// skips the call when MFD is already at configMFD).
+		return delay, false, nil
 	}
 
 	// TODO: remove this block once DeleteLocalStorageOnRestart-based MFD toggling is deprecated.

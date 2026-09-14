@@ -2566,7 +2566,7 @@ func (r *SingleClusterReconciler) handleFailedPodsInRack(
 		// override, MFD was never raised above the config value so there is nothing to revert.
 		// If ALL failed pods are merely Unschedulable, preserve the override — the user may have
 		// set a large value precisely to tolerate a pod being absent while a node is coming up.
-		if r.aeroCluster.Spec.RestartStrategy.GetOverrideMigrateFillDelay() > 0 && hasDefinitiveFailure(serverFailedPods) {
+		if r.aeroCluster.Spec.RestartStrategy.GetOverrideMigrateFillDelay() > 0 && r.hasDefinitiveFailure(serverFailedPods) {
 			// Include failed pod names in the ignorable set so that the info call inside
 			// revertMFDToConfig skips their (dead) Aerospike nodes and doesn't fail.
 			ignorableWithFailed := ignorablePodNames.Union(podNamesToSet(serverFailedPods))

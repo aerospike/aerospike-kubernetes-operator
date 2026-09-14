@@ -111,8 +111,8 @@ func RestartMigrateFillDelayTest(ctx goctx.Context) {
 					aeroCluster, err := getCluster(k8sClient, ctx, clusterNamespacedName)
 					Expect(err).ToNot(HaveOccurred())
 
-					aeroCluster.Spec.AerospikeConfig.Value[asdbv1.ConfKeyService].(map[string]interface{})["migrate-fill-delay"] =
-						configMFD
+					svcConf := aeroCluster.Spec.AerospikeConfig.Value[asdbv1.ConfKeyService].(map[string]interface{})
+					svcConf[asdbv1.ConfKeyMigrateFillDelay] = configMFD
 
 					err = updateCluster(k8sClient, ctx, aeroCluster)
 					Expect(err).ToNot(HaveOccurred())
@@ -178,8 +178,9 @@ func RestartMigrateFillDelayTest(ctx goctx.Context) {
 					aeroCluster := createDummyAerospikeCluster(clusterNamespacedName, 2)
 					// Set migrate-fill-delay in aerospike config but leave
 					// RestartMigrateFillDelay unset to verify no interference.
-					aeroCluster.Spec.AerospikeConfig.Value[asdbv1.ConfKeyService].(map[string]interface{})["migrate-fill-delay"] =
-						configMFD
+					svcConf := aeroCluster.Spec.AerospikeConfig.Value[asdbv1.ConfKeyService].(map[string]interface{})
+					svcConf[asdbv1.ConfKeyMigrateFillDelay] = configMFD
+
 					Expect(DeployCluster(k8sClient, ctx, aeroCluster)).ToNot(HaveOccurred())
 				},
 			)

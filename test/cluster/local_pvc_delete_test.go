@@ -521,8 +521,9 @@ func extractClusterPVC(ctx goctx.Context, k8sClient client.Client, aeroCluster *
 
 func updateAndValidateIntermediateMFD(ctx goctx.Context, k8sClient client.Client, aeroCluster *asdbv1.AerospikeCluster,
 	expectedMigFillDelay int64) {
-	aeroCluster.Spec.AerospikeConfig.Value["service"].(map[string]interface{})["migrate-fill-delay"] =
-		expectedMigFillDelay
+	svcConf := aeroCluster.Spec.AerospikeConfig.Value[asdbv1.ConfKeyService].(map[string]interface{})
+	svcConf[asdbv1.ConfKeyMigrateFillDelay] = expectedMigFillDelay
+
 	Expect(updateClusterWithNoWait(k8sClient, ctx, aeroCluster)).ToNot(HaveOccurred())
 
 	clusterNamespacedName := utils.GetNamespacedName(aeroCluster)

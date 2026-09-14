@@ -94,6 +94,7 @@ const (
 	ConfKeyService             = "service"
 	confKeyWorkDirectory       = "work-directory"
 	ConfigKeyCgroupMemTracking = "cgroup-mem-tracking"
+	ConfKeyMigrateFillDelay    = "migrate-fill-delay"
 
 	// Defaults.
 	DefaultWorkDirectory = "/opt/aerospike"
@@ -555,7 +556,7 @@ func GetMigrateFillDelay(asConfig *AerospikeConfigSpec) (int, error) {
 		return 0, nil
 	}
 
-	fillDelayIFace, exists := serviceConfig["migrate-fill-delay"]
+	fillDelayIFace, exists := serviceConfig[ConfKeyMigrateFillDelay]
 	if !exists {
 		return 0, nil
 	}
