@@ -26,7 +26,6 @@ import (
 	corev1 "k8s.io/api/core/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/types"
-	k8sintstr "k8s.io/apimachinery/pkg/util/intstr"
 	"k8s.io/client-go/util/retry"
 	"k8s.io/utils/ptr"
 	"sigs.k8s.io/controller-runtime/pkg/client"
@@ -136,8 +135,9 @@ func newMultiRackNonSCCluster(
 	aeroCluster := createNonSCDummyAerospikeCluster(clusterNamespacedName, totalSize)
 	racks := getDummyRackConf(rackIDs...)
 	aeroCluster.Spec.RackConfig = asdbv1.RackConfig{
-		Racks:      racks,
-		Namespaces: []string{"test"},
+		Racks:                       racks,
+		Namespaces:                  []string{"test"},
+		EnableBatchScaleDownQuiesce: ptr.To(true),
 	}
 
 	return aeroCluster
@@ -167,25 +167,6 @@ func podsForRack(
 	}
 
 	return podList, k8sClient.List(ctx, podList, listOpts)
-}
-
-// podNamesForRack returns all pod names currently in a given rack.
-func podNamesForRack(
-	ctx goctx.Context,
-	aeroCluster *asdbv1.AerospikeCluster,
-	rackID int,
-) []string {
-	podList, err := podsForRack(ctx, aeroCluster, rackID)
-	if err != nil {
-		return nil
-	}
-
-	names := make([]string, 0, len(podList.Items))
-	for i := range podList.Items {
-		names = append(names, podList.Items[i].Name)
-	}
-
-	return names
 }
 
 // ─── test suite ────────────────────────────────────────────────────────────
@@ -227,7 +208,8 @@ var _ = Describe("CrossRackBatchQuiesce", func() {
 			Expect(loadDataInCluster(k8sClient, aeroCluster)).ToNot(HaveOccurred())
 		})
 
-		It("Should quiesce pods on ALL racks before removing any pod (and no pre-existing annotations on first scale-down)", func() {
+		It("Should quiesce pods on ALL racks before removing any pod"+
+			" (and no pre-existing annotations on first scale-down)", func() {
 			aeroCluster, err := getCluster(k8sClient, ctx, clusterNamespacedName)
 			Expect(err).ToNot(HaveOccurred()) // 6
 
@@ -1030,12 +1012,6 @@ var _ = Describe("CrossRackBatchQuiesce", func() {
 			assertNoStaleQuiesce(ctx, aeroCluster, clusterNamespacedName)
 		})
 	})
-
 })
 
 // ─── small helpers used only in this file ─────────────────────────────────
-
-// intstr_fromInt wraps an int32 as intstr.IntOrString (avoids import alias clash).
-func intstr_fromInt(v int32) k8sintstr.IntOrString {
-	return k8sintstr.FromInt32(v)
-}
