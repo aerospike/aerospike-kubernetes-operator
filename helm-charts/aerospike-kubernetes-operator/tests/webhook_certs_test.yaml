@@ -9,9 +9,8 @@ templates:
 
 tests:
   # ------------------------------------------------------------------------------
-  # 4.5.0 backward compatibility. These assert against what 4.5.0 actually rendered,
-  # not merely that rendering succeeds — an upgrade on either legacy path must not
-  # change a single field.
+  # 4.5.0 backward compatibility: pin the resources and annotations 4.5.0 rendered on
+  # each legacy path, so an upgrade does not change the cert wiring.
   # ------------------------------------------------------------------------------
   - it: "compat: provider unset + create=true renders the 4.5.0 cert-manager path"
     set:
@@ -43,10 +42,11 @@ tests:
           path: webhooks[0].clientConfig.caBundle
         template: templates/aerospike-operator-mutating-webhook-configuration.yaml
 
-  # In 4.5.0 create=false skipped the Issuer/Certificate but still emitted the
-  # annotation. It never meant "no cert-manager" — it meant "I create the Certificate
-  # named aerospike-operator-serving-cert myself".
-  - it: "compat: provider unset + create=false skips Issuer and Certificate but keeps the annotation"
+  # In 4.5.0 create=false skipped the Issuer/Certificate but still emitted the annotation:
+  # it meant the user supplies the Certificate named aerospike-operator-serving-cert, not
+  # that cert-manager is unused. `create` is read with plain truthiness, as 4.5.0 read it,
+  # so a null key lands here too.
+  - it: "compat: provider unset + create=false (or null) skips Issuer and Certificate but keeps the annotation"
     set:
       certs:
         webhook:
@@ -94,29 +94,6 @@ tests:
           count: 0
         template: templates/aerospike-operator-webhook-serving-cert.yaml
 
-  # An absent or null `create` is NOT the 4.5.0 opt-out — 4.5.0's schema required the
-  # key, so that input could not exist there. It must fall through to the default rather
-  # than resolve to the legacy state, which would render no Certificate and no Secret.
-  - it: "compat: provider unset + create absent falls through to certManager"
-    set:
-      certs:
-        webhook:
-          create: null
-    asserts:
-      - hasDocuments:
-          count: 1
-        template: templates/aerospike-operator-selfsigned-issuer.yaml
-      - hasDocuments:
-          count: 1
-        template: templates/aerospike-operator-webhook-serving-cert.yaml
-      - equal:
-          path: metadata.name
-          value: aerospike-operator-serving-cert
-        template: templates/aerospike-operator-webhook-serving-cert.yaml
-      - hasDocuments:
-          count: 0
-        template: templates/aerospike-operator-webhook-selfsigned-secret.yaml
-
   # ------------------------------------------------------------------------------
   # Provider resolution
   # ------------------------------------------------------------------------------
@@ -142,9 +119,8 @@ tests:
           path: webhooks[0].clientConfig.caBundle
         template: templates/aerospike-operator-validating-webhook-configuration.yaml
 
-  # provider wins over a contradictory create. This is the one path where adopting
-  # provider changes behaviour for an existing create=false user, so it is asserted
-  # explicitly rather than left implicit.
+  # provider wins over a contradictory create. Adopting any provider changes behaviour
+  # for an existing create=false user; this pins the certManager case.
   - it: "certManager: provider overrides a contradictory create=false"
     set:
       certs:
@@ -239,8 +215,10 @@ tests:
         template: templates/aerospike-operator-validating-webhook-configuration.yaml
 
   # ------------------------------------------------------------------------------
-  # caBundle must reach EVERY webhook entry. The mutating configuration is the one
-  # that gets forgotten: 5 validating entries (with safePodEviction) + 2 mutating.
+  # caBundle is emitted per webhook entry, not once per configuration: each entry
+  # carries its own `{{- with $caBundle }}` block. A new entry added without that
+  # block would ship with no caBundle, so the entry counts are pinned here to fail
+  # when one is added — 4 validating (5 with safePodEviction) and 2 mutating.
   # ------------------------------------------------------------------------------
   - it: "external: caBundle reaches every default validating entry"
     set:
@@ -313,15 +291,11 @@ tests:
           value: "LS0tLS1CRUdJTg=="
 
   # ------------------------------------------------------------------------------
-  # selfSigned generates its material with Sprig, which is random per call, so the
-  # exact value cannot be asserted and two paths cannot be compared to each other in
-  # helm-unittest. What is checked here is that every consumer got a well-formed
-  # bundle. That all consumers get the SAME one is a property of routing every read
-  # through ako.webhookSelfSignedCert, which memoizes into .Values; Helm's render
-  # order is not deterministic, so reading .Values._akoWebhookSelfSignedCert directly
-  # from a template would race the template that populates it.
+  # selfSigned material is random per render, so these assert shape, not value: every
+  # consumer gets a well-formed bundle. They all get the same one because every read
+  # goes through ako.webhookSelfSignedCert, which memoizes into .Values.
   #
-  # lookup returns empty with no cluster, so these exercise the generate branch only.
+  # lookup returns empty with no cluster, so only the generate branch runs here.
   # ------------------------------------------------------------------------------
   - it: "selfSigned: every webhook entry and the Secret get a well-formed bundle"
     set:

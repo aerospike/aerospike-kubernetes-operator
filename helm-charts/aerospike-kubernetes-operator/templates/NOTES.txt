@@ -32,12 +32,11 @@ Set `certs.webhook.provider: certManager` to make this explicit.
 {{- else if eq $provider "legacyCertManager" }}
 Mode: cert-manager, with the chart creating neither the Issuer nor the Certificate
 (inferred from the deprecated certs.webhook.create=false). cainjector still fills in
-the caBundle, so you must supply a Certificate named aerospike-operator-serving-cert.
+the caBundle, so you must supply a Certificate named aerospike-operator-serving-cert
+from outside.
 
 [DEPRECATED] certs.webhook.create is deprecated and will be removed in a future
-release. This install relies on it. There is no `provider` value with these exact
-semantics — if you create the Certificate yourself, keep using create=false for now;
-if you want the chart to create it, set `certs.webhook.provider: certManager`.
+release.
 {{- else if eq $provider "selfSigned" }}
 {{- $cert := include "aerospike-kubernetes-operator.webhookSelfSignedCert" . | fromYaml }}
 Mode: selfSigned — cert-manager is not required.
@@ -49,7 +48,8 @@ Generated a new CA and serving certificate into Secret {{ .Values.certs.webhook.
 {{- end }}
 
 This mode is intended for development and POC installs:
-  * The certificate is valid for 10 years and nothing renews it.
+  * The certificate is valid for 1 year and nothing renews it. Delete the Secret and run
+    helm upgrade before it expires to issue a new one.
   * Its validity starts at the clock of the machine that ran helm. If that clock runs
     ahead of the cluster's, the API server sees the certificate as not yet valid and
     rejects admission until the skew elapses.

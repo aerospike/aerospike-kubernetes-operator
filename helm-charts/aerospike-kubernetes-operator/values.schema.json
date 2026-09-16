@@ -139,16 +139,16 @@
                             "additionalProperties": false
                         },
                         "create": {
-                            "description": "DEPRECATED: use `provider` instead. Only consulted when `provider` is empty. Removed in a future release.",
+                            "description": "DEPRECATED: use `provider` instead. Only consulted when `provider` is empty. Will be removed in a future release.",
                             "type": "boolean"
                         },
                         "external": {
                             "type": "object",
                             "properties": {
                                 "caBundle": {
-                                    "description": "Base64-encoded PEM CA bundle that signed the webhook serving certificate (not the serving certificate itself). Required when provider is external. Surrounding and embedded whitespace is stripped before rendering, so wrapped",
+                                    "description": "Base64-encoded PEM CA bundle that signed the webhook serving certificate (not the serving certificate itself). Required when provider is external. Surrounding and embedded whitespace is stripped before rendering, so wrapped output and a trailing newline are fine — reading it from a `base64` file works. A whitespace-only value is rejected: it would strip to empty and silently render a webhook config with no caBundle.",
                                     "type": "string",
-                                    "pattern": "^[A-Za-z0-9+/\\s]*={0,2}\\s*$"
+                                    "pattern": "^(|\\s*[A-Za-z0-9+/][A-Za-z0-9+/\\s]*={0,2}\\s*)$"
                                 }
                             },
                             "additionalProperties": false
@@ -263,7 +263,7 @@
             }
         },
         "logging": {
-            "description": "Operator manager logging (controller-runtime / Zap)",
+            "description": "Operator manager logging (controller-runtime / Zap). `development` must stay set; level/encoder are optional (set them in values or on the CLI).",
             "type": "object",
             "required": [
                 "development"

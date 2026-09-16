@@ -210,15 +210,30 @@ tests:
       - failedTemplate:
           errorPattern: "at '/certs/webhook': 'allOf' failed"
 
-  - it: accepts single-line base64 for external.caBundle
+  # A whitespace-only bundle passes minLength but strips to empty at render time, which
+  # would emit a webhook config with no caBundle and an inject-ca-from annotation. The
+  # pattern requires at least one base64 character so it fails here instead.
+  - it: rejects a whitespace-only external.caBundle
     set:
       certs:
         webhook:
           provider: external
           external:
-            caBundle: "LS0tLS1CRUdJTg=="
+            caBundle: "   "
     asserts:
-      - notFailedTemplate: {}
+      - failedTemplate:
+          errorPattern: "at '/certs/webhook/external/caBundle': .* does not match pattern"
+
+  - it: rejects an external.caBundle of only newlines
+    set:
+      certs:
+        webhook:
+          provider: external
+          external:
+            caBundle: "\n\n"
+    asserts:
+      - failedTemplate:
+          errorPattern: "at '/certs/webhook/external/caBundle': .* does not match pattern"
 
   # Raw PEM instead of base64 is the most common mistake here. The API server decodes
   # caBundle with strict base64, so newlines are rejected too.

@@ -23,7 +23,7 @@ Create the namespace where AKO will be installed. Replace the placeholder `<name
 kubectl create namespace <namespace>
 ```
 
-### Deploy Cert-manager (conditional)
+### Setup Webhook Certificates
 
 The operator uses admission webhooks, which need TLS certificates. How those certificates
 are provided is selected by `certs.webhook.provider`:
@@ -37,16 +37,27 @@ are provided is selected by `certs.webhook.provider`:
 cert-manager is also required whenever `certs.metrics.create` is `true`, regardless of the
 webhook provider — the metrics certificate is cert-manager-only.
 
-If you set `certs.webhook.create: false` on 4.5.0 or earlier, leave it as it is: that
-combination still renders exactly what it did before — the chart creates no `Issuer` and
-no `Certificate`, but keeps the `cert-manager.io/inject-ca-from` annotation, so cainjector
-fills in the `caBundle` from the `Certificate` named `aerospike-operator-serving-cert` that
-you manage yourself. `certs.webhook.create` is deprecated but still honoured. Do not switch
-such a release to `provider: certManager` unless you also delete your own `Certificate`,
-because the chart would then create one with the same name and `secretName`.
+#### provider: certManager (default)
 
-If you need cert-manager, install it using the instructions
-[here](https://cert-manager.io/docs/installation/kubernetes/) before installing the operator.
+Install cert-manager using the instructions
+[here](https://cert-manager.io/docs/installation/kubernetes/) before installing the
+operator. The chart then creates the `Issuer` and `Certificate`, and cainjector fills the
+`caBundle` into both webhook configurations.
+
+```sh
+helm install aerospike-kubernetes-operator aerospike/aerospike-kubernetes-operator \
+  --namespace <namespace>
+```
+
+**Already using `certs.webhook.create: false`?** Leave it set and change nothing. It still
+renders exactly what 4.5.0 did: no `Issuer` and no `Certificate`, but the
+`cert-manager.io/inject-ca-from` annotation is kept, so cainjector fills the `caBundle`
+from the `Certificate` named `aerospike-operator-serving-cert` that you manage yourself.
+`certs.webhook.create` is deprecated but still honoured.
+
+To move such a release onto `provider` later, delete your own `Certificate` first, then set
+`provider: certManager`. Setting it without deleting yours makes the chart create a second
+`Certificate` with the same name and `secretName`.
 
 #### provider: selfSigned (development and POC only)
 
@@ -56,13 +67,19 @@ helm install aerospike-kubernetes-operator aerospike/aerospike-kubernetes-operat
 ```
 
 The chart generates the certificate and reuses the existing `Secret` on subsequent
-upgrades so that `helm upgrade` does not rotate it. Two caveats make this unsuitable for
+upgrades so that `helm upgrade` does not rotate it. Three caveats make this unsuitable for
 production:
 
-* The certificate is valid for 10 years and nothing renews it.
-* Its validity window starts at the clock of the machine that runs `helm`. If that clock
-  runs ahead of the cluster's, the API server sees the certificate as not yet valid and
-  rejects admission until the skew elapses.
+* The certificate is valid for 1 year and nothing renews it. Before it expires, delete the
+  `Secret` and run `helm upgrade` to issue a new one — which rotates the certificate, so
+  expect the brief admission gap described above.
+* Its validity window starts at the clock of the machine that runs `helm`, with no
+  backdating. If that clock is ahead of the cluster's, the API server sees the certificate
+  as not yet valid and rejects admission until the difference passes. The chart cannot fix
+  this, so check that the clock on the machine running `helm` is correct, or use
+  `certManager` or `external`, where the certificate is issued inside the cluster instead.
+  If you have already hit it, delete the `Secret` and run `helm upgrade` again from a
+  machine with the right time.
 * Helm's `lookup` returns nothing under `helm template` and `--dry-run`, so a pipeline
   that renders manifests and applies them regenerates the certificate on every apply.
   Because the API server sees the new `caBundle` immediately while the operator pod picks
@@ -95,33 +112,53 @@ create it.
 
 #### Switching an existing release between providers
 
-**To `selfSigned`.** This makes the chart the owner of the serving-certificate `Secret`,
-which it does not own under the other providers — under `certManager` that `Secret` belongs
-to cert-manager. Helm will not adopt a resource it does not own, so use one of the two
-routes below. With neither, the upgrade stops with Helm's own error naming the `Secret` and
-the ownership markers it is missing.
+**`certManager` → `external`.** You supply the serving certificate and the CA that signed
+it. Under `external` the chart renders no `Secret`, so Helm deletes the `Certificate` it
+created (and the `Issuer`, unless `certs.metrics.create` is `true`) and leaves the `Secret`
+behind for you to overwrite.
 
-*Preferred — let Helm adopt the existing `Secret`.* The chart reuses the certificate
-already in the `Secret`, so the served certificate does not change and there is no
-admission gap:
+Issue the certificate for the DNS names the chart uses, or the API server rejects the TLS
+handshake:
 
-```sh
-helm upgrade aerospike-kubernetes-operator ... --take-ownership \
-  --set certs.webhook.provider=selfSigned
+```
+aerospike-operator-webhook-service.<namespace>.svc
+aerospike-operator-webhook-service.<namespace>.svc.cluster.local
 ```
 
-*Or delete and regenerate.* Delete the cert-manager `Certificate` **first** — while it
-exists, cert-manager re-issues the `Secret` within seconds and the upgrade fails again:
+Order matters. The `helm upgrade` must come first, because it deletes the `Certificate`;
+while that object still exists cert-manager re-issues the `Secret` within seconds and
+overwrites whatever you put there.
+
+`--force-conflicts` is required on the switch itself. cainjector owns the `caBundle` field
+on every webhook entry, and with server-side apply Helm refuses to take a field another
+manager owns. Without the flag the upgrade fails with `Apply failed with N conflicts:
+conflicts with "cert-manager-cainjector"`. Later upgrades that stay on `external` do not
+need it, because the chart owns the field by then.
 
 ```sh
-kubectl delete certificate aerospike-operator-serving-cert -n <namespace> --ignore-not-found
-kubectl delete secret webhook-server-cert -n <namespace>
-helm upgrade ... --set certs.webhook.provider=selfSigned
+# 1. switch the release to external and supply the CA that signed your certificate.
+#    caBundle takes base64, so encode the PEM first.
+base64 < ca.crt > ca.b64
+helm upgrade aerospike-kubernetes-operator ... \
+  --set certs.webhook.provider=external \
+  --set-file certs.webhook.external.caBundle=ca.b64 \
+  --force-conflicts
+
+# 2. overwrite cert-manager's Secret with your own key pair
+kubectl create secret tls webhook-server-cert -n <namespace> \
+  --cert=tls.crt --key=tls.key --dry-run=client -o yaml | kubectl apply -f -
 ```
 
-This regenerates the certificate, so expect a brief admission outage: the API server sees
-the new `caBundle` immediately while the operator pod picks up the remounted `Secret` on
-kubelet's schedule.
+Admission fails from step 1 until the operator pods remount the `Secret`, because the API
+server already trusts only your CA while the pods still serve cert-manager's certificate.
+kubelet refreshes the mount on its own schedule, so expect up to a minute, and with more
+than one replica admission recovers only once every pod has picked the new certificate up.
+To avoid the gap, trust both CAs for one release (`cat ca.crt old-ca.crt | base64 > ca.b64`
+in step 1), then upgrade again with just your own once the pods have remounted.
+
+`kubectl apply` merges rather than replaces, so cert-manager's old `ca.crt` stays in the
+`Secret`. The chart never reads it under `external` — the `caBundle` comes from values — so
+it is harmless, but `kubectl delete secret` before step 2 removes it if you prefer.
 
 **Away from `selfSigned`** (to `certManager` or `external`) also has an outage window.
 Helm removes the inlined `caBundle` from every webhook entry and deletes the chart-owned

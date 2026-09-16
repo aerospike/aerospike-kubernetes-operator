@@ -80,24 +80,19 @@ aerospike-operator-webhook-service
 {{/*
 Resolve the effective webhook certificate mode.
 
-`certs.webhook.provider` wins whenever it is set. `certs.webhook.create` is only
-consulted as a legacy fallback, and an explicit false is NOT an error — in 4.5.0 it meant
-"I create the Certificate named aerospike-operator-serving-cert myself, cainjector still
-fills in the caBundle", not "no cert-manager". That maps onto none of the three
-user-facing providers, so it resolves to the internal `legacyCertManager` state, which
-renders exactly what 4.5.0 did. `legacyCertManager` is not a valid `provider` value and
-cannot be selected deliberately.
+`provider` wins when set. `create` is the deprecated fallback, read with plain truthiness
+exactly as 4.5.0 read it, so false, null and absent all land on `legacyCertManager`.
 
-Only a literal boolean false selects the legacy state. An absent or null `create` is not
-the 4.5.0 opt-out (4.5.0's schema required the key, so that input could not exist) and
-must fall through to the default, or a dropped key would silently produce an install with
-no Certificate and no Secret.
+`legacyCertManager` is what 4.5.0 rendered for create=false: no Issuer or Certificate, but
+still the inject-ca-from annotation, because the user supplies the Certificate themselves.
+It is internal, not a selectable `provider` value — existing create=false releases leave
+the key as it is; the README covers moving onto `provider`.
 */}}
 {{- define "aerospike-kubernetes-operator.webhookCertProvider" -}}
 {{- $webhook := .Values.certs.webhook -}}
 {{- if $webhook.provider -}}
 {{- $webhook.provider -}}
-{{- else if and (kindIs "bool" $webhook.create) (not $webhook.create) -}}
+{{- else if not $webhook.create -}}
 legacyCertManager
 {{- else -}}
 certManager
@@ -106,21 +101,18 @@ certManager
 
 {{/*
 Create the cert-manager Issuer/Certificate for the webhook. Only the explicit
-certManager provider does; legacyCertManager deliberately does not.
+certManager provider or deprecated create: true enables this; legacyCertManager deliberately does not.
 */}}
 {{- define "aerospike-kubernetes-operator.webhookCreateCertManagerResources" -}}
 {{- if eq (include "aerospike-kubernetes-operator.webhookCertProvider" .) "certManager" -}}true{{- end -}}
 {{- end -}}
 
 {{/*
-Base64-encoded CA bundle to inline into each webhook clientConfig. Empty for the two
-cert-manager states, where cainjector owns the field — so an empty result is also what
-tells the webhook templates to emit the inject-ca-from annotation, which keeps "annotation
-XOR inlined caBundle" true by construction rather than by a second, separate predicate.
+Base64 CA bundle for the webhook clientConfig.
 
-Whitespace is stripped from the external bundle: the value must reach the API server as
-single-line base64 (it decodes with strict base64), but `--set-file` from a file produced
-by `base64` carries a trailing newline, and GNU base64 wraps at 76 columns by default.
+Empty under either cert-manager mode, where cainjector fills caBundle in and the webhook
+templates emit the inject-ca-from annotation instead. External bundles have whitespace
+stripped; the API server needs single-line base64.
 */}}
 {{- define "aerospike-kubernetes-operator.webhookCaBundle" -}}
 {{- $provider := include "aerospike-kubernetes-operator.webhookCertProvider" . -}}
@@ -132,37 +124,31 @@ by `base64` carries a trailing newline, and GNU base64 wraps at 76 columns by de
 {{- end -}}
 
 {{/*
-The self-signed CA and serving certificate for provider=selfSigned, as base64.
+CA and serving certificate for provider=selfSigned, base64-encoded.
 
-Sprig's genSignedCert produces new material on every call, so the result is memoized into
-.Values (safe: schemaRoot.additionalProperties is true, and JSON schema validation runs
-before rendering). Helm's template render order is NOT deterministic, so every consumer
-must reach the material THROUGH this helper — reading the cached key directly races the
-template that populates it.
+genSignedCert returns new material on every call, so the result is memoized into .Values
+(the schema root allows additional properties, and validation runs before rendering).
+Every consumer must read it through this helper rather than the cached key directly, so
+the value never depends on which template renders first.
 
-The values are kept base64-encoded because that is the form both consumers need (Secret
-data and caBundle) and because the toYaml/fromYaml handoff below is not byte-faithful for
-multi-line strings: Helm's toYaml trims the document's trailing newline, which silently
-truncated the last-sorted PEM field by one byte when this cached decoded PEM.
+Kept base64 because that is the form both consumers need, and because toYaml/fromYaml is
+not byte-faithful for multi-line strings: toYaml drops the trailing newline of the
+last-sorted field, truncating a PEM by one byte.
 
-An existing Secret is reused so `helm upgrade` does not rotate the certificate: the pod
-picks up a remounted Secret on kubelet's schedule (up to ~60s) while the API server sees
-the new caBundle at once, and with failurePolicy: Fail that gap is an admission outage.
-All three keys must be present to reuse — a Secret pre-created for provider=external
-legitimately has no ca.crt, and reusing it would silently yield an empty caBundle.
+An existing Secret is reused only when it passes two checks, otherwise it is regenerated:
 
-Deliberately no Secret-ownership check here. Switching an existing release to selfSigned
-makes the chart the owner of a Secret that cert-manager created, and Helm refuses to adopt
-a resource it does not own unless the user passes --take-ownership. A template cannot see
-that flag (.Release exposes only IsInstall/IsUpgrade/Name/Namespace/Revision/Service), so
-any check here would either be wrong or would have to be waived by a values key: it would
-abort at render time, before Helm's own ownership validation, and so block the very
---take-ownership path that migrates without an admission outage. Helm's error already names
-the Secret and every missing marker; the part it cannot know — that deleting the Secret
-alone lets cert-manager re-issue it — is documented in the README instead.
+  1. Ownership — its meta.helm.sh/release-name annotation equals .Release.Name. Helm sets
+     that annotation on resources it manages, so a Secret issued by cert-manager or by
+     another release fails this and is never adopted.
+  2. Completeness — tls.crt, tls.key and ca.crt are all present. A Secret pre-created for
+     provider=external has no ca.crt, and reusing it would yield an empty caBundle.
 
-Note `lookup` returns empty under `helm template` and `--dry-run`, so a render-and-apply
-GitOps pipeline regenerates the certificate every time. Use certManager or external there.
+Reuse is what stops `helm upgrade` rotating the certificate: the pod remounts on kubelet's
+schedule while the API server sees the new caBundle at once, and with failurePolicy: Fail
+that gap is an admission outage.
+
+`lookup` is empty under `helm template` and `--dry-run`, so a render-and-apply pipeline
+regenerates every time. Use certManager or external there.
 */}}
 {{- define "aerospike-kubernetes-operator.webhookSelfSignedCert" -}}
 {{- $cached := .Values._akoWebhookSelfSignedCert -}}
@@ -172,15 +158,17 @@ GitOps pipeline regenerates the certificate every time. Use certManager or exter
   {{- $crt := dig "data" "tls.crt" "" $secret -}}
   {{- $key := dig "data" "tls.key" "" $secret -}}
   {{- $ca := dig "data" "ca.crt" "" $secret -}}
-  {{- if and $crt $key $ca -}}
+  {{- $owner := dig "metadata" "annotations" "meta.helm.sh/release-name" "" $secret -}}
+  {{- if and $crt $key $ca (eq $owner .Release.Name) -}}
     {{- $cached = dict "crt" $crt "key" $key "ca" $ca "reused" true -}}
   {{- else -}}
-    {{/* 10 years: nothing renews a chart-generated cert, and the mode is dev/POC only.
-         NotBefore is the render machine's clock; see the clock-skew note in the README. */}}
+    {{/* 1 year. Nothing renews a chart-generated cert, so the release has to be upgraded
+         with the Secret deleted before it expires. NotBefore is the render machine's
+         clock; see the clock-skew note in the README. */}}
     {{- $svc := include "aerospike-kubernetes-operator.webhookServiceName" . -}}
     {{- $dnsNames := include "aerospike-kubernetes-operator.webhookDnsNames" . | fromYamlArray -}}
-    {{- $rootCa := genCA (printf "%s-ca" $svc) 3650 -}}
-    {{- $cert := genSignedCert $svc nil $dnsNames 3650 $rootCa -}}
+    {{- $rootCa := genCA (printf "%s-ca" $svc) 365 -}}
+    {{- $cert := genSignedCert $svc nil $dnsNames 365 $rootCa -}}
     {{- $cached = dict "crt" ($cert.Cert | b64enc) "key" ($cert.Key | b64enc) "ca" ($rootCa.Cert | b64enc) "reused" false -}}
   {{- end -}}
   {{- $_ := set .Values "_akoWebhookSelfSignedCert" $cached -}}

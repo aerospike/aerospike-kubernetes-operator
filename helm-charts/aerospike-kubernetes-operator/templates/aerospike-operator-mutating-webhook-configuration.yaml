@@ -16,7 +16,7 @@ webhooks:
   - v1
   clientConfig:
     service:
-      name: aerospike-operator-webhook-service
+      name: {{ include "aerospike-kubernetes-operator.webhookServiceName" . }}
       namespace: {{ .Release.Namespace }}
       path: /mutate-asdb-aerospike-com-v1-aerospikecluster
     {{- with $caBundle }}
@@ -49,7 +49,7 @@ webhooks:
   - v1
   clientConfig:
     service:
-      name: aerospike-operator-webhook-service
+      name: {{ include "aerospike-kubernetes-operator.webhookServiceName" . }}
       namespace: {{ .Release.Namespace }}
       path: /mutate-asdb-aerospike-com-v1beta1-aerospikebackupservice
     {{- with $caBundle }}
