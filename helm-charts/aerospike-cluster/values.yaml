@@ -130,6 +130,12 @@ rosterNodeBlockList: []
 k8sNodeBlockList: []
 #  - <node-name>
 
+## previewFeatures is a list of Aerospike server preview feature names to enable via the
+## --preview startup flag. Each feature has a minimum server version; index-checkpoint
+## needs 8.2.0.0 or later, so override image.tag accordingly.
+previewFeatures: []
+#  - index-checkpoint
+
 ## Pause reconciliation of the cluster
 paused: false
 

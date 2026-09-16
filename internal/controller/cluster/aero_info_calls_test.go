@@ -189,7 +189,7 @@ func TestMarkPodCheckpointParked(t *testing.T) {
 	})
 }
 
-// TestSplitCheckpointNamespaces pins the eligible/skip partition — AKO's entire contribution to the checkpoint decision.
+// TestSplitCheckpointNamespaces pins the eligible/skip partition — AKO's entire contribution to the checkpoint decision
 // The data-size arm is the one worth pinning hardest. A checkpoint written under the old
 // stripe geometry cannot be used by the replacement pod, and depending on what survived
 // the server either comes up empty or REFUSES TO BOOT.
@@ -258,7 +258,7 @@ func TestSplitCheckpointNamespaces(t *testing.T) {
 			wantEligible: []string{"ckpt", "test"},
 		},
 		{
-			//Only the resized namespace is opted out: the device-backed one is untouched
+			// Only the resized namespace is opted out: the device-backed one is untouched
 			name:         "data-size changed - only that namespace is skipped",
 			status:       rack(ckptPath, memNS("ckpt", oldSize, false), deviceNS("test")),
 			spec:         rack(ckptPath, memNS("ckpt", newSize, false), deviceNS("test")),

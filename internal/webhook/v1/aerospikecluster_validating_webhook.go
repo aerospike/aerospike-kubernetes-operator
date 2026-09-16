@@ -1302,8 +1302,8 @@ func validatePreviewFeatures(cluster *asdbv1.AerospikeCluster, version string) (
 			gaVal, err := lib.CompareVersions(version, info.GAVersion)
 			if err == nil && gaVal >= 0 {
 				warnings = append(warnings, fmt.Sprintf(
-					"preview feature %q graduated to GA in server version %s; "+
-						"you can remove it from spec.previewFeatures",
+					"preview feature %q graduated to GA in server version %s, so can be removed"+
+						" from spec.previewFeatures.",
 					name, info.GAVersion,
 				))
 			}

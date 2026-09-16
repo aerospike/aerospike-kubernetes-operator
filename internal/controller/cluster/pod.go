@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"net"
 	"reflect"
+	"slices"
 	"strconv"
 	"strings"
 	"time"
@@ -271,6 +272,18 @@ func (r *SingleClusterReconciler) getRollingRestartTypePod(
 		restartType = mergeRestartType(restartType, podRestart)
 
 		r.Log.Info("Aerospike rack storage changed. Need rolling restart")
+	}
+
+	// Check if the --preview args are updated.
+	desiredPreviewArgs := previewFeaturesArgs(r.aeroCluster.Spec.PreviewFeatures)
+	if isPreviewFeaturesUpdated(desiredPreviewArgs, pod) {
+		restartType = mergeRestartType(restartType, podRestart)
+
+		r.Log.Info(
+			"Preview features changed. Need rolling restart",
+			"previewFeatures", r.aeroCluster.Spec.PreviewFeatures,
+			"requiredArgs", desiredPreviewArgs,
+		)
 	}
 
 	if opType := r.onDemandOperationType(pod.Name, onDemandQuickRestarts, onDemandPodRestarts); opType != noRestart {
@@ -2142,6 +2155,17 @@ func (r *SingleClusterReconciler) shouldSetMigrateFillDelay(rackState *RackState
 	}
 
 	return false
+}
+
+// isPreviewFeaturesUpdated reports whether the pod's server container is running with
+// different --preview args than the spec now requires.
+func isPreviewFeaturesUpdated(desiredArgs []string, pod *corev1.Pod) bool {
+	serverContainer := getContainer(pod.Spec.Containers, asdbv1.AerospikeServerContainerName)
+	if serverContainer == nil {
+		return false
+	}
+
+	return !slices.Equal(serverContainer.Args, desiredArgs)
 }
 
 // isAnyPodSpecUpdated checks if any pod spec has been updated indirectly based on

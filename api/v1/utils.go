@@ -144,6 +144,10 @@ type PreviewFeatureInfo struct {
 }
 
 // PreviewFeatureVersions maps known preview feature names to their version constraints.
+//
+// GAVersion currently only drives an admission warning. No preview feature has graduated yet,
+// and the server has not decided whether a graduated name stays a tolerated --preview value or
+// becomes an error, so setting GAVersion does not change which flags the operator passes.
 var PreviewFeatureVersions = map[string]PreviewFeatureInfo{
 	PreviewFeatureIndexCheckpoint: {MinVersion: "8.2.0.0", GAVersion: ""},
 }
