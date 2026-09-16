@@ -688,7 +688,7 @@ func TestValidateRackRevisionChangeIgnoresMetadataOnlyUpdate(t *testing.T) {
 func TestHasRackRevisionChange(t *testing.T) {
 	racks := func(pairs ...any) []asdbv1.Rack {
 		out := make([]asdbv1.Rack, 0, len(pairs)/2)
-		for idx := 0; idx < len(pairs); idx += 2 {
+		for idx := 0; idx+1 < len(pairs); idx += 2 {
 			out = append(out, asdbv1.Rack{ID: pairs[idx].(int), Revision: pairs[idx+1].(string)})
 		}
 

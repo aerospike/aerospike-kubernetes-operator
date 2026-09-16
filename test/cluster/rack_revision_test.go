@@ -145,7 +145,10 @@ var _ = Describe(
 									return checkBothRevisionsExist(k8sClient, ctx, clusterNamespacedName, versionV1, versionV2)
 								}, 10*time.Minute, 10*time.Second).Should(BeTrue())
 
-								updatedCluster.Spec.Size = 2
+								// Shrink to 4, giving [2,2]. The migrating rack keeps 2 pods, so the
+								// surviving nodes still satisfy the namespace replication-factor while
+								// the old revision drains.
+								updatedCluster.Spec.Size = 4
 
 								err := updateCluster(k8sClient, ctx, updatedCluster)
 								Expect(err).ToNot(HaveOccurred())

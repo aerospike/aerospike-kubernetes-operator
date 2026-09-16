@@ -672,6 +672,7 @@ var _ = Describe("Rack revision webhook validation", func() {
 					// Seed the last reconciled state: all racks still at v1, size 6.
 					base, err := testCluster.GetCluster(envtests.K8sClient, ctx, cName)
 					Expect(err).ToNot(HaveOccurred())
+
 					statusSnap := base.DeepCopy()
 					statusSnap.Status.Size = 6
 					statusSnap.Status.RackConfig.Racks = []asdbv1.Rack{
@@ -684,6 +685,7 @@ var _ = Describe("Rack revision webhook validation", func() {
 					// [2,2,2]; 100% batch leaves 4, which clears RF 3, so the bump is admitted.
 					current, err := testCluster.GetCluster(envtests.K8sClient, ctx, cName)
 					Expect(err).ToNot(HaveOccurred())
+
 					current.Spec.RackConfig.Racks[0].Revision = newRackRevision
 					Expect(envtests.K8sClient.Update(ctx, current)).To(Succeed())
 
@@ -691,6 +693,7 @@ var _ = Describe("Rack revision webhook validation", func() {
 					// [2,1,1], so the same 100% batch leaves only 2 — below RF 3.
 					current, err = testCluster.GetCluster(envtests.K8sClient, ctx, cName)
 					Expect(err).ToNot(HaveOccurred())
+
 					current.Spec.Size = 4
 					err = envtests.K8sClient.Update(ctx, current)
 					Expect(err).To(HaveOccurred())
@@ -945,6 +948,7 @@ var _ = Describe("Rack revision webhook validation", func() {
 
 					base, err := testCluster.GetCluster(envtests.K8sClient, ctx, cName)
 					Expect(err).ToNot(HaveOccurred())
+
 					statusSnap := base.DeepCopy()
 					statusSnap.Status.Size = 12
 					statusSnap.Status.RackConfig.Racks = []asdbv1.Rack{
@@ -956,6 +960,7 @@ var _ = Describe("Rack revision webhook validation", func() {
 
 					current, err := testCluster.GetCluster(envtests.K8sClient, ctx, cName)
 					Expect(err).ToNot(HaveOccurred())
+
 					current.Spec.Size = 6
 					Expect(envtests.K8sClient.Update(ctx, current)).To(Succeed())
 				})
