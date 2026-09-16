@@ -145,7 +145,10 @@ var _ = Describe(
 									return checkBothRevisionsExist(k8sClient, ctx, clusterNamespacedName, versionV1, versionV2)
 								}, 10*time.Minute, 10*time.Second).Should(BeTrue())
 
-								updatedCluster.Spec.Size = 2
+								// Shrink to 4, giving [2,2]. The migrating rack keeps 2 pods, so the
+								// surviving nodes still satisfy the namespace replication-factor while
+								// the old revision drains.
+								updatedCluster.Spec.Size = 4
 
 								err := updateCluster(k8sClient, ctx, updatedCluster)
 								Expect(err).ToNot(HaveOccurred())
@@ -413,7 +416,9 @@ var _ = Describe(
 
 				BeforeEach(
 					func() {
-						aeroCluster := createDummyClusterWithRackRevision(clusterNamespacedName, versionV1, 2)
+						// Size 3 over 2 racks keeps 2 nodes up during the first revision
+						// bump, clearing the rack revision availability floor for SC RF 2.
+						aeroCluster := createDummyClusterWithRackRevision(clusterNamespacedName, versionV1, 3)
 						Expect(DeployCluster(k8sClient, ctx, aeroCluster)).ToNot(HaveOccurred())
 					},
 				)

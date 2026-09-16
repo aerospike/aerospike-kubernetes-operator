@@ -310,6 +310,10 @@ func (acv *AerospikeClusterCustomValidator) ValidateUpdate(_ context.Context,
 		return warnings, err
 	}
 
+	if err := validateRackRevisionChange(oldObject, aerospikeCluster); err != nil {
+		return warnings, err
+	}
+
 	// Validate actual pod names to catch silent DNS label overflows at runtime.
 	// This uses real rack IDs, real revisions, and the real max ordinal (Size-1),
 	// so it only rejects what would actually fail — not a conservative estimate.
@@ -879,6 +883,184 @@ func validateConcurrentRackRevisions(oldObj, newObj *asdbv1.AerospikeCluster) er
 	}
 
 	return nil
+}
+
+// validateRackRevisionChange rejects a rack revision change that would leave too few
+// nodes standing while a rack's pods are replaced.
+//
+// The sizing inputs are spec-only: newObj.Spec.Size, the rack count and the batch describe
+// the cluster the user is asking for, which is the topology the reconciler will roll. The
+// gate additionally reads oldObj.Status.RackConfig so an in-flight migration keeps the
+// check armed. Size 1 and replication-factor <= 1 are rejected in AP and SC. The survivors
+// floor and roster-majority checks are SC only (pkg/validation already allows AP size < RF).
+// The worst batch is the first rack: DistributeItems always gives it the most pods.
+func validateRackRevisionChange(oldObj, newObj *asdbv1.AerospikeCluster) error {
+	const notAllowed = "rack revision change is not allowed"
+
+	// A metadata-only update (finalizer add or removal, a label, a no-op re-apply) cannot
+	// change the plan the previous admission already vetted, so there is nothing new to
+	// check. The status comparison below would otherwise keep re-running the whole check on
+	// every such write for as long as a migration is in flight.
+	//
+	// Deleting the cluster is the case that matters. cleanUpAndRemoveFinalizer strips the
+	// finalizer with an ordinary Update, which this webhook sees like any other, and there
+	// is no metadata-only API call to exempt it:
+	//
+	//	1. a cluster is running on a build that predates this check, and a rack revision is
+	//	   bumped to a spec that would not pass it
+	//	2. the operator is upgraded while that migration is still rolling
+	//	3. kubectl delete -> the finalizer Update is rejected -> the cluster never finishes
+	//	   deleting, and someone has to edit finalizers by hand to free it
+	//
+	// Comparing the spec first keeps that path open: the stored spec was admitted once, and
+	// an update that does not touch it cannot have invalidated that verdict.
+	if reflect.DeepEqual(oldObj.Spec, newObj.Spec) {
+		return nil
+	}
+
+	// New racks and non-revision updates are not a rack revision change.
+	if !hasRackRevisionChange(
+		oldObj.Status.RackConfig.Racks, oldObj.Spec.RackConfig.Racks, newObj.Spec.RackConfig.Racks,
+	) {
+		return nil
+	}
+
+	// AP and SC: replacing the only node takes the cluster down.
+	if newObj.Spec.Size == 1 {
+		return fmt.Errorf("%s: spec.size is 1, so the only node would go down", notAllowed)
+	}
+
+	leaving := podsLeavingFirstRack(newObj)
+	survivors := newObj.Spec.Size - leaving
+
+	// Rejecting on the first namespace that breaks a rule means survivors have to
+	// satisfy every namespace.
+	for nsName, conf := range getNsConfForNamespaces(newObj.Spec.RackConfig) {
+		// AP and SC. validateBatchSize already rejects RF 1 when a batch is set; this
+		// covers the unset-batch case (one pod per pass).
+		if conf.replicationFactor <= 1 {
+			return fmt.Errorf(
+				"%s: namespace %q has replication-factor %d, so no replica remains while pods are replaced",
+				notAllowed, nsName, conf.replicationFactor,
+			)
+		}
+
+		// The remaining floors are strong-consistency only: pkg/validation already
+		// allows an AP cluster smaller than its replication-factor, and AP has no
+		// roster.
+		if !conf.scEnabled {
+			continue
+		}
+
+		if int(survivors) < conf.replicationFactor {
+			return fmt.Errorf(
+				"%s: %d of %d nodes would go down, leaving %d for strong-consistency "+
+					"namespace %q (needs replication-factor %d)",
+				notAllowed, leaving, newObj.Spec.Size, survivors, nsName, conf.replicationFactor,
+			)
+		}
+
+		if survivors <= newObj.Spec.Size/2 {
+			return fmt.Errorf(
+				"%s: %d of %d nodes would go down, leaving %d, which is not a majority of "+
+					"the strong-consistency roster",
+				notAllowed, leaving, newObj.Spec.Size, survivors,
+			)
+		}
+	}
+
+	return nil
+}
+
+// hasRackRevisionChange is true when an existing rack's revision changed, judged against
+// both the previously admitted spec and the last reconciled status.
+//
+// The status arm matters because a migration spans many reconcile passes while
+// status.RackConfig is written only on a fully successful reconcile. Mid-migration the spec
+// revision is already the new value while the status revision is still the old one, so an
+// old-spec-to-new-spec diff alone sees no change, and a follow-up update — a pure resize,
+// say — would skip the check entirely while pods are still being replaced.
+//
+// Racks are keyed by ID rather than list position, because status may order them
+// differently from spec. A rack in neither the old spec nor the status is newly added and
+// is not a rack revision change. A revert counts: it still replaces every pod in the rack.
+func hasRackRevisionChange(statusRacks, oldSpecRacks, newSpecRacks []asdbv1.Rack) bool {
+	oldSpecRevisions := revisionsByRackID(oldSpecRacks)
+	statusRevisions := revisionsByRackID(statusRacks)
+
+	for idx := range newSpecRacks {
+		rack := &newSpecRacks[idx]
+
+		// This update changes the rack's revision.
+		if oldRevision, existed := oldSpecRevisions[rack.ID]; existed && oldRevision != rack.Revision {
+			return true
+		}
+
+		// A migration for this rack is still in flight: the pods the operator has actually
+		// reconciled are at the status revision, not the spec one.
+		if reconciled, existed := statusRevisions[rack.ID]; existed && reconciled != rack.Revision {
+			return true
+		}
+	}
+
+	return false
+}
+
+// revisionsByRackID indexes racks by ID. IDs are unique in both spec and status, since
+// validateRackUpdate rejects duplicates.
+func revisionsByRackID(racks []asdbv1.Rack) map[int]string {
+	revisions := make(map[int]string, len(racks))
+
+	for idx := range racks {
+		revisions[racks[idx].ID] = racks[idx].Revision
+	}
+
+	return revisions
+}
+
+// podsLeavingFirstRack is the largest delete batch in the cluster. DistributeItems
+// gives spec index 0 the most pods, exactly ceil(size/racks), so the first rack's
+// size is all that is needed and the full topology is not worth building.
+//
+// The rack count is floored at 1 so the division is always safe. Reaching here
+// requires hasRackRevisionChange to have found a changed rack, which is only possible
+// when spec.rackConfig.racks is non-empty, and the mutating webhook's
+// setDefaultRackConf injects the default rack before that anyway. The floor therefore
+// only matters to direct callers such as unit tests, where it degenerates to treating
+// the whole cluster as one rack.
+func podsLeavingFirstRack(cluster *asdbv1.AerospikeCluster) int32 {
+	racks := max(utils.Len32(cluster.Spec.RackConfig.Racks), 1)
+
+	// Mirrors DistributeItems: every rack gets size/racks pods, then the remainder is
+	// handed out one pod at a time starting at index 0. So the first rack takes one
+	// extra whenever the split is uneven, which is both why it is the largest rack and
+	// why ceil(size/racks) is its exact pod count.
+	//
+	//	size 6 over 3 racks -> [2, 2, 2], first rack 2 (no remainder)
+	//	size 7 over 3 racks -> [3, 2, 2], first rack 3 (remainder 1 goes to index 0)
+	firstRackSize := cluster.Spec.Size / racks
+	if cluster.Spec.Size%racks != 0 {
+		firstRackSize++
+	}
+
+	return clampedBatch(cluster.Spec.RackConfig.RollingUpdateBatchSize, firstRackSize)
+}
+
+// clampedBatch resolves rollingUpdateBatchSize against a rack size. Round-up matches
+// the reconciler replica step; unset becomes 1; result is capped at the rack size.
+// Callers must pass base >= 1.
+func clampedBatch(batch *intstr.IntOrString, base int32) int32 {
+	value, _ := intstr.GetScaledValueFromIntOrPercent(batch, int(base), true)
+
+	if value >= int(base) {
+		return base
+	}
+
+	if value < 1 {
+		return 1
+	}
+
+	return int32(value) //nolint:gosec // above zero and below base, itself an int32 pod count
 }
 
 // TODO: FIX
