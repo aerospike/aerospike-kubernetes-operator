@@ -34,6 +34,17 @@ import (
 
 func replicaCount(n int32) *int32 { return &n }
 
+func podWithServerArgs(args []string) *corev1.Pod {
+	return &corev1.Pod{
+		Spec: corev1.PodSpec{
+			Containers: []corev1.Container{
+				{Name: "sidecar"},
+				{Name: asdbv1.AerospikeServerContainerName, Args: args},
+			},
+		},
+	}
+}
+
 // TestWaitForSTSPodsServerReady covers the three fast-path branches of
 // waitForSTSPodsServerReady that complete without any sleep:
 //
@@ -321,4 +332,174 @@ func TestGetFinalVolumeAttachmentsForVolume(t *testing.T) {
 
 		t.Fatal("aerospike-init auto-mount attachment not found")
 	})
+}
+
+func TestPreviewFeaturesArgs(t *testing.T) {
+	testCases := []struct {
+		name     string
+		features []string
+		want     []string
+	}{
+		{
+			name:     "no features set",
+			features: nil,
+			want:     nil,
+		},
+		{
+			name:     "single feature",
+			features: []string{asdbv1.PreviewFeatureIndexCheckpoint},
+			want:     []string{"--preview", asdbv1.PreviewFeatureIndexCheckpoint},
+		},
+		{
+			name:     "multiple features are comma joined, sorted",
+			features: []string{asdbv1.PreviewFeatureIndexCheckpoint, "another-feature"},
+			want:     []string{"--preview", "another-feature," + asdbv1.PreviewFeatureIndexCheckpoint},
+		},
+		{
+			name:     "declaration order does not change the args",
+			features: []string{"another-feature", asdbv1.PreviewFeatureIndexCheckpoint},
+			want:     []string{"--preview", "another-feature," + asdbv1.PreviewFeatureIndexCheckpoint},
+		},
+		{
+			name:     "duplicates collapse",
+			features: []string{asdbv1.PreviewFeatureIndexCheckpoint, asdbv1.PreviewFeatureIndexCheckpoint},
+			want:     []string{"--preview", asdbv1.PreviewFeatureIndexCheckpoint},
+		},
+	}
+
+	for _, tc := range testCases {
+		t.Run(tc.name, func(t *testing.T) {
+			assert.Equal(t, tc.want, previewFeaturesArgs(tc.features))
+		})
+	}
+}
+
+// TestPreviewFeaturesTransitions pins the restart decision for the CR edits an operator
+// actually makes. Enabling a feature has to reach the pod as a podRestart: --preview is a
+// container argument, and a quickRestart respawns asd with the argv it was created with, so
+// the server would get config keys it then refuses to parse.
+func TestPreviewFeaturesTransitions(t *testing.T) {
+	enabled := []string{asdbv1.PreviewFeatureIndexCheckpoint}
+
+	testCases := []struct {
+		name          string
+		fromArgs      []string
+		toArgs        []string
+		restartWanted bool
+	}{
+		{
+			name:          "enable on a running cluster",
+			fromArgs:      previewFeaturesArgs(nil),
+			toArgs:        previewFeaturesArgs(enabled),
+			restartWanted: true,
+		},
+		{
+			name:          "remove from the CR",
+			fromArgs:      previewFeaturesArgs(enabled),
+			toArgs:        previewFeaturesArgs(nil),
+			restartWanted: true,
+		},
+		{
+			name:          "unchanged",
+			fromArgs:      previewFeaturesArgs(enabled),
+			toArgs:        previewFeaturesArgs(enabled),
+			restartWanted: false,
+		},
+		{
+			name:          "never enabled",
+			fromArgs:      previewFeaturesArgs(nil),
+			toArgs:        previewFeaturesArgs(nil),
+			restartWanted: false,
+		},
+		{
+			// A cosmetic CR edit must not restart the cluster.
+			name:          "reordered in the CR",
+			fromArgs:      previewFeaturesArgs([]string{"another-feature", asdbv1.PreviewFeatureIndexCheckpoint}),
+			toArgs:        previewFeaturesArgs([]string{asdbv1.PreviewFeatureIndexCheckpoint, "another-feature"}),
+			restartWanted: false,
+		},
+		{
+			name:          "duplicate added in the CR",
+			fromArgs:      previewFeaturesArgs(enabled),
+			toArgs:        previewFeaturesArgs([]string{asdbv1.PreviewFeatureIndexCheckpoint, asdbv1.PreviewFeatureIndexCheckpoint}),
+			restartWanted: false,
+		},
+		{
+			name:          "a second feature added",
+			fromArgs:      previewFeaturesArgs(enabled),
+			toArgs:        previewFeaturesArgs([]string{asdbv1.PreviewFeatureIndexCheckpoint, "another-feature"}),
+			restartWanted: true,
+		},
+	}
+
+	for _, tc := range testCases {
+		t.Run(tc.name, func(t *testing.T) {
+			pod := podWithServerArgs(tc.fromArgs)
+			assert.Equal(t, tc.restartWanted, isPreviewFeaturesUpdated(tc.toArgs, pod))
+		})
+	}
+}
+
+func TestIsPreviewFeaturesUpdated(t *testing.T) {
+	args := []string{"--preview", asdbv1.PreviewFeatureIndexCheckpoint}
+
+	testCases := []struct {
+		name        string
+		pod         *corev1.Pod
+		desiredArgs []string
+		want        bool
+	}{
+		{
+			name:        "unset on both sides",
+			pod:         podWithServerArgs(nil),
+			desiredArgs: nil,
+			want:        false,
+		},
+		{
+			name:        "empty pod args match nil desired args",
+			pod:         podWithServerArgs([]string{}),
+			desiredArgs: nil,
+			want:        false,
+		},
+		{
+			name:        "same args",
+			pod:         podWithServerArgs(args),
+			desiredArgs: args,
+			want:        false,
+		},
+		{
+			name:        "feature added",
+			pod:         podWithServerArgs(nil),
+			desiredArgs: args,
+			want:        true,
+		},
+		{
+			name:        "feature removed",
+			pod:         podWithServerArgs(args),
+			desiredArgs: nil,
+			want:        true,
+		},
+		{
+			name:        "feature list changed",
+			pod:         podWithServerArgs(args),
+			desiredArgs: []string{"--preview", asdbv1.PreviewFeatureIndexCheckpoint + ",another"},
+			want:        true,
+		},
+		{
+			name: "no server container is not an update",
+			pod: &corev1.Pod{
+				Spec: corev1.PodSpec{
+					Containers: []corev1.Container{{Name: "sidecar"}},
+				},
+			},
+			desiredArgs: args,
+			want:        false,
+		},
+	}
+
+	for _, tc := range testCases {
+		t.Run(tc.name, func(t *testing.T) {
+			assert.Equal(t, tc.want, isPreviewFeaturesUpdated(tc.desiredArgs, tc.pod))
+		})
+	}
 }
