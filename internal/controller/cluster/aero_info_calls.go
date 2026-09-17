@@ -24,6 +24,7 @@ import (
 	corev1 "k8s.io/api/core/v1"
 	k8serrors "k8s.io/apimachinery/pkg/api/errors"
 	"k8s.io/apimachinery/pkg/util/sets"
+	"k8s.io/apimachinery/pkg/util/wait"
 	"k8s.io/client-go/util/retry"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 
@@ -563,13 +564,17 @@ func (r *SingleClusterReconciler) triggerIndexCheckpointSave(
 	ctx context.Context,
 	pods []*corev1.Pod, rackState *RackState,
 ) common.ReconcileResult {
+	if len(pods) == 0 {
+		return common.ReconcileSuccess()
+	}
+
 	rackStatus := r.getRackStatus(rackState)
 	if rackStatus == nil {
 		return common.ReconcileSuccess()
 	}
 
 	eligibleNSs, skipNSs := r.splitCheckpointNamespaces(rackStatus, rackState.Rack)
-	if len(eligibleNSs) == 0 || len(pods) == 0 {
+	if len(eligibleNSs) == 0 {
 		if len(skipNSs) != 0 {
 			r.Log.Info("Skipping index checkpoint save, no namespace's checkpoint would be read",
 				"skippedNamespaces", skipNSs)
@@ -591,21 +596,20 @@ func (r *SingleClusterReconciler) triggerIndexCheckpointSave(
 		if err != nil {
 			// Network-level failure (connection error, timeout, EOF).
 			return common.ReconcileError(
-				fmt.Errorf("checkpoint-save on pod %s: %w", pod.Name, err),
+				fmt.Errorf("checkpoint-save on Pod %s: %w", utils.GetNamespacedNameString(pod), err),
 			)
 		}
 
 		switch verdict {
 		case deployment.CheckpointSaveRejected:
 			return common.ReconcileError(fmt.Errorf(
-				"checkpoint-save rejected by pod %s", utils.GetNamespacedName(pod)))
+				"checkpoint-save rejected by Pod %s", utils.GetNamespacedNameString(pod)))
 
 		case deployment.CheckpointSaveAccepted:
 			// Running, finished, or failed — the discharge phase distinguishes them, and a
 			// failed save gets its IndexCheckpointFailed event from there with the
 			// namespace list.
-			r.Log.Info("Index checkpoint save already accepted",
-				"pod", utils.GetNamespacedName(pod))
+			r.Log.Info("Index checkpoint save already accepted", "pod", utils.GetNamespacedName(pod))
 			r.markPodCheckpointParked(ctx, pod)
 
 			anyParked = true
@@ -649,6 +653,8 @@ func (r *SingleClusterReconciler) triggerIndexCheckpointSave(
 // reported as precisely as we can and left to self-heal.
 func (r *SingleClusterReconciler) markPodCheckpointParked(ctx context.Context, pod *corev1.Pod) {
 	containerID := utils.GetAerospikeServerContainerID(pod)
+	// This condition is technically not reachable. The pod object used to trigger checkpoint-save is checked here, so
+	// it'll have the containerID set
 	if containerID == "" {
 		r.Log.Info("No aerospike-server container ID, cannot record checkpoint park",
 			"pod", utils.GetNamespacedName(pod))
@@ -665,9 +671,13 @@ func (r *SingleClusterReconciler) markPodCheckpointParked(ctx context.Context, p
 	}
 
 	pod.Annotations[asdbv1.IndexCheckpointParkedAnnotation] = containerID
-
-	if err := retry.OnError(retry.DefaultBackoff,
-		func(err error) bool { return !k8serrors.IsNotFound(err) },
+	// Backoff config retires the annotation patch 5 times with defined backup-off factor
+	if err := retry.OnError(wait.Backoff{
+		Steps:    5,
+		Duration: 1 * time.Second,
+		Factor:   2,
+		Jitter:   0.1,
+	}, func(err error) bool { return !k8serrors.IsNotFound(err) },
 		func() error {
 			return r.Patch(ctx, pod, patch)
 		}); err != nil {
@@ -784,7 +794,7 @@ func (r *SingleClusterReconciler) skipCheckpointForNamespaces(
 			// Why each namespace was excluded is a per-rack decision, logged once by
 			// the caller; this line is per pod and only confirms the opt-out landed.
 			r.Log.Info("Excluded namespace from the imminent index checkpoint save",
-				"pod", pod.Name, "namespace", ns)
+				"pod", utils.GetNamespacedName(pod), "namespace", ns)
 		}
 	}
 }
@@ -830,18 +840,21 @@ func (r *SingleClusterReconciler) pollAndDeleteParkedPods(
 				continue
 
 			case err != nil:
-				r.Log.V(1).Info("checkpoint-status unavailable, will retry",
+				r.Log.Info("Server checkpoint-status unavailable, will retry",
 					"pod", utils.GetNamespacedName(pod), "error", err)
 				stillPending = append(stillPending, pod)
 
 				continue
 
 			case len(resp.Namespaces) == 0 && !resp.IsParked:
-				// Configured, checkpointing nothing, and NOT parked: a RESTARTED asd.
-				// Nothing to wait for and nothing to delete; the annotation check
-				// reclassifies it next pass. The PARKED form of an empty response falls
-				// through instead — see checkpointDone.
-				r.Log.Info("Server reports no checkpointing namespace and no park, leaving Pod to the normal flow",
+				// Nothing reported and not parked: either a restarted asd, or a node with
+				// nothing to save that accepted the save but is still shutting down — it
+				// answers is_parked=false until the park is entered. Do NOT clear the
+				// annotation; it is what re-selects that second case until is_parked flips,
+				// while a restarted asd drops out on its own when its container ID stops
+				// matching. The PARKED form of an empty response falls through instead —
+				// see checkpointDone.
+				r.Log.Info("Server reports no checkpointing namespace and no park",
 					"pod", utils.GetNamespacedName(pod))
 
 				continue
@@ -863,7 +876,7 @@ func (r *SingleClusterReconciler) pollAndDeleteParkedPods(
 				r.Recorder.Eventf(
 					r.aeroCluster, corev1.EventTypeWarning, "IndexCheckpointFailed",
 					"[rack-%d] Index checkpoint failed for Pod %s namespaces %s; proceeding with cold restart",
-					rackForPod[pod.Name].Rack.ID, utils.GetNamespacedName(pod),
+					rackForPod[pod.Name].Rack.ID, utils.GetNamespacedNameString(pod),
 					strings.Join(failedNSs, ", "),
 				)
 			}
@@ -878,9 +891,9 @@ func (r *SingleClusterReconciler) pollAndDeleteParkedPods(
 			savedNSs := sets.List(sets.KeySet(resp.Namespaces))
 
 			r.Recorder.Eventf(
-				r.aeroCluster, corev1.EventTypeNormal, "IndexCheckpoint",
-				"[rack-%d] Index checkpoint complete for Pod %s namespaces %s; restarting",
-				rackForPod[pod.Name].Rack.ID, utils.GetNamespacedName(pod),
+				r.aeroCluster, corev1.EventTypeNormal, "IndexCheckpointCompleted",
+				"[rack-%d] Index checkpoint completed for Pod %s namespaces %s; restarting",
+				rackForPod[pod.Name].Rack.ID, utils.GetNamespacedNameString(pod),
 				strings.Join(savedNSs, ", "),
 			)
 		}

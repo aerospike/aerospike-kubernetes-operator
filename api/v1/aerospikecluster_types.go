@@ -1162,8 +1162,9 @@ type AerospikeClusterStatusSpec struct { //nolint:govet // for readability
 	// +optional
 	Operations []OperationSpec `json:"operations,omitempty"`
 
-	// PreviewFeatures is the list of Aerospike server preview feature names the running
-	// cluster was started with, via the --preview flag.
+	// PreviewFeatures is a list of Aerospike server preview feature names to enable via the
+	// --preview startup flag. Features gated behind this flag (e.g. "index-checkpoint")
+	// will cause the server to crash at startup if the flag is not present.
 	// +optional
 	PreviewFeatures []string `json:"previewFeatures,omitempty"`
 }

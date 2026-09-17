@@ -820,8 +820,7 @@ func GetNamespaceDataSize(namespaceConf map[string]interface{}) (size int, ok bo
 	return size, true
 }
 
-// GetInMemoryNsDataSizes maps namespace name to storage-engine data-size, for
-// pure in-memory namespaces only
+// GetInMemoryNsDataSizes maps namespace name to storage-engine data-size, for pure in-memory namespaces only
 func GetInMemoryNsDataSizes(aerospikeConfig map[string]interface{}) map[string]int {
 	nsList, ok := aerospikeConfig[ConfKeyNamespace].([]interface{})
 	if !ok {

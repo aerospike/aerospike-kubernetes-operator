@@ -351,9 +351,19 @@ func TestPreviewFeaturesArgs(t *testing.T) {
 			want:     []string{"--preview", asdbv1.PreviewFeatureIndexCheckpoint},
 		},
 		{
-			name:     "multiple features are comma joined in order",
+			name:     "multiple features are comma joined, sorted",
 			features: []string{asdbv1.PreviewFeatureIndexCheckpoint, "another-feature"},
-			want:     []string{"--preview", asdbv1.PreviewFeatureIndexCheckpoint + ",another-feature"},
+			want:     []string{"--preview", "another-feature," + asdbv1.PreviewFeatureIndexCheckpoint},
+		},
+		{
+			name:     "declaration order does not change the args",
+			features: []string{"another-feature", asdbv1.PreviewFeatureIndexCheckpoint},
+			want:     []string{"--preview", "another-feature," + asdbv1.PreviewFeatureIndexCheckpoint},
+		},
+		{
+			name:     "duplicates collapse",
+			features: []string{asdbv1.PreviewFeatureIndexCheckpoint, asdbv1.PreviewFeatureIndexCheckpoint},
+			want:     []string{"--preview", asdbv1.PreviewFeatureIndexCheckpoint},
 		},
 	}
 
@@ -400,6 +410,25 @@ func TestPreviewFeaturesTransitions(t *testing.T) {
 			fromArgs:      previewFeaturesArgs(nil),
 			toArgs:        previewFeaturesArgs(nil),
 			restartWanted: false,
+		},
+		{
+			// A cosmetic CR edit must not restart the cluster.
+			name:          "reordered in the CR",
+			fromArgs:      previewFeaturesArgs([]string{"another-feature", asdbv1.PreviewFeatureIndexCheckpoint}),
+			toArgs:        previewFeaturesArgs([]string{asdbv1.PreviewFeatureIndexCheckpoint, "another-feature"}),
+			restartWanted: false,
+		},
+		{
+			name:          "duplicate added in the CR",
+			fromArgs:      previewFeaturesArgs(enabled),
+			toArgs:        previewFeaturesArgs([]string{asdbv1.PreviewFeatureIndexCheckpoint, asdbv1.PreviewFeatureIndexCheckpoint}),
+			restartWanted: false,
+		},
+		{
+			name:          "a second feature added",
+			fromArgs:      previewFeaturesArgs(enabled),
+			toArgs:        previewFeaturesArgs([]string{asdbv1.PreviewFeatureIndexCheckpoint, "another-feature"}),
+			restartWanted: true,
 		},
 	}
 

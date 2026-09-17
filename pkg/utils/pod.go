@@ -205,16 +205,7 @@ func IsPodCheckpointing(pod *corev1.Pod) bool {
 		return false
 	}
 
-	for idx := range pod.Status.ContainerStatuses {
-		cs := &pod.Status.ContainerStatuses[idx]
-		if cs.Name != asdbv1.AerospikeServerContainerName {
-			continue
-		}
-
-		return cs.ContainerID != "" && cs.ContainerID == parkedContainerID
-	}
-
-	return false
+	return parkedContainerID == GetAerospikeServerContainerID(pod)
 }
 
 // GetAerospikeServerContainerID returns the pod's aerospike-server container ID, or "" if it has none yet.
