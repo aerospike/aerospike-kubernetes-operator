@@ -111,14 +111,16 @@ func (r *SingleClusterReconciler) createSTS(
 	)
 
 	tlsName, _ := asdbv1.GetServiceTLSNameAndPort(r.aeroCluster.Spec.AerospikeConfig)
-	envVarList := []corev1.EnvVar{
+	envVarList := make([]corev1.EnvVar, 0, 6)
+	envVarList = append(
+		envVarList,
 		newSTSEnvVar("MY_POD_NAME", "metadata.name"),
 		newSTSEnvVar("MY_POD_NAMESPACE", "metadata.namespace"),
 		newSTSEnvVar("MY_POD_IP", "status.podIP"),
 		newSTSEnvVar("MY_HOST_IP", "status.hostIP"),
 		newSTSEnvVarStatic("MY_POD_TLS_NAME", tlsName),
 		newSTSEnvVarStatic("MY_POD_CLUSTER_NAME", r.aeroCluster.Name),
-	}
+	)
 
 	st := &appsv1.StatefulSet{
 		ObjectMeta: metav1.ObjectMeta{
@@ -949,7 +951,7 @@ func (r *SingleClusterReconciler) updateSTSSchedulingPolicy(
 					LabelSelector: &metav1.LabelSelector{
 						MatchLabels: antiAffinityLabels,
 					},
-					TopologyKey: "kubernetes.io/hostname",
+					TopologyKey: corev1.LabelHostname,
 				},
 			},
 		}
@@ -996,7 +998,7 @@ func (r *SingleClusterReconciler) updateSTSSchedulingPolicy(
 	if rackState.Rack.NodeName != "" {
 		matchExpressions = append(
 			matchExpressions, corev1.NodeSelectorRequirement{
-				Key:      "kubernetes.io/hostname",
+				Key:      corev1.LabelHostname,
 				Operator: corev1.NodeSelectorOpIn,
 				Values:   []string{rackState.Rack.NodeName},
 			},
@@ -1006,7 +1008,7 @@ func (r *SingleClusterReconciler) updateSTSSchedulingPolicy(
 	if len(r.aeroCluster.Spec.K8sNodeBlockList) > 0 {
 		matchExpressions = append(
 			matchExpressions, corev1.NodeSelectorRequirement{
-				Key:      "kubernetes.io/hostname",
+				Key:      corev1.LabelHostname,
 				Operator: corev1.NodeSelectorOpNotIn,
 				Values:   r.aeroCluster.Spec.K8sNodeBlockList,
 			},
@@ -1468,7 +1470,6 @@ func (r *SingleClusterReconciler) initializeSTSStorage(
 	rackState *RackState,
 ) {
 	// Initialize sts storage
-	//nolint:prealloc // no fixed size
 	var specVolumes []corev1.Volume
 
 	for idx := range st.Spec.Template.Spec.InitContainers {

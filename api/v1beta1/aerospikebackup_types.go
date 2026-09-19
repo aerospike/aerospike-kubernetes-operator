@@ -124,7 +124,3 @@ type AerospikeBackupList struct {
 	metav1.ListMeta `json:"metadata,omitempty"`
 	Items           []AerospikeBackup `json:"items"`
 }
-
-func init() {
-	SchemeBuilder.Register(&AerospikeBackup{}, &AerospikeBackupList{})
-}
