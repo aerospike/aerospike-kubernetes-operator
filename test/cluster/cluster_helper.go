@@ -604,7 +604,7 @@ func validateMigrateFillDelay(
 				return false, err
 			}
 
-			current, exists := svcConfs["migrate-fill-delay"]
+			current, exists := svcConfs[asdbv1.ConfKeyMigrateFillDelay]
 			if !exists {
 				return false, fmt.Errorf("migrate-fill-delay missing from the Aerospike Service config")
 			}
