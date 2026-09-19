@@ -699,13 +699,15 @@ func (r *SingleClusterReconciler) handleNSOrDeviceRemovalForIgnorablePods(
 
 // failedPodsInfo carries the set of pods that triggered a recovery reconcile
 // and whether they are server-failed (server process down) or sidecar-failed
-// (server running, sidecar crashing). The distinction controls two behaviours
+// (server running, sidecar crashing). The distinction controls one behaviour
 // inside reconcileRack:
-//   - migrate-fill-delay revert: skipped for server-failed pods (server is
-//     unreachable); safe for sidecar-failed pods.
 //   - serverFailedPodsNames set: populated from pods when isServerFailed=true,
 //     left empty when isServerFailed=false so asinfo/dynamic-config paths are
 //     not suppressed for sidecar-failed pods.
+//
+// Note: migrate-fill-delay revert for crashed pods is handled in
+// handleFailedPodsInRack (before reconcileRack is called) and the reconciler
+// safety net (reconciler.go), not inside reconcileRack itself.
 type failedPodsInfo struct {
 	pods           []*corev1.Pod
 	isServerFailed bool

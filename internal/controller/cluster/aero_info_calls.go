@@ -21,7 +21,7 @@ import (
 
 	corev1 "k8s.io/api/core/v1"
 	"k8s.io/apimachinery/pkg/util/sets"
-	"k8s.io/client-go/util/retry"
+	"sigs.k8s.io/controller-runtime/pkg/client"
 
 	as "github.com/aerospike/aerospike-client-go/v8"
 	asdbv1 "github.com/aerospike/aerospike-kubernetes-operator/v4/api/v1"
@@ -123,7 +123,7 @@ func (r *SingleClusterReconciler) waitForMultipleNodesSafeStopReady(
 		preStabilityMFD = migrateFillDelay
 	}
 
-	if res := r.setMigrateFillDelay(ctx, policy, preStabilityMFD, ignorablePodNames); !res.IsSuccess {
+	if res := r.setMigrateFillDelay(ctx, policy, preStabilityMFD, ignorablePodNames, allHostConns, false); !res.IsSuccess {
 		return res
 	}
 
@@ -143,7 +143,9 @@ func (r *SingleClusterReconciler) waitForMultipleNodesSafeStopReady(
 	// override value to suppress fills while the pod is absent. On the non-drain path MFD was
 	// already set to migrateFillDelay before stability, so this is intentionally skipped.
 	if drainBeforeStability && migrateFillDelay > 0 {
-		if res := r.setMigrateFillDelay(ctx, policy, migrateFillDelay, ignorablePodNames); !res.IsSuccess {
+		if res := r.setMigrateFillDelay(
+			ctx, policy, migrateFillDelay, ignorablePodNames, allHostConns, false,
+		); !res.IsSuccess {
 			return res
 		}
 	}
@@ -351,28 +353,38 @@ func hostID(hostName string, hostPort int) string {
 // The caller is responsible for resolving delay (e.g. via GetMigrateFillDelay for the
 // config-driven value, or a literal 0 for scale-down resets).
 //
-// The call is skipped when delay equals status.DynamicMigrateFillDelay, which tracks the last
-// value AKO successfully applied and is persisted immediately after every server call, making it
-// a reliable guard.
+// hostConns may be passed by callers that have already built the connection list (e.g.
+// waitForMultipleNodesSafeStopReady) to avoid a redundant pod-list fetch. Pass nil to have
+// setMigrateFillDelay create the connections itself using ignorablePodNames.
+//
+// When force is false the call is skipped when delay equals status.DynamicMigrateFillDelay,
+// which tracks the last value AKO successfully applied and is persisted after every server call.
+// Set force=true to bypass this guard; use it in safety-net / revert paths to protect against
+// the rare case where the previous status patch failed and the shadow value is stale while the
+// live cluster is still at the old override value.
 func (r *SingleClusterReconciler) setMigrateFillDelay(
 	ctx context.Context,
 	policy *as.ClientPolicy,
 	delay int,
 	ignorablePodNames sets.Set[string],
+	hostConns []*deployment.HostConn,
+	force bool,
 ) common.ReconcileResult {
-	if int64(delay) == r.aeroCluster.Status.DynamicMigrateFillDelay {
+	if !force && int64(delay) == r.aeroCluster.Status.DynamicMigrateFillDelay {
 		r.Log.Info("migrate-fill-delay already at desired value, skipping", "value", delay)
 		return common.ReconcileSuccess()
 	}
 
-	// This doesn't make actual connection, only objects having connection info are created
-	allHostConns, err := r.newAllHostConnWithOption(ctx, ignorablePodNames)
-	if err != nil {
-		return common.ReconcileError(
-			fmt.Errorf(
-				"get host connections for cluster nodes: %w", err,
-			),
-		)
+	// Use the caller-supplied connections when available; otherwise fetch the pod list now.
+	// This doesn't make actual connection, only objects having connection info are created.
+	allHostConns := hostConns
+	if allHostConns == nil {
+		var err error
+
+		allHostConns, err = r.newAllHostConnWithOption(ctx, ignorablePodNames)
+		if err != nil {
+			return common.ReconcileError(fmt.Errorf("get host connections for cluster nodes: %w", err))
+		}
 	}
 
 	r.Log.Info("Setting migrate-fill-delay", "migrateFillDelay", delay)
@@ -383,15 +395,14 @@ func (r *SingleClusterReconciler) setMigrateFillDelay(
 
 	// Persist DynamicMigrateFillDelay immediately so the value survives a mid-reconcile requeue.
 	// Without this, an in-memory-only update would be lost when the next reconcile reads from k8s.
-	if err := retry.RetryOnConflict(retry.DefaultRetry, func() error {
-		if err := r.Get(ctx, utils.GetNamespacedName(r.aeroCluster), r.aeroCluster); err != nil {
-			return err
-		}
+	// Use a merge patch (same pattern as phase/conditions) so only this field is touched and
+	// no RetryOnConflict loop is needed.
+	patchBase := r.aeroCluster.DeepCopy()
+	patch := client.MergeFrom(patchBase)
 
-		r.aeroCluster.Status.DynamicMigrateFillDelay = int64(delay)
+	r.aeroCluster.Status.DynamicMigrateFillDelay = int64(delay)
 
-		return r.Client.Status().Update(ctx, r.aeroCluster)
-	}); err != nil {
+	if err := r.Client.Status().Patch(ctx, r.aeroCluster, patch); err != nil {
 		return common.ReconcileError(fmt.Errorf("persist dynamic migrate-fill-delay in status: %w", err))
 	}
 

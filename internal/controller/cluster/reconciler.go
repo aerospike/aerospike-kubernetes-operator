@@ -691,11 +691,10 @@ func (r *SingleClusterReconciler) updateStatus(ctx context.Context) error {
 	newAeroCluster.Status.AerospikeClusterStatusSpec = *specToStatus
 	newAeroCluster.Status.Phase = asdbv1.AerospikeClusterCompleted
 
-	// setMigrateFillDelay persists DynamicMigrateFillDelay immediately to the API server and
-	// re-fetches r.aeroCluster, so this field is always up-to-date before updateStatus runs.
-	// The reconciler safety-net call at line 222 also handles fresh-cluster initialisation:
-	// if configMFD > 0 the guard fails and the info call sets DynamicMigrateFillDelay;
-	// if configMFD == 0 it stays 0, which is already the correct value.
+	// DynamicMigrateFillDelay is managed exclusively by setMigrateFillDelay, which persists it
+	// to the API server immediately and keeps r.aeroCluster.Status in sync via the patch response.
+	// Copy the already-persisted value forward so the final status patch in updateStatus does not
+	// inadvertently reset it to zero.
 	newAeroCluster.Status.DynamicMigrateFillDelay = r.aeroCluster.Status.DynamicMigrateFillDelay
 
 	// Carry forward conditions from r.aeroCluster (which is kept in sync by setConditions calls).

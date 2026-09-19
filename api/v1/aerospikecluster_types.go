@@ -321,12 +321,12 @@ type AerospikeClusterSpec struct { //nolint:govet // for readability
 // upgrade.
 type RestartStrategy struct {
 	// OverrideMigrateFillDelay is the duration in seconds that AKO temporarily sets as the
-	// migrate-fill-delay on the Aerospike cluster before restarting pods. This delays migration
-	// fills while a pod is down, giving the cluster time to avoid unnecessary data movement
+	// migrate-fill-delay on the Aerospike cluster before restarting pods. This delays fill migration
+	// while a pod is down, giving the cluster time to avoid unnecessary data movement
 	// during short maintenance windows. Once the pod restarts and rejoins the cluster, AKO
 	// resets migrate-fill-delay to 0 so that rebalancing can proceed immediately.
 	// This field only takes effect when a pod restart (not a warm restart) is required.
-	// This settings are applied dynamically before the first pod is taken down and
+	// This settings is applied dynamically before the first pod is taken down and
 	// reverted once all pods have rejoined; they are never written to aerospike.conf.
 	// +operator-sdk:csv:customresourcedefinitions:type=spec,displayName="Override Migrate Fill Delay"
 	// +kubebuilder:validation:Minimum=0

@@ -362,7 +362,7 @@ func (r *SingleClusterReconciler) rollingRestartPods(
 				"resolve migrate-fill-delay for rack %d: %w", rackState.Rack.ID, err))
 		}
 
-		r.Log.Info("migrate-fill-delay for Pod restart", "delay", migrateFillDelay, "drain", drainBeforeStability)
+		r.Log.Info("Adjust migrate-fill-delay for Pod restart", "migrateFillDelay", migrateFillDelay)
 
 		if res := r.waitForMultipleNodesSafeStopReady(ctx, activePods, ignorablePodNames,
 			migrateFillDelay, drainBeforeStability); !res.IsSuccess {
@@ -692,7 +692,7 @@ func (r *SingleClusterReconciler) hasDefinitiveFailure(pods []*corev1.Pod) bool 
 		isUnschedulable, reason := utils.IsPodReasonUnschedulable(pods[idx])
 		if isUnschedulable {
 			r.Log.V(1).Info("Pod is unschedulable, skipping MFD revert",
-				"pod", pods[idx].Name, "reason", reason)
+				"pod", utils.GetNamespacedName(pods[idx]), "reason", reason)
 		} else {
 			return true
 		}
@@ -759,7 +759,7 @@ func (r *SingleClusterReconciler) safelyDeletePodsAndEnsureImageUpdated(
 			return common.ReconcileError(err)
 		}
 
-		r.Log.Info("migrate-fill-delay for Pod upgrade", "delay", migrateFillDelay, "drain", drainBeforeStability)
+		r.Log.Info("Adjust migrate-fill-delay for Pod upgrade", "migrateFillDelay", migrateFillDelay)
 
 		if res := r.waitForMultipleNodesSafeStopReady(ctx, activePods, ignorablePodNames,
 			migrateFillDelay, drainBeforeStability); !res.IsSuccess {
@@ -2104,7 +2104,10 @@ func (r *SingleClusterReconciler) revertMFDToConfig(
 		return common.ReconcileError(fmt.Errorf("read configMFD for revert: %w", err))
 	}
 
-	return r.setMigrateFillDelay(ctx, policy, configMFD, ignorablePodNames)
+	// force=true bypasses the DynamicMigrateFillDelay guard so that a stale shadow value
+	// (caused by a previous status patch failure) cannot leave the cluster stuck at the
+	// override value indefinitely.
+	return r.setMigrateFillDelay(ctx, policy, configMFD, ignorablePodNames, nil, true)
 }
 
 // isAnyPodSpecUpdated checks if any pod spec has been updated indirectly based on
