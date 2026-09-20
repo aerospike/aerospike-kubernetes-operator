@@ -394,17 +394,21 @@ func (r *SingleClusterReconciler) setMigrateFillDelay(
 	}
 
 	// Persist DynamicMigrateFillDelay immediately so the value survives a mid-reconcile requeue.
-	// Without this, an in-memory-only update would be lost when the next reconcile reads from k8s.
-	// Use a merge patch (same pattern as phase/conditions) so only this field is touched and
-	// no RetryOnConflict loop is needed.
-	patchBase := r.aeroCluster.DeepCopy()
-	patch := client.MergeFrom(patchBase)
+	// Use a separate patchTarget (same pattern as conditions.go) so the API server's full
+	// response is NOT written back into r.aeroCluster — which would silently overwrite any
+	// spec fields that the user changed mid-reconcile. Only the changed status field and the
+	// new ResourceVersion are selectively copied back.
+	patchTarget := r.aeroCluster.DeepCopy()
+	patch := client.MergeFrom(r.aeroCluster.DeepCopy())
 
-	r.aeroCluster.Status.DynamicMigrateFillDelay = int64(delay)
+	patchTarget.Status.DynamicMigrateFillDelay = int64(delay)
 
-	if err := r.Client.Status().Patch(ctx, r.aeroCluster, patch); err != nil {
+	if err := r.Client.Status().Patch(ctx, patchTarget, patch); err != nil {
 		return common.ReconcileError(fmt.Errorf("persist dynamic migrate-fill-delay in status: %w", err))
 	}
+
+	r.aeroCluster.Status.DynamicMigrateFillDelay = patchTarget.Status.DynamicMigrateFillDelay
+	r.aeroCluster.ResourceVersion = patchTarget.ResourceVersion
 
 	return common.ReconcileSuccess()
 }

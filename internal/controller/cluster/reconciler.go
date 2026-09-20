@@ -264,7 +264,10 @@ func (r *SingleClusterReconciler) Reconcile(ctx context.Context) (result ctrl.Re
 
 	// Revert migrate-fill-delay to the aerospikeConfig value as a final safety net in case any
 	// per-rack revert was missed (e.g. AKO crashed mid-reconcile with MFD at the override value).
-	if res := r.revertMFDToConfig(ctx, policy, ignorablePodNames); !res.IsSuccess {
+	// force=true bypasses the DynamicMigrateFillDelay guard so that a stale shadow value
+	// (caused by a previous status patch failure) cannot leave the cluster stuck at the
+	// override value indefinitely.
+	if res := r.revertMFDToConfig(ctx, policy, ignorablePodNames, true); !res.IsSuccess {
 		if res.Err != nil {
 			r.computedState.failureReason = asdbv1.AerospikeClusterReasonMFDSetFailed
 

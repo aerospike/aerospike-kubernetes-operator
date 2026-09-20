@@ -2094,20 +2094,22 @@ func (r *SingleClusterReconciler) mfdDelayForRestart(rackState *RackState,
 // revertMFDToConfig sets migrate-fill-delay back to the aerospike.conf configured value.
 // Racks[0] is used because webhook validation enforces migrate-fill-delay to be identical
 // across all racks (aerospikecluster_validating_webhook.go).
+// force bypasses the DynamicMigrateFillDelay guard — pass true at the end-of-reconcile
+// safety net (reconciler.go) to protect against a stale shadow caused by a prior status
+// patch failure; pass false for targeted reverts (e.g. crashed pods) where the guard is
+// desirable to avoid unnecessary info calls.
 func (r *SingleClusterReconciler) revertMFDToConfig(
 	ctx context.Context,
 	policy *as.ClientPolicy,
 	ignorablePodNames sets.Set[string],
+	force bool,
 ) common.ReconcileResult {
 	configMFD, err := asdbv1.GetMigrateFillDelay(&r.aeroCluster.Spec.RackConfig.Racks[0].AerospikeConfig)
 	if err != nil {
 		return common.ReconcileError(fmt.Errorf("read configMFD for revert: %w", err))
 	}
 
-	// force=true bypasses the DynamicMigrateFillDelay guard so that a stale shadow value
-	// (caused by a previous status patch failure) cannot leave the cluster stuck at the
-	// override value indefinitely.
-	return r.setMigrateFillDelay(ctx, policy, configMFD, ignorablePodNames, nil, true)
+	return r.setMigrateFillDelay(ctx, policy, configMFD, ignorablePodNames, nil, force)
 }
 
 // isAnyPodSpecUpdated checks if any pod spec has been updated indirectly based on

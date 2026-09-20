@@ -551,7 +551,12 @@ func updateAndValidateIntermediateMFD(ctx goctx.Context, k8sClient client.Client
 
 	By("Validating the migrate-fill-delay is set to given value before the restart of next pod")
 
-	err = validateMigrateFillDelay(ctx, k8sClient, logger, clusterNamespacedName, expectedMigFillDelay,
+	intermediateMFD := expectedMigFillDelay
+	if override := aeroCluster.Spec.RestartStrategy.GetOverrideMigrateFillDelay(); override > 0 {
+		intermediateMFD = override
+	}
+
+	err = validateMigrateFillDelay(ctx, k8sClient, logger, clusterNamespacedName, intermediateMFD,
 		&shortRetryInterval, lastPodName)
 	Expect(err).ToNot(HaveOccurred())
 
@@ -561,7 +566,7 @@ func updateAndValidateIntermediateMFD(ctx goctx.Context, k8sClient client.Client
 	)
 	Expect(err).ToNot(HaveOccurred())
 
-	By("Validating the migrate-fill-delay is set to given value after the operation is completed")
+	By("Validating the migrate-fill-delay is restored to expected value after the operation is completed")
 
 	err = validateMigrateFillDelay(ctx, k8sClient, logger, clusterNamespacedName, expectedMigFillDelay,
 		&shortRetryInterval, lastPodName)

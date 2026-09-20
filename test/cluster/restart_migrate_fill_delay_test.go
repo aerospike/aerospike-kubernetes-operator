@@ -3,7 +3,6 @@ package cluster
 import (
 	goctx "context"
 	"fmt"
-	"strconv"
 
 	. "github.com/onsi/ginkgo/v2"
 	. "github.com/onsi/gomega"
@@ -32,6 +31,7 @@ func RestartMigrateFillDelayTest(ctx goctx.Context) {
 				fmt.Sprintf("restart-mfd-cluster-%d", GinkgoParallelProcess()), namespace,
 			)
 			restartMigrateFillDelay := int64(120)
+			configMFD := int64(60)
 
 			BeforeEach(
 				func() {
@@ -39,6 +39,10 @@ func RestartMigrateFillDelayTest(ctx goctx.Context) {
 					aeroCluster.Spec.RestartStrategy = &asdbv1.RestartStrategy{
 						OverrideMigrateFillDelay: &restartMigrateFillDelay,
 					}
+
+					svcConf := aeroCluster.Spec.AerospikeConfig.Value[asdbv1.ConfKeyService].(map[string]interface{})
+					svcConf[asdbv1.ConfKeyMigrateFillDelay] = configMFD
+
 					Expect(DeployCluster(k8sClient, ctx, aeroCluster)).ToNot(HaveOccurred())
 				},
 			)
@@ -60,40 +64,18 @@ func RestartMigrateFillDelayTest(ctx goctx.Context) {
 			It(
 				"Should set OverrideMigrateFillDelay before pod restart and restore aerospikeConfig value after",
 				func() {
-					// Use a non-zero configMFD so the final check distinguishes "reverted to
-					// configMFD" from "cleared to 0".
-					configMFD := int64(60)
-
 					aeroCluster, err := getCluster(k8sClient, ctx, clusterNamespacedName)
 					Expect(err).ToNot(HaveOccurred())
 
-					svcConf := aeroCluster.Spec.AerospikeConfig.Value[asdbv1.ConfKeyService].(map[string]interface{})
-					svcConf[asdbv1.ConfKeyMigrateFillDelay] = configMFD
+					By("Updating pod metadata to trigger rolling restart")
 
-					err = updateCluster(k8sClient, ctx, aeroCluster)
-					Expect(err).ToNot(HaveOccurred())
-
-					aeroCluster, err = getCluster(k8sClient, ctx, clusterNamespacedName)
-					Expect(err).ToNot(HaveOccurred())
-
-					rackID := aeroCluster.Spec.RackConfig.Racks[0].ID
-
-					firstPodName := aeroCluster.Name + "-" + strconv.Itoa(rackID) + "-0"
-
-					aeroCluster.Spec.Operations = []asdbv1.OperationSpec{
-						{Kind: asdbv1.OperationPodRestart, ID: "mfd-restart-1"},
+					aeroCluster.Spec.PodSpec.AerospikeObjectMeta = asdbv1.AerospikeObjectMeta{
+						Labels: map[string]string{
+							"test-label": "test-value",
+						},
 					}
 
-					err = updateCluster(k8sClient, ctx, aeroCluster)
-					Expect(err).ToNot(HaveOccurred())
-
-					// Check 3: After all pods have rejoined, MFD is restored to the
-					// aerospikeConfig value — not left at the override value permanently.
-					By("Check 3: MFD restored to aerospikeConfig value after all pods have rejoined")
-
-					err = validateMigrateFillDelay(ctx, k8sClient, logger, clusterNamespacedName,
-						configMFD, nil, firstPodName)
-					Expect(err).ToNot(HaveOccurred())
+					updateAndValidateIntermediateMFD(ctx, k8sClient, aeroCluster, configMFD)
 				},
 			)
 		},

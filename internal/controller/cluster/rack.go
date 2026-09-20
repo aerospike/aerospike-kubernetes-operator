@@ -2573,7 +2573,7 @@ func (r *SingleClusterReconciler) handleFailedPodsInRack(
 			// revertMFDToConfig skips their (dead) Aerospike nodes and doesn't fail.
 			ignorableWithFailed := ignorablePodNames.Union(podNamesToSet(serverFailedPods))
 			if res := r.revertMFDToConfig(
-				ctx, r.getClientPolicy(ctx), ignorableWithFailed,
+				ctx, r.getClientPolicy(ctx), ignorableWithFailed, false,
 			); !res.IsSuccess {
 				return res
 			}
