@@ -262,13 +262,12 @@ func (r *SingleClusterReconciler) Reconcile(ctx context.Context) (result ctrl.Re
 	// Use policy from spec after setting up access control
 	policy := r.getClientPolicy(ctx)
 
-	// Revert migrate-fill-delay to the original value if it was set to a different value while processing racks.
-	// Passing the first rack from the list as all the racks will have the same migrate-fill-delay
-	// Redundant safe check to revert migrate-fill-delay if the previous revert operation missed/skipped somehow
-	if res := r.setMigrateFillDelay(
-		ctx, policy, &r.aeroCluster.Spec.RackConfig.Racks[0].AerospikeConfig,
-		false, ignorablePodNames,
-	); !res.IsSuccess {
+	// Revert migrate-fill-delay to the aerospikeConfig value as a final safety net in case any
+	// per-rack revert was missed (e.g. AKO crashed mid-reconcile with MFD at the override value).
+	// force=true bypasses the DynamicMigrateFillDelay guard so that a stale shadow value
+	// (caused by a previous status patch failure) cannot leave the cluster stuck at the
+	// override value indefinitely.
+	if res := r.revertMFDToConfig(ctx, policy, ignorablePodNames, true); !res.IsSuccess {
 		if res.Err != nil {
 			r.computedState.failureReason = asdbv1.AerospikeClusterReasonMFDSetFailed
 
@@ -694,6 +693,12 @@ func (r *SingleClusterReconciler) updateStatus(ctx context.Context) error {
 
 	newAeroCluster.Status.AerospikeClusterStatusSpec = *specToStatus
 	newAeroCluster.Status.Phase = asdbv1.AerospikeClusterCompleted
+
+	// DynamicMigrateFillDelay is managed exclusively by setMigrateFillDelay, which persists it
+	// to the API server immediately and keeps r.aeroCluster.Status in sync via the patch response.
+	// Copy the already-persisted value forward so the final status patch in updateStatus does not
+	// inadvertently reset it to zero.
+	newAeroCluster.Status.DynamicMigrateFillDelay = r.aeroCluster.Status.DynamicMigrateFillDelay
 
 	// Carry forward conditions from r.aeroCluster (which is kept in sync by setConditions calls).
 	// We must deep-copy the slice: patchStatus diffs r.aeroCluster (old) vs newAeroCluster (new).
