@@ -221,17 +221,17 @@ var _ = Describe(
 
 								racks[0].InputAerospikeConfig = &asdbv1.AerospikeConfigSpec{
 									Value: map[string]interface{}{
-										"service": map[string]interface{}{
-											"proto-fd-max":       10000,
-											"migrate-fill-delay": 30,
+										asdbv1.ConfKeyService: map[string]interface{}{
+											"proto-fd-max":                 10000,
+											asdbv1.ConfKeyMigrateFillDelay: 30,
 										},
 									},
 								}
 								racks[1].InputAerospikeConfig = &asdbv1.AerospikeConfigSpec{
 									Value: map[string]interface{}{
-										"service": map[string]interface{}{
-											"proto-fd-max":       12000,
-											"migrate-fill-delay": 30,
+										asdbv1.ConfKeyService: map[string]interface{}{
+											"proto-fd-max":                 12000,
+											asdbv1.ConfKeyMigrateFillDelay: 30,
 										},
 									},
 								}
@@ -423,8 +423,8 @@ var _ = Describe(
 
 										RackASConfig := &asdbv1.AerospikeConfigSpec{
 											Value: map[string]interface{}{
-												"service": map[string]interface{}{
-													"migrate-fill-delay": 200,
+												asdbv1.ConfKeyService: map[string]interface{}{
+													asdbv1.ConfKeyMigrateFillDelay: 200,
 												},
 											},
 										}

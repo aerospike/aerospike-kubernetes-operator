@@ -47,8 +47,27 @@ import (
 // skipped from cluster-operation queries (host connections, roster, quiesce).
 // Pods with a running server but a failing sidecar are not in this set; they are
 // included in all cluster-operation calls since their servers are still reachable.
+//
+// migrateFillDelay is the target migrate-fill-delay value; drainBeforeStability controls whether
+// MFD is zeroed before the stability check. Both are computed by mfdDelayForRestart (rolling
+// restart / upgrade) or set directly by the scale-down path.
+//
+//   - drainBeforeStability == true, migrateFillDelay > 0 (rolling restart with override or
+//     DeleteLocalStorageOnRestart): MFD was transiently raised by the previous iteration; zero it
+//     first so that fills held from the previous quiesce can drain, then raise to migrateFillDelay
+//     before the next quiesce to suppress fills for the upcoming pod restart.
+//   - drainBeforeStability == true, migrateFillDelay == 0 (scale-down): zero MFD before the
+//     stability check so that any fills held from a prior rolling restart (or a previous
+//     scale-down step) can drain quickly. MFD is never raised before quiesce — once a node is
+//     permanently removed we want fills to proceed immediately.
+//   - drainBeforeStability == false (non-drain path): set MFD to migrateFillDelay (configMFD or
+//     0) before the stability check. This corrects any stale elevated MFD left by a previous
+//     batch — e.g. when a warm-only batch follows a podRestart batch that raised the override.
+//     The DynamicMigrateFillDelay guard skips the call when MFD is already at the correct value.
+//     MFD is not raised again before quiesce on this path (it is already at migrateFillDelay).
 func (r *SingleClusterReconciler) waitForMultipleNodesSafeStopReady(
 	ctx context.Context, pods []*corev1.Pod, ignorablePodNames sets.Set[string],
+	migrateFillDelay int, drainBeforeStability bool,
 ) common.ReconcileResult {
 	if len(pods) == 0 {
 		return common.ReconcileSuccess()
@@ -98,6 +117,22 @@ func (r *SingleClusterReconciler) waitForMultipleNodesSafeStopReady(
 		"[rack-%s] Waiting for migrations to complete", pods[0].Labels[asdbv1.AerospikeRackIDLabel],
 	)
 
+	// Bring MFD to the right value before the stability check:
+	//   drainBeforeStability=true  (override / DeleteLocalStorageOnRestart / scale-down path):
+	//     zero MFD so that fills held from the previous quiesce can drain freely.
+	//   drainBeforeStability=false (non-drain path):
+	//     set MFD to migrateFillDelay (configMFD or 0) to correct any stale value left by a
+	//     previous batch — e.g. when a warm-only batch follows a podRestart batch that raised the
+	//     override. The DynamicMigrateFillDelay guard skips the call when MFD is already correct.
+	preStabilityMFD := 0
+	if !drainBeforeStability {
+		preStabilityMFD = migrateFillDelay
+	}
+
+	if res := r.setMigrateFillDelay(ctx, policy, preStabilityMFD, ignorablePodNames, allHostConns, false); !res.IsSuccess {
+		return res
+	}
+
 	// Check for cluster stability
 	if res := r.waitForClusterStability(policy, allHostConns); !res.IsSuccess {
 		return res
@@ -107,6 +142,18 @@ func (r *SingleClusterReconciler) waitForMultipleNodesSafeStopReady(
 	if err = r.getAndSetRoster(ctx, policy, r.aeroCluster.Spec.RosterNodeBlockList, ignorablePodNames); err != nil {
 		r.Log.Error(err, "Failed to set roster for cluster, will requeue")
 		return common.ReconcileRequeueAfter(1)
+	}
+
+	// Raise MFD to migrateFillDelay before quiesce. Only applies on the drain path
+	// (drainBeforeStability=true) where MFD was zeroed above and needs to be raised to the
+	// override value to suppress fills while the pod is absent. On the non-drain path MFD was
+	// already set to migrateFillDelay before stability, so this is intentionally skipped.
+	if drainBeforeStability && migrateFillDelay > 0 {
+		if res := r.setMigrateFillDelay(
+			ctx, policy, migrateFillDelay, ignorablePodNames, allHostConns, false,
+		); !res.IsSuccess {
+			return res
+		}
 	}
 
 	if err := r.quiescePods(ctx, policy, allHostConns, pods, ignorablePodNames); err != nil {
@@ -401,50 +448,66 @@ func hostID(hostName string, hostPort int) string {
 	return fmt.Sprintf("%s:%d", hostName, hostPort)
 }
 
+// setMigrateFillDelay sets the migrate-fill-delay on all cluster nodes to delay fill migrations.
+// The caller is responsible for resolving delay (e.g. via GetMigrateFillDelay for the
+// config-driven value, or a literal 0 for scale-down resets).
+//
+// hostConns may be passed by callers that have already built the connection list (e.g.
+// waitForMultipleNodesSafeStopReady) to avoid a redundant pod-list fetch. Pass nil to have
+// setMigrateFillDelay create the connections itself using ignorablePodNames.
+//
+// When force is false the call is skipped when delay equals status.DynamicMigrateFillDelay,
+// which tracks the last value AKO successfully applied and is persisted after every server call.
+// Set force=true to bypass this guard; use it in safety-net / revert paths to protect against
+// the rare case where the previous status patch failed and the shadow value is stale while the
+// live cluster is still at the old override value.
 func (r *SingleClusterReconciler) setMigrateFillDelay(
 	ctx context.Context,
 	policy *as.ClientPolicy,
-	asConfig *asdbv1.AerospikeConfigSpec, setToZero bool, ignorablePodNames sets.Set[string],
+	delay int,
+	ignorablePodNames sets.Set[string],
+	hostConns []*deployment.HostConn,
+	force bool,
 ) common.ReconcileResult {
-	migrateFillDelay, err := asdbv1.GetMigrateFillDelay(asConfig)
-	if err != nil {
-		return common.ReconcileError(err)
-	}
-
-	var oldMigrateFillDelay int
-
-	if len(r.aeroCluster.Status.RackConfig.Racks) > 0 {
-		oldMigrateFillDelay, err = asdbv1.GetMigrateFillDelay(&r.aeroCluster.Status.RackConfig.Racks[0].AerospikeConfig)
-		if err != nil {
-			return common.ReconcileError(err)
-		}
-	}
-
-	if migrateFillDelay == 0 && oldMigrateFillDelay == 0 {
-		r.Log.Info("migrate-fill-delay config not present or 0, skipping it")
+	if !force && int64(delay) == r.aeroCluster.Status.DynamicMigrateFillDelay {
+		r.Log.Info("migrate-fill-delay already at desired value, skipping", "value", delay)
 		return common.ReconcileSuccess()
 	}
 
-	// Set migrate-fill-delay to 0 if setToZero flag is set
-	if setToZero {
-		migrateFillDelay = 0
+	// Use the caller-supplied connections when available; otherwise fetch the pod list now.
+	// This doesn't make actual connection, only objects having connection info are created.
+	allHostConns := hostConns
+	if allHostConns == nil {
+		var err error
+
+		allHostConns, err = r.newAllHostConnWithOption(ctx, ignorablePodNames)
+		if err != nil {
+			return common.ReconcileError(fmt.Errorf("get host connections for cluster nodes: %w", err))
+		}
 	}
 
-	// This doesn't make actual connection, only objects having connection info are created
-	allHostConns, err := r.newAllHostConnWithOption(ctx, ignorablePodNames)
-	if err != nil {
-		return common.ReconcileError(
-			fmt.Errorf(
-				"get host connections for cluster nodes: %w", err,
-			),
-		)
-	}
+	r.Log.Info("Setting migrate-fill-delay", "migrateFillDelay", delay)
 
-	r.Log.Info("Setting migrate-fill-delay", "migrateFillDelay", migrateFillDelay)
-
-	if err := deployment.SetMigrateFillDelay(r.Log, policy, allHostConns, migrateFillDelay); err != nil {
+	if err := deployment.SetMigrateFillDelay(r.Log, policy, allHostConns, delay); err != nil {
 		return common.ReconcileError(err)
 	}
+
+	// Persist DynamicMigrateFillDelay immediately so the value survives a mid-reconcile requeue.
+	// Use a separate patchTarget (same pattern as conditions.go) so the API server's full
+	// response is NOT written back into r.aeroCluster — which would silently overwrite any
+	// spec fields that the user changed mid-reconcile. Only the changed status field and the
+	// new ResourceVersion are selectively copied back.
+	patchTarget := r.aeroCluster.DeepCopy()
+	patch := client.MergeFrom(r.aeroCluster.DeepCopy())
+
+	patchTarget.Status.DynamicMigrateFillDelay = int64(delay)
+
+	if err := r.Client.Status().Patch(ctx, patchTarget, patch); err != nil {
+		return common.ReconcileError(fmt.Errorf("persist dynamic migrate-fill-delay in status: %w", err))
+	}
+
+	r.aeroCluster.Status.DynamicMigrateFillDelay = patchTarget.Status.DynamicMigrateFillDelay
+	r.aeroCluster.ResourceVersion = patchTarget.ResourceVersion
 
 	return common.ReconcileSuccess()
 }

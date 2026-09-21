@@ -100,9 +100,10 @@ const (
 	confKeySecurityDefaultPasswordFile = "default-password-file"
 
 	// Service section keys.
-	ConfKeyService                    = "service"
-	confKeyWorkDirectory              = "work-directory"
-	ConfigKeyCgroupMemTracking        = "cgroup-mem-tracking"
+	ConfKeyService             = "service"
+	confKeyWorkDirectory       = "work-directory"
+	ConfigKeyCgroupMemTracking = "cgroup-mem-tracking"
+	ConfKeyMigrateFillDelay    = "migrate-fill-delay"
 	ConfKeyServiceIndexCheckpointPath = "index-checkpoint-path"
 
 	// Defaults.
@@ -579,9 +580,16 @@ func GetIntType(value interface{}) (int, error) {
 
 // GetMigrateFillDelay returns the migrate-fill-delay from the Aerospike configuration
 func GetMigrateFillDelay(asConfig *AerospikeConfigSpec) (int, error) {
-	serviceConfig := asConfig.Value[ConfKeyService].(map[string]interface{})
+	if asConfig == nil {
+		return 0, nil
+	}
 
-	fillDelayIFace, exists := serviceConfig["migrate-fill-delay"]
+	serviceConfig, ok := asConfig.Value[ConfKeyService].(map[string]interface{})
+	if !ok {
+		return 0, nil
+	}
+
+	fillDelayIFace, exists := serviceConfig[ConfKeyMigrateFillDelay]
 	if !exists {
 		return 0, nil
 	}

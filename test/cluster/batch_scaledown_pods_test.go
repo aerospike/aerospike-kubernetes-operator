@@ -103,8 +103,9 @@ var _ = Describe("BatchScaleDown", func() {
 		BeforeEach(
 			func() {
 				aeroCluster := createNonSCDummyAerospikeCluster(clusterNamespacedName, 4)
-				aeroCluster.Spec.AerospikeConfig.Value[asdbv1.ConfKeyService].(map[string]interface{})["migrate-fill-delay"] =
-					migrateFillDelay
+				svcConf := aeroCluster.Spec.AerospikeConfig.Value[asdbv1.ConfKeyService].(map[string]interface{})
+				svcConf[asdbv1.ConfKeyMigrateFillDelay] = migrateFillDelay
+
 				Expect(DeployCluster(k8sClient, ctx, aeroCluster)).ToNot(HaveOccurred())
 			},
 		)
