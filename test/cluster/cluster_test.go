@@ -596,8 +596,9 @@ func ScaleDownWithMigrateFillDelay(ctx goctx.Context) {
 			BeforeEach(
 				func() {
 					aeroCluster := createDummyAerospikeCluster(clusterNamespacedName, 4)
-					aeroCluster.Spec.AerospikeConfig.Value[asdbv1.ConfKeyService].(map[string]interface{})["migrate-fill-delay"] =
-						migrateFillDelay
+					svcConf := aeroCluster.Spec.AerospikeConfig.Value[asdbv1.ConfKeyService].(map[string]interface{})
+					svcConf[asdbv1.ConfKeyMigrateFillDelay] = migrateFillDelay
+
 					Expect(DeployCluster(k8sClient, ctx, aeroCluster)).ToNot(HaveOccurred())
 
 					// Load data so that scale-down triggers real migrations.
