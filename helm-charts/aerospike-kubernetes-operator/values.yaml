@@ -92,7 +92,7 @@ aerospikeKubernetesInitRegistry: "docker.io" # @schema required; minLength: 1
 aerospikeKubernetesInitRegistryNamespace: "aerospike" # @schema required; minLength: 1
 
 # -- Name and tag of aerospike-init image
-aerospikeKubernetesInitNameTag: "aerospike-kubernetes-init:2.5.3" # @schema required; pattern:^\S+:\S+$
+aerospikeKubernetesInitNameTag: "aerospike-kubernetes-init:2.5.4-dev1" # @schema required; pattern:^\S+:\S+$
 
 # -- Resources - limits / requests
 resources:
