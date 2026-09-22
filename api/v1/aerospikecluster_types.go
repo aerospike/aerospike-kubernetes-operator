@@ -649,7 +649,6 @@ type RackConfig struct { //nolint:govet // for readability
 	// before the per-rack removal loop starts, collapsing what would otherwise be N sequential
 	// migration rounds (one per rack) into a single concurrent migration round.
 	// Disabled by default (nil / false).
-	// +operator-sdk:csv:customresourcedefinitions:type=spec,displayName="Enable Parallel Scale-Down Across Racks"
 	// +optional
 	EnableParallelScaleDownAcrossRacks *bool `json:"enableParallelScaleDownAcrossRacks,omitempty"`
 

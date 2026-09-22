@@ -163,6 +163,18 @@ func (r *SingleClusterReconciler) waitForMultipleNodesSafeStopReady(
 		}
 	}
 
+	// Raise MFD to migrateFillDelay before quiesce. Only applies on the drain path
+	// (drainBeforeStability=true) where MFD was zeroed above and needs to be raised to the
+	// override value to suppress fills while the pod is absent. On the non-drain path MFD was
+	// already set to migrateFillDelay before stability, so this is intentionally skipped.
+	if drainBeforeStability && migrateFillDelay > 0 {
+		if res := r.setMigrateFillDelay(
+			ctx, policy, migrateFillDelay, ignorablePodNames, allHostConns, false,
+		); !res.IsSuccess {
+			return res
+		}
+	}
+
 	if err := r.quiescePods(ctx, policy, allHostConns, pods, ignorablePodNames); err != nil {
 		return common.ReconcileError(err)
 	}
