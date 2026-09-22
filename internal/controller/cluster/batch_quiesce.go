@@ -223,11 +223,18 @@ func (r *SingleClusterReconciler) reconcileBatchQuiesce(
 
 	r.Log.Info("Running cross-rack batch quiesce pre-pass", "targetCount", len(allTargets))
 
-	// Classify target pods: never-joined targets are added to ignorablePodNames
+	// Local copy so that classifyTargetPods additions (never-joined pods) don't
+	// bleed into the ignorablePodNames used by reconcileRack in Step 4.
+	// Step 2 (non-scaled-down racks) already ran with the original set, so this
+	// copy is identical to ignorablePodNames at this point — only future mutations
+	// within this function are isolated.
+	localIgnorable := ignorablePodNames.Union(sets.New[string]())
+
+	// Classify target pods: never-joined targets are added to localIgnorable
 	// so waitForMultipleNodesSafeStopReady skips them in its server-readiness
 	// wait. Previously-joined but non-running targets return ReconcileError.
 	targetNames := sets.New(getPodNames(allTargets)...)
-	if res := r.classifyTargetPods(ctx, targetNames, ignorablePodNames); !res.IsSuccess {
+	if res := r.classifyTargetPods(ctx, targetNames, localIgnorable); !res.IsSuccess {
 		return res
 	}
 
@@ -240,7 +247,7 @@ func (r *SingleClusterReconciler) reconcileBatchQuiesce(
 	//   - waitForClusterStability
 	//   - SC roster management + second stability wait
 	//   - quiescePods(allTargets)
-	if res := r.waitForMultipleNodesSafeStopReady(ctx, allTargets, ignorablePodNames, 0, true); !res.IsSuccess {
+	if res := r.waitForMultipleNodesSafeStopReady(ctx, allTargets, localIgnorable, 0, true); !res.IsSuccess {
 		return res
 	}
 

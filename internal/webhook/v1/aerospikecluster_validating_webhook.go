@@ -851,13 +851,16 @@ func validateForceBlockFromRosterUpdate(newObj *asdbv1.AerospikeCluster) error {
 // validateBatchScaleDownQuiesceToggle blocks disabling EnableParallelScaleDownAcrossRacks
 // while a scale-down is in flight; enabling is always safe.
 //
-// Enabling mid-scale-down is harmless — no pods are annotated yet and quiesce
-// is idempotent. Disabling mid-scale-down is unsafe: already-annotated/quiesced
-// pods would be left permanently quiesced (reconcileQuiesceUndo stops running).
+// Enabling mid-scale-down is harmless — quiesce is idempotent and no pods are
+// annotated yet. Disabling mid-scale-down is unsafe: already-quiesced pods carry
+// BatchQuiesceAnnotation and reconcileQuiesceUndo stops running, leaving them
+// permanently quiesced.
 //
-// Disable is only allowed when the cluster was fully stable before this update
-// (oldStatus.Size == oldSpec.Size). Without this guard, a user who committed a
-// prior spec reduction still in flight could slip through by reducing further.
+// "In flight" is detected by scaleDownInFlight which covers three cases:
+//   - Total size decrease     (status.Size > spec.Size)
+//   - Rack deletion/replacement (rack ID present in status but absent from spec)
+//   - Per-rack scale-down     (rack topology shrinks even if total size is unchanged,
+//     e.g. adding a rack while keeping spec.Size the same)
 func validateBatchScaleDownQuiesceToggle(oldObj, newObj *asdbv1.AerospikeCluster) error {
 	oldEnabled := ptr.Deref(oldObj.Spec.RackConfig.EnableParallelScaleDownAcrossRacks, false)
 	newEnabled := ptr.Deref(newObj.Spec.RackConfig.EnableParallelScaleDownAcrossRacks, false)
@@ -867,24 +870,50 @@ func validateBatchScaleDownQuiesceToggle(oldObj, newObj *asdbv1.AerospikeCluster
 		return nil
 	}
 
-	// Disabling (true → false): allow only when cluster was stable before this
-	// update and this update atomically initiates a new scale-down.
-	clusterWasStable := oldObj.Status.Size == oldObj.Spec.Size
-	if clusterWasStable && newObj.Spec.Size < oldObj.Spec.Size {
-		return nil
-	}
-
-	// Deny: scale-down already in flight.
-	if oldObj.Status.Size > newObj.Spec.Size {
+	// Disabling (true → false): deny if any scale-down is already in flight.
+	if scaleDownInFlight(oldObj) {
 		return fmt.Errorf(
-			"cannot disable enableParallelScaleDownAcrossRacks: scale-down is already in progress "+
-				"(status.size=%d, spec.size=%d); "+
-				"wait for scale-down to complete before disabling the flag",
-			oldObj.Status.Size, newObj.Spec.Size,
+			"cannot disable enableParallelScaleDownAcrossRacks: scale-down is already in progress; " +
+				"wait for the cluster to reach its desired state before disabling the flag",
 		)
 	}
 
 	return nil
+}
+
+// scaleDownInFlight reports whether a scale-down (or rack deletion/replacement)
+// is currently in progress, meaning pods may already carry BatchQuiesceAnnotation.
+//
+// Two checks are performed in two passes:
+//  1. Build a map of spec rack ID → effective pod count from the spec topology.
+//  2. Sweep status racks: a status rack missing from spec (deletion/replacement)
+//     or whose effective count exceeds the spec count (per-rack shrink) indicates
+//     an in-flight operation.
+func scaleDownInFlight(obj *asdbv1.AerospikeCluster) bool {
+	specRacks := obj.Spec.RackConfig.Racks
+	statusRacks := obj.Status.RackConfig.Racks
+
+	// Pass 1: build spec effective size per rack ID.
+	specTopology := asdbv1.DistributeItems(obj.Spec.Size, utils.Len32(specRacks))
+	specSizeByID := make(map[int]int32, len(specRacks))
+
+	for i := range specRacks {
+		specSizeByID[specRacks[i].ID] = specTopology[i]
+	}
+
+	// Pass 2: single sweep over status racks checks both conditions:
+	//   !inSpec            → rack deletion/replacement in flight
+	//   statusSize > spec  → per-rack scale-down in flight (e.g. rack added at same total size)
+	statusTopology := asdbv1.DistributeItems(obj.Status.Size, utils.Len32(statusRacks))
+
+	for i := range statusRacks {
+		specSize, inSpec := specSizeByID[statusRacks[i].ID]
+		if !inSpec || statusTopology[i] > specSize {
+			return true
+		}
+	}
+
+	return false
 }
 
 func validateConcurrentRackRevisions(oldObj, newObj *asdbv1.AerospikeCluster) error {
