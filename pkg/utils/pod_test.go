@@ -207,9 +207,10 @@ func TestIsAerospikeServerReady(t *testing.T) {
 	now := metav1.Now()
 
 	tests := []struct {
-		pod      *corev1.Pod
-		name     string
-		expected bool
+		pod           *corev1.Pod
+		name          string
+		expected      bool
+		expectedStale bool
 	}{
 		{
 			name: "terminating pod returns false regardless of container state",
@@ -584,35 +585,40 @@ func TestIsPodCheckpointing(t *testing.T) {
 	}
 
 	tests := []struct {
-		pod      *corev1.Pod
-		name     string
-		expected bool
+		pod           *corev1.Pod
+		name          string
+		expected      bool
+		expectedStale bool
 	}{
 		{
-			name:     "no annotation: never parked",
-			pod:      pod("", parkedID),
-			expected: false,
+			name:          "no annotation: never parked",
+			pod:           pod("", parkedID),
+			expected:      false,
+			expectedStale: false,
 		},
 		{
-			name:     "annotation matches the running container: parked",
-			pod:      pod(parkedID, parkedID),
-			expected: true,
+			name:          "annotation matches the running container: parked",
+			pod:           pod(parkedID, parkedID),
+			expected:      true,
+			expectedStale: false,
 		},
 		{
 			// The OOM/crash/park-timeout case: asd exited, kubelet restarted the
 			// container, so the park we recorded is over.
-			name:     "container restarted since the park: not parked",
-			pod:      pod(parkedID, "containerd://bbbb2222"),
-			expected: false,
+			name:          "container restarted since the park: not parked, stale",
+			pod:           pod(parkedID, "containerd://bbbb2222"),
+			expected:      false,
+			expectedStale: true,
 		},
 		{
 			// Mid-restart, before the new container ID is published.
-			name:     "container ID not yet published: not parked",
-			pod:      pod(parkedID, ""),
-			expected: false,
+			name:          "container ID not yet published: not parked, stale",
+			pod:           pod(parkedID, ""),
+			expected:      false,
+			expectedStale: true,
 		},
 		{
-			name: "no server container status: not parked",
+			name: "no server container status: not parked, stale",
 			pod: &corev1.Pod{
 				ObjectMeta: metav1.ObjectMeta{
 					Annotations: map[string]string{asdbv1.IndexCheckpointParkedAnnotation: parkedID},
@@ -623,10 +629,11 @@ func TestIsPodCheckpointing(t *testing.T) {
 					},
 				},
 			},
-			expected: false,
+			expected:      false,
+			expectedStale: true,
 		},
 		{
-			name: "empty annotation value: not parked",
+			name: "empty annotation value: never parked",
 			pod: &corev1.Pod{
 				ObjectMeta: metav1.ObjectMeta{
 					Annotations: map[string]string{asdbv1.IndexCheckpointParkedAnnotation: ""},
@@ -637,14 +644,17 @@ func TestIsPodCheckpointing(t *testing.T) {
 					},
 				},
 			},
-			expected: false,
+			expected:      false,
+			expectedStale: false,
 		},
 	}
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			if result := IsPodCheckpointing(tt.pod); result != tt.expected {
-				t.Errorf("IsPodCheckpointing() = %v, expected %v", result, tt.expected)
+			parked, stale := IsPodCheckpointing(tt.pod)
+			if parked != tt.expected || stale != tt.expectedStale {
+				t.Errorf("IsPodCheckpointing() = (%v, %v), expected (%v, %v)",
+					parked, stale, tt.expected, tt.expectedStale)
 			}
 		})
 	}

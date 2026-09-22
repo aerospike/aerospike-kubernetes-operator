@@ -1788,10 +1788,40 @@ func getFlatConfig(log logger, confStr string) (*asconfig.Conf, error) {
 	return asConf.GetFlatMap(), nil
 }
 
+// runningAerospikeConfig returns the aerospikeConfig the pod's server is actually running.
+// Returns nil when the pod carries no rendered config.
+func runningAerospikeConfig(log logger, pod *corev1.Pod) (map[string]interface{}, error) {
+	confStr := pod.Annotations[asdbv1.AerospikeConfAnnotation]
+	if confStr == "" {
+		return nil, nil
+	}
+
+	asConf, err := asconfig.NewASConfigFromBytes(log, []byte(confStr), asconfig.AeroConfig)
+	if err != nil {
+		return nil, fmt.Errorf("parse %s annotation of Pod %s: %w",
+			asdbv1.AerospikeConfAnnotation, utils.GetNamespacedNameString(pod), err)
+	}
+
+	// ToMap renders list sections as []asconfig.Conf and sizes as uint64; the api/v1
+	// accessors want the CR's []interface{} and a type GetIntType accepts.
+	raw, err := json.Marshal(asConf.ToMap())
+	if err != nil {
+		return nil, err
+	}
+
+	conf := map[string]interface{}{}
+	if err := json.Unmarshal(raw, &conf); err != nil {
+		return nil, fmt.Errorf("parse %s annotation of Pod %s: %w",
+			asdbv1.AerospikeConfAnnotation, utils.GetNamespacedNameString(pod), err)
+	}
+
+	return conf, nil
+}
+
 // getConfDiff retrieves the configuration differences between the spec and status Aerospike configurations.
 func getConfDiff(log logger, specConfig map[string]interface{}, podAnnotations map[string]string,
 	version string) (asconfig.DynamicConfigMap, error) {
-	statusFromAnnotation, ok := podAnnotations["aerospikeConf"]
+	statusFromAnnotation, ok := podAnnotations[asdbv1.AerospikeConfAnnotation]
 	if !ok {
 		log.Info("Pod annotation 'aerospikeConf' missing")
 		return nil, nil

@@ -192,20 +192,29 @@ func IsAerospikeServerReady(pod *corev1.Pod) bool {
 // IsPodCheckpointing reports whether this pod's Aerospike node is parked for an index
 // checkpoint, and is therefore no longer a cluster member and answers only
 // checkpoint-status and checkpoint-save on the info port.
+//
+// stale is true when a park annotation is present but no longer matches the running
+// container: a park we recorded has since ended, normally because it timed out and the
+// container restarted. parked and stale are never both true.
+//
 // The annotation is compared against the server container's current ID rather than
 // merely checked for presence. A park ends only by the pod being deleted, which takes
 // the annotation with it, or by asd exiting — on timeout, crash or OOM — which restarts
 // the container and changes its ID. So a matching ID proves the park we recorded is
 // still the one running. An unreadable ID means a restart is in flight, which is not a park.
-// NOTE: The annotation is left behind on the park-timeout path, where the pod object
+// NOTE: a stale annotation is left behind on the park-timeout path, where the pod object
 // survives the container restart. Self-heals on the pod's next restart trigger.
-func IsPodCheckpointing(pod *corev1.Pod) bool {
+func IsPodCheckpointing(pod *corev1.Pod) (checkpointing, stale bool) {
 	parkedContainerID, ok := pod.Annotations[asdbv1.IndexCheckpointParkedAnnotation]
 	if !ok || parkedContainerID == "" {
-		return false
+		return false, false
 	}
 
-	return parkedContainerID == GetAerospikeServerContainerID(pod)
+	if parkedContainerID == GetAerospikeServerContainerID(pod) {
+		return true, false
+	}
+
+	return false, true
 }
 
 // GetAerospikeServerContainerID returns the pod's aerospike-server container ID, or "" if it has none yet.

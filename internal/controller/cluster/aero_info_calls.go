@@ -223,7 +223,14 @@ func (r *SingleClusterReconciler) reconcileCheckpointingPods(
 
 	for idx := range podList.Items {
 		pod := &podList.Items[idx]
-		if !utils.IsPodCheckpointing(pod) {
+
+		checkpointing, stale := utils.IsPodCheckpointing(pod)
+		if !checkpointing {
+			if stale {
+				r.Log.Info("Ignoring stale index checkpoint park annotation",
+					"pod", utils.GetNamespacedName(pod))
+			}
+
 			continue
 		}
 
@@ -393,7 +400,7 @@ func (r *SingleClusterReconciler) newPodsHostConnWithOption(pods []corev1.Pod, i
 		// commands, so including it would fail every caller's info call. Excluding it
 		// is also what makes the expected size match the cluster_size the remaining
 		// nodes report.
-		if utils.IsPodCheckpointing(pod) {
+		if checkpointing, _ := utils.IsPodCheckpointing(pod); checkpointing {
 			r.Log.V(1).Info("Excluding checkpoint-parked Pod from cluster info calls",
 				"pod", utils.GetNamespacedName(pod))
 
@@ -614,9 +621,9 @@ const skipCheckpointCmdFmt = "set-config:context=namespace;namespace=%s;skip-che
 // completing even in the worst alignment, and the delete follows in that same pass.
 const checkpointParkTimeoutSec = 300
 
-// triggerIndexCheckpointSave sends checkpoint-save to every pod in pods, then polls
-// checkpoint-status for the whole batch together. Called once per batch, before any pod
-// is touched.
+// triggerIndexCheckpointSave sends checkpoint-save to every pod in pods whose checkpoint the
+// replacement pod could still read, then polls checkpoint-status for them together. Called
+// once per batch, before any pod is touched.
 // Idempotence comes from the server, the save is sent unconditionally, and the response classified,
 // so a pod already saving, or fresh save, both resolve correctly with no additional state.
 // Checkpointing is skipped for namespace if
@@ -631,30 +638,36 @@ func (r *SingleClusterReconciler) triggerIndexCheckpointSave(
 		return common.ReconcileSuccess()
 	}
 
-	rackStatus := r.getRackStatus(rackState)
-	if rackStatus == nil {
-		return common.ReconcileSuccess()
-	}
-
-	eligibleNSs, skipNSs := r.splitCheckpointNamespaces(rackStatus, rackState.Rack)
-	if len(eligibleNSs) == 0 {
-		if len(skipNSs) != 0 {
-			r.Log.Info("Skipping index checkpoint save, no namespace's checkpoint would be read",
-				"skippedNamespaces", skipNSs)
-		}
-
-		return common.ReconcileSuccess()
-	}
-
 	policy := r.getClientPolicy(ctx)
-
-	r.skipCheckpointForNamespaces(pods, skipNSs, policy)
 
 	var anyParked bool
 
 	// No checkpoint-status precheck: the server answers a re-issue idempotently so an already-saving pod
 	// classifies as CheckpointSaveAccepted below
 	for _, pod := range pods {
+		// Read the aerospikeConfig from the annotation to understand the intermediate updates done during mid-reconcile.
+		// Status is not reliable in this case because it doesn't tell about intermediate updates
+		runningConf, err := runningAerospikeConfig(r.Log, pod)
+		if err != nil {
+			return common.ReconcileError(err)
+		}
+
+		if runningConf == nil {
+			continue
+		}
+
+		eligibleNSs, skipNSs := r.splitCheckpointNamespaces(runningConf, rackState.Rack.AerospikeConfig.Value)
+		if len(eligibleNSs) == 0 {
+			if len(skipNSs) != 0 {
+				r.Log.Info("Skipping index checkpoint save, no namespace's checkpoint would be read",
+					"pod", utils.GetNamespacedName(pod), "skippedNamespaces", skipNSs)
+			}
+
+			continue
+		}
+
+		r.skipCheckpointForNamespaces(pod, skipNSs, policy)
+
 		verdict, err := r.newAsConn(pod).CheckpointSave(policy, checkpointParkTimeoutSec)
 		if err != nil {
 			// Network-level failure (connection error, timeout, EOF).
@@ -678,10 +691,9 @@ func (r *SingleClusterReconciler) triggerIndexCheckpointSave(
 			anyParked = true
 
 		case deployment.CheckpointSaveNothingToDo:
-			// The running config disagrees with the rack status AKO derived its
-			// namespace set from. Retrying cannot fix it, and no checkpoint was
-			// possible, so proceed rather than wedge the restart — but say so
-			// loudly, since a shadowless memory namespace loses its data this way.
+			// The server disagrees with the config AKO derived its namespace set from.
+			// Retrying cannot fix it, and no checkpoint was possible, so proceed rather
+			// than wedge the restart.
 			r.Log.Info("Server reports no checkpointing namespace, proceeding without a checkpoint",
 				"pod", utils.GetNamespacedName(pod), "expectedNamespaces", eligibleNSs)
 
@@ -758,39 +770,38 @@ func (r *SingleClusterReconciler) markPodCheckpointParked(ctx context.Context, p
 	}
 }
 
-// splitCheckpointNamespaces divides the namespaces the running servers are
-// checkpointing into those still worth saving (eligibleNSs) and those to opt out (skipNSs).
-//
+// splitCheckpointNamespaces divides the namespaces one pod's server is checkpointing into
+// those still worth saving (eligibleNSs) and those to opt out (skipNSs). runningConf is that
+// pod's running config, specConf the rack's desired one.
 // A namespace is skipped when the replacement pod will never usably read its checkpoint:
 //   - the cluster-wide path moved, so it lands at the abandoned path;
 //   - the namespace stopped checkpointing in the spec (removed, skip-checkpoint,);
 //   - its in-memory data layout changed — a different data-size, or storage backing
 //     gained or lost, so the checkpoint no longer describes the layout the replacement pod will have.
 func (r *SingleClusterReconciler) splitCheckpointNamespaces(
-	rackStatus, rackSpec *asdbv1.Rack,
+	runningConf, specConf map[string]interface{},
 ) (eligibleNSs, skipNSs []string) {
-	statusNSs := asdbv1.GetIndexCheckpointNamespaces(rackStatus.AerospikeConfig.Value)
-	if len(statusNSs) == 0 {
+	runningNSs := asdbv1.GetIndexCheckpointNamespaces(runningConf)
+	if len(runningNSs) == 0 {
 		return nil, nil
 	}
 
 	// The path is cluster-wide, so a change to it invalidates every namespace's checkpoint
 	// at once.
-	if asdbv1.GetIndexCheckpointPath(rackStatus.AerospikeConfig.Value) !=
-		asdbv1.GetIndexCheckpointPath(rackSpec.AerospikeConfig.Value) {
+	if asdbv1.GetIndexCheckpointPath(runningConf) != asdbv1.GetIndexCheckpointPath(specConf) {
 		r.Log.Info("Excluding every namespace from the imminent index checkpoint save: "+
 			"the cluster-wide index-checkpoint-path moved, so every checkpoint would land "+
-			"at the abandoned path", "namespaces", statusNSs)
+			"at the abandoned path", "namespaces", runningNSs)
 
-		return nil, statusNSs
+		return nil, runningNSs
 	}
 
-	specNSs := sets.New[string](asdbv1.GetIndexCheckpointNamespaces(rackSpec.AerospikeConfig.Value)...)
+	specNSs := sets.New[string](asdbv1.GetIndexCheckpointNamespaces(specConf)...)
 
-	oldSizes := asdbv1.GetInMemoryNsDataSizes(rackStatus.AerospikeConfig.Value)
-	newSizes := asdbv1.GetInMemoryNsDataSizes(rackSpec.AerospikeConfig.Value)
+	oldSizes := asdbv1.GetInMemoryNsDataSizes(runningConf)
+	newSizes := asdbv1.GetInMemoryNsDataSizes(specConf)
 
-	for _, ns := range statusNSs {
+	for _, ns := range runningNSs {
 		oldSize := oldSizes[ns]
 		newSize := newSizes[ns]
 
@@ -820,45 +831,43 @@ func (r *SingleClusterReconciler) splitCheckpointNamespaces(
 }
 
 // skipCheckpointForNamespaces opts each namespace out of the imminent save by
-// setting skip-checkpoint dynamically on every pod in the batch. Must run BEFORE
+// setting skip-checkpoint dynamically on the pod. Must run BEFORE that pod's
 // checkpoint-save — once the save fires, set-config is FORBIDDEN for the whole park.
 // Failures are logged at Error but never fatal: a failed set-config leaves the
 // namespace checkpointing, costing a redundant copy that stretches the park — worth
 // an operator's attention, not an aborted restart.
 func (r *SingleClusterReconciler) skipCheckpointForNamespaces(
-	pods []*corev1.Pod, skippedNss []string, policy *as.ClientPolicy,
+	pod *corev1.Pod, skippedNSs []string, policy *as.ClientPolicy,
 ) {
-	if len(skippedNss) == 0 {
+	if len(skippedNSs) == 0 {
 		return
 	}
 
-	for _, pod := range pods {
-		asConn := r.newAsConn(pod)
+	asConn := r.newAsConn(pod)
 
-		for _, ns := range skippedNss {
-			cmd := fmt.Sprintf(skipCheckpointCmdFmt, ns)
+	for _, ns := range skippedNSs {
+		cmd := fmt.Sprintf(skipCheckpointCmdFmt, ns)
 
-			resp, err := asConn.RunInfo(policy, cmd)
-			if err != nil {
-				r.Log.Error(err, "Could not set skip-checkpoint, namespace will be checkpointed needlessly",
-					"pod", utils.GetNamespacedName(pod), "namespace", ns)
-
-				continue
-			}
-
-			if respVal := resp[cmd]; info.IsInfoErrorResponse(respVal) {
-				r.Log.Error(fmt.Errorf("skip-checkpoint rejected"),
-					"Could not set skip-checkpoint, namespace will be checkpointed needlessly",
-					"pod", utils.GetNamespacedName(pod), "namespace", ns, "response", respVal)
-
-				continue
-			}
-
-			// Why each namespace was excluded is a per-rack decision, logged once by
-			// the caller; this line is per pod and only confirms the opt-out landed.
-			r.Log.Info("Excluded namespace from the imminent index checkpoint save",
+		resp, err := asConn.RunInfo(policy, cmd)
+		if err != nil {
+			r.Log.Error(err, "Could not set skip-checkpoint, namespace will be checkpointed needlessly",
 				"pod", utils.GetNamespacedName(pod), "namespace", ns)
+
+			continue
 		}
+
+		if respVal := resp[cmd]; info.IsInfoErrorResponse(respVal) {
+			r.Log.Error(fmt.Errorf("skip-checkpoint rejected"),
+				"Could not set skip-checkpoint, namespace will be checkpointed needlessly",
+				"pod", utils.GetNamespacedName(pod), "namespace", ns, "response", respVal)
+
+			continue
+		}
+
+		// Why the namespace was excluded is logged once by the caller; this line only
+		// confirms the opt-out landed.
+		r.Log.Info("Excluded namespace from the imminent index checkpoint save",
+			"pod", utils.GetNamespacedName(pod), "namespace", ns)
 	}
 }
 
@@ -944,6 +953,13 @@ func (r *SingleClusterReconciler) pollAndDeleteParkedPods(
 				)
 			}
 
+			// The namespaces that reached done; a partial failure is reported separately above.
+			savedNSs := sets.List(sets.KeySet(resp.Namespaces).Difference(sets.New(failedNSs...)))
+
+			// Logged before the delete so the completion is recorded even if the delete fails.
+			r.Log.Info("Index checkpoint completed", "pod", utils.GetNamespacedName(pod),
+				"namespaces", savedNSs, "status", resp)
+
 			// isFailureRecovery is false by construction: the checkpoint save is only
 			// triggered on the planned path, so a parked pod is never a failure-recovery pod.
 			if err := r.deletePodWithLocalPVCs(ctx, rackForPod[pod.Name], pod, false); err != nil {
@@ -951,7 +967,6 @@ func (r *SingleClusterReconciler) pollAndDeleteParkedPods(
 			}
 
 			deleted = append(deleted, pod)
-			savedNSs := sets.List(sets.KeySet(resp.Namespaces))
 
 			r.Recorder.Eventf(
 				r.aeroCluster, corev1.EventTypeNormal, "IndexCheckpointCompleted",

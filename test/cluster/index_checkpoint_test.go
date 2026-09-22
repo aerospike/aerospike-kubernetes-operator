@@ -3,6 +3,7 @@ package cluster
 import (
 	goctx "context"
 	"fmt"
+	"strings"
 	"time"
 
 	asdbv1 "github.com/aerospike/aerospike-kubernetes-operator/v4/api/v1"
@@ -26,6 +27,7 @@ const (
 	ckptIndexMountPath = "/test/dev/xvdf-index"
 	ckptNumKeys        = 100
 	ckptAlternatePath  = "/mnt/index-ckpt-alternate"
+	ckptHalfDataSize   = 536870912
 )
 
 var _ = Describe(
@@ -93,9 +95,9 @@ var _ = Describe(
 			Expect(err).ToNot(HaveOccurred())
 
 			nsConf := getClusterNamespaceConfig(aeroCluster, ckptNsName)
-			nsConf[asdbv1.ConfKeyStorageEngine].(map[string]interface{})[asdbv1.ConfKeyDataSize] = 536870912
+			nsConf[asdbv1.ConfKeyStorageEngine].(map[string]interface{})[asdbv1.ConfKeyDataSize] = ckptHalfDataSize
 
-			// Check only in-mem. Skip the device backed assertion again
+			// Check only checkpointing namespace
 			applyAndExpectCheckpoint(ctx, aeroCluster, []string{testNsName})
 
 			By("PHASE 4: skip-checkpoint — the opted-out namespace is excluded from the save")
@@ -113,19 +115,14 @@ var _ = Describe(
 			expectRecords(ctx, clusterNamespacedName, ckptNsName,
 				"record should survive the config-only restart that applies skip-checkpoint")
 
-			aeroCluster, err = getCluster(k8sClient, ctx, clusterNamespacedName)
-			Expect(err).ToNot(HaveOccurred())
-
-			aeroCluster.Spec.PodSpec.AerospikeObjectMeta.Labels = testLabels
+			// remove labels to trigger pod restart
+			aeroCluster.Spec.PodSpec.AerospikeObjectMeta.Labels = nil
 
 			applyAndExpectCheckpoint(ctx, aeroCluster, []string{testNsName})
 
 			By("PHASE 5: index-checkpoint-path change — no checkpoint is taken at all")
 			// The path is cluster-wide, so moving it invalidates EVERY namespace's
 			// checkpoint at once.
-			aeroCluster, err = getCluster(k8sClient, ctx, clusterNamespacedName)
-			Expect(err).ToNot(HaveOccurred())
-
 			svc = aeroCluster.Spec.AerospikeConfig.Value[asdbv1.ConfKeyService].(map[string]interface{})
 			svc[asdbv1.ConfKeyServiceIndexCheckpointPath] = ckptAlternatePath
 
@@ -142,9 +139,6 @@ var _ = Describe(
 
 			// Scale-down should not trigger checkpointing flow
 			By("PHASE 6: scale-down — draining a node must not park it")
-
-			aeroCluster, err = getCluster(k8sClient, ctx, clusterNamespacedName)
-			Expect(err).ToNot(HaveOccurred())
 
 			aeroCluster.Spec.Size--
 
@@ -296,6 +290,7 @@ var _ = Describe(
 
 			Expect(remaining).To(HaveLen(len(nsList)-1), "the in-memory namespace should have been dropped")
 			aeroCluster.Spec.AerospikeConfig.Value[asdbv1.ConfKeyNamespace] = remaining
+			aeroCluster.Spec.PodSpec.AerospikeObjectMeta.Labels = testLabels
 
 			applyAndExpectCheckpoint(ctx, aeroCluster, []string{testNsName})
 		})
@@ -320,6 +315,53 @@ var _ = Describe(
 			// per-namespace record at all.
 			applyAndExpectCheckpoint(ctx, aeroCluster, nil)
 		})
+
+		// This testcase is to cover scenarios where changes are rolled out multiple times mid-reconcile and the
+		// restarted pod if eligible for checkpointing should trigger checkpointing irrespective of stale CR status
+		It("Should checkpoint a Pod already restarted onto the new config, mid-rollout", func() {
+			By("Deploying a 3-node cluster - the rollout has to still be in flight later")
+
+			aeroCluster := createIndexCheckpointCluster(clusterNamespacedName)
+			aeroCluster.Spec.Size = 3
+			Expect(DeployCluster(k8sClient, ctx, aeroCluster)).ToNot(HaveOccurred())
+
+			By("Changing ckpt's data-size - a podRestart-class change, one Pod at a time")
+
+			nsConfig := getClusterNamespaceConfig(aeroCluster, ckptNsName)
+			nsConfig[asdbv1.ConfKeyStorageEngine].(map[string]interface{})[asdbv1.ConfKeyDataSize] = ckptHalfDataSize
+
+			Expect(updateClusterWithNoWait(k8sClient, ctx, aeroCluster)).ToNot(HaveOccurred())
+
+			By("Waiting for the first Pod to come back on the new data-size")
+
+			// One is enough, and leaves the widest window: four Pods still to roll, each
+			// costing quiesce, cluster-stable, a park and a full come-up.
+			var onNewConfig sets.Set[string]
+
+			Eventually(func() int {
+				onNewConfig = podsRunningDataSize(aeroCluster, ckptHalfDataSize)
+				return onNewConfig.Len()
+			}, 5*time.Minute, 2*time.Second).Should(BeNumerically(">=", 1),
+				"no Pod came back carrying the new data-size")
+
+			By("Forcing a second pod restart before the first rollout completes")
+
+			aeroCluster.Spec.PodSpec.AerospikeObjectMeta.Labels = testLabels
+			Expect(updateClusterWithNoWait(k8sClient, ctx, aeroCluster)).ToNot(HaveOccurred())
+
+			aeroCluster, err := getCluster(k8sClient, ctx, clusterNamespacedName)
+			Expect(err).ToNot(HaveOccurred())
+
+			// Read the verdict only from a Pod already on the new data-size. One still to roll
+			// is legitimately opted out of ckpt, so its park reports {test} alone.
+			expectCheckpoint(aeroCluster, onNewConfig, []string{ckptNsName, testNsName})
+
+			Expect(waitForAerospikeCluster(
+				k8sClient, ctx, aeroCluster, int(aeroCluster.Spec.Size), retryInterval,
+				getTimeout(aeroCluster.Spec.Size),
+				[]asdbv1.AerospikeClusterPhase{asdbv1.AerospikeClusterCompleted},
+			)).ToNot(HaveOccurred())
+		})
 	},
 )
 
@@ -333,14 +375,39 @@ func applyAndExpectCheckpoint(
 
 	Expect(updateClusterWithNoWait(k8sClient, ctx, aeroCluster)).ToNot(HaveOccurred())
 
+	expectCheckpoint(aeroCluster, nil, wantNamespaces)
+
+	Expect(waitForAerospikeCluster(
+		k8sClient, ctx, aeroCluster, int(aeroCluster.Spec.Size), retryInterval,
+		getTimeout(aeroCluster.Spec.Size),
+		[]asdbv1.AerospikeClusterPhase{asdbv1.AerospikeClusterCompleted},
+	)).ToNot(HaveOccurred())
+}
+
+// expectCheckpoint catches a pod while it is still holding its checkpoint park and asserts
+// what the server says it saved.
+func expectCheckpoint(
+	aeroCluster *asdbv1.AerospikeCluster, podNames sets.Set[string], wantNamespaces []string,
+) {
+	GinkgoHelper()
+
 	var (
 		parked *corev1.Pod
 		resp   deployment.CheckpointResponse
 	)
 
-	// Just check any one parked for verification
+	clientPolicy := getClientPolicy(aeroCluster, k8sClient)
+
 	Eventually(func() bool {
-		parked = findParkedPod(aeroCluster)
+		parked = nil
+
+		for _, pod := range findParkedPods(aeroCluster) {
+			if podNames.Len() == 0 || podNames.Has(pod.Name) {
+				parked = pod
+				break
+			}
+		}
+
 		if parked == nil {
 			return false
 		}
@@ -350,22 +417,17 @@ func applyAndExpectCheckpoint(
 			return false
 		}
 
-		resp, err = asConn.CheckpointStatus(getClientPolicy(aeroCluster, k8sClient))
+		resp, err = asConn.CheckpointStatus(clientPolicy)
 
 		return err == nil && resp.IsParked
 	}, 5*time.Minute, 2*time.Second).Should(BeTrue(),
-		"no Pod ever reported an index-checkpoint park that the server confirmed")
+		"no Pod in %v ever reported an index-checkpoint park that the server confirmed",
+		podNames.UnsortedList())
 
 	got := sets.KeySet(resp.Namespaces).UnsortedList()
 	Expect(got).To(ConsistOf(wantNamespaces),
 		"checkpoint-status on parked Pod %s reported %v, expected exactly %v",
 		parked.Name, got, wantNamespaces)
-
-	Expect(waitForAerospikeCluster(
-		k8sClient, ctx, aeroCluster, int(aeroCluster.Spec.Size), retryInterval,
-		getTimeout(aeroCluster.Spec.Size),
-		[]asdbv1.AerospikeClusterPhase{asdbv1.AerospikeClusterCompleted},
-	)).ToNot(HaveOccurred())
 }
 
 // applyAndExpectNoCheckpoint applies an already-mutated spec and asserts that NO pod parks while the rollout runs.
@@ -430,6 +492,27 @@ func expectCheckpointMarkersSwept(aeroCluster *asdbv1.AerospikeCluster, dir stri
 	}
 }
 
+// podsRunningDataSize returns the Pods whose rendered config already carries dataSize.
+func podsRunningDataSize(aeroCluster *asdbv1.AerospikeCluster, dataSize int) sets.Set[string] {
+	onNewConfig := sets.New[string]()
+
+	podList, err := getPodList(aeroCluster, k8sClient)
+	if err != nil {
+		return onNewConfig
+	}
+
+	want := fmt.Sprintf("%d", dataSize)
+
+	for idx := range podList.Items {
+		pod := &podList.Items[idx]
+		if strings.Contains(pod.Annotations[asdbv1.AerospikeConfAnnotation], want) {
+			onNewConfig.Insert(pod.Name)
+		}
+	}
+
+	return onNewConfig
+}
+
 // findParkedPods returns every pod currently holding a checkpoint park.
 func findParkedPods(aeroCluster *asdbv1.AerospikeCluster) []*corev1.Pod {
 	podList, err := getPodList(aeroCluster, k8sClient)
@@ -440,7 +523,7 @@ func findParkedPods(aeroCluster *asdbv1.AerospikeCluster) []*corev1.Pod {
 	parked := make([]*corev1.Pod, 0, len(podList.Items))
 
 	for idx := range podList.Items {
-		if operatorUtils.IsPodCheckpointing(&podList.Items[idx]) {
+		if isParked, _ := operatorUtils.IsPodCheckpointing(&podList.Items[idx]); isParked {
 			parked = append(parked, &podList.Items[idx])
 		}
 	}
@@ -457,7 +540,7 @@ func findParkedPod(aeroCluster *asdbv1.AerospikeCluster) *corev1.Pod {
 	}
 
 	for idx := range podList.Items {
-		if operatorUtils.IsPodCheckpointing(&podList.Items[idx]) {
+		if isParked, _ := operatorUtils.IsPodCheckpointing(&podList.Items[idx]); isParked {
 			return &podList.Items[idx]
 		}
 	}
@@ -527,9 +610,7 @@ func createAllFlashCheckpointCluster(clusterNamespacedName types.NamespacedName)
 			Name: "index-mount",
 			Source: asdbv1.VolumeSource{
 				PersistentVolume: &asdbv1.PersistentVolumeSpec{
-					// Must comfortably exceed the PI + SI budgets combined (4 GiB + 1 GiB),
-					// since both index mounts point here.
-					Size:         resource.MustParse("4Gi"),
+					Size:         resource.MustParse("8Gi"),
 					StorageClass: storageClass,
 					VolumeMode:   corev1.PersistentVolumeFilesystem,
 				},

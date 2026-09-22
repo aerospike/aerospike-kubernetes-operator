@@ -1529,8 +1529,6 @@ type AerospikeClusterList struct {
 }
 
 // CopySpecToStatus copy spec in status. Spec to Status DeepCopy doesn't work. It fails in reflect lib.
-//
-//nolint:dupl // not duplicate
 func CopySpecToStatus(spec *AerospikeClusterSpec) (*AerospikeClusterStatusSpec, error) {
 	status := AerospikeClusterStatusSpec{}
 
@@ -1667,8 +1665,6 @@ func CopySpecToStatus(spec *AerospikeClusterSpec) (*AerospikeClusterStatusSpec, 
 }
 
 // CopyStatusToSpec copy status in spec. Status to Spec DeepCopy doesn't work. It fails in reflect lib.
-//
-//nolint:dupl // not duplicate
 func CopyStatusToSpec(status *AerospikeClusterStatusSpec) (*AerospikeClusterSpec, error) {
 	spec := AerospikeClusterSpec{}
 

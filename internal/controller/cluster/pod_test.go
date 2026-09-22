@@ -19,6 +19,7 @@ package cluster
 import (
 	"testing"
 
+	"github.com/go-logr/logr"
 	"github.com/stretchr/testify/require"
 	corev1 "k8s.io/api/core/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
@@ -453,4 +454,74 @@ func assertPodNames(t *testing.T, label string, got, want []string) {
 			t.Errorf("%s: unexpected pod %q in result %v (wanted %v)", label, n, got, want)
 		}
 	}
+}
+
+// TestRunningAerospikeConfig pins that the rendered config a pod carries reads back in the
+// CR's shape, so the api/v1 accessors work on it unchanged. The index-checkpoint keys are
+// the ones that matter: the per-pod checkpoint decision is taken entirely from them.
+func TestRunningAerospikeConfig(t *testing.T) {
+	const renderedConf = `
+service {
+    index-checkpoint-path /mnt/index-ckpt
+    proto-fd-max 15000
+}
+
+namespace ckpt {
+    replication-factor 2
+    storage-engine memory {
+        data-size 4G
+    }
+}
+
+namespace skipped {
+    replication-factor 2
+    skip-checkpoint true
+    storage-engine memory {
+        data-size 1G
+    }
+}
+
+namespace dev {
+    replication-factor 2
+    storage-engine device {
+        device /test/dev/xvdf
+    }
+}
+`
+
+	podWithConf := func(conf string) *corev1.Pod {
+		pod := runningPod("pod-0", serverContainer(true))
+		if conf != "" {
+			pod.Annotations = map[string]string{asdbv1.AerospikeConfAnnotation: conf}
+		}
+
+		return pod
+	}
+
+	t.Run("rendered config reads back in the CR's shape", func(t *testing.T) {
+		conf, err := runningAerospikeConfig(logr.Discard(), podWithConf(renderedConf))
+		require.NoError(t, err)
+		require.NotNil(t, conf)
+
+		require.Equal(t, "/mnt/index-ckpt", asdbv1.GetIndexCheckpointPath(conf))
+		// "skipped" opted out, "dev" has no volatile index to save.
+		require.ElementsMatch(t, []string{"ckpt", "dev"}, asdbv1.GetIndexCheckpointNamespaces(conf))
+		// 4G de-humanized by the conf reader, so it compares numerically against the CR.
+		require.Equal(t,
+			map[string]int{"ckpt": 4 * 1024 * 1024 * 1024, "skipped": 1024 * 1024 * 1024},
+			asdbv1.GetInMemoryNsDataSizes(conf),
+		)
+	})
+
+	t.Run("no annotation - no config, no error", func(t *testing.T) {
+		conf, err := runningAerospikeConfig(logr.Discard(), podWithConf(""))
+		require.NoError(t, err)
+		require.Nil(t, conf)
+	})
+
+	t.Run("unparseable annotation - error", func(t *testing.T) {
+		_, err := runningAerospikeConfig(logr.Discard(),
+			podWithConf("namespace test {\n}\nnamespace test {\n}\n"))
+		require.Error(t, err)
+	})
 }

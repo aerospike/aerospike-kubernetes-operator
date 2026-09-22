@@ -2137,6 +2137,8 @@ func checkClientConnection(
 }
 
 // getClusterNamespaceConfig returns the named namespace's config map from the cluster spec.
+//
+//nolint:unparam // for future ref
 func getClusterNamespaceConfig(aeroCluster *asdbv1.AerospikeCluster, nsName string) map[string]interface{} {
 	nsList := aeroCluster.Spec.AerospikeConfig.Value[asdbv1.ConfKeyNamespace].([]interface{})
 	for _, nsIface := range nsList {

@@ -419,9 +419,10 @@ func TestPreviewFeaturesTransitions(t *testing.T) {
 			restartWanted: false,
 		},
 		{
-			name:          "duplicate added in the CR",
-			fromArgs:      previewFeaturesArgs(enabled),
-			toArgs:        previewFeaturesArgs([]string{asdbv1.PreviewFeatureIndexCheckpoint, asdbv1.PreviewFeatureIndexCheckpoint}),
+			name:     "duplicate added in the CR",
+			fromArgs: previewFeaturesArgs(enabled),
+			toArgs: previewFeaturesArgs([]string{
+				asdbv1.PreviewFeatureIndexCheckpoint, asdbv1.PreviewFeatureIndexCheckpoint}),
 			restartWanted: false,
 		},
 		{

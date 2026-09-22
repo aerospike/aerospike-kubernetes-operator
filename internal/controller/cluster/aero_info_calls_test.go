@@ -223,21 +223,21 @@ func TestSplitCheckpointNamespaces(t *testing.T) {
 		}
 	}
 
-	rack := func(path string, namespaces ...map[string]interface{}) *asdbv1.Rack {
+	conf := func(path string, namespaces ...map[string]interface{}) map[string]interface{} {
 		nsList := make([]interface{}, 0, len(namespaces))
 		for _, ns := range namespaces {
 			nsList = append(nsList, ns)
 		}
 
-		conf := map[string]interface{}{
+		aeroConf := map[string]interface{}{
 			asdbv1.ConfKeyNamespace: nsList,
 			asdbv1.ConfKeyService:   map[string]interface{}{},
 		}
 		if path != "" {
-			conf[asdbv1.ConfKeyService].(map[string]interface{})[asdbv1.ConfKeyServiceIndexCheckpointPath] = path
+			aeroConf[asdbv1.ConfKeyService].(map[string]interface{})[asdbv1.ConfKeyServiceIndexCheckpointPath] = path
 		}
 
-		return &asdbv1.Rack{AerospikeConfig: asdbv1.AerospikeConfigSpec{Value: conf}}
+		return aeroConf
 	}
 
 	const (
@@ -245,23 +245,25 @@ func TestSplitCheckpointNamespaces(t *testing.T) {
 		newSize = 536870912
 	)
 
+	const altCkptPath = "/mnt/index-ckpt-alt"
+
 	tests := []struct {
-		name         string
-		status, spec *asdbv1.Rack
-		wantEligible []string
-		wantSkip     []string
+		name          string
+		running, spec map[string]interface{}
+		wantEligible  []string
+		wantSkip      []string
 	}{
 		{
 			name:         "nothing changed - every namespace stays eligible",
-			status:       rack(ckptPath, memNS("ckpt", oldSize, false), deviceNS("test")),
-			spec:         rack(ckptPath, memNS("ckpt", oldSize, false), deviceNS("test")),
+			running:      conf(ckptPath, memNS("ckpt", oldSize, false), deviceNS("test")),
+			spec:         conf(ckptPath, memNS("ckpt", oldSize, false), deviceNS("test")),
 			wantEligible: []string{"ckpt", "test"},
 		},
 		{
 			// Only the resized namespace is opted out: the device-backed one is untouched
 			name:         "data-size changed - only that namespace is skipped",
-			status:       rack(ckptPath, memNS("ckpt", oldSize, false), deviceNS("test")),
-			spec:         rack(ckptPath, memNS("ckpt", newSize, false), deviceNS("test")),
+			running:      conf(ckptPath, memNS("ckpt", oldSize, false), deviceNS("test")),
+			spec:         conf(ckptPath, memNS("ckpt", newSize, false), deviceNS("test")),
 			wantEligible: []string{"test"},
 			wantSkip:     []string{"ckpt"},
 		},
@@ -270,22 +272,30 @@ func TestSplitCheckpointNamespaces(t *testing.T) {
 			// fatal to the checkpoint: the replacement takes the durably-backed hydrate
 			// arm, whose gate a brand-new backing cannot satisfy.
 			name:         "in-memory namespace gained storage backing - skipped",
-			status:       rack(ckptPath, memNS("ckpt", oldSize, false)),
-			spec:         rack(ckptPath, deviceNS("ckpt")),
+			running:      conf(ckptPath, memNS("ckpt", oldSize, false)),
+			spec:         conf(ckptPath, deviceNS("ckpt")),
 			wantEligible: nil,
 			wantSkip:     []string{"ckpt"},
 		},
 		{
 			name:         "namespace removed from the CR - skipped",
-			status:       rack(ckptPath, memNS("ckpt", oldSize, false), deviceNS("test")),
-			spec:         rack(ckptPath, deviceNS("test")),
+			running:      conf(ckptPath, memNS("ckpt", oldSize, false), deviceNS("test")),
+			spec:         conf(ckptPath, deviceNS("test")),
 			wantEligible: []string{"test"},
 			wantSkip:     []string{"ckpt"},
 		},
 		{
+			// A namespace the running server does not have yet is not AKO's to save, and
+			// the server copies it regardless once it is live.
+			name:         "namespace added to the CR - not in the running config, ignored",
+			running:      conf(ckptPath, deviceNS("test")),
+			spec:         conf(ckptPath, memNS("ckpt", oldSize, false), deviceNS("test")),
+			wantEligible: []string{"test"},
+		},
+		{
 			name:         "skip-checkpoint set in the CR - skipped",
-			status:       rack(ckptPath, memNS("ckpt", oldSize, false), deviceNS("test")),
-			spec:         rack(ckptPath, memNS("ckpt", oldSize, true), deviceNS("test")),
+			running:      conf(ckptPath, memNS("ckpt", oldSize, false), deviceNS("test")),
+			spec:         conf(ckptPath, memNS("ckpt", oldSize, true), deviceNS("test")),
 			wantEligible: []string{"test"},
 			wantSkip:     []string{"ckpt"},
 		},
@@ -294,14 +304,37 @@ func TestSplitCheckpointNamespaces(t *testing.T) {
 			// Distinct from the per-namespace arms: an empty eligible set short-circuits
 			// checkpoint-save entirely, so nothing parks.
 			name:     "checkpoint path moved - every namespace is skipped",
-			status:   rack(ckptPath, memNS("ckpt", oldSize, false), deviceNS("test")),
-			spec:     rack("/mnt/index-ckpt-alt", memNS("ckpt", oldSize, false), deviceNS("test")),
+			running:  conf(ckptPath, memNS("ckpt", oldSize, false), deviceNS("test")),
+			spec:     conf(altCkptPath, memNS("ckpt", oldSize, false), deviceNS("test")),
 			wantSkip: []string{"ckpt", "test"},
 		},
 		{
-			name:   "feature off in status - nothing to do",
-			status: rack("", memNS("ckpt", oldSize, false)),
-			spec:   rack("", memNS("ckpt", oldSize, false)),
+			// The pod restarted onto the new path in an earlier batch. Judged against the
+			// rack status this reads as a path move and loses the checkpoint; judged
+			// against the pod, there is no divergence left to skip for.
+			name:         "pod already restarted onto the new path - still eligible",
+			running:      conf(altCkptPath, memNS("ckpt", oldSize, false), deviceNS("test")),
+			spec:         conf(altCkptPath, memNS("ckpt", oldSize, false), deviceNS("test")),
+			wantEligible: []string{"ckpt", "test"},
+		},
+		{
+			name:         "pod already restarted onto the new data-size - still eligible",
+			running:      conf(ckptPath, memNS("ckpt", newSize, false), deviceNS("test")),
+			spec:         conf(ckptPath, memNS("ckpt", newSize, false), deviceNS("test")),
+			wantEligible: []string{"ckpt", "test"},
+		},
+		{
+			name:    "feature off in the running config - nothing to do",
+			running: conf("", memNS("ckpt", oldSize, false)),
+			spec:    conf("", memNS("ckpt", oldSize, false)),
+		},
+		{
+			// The CR turns the feature on in the same apply as a restart-class change. The
+			// running server resolves no path, so there is nothing to save and nothing to
+			// send — the save would only be rejected.
+			name:    "feature being enabled - running config resolves no path",
+			running: conf("", memNS("ckpt", oldSize, false)),
+			spec:    conf(ckptPath, memNS("ckpt", oldSize, false)),
 		},
 	}
 
@@ -309,7 +342,7 @@ func TestSplitCheckpointNamespaces(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			eligible, skip := r.splitCheckpointNamespaces(tt.status, tt.spec)
+			eligible, skip := r.splitCheckpointNamespaces(tt.running, tt.spec)
 
 			require.ElementsMatch(t, tt.wantEligible, eligible, "eligible namespaces")
 			require.ElementsMatch(t, tt.wantSkip, skip, "skipped namespaces")

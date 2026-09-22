@@ -100,10 +100,10 @@ const (
 	confKeySecurityDefaultPasswordFile = "default-password-file"
 
 	// Service section keys.
-	ConfKeyService             = "service"
-	confKeyWorkDirectory       = "work-directory"
-	ConfigKeyCgroupMemTracking = "cgroup-mem-tracking"
-	ConfKeyMigrateFillDelay    = "migrate-fill-delay"
+	ConfKeyService                    = "service"
+	confKeyWorkDirectory              = "work-directory"
+	ConfigKeyCgroupMemTracking        = "cgroup-mem-tracking"
+	ConfKeyMigrateFillDelay           = "migrate-fill-delay"
 	ConfKeyServiceIndexCheckpointPath = "index-checkpoint-path"
 
 	// Defaults.
@@ -131,6 +131,7 @@ const (
 	// IndexCheckpointParkedAnnotation carries the aerospike-server container ID that was
 	// parked for an index checkpoint.
 	IndexCheckpointParkedAnnotation = "aerospike.com/index-checkpoint-parked"
+	AerospikeConfAnnotation         = "aerospikeConf"
 )
 
 // Preview feature names recognized by the server's --preview flag.

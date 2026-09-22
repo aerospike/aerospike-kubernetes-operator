@@ -43,7 +43,7 @@ var (
 	InvalidImage          = fmt.Sprintf("%s:%s", BaseEnterpriseImage, InvalidImageVersion)
 	// TODO: update this later
 	IndexCheckpointImage = "aerospike.jfrog.io/database-docker-test-local/aerospike-server-enterprise:" +
-		"8.2.0.0_20260911T220300Z"
+		"8.2.0.0_20260922T013045Z"
 	// IndexCheckpointUpgradeImage is the image the index-checkpoint upgrade case upgrades to
 	IndexCheckpointUpgradeImage = IndexCheckpointImage
 )
