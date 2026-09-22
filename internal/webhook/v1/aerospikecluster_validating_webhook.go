@@ -1504,9 +1504,7 @@ func validatePreviewFeatures(cluster *asdbv1.AerospikeCluster, version string) (
 		for idx := range cluster.Spec.RackConfig.Racks {
 			rack := &cluster.Spec.RackConfig.Racks[idx]
 
-			if err := validateNoIndexCheckpointKeys(
-				rack.AerospikeConfig.Value, fmt.Sprintf("rack %d ", rack.ID),
-			); err != nil {
+			if err := validateNoIndexCheckpointKeys(rack.AerospikeConfig.Value); err != nil {
 				return warnings, err
 			}
 		}
@@ -1525,12 +1523,12 @@ var indexCheckpointNamespaceKeys = []string{
 
 // validateNoIndexCheckpointKeys rejects any index-checkpoint config key when
 // "index-checkpoint" is absent from spec.previewFeatures. All four are gated, not just the path.
-func validateNoIndexCheckpointKeys(config map[string]interface{}, scope string) error {
+func validateNoIndexCheckpointKeys(config map[string]interface{}) error {
 	if serviceConf, ok := config[asdbv1.ConfKeyService].(map[string]interface{}); ok {
 		if _, has := serviceConf[asdbv1.ConfKeyServiceIndexCheckpointPath]; has {
 			return fmt.Errorf(
-				"%saerospikeConfig.service has %s configured but %q is not listed in spec.previewFeatures",
-				scope, asdbv1.ConfKeyServiceIndexCheckpointPath, asdbv1.PreviewFeatureIndexCheckpoint,
+				"aerospikeConfig.service has %s configured but %q is not listed in spec.previewFeatures",
+				asdbv1.ConfKeyServiceIndexCheckpointPath, asdbv1.PreviewFeatureIndexCheckpoint,
 			)
 		}
 	}
@@ -1549,8 +1547,8 @@ func validateNoIndexCheckpointKeys(config map[string]interface{}, scope string) 
 		for _, key := range indexCheckpointNamespaceKeys {
 			if _, has := nsConf[key]; has {
 				return fmt.Errorf(
-					"%snamespace %v has %s configured but %q is not listed in spec.previewFeatures",
-					scope, nsConf[asdbv1.ConfKeyName], key, asdbv1.PreviewFeatureIndexCheckpoint,
+					"namespace %v has %s configured but %q is not listed in spec.previewFeatures",
+					nsConf[asdbv1.ConfKeyName], key, asdbv1.PreviewFeatureIndexCheckpoint,
 				)
 			}
 		}
@@ -1835,8 +1833,7 @@ func validateIndexCheckpointVolume(
 	if volume.Source.PersistentVolume == nil {
 		return fmt.Errorf(
 			"service index-checkpoint-path %q is backed by volume %q whose source is not a "+
-				"persistentVolumeClaim; index-checkpoint-path requires durable PersistentVolume-backed "+
-				"storage",
+				"persistentVolumeClaim; index-checkpoint-path requires a Filesystem-mode PersistentVolume",
 			cpPath, volume.Name,
 		)
 	}

@@ -753,7 +753,7 @@ var _ = Describe("AerospikeCluster validation", func() {
 
 					envtests.NewStatusErrorMatcher().
 						WithMessageSubstrings(testutil.WebhookErrorPrefix,
-							"index-checkpoint-path", "\"index-ckpt\"", "Filesystem-mode").
+							"index-checkpoint-path", "\"index-ckpt\"", "volumeMode Block", "Filesystem-mode").
 						Validate(err)
 				})
 
