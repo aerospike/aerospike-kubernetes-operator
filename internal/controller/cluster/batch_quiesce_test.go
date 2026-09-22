@@ -495,7 +495,7 @@ func TestAddFinalizer_IdempotentViaPatch(t *testing.T) {
 		},
 	}
 
-	r := newReconcilerWithObjects(newTestScheme(), aeroCluster, aeroCluster)
+	r := newReconcilerWithObjects(newTestScheme(), aeroCluster)
 
 	// First call — should add the finalizer.
 	err := r.addFinalizer(context.Background(), finalizerName)
