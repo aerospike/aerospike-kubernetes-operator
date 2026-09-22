@@ -18,7 +18,7 @@ package cluster
 
 // Unit tests for the cross-rack batch quiesce functions:
 //   - buildScaleDownTargets
-//   - checkReadyForBatchQuiesce
+//   - classifyTargetPods
 //   - reconcileQuiesceUndo (annotation fast-exit only — Aerospike calls mocked)
 //   - setPodQuiesceAnnotation
 //
@@ -179,7 +179,7 @@ func TestBuildScaleDownTargets_RacksToDelete(t *testing.T) {
 }
 
 // TestBuildScaleDownTargets_NoReadinessCheck verifies that buildScaleDownTargets
-// does NOT reject non-running pods — that is now checkReadyForBatchQuiesce's job.
+// does NOT reject non-running pods — that is now classifyTargetPods's job.
 func TestBuildScaleDownTargets_NoReadinessCheck(t *testing.T) {
 	aeroCluster := newTestAerospikeCluster(namespace, clusterName)
 	withCRStatus(aeroCluster, clusterName+"-1-1")
@@ -205,12 +205,12 @@ func TestBuildScaleDownTargets_NoReadinessCheck(t *testing.T) {
 }
 
 // ══════════════════════════════════════════════════════════════════════════
-// checkReadyForBatchQuiesce
+// classifyTargetPods
 // ══════════════════════════════════════════════════════════════════════════
 
-// TestCheckReadyForBatchQuiesce_AllRunning verifies that a fully healthy
-// cluster returns success with no pods added to ignorable.
-func TestCheckReadyForBatchQuiesce_AllRunning(t *testing.T) {
+// TestClassifyTargetPods_AllRunning verifies that a fully healthy cluster
+// returns success with no pods added to ignorable.
+func TestClassifyTargetPods_AllRunning(t *testing.T) {
 	aeroCluster := newTestAerospikeCluster(namespace, clusterName)
 
 	pods := []*corev1.Pod{
@@ -218,72 +218,51 @@ func TestCheckReadyForBatchQuiesce_AllRunning(t *testing.T) {
 		makeRackPod(clusterName+"-1-1", namespace, clusterName, 1, true),
 	}
 
-	sts := makeRackSTS(clusterName+"-1", namespace, clusterName, 1, 2)
-	objects := []client.Object{sts, pods[0], pods[1]}
-	r := newReconcilerWithObjects(newTestScheme(), aeroCluster, objects...)
-
-	rack := asdbv1.Rack{ID: 1}
-	rackState := &RackState{Rack: &rack, Size: 1}
-	scaledDown := []rackWithSTS{{rackSTS: sts, rackState: rackState}}
-
+	r := newReconcilerWithObjects(newTestScheme(), aeroCluster, pods[0], pods[1])
 	ignorable := sets.New[string]()
 
-	res := r.checkReadyForBatchQuiesce(context.Background(), scaledDown, sets.New(pods[1].Name), ignorable)
+	res := r.classifyTargetPods(context.Background(), sets.New(pods[1].Name), ignorable)
 
 	require.True(t, res.IsSuccess)
 	assert.Empty(t, ignorable, "no pod should be added to ignorable when all are running")
 }
 
-// TestCheckReadyForBatchQuiesce_TargetNeverJoined verifies that a non-running
-// target with no CR status entry is added to ignorablePodNames.
-func TestCheckReadyForBatchQuiesce_TargetNeverJoined(t *testing.T) {
+// TestClassifyTargetPods_TargetNeverJoined verifies that a non-running target
+// with no CR status entry is added to ignorablePodNames.
+func TestClassifyTargetPods_TargetNeverJoined(t *testing.T) {
 	aeroCluster := newTestAerospikeCluster(namespace, clusterName)
 	// No CR status entry for pod-1-1 (never joined).
 
 	pods := []*corev1.Pod{
 		makeRackPod(clusterName+"-1-0", namespace, clusterName, 1, true),
-		makeRackPod(clusterName+"-1-1", namespace, clusterName, 1, false), // target, not running
+		makeRackPod(clusterName+"-1-1", namespace, clusterName, 1, false), // target, crashing
 	}
 
-	sts := makeRackSTS(clusterName+"-1", namespace, clusterName, 1, 2)
-	objects := []client.Object{sts, pods[0], pods[1]}
-	r := newReconcilerWithObjects(newTestScheme(), aeroCluster, objects...)
-
-	rack := asdbv1.Rack{ID: 1}
-	rackState := &RackState{Rack: &rack, Size: 1}
-	scaledDown := []rackWithSTS{{rackSTS: sts, rackState: rackState}}
-
+	r := newReconcilerWithObjects(newTestScheme(), aeroCluster, pods[0], pods[1])
 	ignorable := sets.New[string]()
 
-	res := r.checkReadyForBatchQuiesce(context.Background(), scaledDown, sets.New(pods[1].Name), ignorable)
+	res := r.classifyTargetPods(context.Background(), sets.New(pods[1].Name), ignorable)
 
 	require.True(t, res.IsSuccess)
 	assert.True(t, ignorable.Has(pods[1].Name),
 		"non-running target with no CR status should be added to ignorablePodNames")
 }
 
-// TestCheckReadyForBatchQuiesce_TargetHasCRStatus verifies that a non-running
-// target with a CR status entry returns ReconcileError.
-func TestCheckReadyForBatchQuiesce_TargetHasCRStatus(t *testing.T) {
+// TestClassifyTargetPods_TargetHasCRStatus verifies that a non-running target
+// with a CR status entry returns ReconcileError immediately.
+func TestClassifyTargetPods_TargetHasCRStatus(t *testing.T) {
 	aeroCluster := newTestAerospikeCluster(namespace, clusterName)
 	withCRStatus(aeroCluster, clusterName+"-1-1") // pod has joined before
 
 	pods := []*corev1.Pod{
 		makeRackPod(clusterName+"-1-0", namespace, clusterName, 1, true),
-		makeRackPod(clusterName+"-1-1", namespace, clusterName, 1, false), // target, not running
+		makeRackPod(clusterName+"-1-1", namespace, clusterName, 1, false), // target, crashing
 	}
 
-	sts := makeRackSTS(clusterName+"-1", namespace, clusterName, 1, 2)
-	objects := []client.Object{sts, pods[0], pods[1]}
-	r := newReconcilerWithObjects(newTestScheme(), aeroCluster, objects...)
-
-	rack := asdbv1.Rack{ID: 1}
-	rackState := &RackState{Rack: &rack, Size: 1}
-	scaledDown := []rackWithSTS{{rackSTS: sts, rackState: rackState}}
-
+	r := newReconcilerWithObjects(newTestScheme(), aeroCluster, pods[0], pods[1])
 	ignorable := sets.New[string]()
 
-	res := r.checkReadyForBatchQuiesce(context.Background(), scaledDown, sets.New(pods[1].Name), ignorable)
+	res := r.classifyTargetPods(context.Background(), sets.New(pods[1].Name), ignorable)
 
 	require.False(t, res.IsSuccess)
 	require.NotNil(t, res.Err, "expected ReconcileError for a previously-joined non-running target")
@@ -291,83 +270,66 @@ func TestCheckReadyForBatchQuiesce_TargetHasCRStatus(t *testing.T) {
 		"non-running target with CR status must NOT be added to ignorablePodNames")
 }
 
-// TestCheckReadyForBatchQuiesce_RemainingPodNotRunning verifies that a
-// non-running remaining pod (not a target) always returns ReconcileError.
-func TestCheckReadyForBatchQuiesce_RemainingPodNotRunning(t *testing.T) {
+// TestClassifyTargetPods_RemainingPodCrashing verifies that a crashing
+// non-target pod is silently skipped — it is handled by the subsequent
+// waitForMultipleNodesSafeStopReady call, not by classifyTargetPods.
+func TestClassifyTargetPods_RemainingPodCrashing(t *testing.T) {
 	aeroCluster := newTestAerospikeCluster(namespace, clusterName)
 
 	// Pod-1-0 is the remaining pod (will stay), pod-1-1 and pod-1-2 are targets.
 	pods := []*corev1.Pod{
-		makeRackPod(clusterName+"-1-0", namespace, clusterName, 1, false), // remaining, not running
+		makeRackPod(clusterName+"-1-0", namespace, clusterName, 1, false), // remaining, crashing
 		makeRackPod(clusterName+"-1-1", namespace, clusterName, 1, true),
 		makeRackPod(clusterName+"-1-2", namespace, clusterName, 1, true),
 	}
 
-	sts := makeRackSTS(clusterName+"-1", namespace, clusterName, 1, 3)
-	objects := []client.Object{sts, pods[0], pods[1], pods[2]}
-	r := newReconcilerWithObjects(newTestScheme(), aeroCluster, objects...)
-
-	rack := asdbv1.Rack{ID: 1}
-	rackState := &RackState{Rack: &rack, Size: 1}
-	scaledDown := []rackWithSTS{{rackSTS: sts, rackState: rackState}}
-
-	// Targets are pods 1 and 2; pod 0 is the remaining pod.
+	r := newReconcilerWithObjects(newTestScheme(), aeroCluster, pods[0], pods[1], pods[2])
 	ignorable := sets.New[string]()
 
-	res := r.checkReadyForBatchQuiesce(context.Background(), scaledDown, sets.New(pods[1].Name, pods[2].Name), ignorable)
+	// classifyTargetPods does NOT block on non-target pods; it returns success
+	// and leaves the crashing pod for waitForMultipleNodesSafeStopReady.
+	res := r.classifyTargetPods(context.Background(), sets.New(pods[1].Name, pods[2].Name), ignorable)
 
-	require.False(t, res.IsSuccess)
-	require.NotNil(t, res.Err, "remaining non-running pod must block quiesce")
+	require.True(t, res.IsSuccess, "classifyTargetPods must not error on a crashing non-target pod")
 	assert.False(t, ignorable.Has(pods[0].Name),
 		"remaining pod must NOT be added to ignorablePodNames")
 }
 
-// TestCheckReadyForBatchQuiesce_AlreadyIgnorable verifies that a pod already in
-// ignorablePodNames is silently skipped regardless of its running state.
-func TestCheckReadyForBatchQuiesce_AlreadyIgnorable(t *testing.T) {
+// TestClassifyTargetPods_AlreadyIgnorable verifies that a pod already in
+// ignorablePodNames is silently skipped.
+func TestClassifyTargetPods_AlreadyIgnorable(t *testing.T) {
 	aeroCluster := newTestAerospikeCluster(namespace, clusterName)
 
 	pods := []*corev1.Pod{
 		makeRackPod(clusterName+"-1-0", namespace, clusterName, 1, true),
-		makeRackPod(clusterName+"-1-1", namespace, clusterName, 1, false), // target, not running
+		makeRackPod(clusterName+"-1-1", namespace, clusterName, 1, false), // target, crashing
 	}
 
-	sts := makeRackSTS(clusterName+"-1", namespace, clusterName, 1, 2)
-	objects := []client.Object{sts, pods[0], pods[1]}
-	r := newReconcilerWithObjects(newTestScheme(), aeroCluster, objects...)
-
-	rack := asdbv1.Rack{ID: 1}
-	rackState := &RackState{Rack: &rack, Size: 1}
-	scaledDown := []rackWithSTS{{rackSTS: sts, rackState: rackState}}
-
+	r := newReconcilerWithObjects(newTestScheme(), aeroCluster, pods[0], pods[1])
 	// Pod-1-1 is already in ignorable (e.g. from maxIgnorablePods upstream).
 	ignorable := sets.New(pods[1].Name)
 
-	res := r.checkReadyForBatchQuiesce(context.Background(), scaledDown, sets.New(pods[1].Name), ignorable)
+	res := r.classifyTargetPods(context.Background(), sets.New(pods[1].Name), ignorable)
 
 	require.True(t, res.IsSuccess, "already-ignorable pod should be silently skipped")
 }
 
-// TestCheckReadyForBatchQuiesce_DeletedRackPodsAlreadyIgnorable verifies the
-// design invariant: racksToDelete pods are NOT passed to checkReadyForBatchQuiesce
-// because getIgnorablePods adds all their non-running pods to ignorablePodNames
-// unconditionally. This test confirms that if such a pod IS already in
-// ignorablePodNames (as it would be in production) it is silently skipped.
-func TestCheckReadyForBatchQuiesce_DeletedRackPodsAlreadyIgnorable(t *testing.T) {
+// TestClassifyTargetPods_DeletedRackPodPreIgnorable verifies that a non-running
+// pod from a deleted rack (pre-added to ignorablePodNames by getIgnorablePods)
+// is silently skipped.
+func TestClassifyTargetPods_DeletedRackPodPreIgnorable(t *testing.T) {
 	aeroCluster := newTestAerospikeCluster(namespace, clusterName)
 	withCRStatus(aeroCluster, clusterName+"-2-0")
 
-	pod := makeRackPod(clusterName+"-2-0", namespace, clusterName, 2, false) // not running
+	pod := makeRackPod(clusterName+"-2-0", namespace, clusterName, 2, false) // crashing
 
 	// Simulate what getIgnorablePods does: the non-running pod from the deleted
-	// rack is already in ignorablePodNames before checkReadyForBatchQuiesce runs.
+	// rack is already in ignorablePodNames before classifyTargetPods runs.
 	ignorable := sets.New(pod.Name)
 
 	r := newReconcilerWithObjects(newTestScheme(), aeroCluster, pod)
 
-	// scaledDownRacks is empty (no partial-scale racks); the deleted-rack pod
-	// is pre-ignorable so even if we mistakenly iterated it, it would be skipped.
-	res := r.checkReadyForBatchQuiesce(context.Background(), nil, sets.New(pod.Name), ignorable)
+	res := r.classifyTargetPods(context.Background(), sets.New(pod.Name), ignorable)
 
 	require.True(t, res.IsSuccess,
 		"deleted-rack pod already in ignorablePodNames should cause no error")
@@ -629,7 +591,7 @@ func TestGetAllScaleDownPods_NoDiff(t *testing.T) {
 
 // TestReconcileBatchQuiesce_IgnorablePodFilteredOut verifies that pods already
 // in ignorablePodNames — whether added upstream by getIgnorablePods
-// (maxIgnorablePods budget) or by checkReadyForBatchQuiesce (never-joined pods)
+// (maxIgnorablePods budget) or by classifyTargetPods (never-joined pods)
 // — are silently excluded from the effective target list inside
 // reconcileBatchQuiesce so:
 //   - The annotation fast-exit fires correctly when all non-ignorable targets

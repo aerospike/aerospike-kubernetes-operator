@@ -171,7 +171,7 @@ func podsForRack(
 
 // ─── test suite ────────────────────────────────────────────────────────────
 
-var _ = Describe("CrossRackBatchQuiesce", func() {
+var _ = FDescribe("CrossRackBatchQuiesce", func() {
 	ctx := goctx.TODO()
 
 	// Each It block gets a unique cluster name so parallel Ginkgo processes
@@ -590,7 +590,7 @@ var _ = Describe("CrossRackBatchQuiesce", func() {
 	// (MultiPodPerHost=false).  Scaling up by 1 creates a pod that can never
 	// be scheduled — it stays in Pending indefinitely with no CR status entry.
 	// Scaling back down must complete without MaxIgnorablePods: the
-	// "never-joined" detection in checkReadyForBatchQuiesce is unconditional
+	// "never-joined" detection in classifyTargetPods is unconditional
 	// and does not consume any budget.
 	Context("Scale-down target never joined cluster (no CR status)", func() {
 		var nodeCount int32
@@ -653,7 +653,7 @@ var _ = Describe("CrossRackBatchQuiesce", func() {
 				"expected a never-joined Pending pod (unschedulable) to appear")
 
 			// Step 3: scale back DOWN to original size.
-			// checkReadyForBatchQuiesce detects the Pending pod has no CR
+			// classifyTargetPods detects the Pending pod has no CR
 			// status entry and adds it to ignorablePodNames without consuming
 			// any MaxIgnorablePods budget.
 			// updateCluster handles RetryOnConflict + waitForAerospikeCluster.
@@ -992,12 +992,12 @@ var _ = Describe("CrossRackBatchQuiesce", func() {
 			Expect(DeployCluster(k8sClient, ctx, aeroCluster)).ToNot(HaveOccurred())
 		})
 
-		FIt("Should not quiesce while paused; should complete after unpause", func() {
+		It("Should not quiesce while paused; should complete after unpause", func() {
 			aeroCluster, err := getCluster(k8sClient, ctx, clusterNamespacedName)
 			Expect(err).ToNot(HaveOccurred())
 
 			// Pause reconciliation.
-			aeroCluster.Spec.Paused = ptr.To(true)
+			aeroCluster.Spec.Paused = new(true)
 			aeroCluster.Spec.Size -= 2
 			Expect(k8sClient.Update(ctx, aeroCluster)).ToNot(HaveOccurred())
 
@@ -1013,5 +1013,3 @@ var _ = Describe("CrossRackBatchQuiesce", func() {
 		})
 	})
 })
-
-// ─── small helpers used only in this file ─────────────────────────────────

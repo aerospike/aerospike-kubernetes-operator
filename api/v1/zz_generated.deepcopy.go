@@ -1012,14 +1012,14 @@ func (in *RackConfig) DeepCopyInto(out *RackConfig) {
 		*out = new(intstr.IntOrString)
 		**out = **in
 	}
-	if in.MaxIgnorablePods != nil {
-		in, out := &in.MaxIgnorablePods, &out.MaxIgnorablePods
-		*out = new(intstr.IntOrString)
-		**out = **in
-	}
 	if in.EnableParallelScaleDownAcrossRacks != nil {
 		in, out := &in.EnableParallelScaleDownAcrossRacks, &out.EnableParallelScaleDownAcrossRacks
 		*out = new(bool)
+		**out = **in
+	}
+	if in.MaxIgnorablePods != nil {
+		in, out := &in.MaxIgnorablePods, &out.MaxIgnorablePods
+		*out = new(intstr.IntOrString)
 		**out = **in
 	}
 }

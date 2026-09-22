@@ -137,9 +137,7 @@ func (r *SingleClusterReconciler) reconcileRacks(ctx context.Context) common.Rec
 	// Step ordering when enabled (Steps 2/4/deleteRacks run unconditionally):
 	//   Step 1   — buildScaleDownTargets + reconcileQuiesceUndo
 	//   Step 2   — reconcileRack for non-scaled-down racks
-	//   Step 2.5 — waitForAllRacksReady
-	//   Step 2.75— checkReadyForBatchQuiesce
-	//   Step 3   — reconcileBatchQuiesce
+	//   Step 3   — reconcileBatchQuiesce (classifyTargetPods + waitForMultipleNodesSafeStopReady)
 	batchQuiesceEnabled := ptr.Deref(r.aeroCluster.Spec.RackConfig.EnableParallelScaleDownAcrossRacks, false)
 
 	var (
@@ -149,7 +147,7 @@ func (r *SingleClusterReconciler) reconcileRacks(ctx context.Context) common.Rec
 
 	if batchQuiesceEnabled {
 		// Step 1: collect targets; undo stale quiesces on non-targets.
-		// Readiness checks deferred to Step 2.75 (after waitForAllRacksReady).
+		// Readiness checks deferred to Step 3 (classifyTargetPods inside reconcileBatchQuiesce).
 		if allTargets, res = r.buildScaleDownTargets(ctx, scaledDownRacks, racksToDelete); !res.IsSuccess {
 			return res
 		}
@@ -184,24 +182,9 @@ func (r *SingleClusterReconciler) reconcileRacks(ctx context.Context) common.Rec
 	}
 
 	if batchQuiesceEnabled {
-		// Step 2.5: wait for non-scaled-down racks to be ready before quiescing.
-		// reconcileRack above may have added new pods still initialising.
-		nonScaledDownRackStates := make([]RackState, len(nonScaledDownRacks))
-		for i := range nonScaledDownRacks {
-			nonScaledDownRackStates[i] = *nonScaledDownRacks[i].rackState
-		}
-
-		if res = r.waitForAllRacksReady(ctx, nonScaledDownRackStates, ignorablePodNames); !res.IsSuccess {
-			return res
-		}
-
-		// Step 2.75: readiness gate for scaled-down rack pods.
-		// racksToDelete skipped — their non-running pods are already ignorable.
-		if res = r.checkReadyForBatchQuiesce(ctx, scaledDownRacks, targetNames, ignorablePodNames); !res.IsSuccess {
-			return res
-		}
-
-		// Step 3: quiesce all targets at once — single concurrent migration round.
+		// Step 2.5/3: quiesce all targets at once — single concurrent migration round.
+		// reconcileBatchQuiesce classifies target pods, waits for cluster readiness,
+		// and quiesces; racksToDelete pods are already ignorable before this call.
 		if res = r.reconcileBatchQuiesce(ctx, allTargets, ignorablePodNames); !res.IsSuccess {
 			return res
 		}

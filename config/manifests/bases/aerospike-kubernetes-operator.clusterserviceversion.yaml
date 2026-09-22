@@ -173,6 +173,14 @@ spec:
         displayName: Rack Config
         path: rackConfig
       - description: |-
+          EnableParallelScaleDownAcrossRacks enables the cross-rack parallel quiesce pre-pass during scale-down.
+          When true, the operator quiesces ALL scale-down candidate pods across ALL racks simultaneously
+          before the per-rack removal loop starts, collapsing what would otherwise be N sequential
+          migration rounds (one per rack) into a single concurrent migration round.
+          Disabled by default (nil / false).
+        displayName: Enable Parallel Scale-Down Across Racks
+        path: rackConfig.enableParallelScaleDownAcrossRacks
+      - description: |-
           RestartStrategy configures transient operator behaviour applied around a rolling pod restart
           or upgrade.
         displayName: Restart Strategy
