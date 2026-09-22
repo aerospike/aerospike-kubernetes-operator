@@ -27,7 +27,7 @@ import (
 	"github.com/aerospike/aerospike-management-lib/asconfig"
 )
 
-type scaledDownRack struct {
+type rackWithSTS struct {
 	rackSTS   *appsv1.StatefulSet
 	rackState *RackState
 }
@@ -41,7 +41,7 @@ func (r *SingleClusterReconciler) reconcileRacks(ctx context.Context) common.Rec
 	r.Log.Info("Reconciling rack for AerospikeCluster")
 
 	var (
-		scaledDownRacks []scaledDownRack
+		scaledDownRacks []rackWithSTS
 		res             common.ReconcileResult
 	)
 
@@ -92,7 +92,7 @@ func (r *SingleClusterReconciler) reconcileRacks(ctx context.Context) common.Rec
 	// enabled, reconcileQuiesceUndo runs before any reconcileRack call so that
 	// pods quiesced by a prior pre-pass are restored to full membership before
 	// rolling restarts or config updates execute on them.
-	var nonScaledDownRacks []scaledDownRack
+	var nonScaledDownRacks []rackWithSTS
 
 	for idx := range configuredRacks {
 		state := &configuredRacks[idx]
@@ -124,51 +124,53 @@ func (r *SingleClusterReconciler) reconcileRacks(ctx context.Context) common.Rec
 		}
 
 		if *found.Spec.Replicas > state.Size {
-			scaledDownRacks = append(scaledDownRacks, scaledDownRack{rackSTS: found, rackState: state})
+			scaledDownRacks = append(scaledDownRacks, rackWithSTS{rackSTS: found, rackState: state})
 		} else {
-			nonScaledDownRacks = append(nonScaledDownRacks, scaledDownRack{rackSTS: found, rackState: state})
+			nonScaledDownRacks = append(nonScaledDownRacks, rackWithSTS{rackSTS: found, rackState: state})
 		}
 	}
 
-	// Batch quiesce pre-pass (opt-in via RackConfig.EnableBatchScaleDownQuiesce).
+	// Cross-rack parallel quiesce pre-pass (opt-in via EnableParallelScaleDownAcrossRacks).
+	// The webhook prevents disabling the flag mid-scale-down, so a disabled flag
+	// can never leave stale BatchQuiesceAnnotation pods requiring cleanup.
 	//
-	// The validating webhook guarantees the flag cannot be toggled while a
-	// scale-down is already in flight (it only allows toggles on a stable
-	// cluster or atomically with a spec-size reduction). This means that when
-	// the flag is disabled there can never be stale BatchQuiesceAnnotation
-	// pods that need cleaning up, making it safe to skip reconcileQuiesceUndo
-	// entirely when the feature is off.
-	//
-	// When enabled, the steps are ordered as follows so that no reconcileRack
-	// call ever sees a quiesced pod that should have been unquiesced:
-	//
+	// Step ordering when enabled (Steps 2/4/deleteRacks run unconditionally):
 	//   Step 1   — buildScaleDownTargets + reconcileQuiesceUndo
-	//              Must run before Step 2 (non-scaled-down rack reconcile) so
-	//              that pods left quiesced by a prior pre-pass (e.g. from a
-	//              since-reverted scale-down) are restored to full Aerospike
-	//              membership before rolling restarts / config updates run.
-	//   Step 2   — reconcileRack for non-scaled-down racks (unchanged)
+	//   Step 2   — reconcileRack for non-scaled-down racks
 	//   Step 2.5 — waitForAllRacksReady
 	//   Step 2.75— checkReadyForBatchQuiesce
-	//   Step 3   — reconcileBatchQuiesce (cross-rack parallel quiesce)
-	//
-	// Steps 4 and deleteRacks run unconditionally after this block.
-	batchQuiesceEnabled := ptr.Deref(r.aeroCluster.Spec.RackConfig.EnableBatchScaleDownQuiesce, false)
+	//   Step 3   — reconcileBatchQuiesce
+	batchQuiesceEnabled := ptr.Deref(r.aeroCluster.Spec.RackConfig.EnableParallelScaleDownAcrossRacks, false)
 
-	var allTargets []*corev1.Pod
+	var (
+		allTargets  []*corev1.Pod
+		targetNames sets.Set[string]
+	)
 
 	if batchQuiesceEnabled {
-		// Step 1: collect scale-down targets and undo any stale quiesces on
-		// non-target pods (annotation-gated — a no-op when no non-target pod
-		// carries the BatchQuiesceAnnotation).
-		// Readiness checks on the targets are deferred to Step 2.75, which
-		// runs after waitForAllRacksReady so it sees the cluster state at
-		// quiesce time.
+		// Step 1: collect targets; undo stale quiesces on non-targets.
+		// Readiness checks deferred to Step 2.75 (after waitForAllRacksReady).
 		if allTargets, res = r.buildScaleDownTargets(ctx, scaledDownRacks, racksToDelete); !res.IsSuccess {
 			return res
 		}
 
-		if res = r.reconcileQuiesceUndo(ctx, allTargets); !res.IsSuccess {
+		targetNames = sets.New(getPodNames(allTargets)...)
+
+		// Claim ScalingDown for this reconcile pass now, before any requeue that might
+		// happen in Steps 2.5/2.75/3. Without this, a requeue before Step 4
+		// (scaleDownRack) would leave ScalingDown=False even though pods are quiesced.
+		if len(allTargets) > 0 {
+			if err := r.setConditions(ctx, metav1.Condition{
+				Type:    string(asdbv1.AerospikeClusterConditionScalingDown),
+				Status:  metav1.ConditionTrue,
+				Reason:  asdbv1.AerospikeClusterReasonScalingDown,
+				Message: fmt.Sprintf("Pre-quiescing %d pod(s) across racks before scale-down", len(allTargets)),
+			}); err != nil {
+				return common.ReconcileError(err)
+			}
+		}
+
+		if res = r.reconcileQuiesceUndo(ctx, targetNames, ignorablePodNames); !res.IsSuccess {
 			return res
 		}
 	}
@@ -182,13 +184,8 @@ func (r *SingleClusterReconciler) reconcileRacks(ctx context.Context) common.Rec
 	}
 
 	if batchQuiesceEnabled {
-		// Step 2.5: wait for all non-scaled-down racks to be fully ready before
-		// attempting batch quiesce. reconcileRack above may have scaled up new pods
-		// (rack replacement / rack addition) that haven't finished initializing yet.
-		// newAllHostConnWithOption inside reconcileBatchQuiesce returns an error for
-		// any non-running non-target pod, so we must ensure the cluster has fully
-		// converged before proceeding. ignorablePodNames is forwarded so that
-		// server-failed pods covered by maxIgnorablePods are not waited on.
+		// Step 2.5: wait for non-scaled-down racks to be ready before quiescing.
+		// reconcileRack above may have added new pods still initialising.
 		nonScaledDownRackStates := make([]RackState, len(nonScaledDownRacks))
 		for i := range nonScaledDownRacks {
 			nonScaledDownRackStates[i] = *nonScaledDownRacks[i].rackState
@@ -198,23 +195,13 @@ func (r *SingleClusterReconciler) reconcileRacks(ctx context.Context) common.Rec
 			return res
 		}
 
-		// Step 2.75: scaled-down rack pod readiness gate, run after
-		// waitForAllRacksReady has already ensured non-scaled-down rack pods are up.
-		// racksToDelete are NOT passed here — getIgnorablePods already added all
-		// their non-running pods to ignorablePodNames unconditionally, so checking
-		// them again would be a no-op. Only scaledDownRacks need scanning:
-		//   - target + no CR status (pending/initialising) → added to ignorablePodNames.
-		//   - target + has CR status (re-initialising after prior join) → ReconcileError.
-		//   - remaining (non-target) pod not running → ReconcileError.
-		if res = r.checkReadyForBatchQuiesce(ctx, scaledDownRacks, allTargets, ignorablePodNames); !res.IsSuccess {
+		// Step 2.75: readiness gate for scaled-down rack pods.
+		// racksToDelete skipped — their non-running pods are already ignorable.
+		if res = r.checkReadyForBatchQuiesce(ctx, scaledDownRacks, targetNames, ignorablePodNames); !res.IsSuccess {
 			return res
 		}
 
-		// Step 3: quiesce all scale-down target pods across every rack at once so
-		// all data migrations happen in a single concurrent round. Runs after
-		// non-scaled-down racks are reconciled so those operations see a
-		// full-capacity cluster, and before scaled-down racks are processed so the
-		// single migration round is already in flight when scaleDownRack starts.
+		// Step 3: quiesce all targets at once — single concurrent migration round.
 		if res = r.reconcileBatchQuiesce(ctx, allTargets, ignorablePodNames); !res.IsSuccess {
 			return res
 		}

@@ -16,7 +16,7 @@ limitations under the License.
 
 package cluster
 
-// Envtests for the EnableBatchScaleDownQuiesce webhook validation.
+// Envtests for the EnableParallelScaleDownAcrossRacks webhook validation.
 //
 // The validating webhook only restricts the DISABLE direction (true → false)
 // while a scale-down is in flight. Enabling is always permitted.
@@ -44,7 +44,7 @@ import (
 	"github.com/aerospike/aerospike-kubernetes-operator/v4/test/testutil"
 )
 
-var _ = Describe("EnableBatchScaleDownQuiesce webhook validation", func() {
+var _ = Describe("EnableParallelScaleDownAcrossRacks webhook validation", func() {
 	ctx := context.TODO()
 
 	var clusterNamespacedName types.NamespacedName
@@ -68,7 +68,7 @@ var _ = Describe("EnableBatchScaleDownQuiesce webhook validation", func() {
 	// value and returns the freshly-fetched live object (with ResourceVersion).
 	createCluster := func(size int32, flagEnabled *bool) *asdbv1.AerospikeCluster {
 		aeroCluster := testCluster.CreateDummyAerospikeCluster(clusterNamespacedName, size)
-		aeroCluster.Spec.RackConfig.EnableBatchScaleDownQuiesce = flagEnabled
+		aeroCluster.Spec.RackConfig.EnableParallelScaleDownAcrossRacks = flagEnabled
 		Expect(envtests.K8sClient.Create(ctx, aeroCluster)).To(Succeed())
 
 		cur, err := testCluster.GetCluster(envtests.K8sClient, ctx, clusterNamespacedName)
@@ -89,7 +89,7 @@ var _ = Describe("EnableBatchScaleDownQuiesce webhook validation", func() {
 
 			setStatusSize(4) // stable: status == spec
 
-			cur.Spec.RackConfig.EnableBatchScaleDownQuiesce = ptr.To(true)
+			cur.Spec.RackConfig.EnableParallelScaleDownAcrossRacks = ptr.To(true)
 			Expect(envtests.K8sClient.Update(ctx, cur)).To(Succeed())
 		})
 
@@ -99,7 +99,7 @@ var _ = Describe("EnableBatchScaleDownQuiesce webhook validation", func() {
 
 			setStatusSize(4) // in-flight: status > spec
 
-			cur.Spec.RackConfig.EnableBatchScaleDownQuiesce = ptr.To(true)
+			cur.Spec.RackConfig.EnableParallelScaleDownAcrossRacks = ptr.To(true)
 			Expect(envtests.K8sClient.Update(ctx, cur)).To(Succeed())
 		})
 
@@ -109,7 +109,7 @@ var _ = Describe("EnableBatchScaleDownQuiesce webhook validation", func() {
 			setStatusSize(4) // stable
 
 			cur.Spec.Size = 3
-			cur.Spec.RackConfig.EnableBatchScaleDownQuiesce = ptr.To(true)
+			cur.Spec.RackConfig.EnableParallelScaleDownAcrossRacks = ptr.To(true)
 			Expect(envtests.K8sClient.Update(ctx, cur)).To(Succeed())
 		})
 	})
@@ -126,7 +126,7 @@ var _ = Describe("EnableBatchScaleDownQuiesce webhook validation", func() {
 
 			setStatusSize(4) // stable: status == spec
 
-			cur.Spec.RackConfig.EnableBatchScaleDownQuiesce = nil
+			cur.Spec.RackConfig.EnableParallelScaleDownAcrossRacks = nil
 			Expect(envtests.K8sClient.Update(ctx, cur)).To(Succeed())
 		})
 
@@ -136,7 +136,7 @@ var _ = Describe("EnableBatchScaleDownQuiesce webhook validation", func() {
 			setStatusSize(4) // stable
 
 			cur.Spec.Size = 3
-			cur.Spec.RackConfig.EnableBatchScaleDownQuiesce = nil
+			cur.Spec.RackConfig.EnableParallelScaleDownAcrossRacks = nil
 			Expect(envtests.K8sClient.Update(ctx, cur)).To(Succeed())
 		})
 	})
@@ -154,13 +154,13 @@ var _ = Describe("EnableBatchScaleDownQuiesce webhook validation", func() {
 
 			setStatusSize(4) // in-flight: status > spec
 
-			cur.Spec.RackConfig.EnableBatchScaleDownQuiesce = nil
+			cur.Spec.RackConfig.EnableParallelScaleDownAcrossRacks = nil
 			err := envtests.K8sClient.Update(ctx, cur)
 			Expect(err).To(HaveOccurred())
 			envtests.NewStatusErrorMatcher().
 				WithMessageSubstrings(
 					testutil.WebhookErrorPrefix,
-					"cannot disable enableBatchScaleDownQuiesce",
+					"cannot disable enableParallelScaleDownAcrossRacks",
 					"scale-down is already in progress",
 				).
 				Validate(err)
@@ -174,13 +174,13 @@ var _ = Describe("EnableBatchScaleDownQuiesce webhook validation", func() {
 			setStatusSize(10) // prior 10→8 still in flight
 
 			cur.Spec.Size = 6
-			cur.Spec.RackConfig.EnableBatchScaleDownQuiesce = nil
+			cur.Spec.RackConfig.EnableParallelScaleDownAcrossRacks = nil
 			err := envtests.K8sClient.Update(ctx, cur)
 			Expect(err).To(HaveOccurred())
 			envtests.NewStatusErrorMatcher().
 				WithMessageSubstrings(
 					testutil.WebhookErrorPrefix,
-					"cannot disable enableBatchScaleDownQuiesce",
+					"cannot disable enableParallelScaleDownAcrossRacks",
 					"scale-down is already in progress",
 				).
 				Validate(err)

@@ -122,7 +122,7 @@ const (
 	// subsequent reconcile cycles skip redundant Aerospike info calls when the
 	// pod is already quiesced. The annotation is removed by reconcileQuiesceUndo
 	// when the pod no longer needs to be quiesced.
-	BatchQuiesceAnnotation = "aerospike.com/quiesced-by-ako"
+	BatchQuiesceAnnotation = "aerospike.com/quiesced"
 	// BatchQuiesceAnnotationValue is the value stored in BatchQuiesceAnnotation
 	// when the annotation is active.
 	BatchQuiesceAnnotationValue = "true"

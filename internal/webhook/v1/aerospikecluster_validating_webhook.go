@@ -305,7 +305,7 @@ func (acv *AerospikeClusterCustomValidator) ValidateUpdate(_ context.Context,
 		return warnings, err
 	}
 
-	// Validate EnableBatchScaleDownQuiesce toggle restrictions.
+	// Validate EnableParallelScaleDownAcrossRacks toggle restrictions.
 	if err := validateBatchScaleDownQuiesceToggle(oldObject, aerospikeCluster); err != nil {
 		return warnings, err
 	}
@@ -848,60 +848,36 @@ func validateForceBlockFromRosterUpdate(newObj *asdbv1.AerospikeCluster) error {
 	return nil
 }
 
-// validateBatchScaleDownQuiesceToggle blocks disabling EnableBatchScaleDownQuiesce
-// while a scale-down is in flight; enabling is always permitted.
+// validateBatchScaleDownQuiesceToggle blocks disabling EnableParallelScaleDownAcrossRacks
+// while a scale-down is in flight; enabling is always safe.
 //
-// Why only the disable direction matters:
+// Enabling mid-scale-down is harmless — no pods are annotated yet and quiesce
+// is idempotent. Disabling mid-scale-down is unsafe: already-annotated/quiesced
+// pods would be left permanently quiesced (reconcileQuiesceUndo stops running).
 //
-//	Enabling (false → true) mid-scale-down is safe: no pods carry
-//	BatchQuiesceAnnotation yet (the feature was off), so reconcileQuiesceUndo
-//	is a pure no-op and reconcileBatchQuiesce simply takes over cleanly from
-//	wherever the per-rack loop was. Quiesce is idempotent.
-//
-//	Disabling (true → false) mid-scale-down is unsafe: the batch pre-pass
-//	may have already annotated and quiesced some pods. With the feature off,
-//	reconcileQuiesceUndo no longer runs, so those pods remain permanently
-//	quiesced in Aerospike. If scale-down is subsequently reverted they stay
-//	in the cluster but do not fully participate in data distribution.
-//
-// "Scale-down in flight" detection uses status.Size (updated only at the end
-// of a successful reconcile) vs spec.Size:
-//
-//	status.Size > newSpec.Size  →  pods still need to be removed.
-//
-// The "toggle with a fresh scale-down" exception requires the cluster to have
-// been fully stable before this update (oldStatus.Size == oldSpec.Size).
-// Without this guard a user who had already reduced spec from 10→8 in a prior
-// edit (reconcile not yet done, status still 10) could slip through by
-// reducing further to 6 in the same update — newSpec(6) < oldSpec(8) looks
-// like a "fresh" scale-down but the prior 10→8 is still in flight.
+// Disable is only allowed when the cluster was fully stable before this update
+// (oldStatus.Size == oldSpec.Size). Without this guard, a user who committed a
+// prior spec reduction still in flight could slip through by reducing further.
 func validateBatchScaleDownQuiesceToggle(oldObj, newObj *asdbv1.AerospikeCluster) error {
-	oldEnabled := ptr.Deref(oldObj.Spec.RackConfig.EnableBatchScaleDownQuiesce, false)
-	newEnabled := ptr.Deref(newObj.Spec.RackConfig.EnableBatchScaleDownQuiesce, false)
+	oldEnabled := ptr.Deref(oldObj.Spec.RackConfig.EnableParallelScaleDownAcrossRacks, false)
+	newEnabled := ptr.Deref(newObj.Spec.RackConfig.EnableParallelScaleDownAcrossRacks, false)
 
-	// Only the disable direction (true → false) needs protection.
-	// - Flag unchanged: nothing to do.
-	// - Enabling (false → true): always safe — no pods are annotated yet.
+	// Enabling (false → true) or unchanged: nothing to do.
 	if !oldEnabled || newEnabled {
 		return nil
 	}
 
-	// From here: disabling (true → false). Only block when scale-down is in flight.
-
-	// ALLOW: cluster was fully stable before this update AND this update is
-	// atomically initiating the scale-down. The flag disable and the
-	// scale-down start together, so the feature was never active during this
-	// particular scale-down cycle.
+	// Disabling (true → false): allow only when cluster was stable before this
+	// update and this update atomically initiates a new scale-down.
 	clusterWasStable := oldObj.Status.Size == oldObj.Spec.Size
 	if clusterWasStable && newObj.Spec.Size < oldObj.Spec.Size {
 		return nil
 	}
 
-	// DENY: scale-down is in flight (status hasn't caught up to the committed
-	// spec). Disabling now would leave annotated pods permanently quiesced.
+	// Deny: scale-down already in flight.
 	if oldObj.Status.Size > newObj.Spec.Size {
 		return fmt.Errorf(
-			"cannot disable enableBatchScaleDownQuiesce: scale-down is already in progress "+
+			"cannot disable enableParallelScaleDownAcrossRacks: scale-down is already in progress "+
 				"(status.size=%d, spec.size=%d); "+
 				"wait for scale-down to complete before disabling the flag",
 			oldObj.Status.Size, newObj.Spec.Size,

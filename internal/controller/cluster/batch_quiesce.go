@@ -15,29 +15,16 @@ import (
 	"github.com/aerospike/aerospike-management-lib/deployment"
 )
 
-// buildScaleDownTargets collects all scale-down candidate pods from both
-// explicitly scaled-down racks and racks being deleted entirely.
-//
-// Sources iterated directly (no intermediate slice):
-//  1. scaledDownRacks — configured racks where STS.Replicas > spec.Size.
-//  2. racksToDelete — racks removed entirely (rack replacement / deletion).
-//     A synthetic scaledDownRack with nil rackSTS is constructed inline;
-//     getAllScaleDownPods treats nil as Size=0 and returns all existing pods.
-//
-// This function is intentionally a pure collection step — it does not perform
-// any pod readiness checks. The readiness gate is applied later by
-// checkReadyForBatchQuiesce (Step 2.75 in reconcileRacks), which runs after
-// waitForAllRacksReady (Step 2.5) has ensured non-scaled-down racks are fully
-// up. This ordering guarantees the check sees the cluster state that will be
-// active when quiesce actually runs.
+// buildScaleDownTargets collects all scale-down candidate pods from
+// scaledDownRacks (STS.Replicas > spec.Size) and racksToDelete (target size=0).
+// Pure collection only — readiness checks run later in checkReadyForBatchQuiesce.
 func (r *SingleClusterReconciler) buildScaleDownTargets(
 	ctx context.Context,
-	scaledDownRacks []scaledDownRack,
+	scaledDownRacks []rackWithSTS,
 	racksToDelete []asdbv1.Rack,
 ) ([]*corev1.Pod, common.ReconcileResult) {
 	var allTargets []*corev1.Pod
 
-	// Source 1: configured racks where STS.Replicas > spec.Size.
 	for idx := range scaledDownRacks {
 		removedPods, err := r.getAllScaleDownPods(ctx, scaledDownRacks[idx])
 		if err != nil {
@@ -50,12 +37,10 @@ func (r *SingleClusterReconciler) buildScaleDownTargets(
 		allTargets = append(allTargets, removedPods...)
 	}
 
-	// Source 2: racks removed entirely (rack replacement / deletion).
-	// Pass a nil rackSTS so getAllScaleDownPods treats the target size as 0
-	// and returns every existing pod for the rack.
+	// racksToDelete: nil rackSTS signals target size=0, so all pods are returned.
 	for idx := range racksToDelete {
 		rack := &racksToDelete[idx]
-		entry := scaledDownRack{
+		entry := rackWithSTS{
 			rackSTS:   nil,
 			rackState: &RackState{Size: 0, Rack: rack},
 		}
@@ -74,50 +59,20 @@ func (r *SingleClusterReconciler) buildScaleDownTargets(
 	return allTargets, common.ReconcileSuccess()
 }
 
-// checkReadyForBatchQuiesce scans the pods belonging to partially-scaled-down
-// racks immediately before reconcileBatchQuiesce.
+// checkReadyForBatchQuiesce gates entry into reconcileBatchQuiesce by checking
+// pod readiness in scaledDownRacks (racksToDelete are skipped — all their
+// non-running pods are already in ignorablePodNames via getIgnorablePods).
 //
-// Why only scaledDownRacks (not racksToDelete):
-//
-//	getIgnorablePods (very beginning of reconcileRacks) adds ALL non-running
-//	pods from racksToDelete to ignorablePodNames unconditionally. Every pod in
-//	a deleted rack is also a target (no "remaining" pods). So for racksToDelete:
-//	running pods pass the IsAerospikeServerReady check; non-running pods are
-//	already in ignorablePodNames. This function is a no-op for them.
-//
-// Why only pending/initialising pods reach this function:
-//
-//	handleFailedPodsInRack (lines ~64–90 in reconcileRacks) processes every
-//	rack with a *terminal* server failure (CrashLoopBackOff, ErrImagePull,
-//	OOMKilled, Failed phase, …). For non-ignorable failures it always returns
-//	RequeueAfter — execution never reaches this function until the pod either
-//	recovers or enters ignorablePodNames. Pods that are merely pending or still
-//	initialising are classified PodHealthy by getServerFailedAndActivePods and
-//	pass through handleFailedPodsInRack unchecked.
-//
-// Within scaledDownRacks two cases are handled:
-//
-//   - Target (will be removed) + NOT running + no CR status →
-//     pod is pending/initialising and never joined the cluster; added to
-//     ignorablePodNames so quiescePods skips it safely.
-//   - Target (will be removed) + NOT running + has CR status →
-//     pod previously joined, currently re-initialising; ReconcileError to
-//     wait for recovery before quiesce.
-//   - Remaining pod (stays after scale-down) + NOT running →
-//     ReconcileError regardless of status — remaining pods must be up for
-//     quiesce connections to succeed.
+// For each non-ready pod in a scaled-down rack:
+//   - Target + no CR status → never joined; added to ignorablePodNames.
+//   - Target + has CR status → re-initialising; ReconcileError (wait for recovery).
+//   - Remaining (non-target) pod → ReconcileError (must be up for connections).
 func (r *SingleClusterReconciler) checkReadyForBatchQuiesce(
 	ctx context.Context,
-	scaledDownRacks []scaledDownRack,
-	allTargets []*corev1.Pod,
+	scaledDownRacks []rackWithSTS,
+	targetNames sets.Set[string],
 	ignorablePodNames sets.Set[string],
 ) common.ReconcileResult {
-	// Build a fast-lookup set of target pod names (pods being removed).
-	targetNames := sets.New[string]()
-	for _, pod := range allTargets {
-		targetNames.Insert(pod.Name)
-	}
-
 	for idx := range scaledDownRacks {
 		rack := scaledDownRacks[idx]
 
@@ -139,9 +94,8 @@ func (r *SingleClusterReconciler) checkReadyForBatchQuiesce(
 			}
 
 			if targetNames.Has(pod.Name) {
-				// Scale-down target is pending/initialising and not ready.
 				if _, hasStatus := r.aeroCluster.Status.Pods[pod.Name]; !hasStatus {
-					// Pod never joined the cluster — safe to skip quiesce.
+					// Never joined — safe to skip quiesce.
 					r.Log.Info("Scale-down target has no CR status entry; never joined cluster, skipping quiesce",
 						"pod", pod.Name)
 					ignorablePodNames.Insert(pod.Name)
@@ -152,9 +106,7 @@ func (r *SingleClusterReconciler) checkReadyForBatchQuiesce(
 					))
 				}
 			} else {
-				// Remaining pod in a scaled-down rack is not running. These
-				// pods must be up for quiesce connections to succeed. Block
-				// and wait for recovery — never silently skip them.
+				// Remaining pod must be up for quiesce connections.
 				return common.ReconcileError(fmt.Errorf(
 					"pod %s in scaled-down rack is not ready; waiting for recovery before quiesce",
 					pod.Name,
@@ -166,61 +118,28 @@ func (r *SingleClusterReconciler) checkReadyForBatchQuiesce(
 	return common.ReconcileSuccess()
 }
 
-// reconcileQuiesceUndo restores quiesced non-target pods to full cluster
-// membership. It runs BEFORE reconcileRack for non-scaled-down racks so that
-// any pods left quiesced by a prior batch-quiesce pre-pass (e.g. from a
-// since-reverted scale-down) are unquiesced before rolling restarts, config
-// updates, or scale-ups execute.
+// reconcileQuiesceUndo restores quiesced non-target pods to full membership.
+// Runs before reconcileRack for non-scaled-down racks so stale quiesces from a
+// prior (possibly reverted) scale-down are undone before rolling restarts run.
 //
-// Annotation-based fast-exit:
-// AKO marks every pod it quiesces with the BatchQuiesceAnnotation. If no
-// non-target pod carries the annotation, nothing needs undoing — we skip all
-// Aerospike info calls.
-//
-// When undo IS needed, InfoQuiesceUndoSubset is called with:
-//   - undoHosts: connections to the annotated non-target pods only (the nodes
-//     AKO wants to unquiesce).
-//   - allHosts: connections to ALL cluster pods (passed through to the internal
-//     InfoRecluster call so the principal is always reachable).
-//
-// Because only non-target pods are passed as undoHosts, target pods that are
-// intentionally quiesced are NOT disturbed. Only the annotated non-target pods
-// have their BatchQuiesceAnnotation cleared after a successful undo.
+// Annotation fast-exit: if no non-target pod carries BatchQuiesceAnnotation all
+// Aerospike calls are skipped. When undo is needed, InfoQuiesceUndoSubset is
+// called with annotated non-target pods only (undoHosts) plus all pods
+// (allHosts, so InfoRecluster can always reach the principal).
 func (r *SingleClusterReconciler) reconcileQuiesceUndo(
 	ctx context.Context,
-	allTargets []*corev1.Pod,
+	targetNames sets.Set[string],
+	ignorablePodNames sets.Set[string],
 ) common.ReconcileResult {
-	targetNames := sets.New[string]()
-	for _, pod := range allTargets {
-		targetNames.Insert(pod.Name)
-	}
-
 	podList, err := r.getClusterPodList(ctx)
 	if err != nil {
 		return common.ReconcileError(fmt.Errorf("list cluster pods for quiesce-undo: %w", err))
 	}
 
-	// Single pass over the pod list:
-	//  - collect annotated non-target pods (annotation fast-exit check)
-	//  - build tolerantIgnorable (any currently non-running pod is skipped
-	//    rather than causing a hard error; the annotation stays in place and
-	//    the next reconcile retries it)
-	//
-	// tolerantIgnorable uses the live !IsAerospikeServerReady check rather
-	// than the upstream ignorablePodNames snapshot: the snapshot was taken at
-	// the very start of reconcileRacks; a pod that was not-ready then may have
-	// recovered by now. Using a live check ensures recovered pods are included
-	// in allHostConns so InfoRecluster can always reach the principal.
 	var annotatedNonTargets []corev1.Pod
-
-	tolerantIgnorable := sets.New[string]()
 
 	for idx := range podList.Items {
 		pod := &podList.Items[idx]
-
-		if !utils.IsAerospikeServerReady(pod) {
-			tolerantIgnorable.Insert(pod.Name)
-		}
 
 		if !targetNames.Has(pod.Name) && pod.Annotations[asdbv1.BatchQuiesceAnnotation] ==
 			asdbv1.BatchQuiesceAnnotationValue {
@@ -236,9 +155,8 @@ func (r *SingleClusterReconciler) reconcileQuiesceUndo(
 	r.Log.Info("Sending quiesce-undo to annotated non-target pods",
 		"annotatedNonTargetCount", len(annotatedNonTargets))
 
-	// Build connections for ALL pods — required by InfoRecluster inside the
-	// management library so the principal is always reachable.
-	allHostConns, err := r.newPodsHostConnWithOption(podList.Items, tolerantIgnorable)
+	// ALL pods needed by InfoRecluster inside the management lib to find the principal.
+	allHostConns, err := r.newPodsHostConnWithOption(podList.Items, ignorablePodNames)
 	if err != nil {
 		return common.ReconcileError(fmt.Errorf("build all-host connections for quiesce-undo: %w", err))
 	}
@@ -247,11 +165,8 @@ func (r *SingleClusterReconciler) reconcileQuiesceUndo(
 		return common.ReconcileSuccess()
 	}
 
-	// Build connections only for the annotated non-target pods that need
-	// unquiescing, using the same tolerant ignorable set so non-running pods
-	// in annotatedNonTargets are silently skipped.
 	nonTargetHostConns, err := r.newPodsHostConnWithOption(
-		annotatedNonTargets, tolerantIgnorable,
+		annotatedNonTargets, ignorablePodNames,
 	)
 	if err != nil {
 		return common.ReconcileError(fmt.Errorf("build non-target host connections for quiesce-undo: %w", err))
@@ -259,18 +174,12 @@ func (r *SingleClusterReconciler) reconcileQuiesceUndo(
 
 	policy := r.getClientPolicy(ctx)
 
-	// InfoQuiesceUndoSubset:
-	//   - scans and undoes quiesce on nonTargetHostConns only
-	//   - calls InfoRecluster with allHostConns so the principal is always found
 	if err := deployment.InfoQuiesceUndoSubset(r.Log, policy, nonTargetHostConns, allHostConns); err != nil {
 		return common.ReconcileError(fmt.Errorf("send quiesce-undo to non-target pods: %w", err))
 	}
 
-	// Clear annotations only from the non-target pods we just unquiesced.
-	// Target pods keep their annotations; reconcileBatchQuiesce will re-use
-	// them for the fast-exit check.
-	// Use index-based iteration so &annotatedNonTargets[i] is a stable pointer
-	// into the slice (not a range-copy), which setPodQuiesceAnnotation requires.
+	// Clear annotations from unquiesced non-target pods only; targets keep
+	// theirs for the fast-exit check in reconcileBatchQuiesce.
 	for i := range annotatedNonTargets {
 		if annErr := r.setPodQuiesceAnnotation(ctx, &annotatedNonTargets[i], false); annErr != nil {
 			r.Log.Error(annErr, "Failed to remove quiesce annotation from pod; will retry next reconcile",
@@ -281,28 +190,15 @@ func (r *SingleClusterReconciler) reconcileQuiesceUndo(
 	return common.ReconcileSuccess()
 }
 
-// reconcileBatchQuiesce is the cross-rack batch quiesce pre-pass. It runs
-// AFTER checkReadyForBatchQuiesce (Step 2.75) and BEFORE reconcileRack for
-// scaled-down racks, quiescing ALL scale-down target pods across every rack at
-// once — triggering a single concurrent migration round instead of N sequential
-// rounds (one per rack / batch in the legacy flow).
+// reconcileBatchQuiesce quiesces ALL scale-down targets across every rack in a
+// single pre-pass, triggering one concurrent migration round instead of N
+// sequential rounds. Runs after checkReadyForBatchQuiesce and before
+// reconcileRack for scaled-down racks.
 //
-// Design notes:
-//   - ALL diff pods are quiesced upfront, not just the first ScaleDownBatchSize
-//     batch. The per-rack scaleDownRack loop still reduces the STS in batches;
-//     this pre-pass only triggers the single migration round early.
-//   - Annotation-based fast-exit: if every target pod already carries the
-//     BatchQuiesceAnnotation (set by AKO on the previous pass), all Aerospike
-//     info calls are skipped. This makes the steady-state path free of network
-//     round-trips.
-//   - Connections are built fresh here because reconcileRack for non-scaled-down
-//     racks (which runs before this function) may restart pods and change IPs.
-//   - Non-running targets that never joined the cluster are already in
-//     ignorablePodNames (added by checkReadyForBatchQuiesce) and are skipped
-//     by quiescePods.
-//   - validateSCClusterState gates on SC partition health before any quiesce.
-//   - waitForClusterStability ensures no migrations are in flight before
-//     quiescing, preventing stalled migrations on quiesced nodes.
+//   - Annotation fast-exit: if all targets carry BatchQuiesceAnnotation, all
+//     Aerospike info calls are skipped (steady-state path is free of network I/O).
+//   - Connections built fresh — prior reconcileRack pass may have changed IPs.
+//   - validateSCClusterState + waitForClusterStability gate before any quiesce.
 func (r *SingleClusterReconciler) reconcileBatchQuiesce(
 	ctx context.Context,
 	allTargets []*corev1.Pod,
@@ -312,28 +208,10 @@ func (r *SingleClusterReconciler) reconcileBatchQuiesce(
 		return common.ReconcileSuccess()
 	}
 
-	// Single pass: filter ignorable pods out of the target list AND check
-	// whether every remaining target already carries the BatchQuiesceAnnotation
-	// (the annotation-based fast-exit).
-	//
-	// A target pod can end up in ignorablePodNames from two independent sources:
-	//
-	//  1. getIgnorablePods (beginning of reconcileRacks) — server-failed pods
-	//     within the maxIgnorablePods budget are added BEFORE buildScaleDownTargets
-	//     runs, so they can already be ignorable when we arrive here.
-	//
-	//  2. checkReadyForBatchQuiesce (Step 2.75) — never-joined target pods
-	//     (not running, no CR status) are added AFTER buildScaleDownTargets
-	//     collected them.
-	//
-	// Both cases must be filtered out so that:
-	//   a. The annotation fast-exit correctly detects that all remaining
-	//      (actually-quiesceable) targets are already annotated.
-	//   b. quiescePods is not asked to build a connection to an unreachable pod.
-	//   c. The annotation loop at the end does not stamp ignorable pods.
-	//
-	// allTargets[:0] reuses the backing array: effectiveTargets is a strict
-	// left-to-right subset of allTargets, so overwriting while reading is safe.
+	// Single pass: filter ignorable pods and check annotation fast-exit.
+	// Targets may be ignorable from getIgnorablePods (server-failed within budget)
+	// or checkReadyForBatchQuiesce (never-joined pods). allTargets[:0] reuses
+	// the backing array safely (effectiveTargets is a left-to-right subset).
 	effectiveTargets := allTargets[:0]
 	allAnnotated := true
 
@@ -367,19 +245,14 @@ func (r *SingleClusterReconciler) reconcileBatchQuiesce(
 
 	policy := r.getClientPolicy(ctx)
 
-	// SC cluster state pre-check.
-	// If the cluster already has unavailable or dead partitions, quiescing
-	// additional nodes would deepen the degradation. Requeue and wait for
-	// the SC state to be healthy before proceeding.
+	// Abort if SC partitions are already unavailable — quiescing would deepen it.
 	if err := r.validateSCClusterState(ctx, policy, ignorablePodNames); err != nil {
 		r.Log.Error(err, "SC cluster state not healthy, deferring batch quiesce pre-pass")
 		return common.ReconcileRequeueAfter(10)
 	}
 
-	// Build connections fresh — pods may have restarted during reconcileRack
-	// for non-scaled-down racks (which runs before this function), so any
-	// connections built earlier would carry stale IPs.
-	// errEmptyPodList means no pods exist yet (new cluster); treat as a no-op.
+	// Build connections fresh; prior reconcileRack pass may have restarted pods.
+	// errEmptyPodList (new cluster) is treated as a no-op.
 	allHostConns, err := r.newAllHostConnWithOption(ctx, ignorablePodNames)
 	if err != nil {
 		if errors.Is(err, errEmptyPodList) {
@@ -389,29 +262,31 @@ func (r *SingleClusterReconciler) reconcileBatchQuiesce(
 		return common.ReconcileError(fmt.Errorf("build host connections for batch quiesce: %w", err))
 	}
 
-	// Wait for any in-flight migrations to complete before quiescing.
-	// Quiescing while migrations are active could stall them indefinitely,
-	// because quiesced nodes stop accepting new partition assignments.
+	// Zero MFD before the stability check so fills from any prior elevated MFD
+	// (e.g. a rolling-restart override) drain freely. Scale-down never raises MFD
+	// before quiesce — once nodes are permanently removed, fills must proceed at
+	// full speed. The DynamicMigrateFillDelay guard skips the call when already 0.
+	if res := r.setMigrateFillDelay(ctx, policy, 0, ignorablePodNames, allHostConns, false); !res.IsSuccess {
+		return res
+	}
+
+	// Quiescing during active migrations stalls them; wait for stability first.
 	if res := r.waitForClusterStability(policy, allHostConns); !res.IsSuccess {
 		return res
 	}
 
-	// Quiesce all running target pods — idempotent (re-quiescing an already-
-	// quiesced node is safe; the management lib verifies pending_quiesce after
-	// sending the quiesce: command).
+	// Quiesce all targets — idempotent.
 	if err := r.quiescePods(ctx, policy, allHostConns, allTargets, ignorablePodNames); err != nil {
 		return common.ReconcileError(fmt.Errorf("batch quiesce scale-down target pods: %w", err))
 	}
 
-	// Mark all targets with the BatchQuiesceAnnotation so subsequent reconcile
-	// cycles can skip re-quiescing them (fast-exit above).
+	// Stamp annotation for fast-exit on subsequent reconciles. Non-fatal if it
+	// fails — next reconcile will re-quiesce idempotently and retry the stamp.
 	for _, pod := range allTargets {
 		if pod.Annotations[asdbv1.BatchQuiesceAnnotation] != asdbv1.BatchQuiesceAnnotationValue {
 			if annErr := r.setPodQuiesceAnnotation(ctx, pod, true); annErr != nil {
 				r.Log.Error(annErr, "Failed to set quiesce annotation on pod; will re-quiesce next reconcile",
 					"pod", pod.Name)
-				// Non-fatal: the annotation is an optimisation. Next reconcile
-				// will re-quiesce this pod (idempotent) and retry the annotation.
 			}
 		}
 	}
@@ -422,8 +297,7 @@ func (r *SingleClusterReconciler) reconcileBatchQuiesce(
 }
 
 // setPodQuiesceAnnotation adds (add=true) or removes (add=false) the
-// BatchQuiesceAnnotation on the given pod using a merge-patch so only the
-// annotation map is touched.
+// BatchQuiesceAnnotation on the pod via a merge-patch.
 func (r *SingleClusterReconciler) setPodQuiesceAnnotation(
 	ctx context.Context, pod *corev1.Pod, add bool,
 ) error {
@@ -455,16 +329,10 @@ func (r *SingleClusterReconciler) setPodQuiesceAnnotation(
 	return nil
 }
 
-// getAllScaleDownPods returns ALL pods that will be removed for the given rack.
-// Unlike the per-rack scaleDownRack loop which processes one ScaleDownBatchSize
-// chunk at a time, the pre-pass quiesces the entire removal set upfront so all
-// migrations happen concurrently.
-//
-// When rackSTS is nil (racks sourced from racksToDelete whose STS was not
-// fetched) all existing pods are returned — the target size is 0 so every pod
-// is a removal candidate.
+// getAllScaleDownPods returns all pods to be removed for the given rack.
+// When rackSTS is nil (rack in racksToDelete) all existing pods are returned.
 func (r *SingleClusterReconciler) getAllScaleDownPods(
-	ctx context.Context, rack scaledDownRack,
+	ctx context.Context, rack rackWithSTS,
 ) ([]*corev1.Pod, error) {
 	rackState := rack.rackState
 
@@ -473,7 +341,6 @@ func (r *SingleClusterReconciler) getAllScaleDownPods(
 		return nil, err
 	}
 
-	// No STS object: rack is being deleted entirely (Size=0), return all pods.
 	if rack.rackSTS == nil {
 		return orderedPods, nil
 	}

@@ -137,16 +137,18 @@ func (r *SingleClusterReconciler) waitForMultipleNodesSafeStopReady(
 		return res
 	}
 
-	// Setup roster after migration.
-	if err = r.getAndSetRoster(ctx, policy, r.aeroCluster.Spec.RosterNodeBlockList, ignorablePodNames); err != nil {
-		r.Log.Error(err, "Failed to set roster for cluster, will requeue")
-		return common.ReconcileRequeueAfter(1)
-	}
+	if asdbv1.IsClusterSCEnabled(r.aeroCluster) {
+		// Setup roster after migration.
+		if err = r.getAndSetRoster(ctx, policy, r.aeroCluster.Spec.RosterNodeBlockList, ignorablePodNames); err != nil {
+			r.Log.Error(err, "Failed to set roster for cluster, will requeue")
+			return common.ReconcileRequeueAfter(1)
+		}
 
-	// A roster change can trigger a second wave of data-rebalancing migrations.
-	// Wait for the cluster to stabilise again before quiescing nodes.
-	if res := r.waitForClusterStability(policy, allHostConns); !res.IsSuccess {
-		return res
+		// A roster change can trigger a second wave of data-rebalancing migrations.
+		// Wait for the cluster to stabilise again before quiescing nodes.
+		if res := r.waitForClusterStability(policy, allHostConns); !res.IsSuccess {
+			return res
+		}
 	}
 
 	// Raise MFD to migrateFillDelay before quiesce. Only applies on the drain path

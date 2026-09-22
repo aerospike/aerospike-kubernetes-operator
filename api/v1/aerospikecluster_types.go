@@ -644,14 +644,14 @@ type RackConfig struct { //nolint:govet // for readability
 	// +optional
 	ScaleDownBatchSize *intstr.IntOrString `json:"scaleDownBatchSize,omitempty"`
 
-	// EnableBatchScaleDownQuiesce enables the cross-rack batch quiesce pre-pass during scale-down.
+	// EnableParallelScaleDownAcrossRacks enables the cross-rack parallel quiesce pre-pass during scale-down.
 	// When true, the operator quiesces ALL scale-down candidate pods across ALL racks simultaneously
 	// before the per-rack removal loop starts, collapsing what would otherwise be N sequential
 	// migration rounds (one per rack) into a single concurrent migration round.
 	// Disabled by default (nil / false).
-	// +operator-sdk:csv:customresourcedefinitions:type=spec,displayName="Enable Batch Scale-Down Quiesce"
+	// +operator-sdk:csv:customresourcedefinitions:type=spec,displayName="Enable Parallel Scale-Down Across Racks"
 	// +optional
-	EnableBatchScaleDownQuiesce *bool `json:"enableBatchScaleDownQuiesce,omitempty"`
+	EnableParallelScaleDownAcrossRacks *bool `json:"enableParallelScaleDownAcrossRacks,omitempty"`
 
 	// MaxIgnorablePods is the maximum number/percentage of pending/failed pods in a rack that are ignored while
 	// assessing cluster stability. Pods identified using this value are not considered part of the cluster.

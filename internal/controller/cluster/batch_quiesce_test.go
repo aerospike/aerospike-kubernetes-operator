@@ -146,7 +146,7 @@ func TestBuildScaleDownTargets_ScaledDownRacks(t *testing.T) {
 
 	rack := asdbv1.Rack{ID: 1}
 	rackState := &RackState{Rack: &rack, Size: 1}
-	scaledDown := []scaledDownRack{{rackSTS: sts, rackState: rackState}}
+	scaledDown := []rackWithSTS{{rackSTS: sts, rackState: rackState}}
 
 	targets, res := r.buildScaleDownTargets(context.Background(), scaledDown, nil)
 
@@ -195,7 +195,7 @@ func TestBuildScaleDownTargets_NoReadinessCheck(t *testing.T) {
 
 	rack := asdbv1.Rack{ID: 1}
 	rackState := &RackState{Rack: &rack, Size: 1}
-	scaledDown := []scaledDownRack{{rackSTS: sts, rackState: rackState}}
+	scaledDown := []rackWithSTS{{rackSTS: sts, rackState: rackState}}
 
 	targets, res := r.buildScaleDownTargets(context.Background(), scaledDown, nil)
 
@@ -224,12 +224,11 @@ func TestCheckReadyForBatchQuiesce_AllRunning(t *testing.T) {
 
 	rack := asdbv1.Rack{ID: 1}
 	rackState := &RackState{Rack: &rack, Size: 1}
-	scaledDown := []scaledDownRack{{rackSTS: sts, rackState: rackState}}
+	scaledDown := []rackWithSTS{{rackSTS: sts, rackState: rackState}}
 
-	allTargets := []*corev1.Pod{pods[1]} // pod index 1 is the removed one
 	ignorable := sets.New[string]()
 
-	res := r.checkReadyForBatchQuiesce(context.Background(), scaledDown, allTargets, ignorable)
+	res := r.checkReadyForBatchQuiesce(context.Background(), scaledDown, sets.New(pods[1].Name), ignorable)
 
 	require.True(t, res.IsSuccess)
 	assert.Empty(t, ignorable, "no pod should be added to ignorable when all are running")
@@ -252,12 +251,11 @@ func TestCheckReadyForBatchQuiesce_TargetNeverJoined(t *testing.T) {
 
 	rack := asdbv1.Rack{ID: 1}
 	rackState := &RackState{Rack: &rack, Size: 1}
-	scaledDown := []scaledDownRack{{rackSTS: sts, rackState: rackState}}
+	scaledDown := []rackWithSTS{{rackSTS: sts, rackState: rackState}}
 
-	allTargets := []*corev1.Pod{pods[1]}
 	ignorable := sets.New[string]()
 
-	res := r.checkReadyForBatchQuiesce(context.Background(), scaledDown, allTargets, ignorable)
+	res := r.checkReadyForBatchQuiesce(context.Background(), scaledDown, sets.New(pods[1].Name), ignorable)
 
 	require.True(t, res.IsSuccess)
 	assert.True(t, ignorable.Has(pods[1].Name),
@@ -281,12 +279,11 @@ func TestCheckReadyForBatchQuiesce_TargetHasCRStatus(t *testing.T) {
 
 	rack := asdbv1.Rack{ID: 1}
 	rackState := &RackState{Rack: &rack, Size: 1}
-	scaledDown := []scaledDownRack{{rackSTS: sts, rackState: rackState}}
+	scaledDown := []rackWithSTS{{rackSTS: sts, rackState: rackState}}
 
-	allTargets := []*corev1.Pod{pods[1]}
 	ignorable := sets.New[string]()
 
-	res := r.checkReadyForBatchQuiesce(context.Background(), scaledDown, allTargets, ignorable)
+	res := r.checkReadyForBatchQuiesce(context.Background(), scaledDown, sets.New(pods[1].Name), ignorable)
 
 	require.False(t, res.IsSuccess)
 	require.NotNil(t, res.Err, "expected ReconcileError for a previously-joined non-running target")
@@ -312,13 +309,12 @@ func TestCheckReadyForBatchQuiesce_RemainingPodNotRunning(t *testing.T) {
 
 	rack := asdbv1.Rack{ID: 1}
 	rackState := &RackState{Rack: &rack, Size: 1}
-	scaledDown := []scaledDownRack{{rackSTS: sts, rackState: rackState}}
+	scaledDown := []rackWithSTS{{rackSTS: sts, rackState: rackState}}
 
 	// Targets are pods 1 and 2; pod 0 is the remaining pod.
-	allTargets := []*corev1.Pod{pods[1], pods[2]}
 	ignorable := sets.New[string]()
 
-	res := r.checkReadyForBatchQuiesce(context.Background(), scaledDown, allTargets, ignorable)
+	res := r.checkReadyForBatchQuiesce(context.Background(), scaledDown, sets.New(pods[1].Name, pods[2].Name), ignorable)
 
 	require.False(t, res.IsSuccess)
 	require.NotNil(t, res.Err, "remaining non-running pod must block quiesce")
@@ -342,13 +338,12 @@ func TestCheckReadyForBatchQuiesce_AlreadyIgnorable(t *testing.T) {
 
 	rack := asdbv1.Rack{ID: 1}
 	rackState := &RackState{Rack: &rack, Size: 1}
-	scaledDown := []scaledDownRack{{rackSTS: sts, rackState: rackState}}
+	scaledDown := []rackWithSTS{{rackSTS: sts, rackState: rackState}}
 
-	allTargets := []*corev1.Pod{pods[1]}
 	// Pod-1-1 is already in ignorable (e.g. from maxIgnorablePods upstream).
 	ignorable := sets.New(pods[1].Name)
 
-	res := r.checkReadyForBatchQuiesce(context.Background(), scaledDown, allTargets, ignorable)
+	res := r.checkReadyForBatchQuiesce(context.Background(), scaledDown, sets.New(pods[1].Name), ignorable)
 
 	require.True(t, res.IsSuccess, "already-ignorable pod should be silently skipped")
 }
@@ -372,7 +367,7 @@ func TestCheckReadyForBatchQuiesce_DeletedRackPodsAlreadyIgnorable(t *testing.T)
 
 	// scaledDownRacks is empty (no partial-scale racks); the deleted-rack pod
 	// is pre-ignorable so even if we mistakenly iterated it, it would be skipped.
-	res := r.checkReadyForBatchQuiesce(context.Background(), nil, []*corev1.Pod{pod}, ignorable)
+	res := r.checkReadyForBatchQuiesce(context.Background(), nil, sets.New(pod.Name), ignorable)
 
 	require.True(t, res.IsSuccess,
 		"deleted-rack pod already in ignorablePodNames should cause no error")
@@ -397,10 +392,7 @@ func TestReconcileQuiesceUndo_FastExit_NoAnnotatedNonTargets(t *testing.T) {
 		pod0, pod1,
 	)
 
-	// pod1 is a scale-down target.
-	allTargets := []*corev1.Pod{pod1}
-
-	res := r.reconcileQuiesceUndo(context.Background(), allTargets)
+	res := r.reconcileQuiesceUndo(context.Background(), sets.New(pod1.Name), sets.New[string]())
 
 	require.True(t, res.IsSuccess, "should fast-exit when no non-target pod is annotated")
 }
@@ -417,9 +409,7 @@ func TestReconcileQuiesceUndo_FastExit_OnlyTargetsAnnotated(t *testing.T) {
 
 	r := newReconcilerWithObjects(newTestScheme(), aeroCluster, pod0, pod1)
 
-	allTargets := []*corev1.Pod{pod1}
-
-	res := r.reconcileQuiesceUndo(context.Background(), allTargets)
+	res := r.reconcileQuiesceUndo(context.Background(), sets.New(pod1.Name), sets.New[string]())
 
 	// annotatedNonTargets is empty → fast-exit → success without Aerospike calls.
 	require.True(t, res.IsSuccess,
@@ -439,9 +429,7 @@ func TestReconcileQuiesceUndo_AnnotatedNonTargetDetected(t *testing.T) {
 
 	r := newReconcilerWithObjects(newTestScheme(), aeroCluster, pod0, pod1)
 
-	allTargets := []*corev1.Pod{pod1}
-
-	res := r.reconcileQuiesceUndo(context.Background(), allTargets)
+	res := r.reconcileQuiesceUndo(context.Background(), sets.New(pod1.Name), sets.New[string]())
 
 	// The function must NOT fast-exit (annotated non-target found).
 	// It will fail at the InfoQuiesceUndoSubset call because there is no
@@ -579,7 +567,7 @@ func TestGetAllScaleDownPods_NilSTS(t *testing.T) {
 
 	rack := asdbv1.Rack{ID: 2}
 	rackState := &RackState{Rack: &rack, Size: 0}
-	entry := scaledDownRack{rackSTS: nil, rackState: rackState}
+	entry := rackWithSTS{rackSTS: nil, rackState: rackState}
 
 	result, err := r.getAllScaleDownPods(context.Background(), entry)
 
@@ -608,7 +596,7 @@ func TestGetAllScaleDownPods_DiffCalculation(t *testing.T) {
 
 	rack := asdbv1.Rack{ID: 1}
 	rackState := &RackState{Rack: &rack, Size: 1} // desired = 1, diff = 2
-	entry := scaledDownRack{rackSTS: sts, rackState: rackState}
+	entry := rackWithSTS{rackSTS: sts, rackState: rackState}
 
 	result, err := r.getAllScaleDownPods(context.Background(), entry)
 
@@ -627,7 +615,7 @@ func TestGetAllScaleDownPods_NoDiff(t *testing.T) {
 
 	rack := asdbv1.Rack{ID: 1}
 	rackState := &RackState{Rack: &rack, Size: 3} // desired >= replicas → no diff
-	entry := scaledDownRack{rackSTS: sts, rackState: rackState}
+	entry := rackWithSTS{rackSTS: sts, rackState: rackState}
 
 	result, err := r.getAllScaleDownPods(context.Background(), entry)
 
@@ -722,7 +710,7 @@ func TestBuildScaleDownTargets_ScaleDownBatchSizeIgnored(t *testing.T) {
 
 	rack := asdbv1.Rack{ID: 1}
 	rackState := &RackState{Rack: &rack, Size: 1}
-	scaledDown := []scaledDownRack{{rackSTS: sts, rackState: rackState}}
+	scaledDown := []rackWithSTS{{rackSTS: sts, rackState: rackState}}
 
 	targets, res := r.buildScaleDownTargets(context.Background(), scaledDown, nil)
 

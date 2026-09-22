@@ -1017,8 +1017,8 @@ func (in *RackConfig) DeepCopyInto(out *RackConfig) {
 		*out = new(intstr.IntOrString)
 		**out = **in
 	}
-	if in.EnableBatchScaleDownQuiesce != nil {
-		in, out := &in.EnableBatchScaleDownQuiesce, &out.EnableBatchScaleDownQuiesce
+	if in.EnableParallelScaleDownAcrossRacks != nil {
+		in, out := &in.EnableParallelScaleDownAcrossRacks, &out.EnableParallelScaleDownAcrossRacks
 		*out = new(bool)
 		**out = **in
 	}

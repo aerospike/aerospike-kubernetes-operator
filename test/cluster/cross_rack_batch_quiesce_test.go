@@ -135,9 +135,9 @@ func newMultiRackNonSCCluster(
 	aeroCluster := createNonSCDummyAerospikeCluster(clusterNamespacedName, totalSize)
 	racks := getDummyRackConf(rackIDs...)
 	aeroCluster.Spec.RackConfig = asdbv1.RackConfig{
-		Racks:                       racks,
-		Namespaces:                  []string{"test"},
-		EnableBatchScaleDownQuiesce: ptr.To(true),
+		Racks:                              racks,
+		Namespaces:                         []string{"test"},
+		EnableParallelScaleDownAcrossRacks: ptr.To(true),
 	}
 
 	return aeroCluster
