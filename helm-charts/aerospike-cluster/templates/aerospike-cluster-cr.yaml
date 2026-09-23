@@ -140,6 +140,11 @@ spec:
   k8sNodeBlockList: {{- toYaml . | nindent 4 }}
   {{- end }}
 
+  ## previewFeatures is a list of Aerospike server preview feature names enabled via --preview.
+  {{- with .Values.previewFeatures }}
+  previewFeatures: {{- toYaml . | nindent 4 }}
+  {{- end }}
+
   ## operations is a list of on-demand operations to be performed on the Aerospike cluster.
   {{- with .Values.operations }}
   operations: {{- toYaml . | nindent 4 }}

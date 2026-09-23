@@ -25,6 +25,7 @@ import (
 //	    Validate(err)
 type StatusErrorMatcher struct {
 	messageSubstrings []string
+	absentSubstrings  []string
 	causes            []metav1.StatusCause
 	warnings          []string
 	checkCauses       bool
@@ -39,6 +40,13 @@ func NewStatusErrorMatcher() *StatusErrorMatcher {
 // All provided substrings must be present in the error message.
 func (m *StatusErrorMatcher) WithMessageSubstrings(substrings ...string) *StatusErrorMatcher {
 	m.messageSubstrings = append(m.messageSubstrings, substrings...)
+	return m
+}
+
+// WithoutMessageSubstrings adds negative message validation. None of the provided substrings
+// may appear in the error message.
+func (m *StatusErrorMatcher) WithoutMessageSubstrings(substrings ...string) *StatusErrorMatcher {
+	m.absentSubstrings = append(m.absentSubstrings, substrings...)
 	return m
 }
 
@@ -73,6 +81,10 @@ func (m *StatusErrorMatcher) Validate(err error) {
 	// 3. Validate message substrings if provided
 	for _, substring := range m.messageSubstrings {
 		Expect(statusErr.ErrStatus.Message).To(ContainSubstring(substring))
+	}
+
+	for _, substring := range m.absentSubstrings {
+		Expect(statusErr.ErrStatus.Message).ToNot(ContainSubstring(substring))
 	}
 
 	// 4. Validate Causes if CheckCauses is enabled

@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"net"
 	"reflect"
+	"slices"
 	"strconv"
 	"strings"
 	"time"
@@ -273,6 +274,18 @@ func (r *SingleClusterReconciler) getRollingRestartTypePod(
 		r.Log.Info("Aerospike rack storage changed. Need rolling restart")
 	}
 
+	// Check if the --preview args are updated.
+	desiredPreviewArgs := previewFeaturesArgs(r.aeroCluster.Spec.PreviewFeatures)
+	if isPreviewFeaturesUpdated(desiredPreviewArgs, pod) {
+		restartType = mergeRestartType(restartType, podRestart)
+
+		r.Log.Info(
+			"Preview features changed. Need rolling restart",
+			"previewFeatures", r.aeroCluster.Spec.PreviewFeatures,
+			"requiredArgs", desiredPreviewArgs,
+		)
+	}
+
 	if opType := r.onDemandOperationType(pod.Name, onDemandQuickRestarts, onDemandPodRestarts); opType != noRestart {
 		restartType = mergeRestartType(restartType, opType)
 
@@ -340,7 +353,7 @@ func (r *SingleClusterReconciler) rollingRestartPods(
 	failedPods, failedWithinGracePeriodPods, activePods := getServerFailedAndActivePods(podsToRestart, true)
 
 	// Failed pods are always restarted as failure recovery regardless of the outer operation
-	// (upgrade, k8sNodeBlockList, planned rolling restart) — they failed for an unknown reason
+	// (upgrade, k8sNodeBlockList, planned rolling restart) — they failed for an unknown reason,
 	// and their local disk data must be protected.
 	if len(failedPods) != 0 {
 		r.Log.Info("Restart failed Pods", "pods", getPodNames(failedPods))
@@ -350,9 +363,8 @@ func (r *SingleClusterReconciler) rollingRestartPods(
 		}
 	}
 
-	// Here activePods should be those pods where server pod is running, irrespective of sidecars status.
-	// ignorablePodNames should only have those pods where server container is failing
-
+	// Here activePods should be those pods where the server pod is running, irrespective of sidecars status.
+	// ignorablePodNames should only have those pods where the server container is failing
 	if len(activePods) != 0 {
 		r.Log.Info("Restart active Pods", "pods", getPodNames(activePods))
 
@@ -498,6 +510,17 @@ func (r *SingleClusterReconciler) restartPods(
 		return common.ReconcileError(err)
 	}
 
+	// Skip checkpoint for failed pods. The server container is not running so the info port is unreachable.
+	if !isFailureRecovery {
+		checkpointPods := podsWithRestartType(podsToRestart, restartTypeMap, podRestart)
+
+		// Trigger and wait for index checkpoint once for the whole batch of podRestart pods,
+		// before any of them are touched.
+		if result := r.triggerIndexCheckpointSave(ctx, checkpointPods, rackState); !result.IsSuccess {
+			return result
+		}
+	}
+
 	restartedPods := make([]*corev1.Pod, 0, len(podsToRestart))
 	restartedPodNames := make([]string, 0, len(podsToRestart))
 	restartedASDPodNames := make([]string, 0, len(podsToRestart))
@@ -519,14 +542,8 @@ func (r *SingleClusterReconciler) restartPods(
 
 			restartedASDPodNames = append(restartedASDPodNames, pod.Name)
 		case podRestart:
-			if r.isLocalPVCDeletionRequired(rackState, pod, isFailureRecovery) {
-				if err := r.deleteLocalPVCs(ctx, rackState, pod); err != nil {
-					return common.ReconcileError(err)
-				}
-			}
-
-			if err := r.Delete(ctx, pod); err != nil {
-				return common.ReconcileError(fmt.Errorf("delete Pod %s: %w", utils.GetNamespacedNameString(pod), err))
+			if err := r.deletePodWithLocalPVCs(ctx, rackState, pod, isFailureRecovery); err != nil {
+				return common.ReconcileError(err)
 			}
 
 			restartedPods = append(restartedPods, pod)
@@ -672,6 +689,21 @@ func getServerFailedAndActivePods(
 	return failedPods, failedWithinGracePeriodPods, activePods
 }
 
+// podsWithRestartType returns the subset of pods whose restart type in
+// restartTypeMap equals restartType.
+func podsWithRestartType(pods []*corev1.Pod, restartTypeMap map[string]RestartType,
+	restartType RestartType) []*corev1.Pod {
+	filtered := make([]*corev1.Pod, 0, len(pods))
+
+	for idx := range pods {
+		if restartTypeMap[pods[idx].Name] == restartType {
+			filtered = append(filtered, pods[idx])
+		}
+	}
+
+	return filtered
+}
+
 // podNamesToSet returns a Set containing the names of the given pods.
 func podNamesToSet(pods []*corev1.Pod) sets.Set[string] {
 	names := sets.New[string]()
@@ -796,19 +828,21 @@ func (r *SingleClusterReconciler) deletePodAndEnsureImageUpdated(
 		return common.ReconcileError(err)
 	}
 
+	// Skip checkpoint for failed pods. The server container is not running so the info port is unreachable.
+	if !isFailureRecovery {
+		// Trigger and wait for index checkpoint once for the whole batch of podRestart pods,
+		// before any of them are touched.
+		if result := r.triggerIndexCheckpointSave(ctx, podsToUpdate, rackState); !result.IsSuccess {
+			return result
+		}
+	}
+
 	// Delete pods
 	for _, pod := range podsToUpdate {
-		if r.isLocalPVCDeletionRequired(rackState, pod, isFailureRecovery) {
-			if err := r.deleteLocalPVCs(ctx, rackState, pod); err != nil {
-				return common.ReconcileError(err)
-			}
-		}
-
-		if err := r.Delete(ctx, pod); err != nil {
+		if err := r.deletePodWithLocalPVCs(ctx, rackState, pod, isFailureRecovery); err != nil {
 			return common.ReconcileError(err)
 		}
 
-		r.Log.V(1).Info("Pod deleted", "pod", utils.GetNamespacedName(pod))
 		r.Recorder.Eventf(
 			r.aeroCluster, corev1.EventTypeNormal, "PodWaitUpdate",
 			"[rack-%d] Waiting to update Pod %s",
@@ -817,6 +851,26 @@ func (r *SingleClusterReconciler) deletePodAndEnsureImageUpdated(
 	}
 
 	return r.ensurePodsImageUpdated(ctx, podsToUpdate)
+}
+
+// deletePodWithLocalPVCs deletes a pod, first removing its local PVCs when the rack
+// configuration or the pod's placement calls for it.
+func (r *SingleClusterReconciler) deletePodWithLocalPVCs(
+	ctx context.Context, rackState *RackState, pod *corev1.Pod, isFailureRecovery bool,
+) error {
+	if r.isLocalPVCDeletionRequired(rackState, pod, isFailureRecovery) {
+		if err := r.deleteLocalPVCs(ctx, rackState, pod); err != nil {
+			return err
+		}
+	}
+
+	if err := r.Delete(ctx, pod); err != nil {
+		return fmt.Errorf("delete Pod %s: %w", utils.GetNamespacedNameString(pod), err)
+	}
+
+	r.Log.V(1).Info("Pod deleted", "pod", utils.GetNamespacedName(pod))
+
+	return nil
 }
 
 func (r *SingleClusterReconciler) isLocalPVCDeletionRequired(
@@ -1354,6 +1408,15 @@ func (r *SingleClusterReconciler) handleNSOrDeviceRemoval(
 		return nil
 	}
 
+	// In case of checkpoint path change, the old path is useless and intermediate ops can leave stale files behind
+	// in the old path. Clean the path explicitly.
+	statusCkptPath := asdbv1.GetIndexCheckpointPath(rackStatus.AerospikeConfig.Value)
+	specCkptPath := asdbv1.GetIndexCheckpointPath(rackState.Rack.AerospikeConfig.Value)
+
+	if statusCkptPath != "" && statusCkptPath != specCkptPath {
+		removedFiles = append(removedFiles, statusCkptPath+"/*")
+	}
+
 	for _, statusNamespace := range rackStatus.AerospikeConfig.Value[asdbv1.ConfKeyNamespace].([]interface{}) {
 		namespaceFound := false
 
@@ -1417,19 +1480,19 @@ func (r *SingleClusterReconciler) handleNSOrDeviceRemoval(
 
 			specMounts := sets.Set[string]{}
 
-			if statusNamespace.(map[string]interface{})["index-type"] != nil {
-				statusIndex := statusNamespace.(map[string]interface{})["index-type"].(map[string]interface{})
-				if statusIndex["mounts"] != nil {
-					for _, statusMountInterface := range statusIndex["mounts"].([]interface{}) {
+			if statusNamespace.(map[string]interface{})[asdbv1.ConfKeyIndexType] != nil {
+				statusIndex := statusNamespace.(map[string]interface{})[asdbv1.ConfKeyIndexType].(map[string]interface{})
+				if statusIndex[asdbv1.ConfKeyMounts] != nil {
+					for _, statusMountInterface := range statusIndex[asdbv1.ConfKeyMounts].([]interface{}) {
 						statusMounts = append(statusMounts, strings.Fields(statusMountInterface.(string))...)
 					}
 				}
 			}
 
-			if specNamespace.(map[string]interface{})["index-type"] != nil {
-				specIndex := specNamespace.(map[string]interface{})["index-type"].(map[string]interface{})
-				if specIndex["mounts"] != nil {
-					for _, specMountInterface := range specIndex["mounts"].([]interface{}) {
+			if specNamespace.(map[string]interface{})[asdbv1.ConfKeyIndexType] != nil {
+				specIndex := specNamespace.(map[string]interface{})[asdbv1.ConfKeyIndexType].(map[string]interface{})
+				if specIndex[asdbv1.ConfKeyMounts] != nil {
+					for _, specMountInterface := range specIndex[asdbv1.ConfKeyMounts].([]interface{}) {
 						specMounts.Insert(strings.Fields(specMountInterface.(string))...)
 					}
 				}
@@ -1480,11 +1543,11 @@ func (r *SingleClusterReconciler) handleNSOrDeviceRemoval(
 				removedFiles = append(removedFiles, statusFiles...)
 			}
 
-			if statusNamespace.(map[string]interface{})["index-type"] != nil {
-				statusIndex := statusNamespace.(map[string]interface{})["index-type"].(map[string]interface{})
-				if statusIndex["mounts"] != nil {
+			if statusNamespace.(map[string]interface{})[asdbv1.ConfKeyIndexType] != nil {
+				statusIndex := statusNamespace.(map[string]interface{})[asdbv1.ConfKeyIndexType].(map[string]interface{})
+				if statusIndex[asdbv1.ConfKeyMounts] != nil {
 					var statusMounts []string
-					for _, statusMountInterface := range statusStorage["mounts"].([]interface{}) {
+					for _, statusMountInterface := range statusStorage[asdbv1.ConfKeyMounts].([]interface{}) {
 						statusMounts = append(statusMounts, strings.Fields(statusMountInterface.(string))...)
 					}
 
@@ -1725,10 +1788,40 @@ func getFlatConfig(log logger, confStr string) (*asconfig.Conf, error) {
 	return asConf.GetFlatMap(), nil
 }
 
+// runningAerospikeConfig returns the aerospikeConfig the pod's server is actually running.
+// Returns nil when the pod carries no rendered config.
+func runningAerospikeConfig(log logger, pod *corev1.Pod) (map[string]interface{}, error) {
+	confStr := pod.Annotations[asdbv1.AerospikeConfAnnotation]
+	if confStr == "" {
+		return nil, nil
+	}
+
+	asConf, err := asconfig.NewASConfigFromBytes(log, []byte(confStr), asconfig.AeroConfig)
+	if err != nil {
+		return nil, fmt.Errorf("parse %s annotation of Pod %s: %w",
+			asdbv1.AerospikeConfAnnotation, utils.GetNamespacedNameString(pod), err)
+	}
+
+	// ToMap renders list sections as []asconfig.Conf and sizes as uint64; the api/v1
+	// accessors want the CR's []interface{} and a type GetIntType accepts.
+	raw, err := json.Marshal(asConf.ToMap())
+	if err != nil {
+		return nil, err
+	}
+
+	conf := map[string]interface{}{}
+	if err := json.Unmarshal(raw, &conf); err != nil {
+		return nil, fmt.Errorf("parse %s annotation of Pod %s: %w",
+			asdbv1.AerospikeConfAnnotation, utils.GetNamespacedNameString(pod), err)
+	}
+
+	return conf, nil
+}
+
 // getConfDiff retrieves the configuration differences between the spec and status Aerospike configurations.
 func getConfDiff(log logger, specConfig map[string]interface{}, podAnnotations map[string]string,
 	version string) (asconfig.DynamicConfigMap, error) {
-	statusFromAnnotation, ok := podAnnotations["aerospikeConf"]
+	statusFromAnnotation, ok := podAnnotations[asdbv1.AerospikeConfAnnotation]
 	if !ok {
 		log.Info("Pod annotation 'aerospikeConf' missing")
 		return nil, nil
@@ -2110,6 +2203,17 @@ func (r *SingleClusterReconciler) revertMFDToConfig(
 	}
 
 	return r.setMigrateFillDelay(ctx, policy, configMFD, ignorablePodNames, nil, force)
+}
+
+// isPreviewFeaturesUpdated reports whether the pod's server container is running with
+// different --preview args than the spec now requires.
+func isPreviewFeaturesUpdated(desiredArgs []string, pod *corev1.Pod) bool {
+	serverContainer := getContainer(pod.Spec.Containers, asdbv1.AerospikeServerContainerName)
+	if serverContainer == nil {
+		return false
+	}
+
+	return !slices.Equal(serverContainer.Args, desiredArgs)
 }
 
 // isAnyPodSpecUpdated checks if any pod spec has been updated indirectly based on

@@ -12,7 +12,7 @@ replicas: 2 # @schema required; minimum: 0
 # -- Operator image
 operatorImage: # @schema required; additionalProperties: false
   repository: aerospike/aerospike-kubernetes-operator # @schema required; minLength: 1
-  tag: 4.5.0 # @schema required; minLength: 1
+  tag: 4.6.0-dev1 # @schema required; minLength: 1
   pullPolicy: IfNotPresent # @schema required
 
 # -- In case the above image is pulled from a registry that requires
@@ -92,7 +92,7 @@ aerospikeKubernetesInitRegistry: "docker.io" # @schema required; minLength: 1
 aerospikeKubernetesInitRegistryNamespace: "aerospike" # @schema required; minLength: 1
 
 # -- Name and tag of aerospike-init image
-aerospikeKubernetesInitNameTag: "aerospike-kubernetes-init:2.5.3" # @schema required; pattern:^\S+:\S+$
+aerospikeKubernetesInitNameTag: "aerospike-kubernetes-init:2.5.4-dev1" # @schema required; pattern:^\S+:\S+$
 
 # -- Resources - limits / requests
 resources:

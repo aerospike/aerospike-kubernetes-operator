@@ -980,6 +980,7 @@ func createAerospikeClusterPost570(
 						Roles: []string{
 							"sys-admin",
 							"user-admin",
+							"read-write",
 						},
 					},
 				},
@@ -1086,6 +1087,41 @@ func createDummyRackAwareAerospikeCluster(
 	racks := []asdbv1.Rack{{ID: 1}}
 	rackConf := asdbv1.RackConfig{Racks: racks}
 	aeroCluster.Spec.RackConfig = rackConf
+
+	return aeroCluster
+}
+
+func createAllFlashCluster(
+	clusterNamespacedName types.NamespacedName, size int32,
+) *asdbv1.AerospikeCluster {
+	aeroCluster := CreateAerospikeClusterPost640(clusterNamespacedName, size, latestImage)
+
+	aeroCluster.Spec.AerospikeConfig.Value[asdbv1.ConfKeyNamespace] = []any{
+		map[string]any{
+			"name":               "test",
+			"replication-factor": 2,
+			asdbv1.ConfKeyIndexType: map[string]any{
+				"type":   "flash",
+				"mounts": []any{"/test/dev/xvdf-index"},
+				// mounts-budget has a 4 GiB floor for index-type flash in the config schema (1 GiB is the PMEM floor
+				"mounts-budget": 4294967296,
+			},
+			asdbv1.ConfKeyStorageEngine: map[string]any{
+				"type":    "device",
+				"devices": []any{"/test/dev/xvdf"},
+			},
+			asdbv1.ConfKeySindexType: map[string]any{
+				"type":          "flash",
+				"mounts":        []any{"/test/dev/xvdf-index"},
+				"mounts-budget": 1073741824,
+			},
+		},
+	}
+
+	// all-flash required privilege true
+	aeroCluster.Spec.PodSpec.AerospikeContainerSpec.SecurityContext = &corev1.SecurityContext{
+		Privileged: new(true),
+	}
 
 	return aeroCluster
 }
@@ -1820,14 +1856,14 @@ func LoadBulkDataInCluster(
 	wp := as.NewWritePolicy(0, 0)
 	binMap := as.BinMap{"testbin": token}
 
-	for i := 0; i < numKeys; i++ {
+	for i := range numKeys {
 		key, keyErr := as.NewKey(namespace, "testset", "testkey"+strconv.Itoa(i))
 		if keyErr != nil {
 			return fmt.Errorf("create key %d: %w", i, keyErr)
 		}
 
 		// Retry briefly in case a service endpoint is still warming up.
-		for j := 0; j < 10; j++ {
+		for range 10 {
 			if err = asClient.Put(wp, key, binMap); err == nil {
 				break
 			}
@@ -1843,6 +1879,50 @@ func LoadBulkDataInCluster(
 	pkgLog.Info("Bulk data load complete", "namespace", namespace, "numKeys", numKeys)
 
 	return nil
+}
+
+// CheckBulkDataInCluster reports how many of the numKeys records written by LoadBulkDataInCluster are still readable
+// in the namespace. It returns a COUNT rather than a bool. A missing record is a miss, not an error.
+func CheckBulkDataInCluster(
+	aeroCluster *asdbv1.AerospikeCluster,
+	k8sClient client.Client,
+	namespace string,
+	numKeys int,
+) (int, error) {
+	asClient, err := getAerospikeClient(aeroCluster, k8sClient)
+	if err != nil {
+		return 0, err
+	}
+
+	defer asClient.Close()
+
+	pkgLog.Info("Verifying bulk data", "namespace", namespace, "numKeys", numKeys)
+
+	found := 0
+
+	for i := 0; i < numKeys; i++ {
+		key, keyErr := as.NewKey(namespace, "testset", "testkey"+strconv.Itoa(i))
+		if keyErr != nil {
+			return found, fmt.Errorf("create key %d: %w", i, keyErr)
+		}
+
+		// A read miss surfaces either as an error or as a nil record depending on the
+		// client's policy; both mean "not there", and neither is a test failure on its
+		// own — the caller asserts on the total.
+		record, getErr := asClient.Get(nil, key)
+		if getErr != nil || record == nil {
+			continue
+		}
+
+		if _, exists := record.Bins["testbin"]; exists {
+			found++
+		}
+	}
+
+	pkgLog.Info("Bulk data verification complete", "namespace", namespace,
+		"found", found, "expected", numKeys)
+
+	return found, nil
 }
 
 func CheckDataInCluster(
@@ -2051,6 +2131,21 @@ func checkClientConnection(
 
 	if len(cl.GetNodeNames()) == 0 {
 		return fmt.Errorf("not connected")
+	}
+
+	return nil
+}
+
+// getClusterNamespaceConfig returns the named namespace's config map from the cluster spec.
+//
+//nolint:unparam // for future ref
+func getClusterNamespaceConfig(aeroCluster *asdbv1.AerospikeCluster, nsName string) map[string]interface{} {
+	nsList := aeroCluster.Spec.AerospikeConfig.Value[asdbv1.ConfKeyNamespace].([]interface{})
+	for _, nsIface := range nsList {
+		nsConf := nsIface.(map[string]interface{})
+		if nsConf[asdbv1.ConfKeyName] == nsName {
+			return nsConf
+		}
 	}
 
 	return nil

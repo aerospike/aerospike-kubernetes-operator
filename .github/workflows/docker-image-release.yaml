@@ -2,7 +2,7 @@ name: Release Container Image
 on:
   push:
     tags:
-      - 'v[0-9]+.[0-9]+.[0-9]+'
+      - 'v*.*.*'
 
 jobs:
   build-and-push:
@@ -61,7 +61,7 @@ jobs:
         with:
           command: container test
           image: ${{ env.IMG_BASE }}:${{ env.TAG }}
-          args: --file=Dockerfile --severity-threshold=high --fail-on=all # fail on vulnerabilities with fix available
+          args: --severity-threshold=high --fail-on=all # fail on vulnerabilities with fix available
 
 # https://github.blog/changelog/2024-05-06-code-scanning-will-stop-combining-runs-from-a-single-upload/
 #      - name: Upload result to GitHub Code Scanning

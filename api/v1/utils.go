@@ -52,6 +52,15 @@ const (
 	ConfKeyReplicationFactor = "replication-factor"
 	ConfKeyStrongConsistency = "strong-consistency"
 	ConfKeyName              = "name"
+	ConfKeyIndexType         = "index-type"
+	ConfKeySindexType        = "sindex-type"
+	ConfKeyMounts            = "mounts"
+	ConfKeyType              = "type"
+	ConfKeyDataSize          = "data-size"
+	// ConfKeySkipCheckpoint is the only dynamic index-checkpoint key.
+	ConfKeySkipCheckpoint             = "skip-checkpoint"
+	ConfKeyIndexCheckpointThreads     = "index-checkpoint-threads"
+	ConfKeyIndexCheckpointCompression = "index-checkpoint-compression"
 
 	// Network section keys.
 	ConfKeyNetwork          = "network"
@@ -91,10 +100,11 @@ const (
 	confKeySecurityDefaultPasswordFile = "default-password-file"
 
 	// Service section keys.
-	ConfKeyService             = "service"
-	confKeyWorkDirectory       = "work-directory"
-	ConfigKeyCgroupMemTracking = "cgroup-mem-tracking"
-	ConfKeyMigrateFillDelay    = "migrate-fill-delay"
+	ConfKeyService                    = "service"
+	confKeyWorkDirectory              = "work-directory"
+	ConfigKeyCgroupMemTracking        = "cgroup-mem-tracking"
+	ConfKeyMigrateFillDelay           = "migrate-fill-delay"
+	ConfKeyServiceIndexCheckpointPath = "index-checkpoint-path"
 
 	// Defaults.
 	DefaultWorkDirectory = "/opt/aerospike"
@@ -108,7 +118,7 @@ const (
 	AerospikeInitContainerNameTagEnvVar            = "AEROSPIKE_KUBERNETES_INIT_NAME_TAG"
 	AerospikeInitContainerDefaultRegistry          = "docker.io"
 	AerospikeInitContainerDefaultRegistryNamespace = "aerospike"
-	AerospikeInitContainerDefaultNameAndTag        = "aerospike-kubernetes-init:2.5.3"
+	AerospikeInitContainerDefaultNameAndTag        = "aerospike-kubernetes-init:2.5.4-dev1"
 	AerospikeAppLabel                              = "app"
 	AerospikeAppLabelValue                         = "aerospike-cluster"
 	AerospikeCustomResourceLabel                   = "aerospike.com/cr"
@@ -118,7 +128,31 @@ const (
 	EvictionBlockedAnnotation                      = "aerospike.com/eviction-blocked"
 	OverrideRackIDAnnotation                       = "aerospike.com/override-rack-id"
 	AerospikeAPIVersion                            = "v1"
+	// IndexCheckpointParkedAnnotation carries the aerospike-server container ID that was
+	// parked for an index checkpoint.
+	IndexCheckpointParkedAnnotation = "aerospike.com/index-checkpoint-parked"
+	AerospikeConfAnnotation         = "aerospikeConf"
 )
+
+// Preview feature names recognized by the server's --preview flag.
+const (
+	PreviewFeatureIndexCheckpoint = "index-checkpoint"
+)
+
+// PreviewFeatureInfo describes the server version range for a preview feature.
+type PreviewFeatureInfo struct {
+	MinVersion string // first server version supporting this feature
+	GAVersion  string // server version where the flag is no longer needed ("" = still preview)
+}
+
+// PreviewFeatureVersions maps known preview feature names to their version constraints.
+//
+// GAVersion currently only drives an admission warning. No preview feature has graduated yet,
+// and the server has not decided whether a graduated name stays a tolerated --preview value or
+// becomes an error, so setting GAVersion does not change which flags the operator passes.
+var PreviewFeatureVersions = map[string]PreviewFeatureInfo{
+	PreviewFeatureIndexCheckpoint: {MinVersion: "8.2.0.0", GAVersion: ""},
+}
 
 // GetConfiguredWorkDirectory returns the Aerospike work directory configured in aerospikeConfig.
 func GetConfiguredWorkDirectory(aerospikeConfigSpec AerospikeConfigSpec) string {
@@ -644,29 +678,35 @@ func DistributeItems(totalItems, totalGroups int32) []int32 {
 	return topology
 }
 
-// getAllNamespaceNames collects all unique plain namespace names across every
-// rack in the spec.
-func GetAllNamespaceNames(spec *AerospikeClusterSpec) sets.Set[string] {
-	nsNames := make(sets.Set[string])
+// GetNamespaceNamesFromConfig returns every namespace name in one aerospikeConfig.
+func GetNamespaceNamesFromConfig(aerospikeConfig map[string]interface{}) []string {
+	namespaces, ok := aerospikeConfig[ConfKeyNamespace].([]interface{})
+	if !ok {
+		return nil
+	}
 
-	for idx := range spec.RackConfig.Racks {
-		rack := &spec.RackConfig.Racks[idx]
+	var result []string
 
-		nsList, ok := rack.AerospikeConfig.Value[ConfKeyNamespace].([]interface{})
+	for _, ns := range namespaces {
+		nsConf, ok := ns.(map[string]interface{})
 		if !ok {
 			continue
 		}
 
-		for _, nsInterface := range nsList {
-			ns, ok := nsInterface.(map[string]interface{})
-			if !ok {
-				continue
-			}
-
-			if name, ok := ns[ConfKeyName].(string); ok {
-				nsNames.Insert(name)
-			}
+		if name, ok := nsConf[ConfKeyName].(string); ok && name != "" {
+			result = append(result, name)
 		}
+	}
+
+	return result
+}
+
+// GetAllNamespaceNames collects all unique plain namespace names across every rack in the spec.
+func GetAllNamespaceNames(spec *AerospikeClusterSpec) sets.Set[string] {
+	nsNames := make(sets.Set[string])
+
+	for idx := range spec.RackConfig.Racks {
+		nsNames.Insert(GetNamespaceNamesFromConfig(spec.RackConfig.Racks[idx].AerospikeConfig.Value)...)
 	}
 
 	return nsNames
@@ -767,4 +807,52 @@ func GetClientAuthMode(authMode AerospikeAuthMode) as.AuthMode {
 
 func IsAuthModeInternal(authMode AerospikeAuthMode) bool {
 	return authMode == AerospikeAuthModeInternal || authMode == ""
+}
+
+// GetNamespaceDataSize returns a namespace's storage-engine data-size in bytes.
+func GetNamespaceDataSize(namespaceConf map[string]interface{}) (size int, ok bool) {
+	storageConf, ok := namespaceConf[ConfKeyStorageEngine].(map[string]interface{})
+	if !ok {
+		return 0, false
+	}
+
+	sizeIface, ok := storageConf[ConfKeyDataSize]
+	if !ok {
+		return 0, false
+	}
+
+	size, err := GetIntType(sizeIface)
+	if err != nil {
+		return 0, false
+	}
+
+	return size, true
+}
+
+// GetInMemoryNsDataSizes maps namespace name to storage-engine data-size, for pure in-memory namespaces only
+func GetInMemoryNsDataSizes(aerospikeConfig map[string]interface{}) map[string]int {
+	nsList, ok := aerospikeConfig[ConfKeyNamespace].([]interface{})
+	if !ok {
+		return nil
+	}
+
+	sizes := make(map[string]int, len(nsList))
+
+	for _, nsIface := range nsList {
+		nsConf, ok := nsIface.(map[string]interface{})
+		if !ok {
+			continue
+		}
+
+		name, ok := nsConf[ConfKeyName].(string)
+		if !ok {
+			continue
+		}
+
+		if size, ok := GetNamespaceDataSize(nsConf); ok {
+			sizes[name] = size
+		}
+	}
+
+	return sizes
 }

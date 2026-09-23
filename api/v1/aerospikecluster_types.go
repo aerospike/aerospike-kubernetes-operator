@@ -298,6 +298,13 @@ type AerospikeClusterSpec struct { //nolint:govet // for readability
 	// +optional
 	Operations []OperationSpec `json:"operations,omitempty"`
 
+	// PreviewFeatures is a list of Aerospike server preview feature names to enable via the
+	// --preview startup flag. Features gated behind this flag (e.g. "index-checkpoint")
+	// will cause the server to crash at startup if the flag is not present.
+	// +operator-sdk:csv:customresourcedefinitions:type=spec,displayName="Preview Features"
+	// +optional
+	PreviewFeatures []string `json:"previewFeatures,omitempty"`
+
 	// EnableRackIDOverride enables dynamic allocation of rack IDs to pods after they get scheduled.
 	// When enabled, the operator checks for the existence of the
 	// aerospike.com/override-rack-id annotation in the pod. When a pod has this annotation is
@@ -1191,6 +1198,12 @@ type AerospikeClusterStatusSpec struct { //nolint:govet // for readability
 	// or upgrade.
 	// +optional
 	RestartStrategy *RestartStrategy `json:"restartStrategy,omitempty"`
+
+	// PreviewFeatures is a list of Aerospike server preview feature names to enable via the
+	// --preview startup flag. Features gated behind this flag (e.g. "index-checkpoint")
+	// will cause the server to crash at startup if the flag is not present.
+	// +optional
+	PreviewFeatures []string `json:"previewFeatures,omitempty"`
 }
 
 // AerospikeClusterStatus defines the observed state of AerospikeCluster
@@ -1495,7 +1508,7 @@ type AerospikePodStatus struct { //nolint:govet // for readability
 
 // AerospikeCluster is the schema for the AerospikeCluster API
 // +operator-sdk:csv:customresourcedefinitions:displayName="Aerospike Cluster",resources={{Service, v1},{Pod,v1},{StatefulSet,v1}}
-// +kubebuilder:metadata:annotations="aerospike-kubernetes-operator/version=4.5.0"
+// +kubebuilder:metadata:annotations="aerospike-kubernetes-operator/version=4.6.0-dev1"
 //
 //nolint:lll // for readability
 type AerospikeCluster struct {
@@ -1516,8 +1529,6 @@ type AerospikeClusterList struct {
 }
 
 // CopySpecToStatus copy spec in status. Spec to Status DeepCopy doesn't work. It fails in reflect lib.
-//
-//nolint:dupl // not duplicate
 func CopySpecToStatus(spec *AerospikeClusterSpec) (*AerospikeClusterStatusSpec, error) {
 	status := AerospikeClusterStatusSpec{}
 
@@ -1644,12 +1655,16 @@ func CopySpecToStatus(spec *AerospikeClusterSpec) (*AerospikeClusterStatusSpec, 
 		status.RestartStrategy = spec.RestartStrategy.DeepCopy()
 	}
 
+	if len(spec.PreviewFeatures) != 0 {
+		previewFeatures := lib.DeepCopy(&spec.PreviewFeatures).(*[]string)
+
+		status.PreviewFeatures = *previewFeatures
+	}
+
 	return &status, nil
 }
 
 // CopyStatusToSpec copy status in spec. Status to Spec DeepCopy doesn't work. It fails in reflect lib.
-//
-//nolint:dupl // not duplicate
 func CopyStatusToSpec(status *AerospikeClusterStatusSpec) (*AerospikeClusterSpec, error) {
 	spec := AerospikeClusterSpec{}
 
@@ -1764,6 +1779,11 @@ func CopyStatusToSpec(status *AerospikeClusterStatusSpec) (*AerospikeClusterSpec
 	if len(status.K8sNodeBlockList) != 0 {
 		k8sNodeBlockList := lib.DeepCopy(&status.K8sNodeBlockList).(*[]string)
 		spec.K8sNodeBlockList = *k8sNodeBlockList
+	}
+
+	if len(status.PreviewFeatures) != 0 {
+		previewFeatures := lib.DeepCopy(&status.PreviewFeatures).(*[]string)
+		spec.PreviewFeatures = *previewFeatures
 	}
 
 	if len(status.Operations) != 0 {
