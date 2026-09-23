@@ -644,10 +644,9 @@ type RackConfig struct { //nolint:govet // for readability
 	// +optional
 	ScaleDownBatchSize *intstr.IntOrString `json:"scaleDownBatchSize,omitempty"`
 
-	// EnableParallelScaleDownAcrossRacks enables the cross-rack parallel quiesce pre-pass during scale-down.
-	// When true, the operator quiesces ALL scale-down candidate pods across ALL racks simultaneously
-	// before the per-rack removal loop starts, collapsing what would otherwise be N sequential
-	// migration rounds (one per rack) into a single concurrent migration round.
+	// EnableParallelScaleDownAcrossRacks enables the cross-rack parallel quiesce during scale-down.
+	// When true, the operator quiesces all scale-down candidate pods across all racks simultaneously
+	// before deleting the pods per rack.
 	// Disabled by default (nil / false).
 	// +optional
 	EnableParallelScaleDownAcrossRacks *bool `json:"enableParallelScaleDownAcrossRacks,omitempty"`

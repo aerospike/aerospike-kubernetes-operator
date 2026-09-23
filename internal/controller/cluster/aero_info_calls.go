@@ -19,7 +19,6 @@ import (
 	"fmt"
 	"time"
 
-	"github.com/aerospike/aerospike-kubernetes-operator/v4/pkg/jsonpatch"
 	corev1 "k8s.io/api/core/v1"
 	"k8s.io/apimachinery/pkg/util/sets"
 	"sigs.k8s.io/controller-runtime/pkg/client"
@@ -27,6 +26,7 @@ import (
 	as "github.com/aerospike/aerospike-client-go/v8"
 	asdbv1 "github.com/aerospike/aerospike-kubernetes-operator/v4/api/v1"
 	"github.com/aerospike/aerospike-kubernetes-operator/v4/internal/controller/common"
+	"github.com/aerospike/aerospike-kubernetes-operator/v4/pkg/jsonpatch"
 	"github.com/aerospike/aerospike-kubernetes-operator/v4/pkg/utils"
 	"github.com/aerospike/aerospike-management-lib/asconfig"
 	"github.com/aerospike/aerospike-management-lib/deployment"
@@ -147,18 +147,6 @@ func (r *SingleClusterReconciler) waitForMultipleNodesSafeStopReady(
 		// A roster change can trigger a second wave of data-rebalancing migrations.
 		// Wait for the cluster to stabilise again before quiescing nodes.
 		if res := r.waitForClusterStability(policy, allHostConns); !res.IsSuccess {
-			return res
-		}
-	}
-
-	// Raise MFD to migrateFillDelay before quiesce. Only applies on the drain path
-	// (drainBeforeStability=true) where MFD was zeroed above and needs to be raised to the
-	// override value to suppress fills while the pod is absent. On the non-drain path MFD was
-	// already set to migrateFillDelay before stability, so this is intentionally skipped.
-	if drainBeforeStability && migrateFillDelay > 0 {
-		if res := r.setMigrateFillDelay(
-			ctx, policy, migrateFillDelay, ignorablePodNames, allHostConns, false,
-		); !res.IsSuccess {
 			return res
 		}
 	}

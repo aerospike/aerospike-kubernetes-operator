@@ -14,9 +14,8 @@ import (
 	"github.com/aerospike/aerospike-management-lib/deployment"
 )
 
-// buildScaleDownTargets collects all scale-down candidate pods from
-// scaledDownRacks (STS.Replicas > spec.Size) and racksToDelete (target size=0).
-// Pure collection only — target pod classification runs later in classifyTargetPods.
+// buildScaleDownTargets collects scale-down candidate pods from scaledDownRacks
+// and racksToDelete.
 func (r *SingleClusterReconciler) buildScaleDownTargets(
 	ctx context.Context,
 	scaledDownRacks []rackWithSTS,
@@ -36,7 +35,7 @@ func (r *SingleClusterReconciler) buildScaleDownTargets(
 		allTargets = append(allTargets, removedPods...)
 	}
 
-	// racksToDelete: nil rackSTS signals target size=0, so all pods are returned.
+	// racksToDelete: nil rackSTS → target size=0, all pods returned.
 	for idx := range racksToDelete {
 		rack := &racksToDelete[idx]
 		entry := rackWithSTS{
@@ -58,11 +57,8 @@ func (r *SingleClusterReconciler) buildScaleDownTargets(
 	return allTargets, common.ReconcileSuccess()
 }
 
-// classifyTargetPods populates ignorablePodNames with scale-down targets that
-// never joined the cluster (no CR status entry) and returns ReconcileError for
-// targets that previously joined but are currently not running.
-// Non-target not-ready pods are left to waitForMultipleNodesSafeStopReady which
-// runs immediately after this in reconcileBatchQuiesce.
+// classifyTargetPods adds never-joined targets to ignorablePodNames and returns
+// ReconcileError for previously-joined targets that are currently not running.
 func (r *SingleClusterReconciler) classifyTargetPods(
 	ctx context.Context,
 	targetNames sets.Set[string],
@@ -188,10 +184,7 @@ func (r *SingleClusterReconciler) reconcileBatchQuiesce(
 		return common.ReconcileSuccess()
 	}
 
-	// Single pass: filter ignorable pods and check annotation fast-exit.
-	// Targets may be ignorable from getIgnorablePods (server-failed within budget)
-	// or classifyTargetPods (never-joined pods). allTargets[:0] reuses
-	// the backing array safely (effectiveTargets is a left-to-right subset).
+	// Filter ignorable targets; check annotation fast-exit.
 	effectiveTargets := allTargets[:0]
 	allAnnotated := true
 
@@ -223,36 +216,20 @@ func (r *SingleClusterReconciler) reconcileBatchQuiesce(
 
 	r.Log.Info("Running cross-rack batch quiesce pre-pass", "targetCount", len(allTargets))
 
-	// Local copy so that classifyTargetPods additions (never-joined pods) don't
-	// bleed into the ignorablePodNames used by reconcileRack in Step 4.
-	// Step 2 (non-scaled-down racks) already ran with the original set, so this
-	// copy is identical to ignorablePodNames at this point — only future mutations
-	// within this function are isolated.
+	// Local copy: mutations by classifyTargetPods must not bleed into Step 4's reconcileRack.
 	localIgnorable := ignorablePodNames.Union(sets.New[string]())
 
-	// Classify target pods: never-joined targets are added to localIgnorable
-	// so waitForMultipleNodesSafeStopReady skips them in its server-readiness
-	// wait. Previously-joined but non-running targets return ReconcileError.
+	// Never-joined targets → localIgnorable; previously-joined non-running → ReconcileError.
 	targetNames := sets.New(getPodNames(allTargets)...)
 	if res := r.classifyTargetPods(ctx, targetNames, localIgnorable); !res.IsSuccess {
 		return res
 	}
 
-	// waitForMultipleNodesSafeStopReady with (migrateFillDelay=0, drainBeforeStability=true)
-	// mirrors the per-rack scale-down path. It handles:
-	//   - waitForAllAerospikeServersReady (waits for non-target pods started by Step 2)
-	//   - errEmptyPodList → success (new cluster, nothing to quiesce)
-	//   - degraded cluster guard (len(hostConns) < 2 with ignorable pods)
-	//   - setMigrateFillDelay(0) before stability check
-	//   - waitForClusterStability
-	//   - SC roster management + second stability wait
-	//   - quiescePods(allTargets)
 	if res := r.waitForMultipleNodesSafeStopReady(ctx, allTargets, localIgnorable, 0, true); !res.IsSuccess {
 		return res
 	}
 
-	// Stamp annotation for fast-exit on subsequent reconciles. Non-fatal if it
-	// fails — next reconcile will re-quiesce idempotently and retry the stamp.
+	// Stamp annotation for fast-exit; failure is non-fatal (next reconcile retries).
 	for _, pod := range allTargets {
 		if pod.Annotations[asdbv1.BatchQuiesceAnnotation] != asdbv1.BatchQuiesceAnnotationValue {
 			if annErr := r.setPodQuiesceAnnotation(ctx, pod, true); annErr != nil {

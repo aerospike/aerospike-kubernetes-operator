@@ -1032,12 +1032,8 @@ func (r *SingleClusterReconciler) addFinalizer(ctx context.Context, finalizerNam
 		return nil
 	}
 
-	// Use a MergePatch so only the finalizers field is sent to the API server.
-	// A full Update carries the entire object body and its resourceVersion —
-	// any concurrent write (webhook, HPA controller, kubectl annotate, …) that
-	// bumped the resourceVersion between our Get and this call would produce a
-	// 409 conflict. A patch on the finalizers list doesn't conflict with
-	// unrelated concurrent changes to spec, labels, or annotations.
+	// MergePatch: only the finalizers field is sent, avoiding 409 conflicts
+	// from concurrent writes to spec, labels, or annotations.
 	patch := client.MergeFrom(r.aeroCluster.DeepCopy())
 	controllerutil.AddFinalizer(r.aeroCluster, finalizerName)
 
