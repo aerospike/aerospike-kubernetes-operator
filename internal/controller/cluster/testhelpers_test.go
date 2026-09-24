@@ -132,49 +132,6 @@ func getCluster(t *testing.T, c client.Client, ac *asdbv1.AerospikeCluster) *asd
 	return got
 }
 
-// newTestScheme returns a runtime.Scheme with the types used across unit tests
-// registered (AerospikeCluster CRD types + core k8s client-go types including
-// apps/v1 StatefulSets).
-func newTestScheme() *runtime.Scheme {
-	scheme := runtime.NewScheme()
-	_ = asdbv1.AddToScheme(scheme)
-	_ = clientgoscheme.AddToScheme(scheme)
-
-	return scheme
-}
-
-// newReconcilerWithObjects builds a SingleClusterReconciler backed by a fake
-// k8s client pre-seeded with aeroCluster (deep-copied) and any extra objects.
-// Unlike newTestReconciler it does not need a *testing.T or interceptor.Funcs,
-// making it convenient for straightforward unit tests that don't intercept API
-// calls.
-func newReconcilerWithObjects(
-	scheme *runtime.Scheme,
-	aeroCluster *asdbv1.AerospikeCluster,
-	existingObjects ...client.Object,
-) *SingleClusterReconciler {
-	objects := make([]client.Object, 0, len(existingObjects)+1)
-	if aeroCluster != nil {
-		objects = append(objects, aeroCluster.DeepCopy())
-	}
-
-	objects = append(objects, existingObjects...)
-
-	fakeClient := fake.NewClientBuilder().
-		WithScheme(scheme).
-		WithStatusSubresource(&asdbv1.AerospikeCluster{}).
-		WithObjects(objects...).
-		Build()
-
-	return &SingleClusterReconciler{
-		Client:      fakeClient,
-		Log:         logr.Discard(),
-		Scheme:      scheme,
-		aeroCluster: aeroCluster,
-		Recorder:    record.NewFakeRecorder(10),
-	}
-}
-
 func newTestReconciler(
 	t *testing.T, aeroCluster *asdbv1.AerospikeCluster, funcs *interceptor.Funcs,
 	existingObjects ...client.Object,

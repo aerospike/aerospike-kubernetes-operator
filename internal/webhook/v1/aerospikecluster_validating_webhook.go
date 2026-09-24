@@ -306,7 +306,7 @@ func (acv *AerospikeClusterCustomValidator) ValidateUpdate(_ context.Context,
 	}
 
 	// Validate EnableParallelScaleDownAcrossRacks toggle restrictions.
-	if err := validateBatchScaleDownQuiesceToggle(oldObject, aerospikeCluster); err != nil {
+	if err := validateParallelScaleDownToggle(oldObject, aerospikeCluster); err != nil {
 		return warnings, err
 	}
 
@@ -848,7 +848,7 @@ func validateForceBlockFromRosterUpdate(newObj *asdbv1.AerospikeCluster) error {
 	return nil
 }
 
-// validateBatchScaleDownQuiesceToggle blocks disabling EnableParallelScaleDownAcrossRacks
+// validateParallelScaleDownToggle blocks disabling EnableParallelScaleDownAcrossRacks
 // while a scale-down is in flight; enabling is always safe.
 //
 // Enabling mid-scale-down is harmless — quiesce is idempotent and no pods are
@@ -857,11 +857,11 @@ func validateForceBlockFromRosterUpdate(newObj *asdbv1.AerospikeCluster) error {
 // permanently quiesced.
 //
 // "In flight" is detected by scaleDownInFlight which covers three cases:
-//   - Total size decrease     (status.Size > spec.Size)
+//   - Total size decrease       (status.Size > spec.Size)
 //   - Rack deletion/replacement (rack ID present in status but absent from spec)
-//   - Per-rack scale-down     (rack topology shrinks even if total size is unchanged,
+//   - Per-rack scale-down       (rack topology shrinks even if total size is unchanged,
 //     e.g. adding a rack while keeping spec.Size the same)
-func validateBatchScaleDownQuiesceToggle(oldObj, newObj *asdbv1.AerospikeCluster) error {
+func validateParallelScaleDownToggle(oldObj, newObj *asdbv1.AerospikeCluster) error {
 	oldEnabled := ptr.Deref(oldObj.Spec.RackConfig.EnableParallelScaleDownAcrossRacks, false)
 	newEnabled := ptr.Deref(newObj.Spec.RackConfig.EnableParallelScaleDownAcrossRacks, false)
 
@@ -892,6 +892,11 @@ func validateBatchScaleDownQuiesceToggle(oldObj, newObj *asdbv1.AerospikeCluster
 func scaleDownInFlight(obj *asdbv1.AerospikeCluster) bool {
 	specRacks := obj.Spec.RackConfig.Racks
 	statusRacks := obj.Status.RackConfig.Racks
+
+	// Status not yet written (fresh cluster) — nothing can be in flight.
+	if len(statusRacks) == 0 {
+		return false
+	}
 
 	// Pass 1: build spec effective size per rack ID.
 	specTopology := asdbv1.DistributeItems(obj.Spec.Size, utils.Len32(specRacks))

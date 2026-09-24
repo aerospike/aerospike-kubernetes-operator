@@ -198,28 +198,8 @@ func (r *SingleClusterReconciler) Reconcile(ctx context.Context) (result ctrl.Re
 		return res.Result, res.Err
 	}
 
-	if err := r.reconcilePDB(ctx); err != nil {
-		r.Recorder.Eventf(
-			r.aeroCluster, corev1.EventTypeWarning, "PodDisruptionBudgetReconcileFailed",
-			"Failed to reconcile PodDisruptionBudget %s",
-			utils.GetNamespacedNameString(r.aeroCluster),
-		)
-
-		r.computedState.failureReason = asdbv1.AerospikeClusterReasonPDBReconcileFailed
-
-		return reconcile.Result{}, fmt.Errorf("reconcile PodDisruptionBudget: %w", err)
-	}
-
-	if err := r.reconcileSTSLoadBalancerSvc(ctx); err != nil {
-		r.Recorder.Eventf(
-			r.aeroCluster, corev1.EventTypeWarning, ReasonServiceCreateFailed,
-			"Failed to create LoadBalancer Service %s",
-			utils.NamespacedName(r.aeroCluster.Namespace, r.aeroCluster.Name+"-lb"),
-		)
-
-		r.computedState.failureReason = asdbv1.AerospikeClusterReasonServiceReconcileFailed
-
-		return reconcile.Result{}, fmt.Errorf("reconcile LoadBalancer Service: %w", err)
+	if err := r.reconcilePDBAndLoadBalancer(ctx); err != nil {
+		return reconcile.Result{}, err
 	}
 
 	ignorablePodNames, err := r.getIgnorablePods(ctx, nil, getConfiguredRackStateList(r.aeroCluster))
@@ -245,6 +225,12 @@ func (r *SingleClusterReconciler) Reconcile(ctx context.Context) (result ctrl.Re
 		r.computedState.failureReason = asdbv1.AerospikeClusterReasonQuiesceUndoFailed
 
 		return reconcile.Result{}, fmt.Errorf("undo quiesce state: %w", err)
+	}
+
+	if err = r.clearStaleQuiesceAnnotations(ctx); err != nil {
+		r.computedState.failureReason = asdbv1.AerospikeClusterReasonQuiesceUndoFailed
+
+		return reconcile.Result{}, fmt.Errorf("clear stale quiesce annotations: %w", err)
 	}
 
 	// Setup access control.
@@ -355,6 +341,37 @@ func (r *SingleClusterReconciler) handleTerminatingCluster(ctx context.Context) 
 	)
 
 	// Stop reconciliation as the cluster is being deleted
+	return nil
+}
+
+// reconcilePDBAndLoadBalancer reconciles the PodDisruptionBudget and the
+// LoadBalancer Service in sequence, recording events and setting failureReason
+// on error so Reconcile stays below the cyclomatic-complexity limit.
+func (r *SingleClusterReconciler) reconcilePDBAndLoadBalancer(ctx context.Context) error {
+	if err := r.reconcilePDB(ctx); err != nil {
+		r.Recorder.Eventf(
+			r.aeroCluster, corev1.EventTypeWarning, "PodDisruptionBudgetReconcileFailed",
+			"Failed to reconcile PodDisruptionBudget %s",
+			utils.GetNamespacedNameString(r.aeroCluster),
+		)
+
+		r.computedState.failureReason = asdbv1.AerospikeClusterReasonPDBReconcileFailed
+
+		return fmt.Errorf("reconcile PodDisruptionBudget: %w", err)
+	}
+
+	if err := r.reconcileSTSLoadBalancerSvc(ctx); err != nil {
+		r.Recorder.Eventf(
+			r.aeroCluster, corev1.EventTypeWarning, ReasonServiceCreateFailed,
+			"Failed to create LoadBalancer Service %s",
+			utils.NamespacedName(r.aeroCluster.Namespace, r.aeroCluster.Name+"-lb"),
+		)
+
+		r.computedState.failureReason = asdbv1.AerospikeClusterReasonServiceReconcileFailed
+
+		return fmt.Errorf("reconcile LoadBalancer Service: %w", err)
+	}
+
 	return nil
 }
 

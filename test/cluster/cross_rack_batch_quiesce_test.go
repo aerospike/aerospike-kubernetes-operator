@@ -444,8 +444,8 @@ var _ = Describe("CrossRackBatchQuiesce", func() {
 	// (MultiPodPerHost=false).  Scaling up by 1 creates a pod that can never
 	// be scheduled — it stays in Pending indefinitely with no CR status entry.
 	// Scaling back down must complete without MaxIgnorablePods: the
-	// "never-joined" detection in classifyTargetPods is unconditional
-	// and does not consume any budget.
+	// Never-joined pods are handled upstream by getIgnorablePods (unschedulable
+	// detection) and do not consume any MaxIgnorablePods budget.
 	Context("Scale-down target never joined cluster (no CR status)", func() {
 		var nodeCount int32
 
@@ -497,8 +497,8 @@ var _ = Describe("CrossRackBatchQuiesce", func() {
 			}, 2*time.Minute, 2*time.Second).Should(BeTrue(),
 				"expected a never-joined Pending pod (unschedulable) to appear")
 
-			// Scale back down; classifyTargetPods adds the never-joined pod to
-			// ignorablePodNames without consuming any MaxIgnorablePods budget.
+			// Scale back down; the unschedulable pod is in ignorablePodNames
+			// (via getIgnorablePods) without consuming any MaxIgnorablePods budget.
 			aeroCluster.Spec.Size = originalSize
 			Expect(updateCluster(k8sClient, ctx, aeroCluster)).ToNot(HaveOccurred())
 

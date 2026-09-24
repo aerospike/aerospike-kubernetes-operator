@@ -18,7 +18,6 @@ package cluster
 
 // Unit tests for the cross-rack batch quiesce functions:
 //   - buildScaleDownTargets
-//   - classifyTargetPods
 //   - reconcileQuiesceUndo (annotation fast-exit only — Aerospike calls mocked)
 //   - setPodQuiesceAnnotation
 //
@@ -36,6 +35,7 @@ import (
 	"k8s.io/apimachinery/pkg/util/intstr"
 	"k8s.io/apimachinery/pkg/util/sets"
 	"sigs.k8s.io/controller-runtime/pkg/client"
+	"sigs.k8s.io/controller-runtime/pkg/client/interceptor"
 	"sigs.k8s.io/controller-runtime/pkg/controller/controllerutil"
 
 	asdbv1 "github.com/aerospike/aerospike-kubernetes-operator/v4/api/v1"
@@ -43,6 +43,14 @@ import (
 )
 
 // ─── helpers ──────────────────────────────────────────────────────────────
+
+// newDefaultReconciler creates a SingleClusterReconciler for namespace/clusterName
+// using a no-op interceptor. Use this for tests that do not need a custom
+// AerospikeCluster spec.
+func newDefaultReconciler(t *testing.T, objects ...client.Object) *SingleClusterReconciler {
+	t.Helper()
+	return newTestReconciler(t, newTestAerospikeCluster(namespace, clusterName), &interceptor.Funcs{}, objects...)
+}
 
 // makeRackPod creates a pod with the labels that getOrderedRackPodList uses.
 //
@@ -117,8 +125,7 @@ func withAnnotation(pod *corev1.Pod) *corev1.Pod {
 // TestBuildScaleDownTargets_EmptyInputs verifies that passing empty rack slices
 // returns an empty target list without error.
 func TestBuildScaleDownTargets_EmptyInputs(t *testing.T) {
-	aeroCluster := newTestAerospikeCluster(namespace, clusterName)
-	r := newReconcilerWithObjects(newTestScheme(), aeroCluster)
+	r := newDefaultReconciler(t)
 
 	targets, res := r.buildScaleDownTargets(context.Background(), nil, nil)
 
@@ -129,8 +136,6 @@ func TestBuildScaleDownTargets_EmptyInputs(t *testing.T) {
 // TestBuildScaleDownTargets_ScaledDownRacks verifies that only the "diff" pods
 // (orderedPods[:diffPods]) are returned as targets.
 func TestBuildScaleDownTargets_ScaledDownRacks(t *testing.T) {
-	aeroCluster := newTestAerospikeCluster(namespace, clusterName)
-
 	// Rack 1: STS has 3 replicas, desired size 1 → diff = 2; pods 0, 1, 2 exist.
 	// Expected targets: pods 1 and 2 (the top-2 in ordered list).
 	pods := []*corev1.Pod{
@@ -140,9 +145,7 @@ func TestBuildScaleDownTargets_ScaledDownRacks(t *testing.T) {
 	}
 
 	sts := makeRackSTS(clusterName+"-1", namespace, clusterName, 1, 3)
-
-	objects := []client.Object{sts, pods[0], pods[1], pods[2]}
-	r := newReconcilerWithObjects(newTestScheme(), aeroCluster, objects...)
+	r := newDefaultReconciler(t, sts, pods[0], pods[1], pods[2])
 
 	rack := asdbv1.Rack{ID: 1}
 	rackState := &RackState{Rack: &rack, Size: 1}
@@ -158,16 +161,13 @@ func TestBuildScaleDownTargets_ScaledDownRacks(t *testing.T) {
 // TestBuildScaleDownTargets_RacksToDelete verifies that pods from racks in
 // racksToDelete (nil STS = all pods are targets) are included.
 func TestBuildScaleDownTargets_RacksToDelete(t *testing.T) {
-	aeroCluster := newTestAerospikeCluster(namespace, clusterName)
-
 	// Rack 2 is being deleted; it has 2 pods.
 	pods := []*corev1.Pod{
 		makeRackPod(clusterName+"-2-0", namespace, clusterName, 2, true),
 		makeRackPod(clusterName+"-2-1", namespace, clusterName, 2, true),
 	}
 
-	objects := []client.Object{pods[0], pods[1]}
-	r := newReconcilerWithObjects(newTestScheme(), aeroCluster, objects...)
+	r := newDefaultReconciler(t, pods[0], pods[1])
 
 	rack := asdbv1.Rack{ID: 2}
 	racksToDelete := []asdbv1.Rack{rack}
@@ -179,7 +179,7 @@ func TestBuildScaleDownTargets_RacksToDelete(t *testing.T) {
 }
 
 // TestBuildScaleDownTargets_NoReadinessCheck verifies that buildScaleDownTargets
-// does NOT reject non-running pods — that is now classifyTargetPods's job.
+// does not reject non-running pods — readiness is handled by waitForMultipleNodesSafeStopReady.
 func TestBuildScaleDownTargets_NoReadinessCheck(t *testing.T) {
 	aeroCluster := newTestAerospikeCluster(namespace, clusterName)
 	withCRStatus(aeroCluster, clusterName+"-1-1")
@@ -191,7 +191,7 @@ func TestBuildScaleDownTargets_NoReadinessCheck(t *testing.T) {
 
 	sts := makeRackSTS(clusterName+"-1", namespace, clusterName, 1, 2)
 	objects := []client.Object{sts, pods[0], pods[1]}
-	r := newReconcilerWithObjects(newTestScheme(), aeroCluster, objects...)
+	r := newTestReconciler(t, aeroCluster, &interceptor.Funcs{}, objects...)
 
 	rack := asdbv1.Rack{ID: 1}
 	rackState := &RackState{Rack: &rack, Size: 1}
@@ -205,137 +205,6 @@ func TestBuildScaleDownTargets_NoReadinessCheck(t *testing.T) {
 }
 
 // ══════════════════════════════════════════════════════════════════════════
-// classifyTargetPods
-// ══════════════════════════════════════════════════════════════════════════
-
-// TestClassifyTargetPods_AllRunning verifies that a fully healthy cluster
-// returns success with no pods added to ignorable.
-func TestClassifyTargetPods_AllRunning(t *testing.T) {
-	aeroCluster := newTestAerospikeCluster(namespace, clusterName)
-
-	pods := []*corev1.Pod{
-		makeRackPod(clusterName+"-1-0", namespace, clusterName, 1, true),
-		makeRackPod(clusterName+"-1-1", namespace, clusterName, 1, true),
-	}
-
-	r := newReconcilerWithObjects(newTestScheme(), aeroCluster, pods[0], pods[1])
-	ignorable := sets.New[string]()
-
-	res := r.classifyTargetPods(context.Background(), sets.New(pods[1].Name), ignorable)
-
-	require.True(t, res.IsSuccess)
-	assert.Empty(t, ignorable, "no pod should be added to ignorable when all are running")
-}
-
-// TestClassifyTargetPods_TargetNeverJoined verifies that a non-running target
-// with no CR status entry is added to ignorablePodNames.
-func TestClassifyTargetPods_TargetNeverJoined(t *testing.T) {
-	aeroCluster := newTestAerospikeCluster(namespace, clusterName)
-	// No CR status entry for pod-1-1 (never joined).
-
-	pods := []*corev1.Pod{
-		makeRackPod(clusterName+"-1-0", namespace, clusterName, 1, true),
-		makeRackPod(clusterName+"-1-1", namespace, clusterName, 1, false), // target, crashing
-	}
-
-	r := newReconcilerWithObjects(newTestScheme(), aeroCluster, pods[0], pods[1])
-	ignorable := sets.New[string]()
-
-	res := r.classifyTargetPods(context.Background(), sets.New(pods[1].Name), ignorable)
-
-	require.True(t, res.IsSuccess)
-	assert.True(t, ignorable.Has(pods[1].Name),
-		"non-running target with no CR status should be added to ignorablePodNames")
-}
-
-// TestClassifyTargetPods_TargetHasCRStatus verifies that a non-running target
-// with a CR status entry returns ReconcileError immediately.
-func TestClassifyTargetPods_TargetHasCRStatus(t *testing.T) {
-	aeroCluster := newTestAerospikeCluster(namespace, clusterName)
-	withCRStatus(aeroCluster, clusterName+"-1-1") // pod has joined before
-
-	pods := []*corev1.Pod{
-		makeRackPod(clusterName+"-1-0", namespace, clusterName, 1, true),
-		makeRackPod(clusterName+"-1-1", namespace, clusterName, 1, false), // target, crashing
-	}
-
-	r := newReconcilerWithObjects(newTestScheme(), aeroCluster, pods[0], pods[1])
-	ignorable := sets.New[string]()
-
-	res := r.classifyTargetPods(context.Background(), sets.New(pods[1].Name), ignorable)
-
-	require.False(t, res.IsSuccess)
-	require.NotNil(t, res.Err, "expected ReconcileError for a previously-joined non-running target")
-	assert.False(t, ignorable.Has(pods[1].Name),
-		"non-running target with CR status must NOT be added to ignorablePodNames")
-}
-
-// TestClassifyTargetPods_RemainingPodCrashing verifies that a crashing
-// non-target pod is silently skipped — it is handled by the subsequent
-// waitForMultipleNodesSafeStopReady call, not by classifyTargetPods.
-func TestClassifyTargetPods_RemainingPodCrashing(t *testing.T) {
-	aeroCluster := newTestAerospikeCluster(namespace, clusterName)
-
-	// Pod-1-0 is the remaining pod (will stay), pod-1-1 and pod-1-2 are targets.
-	pods := []*corev1.Pod{
-		makeRackPod(clusterName+"-1-0", namespace, clusterName, 1, false), // remaining, crashing
-		makeRackPod(clusterName+"-1-1", namespace, clusterName, 1, true),
-		makeRackPod(clusterName+"-1-2", namespace, clusterName, 1, true),
-	}
-
-	r := newReconcilerWithObjects(newTestScheme(), aeroCluster, pods[0], pods[1], pods[2])
-	ignorable := sets.New[string]()
-
-	// classifyTargetPods does NOT block on non-target pods; it returns success
-	// and leaves the crashing pod for waitForMultipleNodesSafeStopReady.
-	res := r.classifyTargetPods(context.Background(), sets.New(pods[1].Name, pods[2].Name), ignorable)
-
-	require.True(t, res.IsSuccess, "classifyTargetPods must not error on a crashing non-target pod")
-	assert.False(t, ignorable.Has(pods[0].Name),
-		"remaining pod must NOT be added to ignorablePodNames")
-}
-
-// TestClassifyTargetPods_AlreadyIgnorable verifies that a pod already in
-// ignorablePodNames is silently skipped.
-func TestClassifyTargetPods_AlreadyIgnorable(t *testing.T) {
-	aeroCluster := newTestAerospikeCluster(namespace, clusterName)
-
-	pods := []*corev1.Pod{
-		makeRackPod(clusterName+"-1-0", namespace, clusterName, 1, true),
-		makeRackPod(clusterName+"-1-1", namespace, clusterName, 1, false), // target, crashing
-	}
-
-	r := newReconcilerWithObjects(newTestScheme(), aeroCluster, pods[0], pods[1])
-	// Pod-1-1 is already in ignorable (e.g. from maxIgnorablePods upstream).
-	ignorable := sets.New(pods[1].Name)
-
-	res := r.classifyTargetPods(context.Background(), sets.New(pods[1].Name), ignorable)
-
-	require.True(t, res.IsSuccess, "already-ignorable pod should be silently skipped")
-}
-
-// TestClassifyTargetPods_DeletedRackPodPreIgnorable verifies that a non-running
-// pod from a deleted rack (pre-added to ignorablePodNames by getIgnorablePods)
-// is silently skipped.
-func TestClassifyTargetPods_DeletedRackPodPreIgnorable(t *testing.T) {
-	aeroCluster := newTestAerospikeCluster(namespace, clusterName)
-	withCRStatus(aeroCluster, clusterName+"-2-0")
-
-	pod := makeRackPod(clusterName+"-2-0", namespace, clusterName, 2, false) // crashing
-
-	// Simulate what getIgnorablePods does: the non-running pod from the deleted
-	// rack is already in ignorablePodNames before classifyTargetPods runs.
-	ignorable := sets.New(pod.Name)
-
-	r := newReconcilerWithObjects(newTestScheme(), aeroCluster, pod)
-
-	res := r.classifyTargetPods(context.Background(), sets.New(pod.Name), ignorable)
-
-	require.True(t, res.IsSuccess,
-		"deleted-rack pod already in ignorablePodNames should cause no error")
-}
-
-// ══════════════════════════════════════════════════════════════════════════
 // reconcileQuiesceUndo — annotation fast-exit only
 // (Aerospike info calls are not exercised in unit tests)
 // ══════════════════════════════════════════════════════════════════════════
@@ -344,15 +213,10 @@ func TestClassifyTargetPods_DeletedRackPodPreIgnorable(t *testing.T) {
 // reconcileQuiesceUndo returns immediately without error when no non-target pod
 // carries the BatchQuiesceAnnotation.
 func TestReconcileQuiesceUndo_FastExit_NoAnnotatedNonTargets(t *testing.T) {
-	aeroCluster := newTestAerospikeCluster(namespace, clusterName)
-
 	// Two running pods; neither has the quiesce annotation.
 	pod0 := makeRackPod(clusterName+"-1-0", namespace, clusterName, 1, true)
 	pod1 := makeRackPod(clusterName+"-1-1", namespace, clusterName, 1, true)
-
-	r := newReconcilerWithObjects(newTestScheme(), aeroCluster,
-		pod0, pod1,
-	)
+	r := newDefaultReconciler(t, pod0, pod1)
 
 	res := r.reconcileQuiesceUndo(context.Background(), sets.New(pod1.Name), sets.New[string]())
 
@@ -363,13 +227,10 @@ func TestReconcileQuiesceUndo_FastExit_NoAnnotatedNonTargets(t *testing.T) {
 // reconcileQuiesceUndo fast-exits when only target pods carry the annotation
 // (non-target pods do not have it).
 func TestReconcileQuiesceUndo_FastExit_OnlyTargetsAnnotated(t *testing.T) {
-	aeroCluster := newTestAerospikeCluster(namespace, clusterName)
-
 	// pod0 is a non-target (no annotation); pod1 is a target (with annotation).
 	pod0 := makeRackPod(clusterName+"-1-0", namespace, clusterName, 1, true)
 	pod1 := withAnnotation(makeRackPod(clusterName+"-1-1", namespace, clusterName, 1, true))
-
-	r := newReconcilerWithObjects(newTestScheme(), aeroCluster, pod0, pod1)
+	r := newDefaultReconciler(t, pod0, pod1)
 
 	res := r.reconcileQuiesceUndo(context.Background(), sets.New(pod1.Name), sets.New[string]())
 
@@ -383,13 +244,10 @@ func TestReconcileQuiesceUndo_FastExit_OnlyTargetsAnnotated(t *testing.T) {
 // no real Aerospike cluster, the InfoQuiesceUndoSubset call will fail — but we
 // can verify it was reached by checking the error path (not the fast-exit path).
 func TestReconcileQuiesceUndo_AnnotatedNonTargetDetected(t *testing.T) {
-	aeroCluster := newTestAerospikeCluster(namespace, clusterName)
-
 	// pod0 is a non-target WITH the annotation — should trigger undo logic.
 	pod0 := withAnnotation(makeRackPod(clusterName+"-1-0", namespace, clusterName, 1, true))
 	pod1 := makeRackPod(clusterName+"-1-1", namespace, clusterName, 1, true) // target
-
-	r := newReconcilerWithObjects(newTestScheme(), aeroCluster, pod0, pod1)
+	r := newDefaultReconciler(t, pod0, pod1)
 
 	res := r.reconcileQuiesceUndo(context.Background(), sets.New(pod1.Name), sets.New[string]())
 
@@ -406,76 +264,45 @@ func TestReconcileQuiesceUndo_AnnotatedNonTargetDetected(t *testing.T) {
 // setPodQuiesceAnnotation
 // ══════════════════════════════════════════════════════════════════════════
 
-// TestSetPodQuiesceAnnotation_Add verifies that the annotation is added when
-// add=true and the pod does not already carry it.
-func TestSetPodQuiesceAnnotation_Add(t *testing.T) {
-	aeroCluster := newTestAerospikeCluster(namespace, clusterName)
+// TestSetPodQuiesceAnnotation covers add, remove, and no-op cases.
+func TestSetPodQuiesceAnnotation(t *testing.T) {
+	tests := []struct {
+		name       string
+		startAnnot bool // whether the pod carries the annotation before the call
+		add        bool // argument passed to setPodQuiesceAnnotation
+		wantAnnot  bool // expected annotation state afterwards
+	}{
+		{name: "add", startAnnot: false, add: true, wantAnnot: true},
+		{name: "remove", startAnnot: true, add: false, wantAnnot: false},
+		{name: "already set", startAnnot: true, add: true, wantAnnot: true},
+		{name: "already absent", startAnnot: false, add: false, wantAnnot: false},
+	}
 
-	pod := makeRackPod(clusterName+"-1-0", namespace, clusterName, 1, true)
-	pod.ResourceVersion = "1" // fake client requires a resource version for patches
+	for _, tc := range tests {
+		t.Run(tc.name, func(t *testing.T) {
+			pod := makeRackPod(clusterName+"-1-0", namespace, clusterName, 1, true)
 
-	r := newReconcilerWithObjects(newTestScheme(), aeroCluster, pod)
+			pod.ResourceVersion = "1"
+			if tc.startAnnot {
+				withAnnotation(pod)
+			}
 
-	err := r.setPodQuiesceAnnotation(context.Background(), pod, true)
-	require.NoError(t, err)
+			r := newDefaultReconciler(t, pod)
 
-	// Verify the in-memory pod was mutated.
-	assert.Equal(t, asdbv1.BatchQuiesceAnnotationValue, pod.Annotations[asdbv1.BatchQuiesceAnnotation])
+			require.NoError(t, r.setPodQuiesceAnnotation(context.Background(), pod, tc.add))
 
-	// Verify the stored pod was patched.
-	stored := &corev1.Pod{}
-	require.NoError(t, r.Get(context.Background(),
-		client.ObjectKeyFromObject(pod), stored))
-	assert.Equal(t, asdbv1.BatchQuiesceAnnotationValue, stored.Annotations[asdbv1.BatchQuiesceAnnotation])
-}
+			wantVal := ""
+			if tc.wantAnnot {
+				wantVal = asdbv1.BatchQuiesceAnnotationValue
+			}
 
-// TestSetPodQuiesceAnnotation_Remove verifies that the annotation is removed
-// when add=false.
-func TestSetPodQuiesceAnnotation_Remove(t *testing.T) {
-	aeroCluster := newTestAerospikeCluster(namespace, clusterName)
+			assert.Equal(t, wantVal, pod.Annotations[asdbv1.BatchQuiesceAnnotation], "in-memory pod")
 
-	pod := withAnnotation(makeRackPod(clusterName+"-1-0", namespace, clusterName, 1, true))
-	pod.ResourceVersion = "1"
-
-	r := newReconcilerWithObjects(newTestScheme(), aeroCluster, pod)
-
-	err := r.setPodQuiesceAnnotation(context.Background(), pod, false)
-	require.NoError(t, err)
-
-	assert.NotEqual(t, asdbv1.BatchQuiesceAnnotationValue, pod.Annotations[asdbv1.BatchQuiesceAnnotation])
-
-	stored := &corev1.Pod{}
-	require.NoError(t, r.Get(context.Background(),
-		client.ObjectKeyFromObject(pod), stored))
-	assert.NotEqual(t, asdbv1.BatchQuiesceAnnotationValue, stored.Annotations[asdbv1.BatchQuiesceAnnotation])
-}
-
-// TestSetPodQuiesceAnnotation_NoOpWhenAlreadySet verifies that adding an
-// annotation that is already present is a no-op (no API call).
-func TestSetPodQuiesceAnnotation_NoOpWhenAlreadySet(t *testing.T) {
-	aeroCluster := newTestAerospikeCluster(namespace, clusterName)
-
-	pod := withAnnotation(makeRackPod(clusterName+"-1-0", namespace, clusterName, 1, true))
-	pod.ResourceVersion = "1"
-
-	r := newReconcilerWithObjects(newTestScheme(), aeroCluster, pod)
-
-	err := r.setPodQuiesceAnnotation(context.Background(), pod, true)
-	require.NoError(t, err, "adding an already-set annotation should be a no-op")
-}
-
-// TestSetPodQuiesceAnnotation_NoOpWhenAlreadyAbsent verifies that removing an
-// annotation that is already absent is a no-op.
-func TestSetPodQuiesceAnnotation_NoOpWhenAlreadyAbsent(t *testing.T) {
-	aeroCluster := newTestAerospikeCluster(namespace, clusterName)
-
-	pod := makeRackPod(clusterName+"-1-0", namespace, clusterName, 1, true)
-	pod.ResourceVersion = "1"
-
-	r := newReconcilerWithObjects(newTestScheme(), aeroCluster, pod)
-
-	err := r.setPodQuiesceAnnotation(context.Background(), pod, false)
-	require.NoError(t, err, "removing an already-absent annotation should be a no-op")
+			stored := &corev1.Pod{}
+			require.NoError(t, r.Get(context.Background(), client.ObjectKeyFromObject(pod), stored))
+			assert.Equal(t, wantVal, stored.Annotations[asdbv1.BatchQuiesceAnnotation], "stored pod")
+		})
+	}
 }
 
 // ══════════════════════════════════════════════════════════════════════════
@@ -495,7 +322,7 @@ func TestAddFinalizer_IdempotentViaPatch(t *testing.T) {
 		},
 	}
 
-	r := newReconcilerWithObjects(newTestScheme(), aeroCluster)
+	r := newTestReconciler(t, aeroCluster, &interceptor.Funcs{})
 
 	// First call — should add the finalizer.
 	err := r.addFinalizer(context.Background(), finalizerName)
@@ -516,16 +343,12 @@ func TestAddFinalizer_IdempotentViaPatch(t *testing.T) {
 // TestGetAllScaleDownPods_NilSTS verifies that a nil STS (racksToDelete path)
 // returns all existing pods.
 func TestGetAllScaleDownPods_NilSTS(t *testing.T) {
-	aeroCluster := newTestAerospikeCluster(namespace, clusterName)
-
 	pods := []*corev1.Pod{
 		makeRackPod(clusterName+"-2-0", namespace, clusterName, 2, true),
 		makeRackPod(clusterName+"-2-1", namespace, clusterName, 2, true),
 	}
 
-	r := newReconcilerWithObjects(newTestScheme(), aeroCluster,
-		pods[0], pods[1],
-	)
+	r := newDefaultReconciler(t, pods[0], pods[1])
 
 	rack := asdbv1.Rack{ID: 2}
 	rackState := &RackState{Rack: &rack, Size: 0}
@@ -540,21 +363,14 @@ func TestGetAllScaleDownPods_NilSTS(t *testing.T) {
 // TestGetAllScaleDownPods_DiffCalculation verifies that the diff calculation
 // returns only the excess pods when STS replicas > desired size.
 func TestGetAllScaleDownPods_DiffCalculation(t *testing.T) {
-	aeroCluster := newTestAerospikeCluster(namespace, clusterName)
-
 	pods := []*corev1.Pod{
 		makeRackPod(clusterName+"-1-0", namespace, clusterName, 1, true),
 		makeRackPod(clusterName+"-1-1", namespace, clusterName, 1, true),
 		makeRackPod(clusterName+"-1-2", namespace, clusterName, 1, true),
 	}
 
-	var stsReplicas int32 = 3
-
-	sts := makeRackSTS(clusterName+"-1", namespace, clusterName, 1, stsReplicas)
-
-	r := newReconcilerWithObjects(newTestScheme(), aeroCluster,
-		pods[0], pods[1], pods[2],
-	)
+	sts := makeRackSTS(clusterName+"-1", namespace, clusterName, 1, 3)
+	r := newDefaultReconciler(t, pods[0], pods[1], pods[2])
 
 	rack := asdbv1.Rack{ID: 1}
 	rackState := &RackState{Rack: &rack, Size: 1} // desired = 1, diff = 2
@@ -568,12 +384,8 @@ func TestGetAllScaleDownPods_DiffCalculation(t *testing.T) {
 
 // TestGetAllScaleDownPods_NoDiff verifies that a zero diff returns nil.
 func TestGetAllScaleDownPods_NoDiff(t *testing.T) {
-	aeroCluster := newTestAerospikeCluster(namespace, clusterName)
-
-	var stsReplicas int32 = 2
-
-	sts := makeRackSTS(clusterName+"-1", namespace, clusterName, 1, stsReplicas)
-	r := newReconcilerWithObjects(newTestScheme(), aeroCluster)
+	sts := makeRackSTS(clusterName+"-1", namespace, clusterName, 1, 2)
+	r := newDefaultReconciler(t)
 
 	rack := asdbv1.Rack{ID: 1}
 	rackState := &RackState{Rack: &rack, Size: 3} // desired >= replicas → no diff
@@ -589,17 +401,13 @@ func TestGetAllScaleDownPods_NoDiff(t *testing.T) {
 // ScaleDownBatchSize helper: intstr_batchSize
 // ══════════════════════════════════════════════════════════════════════════
 
-// TestReconcileBatchQuiesce_IgnorablePodFilteredOut verifies that pods already
-// in ignorablePodNames — whether added upstream by getIgnorablePods
-// (maxIgnorablePods budget) or by classifyTargetPods (never-joined pods)
-// — are silently excluded from the effective target list inside
-// reconcileBatchQuiesce so:
+// TestReconcileParallelScaleDownQuiesce_IgnorablePodFilteredOut verifies that pods already
+// in ignorablePodNames (added upstream by getIgnorablePods) are silently
+// excluded from the effective target list inside reconcileParallelScaleDownQuiesce so:
 //   - The annotation fast-exit fires correctly when all non-ignorable targets
 //     are already annotated.
 //   - ignorable pods are never annotated.
-func TestReconcileBatchQuiesce_IgnorablePodFilteredOut(t *testing.T) {
-	aeroCluster := newTestAerospikeCluster(namespace, clusterName)
-
+func TestReconcileParallelScaleDownQuiesce_IgnorablePodFilteredOut(t *testing.T) {
 	// pod0 is annotated (quiesced by a prior pass).
 	pod0 := withAnnotation(makeRackPod(clusterName+"-1-0", namespace, clusterName, 1, true))
 	pod0.ResourceVersion = "1"
@@ -608,41 +416,38 @@ func TestReconcileBatchQuiesce_IgnorablePodFilteredOut(t *testing.T) {
 	pod1 := makeRackPod(clusterName+"-1-1", namespace, clusterName, 1, false)
 	pod1.ResourceVersion = "1"
 
-	r := newReconcilerWithObjects(newTestScheme(), aeroCluster, pod0, pod1)
+	r := newDefaultReconciler(t, pod0, pod1)
 
 	// allTargets includes both pods; ignorablePodNames covers pod1.
 	allTargets := []*corev1.Pod{pod0, pod1}
 	ignorable := sets.New(pod1.Name)
 
-	res := r.reconcileBatchQuiesce(context.Background(), allTargets, ignorable)
+	res := r.reconcileParallelScaleDownQuiesce(context.Background(), allTargets, ignorable)
 
 	// After filtering, effectiveTargets = [pod0] (annotated) → fast-exit.
 	// If pod1 were NOT filtered, allAnnotated would be false and the function
 	// would try to build Aerospike connections (and fail in a unit test).
 	require.True(t, res.IsSuccess,
-		"reconcileBatchQuiesce should fast-exit when all non-ignorable targets are already annotated")
+		"reconcileParallelScaleDownQuiesce should fast-exit when all non-ignorable targets are already annotated")
 
 	// pod1 must NOT have received the quiesce annotation.
 	stored := &corev1.Pod{}
 	require.NoError(t, r.Get(context.Background(),
 		client.ObjectKeyFromObject(pod1), stored))
 	assert.NotEqual(t, asdbv1.BatchQuiesceAnnotationValue, stored.Annotations[asdbv1.BatchQuiesceAnnotation],
-		"ignorable pod must not be annotated by reconcileBatchQuiesce")
+		"ignorable pod must not be annotated by reconcileParallelScaleDownQuiesce")
 }
 
-// TestReconcileBatchQuiesce_AllTargetsIgnorable verifies that the function
+// TestReconcileParallelScaleDownQuiesce_AllTargetsIgnorable verifies that the function
 // returns success immediately when every allTargets pod is ignorable.
-func TestReconcileBatchQuiesce_AllTargetsIgnorable(t *testing.T) {
-	aeroCluster := newTestAerospikeCluster(namespace, clusterName)
-
+func TestReconcileParallelScaleDownQuiesce_AllTargetsIgnorable(t *testing.T) {
 	pod0 := makeRackPod(clusterName+"-1-0", namespace, clusterName, 1, false)
-
-	r := newReconcilerWithObjects(newTestScheme(), aeroCluster, pod0)
+	r := newDefaultReconciler(t, pod0)
 
 	allTargets := []*corev1.Pod{pod0}
 	ignorable := sets.New(pod0.Name)
 
-	res := r.reconcileBatchQuiesce(context.Background(), allTargets, ignorable)
+	res := r.reconcileParallelScaleDownQuiesce(context.Background(), allTargets, ignorable)
 
 	require.True(t, res.IsSuccess,
 		"should succeed immediately when all targets are ignorable")
@@ -666,7 +471,7 @@ func TestBuildScaleDownTargets_ScaleDownBatchSizeIgnored(t *testing.T) {
 
 	sts := makeRackSTS(clusterName+"-1", namespace, clusterName, 1, stsReplicas)
 
-	r := newReconcilerWithObjects(newTestScheme(), aeroCluster,
+	r := newTestReconciler(t, aeroCluster, &interceptor.Funcs{},
 		pods[0], pods[1], pods[2],
 	)
 
