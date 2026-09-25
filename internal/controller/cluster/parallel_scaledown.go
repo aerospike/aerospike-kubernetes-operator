@@ -116,7 +116,7 @@ func (r *SingleClusterReconciler) reconcileQuiesceUndo(
 
 	policy := r.getClientPolicy(ctx)
 
-	if err := deployment.InfoQuiesceUndoSubset(r.Log, policy, nonTargetHostConns, allHostConns); err != nil {
+	if err := deployment.InfoQuiesceUndoSubset(r.Log, policy, allHostConns, nonTargetHostConns); err != nil {
 		return common.ReconcileError(fmt.Errorf("send quiesce-undo to scale-down-reverted pods: %w", err))
 	}
 
