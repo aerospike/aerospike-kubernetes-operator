@@ -132,13 +132,10 @@ func (r *SingleClusterReconciler) reconcileRacks(ctx context.Context) common.Rec
 
 	// Cross-rack parallel quiesce pre-pass (opt-in via EnableParallelScaleDownAcrossRacks).
 	// The webhook prevents disabling the flag mid-scale-down, so a disabled flag
-	// can never leave stale BatchQuiesceAnnotation pods requiring cleanup.
+	// can never leave stale QuiesceAnnotation pods requiring cleanup.
 	parallelScaleDownEnabled := ptr.Deref(r.aeroCluster.Spec.RackConfig.EnableParallelScaleDownAcrossRacks, false)
 
-	var (
-		allTargets  []*corev1.Pod
-		targetNames sets.Set[string]
-	)
+	var allTargets []*corev1.Pod
 
 	if parallelScaleDownEnabled {
 		// Collect scale-down candidates and undo any stale quiesces from a prior
@@ -147,9 +144,7 @@ func (r *SingleClusterReconciler) reconcileRacks(ctx context.Context) common.Rec
 			return res
 		}
 
-		targetNames = podNamesToSet(allTargets)
-
-		if res = r.reconcileQuiesceUndo(ctx, targetNames, ignorablePodNames); !res.IsSuccess {
+		if res = r.reconcileQuiesceUndo(ctx, allTargets, ignorablePodNames); !res.IsSuccess {
 			return res
 		}
 	}

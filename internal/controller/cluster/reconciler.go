@@ -198,8 +198,28 @@ func (r *SingleClusterReconciler) Reconcile(ctx context.Context) (result ctrl.Re
 		return res.Result, res.Err
 	}
 
-	if err := r.reconcilePDBAndLoadBalancer(ctx); err != nil {
-		return reconcile.Result{}, err
+	if err := r.reconcilePDB(ctx); err != nil {
+		r.Recorder.Eventf(
+			r.aeroCluster, corev1.EventTypeWarning, "PodDisruptionBudgetReconcileFailed",
+			"Failed to reconcile PodDisruptionBudget %s",
+			utils.GetNamespacedNameString(r.aeroCluster),
+		)
+
+		r.computedState.failureReason = asdbv1.AerospikeClusterReasonPDBReconcileFailed
+
+		return reconcile.Result{}, fmt.Errorf("reconcile PodDisruptionBudget: %w", err)
+	}
+
+	if err := r.reconcileSTSLoadBalancerSvc(ctx); err != nil {
+		r.Recorder.Eventf(
+			r.aeroCluster, corev1.EventTypeWarning, ReasonServiceCreateFailed,
+			"Failed to create LoadBalancer Service %s",
+			utils.NamespacedName(r.aeroCluster.Namespace, r.aeroCluster.Name+"-lb"),
+		)
+
+		r.computedState.failureReason = asdbv1.AerospikeClusterReasonServiceReconcileFailed
+
+		return reconcile.Result{}, fmt.Errorf("reconcile LoadBalancer Service: %w", err)
 	}
 
 	ignorablePodNames, err := r.getIgnorablePods(ctx, nil, getConfiguredRackStateList(r.aeroCluster))
@@ -218,19 +238,9 @@ func (r *SingleClusterReconciler) Reconcile(ctx context.Context) (result ctrl.Re
 		return reconcile.Result{}, fmt.Errorf("get host connections for cluster nodes: %w", err)
 	}
 
-	if err = deployment.InfoQuiesceUndo(
-		r.Log,
-		r.getClientPolicy(ctx), allHostConns,
-	); err != nil {
-		r.computedState.failureReason = asdbv1.AerospikeClusterReasonQuiesceUndoFailed
-
-		return reconcile.Result{}, fmt.Errorf("undo quiesce state: %w", err)
-	}
-
-	if err = r.clearStaleQuiesceAnnotations(ctx); err != nil {
-		r.computedState.failureReason = asdbv1.AerospikeClusterReasonQuiesceUndoFailed
-
-		return reconcile.Result{}, fmt.Errorf("clear stale quiesce annotations: %w", err)
+	err = r.undoQuiesceState(ctx, allHostConns)
+	if err != nil {
+		return reconcile.Result{}, err
 	}
 
 	// Setup access control.
@@ -344,32 +354,17 @@ func (r *SingleClusterReconciler) handleTerminatingCluster(ctx context.Context) 
 	return nil
 }
 
-// reconcilePDBAndLoadBalancer reconciles the PodDisruptionBudget and the
-// LoadBalancer Service in sequence, recording events and setting failureReason
-// on error so Reconcile stays below the cyclomatic-complexity limit.
-func (r *SingleClusterReconciler) reconcilePDBAndLoadBalancer(ctx context.Context) error {
-	if err := r.reconcilePDB(ctx); err != nil {
-		r.Recorder.Eventf(
-			r.aeroCluster, corev1.EventTypeWarning, "PodDisruptionBudgetReconcileFailed",
-			"Failed to reconcile PodDisruptionBudget %s",
-			utils.GetNamespacedNameString(r.aeroCluster),
-		)
-
-		r.computedState.failureReason = asdbv1.AerospikeClusterReasonPDBReconcileFailed
-
-		return fmt.Errorf("reconcile PodDisruptionBudget: %w", err)
+// undoQuiesceState sends quiesce-undo to all nodes and clears any stale
+// quiesce annotations left by a prior reconcile pass.
+func (r *SingleClusterReconciler) undoQuiesceState(ctx context.Context, allHostConns []*deployment.HostConn) error {
+	if err := deployment.InfoQuiesceUndo(r.Log, r.getClientPolicy(ctx), allHostConns); err != nil {
+		r.computedState.failureReason = asdbv1.AerospikeClusterReasonQuiesceUndoFailed
+		return fmt.Errorf("undo quiesce state: %w", err)
 	}
 
-	if err := r.reconcileSTSLoadBalancerSvc(ctx); err != nil {
-		r.Recorder.Eventf(
-			r.aeroCluster, corev1.EventTypeWarning, ReasonServiceCreateFailed,
-			"Failed to create LoadBalancer Service %s",
-			utils.NamespacedName(r.aeroCluster.Namespace, r.aeroCluster.Name+"-lb"),
-		)
-
-		r.computedState.failureReason = asdbv1.AerospikeClusterReasonServiceReconcileFailed
-
-		return fmt.Errorf("reconcile LoadBalancer Service: %w", err)
+	if err := r.clearStaleQuiesceAnnotations(ctx); err != nil {
+		r.computedState.failureReason = asdbv1.AerospikeClusterReasonQuiesceUndoFailed
+		return fmt.Errorf("clear stale quiesce annotations: %w", err)
 	}
 
 	return nil

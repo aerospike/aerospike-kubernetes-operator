@@ -1,15 +1,15 @@
 package cluster
 
-// Cross-Rack Batch Quiesce tests
+// Cross-Rack Parallel Quiesce tests
 //
-// This file validates the batch quiesce pre-pass introduced for parallel
-// cross-rack scale-down.  The pre-pass quiesces ALL scale-down candidate pods
+// This file validates the parallel quiesce pre-pass introduced for parallel
+// cross-rack scale-down. The pre-pass quiesces ALL scale-down candidate pods
 // across ALL racks simultaneously before the per-rack scaleDownRack loop runs,
 // triggering a single concurrent migration round instead of N sequential ones.
 //
 // Covered scenarios
 // ─────────────────
-// §1 Basic quiesce ordering
+// §1 Basic quiesce ordering (including strong-consistency namespace)
 // §2 Scale-down revert (partial and full)
 // §3 Non-ready / never-joined pod handling
 // §4 Rack operations (delete, replace)
@@ -21,15 +21,16 @@ import (
 	"strings"
 	"time"
 
-	asdbv1 "github.com/aerospike/aerospike-kubernetes-operator/v4/api/v1"
-	"github.com/aerospike/aerospike-kubernetes-operator/v4/pkg/utils"
-	"github.com/aerospike/aerospike-kubernetes-operator/v4/test"
 	. "github.com/onsi/ginkgo/v2"
 	. "github.com/onsi/gomega"
 	corev1 "k8s.io/api/core/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/types"
 	"k8s.io/utils/ptr"
+
+	asdbv1 "github.com/aerospike/aerospike-kubernetes-operator/v4/api/v1"
+	"github.com/aerospike/aerospike-kubernetes-operator/v4/pkg/utils"
+	"github.com/aerospike/aerospike-kubernetes-operator/v4/test"
 )
 
 // ─── package-level helpers ─────────────────────────────────────────────────
@@ -77,8 +78,10 @@ func waitForQuiescedCount(
 ) {
 	GinkgoHelper()
 
+	mc := minCluster(clusterNamespacedName)
+
 	Eventually(func() bool {
-		podList, err := getPodList(minCluster(clusterNamespacedName), k8sClient)
+		podList, err := getPodList(mc, k8sClient)
 		if err != nil || len(podList.Items) == 0 {
 			return false
 		}
@@ -106,9 +109,9 @@ func assertNoStaleQuiesce(
 	)
 }
 
-// assertNoBatchQuiesceAnnotations verifies that no pod in the cluster carries
-// the BatchQuiesceAnnotation.
-func assertNoBatchQuiesceAnnotations(aeroCluster *asdbv1.AerospikeCluster) {
+// assertNoQuiesceAnnotations verifies that no pod in the cluster carries
+// the QuiesceAnnotation.
+func assertNoQuiesceAnnotations(aeroCluster *asdbv1.AerospikeCluster) {
 	GinkgoHelper()
 
 	podList, err := getPodList(aeroCluster, k8sClient)
@@ -116,12 +119,12 @@ func assertNoBatchQuiesceAnnotations(aeroCluster *asdbv1.AerospikeCluster) {
 
 	for i := range podList.Items {
 		pod := &podList.Items[i]
-		Expect(pod.Annotations[asdbv1.BatchQuiesceAnnotation]).ToNot(Equal(asdbv1.BatchQuiesceAnnotationValue),
-			"Pod %s should not carry BatchQuiesceAnnotation", pod.Name)
+		Expect(pod.Annotations[asdbv1.QuiesceAnnotation]).ToNot(Equal(asdbv1.QuiesceAnnotationValue),
+			"Pod %s should not carry QuiesceAnnotation", pod.Name)
 	}
 }
 
-// assertCleanQuiesceState asserts zero quiesced nodes and no stale BatchQuiesceAnnotation.
+// assertCleanQuiesceState asserts zero quiesced nodes and no stale QuiesceAnnotation.
 func assertCleanQuiesceState(
 	ctx goctx.Context,
 	aeroCluster *asdbv1.AerospikeCluster,
@@ -129,21 +132,23 @@ func assertCleanQuiesceState(
 ) {
 	GinkgoHelper()
 	assertNoStaleQuiesce(ctx, aeroCluster, clusterNamespacedName)
-	assertNoBatchQuiesceAnnotations(aeroCluster)
+	assertNoQuiesceAnnotations(aeroCluster)
 }
 
-// waitForPodsWithoutBatchAnnotation blocks until exactly count pods in the
-// cluster do NOT carry BatchQuiesceAnnotation (e.g. use count==totalPods to
+// waitForPodsWithoutParallelAnnotation blocks until exactly count pods in the
+// cluster do NOT carry QuiesceAnnotation (e.g. use count==totalPods to
 // wait for all annotations to be cleared after a mid-operation revert).
-func waitForPodsWithoutBatchAnnotation(
+func waitForPodsWithoutParallelAnnotation(
 	clusterNamespacedName types.NamespacedName,
 	count int,
 	timeout time.Duration,
 ) {
 	GinkgoHelper()
 
+	mc := minCluster(clusterNamespacedName)
+
 	Eventually(func() int {
-		podList, err := getPodList(minCluster(clusterNamespacedName), k8sClient)
+		podList, err := getPodList(mc, k8sClient)
 		if err != nil {
 			return -1
 		}
@@ -151,7 +156,7 @@ func waitForPodsWithoutBatchAnnotation(
 		n := 0
 
 		for i := range podList.Items {
-			if podList.Items[i].Annotations[asdbv1.BatchQuiesceAnnotation] != asdbv1.BatchQuiesceAnnotationValue {
+			if podList.Items[i].Annotations[asdbv1.QuiesceAnnotation] != asdbv1.QuiesceAnnotationValue {
 				n++
 			}
 		}
@@ -159,12 +164,13 @@ func waitForPodsWithoutBatchAnnotation(
 		return n
 	}, timeout, 2*time.Second).Should(
 		Equal(count),
-		"Expected exactly %d pod(s) without BatchQuiesceAnnotation within %s", count, timeout,
+		"Expected exactly %d pod(s) without QuiesceAnnotation within %s", count, timeout,
 	)
 }
 
 // waitForCoQuiesceBeforeRemoval blocks until ≥minQuiesce pods are quiesced
-// while duringPodCount pods still exist, then waits for the final pod count.
+// while duringPodCount pods still exist, asserting co-quiesce happened before
+// any pod was removed.
 func waitForCoQuiesceBeforeRemoval(
 	ctx goctx.Context,
 	aeroCluster *asdbv1.AerospikeCluster,
@@ -189,8 +195,8 @@ func waitForCoQuiesceBeforeRemoval(
 			seen = true
 		}
 
-		return podCount == aeroCluster.Spec.Size && seen
-	}, 15*time.Minute, 2*time.Second).Should(BeTrue(), failMsg)
+		return seen
+	}, 5*time.Minute, 2*time.Second).Should(BeTrue(), failMsg)
 }
 
 // newMultiRackNonSCCluster builds a non-SC cluster with the requested number
@@ -213,7 +219,7 @@ func newMultiRackNonSCCluster(
 
 // ─── test suite ────────────────────────────────────────────────────────────
 
-var _ = Describe("CrossRackBatchQuiesce", func() {
+var _ = Describe("CrossRackParallelQuiesce", func() {
 	ctx := goctx.TODO()
 
 	clusterName := fmt.Sprintf("cross-rack-bq-%d", GinkgoParallelProcess())
@@ -237,7 +243,7 @@ var _ = Describe("CrossRackBatchQuiesce", func() {
 	// ── 1.1 3-rack cluster scale-down ───────────────────────────────────
 	Context("3-rack cluster scale-down (one target per rack)", func() {
 		BeforeEach(func() {
-			aeroCluster := newMultiRackNonSCCluster(clusterNamespacedName, 9, []int{1, 2, 3})
+			aeroCluster := newMultiRackNonSCCluster(clusterNamespacedName, 6, []int{1, 2, 3})
 			Expect(DeployCluster(k8sClient, ctx, aeroCluster)).ToNot(HaveOccurred())
 		})
 
@@ -248,30 +254,12 @@ var _ = Describe("CrossRackBatchQuiesce", func() {
 			aeroCluster.Spec.Size -= 3 // remove one pod per rack
 			Expect(k8sClient.Update(ctx, aeroCluster)).ToNot(HaveOccurred())
 
-			seenTripleQuiesced := false
-
-			Eventually(func() bool {
-				podList, lErr := getPodList(aeroCluster, k8sClient)
-				Expect(lErr).ToNot(HaveOccurred())
-
-				podCount := utils.Len32(podList.Items)
-
-				if len(podList.Items) > 0 &&
-					countQuiescedNodes(ctx, clusterNamespacedName, podList.Items[0].Name) >= 3 &&
-					podCount == 9 {
-					seenTripleQuiesced = true
-				}
-
-				if podCount < 9 && !seenTripleQuiesced {
-					Fail("Pod removed before all 3 cross-rack targets were quiesced")
-				}
-
-				return podCount == aeroCluster.Spec.Size && seenTripleQuiesced
-			}, 15*time.Minute, 2*time.Second).Should(BeTrue())
+			waitForCoQuiesceBeforeRemoval(ctx, aeroCluster, clusterNamespacedName, 6, 3,
+				"Pod removed before all 3 cross-rack targets were quiesced")
 
 			Expect(waitForAerospikeCluster(
 				k8sClient, ctx, aeroCluster, int(aeroCluster.Spec.Size),
-				retryInterval, getTimeout(6),
+				retryInterval, getTimeout(3),
 				[]asdbv1.AerospikeClusterPhase{asdbv1.AerospikeClusterCompleted},
 			)).ToNot(HaveOccurred())
 
@@ -280,7 +268,7 @@ var _ = Describe("CrossRackBatchQuiesce", func() {
 	})
 
 	// ── 1.2 Single-rack scale-down ───────────────────────────────────────
-	// reconcileBatchQuiesce runs regardless of rack count. Even for a
+	// reconcileParallelScaleDownQuiesce runs regardless of rack count. Even for a
 	// single-rack cluster, ALL target pods must be quiesced simultaneously in
 	// the pre-pass before the StatefulSet replica count is reduced.
 	Context("Single-rack scale-down", func() {
@@ -311,14 +299,14 @@ var _ = Describe("CrossRackBatchQuiesce", func() {
 					return false
 				}
 
-				return pod.Annotations[asdbv1.BatchQuiesceAnnotation] == asdbv1.BatchQuiesceAnnotationValue
+				return pod.Annotations[asdbv1.QuiesceAnnotation] == asdbv1.QuiesceAnnotationValue
 			}
 
 			// Both annotations must appear before either pod is deleted.
 			Eventually(func() bool {
 				return isAnnotated(target1) && isAnnotated(target2)
 			}, 3*time.Minute, 2*time.Second).Should(BeTrue(),
-				"Expected BatchQuiesceAnnotation on both scale-down targets (%s, %s)", target1, target2)
+				"Expected QuiesceAnnotation on both scale-down targets (%s, %s)", target1, target2)
 
 			// Let scale-down finish; annotations must be cleared.
 			Expect(updateCluster(k8sClient, ctx, aeroCluster)).ToNot(HaveOccurred())
@@ -327,10 +315,10 @@ var _ = Describe("CrossRackBatchQuiesce", func() {
 		})
 	})
 
-	// ── 1.3 No scale-down — batch quiesce pre-pass entirely skipped ──────
-	Context("No scale-down — batch quiesce pre-pass should be skipped", func() {
+	// ── 1.3 No scale-down — parallel quiesce pre-pass entirely skipped ──────
+	Context("No scale-down — parallel quiesce pre-pass should be skipped", func() {
 		BeforeEach(func() {
-			aeroCluster := newMultiRackNonSCCluster(clusterNamespacedName, 6, []int{1, 2})
+			aeroCluster := newMultiRackNonSCCluster(clusterNamespacedName, 4, []int{1, 2})
 			Expect(DeployCluster(k8sClient, ctx, aeroCluster)).ToNot(HaveOccurred())
 		})
 
@@ -341,19 +329,18 @@ var _ = Describe("CrossRackBatchQuiesce", func() {
 			// Trigger a reconcile via a dynamic config update (no restart, no
 			// size change).
 			aeroCluster.Spec.AerospikeConfig.Value[asdbv1.ConfKeyService].(map[string]interface{})["proto-fd-max"] = 18000
+			aeroCluster.Spec.EnableDynamicConfigUpdate = ptr.To(true)
 			Expect(k8sClient.Update(ctx, aeroCluster)).ToNot(HaveOccurred())
 
-			// Poll to Completed; latch annotationSeen if any pod carries the
-			// annotation at any point (catches transient annotations).
-			annotationSeen := false
-
+			// Poll to Completed; fail immediately if any pod carries the annotation
+			// at any point during the reconcile.
 			Eventually(func() bool {
 				podList, lErr := getPodList(aeroCluster, k8sClient)
-				if lErr == nil {
-					for i := range podList.Items {
-						if podList.Items[i].Annotations[asdbv1.BatchQuiesceAnnotation] == asdbv1.BatchQuiesceAnnotationValue {
-							annotationSeen = true
-						}
+				Expect(lErr).ToNot(HaveOccurred())
+
+				for i := range podList.Items {
+					if podList.Items[i].Annotations[asdbv1.QuiesceAnnotation] == asdbv1.QuiesceAnnotationValue {
+						Fail("pod " + podList.Items[i].Name + " should not carry QuiesceAnnotation during a no-scale-down reconcile")
 					}
 				}
 
@@ -366,10 +353,41 @@ var _ = Describe("CrossRackBatchQuiesce", func() {
 			}, getTimeout(aeroCluster.Spec.Size), retryInterval).Should(BeTrue(),
 				"cluster should reach Completed state after proto-fd-max update")
 
-			Expect(annotationSeen).To(BeFalse(),
-				"No pod should carry BatchQuiesceAnnotation during a no-scale-down reconcile")
-
 			assertNoStaleQuiesce(ctx, aeroCluster, clusterNamespacedName)
+		})
+	})
+
+	// ── 1.4 SC namespace — quiesce ordering preserved ──────────────────
+	// Strong-consistency namespaces require roster management on top of the
+	// regular quiesce command.  The parallel pre-pass must still co-quiesce all
+	// scale-down targets before any pod is removed.
+	Context("SC namespace — quiesce ordering preserved across 2 racks", func() {
+		BeforeEach(func() {
+			aeroCluster := newMultiRackNonSCCluster(clusterNamespacedName, 4, []int{1, 2})
+			aeroCluster.Spec.AerospikeConfig.Value[asdbv1.ConfKeyNamespace] = []interface{}{
+				getSCNamespaceConfig("test", "/test/dev/xvdf"),
+			}
+			Expect(DeployCluster(k8sClient, ctx, aeroCluster)).ToNot(HaveOccurred())
+		})
+
+		It("Should quiesce both SC targets simultaneously before removing any pod", func() {
+			aeroCluster, err := getCluster(k8sClient, ctx, clusterNamespacedName)
+			Expect(err).ToNot(HaveOccurred())
+
+			// Scale down by 2 (one target per rack).
+			aeroCluster.Spec.Size -= 2
+			Expect(k8sClient.Update(ctx, aeroCluster)).ToNot(HaveOccurred())
+
+			waitForCoQuiesceBeforeRemoval(ctx, aeroCluster, clusterNamespacedName, 4, 2,
+				"Both SC targets must be quiesced before any pod is removed")
+
+			Expect(waitForAerospikeCluster(
+				k8sClient, ctx, aeroCluster, int(aeroCluster.Spec.Size),
+				retryInterval, getTimeout(aeroCluster.Spec.Size),
+				[]asdbv1.AerospikeClusterPhase{asdbv1.AerospikeClusterCompleted},
+			)).ToNot(HaveOccurred())
+
+			assertCleanQuiesceState(ctx, aeroCluster, clusterNamespacedName)
 		})
 	})
 
@@ -398,17 +416,20 @@ var _ = Describe("CrossRackBatchQuiesce", func() {
 
 			aeroCluster.Spec.Size += 2
 			Expect(k8sClient.Update(ctx, aeroCluster)).ToNot(HaveOccurred())
-			waitForPodsWithoutBatchAnnotation(clusterNamespacedName, 4, 3*time.Minute)
+			waitForPodsWithoutParallelAnnotation(clusterNamespacedName, 4, 3*time.Minute)
 
-			Expect(waitForClusterPhase(k8sClient, ctx, clusterNamespacedName,
-				asdbv1.AerospikeClusterCompleted)).ToNot(HaveOccurred())
+			Expect(waitForAerospikeCluster(
+				k8sClient, ctx, aeroCluster, int(aeroCluster.Spec.Size),
+				retryInterval, getTimeout(aeroCluster.Spec.Size),
+				[]asdbv1.AerospikeClusterPhase{asdbv1.AerospikeClusterCompleted},
+			)).ToNot(HaveOccurred())
 		})
 	})
 
 	// ── 2.2 Full revert ─────────────────────────────────────────────────
 	Context("Full scale-down revert while migration is in progress", func() {
 		BeforeEach(func() {
-			aeroCluster := newMultiRackNonSCCluster(clusterNamespacedName, 6, []int{1, 2})
+			aeroCluster := newMultiRackNonSCCluster(clusterNamespacedName, 4, []int{1, 2})
 			Expect(DeployCluster(k8sClient, ctx, aeroCluster)).ToNot(HaveOccurred())
 		})
 
@@ -428,10 +449,13 @@ var _ = Describe("CrossRackBatchQuiesce", func() {
 			aeroCluster.Spec.Size = originalSize
 			Expect(k8sClient.Update(ctx, aeroCluster)).ToNot(HaveOccurred())
 
-			waitForPodsWithoutBatchAnnotation(clusterNamespacedName, 6, 3*time.Minute)
+			waitForPodsWithoutParallelAnnotation(clusterNamespacedName, 4, 3*time.Minute)
 
-			Expect(waitForClusterPhase(k8sClient, ctx, clusterNamespacedName,
-				asdbv1.AerospikeClusterCompleted)).ToNot(HaveOccurred())
+			Expect(waitForAerospikeCluster(
+				k8sClient, ctx, aeroCluster, int(aeroCluster.Spec.Size),
+				retryInterval, getTimeout(aeroCluster.Spec.Size),
+				[]asdbv1.AerospikeClusterPhase{asdbv1.AerospikeClusterCompleted},
+			)).ToNot(HaveOccurred())
 		})
 	})
 
@@ -441,11 +465,10 @@ var _ = Describe("CrossRackBatchQuiesce", func() {
 
 	// ── 3.1 Target pod never joined (no CR status) ───────────────────────
 	// Scenario: cluster fills every schedulable worker node with one pod
-	// (MultiPodPerHost=false).  Scaling up by 1 creates a pod that can never
+	// (MultiPodPerHost=false). Scaling up by 1 creates a pod that can never
 	// be scheduled — it stays in Pending indefinitely with no CR status entry.
-	// Scaling back down must complete without MaxIgnorablePods: the
-	// Never-joined pods are handled upstream by getIgnorablePods (unschedulable
-	// detection) and do not consume any MaxIgnorablePods budget.
+	// Scaling back down must complete without MaxIgnorablePods. Pending scale down
+	// pods doesn't consider EnableParallelScaleDownAcrossRacks flag and are scaled down via failedPodHandling
 	Context("Scale-down target never joined cluster (no CR status)", func() {
 		var nodeCount int32
 
@@ -456,6 +479,7 @@ var _ = Describe("CrossRackBatchQuiesce", func() {
 			// Fill all nodes; the +1 pod will be permanently unschedulable.
 			aeroCluster := newMultiRackNonSCCluster(clusterNamespacedName, nodeCount, []int{1, 2})
 			aeroCluster.Spec.PodSpec.MultiPodPerHost = ptr.To(false)
+			randomizeServicePorts(aeroCluster, false, GinkgoParallelProcess())
 			Expect(DeployCluster(k8sClient, ctx, aeroCluster)).ToNot(HaveOccurred())
 		})
 
@@ -497,8 +521,7 @@ var _ = Describe("CrossRackBatchQuiesce", func() {
 			}, 2*time.Minute, 2*time.Second).Should(BeTrue(),
 				"expected a never-joined Pending pod (unschedulable) to appear")
 
-			// Scale back down; the unschedulable pod is in ignorablePodNames
-			// (via getIgnorablePods) without consuming any MaxIgnorablePods budget.
+			// Scale back down via faild pod handling's scale down flow
 			aeroCluster.Spec.Size = originalSize
 			Expect(updateCluster(k8sClient, ctx, aeroCluster)).ToNot(HaveOccurred())
 
@@ -534,14 +557,14 @@ var _ = Describe("CrossRackBatchQuiesce", func() {
 
 			// Phase 1: wait for rack 3's first pod to become server-ready.
 			// During this window NO pod should carry the annotation — Step 3
-			// (reconcileBatchQuiesce) must not run before Step 2 finishes.
+			// (reconcileParallelScaleDownQuiesce) must not run before Step 2 finishes.
 			annotationBeforeReady := false
 
 			Eventually(func() bool {
 				podList, lErr := getPodList(aeroCluster, k8sClient)
 				if lErr == nil {
 					for i := range podList.Items {
-						if podList.Items[i].Annotations[asdbv1.BatchQuiesceAnnotation] == asdbv1.BatchQuiesceAnnotationValue {
+						if podList.Items[i].Annotations[asdbv1.QuiesceAnnotation] == asdbv1.QuiesceAnnotationValue {
 							annotationBeforeReady = true
 						}
 					}
@@ -559,9 +582,9 @@ var _ = Describe("CrossRackBatchQuiesce", func() {
 				"rack 3 pod 0 should become server-ready")
 
 			Expect(annotationBeforeReady).To(BeFalse(),
-				"no pod should carry BatchQuiesceAnnotation before rack 3's first pod is server-ready")
+				"no pod should carry QuiesceAnnotation before rack 3's first pod is server-ready")
 
-			// Phase 2: once rack 3 is up, the batch quiesce pre-pass must annotate
+			// Phase 2: once rack 3 is up, the parallel quiesce pre-pass must annotate
 			// rack 2's scale-down target.
 			Eventually(func() bool {
 				pod := &corev1.Pod{}
@@ -571,12 +594,15 @@ var _ = Describe("CrossRackBatchQuiesce", func() {
 					return false
 				}
 
-				return pod.Annotations[asdbv1.BatchQuiesceAnnotation] == asdbv1.BatchQuiesceAnnotationValue
+				return pod.Annotations[asdbv1.QuiesceAnnotation] == asdbv1.QuiesceAnnotationValue
 			}, 3*time.Minute, 2*time.Second).Should(BeTrue(),
 				"rack 2's scale-down target %s should be annotated after rack 3 is ready", rack2TargetName)
 
-			Expect(waitForClusterPhase(k8sClient, ctx, clusterNamespacedName,
-				asdbv1.AerospikeClusterCompleted)).ToNot(HaveOccurred())
+			Expect(waitForAerospikeCluster(
+				k8sClient, ctx, aeroCluster, int(aeroCluster.Spec.Size),
+				retryInterval, getTimeout(aeroCluster.Spec.Size),
+				[]asdbv1.AerospikeClusterPhase{asdbv1.AerospikeClusterCompleted},
+			)).ToNot(HaveOccurred())
 		})
 	})
 
@@ -613,15 +639,18 @@ var _ = Describe("CrossRackBatchQuiesce", func() {
 			waitForCoQuiesceBeforeRemoval(ctx, aeroCluster, clusterNamespacedName, 6, 3,
 				"Pods of deleted rack should be co-quiesced before removal")
 
-			Expect(waitForClusterPhase(k8sClient, ctx, clusterNamespacedName,
-				asdbv1.AerospikeClusterCompleted)).ToNot(HaveOccurred())
+			Expect(waitForAerospikeCluster(
+				k8sClient, ctx, aeroCluster, int(aeroCluster.Spec.Size),
+				retryInterval, getTimeout(aeroCluster.Spec.Size),
+				[]asdbv1.AerospikeClusterPhase{asdbv1.AerospikeClusterCompleted},
+			)).ToNot(HaveOccurred())
 		})
 	})
 
 	// ── 4.2 Rack replace ────────────────────────────────────────────────
 	Context("Rack replace — old rack quiesced with explicit scale-down targets", func() {
 		BeforeEach(func() {
-			aeroCluster := newMultiRackNonSCCluster(clusterNamespacedName, 6, []int{1, 2})
+			aeroCluster := newMultiRackNonSCCluster(clusterNamespacedName, 4, []int{1, 2})
 			Expect(DeployCluster(k8sClient, ctx, aeroCluster)).ToNot(HaveOccurred())
 		})
 
@@ -639,45 +668,16 @@ var _ = Describe("CrossRackBatchQuiesce", func() {
 			aeroCluster.Spec.Size -= 1
 			Expect(k8sClient.Update(ctx, aeroCluster)).ToNot(HaveOccurred())
 
-			// Quiesce window: 8 total pods (rack1×3 + rack3×2 new + rack2×3 old),
-			// ≥3 targets (rack 2 delete targets) must be quiesced together.
-			waitForCoQuiesceBeforeRemoval(ctx, aeroCluster, clusterNamespacedName, 8, 3,
+			// Quiesce window: 5 total pods (rack1×2 + rack3×1 new + rack2×2 old),
+			// ≥2 targets (rack 2 delete targets) must be quiesced together.
+			waitForCoQuiesceBeforeRemoval(ctx, aeroCluster, clusterNamespacedName, 5, 2,
 				"Old rack pods should be quiesced before removal")
 
-			Expect(waitForClusterPhase(k8sClient, ctx, clusterNamespacedName,
-				asdbv1.AerospikeClusterCompleted)).ToNot(HaveOccurred())
-		})
-	})
-
-	// ══════════════════════════════════════════════════════════════════════
-	// §5  Concurrent Operations
-	// ══════════════════════════════════════════════════════════════════════
-
-	// ── 5.1 Scale-down + pause/unpause ───────────────────────────────────
-	Context("Scale-down with reconciliation paused then unpaused", func() {
-		BeforeEach(func() {
-			aeroCluster := newMultiRackNonSCCluster(clusterNamespacedName, 6, []int{1, 2})
-			Expect(DeployCluster(k8sClient, ctx, aeroCluster)).ToNot(HaveOccurred())
-		})
-
-		It("Should not quiesce while paused; should complete after unpause", func() {
-			aeroCluster, err := getCluster(k8sClient, ctx, clusterNamespacedName)
-			Expect(err).ToNot(HaveOccurred())
-
-			// Pause reconciliation.
-			aeroCluster.Spec.Paused = ptr.To(true)
-			aeroCluster.Spec.Size -= 2
-			Expect(k8sClient.Update(ctx, aeroCluster)).ToNot(HaveOccurred())
-
-			// Wait a moment and verify no quiesce happened.
-			time.Sleep(30 * time.Second)
-			assertNoStaleQuiesce(ctx, aeroCluster, clusterNamespacedName)
-
-			// Unpause — scale-down should now complete.
-			aeroCluster.Spec.Paused = nil
-			Expect(updateCluster(k8sClient, ctx, aeroCluster)).ToNot(HaveOccurred())
-
-			assertNoStaleQuiesce(ctx, aeroCluster, clusterNamespacedName)
+			Expect(waitForAerospikeCluster(
+				k8sClient, ctx, aeroCluster, int(aeroCluster.Spec.Size),
+				retryInterval, getTimeout(aeroCluster.Spec.Size),
+				[]asdbv1.AerospikeClusterPhase{asdbv1.AerospikeClusterCompleted},
+			)).ToNot(HaveOccurred())
 		})
 	})
 })

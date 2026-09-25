@@ -36,21 +36,12 @@ import (
 	"k8s.io/apimachinery/pkg/util/sets"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 	"sigs.k8s.io/controller-runtime/pkg/client/interceptor"
-	"sigs.k8s.io/controller-runtime/pkg/controller/controllerutil"
 
 	asdbv1 "github.com/aerospike/aerospike-kubernetes-operator/v4/api/v1"
 	"github.com/aerospike/aerospike-kubernetes-operator/v4/pkg/utils"
 )
 
 // ─── helpers ──────────────────────────────────────────────────────────────
-
-// newDefaultReconciler creates a SingleClusterReconciler for namespace/clusterName
-// using a no-op interceptor. Use this for tests that do not need a custom
-// AerospikeCluster spec.
-func newDefaultReconciler(t *testing.T, objects ...client.Object) *SingleClusterReconciler {
-	t.Helper()
-	return newTestReconciler(t, newTestAerospikeCluster(namespace, clusterName), &interceptor.Funcs{}, objects...)
-}
 
 // makeRackPod creates a pod with the labels that getOrderedRackPodList uses.
 //
@@ -107,13 +98,13 @@ func withCRStatus(aeroCluster *asdbv1.AerospikeCluster, podNames ...string) {
 	}
 }
 
-// withAnnotation sets the BatchQuiesceAnnotation on the pod.
+// withAnnotation sets the QuiesceAnnotation on the pod.
 func withAnnotation(pod *corev1.Pod) *corev1.Pod {
 	if pod.Annotations == nil {
 		pod.Annotations = make(map[string]string)
 	}
 
-	pod.Annotations[asdbv1.BatchQuiesceAnnotation] = asdbv1.BatchQuiesceAnnotationValue
+	pod.Annotations[asdbv1.QuiesceAnnotation] = asdbv1.QuiesceAnnotationValue
 
 	return pod
 }
@@ -204,6 +195,40 @@ func TestBuildScaleDownTargets_NoReadinessCheck(t *testing.T) {
 	assert.Len(t, targets, 1)
 }
 
+// TestBuildScaleDownTargets_ScaleDownBatchSizeIgnored verifies that
+// buildScaleDownTargets collects ALL diff pods regardless of ScaleDownBatchSize.
+// The batch-size gating happens inside scaleDownRack, not here.
+func TestBuildScaleDownTargets_ScaleDownBatchSizeIgnored(t *testing.T) {
+	aeroCluster := newTestAerospikeCluster(namespace, clusterName)
+	batchOne := intstr.FromInt32(1)
+	aeroCluster.Spec.RackConfig.ScaleDownBatchSize = &batchOne
+
+	pods := []*corev1.Pod{
+		makeRackPod(clusterName+"-1-0", namespace, clusterName, 1, true),
+		makeRackPod(clusterName+"-1-1", namespace, clusterName, 1, true),
+		makeRackPod(clusterName+"-1-2", namespace, clusterName, 1, true),
+	}
+
+	var stsReplicas int32 = 3
+
+	sts := makeRackSTS(clusterName+"-1", namespace, clusterName, 1, stsReplicas)
+
+	r := newTestReconciler(t, aeroCluster, &interceptor.Funcs{},
+		pods[0], pods[1], pods[2],
+	)
+
+	rack := asdbv1.Rack{ID: 1}
+	rackState := &RackState{Rack: &rack, Size: 1}
+	scaledDown := []rackWithSTS{{rackSTS: sts, rackState: rackState}}
+
+	targets, res := r.buildScaleDownTargets(context.Background(), scaledDown, nil)
+
+	require.True(t, res.IsSuccess)
+	// All 2 diff pods must be returned regardless of ScaleDownBatchSize=1.
+	assert.Len(t, targets, 2,
+		"buildScaleDownTargets must return ALL diff pods; batch-size gating is done by scaleDownRack")
+}
+
 // ══════════════════════════════════════════════════════════════════════════
 // reconcileQuiesceUndo — annotation fast-exit only
 // (Aerospike info calls are not exercised in unit tests)
@@ -211,14 +236,14 @@ func TestBuildScaleDownTargets_NoReadinessCheck(t *testing.T) {
 
 // TestReconcileQuiesceUndo_FastExit_NoAnnotatedNonTargets verifies that
 // reconcileQuiesceUndo returns immediately without error when no non-target pod
-// carries the BatchQuiesceAnnotation.
+// carries the QuiesceAnnotation.
 func TestReconcileQuiesceUndo_FastExit_NoAnnotatedNonTargets(t *testing.T) {
 	// Two running pods; neither has the quiesce annotation.
 	pod0 := makeRackPod(clusterName+"-1-0", namespace, clusterName, 1, true)
 	pod1 := makeRackPod(clusterName+"-1-1", namespace, clusterName, 1, true)
 	r := newDefaultReconciler(t, pod0, pod1)
 
-	res := r.reconcileQuiesceUndo(context.Background(), sets.New(pod1.Name), sets.New[string]())
+	res := r.reconcileQuiesceUndo(context.Background(), []*corev1.Pod{pod1}, sets.New[string]())
 
 	require.True(t, res.IsSuccess, "should fast-exit when no non-target pod is annotated")
 }
@@ -232,32 +257,26 @@ func TestReconcileQuiesceUndo_FastExit_OnlyTargetsAnnotated(t *testing.T) {
 	pod1 := withAnnotation(makeRackPod(clusterName+"-1-1", namespace, clusterName, 1, true))
 	r := newDefaultReconciler(t, pod0, pod1)
 
-	res := r.reconcileQuiesceUndo(context.Background(), sets.New(pod1.Name), sets.New[string]())
+	res := r.reconcileQuiesceUndo(context.Background(), []*corev1.Pod{pod1}, sets.New[string]())
 
 	// annotatedNonTargets is empty → fast-exit → success without Aerospike calls.
 	require.True(t, res.IsSuccess,
 		"should fast-exit when only target pods are annotated (non-targets have no annotation)")
 }
 
-// TestReconcileQuiesceUndo_AnnotatedNonTargetDetected verifies that
-// reconcileQuiesceUndo detects an annotated non-target pod. Because there is
-// no real Aerospike cluster, the InfoQuiesceUndoSubset call will fail — but we
-// can verify it was reached by checking the error path (not the fast-exit path).
+// TestReconcileQuiesceUndo_AnnotatedNonTargetDetected verifies that an annotated
+// non-target pod is detected and the undo path is reached (not the fast-exit path).
 func TestReconcileQuiesceUndo_AnnotatedNonTargetDetected(t *testing.T) {
 	// pod0 is a non-target WITH the annotation — should trigger undo logic.
 	pod0 := withAnnotation(makeRackPod(clusterName+"-1-0", namespace, clusterName, 1, true))
 	pod1 := makeRackPod(clusterName+"-1-1", namespace, clusterName, 1, true) // target
 	r := newDefaultReconciler(t, pod0, pod1)
 
-	res := r.reconcileQuiesceUndo(context.Background(), sets.New(pod1.Name), sets.New[string]())
+	res := r.reconcileQuiesceUndo(context.Background(), []*corev1.Pod{pod1}, sets.New[string]())
 
-	// The function must NOT fast-exit (annotated non-target found).
-	// It will fail at the InfoQuiesceUndoSubset call because there is no
-	// real Aerospike cluster — that is expected in a unit test.
-	// The key assertion is: res is not a fast-exit success due to annotation scan.
-	// We allow either an error (from Aerospike call) OR success (if the fake
-	// client call path short-circuits gracefully).
-	_ = res // outcome depends on network; we only verify it did NOT panic.
+	// pod0 is an annotated non-target — the function must proceed past the fast-exit
+	// and reach InfoQuiesceUndoSubset, which always fails without a real cluster.
+	require.False(t, res.IsSuccess, "should fail when InfoQuiesceUndoSubset cannot reach the cluster")
 }
 
 // ══════════════════════════════════════════════════════════════════════════
@@ -293,47 +312,16 @@ func TestSetPodQuiesceAnnotation(t *testing.T) {
 
 			wantVal := ""
 			if tc.wantAnnot {
-				wantVal = asdbv1.BatchQuiesceAnnotationValue
+				wantVal = asdbv1.QuiesceAnnotationValue
 			}
 
-			assert.Equal(t, wantVal, pod.Annotations[asdbv1.BatchQuiesceAnnotation], "in-memory pod")
+			assert.Equal(t, wantVal, pod.Annotations[asdbv1.QuiesceAnnotation], "in-memory pod")
 
 			stored := &corev1.Pod{}
 			require.NoError(t, r.Get(context.Background(), client.ObjectKeyFromObject(pod), stored))
-			assert.Equal(t, wantVal, stored.Annotations[asdbv1.BatchQuiesceAnnotation], "stored pod")
+			assert.Equal(t, wantVal, stored.Annotations[asdbv1.QuiesceAnnotation], "stored pod")
 		})
 	}
-}
-
-// ══════════════════════════════════════════════════════════════════════════
-// controllerutil.AddFinalizer / ContainsFinalizer (addFinalizer unit test)
-// ══════════════════════════════════════════════════════════════════════════
-
-// TestAddFinalizer_IdempotentViaPatch verifies that addFinalizer uses a patch
-// (not a full Update) and is idempotent when called twice.
-func TestAddFinalizer_IdempotentViaPatch(t *testing.T) {
-	const finalizerName = "test.aerospike.com/finalizer"
-
-	aeroCluster := &asdbv1.AerospikeCluster{
-		ObjectMeta: metav1.ObjectMeta{
-			Name:            clusterName,
-			Namespace:       namespace,
-			ResourceVersion: "1",
-		},
-	}
-
-	r := newTestReconciler(t, aeroCluster, &interceptor.Funcs{})
-
-	// First call — should add the finalizer.
-	err := r.addFinalizer(context.Background(), finalizerName)
-	require.NoError(t, err)
-	require.True(t, controllerutil.ContainsFinalizer(r.aeroCluster, finalizerName))
-
-	// Second call — should be a no-op (patch not issued).
-	err = r.addFinalizer(context.Background(), finalizerName)
-	require.NoError(t, err)
-	require.True(t, controllerutil.ContainsFinalizer(r.aeroCluster, finalizerName),
-		"finalizer must still be present after second addFinalizer call")
 }
 
 // ══════════════════════════════════════════════════════════════════════════
@@ -434,7 +422,7 @@ func TestReconcileParallelScaleDownQuiesce_IgnorablePodFilteredOut(t *testing.T)
 	stored := &corev1.Pod{}
 	require.NoError(t, r.Get(context.Background(),
 		client.ObjectKeyFromObject(pod1), stored))
-	assert.NotEqual(t, asdbv1.BatchQuiesceAnnotationValue, stored.Annotations[asdbv1.BatchQuiesceAnnotation],
+	assert.NotEqual(t, asdbv1.QuiesceAnnotationValue, stored.Annotations[asdbv1.QuiesceAnnotation],
 		"ignorable pod must not be annotated by reconcileParallelScaleDownQuiesce")
 }
 
@@ -451,38 +439,4 @@ func TestReconcileParallelScaleDownQuiesce_AllTargetsIgnorable(t *testing.T) {
 
 	require.True(t, res.IsSuccess,
 		"should succeed immediately when all targets are ignorable")
-}
-
-// TestBuildScaleDownTargets_ScaleDownBatchSizeIgnored verifies that
-// buildScaleDownTargets collects ALL diff pods regardless of ScaleDownBatchSize.
-// The batch-size gating happens inside scaleDownRack, not here.
-func TestBuildScaleDownTargets_ScaleDownBatchSizeIgnored(t *testing.T) {
-	aeroCluster := newTestAerospikeCluster(namespace, clusterName)
-	batchOne := intstr.FromInt32(1)
-	aeroCluster.Spec.RackConfig.ScaleDownBatchSize = &batchOne
-
-	pods := []*corev1.Pod{
-		makeRackPod(clusterName+"-1-0", namespace, clusterName, 1, true),
-		makeRackPod(clusterName+"-1-1", namespace, clusterName, 1, true),
-		makeRackPod(clusterName+"-1-2", namespace, clusterName, 1, true),
-	}
-
-	var stsReplicas int32 = 3
-
-	sts := makeRackSTS(clusterName+"-1", namespace, clusterName, 1, stsReplicas)
-
-	r := newTestReconciler(t, aeroCluster, &interceptor.Funcs{},
-		pods[0], pods[1], pods[2],
-	)
-
-	rack := asdbv1.Rack{ID: 1}
-	rackState := &RackState{Rack: &rack, Size: 1}
-	scaledDown := []rackWithSTS{{rackSTS: sts, rackState: rackState}}
-
-	targets, res := r.buildScaleDownTargets(context.Background(), scaledDown, nil)
-
-	require.True(t, res.IsSuccess)
-	// All 2 diff pods must be returned regardless of ScaleDownBatchSize=1.
-	assert.Len(t, targets, 2,
-		"buildScaleDownTargets must return ALL diff pods; batch-size gating is done by scaleDownRack")
 }

@@ -853,7 +853,7 @@ func validateForceBlockFromRosterUpdate(newObj *asdbv1.AerospikeCluster) error {
 //
 // Enabling mid-scale-down is harmless — quiesce is idempotent and no pods are
 // annotated yet. Disabling mid-scale-down is unsafe: already-quiesced pods carry
-// BatchQuiesceAnnotation and reconcileQuiesceUndo stops running, leaving them
+// QuiesceAnnotation and reconcileQuiesceUndo stops running, leaving them
 // permanently quiesced.
 //
 // "In flight" is detected by scaleDownInFlight which covers three cases:
@@ -882,7 +882,7 @@ func validateParallelScaleDownToggle(oldObj, newObj *asdbv1.AerospikeCluster) er
 }
 
 // scaleDownInFlight reports whether a scale-down (or rack deletion/replacement)
-// is currently in progress, meaning pods may already carry BatchQuiesceAnnotation.
+// is currently in progress, meaning pods may already carry QuiesceAnnotation.
 //
 // Two checks are performed in two passes:
 //  1. Build a map of spec rack ID → effective pod count from the spec topology.

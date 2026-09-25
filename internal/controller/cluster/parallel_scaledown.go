@@ -62,15 +62,17 @@ func (r *SingleClusterReconciler) buildScaleDownTargets(
 // Runs before reconcileRack for non-scaled-down racks so stale quiesces from a
 // prior (possibly reverted) scale-down are undone before rolling restarts run.
 //
-// Annotation fast-exit: if no non-target pod carries BatchQuiesceAnnotation all
+// Annotation fast-exit: if no non-target pod carries QuiesceAnnotation all
 // Aerospike calls are skipped. When undo is needed, InfoQuiesceUndoSubset is
 // called with annotated non-target pods only (undoHosts) plus all pods
 // (allHosts, so InfoRecluster can always reach the principal).
 func (r *SingleClusterReconciler) reconcileQuiesceUndo(
 	ctx context.Context,
-	targetNames sets.Set[string],
+	allTargets []*corev1.Pod,
 	ignorablePodNames sets.Set[string],
 ) common.ReconcileResult {
+	targetNames := podNamesToSet(allTargets)
+
 	podList, err := r.getClusterPodList(ctx)
 	if err != nil {
 		return common.ReconcileError(fmt.Errorf("list cluster pods for quiesce-undo: %w", err))
@@ -81,8 +83,8 @@ func (r *SingleClusterReconciler) reconcileQuiesceUndo(
 	for idx := range podList.Items {
 		pod := &podList.Items[idx]
 
-		if !targetNames.Has(pod.Name) && pod.Annotations[asdbv1.BatchQuiesceAnnotation] ==
-			asdbv1.BatchQuiesceAnnotationValue {
+		if !targetNames.Has(pod.Name) && pod.Annotations[asdbv1.QuiesceAnnotation] ==
+			asdbv1.QuiesceAnnotationValue {
 			annotatedNonTargets = append(annotatedNonTargets, *pod)
 		}
 	}
@@ -93,7 +95,7 @@ func (r *SingleClusterReconciler) reconcileQuiesceUndo(
 	}
 
 	r.Log.Info("Sending quiesce-undo to pods that were quiesced but are no longer scale-down candidates",
-		"podCount", len(annotatedNonTargets))
+		"quiesceUndoPods", len(annotatedNonTargets))
 
 	// ALL pods needed by InfoRecluster inside the management lib to find the principal.
 	allHostConns, err := r.newPodsHostConnWithOption(podList.Items, ignorablePodNames)
@@ -123,7 +125,7 @@ func (r *SingleClusterReconciler) reconcileQuiesceUndo(
 	for i := range annotatedNonTargets {
 		if annErr := r.setPodQuiesceAnnotation(ctx, &annotatedNonTargets[i], false); annErr != nil {
 			r.Log.Error(annErr, "Failed to remove quiesce annotation from pod; will retry next reconcile",
-				"pods", utils.GetNamespacedName(&annotatedNonTargets[i]))
+				"pod", utils.GetNamespacedName(&annotatedNonTargets[i]))
 		}
 	}
 
@@ -135,7 +137,7 @@ func (r *SingleClusterReconciler) reconcileQuiesceUndo(
 // sequential rounds. Runs before
 // reconcileRack for scaled-down racks.
 //
-//   - Annotation fast-exit: if all targets carry BatchQuiesceAnnotation, all
+//   - Annotation fast-exit: if all targets carry QuiesceAnnotation, all
 //     Aerospike info calls are skipped (steady-state path is free of network I/O).
 //   - Delegates to waitForMultipleNodesSafeStopReady (MFD=0, drain path) which
 //     handles: server readiness, degraded-cluster guard, MFD zeroing, stability
@@ -160,26 +162,31 @@ func (r *SingleClusterReconciler) reconcileParallelScaleDownQuiesce(
 
 		effectiveTargets = append(effectiveTargets, pod)
 
-		if pod.Annotations[asdbv1.BatchQuiesceAnnotation] != asdbv1.BatchQuiesceAnnotationValue {
+		if pod.Annotations[asdbv1.QuiesceAnnotation] != asdbv1.QuiesceAnnotationValue {
 			allAnnotated = false
 		}
 	}
 
 	if len(effectiveTargets) == 0 {
-		r.Log.V(1).Info("All scale-down candidates are ignorable; skipping batch quiesce pre-pass")
+		r.Log.V(1).Info("All scale-down candidates are ignorable; skipping parallel quiesce pre-pass")
 		return common.ReconcileSuccess()
 	}
 
 	allTargets = effectiveTargets
 
 	if allAnnotated {
-		r.Log.V(1).Info("All scale-down candidates already quiesced by AKO, skipping batch quiesce pre-pass",
+		r.Log.V(1).Info("All scale-down candidates already quiesced by AKO, skipping parallel quiesce pre-pass",
 			"scaleDownCandidates", len(allTargets))
 
 		return common.ReconcileSuccess()
 	}
 
-	r.Log.Info("Running cross-rack batch quiesce pre-pass", "scaleDownCandidates", len(allTargets))
+	r.Log.Info("Running cross-rack parallel quiesce pre-pass", "scaleDownCandidates", len(allTargets))
+
+	r.Recorder.Eventf(
+		r.aeroCluster, corev1.EventTypeNormal, "ParallelQuiesceStarted",
+		"Quiescing %d pod(s) across racks before scale-down", len(allTargets),
+	)
 
 	if err := r.setConditions(ctx, metav1.Condition{
 		Type:    string(asdbv1.AerospikeClusterConditionScalingDown),
@@ -196,20 +203,25 @@ func (r *SingleClusterReconciler) reconcileParallelScaleDownQuiesce(
 
 	// Stamp annotation for fast-exit; failure is non-fatal (next reconcile retries).
 	for _, pod := range allTargets {
-		if pod.Annotations[asdbv1.BatchQuiesceAnnotation] != asdbv1.BatchQuiesceAnnotationValue {
+		if pod.Annotations[asdbv1.QuiesceAnnotation] != asdbv1.QuiesceAnnotationValue {
 			if annErr := r.setPodQuiesceAnnotation(ctx, pod, true); annErr != nil {
 				r.Log.Error(annErr, "Failed to set quiesce annotation on pod; will try quiesce in next reconcile",
-					"pods", utils.GetNamespacedName(pod))
+					"pod", utils.GetNamespacedName(pod))
 			}
 		}
 	}
 
-	r.Log.Info("Cross-rack batch quiesce pre-pass completed", "podsQuiesced", len(allTargets))
+	r.Log.Info("Cross-rack parallel quiesce pre-pass completed", "podsQuiesced", len(allTargets))
+
+	r.Recorder.Eventf(
+		r.aeroCluster, corev1.EventTypeNormal, "ParallelQuiesceCompleted",
+		"Quiesced %d pod(s) across racks, ready for scale-down", len(allTargets),
+	)
 
 	return common.ReconcileSuccess()
 }
 
-// clearStaleQuiesceAnnotations removes BatchQuiesceAnnotation from every pod
+// clearStaleQuiesceAnnotations removes QuiesceAnnotation from every pod
 // that still carries it. Single list call; only patches annotated pods, so
 // the common case (no stale annotations) costs exactly one API round-trip.
 func (r *SingleClusterReconciler) clearStaleQuiesceAnnotations(ctx context.Context) error {
@@ -220,7 +232,7 @@ func (r *SingleClusterReconciler) clearStaleQuiesceAnnotations(ctx context.Conte
 
 	for i := range podList.Items {
 		pod := &podList.Items[i]
-		if pod.Annotations[asdbv1.BatchQuiesceAnnotation] != asdbv1.BatchQuiesceAnnotationValue {
+		if pod.Annotations[asdbv1.QuiesceAnnotation] != asdbv1.QuiesceAnnotationValue {
 			continue
 		}
 
@@ -233,15 +245,15 @@ func (r *SingleClusterReconciler) clearStaleQuiesceAnnotations(ctx context.Conte
 }
 
 // setPodQuiesceAnnotation adds (add=true) or removes (add=false) the
-// BatchQuiesceAnnotation on the pod via a merge-patch.
+// QuiesceAnnotation on the pod via a merge-patch.
 func (r *SingleClusterReconciler) setPodQuiesceAnnotation(
 	ctx context.Context, pod *corev1.Pod, add bool,
 ) error {
-	if add && pod.Annotations[asdbv1.BatchQuiesceAnnotation] == asdbv1.BatchQuiesceAnnotationValue {
+	if add && pod.Annotations[asdbv1.QuiesceAnnotation] == asdbv1.QuiesceAnnotationValue {
 		return nil // already set
 	}
 
-	if !add && pod.Annotations[asdbv1.BatchQuiesceAnnotation] != asdbv1.BatchQuiesceAnnotationValue {
+	if !add && pod.Annotations[asdbv1.QuiesceAnnotation] != asdbv1.QuiesceAnnotationValue {
 		return nil // already absent
 	}
 
@@ -253,13 +265,13 @@ func (r *SingleClusterReconciler) setPodQuiesceAnnotation(
 			pod.Annotations = make(map[string]string)
 		}
 
-		pod.Annotations[asdbv1.BatchQuiesceAnnotation] = asdbv1.BatchQuiesceAnnotationValue
+		pod.Annotations[asdbv1.QuiesceAnnotation] = asdbv1.QuiesceAnnotationValue
 	} else {
-		delete(pod.Annotations, asdbv1.BatchQuiesceAnnotation)
+		delete(pod.Annotations, asdbv1.QuiesceAnnotation)
 	}
 
 	if err := r.Patch(ctx, pod, patch); err != nil {
-		return fmt.Errorf("patch pod %s quiesce annotation (add=%v): %w", pod.Name, add, err)
+		return fmt.Errorf("patch pod %s quiesce annotation (add=%v): %w", utils.GetNamespacedNameString(pod), add, err)
 	}
 
 	return nil
