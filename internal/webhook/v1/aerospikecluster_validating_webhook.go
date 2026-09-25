@@ -305,6 +305,11 @@ func (acv *AerospikeClusterCustomValidator) ValidateUpdate(_ context.Context,
 		return warnings, err
 	}
 
+	// Validate EnableParallelScaleDownAcrossRacks toggle restrictions.
+	if err := validateParallelScaleDownToggle(oldObject, aerospikeCluster); err != nil {
+		return warnings, err
+	}
+
 	// Validate concurrent rack revisions limit
 	if err := validateConcurrentRackRevisions(oldObject, aerospikeCluster); err != nil {
 		return warnings, err
@@ -843,6 +848,79 @@ func validateForceBlockFromRosterUpdate(newObj *asdbv1.AerospikeCluster) error {
 	return nil
 }
 
+// validateParallelScaleDownToggle blocks disabling EnableParallelScaleDownAcrossRacks
+// while a scale-down is in flight; enabling is always safe.
+//
+// Enabling mid-scale-down is harmless — quiesce is idempotent and no pods are
+// annotated yet. Disabling mid-scale-down is unsafe: already-quiesced pods carry
+// QuiesceAnnotation and reconcileQuiesceUndo stops running, leaving them
+// permanently quiesced.
+//
+// "In flight" is detected by scaleDownInFlight which covers three cases:
+//   - Total size decrease       (status.Size > spec.Size)
+//   - Rack deletion/replacement (rack ID present in status but absent from spec)
+//   - Per-rack scale-down       (rack topology shrinks even if total size is unchanged,
+//     e.g. adding a rack while keeping spec.Size the same)
+func validateParallelScaleDownToggle(oldObj, newObj *asdbv1.AerospikeCluster) error {
+	oldEnabled := ptr.Deref(oldObj.Spec.RackConfig.EnableParallelScaleDownAcrossRacks, false)
+	newEnabled := ptr.Deref(newObj.Spec.RackConfig.EnableParallelScaleDownAcrossRacks, false)
+
+	// Enabling (false → true) or unchanged: nothing to do.
+	if !oldEnabled || newEnabled {
+		return nil
+	}
+
+	// Disabling (true → false): deny if any scale-down is already in flight.
+	if scaleDownInFlight(oldObj) {
+		return fmt.Errorf(
+			"cannot disable enableParallelScaleDownAcrossRacks: scale-down is already in progress; " +
+				"wait for the cluster to reach its desired state before disabling the flag",
+		)
+	}
+
+	return nil
+}
+
+// scaleDownInFlight reports whether a scale-down (or rack deletion/replacement)
+// is currently in progress, meaning pods may already carry QuiesceAnnotation.
+//
+// Two checks are performed in two passes:
+//  1. Build a map of spec rack ID → effective pod count from the spec topology.
+//  2. Sweep status racks: a status rack missing from spec (deletion/replacement)
+//     or whose effective count exceeds the spec count (per-rack shrink) indicates
+//     an in-flight operation.
+func scaleDownInFlight(obj *asdbv1.AerospikeCluster) bool {
+	specRacks := obj.Spec.RackConfig.Racks
+	statusRacks := obj.Status.RackConfig.Racks
+
+	// Status not yet written (fresh cluster) — nothing can be in flight.
+	if len(statusRacks) == 0 {
+		return false
+	}
+
+	// Pass 1: build spec effective size per rack ID.
+	specTopology := asdbv1.DistributeItems(obj.Spec.Size, utils.Len32(specRacks))
+	specSizeByID := make(map[int]int32, len(specRacks))
+
+	for i := range specRacks {
+		specSizeByID[specRacks[i].ID] = specTopology[i]
+	}
+
+	// Pass 2: single sweep over status racks checks both conditions:
+	//   !inSpec            → rack deletion/replacement in flight
+	//   statusSize > spec  → per-rack scale-down in flight (e.g. rack added at same total size)
+	statusTopology := asdbv1.DistributeItems(obj.Status.Size, utils.Len32(statusRacks))
+
+	for i := range statusRacks {
+		specSize, inSpec := specSizeByID[statusRacks[i].ID]
+		if !inSpec || statusTopology[i] > specSize {
+			return true
+		}
+	}
+
+	return false
+}
+
 func validateConcurrentRackRevisions(oldObj, newObj *asdbv1.AerospikeCluster) error {
 	// Group racks by ID to check for concurrent revisions across all three sources:
 	// 1. Old Status
@@ -927,7 +1005,7 @@ func validateRackRevisionChange(oldObj, newObj *asdbv1.AerospikeCluster) error {
 
 	// Rejecting on the first namespace that breaks a rule means survivors have to
 	// satisfy every namespace.
-	for nsName, conf := range getNsConfForNamespaces(newObj.Spec.RackConfig) {
+	for nsName, conf := range getNsConfForNamespaces(&newObj.Spec.RackConfig) {
 		// AP and SC. validateBatchSize already rejects RF 1 when a batch is set; this
 		// covers the unset-batch case (one pod per pass).
 		if conf.replicationFactor <= 1 {
@@ -1321,7 +1399,7 @@ type nsConf struct {
 	scEnabled              bool
 }
 
-func getNsConfForNamespaces(rackConfig asdbv1.RackConfig) map[string]nsConf {
+func getNsConfForNamespaces(rackConfig *asdbv1.RackConfig) map[string]nsConf {
 	nsConfs := map[string]nsConf{}
 
 	for idx := range rackConfig.Racks {
@@ -2205,7 +2283,7 @@ func validateBatchSize(batchSize *intstr.IntOrString, rollingUpdateBatch bool, c
 			return fmt.Errorf("can not use %s when number of racks is less than two", fieldPath)
 		}
 
-		nsConfsNamespaces := getNsConfForNamespaces(rackConfig)
+		nsConfsNamespaces := getNsConfForNamespaces(&rackConfig)
 		for ns, nsConf := range nsConfsNamespaces {
 			if !isNameExist(rackConfig.Namespaces, ns) {
 				return fmt.Errorf(

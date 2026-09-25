@@ -17,6 +17,7 @@ import (
 	"k8s.io/apimachinery/pkg/util/intstr"
 	"k8s.io/apimachinery/pkg/util/sets"
 	"k8s.io/client-go/util/retry"
+	"k8s.io/utils/ptr"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 
 	asdbv1 "github.com/aerospike/aerospike-kubernetes-operator/v4/api/v1"
@@ -26,7 +27,7 @@ import (
 	"github.com/aerospike/aerospike-management-lib/asconfig"
 )
 
-type scaledDownRack struct {
+type rackWithSTS struct {
 	rackSTS   *appsv1.StatefulSet
 	rackState *RackState
 }
@@ -40,8 +41,8 @@ func (r *SingleClusterReconciler) reconcileRacks(ctx context.Context) common.Rec
 	r.Log.Info("Reconciling rack for AerospikeCluster")
 
 	var (
-		scaledDownRackList []scaledDownRack
-		res                common.ReconcileResult
+		scaledDownRacks []rackWithSTS
+		res             common.ReconcileResult
 	)
 
 	configuredRacks, revisionChangedRacks, racksToDelete, err := r.categoriseRacks(ctx)
@@ -65,32 +66,8 @@ func (r *SingleClusterReconciler) reconcileRacks(ctx context.Context) common.Rec
 	// Handle failed pods for each configured rack. For revision-changed racks,
 	// handleFailedPodsInRack only inspects new-revision STS pods — old-revision
 	// STS pods are invisible to it. Check them explicitly before proceeding.
-	for idx := range configuredRacks {
-		state := &configuredRacks[idx]
-
-		if revisionChangedRackInfo, ok := revisionChangedRacks[state.Rack.ID]; ok {
-			oldRack := revisionChangedRackInfo.oldRack
-			if res = r.checkRackPodsHealthy(ctx, oldRack.Rack.ID, oldRack.Rack.Revision, ignorablePodNames); !res.IsSuccess {
-				return res
-			}
-		}
-
-		found := &appsv1.StatefulSet{}
-		stsName := utils.GetNamespacedNameForSTSOrConfigMap(r.aeroCluster,
-			utils.GetRackIdentifier(state.Rack.ID, state.Rack.Revision))
-
-		if err = r.Get(ctx, stsName, found); err != nil {
-			if !k8serrors.IsNotFound(err) {
-				return common.ReconcileError(err)
-			}
-
-			continue
-		}
-
-		// Handle failed pods for this rack (two-pass: reconcile then restart if not recovered)
-		if res = r.handleFailedPodsInRack(ctx, found, state, ignorablePodNames); !res.IsSuccess {
-			return res
-		}
+	if res = r.handleFailedPodsForAllRacks(ctx, configuredRacks, revisionChangedRacks, ignorablePodNames); !res.IsSuccess {
+		return res
 	}
 
 	// All racks either passed handleFailedPodsInRack or had their old-revision
@@ -109,6 +86,13 @@ func (r *SingleClusterReconciler) reconcileRacks(ctx context.Context) common.Rec
 	); err != nil {
 		return common.ReconcileError(fmt.Errorf("mark reconcile in progress: %w", err))
 	}
+
+	// Classification pass: sort racks into scaled-down vs non-scaled-down lists
+	// without calling reconcileRack yet. When the batch-quiesce feature is
+	// enabled, reconcileQuiesceUndo runs before any reconcileRack call so that
+	// pods quiesced by a prior pre-pass are restored to full membership before
+	// rolling restarts or config updates execute on them.
+	var nonScaledDownRacks []rackWithSTS
 
 	for idx := range configuredRacks {
 		state := &configuredRacks[idx]
@@ -139,23 +123,51 @@ func (r *SingleClusterReconciler) reconcileRacks(ctx context.Context) common.Rec
 			}
 		}
 
-		// Get list of scaled down racks
 		if *found.Spec.Replicas > state.Size {
-			scaledDownRackList = append(scaledDownRackList, scaledDownRack{rackSTS: found, rackState: state})
+			scaledDownRacks = append(scaledDownRacks, rackWithSTS{rackSTS: found, rackState: state})
 		} else {
-			// Reconcile other statefulset
-			if res = r.reconcileRack(
-				ctx, found, state, ignorablePodNames, nil,
-			); !res.IsSuccess {
-				return res
-			}
+			nonScaledDownRacks = append(nonScaledDownRacks, rackWithSTS{rackSTS: found, rackState: state})
 		}
 	}
 
-	// Reconcile scaledDownRacks after all other racks are reconciled
-	for idx := range scaledDownRackList {
-		state := scaledDownRackList[idx].rackState
-		sts := scaledDownRackList[idx].rackSTS
+	// Cross-rack parallel quiesce pre-pass (opt-in via EnableParallelScaleDownAcrossRacks).
+	// The webhook prevents disabling the flag mid-scale-down, so a disabled flag
+	// can never leave stale QuiesceAnnotation pods requiring cleanup.
+	parallelScaleDownEnabled := ptr.Deref(r.aeroCluster.Spec.RackConfig.EnableParallelScaleDownAcrossRacks, false)
+
+	var allTargets []*corev1.Pod
+
+	if parallelScaleDownEnabled {
+		// Collect scale-down candidates and undo any stale quiesces from a prior
+		// (possibly reverted) scale-down before non-scaled-down racks are reconciled.
+		if allTargets, res = r.buildScaleDownTargets(ctx, scaledDownRacks, racksToDelete); !res.IsSuccess {
+			return res
+		}
+
+		if res = r.reconcileQuiesceUndo(ctx, allTargets, ignorablePodNames); !res.IsSuccess {
+			return res
+		}
+	}
+
+	// Reconcile non-scaled-down racks (always, regardless of flag).
+	for idx := range nonScaledDownRacks {
+		rack := &nonScaledDownRacks[idx]
+		if res = r.reconcileRack(ctx, rack.rackSTS, rack.rackState, ignorablePodNames, nil); !res.IsSuccess {
+			return res
+		}
+	}
+
+	if parallelScaleDownEnabled {
+		// Quiesce all scale-down candidates at once — single concurrent migration round.
+		if res = r.reconcileParallelScaleDownQuiesce(ctx, allTargets, ignorablePodNames); !res.IsSuccess {
+			return res
+		}
+	}
+
+	// Reconcile scaled-down racks.
+	for idx := range scaledDownRacks {
+		state := scaledDownRacks[idx].rackState
+		sts := scaledDownRacks[idx].rackSTS
 
 		if res = r.reconcileRack(ctx, sts, state, ignorablePodNames, nil); !res.IsSuccess {
 			return res
@@ -178,6 +190,47 @@ func (r *SingleClusterReconciler) reconcileRacks(ctx context.Context) common.Rec
 	// might not be ready if they are running long-running init scripts or
 	// aerospike index load.
 	return r.waitForAllRacksReady(ctx, configuredRacks, ignorablePodNames)
+}
+
+// handleFailedPodsForAllRacks iterates every configured rack and ensures failed
+// pods are handled before the main reconcile loop begins. For revision-changed
+// racks, old-revision STS pods are invisible to handleFailedPodsInRack, so
+// they are checked explicitly via checkRackPodsHealthy first.
+func (r *SingleClusterReconciler) handleFailedPodsForAllRacks(
+	ctx context.Context,
+	configuredRacks []RackState,
+	revisionChangedRacks map[int]revisionChangedRack,
+	ignorablePodNames sets.Set[string],
+) common.ReconcileResult {
+	for idx := range configuredRacks {
+		state := &configuredRacks[idx]
+
+		if rackInfo, ok := revisionChangedRacks[state.Rack.ID]; ok {
+			oldRack := rackInfo.oldRack
+			if res := r.checkRackPodsHealthy(ctx, oldRack.Rack.ID, oldRack.Rack.Revision, ignorablePodNames); !res.IsSuccess {
+				return res
+			}
+		}
+
+		found := &appsv1.StatefulSet{}
+		stsName := utils.GetNamespacedNameForSTSOrConfigMap(r.aeroCluster,
+			utils.GetRackIdentifier(state.Rack.ID, state.Rack.Revision))
+
+		if err := r.Get(ctx, stsName, found); err != nil {
+			if !k8serrors.IsNotFound(err) {
+				return common.ReconcileError(err)
+			}
+
+			continue
+		}
+
+		// Two-pass: reconcile then restart if not recovered.
+		if res := r.handleFailedPodsInRack(ctx, found, state, ignorablePodNames); !res.IsSuccess {
+			return res
+		}
+	}
+
+	return common.ReconcileSuccess()
 }
 
 // waitForAllRacksReady waits for every configured rack's StatefulSet pods to

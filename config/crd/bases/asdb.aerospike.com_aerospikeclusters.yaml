@@ -5409,6 +5409,13 @@ spec:
                   RackConfig Configures the operator to deploy rack aware Aerospike cluster.
                   Pods will be deployed in given racks based on given configuration
                 properties:
+                  enableParallelScaleDownAcrossRacks:
+                    description: |-
+                      EnableParallelScaleDownAcrossRacks enables the cross-rack parallel quiesce during scale-down.
+                      When true, the operator quiesces all scale-down candidate pods across all racks simultaneously
+                      before deleting the pods per rack.
+                      Disabled by default (nil / false).
+                    type: boolean
                   maxIgnorablePods:
                     anyOf:
                     - type: integer
@@ -15053,6 +15060,13 @@ spec:
                   Pods will be deployed in given racks based on given configuration
                 nullable: true
                 properties:
+                  enableParallelScaleDownAcrossRacks:
+                    description: |-
+                      EnableParallelScaleDownAcrossRacks enables the cross-rack parallel quiesce during scale-down.
+                      When true, the operator quiesces all scale-down candidate pods across all racks simultaneously
+                      before deleting the pods per rack.
+                      Disabled by default (nil / false).
+                    type: boolean
                   maxIgnorablePods:
                     anyOf:
                     - type: integer
