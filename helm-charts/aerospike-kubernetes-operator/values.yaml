@@ -38,11 +38,38 @@ metricsPort: 8443 # @schema required; minimum: 1; maximum: 65535
 
 # -- Certificate configuration for the webhook and metrics endpoints
 certs: # @schema required; additionalProperties: false
+  # @schema allOf: [{type: object}, {if: {properties: {provider: {const: external}}, required: [provider]}, then: {required: [external], properties: {external: {required: [caBundle], properties: {caBundle: {minLength: 1}}}}}}]
+  # @schema additionalProperties: false
   # -- Webhook server certificate configuration
-  webhook: # @schema required; additionalProperties: false
-    create: true # @schema required
+  webhook: # @schema required
+    # -- How the webhook serving certificate is provided.
+    # certManager: chart creates the cert-manager Issuer/Certificate (requires cert-manager).
+    # selfSigned: chart generates the cert and Secret itself. Dev/POC only, see README.
+    # external: you pre-create the Secret and supply external.caBundle.
+    # Empty infers the mode from the deprecated `create` flag (4.5.0 compatibility).
+    provider: "" # @schema enum: ["", certManager, selfSigned, external]
+
+    # -- DEPRECATED: use `provider` instead. Only consulted when `provider` is empty.
+    # Will be removed in a future release.
+    create: true
+
     # -- Name of the secret holding the webhook server certificate
     webhookServerCertSecretName: "webhook-server-cert" # @schema required; minLength: 1
+
+    # -- Reserved for future cert-manager tuning (issuerRef, duration, renewBefore)
+    certManager: {} # @schema additionalProperties: false
+
+    # -- Reserved for future self-signed tuning (duration). Dev/POC only
+    selfSigned: {} # @schema additionalProperties: false
+
+    external: # @schema additionalProperties: false
+      # -- Base64-encoded PEM CA bundle that signed the webhook serving certificate
+      # (not the serving certificate itself). Required when provider is external.
+      # Surrounding and embedded whitespace is stripped before rendering, so wrapped
+      # output and a trailing newline are fine — reading it from a `base64` file works.
+      # A whitespace-only value is rejected: it would strip to empty and silently render
+      # a webhook config with no caBundle.
+      caBundle: "" # @schema pattern:^(|\s*[A-Za-z0-9+/][A-Za-z0-9+/\s]*={0,2}\s*)$
 
   # @schema allOf: [{type: object}, {if: {properties: {create: {const: true}}, required: [create]}, then: {properties: {metricsServerCertSecretName: {minLength: 1}}, required: [metricsServerCertSecretName]}}]
   # @schema additionalProperties: false
@@ -52,8 +79,8 @@ certs: # @schema required; additionalProperties: false
     # -- Name of the secret holding the metrics server certificate
     metricsServerCertSecretName: "metrics-server-cert"
 
-# -- Operator manager logging (controller-runtime / Zap)
-# development must stay set; level/encoder are optional (update value or use --set).
+# -- Operator manager logging (controller-runtime / Zap).
+# `development` must stay set; level/encoder are optional (set them in values or on the CLI).
 logging: # @schema required; additionalProperties: false
   development: true # @schema required
   # -- (Optional) Zap log level (--zap-log-level): debug, info, error, panic, or a positive integer for custom verbosity. Empty leaves the flag off

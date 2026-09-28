@@ -1,4 +1,4 @@
-{{- if .Values.certs.webhook.create }}
+{{- if include "aerospike-kubernetes-operator.webhookCreateCertManagerResources" . }}
 apiVersion: cert-manager.io/v1
 kind: Certificate
 metadata:
@@ -10,8 +10,7 @@ metadata:
     release: {{ .Release.Name }}
 spec:
   dnsNames:
-  - aerospike-operator-webhook-service.{{ .Release.Namespace }}.svc
-  - aerospike-operator-webhook-service.{{ .Release.Namespace }}.svc.cluster.local
+{{- include "aerospike-kubernetes-operator.webhookDnsNames" . | nindent 2 }}
   issuerRef:
     kind: Issuer
     name: aerospike-operator-selfsigned-issuer
