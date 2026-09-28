@@ -419,6 +419,8 @@ func expectCheckpoint(
 
 		resp, err = asConn.CheckpointStatus(clientPolicy)
 
+		pkgLog.Info("Checkpoint response resp", "resp", resp, "error", err)
+
 		return err == nil && resp.IsParked
 	}, 5*time.Minute, 2*time.Second).Should(BeTrue(),
 		"no Pod in %v ever reported an index-checkpoint park that the server confirmed",
