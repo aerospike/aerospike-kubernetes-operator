@@ -261,3 +261,11 @@ func newTestAerospikeCluster(namespace, name string) *asdbv1.AerospikeCluster {
 		},
 	}
 }
+
+// newDefaultReconciler creates a SingleClusterReconciler for namespace/clusterName
+// using a no-op interceptor. Use this for tests that do not need a custom
+// AerospikeCluster spec.
+func newDefaultReconciler(t *testing.T, objects ...client.Object) *SingleClusterReconciler {
+	t.Helper()
+	return newTestReconciler(t, newTestAerospikeCluster(namespace, clusterName), &interceptor.Funcs{}, objects...)
+}

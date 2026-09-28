@@ -644,6 +644,13 @@ type RackConfig struct { //nolint:govet // for readability
 	// +optional
 	ScaleDownBatchSize *intstr.IntOrString `json:"scaleDownBatchSize,omitempty"`
 
+	// EnableParallelScaleDownAcrossRacks enables the cross-rack parallel quiesce during scale-down.
+	// When true, the operator quiesces all scale-down candidate pods across all racks simultaneously
+	// before deleting the pods per rack.
+	// Disabled by default (nil / false).
+	// +optional
+	EnableParallelScaleDownAcrossRacks *bool `json:"enableParallelScaleDownAcrossRacks,omitempty"`
+
 	// MaxIgnorablePods is the maximum number/percentage of pending/failed pods in a rack that are ignored while
 	// assessing cluster stability. Pods identified using this value are not considered part of the cluster.
 	// Additionally, in SC mode clusters, these pods are removed from the roster.
