@@ -30,9 +30,11 @@ import (
 	ctrl "sigs.k8s.io/controller-runtime"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 	"sigs.k8s.io/controller-runtime/pkg/client/interceptor"
+	"sigs.k8s.io/controller-runtime/pkg/controller/controllerutil"
 
 	asdbv1 "github.com/aerospike/aerospike-kubernetes-operator/v4/api/v1"
 	"github.com/aerospike/aerospike-kubernetes-operator/v4/pkg/utils"
+	"github.com/stretchr/testify/require"
 )
 
 // clusterLabels returns the standard AKO labels for a cluster with the given name.
@@ -541,4 +543,36 @@ func TestHandleTerminatingCluster(t *testing.T) {
 			}
 		})
 	}
+}
+
+// TestAddFinalizer_IdempotentViaPatch verifies that addFinalizer uses a patch
+// (not a full Update) and is idempotent when called twice.
+func TestAddFinalizer_IdempotentViaPatch(t *testing.T) {
+	const finalizerName = "test.aerospike.com/finalizer"
+
+	aeroCluster := &asdbv1.AerospikeCluster{
+		ObjectMeta: metav1.ObjectMeta{
+			Name:            clusterName,
+			Namespace:       namespace,
+			ResourceVersion: "1",
+		},
+	}
+
+	r := newTestReconciler(t, aeroCluster, &interceptor.Funcs{})
+
+	// First call — should add the finalizer.
+	require.NoError(t, r.addFinalizer(context.Background(), finalizerName))
+
+	// Verify the patch reached the store (not just the in-memory object).
+	stored := getCluster(t, r.Client, aeroCluster)
+	require.True(t, controllerutil.ContainsFinalizer(stored, finalizerName))
+
+	// Capture resource version: a no-op second call must not issue another patch.
+	rvAfterFirst := stored.ResourceVersion
+
+	require.NoError(t, r.addFinalizer(context.Background(), finalizerName))
+
+	stored = getCluster(t, r.Client, aeroCluster)
+	require.Equal(t, rvAfterFirst, stored.ResourceVersion,
+		"resource version must not change when finalizer is already present")
 }

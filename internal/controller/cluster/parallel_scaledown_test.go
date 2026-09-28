@@ -1,0 +1,442 @@
+/*
+Copyright 2024.
+
+Licensed under the Apache License, Version 2.0 (the "License");
+you may not use this file except in compliance with the License.
+You may obtain a copy of the License at
+
+    http://www.apache.org/licenses/LICENSE-2.0
+
+Unless required by applicable law or agreed to in writing, software
+distributed under the License is distributed on an "AS IS" BASIS,
+WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+See the License for the specific language governing permissions and
+limitations under the License.
+*/
+
+package cluster
+
+// Unit tests for the cross-rack batch quiesce functions:
+//   - buildScaleDownTargets
+//   - reconcileQuiesceUndo (annotation fast-exit only — Aerospike calls mocked)
+//   - setPodQuiesceAnnotation
+//
+// All tests use the fake k8s client (no real cluster, no Aerospike info calls).
+
+import (
+	"context"
+	"testing"
+
+	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/require"
+	appsv1 "k8s.io/api/apps/v1"
+	corev1 "k8s.io/api/core/v1"
+	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
+	"k8s.io/apimachinery/pkg/util/intstr"
+	"k8s.io/apimachinery/pkg/util/sets"
+	"sigs.k8s.io/controller-runtime/pkg/client"
+	"sigs.k8s.io/controller-runtime/pkg/client/interceptor"
+
+	asdbv1 "github.com/aerospike/aerospike-kubernetes-operator/v4/api/v1"
+	"github.com/aerospike/aerospike-kubernetes-operator/v4/pkg/utils"
+)
+
+// ─── helpers ──────────────────────────────────────────────────────────────
+
+// makeRackPod creates a pod with the labels that getOrderedRackPodList uses.
+//
+//nolint:unparam // ns is always "test-ns" in current tests; kept for clarity
+func makeRackPod(name, ns, cluster string, rackID int, running bool) *corev1.Pod {
+	pod := &corev1.Pod{
+		ObjectMeta: metav1.ObjectMeta{
+			Name:      name,
+			Namespace: ns,
+			Labels:    utils.LabelsForAerospikeClusterRack(cluster, rackID, ""),
+		},
+	}
+
+	if running {
+		pod.Status = corev1.PodStatus{
+			Phase:             corev1.PodRunning,
+			ContainerStatuses: []corev1.ContainerStatus{serverContainer(true)},
+		}
+	} else {
+		pod.Status = corev1.PodStatus{
+			Phase:             corev1.PodRunning,
+			ContainerStatuses: []corev1.ContainerStatus{serverCrashLoopContainer()},
+		}
+	}
+
+	return pod
+}
+
+// makeRackSTS creates an STS for a rack with the given replica count.
+//
+//nolint:unparam // name always receives clusterName+"-1" in current tests; kept for clarity
+func makeRackSTS(name, ns, cluster string, rackID int, replicas int32) *appsv1.StatefulSet {
+	return &appsv1.StatefulSet{
+		ObjectMeta: metav1.ObjectMeta{
+			Name:      name,
+			Namespace: ns,
+			Labels:    utils.LabelsForAerospikeClusterRack(cluster, rackID, ""),
+		},
+		Spec: appsv1.StatefulSetSpec{
+			Replicas: &replicas,
+		},
+	}
+}
+
+// withCRStatus adds a CR status entry for podName (simulates a pod that has
+// previously joined the cluster).
+func withCRStatus(aeroCluster *asdbv1.AerospikeCluster, podNames ...string) {
+	if aeroCluster.Status.Pods == nil {
+		aeroCluster.Status.Pods = make(map[string]asdbv1.AerospikePodStatus)
+	}
+
+	for _, name := range podNames {
+		aeroCluster.Status.Pods[name] = asdbv1.AerospikePodStatus{}
+	}
+}
+
+// withAnnotation sets the QuiesceAnnotation on the pod.
+func withAnnotation(pod *corev1.Pod) *corev1.Pod {
+	if pod.Annotations == nil {
+		pod.Annotations = make(map[string]string)
+	}
+
+	pod.Annotations[asdbv1.QuiesceAnnotation] = asdbv1.QuiesceAnnotationValue
+
+	return pod
+}
+
+// ══════════════════════════════════════════════════════════════════════════
+// buildScaleDownTargets
+// ══════════════════════════════════════════════════════════════════════════
+
+// TestBuildScaleDownTargets_EmptyInputs verifies that passing empty rack slices
+// returns an empty target list without error.
+func TestBuildScaleDownTargets_EmptyInputs(t *testing.T) {
+	r := newDefaultReconciler(t)
+
+	targets, res := r.buildScaleDownTargets(context.Background(), nil, nil)
+
+	require.True(t, res.IsSuccess)
+	assert.Empty(t, targets)
+}
+
+// TestBuildScaleDownTargets_ScaledDownRacks verifies that only the "diff" pods
+// (orderedPods[:diffPods]) are returned as targets.
+func TestBuildScaleDownTargets_ScaledDownRacks(t *testing.T) {
+	// Rack 1: STS has 3 replicas, desired size 1 → diff = 2; pods 0, 1, 2 exist.
+	// Expected targets: pods 1 and 2 (the top-2 in ordered list).
+	pods := []*corev1.Pod{
+		makeRackPod(clusterName+"-1-0", namespace, clusterName, 1, true),
+		makeRackPod(clusterName+"-1-1", namespace, clusterName, 1, true),
+		makeRackPod(clusterName+"-1-2", namespace, clusterName, 1, true),
+	}
+
+	sts := makeRackSTS(clusterName+"-1", namespace, clusterName, 1, 3)
+	r := newDefaultReconciler(t, sts, pods[0], pods[1], pods[2])
+
+	rack := asdbv1.Rack{ID: 1}
+	rackState := &RackState{Rack: &rack, Size: 1}
+	scaledDown := []rackWithSTS{{rackSTS: sts, rackState: rackState}}
+
+	targets, res := r.buildScaleDownTargets(context.Background(), scaledDown, nil)
+
+	require.True(t, res.IsSuccess)
+	// Diff is 2: the top-2 pods in descending order are index 2 and 1.
+	assert.Len(t, targets, 2)
+}
+
+// TestBuildScaleDownTargets_RacksToDelete verifies that pods from racks in
+// racksToDelete (nil STS = all pods are targets) are included.
+func TestBuildScaleDownTargets_RacksToDelete(t *testing.T) {
+	// Rack 2 is being deleted; it has 2 pods.
+	pods := []*corev1.Pod{
+		makeRackPod(clusterName+"-2-0", namespace, clusterName, 2, true),
+		makeRackPod(clusterName+"-2-1", namespace, clusterName, 2, true),
+	}
+
+	r := newDefaultReconciler(t, pods[0], pods[1])
+
+	rack := asdbv1.Rack{ID: 2}
+	racksToDelete := []asdbv1.Rack{rack}
+
+	targets, res := r.buildScaleDownTargets(context.Background(), nil, racksToDelete)
+
+	require.True(t, res.IsSuccess)
+	assert.Len(t, targets, 2, "both rack-2 pods should be targets")
+}
+
+// TestBuildScaleDownTargets_NoReadinessCheck verifies that buildScaleDownTargets
+// does not reject non-running pods — readiness is handled by waitForMultipleNodesSafeStopReady.
+func TestBuildScaleDownTargets_NoReadinessCheck(t *testing.T) {
+	aeroCluster := newTestAerospikeCluster(namespace, clusterName)
+	withCRStatus(aeroCluster, clusterName+"-1-1")
+
+	pods := []*corev1.Pod{
+		makeRackPod(clusterName+"-1-0", namespace, clusterName, 1, true),
+		makeRackPod(clusterName+"-1-1", namespace, clusterName, 1, false), // not running
+	}
+
+	sts := makeRackSTS(clusterName+"-1", namespace, clusterName, 1, 2)
+	objects := []client.Object{sts, pods[0], pods[1]}
+	r := newTestReconciler(t, aeroCluster, &interceptor.Funcs{}, objects...)
+
+	rack := asdbv1.Rack{ID: 1}
+	rackState := &RackState{Rack: &rack, Size: 1}
+	scaledDown := []rackWithSTS{{rackSTS: sts, rackState: rackState}}
+
+	targets, res := r.buildScaleDownTargets(context.Background(), scaledDown, nil)
+
+	// buildScaleDownTargets must succeed — no readiness check performed here.
+	require.True(t, res.IsSuccess, "buildScaleDownTargets should not check readiness")
+	assert.Len(t, targets, 1)
+}
+
+// TestBuildScaleDownTargets_ScaleDownBatchSizeIgnored verifies that
+// buildScaleDownTargets collects ALL diff pods regardless of ScaleDownBatchSize.
+// The batch-size gating happens inside scaleDownRack, not here.
+func TestBuildScaleDownTargets_ScaleDownBatchSizeIgnored(t *testing.T) {
+	aeroCluster := newTestAerospikeCluster(namespace, clusterName)
+	batchOne := intstr.FromInt32(1)
+	aeroCluster.Spec.RackConfig.ScaleDownBatchSize = &batchOne
+
+	pods := []*corev1.Pod{
+		makeRackPod(clusterName+"-1-0", namespace, clusterName, 1, true),
+		makeRackPod(clusterName+"-1-1", namespace, clusterName, 1, true),
+		makeRackPod(clusterName+"-1-2", namespace, clusterName, 1, true),
+	}
+
+	var stsReplicas int32 = 3
+
+	sts := makeRackSTS(clusterName+"-1", namespace, clusterName, 1, stsReplicas)
+
+	r := newTestReconciler(t, aeroCluster, &interceptor.Funcs{},
+		pods[0], pods[1], pods[2],
+	)
+
+	rack := asdbv1.Rack{ID: 1}
+	rackState := &RackState{Rack: &rack, Size: 1}
+	scaledDown := []rackWithSTS{{rackSTS: sts, rackState: rackState}}
+
+	targets, res := r.buildScaleDownTargets(context.Background(), scaledDown, nil)
+
+	require.True(t, res.IsSuccess)
+	// All 2 diff pods must be returned regardless of ScaleDownBatchSize=1.
+	assert.Len(t, targets, 2,
+		"buildScaleDownTargets must return ALL diff pods; batch-size gating is done by scaleDownRack")
+}
+
+// ══════════════════════════════════════════════════════════════════════════
+// reconcileQuiesceUndo — annotation fast-exit only
+// (Aerospike info calls are not exercised in unit tests)
+// ══════════════════════════════════════════════════════════════════════════
+
+// TestReconcileQuiesceUndo_FastExit_NoAnnotatedNonTargets verifies that
+// reconcileQuiesceUndo returns immediately without error when no non-target pod
+// carries the QuiesceAnnotation.
+func TestReconcileQuiesceUndo_FastExit_NoAnnotatedNonTargets(t *testing.T) {
+	// Two running pods; neither has the quiesce annotation.
+	pod0 := makeRackPod(clusterName+"-1-0", namespace, clusterName, 1, true)
+	pod1 := makeRackPod(clusterName+"-1-1", namespace, clusterName, 1, true)
+	r := newDefaultReconciler(t, pod0, pod1)
+
+	res := r.reconcileQuiesceUndo(context.Background(), []*corev1.Pod{pod1}, sets.New[string]())
+
+	require.True(t, res.IsSuccess, "should fast-exit when no non-target pod is annotated")
+}
+
+// TestReconcileQuiesceUndo_FastExit_OnlyTargetsAnnotated verifies that
+// reconcileQuiesceUndo fast-exits when only target pods carry the annotation
+// (non-target pods do not have it).
+func TestReconcileQuiesceUndo_FastExit_OnlyTargetsAnnotated(t *testing.T) {
+	// pod0 is a non-target (no annotation); pod1 is a target (with annotation).
+	pod0 := makeRackPod(clusterName+"-1-0", namespace, clusterName, 1, true)
+	pod1 := withAnnotation(makeRackPod(clusterName+"-1-1", namespace, clusterName, 1, true))
+	r := newDefaultReconciler(t, pod0, pod1)
+
+	res := r.reconcileQuiesceUndo(context.Background(), []*corev1.Pod{pod1}, sets.New[string]())
+
+	// annotatedNonTargets is empty → fast-exit → success without Aerospike calls.
+	require.True(t, res.IsSuccess,
+		"should fast-exit when only target pods are annotated (non-targets have no annotation)")
+}
+
+// TestReconcileQuiesceUndo_AnnotatedNonTargetDetected verifies that an annotated
+// non-target pod is detected and the undo path is reached (not the fast-exit path).
+func TestReconcileQuiesceUndo_AnnotatedNonTargetDetected(t *testing.T) {
+	// pod0 is a non-target WITH the annotation — should trigger undo logic.
+	pod0 := withAnnotation(makeRackPod(clusterName+"-1-0", namespace, clusterName, 1, true))
+	pod1 := makeRackPod(clusterName+"-1-1", namespace, clusterName, 1, true) // target
+	r := newDefaultReconciler(t, pod0, pod1)
+
+	res := r.reconcileQuiesceUndo(context.Background(), []*corev1.Pod{pod1}, sets.New[string]())
+
+	// pod0 is an annotated non-target — the function must proceed past the fast-exit
+	// and reach InfoQuiesceUndoSubset, which always fails without a real cluster.
+	require.False(t, res.IsSuccess, "should fail when InfoQuiesceUndoSubset cannot reach the cluster")
+}
+
+// ══════════════════════════════════════════════════════════════════════════
+// setPodQuiesceAnnotation
+// ══════════════════════════════════════════════════════════════════════════
+
+// TestSetPodQuiesceAnnotation covers add, remove, and no-op cases.
+func TestSetPodQuiesceAnnotation(t *testing.T) {
+	tests := []struct {
+		name       string
+		startAnnot bool // whether the pod carries the annotation before the call
+		add        bool // argument passed to setPodQuiesceAnnotation
+		wantAnnot  bool // expected annotation state afterwards
+	}{
+		{name: "add", startAnnot: false, add: true, wantAnnot: true},
+		{name: "remove", startAnnot: true, add: false, wantAnnot: false},
+		{name: "already set", startAnnot: true, add: true, wantAnnot: true},
+		{name: "already absent", startAnnot: false, add: false, wantAnnot: false},
+	}
+
+	for _, tc := range tests {
+		t.Run(tc.name, func(t *testing.T) {
+			pod := makeRackPod(clusterName+"-1-0", namespace, clusterName, 1, true)
+
+			pod.ResourceVersion = "1"
+			if tc.startAnnot {
+				withAnnotation(pod)
+			}
+
+			r := newDefaultReconciler(t, pod)
+
+			require.NoError(t, r.setPodQuiesceAnnotation(context.Background(), pod, tc.add))
+
+			wantVal := ""
+			if tc.wantAnnot {
+				wantVal = asdbv1.QuiesceAnnotationValue
+			}
+
+			assert.Equal(t, wantVal, pod.Annotations[asdbv1.QuiesceAnnotation], "in-memory pod")
+
+			stored := &corev1.Pod{}
+			require.NoError(t, r.Get(context.Background(), client.ObjectKeyFromObject(pod), stored))
+			assert.Equal(t, wantVal, stored.Annotations[asdbv1.QuiesceAnnotation], "stored pod")
+		})
+	}
+}
+
+// ══════════════════════════════════════════════════════════════════════════
+// getAllScaleDownPods
+// ══════════════════════════════════════════════════════════════════════════
+
+// TestGetAllScaleDownPods_NilSTS verifies that a nil STS (racksToDelete path)
+// returns all existing pods.
+func TestGetAllScaleDownPods_NilSTS(t *testing.T) {
+	pods := []*corev1.Pod{
+		makeRackPod(clusterName+"-2-0", namespace, clusterName, 2, true),
+		makeRackPod(clusterName+"-2-1", namespace, clusterName, 2, true),
+	}
+
+	r := newDefaultReconciler(t, pods[0], pods[1])
+
+	rack := asdbv1.Rack{ID: 2}
+	rackState := &RackState{Rack: &rack, Size: 0}
+	entry := rackWithSTS{rackSTS: nil, rackState: rackState}
+
+	result, err := r.getAllScaleDownPods(context.Background(), entry)
+
+	require.NoError(t, err)
+	assert.Len(t, result, 2, "nil STS should return all pods")
+}
+
+// TestGetAllScaleDownPods_DiffCalculation verifies that the diff calculation
+// returns only the excess pods when STS replicas > desired size.
+func TestGetAllScaleDownPods_DiffCalculation(t *testing.T) {
+	pods := []*corev1.Pod{
+		makeRackPod(clusterName+"-1-0", namespace, clusterName, 1, true),
+		makeRackPod(clusterName+"-1-1", namespace, clusterName, 1, true),
+		makeRackPod(clusterName+"-1-2", namespace, clusterName, 1, true),
+	}
+
+	sts := makeRackSTS(clusterName+"-1", namespace, clusterName, 1, 3)
+	r := newDefaultReconciler(t, pods[0], pods[1], pods[2])
+
+	rack := asdbv1.Rack{ID: 1}
+	rackState := &RackState{Rack: &rack, Size: 1} // desired = 1, diff = 2
+	entry := rackWithSTS{rackSTS: sts, rackState: rackState}
+
+	result, err := r.getAllScaleDownPods(context.Background(), entry)
+
+	require.NoError(t, err)
+	assert.Len(t, result, 2, "diff of 2 should return 2 target pods")
+}
+
+// TestGetAllScaleDownPods_NoDiff verifies that a zero diff returns nil.
+func TestGetAllScaleDownPods_NoDiff(t *testing.T) {
+	sts := makeRackSTS(clusterName+"-1", namespace, clusterName, 1, 2)
+	r := newDefaultReconciler(t)
+
+	rack := asdbv1.Rack{ID: 1}
+	rackState := &RackState{Rack: &rack, Size: 3} // desired >= replicas → no diff
+	entry := rackWithSTS{rackSTS: sts, rackState: rackState}
+
+	result, err := r.getAllScaleDownPods(context.Background(), entry)
+
+	require.NoError(t, err)
+	assert.Empty(t, result, "non-positive diff should return empty slice")
+}
+
+// ══════════════════════════════════════════════════════════════════════════
+// ScaleDownBatchSize helper: intstr_batchSize
+// ══════════════════════════════════════════════════════════════════════════
+
+// TestReconcileParallelScaleDownQuiesce_IgnorablePodFilteredOut verifies that pods already
+// in ignorablePodNames (added upstream by getIgnorablePods) are silently
+// excluded from the effective target list inside reconcileParallelScaleDownQuiesce so:
+//   - The annotation fast-exit fires correctly when all non-ignorable targets
+//     are already annotated.
+//   - ignorable pods are never annotated.
+func TestReconcileParallelScaleDownQuiesce_IgnorablePodFilteredOut(t *testing.T) {
+	// pod0 is annotated (quiesced by a prior pass).
+	pod0 := withAnnotation(makeRackPod(clusterName+"-1-0", namespace, clusterName, 1, true))
+	pod0.ResourceVersion = "1"
+
+	// pod1 is in ignorablePodNames (never joined) and has NO annotation.
+	pod1 := makeRackPod(clusterName+"-1-1", namespace, clusterName, 1, false)
+	pod1.ResourceVersion = "1"
+
+	r := newDefaultReconciler(t, pod0, pod1)
+
+	// allTargets includes both pods; ignorablePodNames covers pod1.
+	allTargets := []*corev1.Pod{pod0, pod1}
+	ignorable := sets.New(pod1.Name)
+
+	res := r.reconcileParallelScaleDownQuiesce(context.Background(), allTargets, ignorable)
+
+	// After filtering, effectiveTargets = [pod0] (annotated) → fast-exit.
+	// If pod1 were NOT filtered, allAnnotated would be false and the function
+	// would try to build Aerospike connections (and fail in a unit test).
+	require.True(t, res.IsSuccess,
+		"reconcileParallelScaleDownQuiesce should fast-exit when all non-ignorable targets are already annotated")
+
+	// pod1 must NOT have received the quiesce annotation.
+	stored := &corev1.Pod{}
+	require.NoError(t, r.Get(context.Background(),
+		client.ObjectKeyFromObject(pod1), stored))
+	assert.NotEqual(t, asdbv1.QuiesceAnnotationValue, stored.Annotations[asdbv1.QuiesceAnnotation],
+		"ignorable pod must not be annotated by reconcileParallelScaleDownQuiesce")
+}
+
+// TestReconcileParallelScaleDownQuiesce_AllTargetsIgnorable verifies that the function
+// returns success immediately when every allTargets pod is ignorable.
+func TestReconcileParallelScaleDownQuiesce_AllTargetsIgnorable(t *testing.T) {
+	pod0 := makeRackPod(clusterName+"-1-0", namespace, clusterName, 1, false)
+	r := newDefaultReconciler(t, pod0)
+
+	allTargets := []*corev1.Pod{pod0}
+	ignorable := sets.New(pod0.Name)
+
+	res := r.reconcileParallelScaleDownQuiesce(context.Background(), allTargets, ignorable)
+
+	require.True(t, res.IsSuccess,
+		"should succeed immediately when all targets are ignorable")
+}

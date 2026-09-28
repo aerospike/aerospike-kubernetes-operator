@@ -24,6 +24,7 @@ import (
 	"k8s.io/client-go/tools/record"
 	ctrl "sigs.k8s.io/controller-runtime"
 	"sigs.k8s.io/controller-runtime/pkg/client"
+	"sigs.k8s.io/controller-runtime/pkg/controller/controllerutil"
 	"sigs.k8s.io/controller-runtime/pkg/reconcile"
 
 	as "github.com/aerospike/aerospike-client-go/v8"
@@ -237,13 +238,9 @@ func (r *SingleClusterReconciler) Reconcile(ctx context.Context) (result ctrl.Re
 		return reconcile.Result{}, fmt.Errorf("get host connections for cluster nodes: %w", err)
 	}
 
-	if err = deployment.InfoQuiesceUndo(
-		r.Log,
-		r.getClientPolicy(ctx), allHostConns,
-	); err != nil {
-		r.computedState.failureReason = asdbv1.AerospikeClusterReasonQuiesceUndoFailed
-
-		return reconcile.Result{}, fmt.Errorf("undo quiesce state: %w", err)
+	err = r.undoQuiesceState(ctx, allHostConns)
+	if err != nil {
+		return reconcile.Result{}, err
 	}
 
 	// Setup access control.
@@ -354,6 +351,22 @@ func (r *SingleClusterReconciler) handleTerminatingCluster(ctx context.Context) 
 	)
 
 	// Stop reconciliation as the cluster is being deleted
+	return nil
+}
+
+// undoQuiesceState sends quiesce-undo to all nodes and clears any stale
+// quiesce annotations left by a prior reconcile pass.
+func (r *SingleClusterReconciler) undoQuiesceState(ctx context.Context, allHostConns []*deployment.HostConn) error {
+	if err := deployment.InfoQuiesceUndo(r.Log, r.getClientPolicy(ctx), allHostConns); err != nil {
+		r.computedState.failureReason = asdbv1.AerospikeClusterReasonQuiesceUndoFailed
+		return fmt.Errorf("undo quiesce state: %w", err)
+	}
+
+	if err := r.clearStaleQuiesceAnnotations(ctx); err != nil {
+		r.computedState.failureReason = asdbv1.AerospikeClusterReasonQuiesceUndoFailed
+		return fmt.Errorf("clear stale quiesce annotations: %w", err)
+	}
+
 	return nil
 }
 
@@ -1027,22 +1040,16 @@ func (r *SingleClusterReconciler) clearAerospikeAccessControlStatus(ctx context.
 }
 
 func (r *SingleClusterReconciler) addFinalizer(ctx context.Context, finalizerName string) error {
-	// The object is not being deleted, so if it does not have our finalizer,
-	// then lets add the finalizer and update the object. This is equivalent
-	// registering our finalizer.
-	if !utils.ContainsString(
-		r.aeroCluster.Finalizers, finalizerName,
-	) {
-		r.aeroCluster.Finalizers = append(
-			r.aeroCluster.Finalizers, finalizerName,
-		)
-
-		if err := r.Update(ctx, r.aeroCluster); err != nil {
-			return err
-		}
+	if controllerutil.ContainsFinalizer(r.aeroCluster, finalizerName) {
+		return nil
 	}
 
-	return nil
+	// MergePatch: only the finalizers field is sent, avoiding 409 conflicts
+	// from concurrent writes to spec, labels, or annotations.
+	patch := client.MergeFrom(r.aeroCluster.DeepCopy())
+	controllerutil.AddFinalizer(r.aeroCluster, finalizerName)
+
+	return r.Patch(ctx, r.aeroCluster, patch)
 }
 
 func (r *SingleClusterReconciler) cleanUpAndRemoveFinalizer(ctx context.Context, finalizerName string) error {

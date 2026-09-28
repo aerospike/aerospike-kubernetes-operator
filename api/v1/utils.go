@@ -127,7 +127,16 @@ const (
 	AerospikeAPIVersionLabel                       = "aerospike.com/api-version"
 	EvictionBlockedAnnotation                      = "aerospike.com/eviction-blocked"
 	OverrideRackIDAnnotation                       = "aerospike.com/override-rack-id"
-	AerospikeAPIVersion                            = "v1"
+	// QuiesceAnnotation is set on a pod by the operator after the
+	// cross-rack parallel quiesce pre-pass successfully quiesces it. It lets
+	// subsequent reconcile cycles skip redundant Aerospike info calls when the
+	// pod is already quiesced. The annotation is removed by reconcileQuiesceUndo
+	// when the pod no longer needs to be quiesced.
+	QuiesceAnnotation = "aerospike.com/quiesced"
+	// QuiesceAnnotationValue is the value stored in QuiesceAnnotation
+	// when the annotation is active.
+	QuiesceAnnotationValue = "true"
+	AerospikeAPIVersion    = "v1"
 	// IndexCheckpointParkedAnnotation carries the aerospike-server container ID that was
 	// parked for an index checkpoint.
 	IndexCheckpointParkedAnnotation = "aerospike.com/index-checkpoint-parked"
