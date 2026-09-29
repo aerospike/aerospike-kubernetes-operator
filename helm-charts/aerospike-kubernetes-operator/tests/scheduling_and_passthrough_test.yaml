@@ -191,3 +191,57 @@ tests:
         allowPrivilegeEscalation: true
     asserts:
       - notFailedTemplate: {}
+
+  - it: accepts arbitrary securityContext fields without schema validation
+    set:
+      securityContext:
+        runAsNonRoot: true
+        capabilities:
+          drop: ["ALL"]
+    asserts:
+      - notFailedTemplate: {}
+
+  # -- livenessProbe / readinessProbe --
+  - it: accepts probe fields as numeric strings
+    set:
+      livenessProbe:
+        initialDelaySeconds: "30"
+      readinessProbe:
+        periodSeconds: "15"
+    asserts:
+      - equal:
+          path: spec.template.spec.containers[0].livenessProbe.initialDelaySeconds
+          value: 30
+      - equal:
+          path: spec.template.spec.containers[0].readinessProbe.periodSeconds
+          value: 15
+
+  # -- resources --
+  - it: accepts integer cpu and memory quantities
+    set:
+      resources:
+        limits:
+          cpu: 1
+          memory: 536870912
+        requests:
+          cpu: 1
+          memory: 67108864
+    asserts:
+      - notFailedTemplate: {}
+
+  - it: accepts a fractional cpu quantity
+    set:
+      resources:
+        limits:
+          cpu: 0.5
+    asserts:
+      - notFailedTemplate: {}
+
+  - it: accepts string cpu and memory quantities
+    set:
+      resources:
+        limits:
+          cpu: "400m"
+          memory: "512Mi"
+    asserts:
+      - notFailedTemplate: {}

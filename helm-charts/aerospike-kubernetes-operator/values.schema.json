@@ -192,7 +192,11 @@
                 }
             ],
             "additionalProperties": {
-                "type": "string"
+                "type": [
+                    "string",
+                    "number",
+                    "boolean"
+                ]
             }
         },
         "failedPodGracePeriodSeconds": {
@@ -214,14 +218,17 @@
         },
         "healthPort": {
             "description": "Port for the operator's health probe bind address",
-            "type": "integer",
+            "type": [
+                "integer",
+                "string"
+            ],
             "maximum": 65535,
             "minimum": 1
         },
         "ignoreNamespaces": {
-            "description": "Comma-separated (no spaces) list of namespaces to ignore. Only used for eviction webhook",
+            "description": "Comma-separated list of namespaces to ignore. Only used for eviction webhook",
             "type": "string",
-            "pattern": "^$|^[a-z0-9]([-a-z0-9]*[a-z0-9])?(,[a-z0-9]([-a-z0-9]*[a-z0-9])?)*$"
+            "pattern": "^$|^ *[a-z0-9]([-a-z0-9]*[a-z0-9])? *(, *[a-z0-9]([-a-z0-9]*[a-z0-9])? *)*$"
         },
         "imagePullSecrets": {
             "description": "In case the above image is pulled from a registry that requires authentication, a secret containing credentials can be added imagePullSecrets: - secret_with_credentials_to_custom_registry",
@@ -243,24 +250,7 @@
         },
         "livenessProbe": {
             "description": "Liveness probe configuration",
-            "type": "object",
-            "properties": {
-                "failureThreshold": {
-                    "type": "integer"
-                },
-                "initialDelaySeconds": {
-                    "type": "integer"
-                },
-                "periodSeconds": {
-                    "type": "integer"
-                },
-                "successThreshold": {
-                    "type": "integer"
-                },
-                "timeoutSeconds": {
-                    "type": "integer"
-                }
-            }
+            "type": "object"
         },
         "logging": {
             "description": "Operator manager logging (controller-runtime / Zap). `development` must stay set; level/encoder are optional (set them in values or on the CLI).",
@@ -317,7 +307,10 @@
         },
         "metricsPort": {
             "description": "Port for the operator's metrics bind address",
-            "type": "integer",
+            "type": [
+                "integer",
+                "string"
+            ],
             "maximum": 65535,
             "minimum": 1
         },
@@ -338,7 +331,10 @@
                     "type": "object"
                 },
                 "port": {
-                    "type": "integer",
+                    "type": [
+                        "integer",
+                        "string"
+                    ],
                     "maximum": 65535,
                     "minimum": 1
                 },
@@ -373,7 +369,10 @@
                     "minLength": 1
                 },
                 "tag": {
-                    "type": "string",
+                    "type": [
+                        "string",
+                        "number"
+                    ],
                     "minLength": 1
                 }
             },
@@ -437,57 +436,20 @@
         },
         "readinessProbe": {
             "description": "Readiness probe configuration",
-            "type": "object",
-            "properties": {
-                "failureThreshold": {
-                    "type": "integer"
-                },
-                "initialDelaySeconds": {
-                    "type": "integer"
-                },
-                "periodSeconds": {
-                    "type": "integer"
-                },
-                "successThreshold": {
-                    "type": "integer"
-                },
-                "timeoutSeconds": {
-                    "type": "integer"
-                }
-            }
+            "type": "object"
         },
         "replicas": {
             "description": "Number of operator replicas to deploy",
-            "type": "integer",
-            "minimum": 0
+            "type": [
+                "integer",
+                "string"
+            ],
+            "minimum": 0,
+            "pattern": "^[0-9]+$"
         },
         "resources": {
             "description": "Resources - limits / requests",
-            "type": "object",
-            "properties": {
-                "limits": {
-                    "type": "object",
-                    "properties": {
-                        "cpu": {
-                            "type": "string"
-                        },
-                        "memory": {
-                            "type": "string"
-                        }
-                    }
-                },
-                "requests": {
-                    "type": "object",
-                    "properties": {
-                        "cpu": {
-                            "type": "string"
-                        },
-                        "memory": {
-                            "type": "string"
-                        }
-                    }
-                }
-            }
+            "type": "object"
         },
         "safePodEviction": {
             "description": "Enable the eviction webhook to safely block Aerospike pod evictions during node maintenance Also enables Prometheus metrics: aerospike_ako_eviction_webhook_requests_total (labels: eviction_namespace, decision)",
@@ -527,7 +489,9 @@
                             "pattern": "^([1-9]|[12][0-9]|30)$"
                         },
                         {
-                            "type": "integer"
+                            "type": "integer",
+                            "maximum": 30,
+                            "minimum": 1
                         }
                     ]
                 }
@@ -536,21 +500,16 @@
         },
         "securityContext": {
             "description": "Container security context",
-            "type": "object",
-            "properties": {
-                "allowPrivilegeEscalation": {
-                    "type": "boolean"
-                }
-            }
+            "type": "object"
         },
         "tolerations": {
             "description": "Tolerations",
             "type": "array"
         },
         "watchNamespaces": {
-            "description": "Comma-separated (no spaces) list of namespaces to watch for Aerospike custom resources",
+            "description": "Comma-separated list of namespaces to watch for Aerospike custom resources",
             "type": "string",
-            "pattern": "^$|^[a-z0-9]([-a-z0-9]*[a-z0-9])?(,[a-z0-9]([-a-z0-9]*[a-z0-9])?)*$"
+            "pattern": "^$|^ *[a-z0-9]([-a-z0-9]*[a-z0-9])? *(, *[a-z0-9]([-a-z0-9]*[a-z0-9])? *)*$"
         },
         "webhookService": {
             "description": "Service configuration",
@@ -570,12 +529,18 @@
                     "type": "object"
                 },
                 "port": {
-                    "type": "integer",
+                    "type": [
+                        "integer",
+                        "string"
+                    ],
                     "maximum": 65535,
                     "minimum": 1
                 },
                 "targetPort": {
-                    "type": "integer",
+                    "type": [
+                        "integer",
+                        "string"
+                    ],
                     "maximum": 65535,
                     "minimum": 1
                 },

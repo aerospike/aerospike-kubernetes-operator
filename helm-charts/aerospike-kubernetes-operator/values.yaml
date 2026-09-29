@@ -7,12 +7,12 @@ nameOverride: ""
 fullnameOverride: ""
 
 # -- Number of operator replicas to deploy
-replicas: 2 # @schema required; minimum: 0
+replicas: 2 # @schema required; type: [integer, string]; minimum: 0
 
 # -- Operator image
 operatorImage: # @schema required; additionalProperties: false
   repository: aerospike/aerospike-kubernetes-operator # @schema required; minLength: 1
-  tag: 4.5.0 # @schema required; minLength: 1
+  tag: 4.5.0 # @schema required; type: [string, number]; minLength: 1
   pullPolicy: IfNotPresent # @schema required
 
 # -- In case the above image is pulled from a registry that requires
@@ -31,10 +31,10 @@ rbac: # @schema required
   serviceAccountName: ""
 
 # -- Port for the operator's health probe bind address
-healthPort: 8081 # @schema required; minimum: 1; maximum: 65535
+healthPort: 8081 # @schema required; type: [integer, string]; minimum: 1; maximum: 65535
 
 # -- Port for the operator's metrics bind address
-metricsPort: 8443 # @schema required; minimum: 1; maximum: 65535
+metricsPort: 8443 # @schema required; type: [integer, string]; minimum: 1; maximum: 65535
 
 # -- Certificate configuration for the webhook and metrics endpoints
 certs: # @schema required; additionalProperties: false
@@ -93,12 +93,12 @@ logging: # @schema required; additionalProperties: false
 metrics: # @schema required; additionalProperties: false
   secure: true # @schema required
 
-# @schema required; pattern:^$|^[a-z0-9]([-a-z0-9]*[a-z0-9])?(,[a-z0-9]([-a-z0-9]*[a-z0-9])?)*$
-# -- Comma-separated (no spaces) list of namespaces to watch for Aerospike custom resources
+# @schema required; pattern:^$|^ *[a-z0-9]([-a-z0-9]*[a-z0-9])? *(, *[a-z0-9]([-a-z0-9]*[a-z0-9])? *)*$
+# -- Comma-separated list of namespaces to watch for Aerospike custom resources
 watchNamespaces: "default,aerospike"
 
-# @schema pattern:^$|^[a-z0-9]([-a-z0-9]*[a-z0-9])?(,[a-z0-9]([-a-z0-9]*[a-z0-9])?)*$
-# -- Comma-separated (no spaces) list of namespaces to ignore. Only used for eviction webhook
+# @schema pattern:^$|^ *[a-z0-9]([-a-z0-9]*[a-z0-9])? *(, *[a-z0-9]([-a-z0-9]*[a-z0-9])? *)*$
+# -- Comma-separated list of namespaces to ignore. Only used for eviction webhook
 ignoreNamespaces: "kube-system,kube-node-lease"
 
 # @schema allOf: [{type: object}, {if: {properties: {enable: {const: true}}, required: [enable]}, then: {required: [timeoutSeconds]}}]
@@ -107,7 +107,7 @@ ignoreNamespaces: "kube-system,kube-node-lease"
 # Also enables Prometheus metrics: aerospike_ako_eviction_webhook_requests_total (labels: eviction_namespace, decision)
 safePodEviction: # @schema required
   enable: false # @schema required
-  timeoutSeconds: "20" # @schema anyOf: [{type: string, "pattern": "^([1-9]|[12][0-9]|30)$"}, {type: integer}]
+  timeoutSeconds: "20" # @schema anyOf: [{type: string, "pattern": "^([1-9]|[12][0-9]|30)$"}, {type: integer, minimum: 1, maximum: 30}]
 
 # -- Grace period to delete/recover failed pods (in seconds)
 failedPodGracePeriodSeconds: "60" # @schema anyOf: [{type: string,"pattern": "^[1-9][0-9]*$"}, {type: integer, minimum: 1}]
@@ -122,7 +122,7 @@ aerospikeKubernetesInitRegistryNamespace: "aerospike" # @schema required; minLen
 aerospikeKubernetesInitNameTag: "aerospike-kubernetes-init:2.5.3" # @schema required; pattern:^\S+:\S+$
 
 # -- Resources - limits / requests
-resources:
+resources: # @schema skipProperties: true
   limits:
     cpu: 400m
     memory: 512Mi
@@ -141,7 +141,7 @@ affinity: {}
 #         values:
 #         - <Kubernetes Host>
 
-# @schema additionalProperties: {type: string}
+# @schema additionalProperties: {type: [string, number, boolean]}
 # @schema allOf: [{type: object}, {propertyNames: {pattern: "^[-._a-zA-Z][-._a-zA-Z0-9]*$"}}]
 # -- Extra environment variables that will be passed into the operator pods
 extraEnv: {}
@@ -166,7 +166,7 @@ podLabels: {}
 
 # -- Service configuration
 metricsService: # @schema required; additionalProperties: false
-  port: 8443 # @schema required; minimum: 1; maximum: 65535
+  port: 8443 # @schema required; type: [integer, string]; minimum: 1; maximum: 65535
   type: ClusterIP # @schema required
   # -- (Optional) Extra labels for the service
   labels: {}
@@ -175,8 +175,8 @@ metricsService: # @schema required; additionalProperties: false
 
 # -- Service configuration
 webhookService: # @schema required; additionalProperties: false
-  port: 443 # @schema required; minimum: 1; maximum: 65535
-  targetPort: 9443 # @schema required; minimum: 1; maximum: 65535
+  port: 443 # @schema required; type: [integer, string]; minimum: 1; maximum: 65535
+  targetPort: 9443 # @schema required; type: [integer, string]; minimum: 1; maximum: 65535
   # -- Kubernetes Service type
   type: ClusterIP # @schema required
   # -- (Optional) Extra labels for the service
@@ -188,11 +188,11 @@ webhookService: # @schema required; additionalProperties: false
 podSecurityContext: {}
 
 # -- Container security context
-securityContext:
+securityContext: # @schema skipProperties: true
   allowPrivilegeEscalation: false
 
 # -- Liveness probe configuration
-livenessProbe:
+livenessProbe: # @schema skipProperties: true
   initialDelaySeconds: 15
   periodSeconds: 20
   timeoutSeconds: 1
@@ -200,7 +200,7 @@ livenessProbe:
   failureThreshold: 3
 
 # -- Readiness probe configuration
-readinessProbe:
+readinessProbe: # @schema skipProperties: true
   initialDelaySeconds: 5
   periodSeconds: 10
   timeoutSeconds: 1

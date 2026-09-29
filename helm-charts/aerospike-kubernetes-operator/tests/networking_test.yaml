@@ -17,6 +17,14 @@ tests:
     asserts:
       - notFailedTemplate: {}
 
+  - it: accepts healthPort as a numeric string
+    set:
+      healthPort: "8081"
+    asserts:
+      - equal:
+          path: spec.template.spec.containers[0].livenessProbe.httpGet.port
+          value: 8081
+
   - it: rejects healthPort below the minimum
     set:
       healthPort: 0
@@ -189,6 +197,15 @@ tests:
     asserts:
       - failedTemplate:
           errorPattern: "at '/webhookService/targetPort': maximum: got 65,536, want 65,535"
+
+  - it: accepts webhookService.targetPort as a numeric string
+    set:
+      webhookService:
+        targetPort: "9443"
+    asserts:
+      - equal:
+          path: spec.template.spec.containers[0].ports[?(@.name == "webhook-server")].containerPort
+          value: 9443
 
   - it: accepts each valid webhookService.type
     set:

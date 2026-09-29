@@ -96,13 +96,14 @@ tests:
     asserts:
       - notFailedTemplate: {}
 
-  - it: rejects a non-string operatorImage.tag
+  - it: accepts a numeric operatorImage.tag
     set:
       operatorImage:
-        tag: 5.0
+        tag: 4.6
     asserts:
-      - failedTemplate:
-          errorPattern: "operatorImage/tag.*got number, want string"
+      - equal:
+          path: spec.template.spec.containers[0].image
+          value: aerospike/aerospike-kubernetes-operator:4.6
 
   - it: accepts each valid operatorImage.pullPolicy
     set:
