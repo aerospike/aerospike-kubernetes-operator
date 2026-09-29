@@ -147,10 +147,6 @@ var _ = Describe(
 		})
 
 		It("Should checkpoint during image upgrade", func() {
-			if testutil.IndexCheckpointUpgradeImage == testutil.IndexCheckpointImage {
-				Skip("set IndexCheckpointUpgradeImage to a second feature-carrying image to run this")
-			}
-
 			By("Deploying the cluster with index-checkpoint enabled")
 
 			aeroCluster := createIndexCheckpointCluster(clusterNamespacedName)
@@ -570,7 +566,7 @@ func expectRecords(ctx goctx.Context, clusterNamespacedName types.NamespacedName
 // feature enabled and a pure in-memory namespace at RF=1 alongside the device backed namespace.
 func createIndexCheckpointCluster(clusterNamespacedName types.NamespacedName) *asdbv1.AerospikeCluster {
 	aeroCluster := CreateAerospikeClusterPost640(
-		clusterNamespacedName, 2, testutil.IndexCheckpointImage,
+		clusterNamespacedName, 2, testutil.LatestEnterpriseImage,
 	)
 
 	nsConf := getNonSCInMemoryNamespaceConfig(ckptNsName)
@@ -590,15 +586,13 @@ func createIndexCheckpointCluster(clusterNamespacedName types.NamespacedName) *a
 		checkpointVolume("index-ckpt-alt", ckptAlternatePath),
 	)
 
-	setCheckpointImagePullSecret(aeroCluster) // TODO(index-checkpoint): remove, see above
-
 	return aeroCluster
 }
 
 // createAllFlashCheckpointCluster builds a 2-node cluster with PI, SI and data on flash
 func createAllFlashCheckpointCluster(clusterNamespacedName types.NamespacedName) *asdbv1.AerospikeCluster {
 	aeroCluster := createAllFlashCluster(clusterNamespacedName, 2)
-	aeroCluster.Spec.Image = testutil.IndexCheckpointImage
+	aeroCluster.Spec.Image = testutil.LatestEnterpriseImage
 
 	svc := aeroCluster.Spec.AerospikeConfig.Value[asdbv1.ConfKeyService].(map[string]any)
 	svc[asdbv1.ConfKeyServiceIndexCheckpointPath] = ckptPath
@@ -621,22 +615,7 @@ func createAllFlashCheckpointCluster(clusterNamespacedName types.NamespacedName)
 		},
 	)
 
-	setCheckpointImagePullSecret(aeroCluster) // TODO(index-checkpoint): remove, see above
-
 	return aeroCluster
-}
-
-// TODO(index-checkpoint): REMOVE once the index-checkpoint server image is published
-// publicly. The feature is still on an unmerged server branch, so its image lives in a
-// private dev registry and every Pod needs a pull secret to start. When the image ships
-// publicly, delete ckptImagePullSecret, this function, and its two call sites in the
-// cluster builders — nothing else in the suite needs a pull secret.
-const ckptImagePullSecret = "regcred"
-
-func setCheckpointImagePullSecret(aeroCluster *asdbv1.AerospikeCluster) {
-	aeroCluster.Spec.PodSpec.ImagePullSecrets = []corev1.LocalObjectReference{
-		{Name: ckptImagePullSecret},
-	}
 }
 
 // checkpointVolume is the durable per-pod volume backing index-checkpoint-path.

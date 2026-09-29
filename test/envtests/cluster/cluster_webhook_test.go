@@ -586,7 +586,7 @@ var _ = Describe("AerospikeCluster validation", func() {
 			Context("negative", func() {
 				It("rejects index-checkpoint-path with server version < "+testutil.IndexCheckpointServerVersion, func() {
 					aeroCluster := testCluster.CreateAerospikeClusterPost640(
-						clusterNamespacedName, 1, testutil.LatestEnterpriseImage,
+						clusterNamespacedName, 1, testutil.GetEnterpriseImage(testutil.CgroupMemTrackingServerVersion),
 					)
 					setCheckpointPath(aeroCluster, indexCheckpointPath)
 					aeroCluster.Spec.PreviewFeatures = []string{asdbv1.PreviewFeatureIndexCheckpoint}
