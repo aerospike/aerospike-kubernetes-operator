@@ -568,8 +568,8 @@ func validateNamespaceConfig(
 			continue
 		}
 
-		if nsIndexStorage, ok := nsConf["index-type"]; ok {
-			if mounts, ok := nsIndexStorage.(map[string]interface{})["mounts"]; ok {
+		if nsIndexStorage, ok := nsConf[asdbv1.ConfKeyIndexType]; ok {
+			if mounts, ok := nsIndexStorage.(map[string]interface{})[asdbv1.ConfKeyMounts]; ok {
 				if mounts == nil {
 					return fmt.Errorf(
 						"namespace index-type mounts cannot be nil %v",
@@ -759,16 +759,23 @@ func IsDeviceOrPmemNamespace(namespaceConf map[string]interface{}) bool {
 	return ok && (typeStr == "device" || typeStr == "pmem")
 }
 
-// IsShMemIndexTypeNamespace returns true if this namespace index type is shmem.
+// IsShMemIndexTypeNamespace returns true if this namespace primary index type
+// is the in-memory shmem type. A missing index-type is treated as shmem.
+// Returns false for pmem and flash, both of which require mount paths to be
+// declared in spec.storage.
 func IsShMemIndexTypeNamespace(namespaceConf map[string]interface{}) bool {
-	storage, ok := namespaceConf["index-type"]
+	storage, ok := namespaceConf[asdbv1.ConfKeyIndexType]
 	if !ok {
-		// missing index-type assumed to be shmem.
+		// missing index-type is the default in-memory shmem.
 		return true
 	}
 
-	storageConf := storage.(map[string]interface{})
-	typeStr, ok := storageConf["type"]
+	storageConf, ok := storage.(map[string]interface{})
+	if !ok {
+		return false
+	}
+
+	typeStr, ok := storageConf[asdbv1.ConfKeyType]
 
 	return ok && typeStr == "shmem"
 }

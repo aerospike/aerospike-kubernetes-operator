@@ -1378,6 +1378,21 @@ func (r *SingleClusterReconciler) updateAerospikeContainer(st *appsv1.StatefulSe
 
 	// This SecurityContext is for main aerospike container. Other sidecars can mention their own SecurityContext.
 	st.Spec.Template.Spec.Containers[0].SecurityContext = r.aeroCluster.Spec.PodSpec.AerospikeContainerSpec.SecurityContext
+
+	st.Spec.Template.Spec.Containers[0].Args = previewFeaturesArgs(r.aeroCluster.Spec.PreviewFeatures)
+}
+
+// previewFeaturesArgs returns the server container's --preview args for spec.previewFeatures.
+// Kubernetes args REPLACES the image's Dockerfile CMD (["asd"]) while leaving the ENTRYPOINT
+// (as-tini-static ... -- /entrypoint.sh) alone, so the container argv becomes
+// "/entrypoint.sh --preview <features>" with no explicit "asd". The resulting argv also survives a warm restart.
+// previewFeatures list is normalised to only consider unique features without accounting their sequence in the list
+func previewFeaturesArgs(previewFeatures []string) []string {
+	if len(previewFeatures) == 0 {
+		return nil
+	}
+
+	return []string{"--preview", strings.Join(sets.List(sets.New[string](previewFeatures...)), ",")}
 }
 
 func (r *SingleClusterReconciler) updateAerospikeInitContainer(st *appsv1.StatefulSet) {
