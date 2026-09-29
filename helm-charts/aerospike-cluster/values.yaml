@@ -139,5 +139,9 @@ operations: []
 #    podList:
 #      - aerospike-cluster-0-1
 
+## restartStrategy configures transient operator behaviour applied around a rolling pod restart or upgrade.
+restartStrategy: {}
+#  overrideMigrateFillDelay: 0
+
 ## Dev Mode
 devMode: false
