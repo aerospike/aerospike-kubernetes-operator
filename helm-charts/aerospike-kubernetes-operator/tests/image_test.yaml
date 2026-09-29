@@ -7,7 +7,7 @@ tests:
   # -- aerospikeKubernetesInitNameTag --
   - it: accepts a plain name:tag reference
     set:
-      aerospikeKubernetesInitNameTag: "aerospike-kubernetes-init:2.5.3"
+      aerospikeKubernetesInitNameTag: "aerospike-kubernetes-init:2.5.4-dev1"
     asserts:
       - notFailedTemplate: {}
 

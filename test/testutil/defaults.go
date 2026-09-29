@@ -13,11 +13,14 @@ const (
 	// BaseEnterpriseImage is the repo for Aerospike Enterprise server images.
 	BaseEnterpriseImage = "aerospike/aerospike-server-enterprise"
 	BaseFederalImage    = "aerospike/aerospike-server-federal"
-	LatestServerVersion = "8.1.2.0"
+	LatestServerVersion = "8.2.0.0"
 	Pre810ServerVersion = "8.0.0.0"
 	// CgroupMemTrackingServerVersion is the minimum Aerospike server version that requires
 	// aerospikeConfig.service.cgroup-mem-tracking to be set to true.
-	CgroupMemTrackingServerVersion    = "8.1.2.0"
+	CgroupMemTrackingServerVersion = "8.1.2.0"
+	// IndexCheckpointServerVersion is the minimum Aerospike server version that supports the checkpointing feature
+	// configuration keys.
+	IndexCheckpointServerVersion      = "8.2.0.0"
 	InvalidImageVersion               = "3.0.0.4"
 	StorageClass                      = "ssd"
 	ClusterNameConfig                 = "cluster-name"
@@ -33,11 +36,12 @@ const (
 )
 
 var (
-	LatestEnterpriseImage = fmt.Sprintf("%s:%s", BaseEnterpriseImage, LatestServerVersion)
-	Pre810EnterpriseImage = fmt.Sprintf("%s:%s", BaseEnterpriseImage, Pre810ServerVersion)
-	Pre810FederalImage    = fmt.Sprintf("%s:%s", BaseFederalImage, Pre810ServerVersion)
-	LatestFederalImage    = fmt.Sprintf("%s:%s", BaseFederalImage, LatestServerVersion)
-	InvalidImage          = fmt.Sprintf("%s:%s", BaseEnterpriseImage, InvalidImageVersion)
+	LatestEnterpriseImage       = fmt.Sprintf("%s:%s", BaseEnterpriseImage, LatestServerVersion)
+	Pre810EnterpriseImage       = fmt.Sprintf("%s:%s", BaseEnterpriseImage, Pre810ServerVersion)
+	Pre810FederalImage          = fmt.Sprintf("%s:%s", BaseFederalImage, Pre810ServerVersion)
+	LatestFederalImage          = fmt.Sprintf("%s:%s", BaseFederalImage, LatestServerVersion)
+	InvalidImage                = fmt.Sprintf("%s:%s", BaseEnterpriseImage, InvalidImageVersion)
+	IndexCheckpointUpgradeImage = fmt.Sprintf("%s:%s", BaseEnterpriseImage, "8.2.0.0_20260922T013045Z")
 )
 
 // GetEnterpriseImage returns the full image string for the default (or given)
