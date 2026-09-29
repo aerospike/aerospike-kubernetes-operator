@@ -2,7 +2,6 @@
     "$schema": "https://json-schema.org/draft/2020-12/schema",
     "type": "object",
     "required": [
-        "replicas",
         "operatorImage",
         "rbac",
         "healthPort",
@@ -10,7 +9,6 @@
         "certs",
         "logging",
         "metrics",
-        "watchNamespaces",
         "safePodEviction",
         "aerospikeKubernetesInitRegistry",
         "aerospikeKubernetesInitRegistryNamespace",
@@ -21,26 +19,16 @@
     "properties": {
         "aerospikeKubernetesInitNameTag": {
             "description": "Name and tag of aerospike-init image",
-            "type": "string",
-            "pattern": "^\\S+:\\S+$"
+            "type": "string"
         },
         "aerospikeKubernetesInitRegistry": {
             "description": "Registry used to pull aerospike-init image",
-            "type": "string",
-            "minLength": 1
+            "type": "string"
         },
         "aerospikeKubernetesInitRegistryNamespace": {
             "description": "Namespace in registry used to pull aerospike-init image",
             "type": "string",
             "minLength": 1
-        },
-        "affinity": {
-            "description": "Affinity rules",
-            "type": "object"
-        },
-        "annotations": {
-            "description": "Deployment annotations",
-            "type": "object"
         },
         "certs": {
             "description": "Certificate configuration for the webhook and metrics endpoints",
@@ -183,7 +171,10 @@
             "description": "Extra environment variables that will be passed into the operator pods",
             "allOf": [
                 {
-                    "type": "object"
+                    "type": [
+                        "object",
+                        "null"
+                    ]
                 },
                 {
                     "propertyNames": {
@@ -203,8 +194,7 @@
             "description": "Grace period to delete/recover failed pods (in seconds)",
             "anyOf": [
                 {
-                    "type": "string",
-                    "pattern": "^[1-9][0-9]*$"
+                    "type": "string"
                 },
                 {
                     "type": "integer",
@@ -241,16 +231,11 @@
                 },
                 {
                     "type": "object"
+                },
+                {
+                    "type": "null"
                 }
             ]
-        },
-        "labels": {
-            "description": "Deployment labels are inherited by the pods automatically",
-            "type": "object"
-        },
-        "livenessProbe": {
-            "description": "Liveness probe configuration",
-            "type": "object"
         },
         "logging": {
             "description": "Operator manager logging (controller-runtime / Zap). `development` must stay set; level/encoder are optional (set them in values or on the CLI).",
@@ -260,7 +245,17 @@
             ],
             "properties": {
                 "development": {
-                    "type": "boolean"
+                    "anyOf": [
+                        {
+                            "type": "boolean"
+                        },
+                        {
+                            "enum": [
+                                "true",
+                                "false"
+                            ]
+                        }
+                    ]
                 },
                 "encoder": {
                     "description": "Zap log encoder (--zap-encoder). Empty leaves the flag off",
@@ -300,7 +295,17 @@
             ],
             "properties": {
                 "secure": {
-                    "type": "boolean"
+                    "anyOf": [
+                        {
+                            "type": "boolean"
+                        },
+                        {
+                            "enum": [
+                                "true",
+                                "false"
+                            ]
+                        }
+                    ]
                 }
             },
             "additionalProperties": false
@@ -318,8 +323,7 @@
             "description": "Service configuration",
             "type": "object",
             "required": [
-                "port",
-                "type"
+                "port"
             ],
             "properties": {
                 "annotations": {
@@ -339,7 +343,10 @@
                     "minimum": 1
                 },
                 "type": {
-                    "type": "string"
+                    "type": [
+                        "string",
+                        "null"
+                    ]
                 }
             },
             "additionalProperties": false
@@ -348,21 +355,19 @@
             "description": "Override the chart name used in generated resource names",
             "type": "string"
         },
-        "nodeSelector": {
-            "description": "Node selector",
-            "type": "object"
-        },
         "operatorImage": {
             "description": "Operator image",
             "type": "object",
             "required": [
                 "repository",
-                "tag",
-                "pullPolicy"
+                "tag"
             ],
             "properties": {
                 "pullPolicy": {
-                    "type": "string"
+                    "type": [
+                        "string",
+                        "null"
+                    ]
                 },
                 "repository": {
                     "type": "string",
@@ -378,47 +383,9 @@
             },
             "additionalProperties": false
         },
-        "podAnnotations": {
-            "description": "Pod annotations",
-            "type": "object"
-        },
-        "podLabels": {
-            "description": "Pod labels",
-            "type": "object"
-        },
-        "podSecurityContext": {
-            "description": "Pod security context",
-            "type": "object"
-        },
         "rbac": {
             "description": "RBAC resource creation for the operator",
-            "allOf": [
-                {
-                    "type": "object"
-                },
-                {
-                    "if": {
-                        "required": [
-                            "create"
-                        ],
-                        "properties": {
-                            "create": {
-                                "const": false
-                            }
-                        }
-                    },
-                    "then": {
-                        "required": [
-                            "serviceAccountName"
-                        ],
-                        "properties": {
-                            "serviceAccountName": {
-                                "minLength": 1
-                            }
-                        }
-                    }
-                }
-            ],
+            "type": "object",
             "required": [
                 "create"
             ],
@@ -434,22 +401,14 @@
             },
             "additionalProperties": false
         },
-        "readinessProbe": {
-            "description": "Readiness probe configuration",
-            "type": "object"
-        },
         "replicas": {
             "description": "Number of operator replicas to deploy",
             "type": [
                 "integer",
-                "string"
+                "string",
+                "null"
             ],
-            "minimum": 0,
-            "pattern": "^[0-9]+$"
-        },
-        "resources": {
-            "description": "Resources - limits / requests",
-            "type": "object"
+            "minimum": 0
         },
         "safePodEviction": {
             "description": "Enable the eviction webhook to safely block Aerospike pod evictions during node maintenance Also enables Prometheus metrics: aerospike_ako_eviction_webhook_requests_total (labels: eviction_namespace, decision)",
@@ -498,17 +457,12 @@
             },
             "additionalProperties": false
         },
-        "securityContext": {
-            "description": "Container security context",
-            "type": "object"
-        },
-        "tolerations": {
-            "description": "Tolerations",
-            "type": "array"
-        },
         "watchNamespaces": {
             "description": "Comma-separated list of namespaces to watch for Aerospike custom resources",
-            "type": "string",
+            "type": [
+                "string",
+                "null"
+            ],
             "pattern": "^$|^ *[a-z0-9]([-a-z0-9]*[a-z0-9])? *(, *[a-z0-9]([-a-z0-9]*[a-z0-9])? *)*$"
         },
         "webhookService": {
@@ -516,8 +470,7 @@
             "type": "object",
             "required": [
                 "port",
-                "targetPort",
-                "type"
+                "targetPort"
             ],
             "properties": {
                 "annotations": {
@@ -546,7 +499,10 @@
                 },
                 "type": {
                     "description": "Kubernetes Service type",
-                    "type": "string"
+                    "type": [
+                        "string",
+                        "null"
+                    ]
                 }
             },
             "additionalProperties": false

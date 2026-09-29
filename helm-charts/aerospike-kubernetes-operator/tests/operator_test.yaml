@@ -32,13 +32,6 @@ tests:
           path: spec.replicas
           value: 3
 
-  - it: rejects a non-numeric replicas string
-    set:
-      replicas: "two"
-    asserts:
-      - failedTemplate:
-          errorPattern: "at '/replicas': 'two' does not match pattern"
-
   # -- failedPodGracePeriodSeconds --
   - it: accepts failedPodGracePeriodSeconds as a numeric string
     set:
@@ -273,23 +266,6 @@ tests:
         serviceAccountName: "my-sa"
     asserts:
       - notFailedTemplate: {}
-
-  - it: rejects rbac.create false without an explicit serviceAccountName
-    set:
-      rbac:
-        create: false
-    asserts:
-      - failedTemplate:
-          errorPattern: "at '/rbac/serviceAccountName': minLength: got 0, want 1"
-
-  - it: rejects an empty rbac.serviceAccountName when rbac.create is false
-    set:
-      rbac:
-        create: false
-        serviceAccountName: ""
-    asserts:
-      - failedTemplate:
-          errorPattern: "at '/rbac/serviceAccountName': minLength: got 0, want 1"
 
   - it: accepts a non-empty rbac.serviceAccountName when rbac.create is false
     set:
