@@ -883,6 +883,16 @@ func (r *SingleClusterReconciler) reconcileRack(
 		}
 	}
 
+	// Expand the volumes before the rolling restart: it warm restarts the pods whose devices grew.
+	found, res = r.reconcileRackVolumeExpansion(ctx, found, rackState)
+	if !res.IsSuccess {
+		if res.Err != nil {
+			res.Err = fmt.Errorf("expand volumes of rack %d: %w", rackState.Rack.ID, res.Err)
+		}
+
+		return res
+	}
+
 	if err := r.updateAerospikeInitContainerImage(ctx, found); err != nil {
 		return common.ReconcileError(fmt.Errorf("update init container image for StatefulSet %s: %w",
 			utils.GetNamespacedNameString(found), err))
