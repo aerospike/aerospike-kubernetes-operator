@@ -122,10 +122,7 @@ func (r *SingleClusterReconciler) reconcileRacks(ctx context.Context) common.Rec
 				return common.ReconcileError(err)
 			}
 
-			// Create statefulset with 0 size rack and then scaleUp later in Reconcile
-			zeroSizedRack := &RackState{Rack: state.Rack, Size: 0}
-
-			found, res = r.createEmptyRack(ctx, zeroSizedRack)
+			found, res = r.createMissingRack(ctx, state.Rack)
 			if !res.IsSuccess {
 				return res
 			}
@@ -259,12 +256,9 @@ func (r *SingleClusterReconciler) waitForAllRacksReady(
 				return common.ReconcileError(err)
 			}
 
-			// Create statefulset with 0 size rack and then scaleUp later in Reconcile
-			zeroSizedRack := &RackState{Rack: state.Rack, Size: 0}
-
 			var res common.ReconcileResult
 
-			found, res = r.createEmptyRack(ctx, zeroSizedRack)
+			found, res = r.createMissingRack(ctx, state.Rack)
 
 			if !res.IsSuccess {
 				return res
@@ -314,6 +308,78 @@ func (r *SingleClusterReconciler) waitForAllRacksReady(
 	return common.ReconcileSuccess()
 }
 
+// createMissingRack recreates the StatefulSet of a rack that has no StatefulSet. A new rack starts at 0
+// replicas and is scaled up later. A rack that still has pods, or pods recorded in status (StatefulSet
+// deleted with --cascade=orphan, or by hand), is recreated at the size needed to re-adopt all of them:
+// starting at 0 would make the StatefulSet controller delete them and the dangling-pod cleanup delete
+// their PVCs.
+func (r *SingleClusterReconciler) createMissingRack(ctx context.Context, rack *asdbv1.Rack) (
+	*appsv1.StatefulSet, common.ReconcileResult,
+) {
+	size, err := r.getExistingRackSize(ctx, rack.ID, rack.Revision)
+	if err != nil {
+		return nil, common.ReconcileError(fmt.Errorf("get existing size of rack %d: %w", rack.ID, err))
+	}
+
+	if size > 0 {
+		r.Log.Info(
+			"StatefulSet missing for a rack that still has pods, recreating it to re-adopt them",
+			"rackID", rack.ID, "rackRevision", rack.Revision, "size", size,
+		)
+	}
+
+	return r.createEmptyRack(ctx, &RackState{Rack: rack, Size: size})
+}
+
+// getExistingRackSize returns one more than the highest ordinal among the rack's live pods and the
+// rack's pods recorded in status, or 0 when there are none.
+func (r *SingleClusterReconciler) getExistingRackSize(
+	ctx context.Context, rackID int, rackRevision string,
+) (int32, error) {
+	var size int32
+
+	observe := func(podName string) error {
+		ordinal, err := getSTSPodOrdinal(podName)
+		if err != nil {
+			return fmt.Errorf("invalid pod name %s: %w", podName, err)
+		}
+
+		if *ordinal+1 > size {
+			size = *ordinal + 1
+		}
+
+		return nil
+	}
+
+	podList, err := r.getRackPodList(ctx, rackID, rackRevision)
+	if err != nil {
+		return 0, err
+	}
+
+	for idx := range podList.Items {
+		if podList.Items[idx].DeletionTimestamp != nil {
+			continue
+		}
+
+		if err := observe(podList.Items[idx].Name); err != nil {
+			return 0, err
+		}
+	}
+
+	for podName := range r.aeroCluster.Status.Pods {
+		podRackID, podRackRevision, err := utils.GetRackIDAndRevisionFromPodName(r.aeroCluster.Name, podName)
+		if err != nil || podRackID != rackID || podRackRevision != rackRevision {
+			continue
+		}
+
+		if err := observe(podName); err != nil {
+			return 0, err
+		}
+	}
+
+	return size, nil
+}
+
 func (r *SingleClusterReconciler) createEmptyRack(ctx context.Context, rackState *RackState) (
 	*appsv1.StatefulSet, common.ReconcileResult,
 ) {
@@ -335,13 +401,14 @@ func (r *SingleClusterReconciler) createEmptyRack(ctx context.Context, rackState
 
 	found, err := r.createSTS(ctx, stsName, rackState)
 	if err != nil {
-		// Delete statefulset and everything related so that it can be properly created and updated in next run
+		// Delete statefulset so that it can be properly created and updated in next run. Orphan its pods:
+		// a rack recreated to re-adopt running pods must not lose them to a readiness timeout.
 		if found != nil {
 			r.Log.V(1).Info(
 				"StatefulSet setup failed. Deleting StatefulSet", "name",
 				stsName,
 			)
-			_ = r.deleteSTS(ctx, found)
+			_ = r.Delete(ctx, found, client.PropagationPolicy(metav1.DeletePropagationOrphan))
 		}
 
 		return nil, common.ReconcileError(fmt.Errorf("create StatefulSet %s for rack %d: %w",
@@ -2392,7 +2459,7 @@ func (r *SingleClusterReconciler) reconcileRevisionChangedRacks(
 			return common.ReconcileError(err)
 		}
 		// Create new STS
-		found, res := r.createEmptyRack(ctx, &RackState{Rack: newRack.Rack, Size: 0})
+		found, res := r.createMissingRack(ctx, newRack.Rack)
 		if !res.IsSuccess {
 			return res
 		}
