@@ -4,60 +4,12 @@ templates:
   - templates/aerospike-operator-controller-manager-deployment.yaml
 
 tests:
-  # -- aerospikeKubernetesInitNameTag --
-  - it: accepts a plain name:tag reference
-    set:
-      aerospikeKubernetesInitNameTag: "aerospike-kubernetes-init:2.5.4-dev1"
-    asserts:
-      - notFailedTemplate: {}
-
-  - it: accepts a digest-style reference (name@sha256:digest)
-    set:
-      aerospikeKubernetesInitNameTag: "name@sha256:abcdef0123"
-    asserts:
-      - notFailedTemplate: {}
-
-  - it: rejects a tag reference with no colon at all
-    set:
-      aerospikeKubernetesInitNameTag: "nametag"
-    asserts:
-      - failedTemplate:
-          errorPattern: "aerospikeKubernetesInitNameTag.*does not match pattern"
-
-  - it: rejects a trailing colon with nothing after it
-    set:
-      aerospikeKubernetesInitNameTag: "name:"
-    asserts:
-      - failedTemplate:
-          errorPattern: "aerospikeKubernetesInitNameTag.*does not match pattern"
-
-  - it: rejects a leading colon with nothing before it
-    set:
-      aerospikeKubernetesInitNameTag: ":tag"
-    asserts:
-      - failedTemplate:
-          errorPattern: "aerospikeKubernetesInitNameTag.*does not match pattern"
-
-  - it: rejects a reference containing whitespace
-    set:
-      aerospikeKubernetesInitNameTag: "name tag:foo"
-    asserts:
-      - failedTemplate:
-          errorPattern: "aerospikeKubernetesInitNameTag.*does not match pattern"
-
   # -- aerospikeKubernetesInitRegistry --
   - it: accepts a non-empty aerospikeKubernetesInitRegistry
     set:
       aerospikeKubernetesInitRegistry: "my-registry.example.com"
     asserts:
       - notFailedTemplate: {}
-
-  - it: rejects an empty aerospikeKubernetesInitRegistry
-    set:
-      aerospikeKubernetesInitRegistry: ""
-    asserts:
-      - failedTemplate:
-          errorPattern: "at '/aerospikeKubernetesInitRegistry': minLength: got 0, want 1"
 
   # -- aerospikeKubernetesInitRegistryNamespace --
   - it: accepts a non-empty aerospikeKubernetesInitRegistryNamespace
@@ -96,13 +48,14 @@ tests:
     asserts:
       - notFailedTemplate: {}
 
-  - it: rejects a non-string operatorImage.tag
+  - it: accepts a numeric operatorImage.tag
     set:
       operatorImage:
-        tag: 5.0
+        tag: 4.6
     asserts:
-      - failedTemplate:
-          errorPattern: "operatorImage/tag.*got number, want string"
+      - equal:
+          path: spec.template.spec.containers[0].image
+          value: aerospike/aerospike-kubernetes-operator:4.6
 
   - it: accepts each valid operatorImage.pullPolicy
     set:

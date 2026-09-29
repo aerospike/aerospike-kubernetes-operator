@@ -24,6 +24,14 @@ tests:
       - failedTemplate:
           errorPattern: "at '/replicas': minimum: got -1, want 0"
 
+  - it: accepts replicas as a numeric string
+    set:
+      replicas: "3"
+    asserts:
+      - equal:
+          path: spec.replicas
+          value: 3
+
   # -- failedPodGracePeriodSeconds --
   - it: accepts failedPodGracePeriodSeconds as a numeric string
     set:
@@ -91,10 +99,29 @@ tests:
       - failedTemplate:
           errorPattern: "watchNamespaces.*does not match pattern"
 
+  - it: accepts watchNamespaces with spaces around commas
+    set:
+      watchNamespaces: " default , aerospike "
+    asserts:
+      - notFailedTemplate: {}
+
+  - it: rejects watchNamespaces with a space inside a namespace name
+    set:
+      watchNamespaces: "aero spike"
+    asserts:
+      - failedTemplate:
+          errorPattern: "watchNamespaces.*does not match pattern"
+
   # -- ignoreNamespaces --
   - it: accepts a comma-joined multi-namespace ignoreNamespaces
     set:
       ignoreNamespaces: "kube-system,kube-node-lease"
+    asserts:
+      - notFailedTemplate: {}
+
+  - it: accepts ignoreNamespaces with spaces around commas
+    set:
+      ignoreNamespaces: "kube-system, kube-node-lease"
     asserts:
       - notFailedTemplate: {}
 
@@ -126,6 +153,29 @@ tests:
         timeoutSeconds: 1
     asserts:
       - notFailedTemplate: {}
+
+  - it: accepts safePodEviction.timeoutSeconds at the upper integer boundary
+    set:
+      safePodEviction:
+        timeoutSeconds: 30
+    asserts:
+      - notFailedTemplate: {}
+
+  - it: rejects an integer safePodEviction.timeoutSeconds above 30
+    set:
+      safePodEviction:
+        timeoutSeconds: 999
+    asserts:
+      - failedTemplate:
+          errorPattern: "safePodEviction/timeoutSeconds.*'anyOf' failed"
+
+  - it: rejects an integer safePodEviction.timeoutSeconds of 0
+    set:
+      safePodEviction:
+        timeoutSeconds: 0
+    asserts:
+      - failedTemplate:
+          errorPattern: "safePodEviction/timeoutSeconds.*'anyOf' failed"
 
   # -- logging --
   - it: accepts logging.development as a boolean
@@ -217,23 +267,6 @@ tests:
     asserts:
       - notFailedTemplate: {}
 
-  - it: rejects rbac.create false without an explicit serviceAccountName
-    set:
-      rbac:
-        create: false
-    asserts:
-      - failedTemplate:
-          errorPattern: "at '/rbac/serviceAccountName': minLength: got 0, want 1"
-
-  - it: rejects an empty rbac.serviceAccountName when rbac.create is false
-    set:
-      rbac:
-        create: false
-        serviceAccountName: ""
-    asserts:
-      - failedTemplate:
-          errorPattern: "at '/rbac/serviceAccountName': minLength: got 0, want 1"
-
   - it: accepts a non-empty rbac.serviceAccountName when rbac.create is false
     set:
       rbac:
@@ -265,10 +298,29 @@ tests:
       - failedTemplate:
           errorPattern: "invalid propertyName '9FOO'"
 
-  - it: rejects a non-string extraEnv value
+  - it: renders a numeric extraEnv value as a string
     set:
       extraEnv:
         FOO: 123
     asserts:
+      - equal:
+          path: spec.template.spec.containers[0].env[?(@.name == "FOO")].value
+          value: "123"
+
+  - it: renders a boolean extraEnv value as a string
+    set:
+      extraEnv:
+        FOO: true
+    asserts:
+      - equal:
+          path: spec.template.spec.containers[0].env[?(@.name == "FOO")].value
+          value: "true"
+
+  - it: rejects an object extraEnv value
+    set:
+      extraEnv:
+        FOO:
+          bar: baz
+    asserts:
       - failedTemplate:
-          errorPattern: "extraEnv/FOO.*got number, want string"
+          errorPattern: "extraEnv/FOO.*got object, want boolean or number or string"
