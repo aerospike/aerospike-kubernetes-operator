@@ -150,5 +150,10 @@ spec:
   operations: {{- toYaml . | nindent 4 }}
   {{- end }}
 
+  ## restartStrategy configures transient operator behaviour applied around a rolling pod restart or upgrade.
+  {{- with .Values.restartStrategy }}
+  restartStrategy: {{- toYaml . | nindent 4 }}
+  {{- end }}
+
   ## Pause reconciliation of the cluster
   paused: {{ .Values.paused }}
