@@ -46,6 +46,46 @@ tests:
       - failedTemplate:
           errorPattern: "at '/healthPort': minimum: got -1, want 1"
 
+  - it: accepts a string healthPort at the lower boundary
+    set:
+      healthPort: "1"
+    asserts:
+      - notFailedTemplate: {}
+
+  - it: accepts a string healthPort at the upper boundary
+    set:
+      healthPort: "65535"
+    asserts:
+      - notFailedTemplate: {}
+
+  - it: rejects a string healthPort above the maximum
+    set:
+      healthPort: "65536"
+    asserts:
+      - failedTemplate:
+          errorPattern: "at '/healthPort': .* does not match pattern"
+
+  - it: rejects a string healthPort of 0
+    set:
+      healthPort: "0"
+    asserts:
+      - failedTemplate:
+          errorPattern: "at '/healthPort': .* does not match pattern"
+
+  - it: rejects a non-numeric string healthPort
+    set:
+      healthPort: "abc"
+    asserts:
+      - failedTemplate:
+          errorPattern: "at '/healthPort': .* does not match pattern"
+
+  - it: rejects a string healthPort with a leading zero
+    set:
+      healthPort: "08081"
+    asserts:
+      - failedTemplate:
+          errorPattern: "at '/healthPort': .* does not match pattern"
+
   # -- metricsPort --
   - it: accepts metricsPort at the lower boundary
     set:
@@ -72,6 +112,33 @@ tests:
     asserts:
       - failedTemplate:
           errorPattern: "at '/metricsPort': maximum: got 65,536, want 65,535"
+
+  - it: accepts a string metricsPort at the upper boundary
+    set:
+      metricsPort: "65535"
+    asserts:
+      - notFailedTemplate: {}
+
+  - it: rejects a string metricsPort above the maximum
+    set:
+      metricsPort: "65536"
+    asserts:
+      - failedTemplate:
+          errorPattern: "at '/metricsPort': .* does not match pattern"
+
+  - it: rejects a string metricsPort of 0
+    set:
+      metricsPort: "0"
+    asserts:
+      - failedTemplate:
+          errorPattern: "at '/metricsPort': .* does not match pattern"
+
+  - it: rejects a non-numeric string metricsPort
+    set:
+      metricsPort: "abc"
+    asserts:
+      - failedTemplate:
+          errorPattern: "at '/metricsPort': .* does not match pattern"
 
   # -- metricsService --
   - it: accepts metricsService.port at the lower boundary
@@ -103,6 +170,37 @@ tests:
     asserts:
       - failedTemplate:
           errorPattern: "at '/metricsService/port': maximum: got 65,536, want 65,535"
+
+  - it: accepts a string metricsService.port at the upper boundary
+    set:
+      metricsService:
+        port: "65535"
+    asserts:
+      - notFailedTemplate: {}
+
+  - it: rejects a string metricsService.port above the maximum
+    set:
+      metricsService:
+        port: "65536"
+    asserts:
+      - failedTemplate:
+          errorPattern: "at '/metricsService/port': .* does not match pattern"
+
+  - it: rejects a string metricsService.port of 0
+    set:
+      metricsService:
+        port: "0"
+    asserts:
+      - failedTemplate:
+          errorPattern: "at '/metricsService/port': .* does not match pattern"
+
+  - it: rejects a non-numeric string metricsService.port
+    set:
+      metricsService:
+        port: "abc"
+    asserts:
+      - failedTemplate:
+          errorPattern: "at '/metricsService/port': .* does not match pattern"
 
   - it: accepts each valid metricsService.type
     set:
@@ -168,6 +266,37 @@ tests:
       - failedTemplate:
           errorPattern: "at '/webhookService/port': maximum: got 65,536, want 65,535"
 
+  - it: accepts a string webhookService.port at the upper boundary
+    set:
+      webhookService:
+        port: "65535"
+    asserts:
+      - notFailedTemplate: {}
+
+  - it: rejects a string webhookService.port above the maximum
+    set:
+      webhookService:
+        port: "65536"
+    asserts:
+      - failedTemplate:
+          errorPattern: "at '/webhookService/port': .* does not match pattern"
+
+  - it: rejects a string webhookService.port of 0
+    set:
+      webhookService:
+        port: "0"
+    asserts:
+      - failedTemplate:
+          errorPattern: "at '/webhookService/port': .* does not match pattern"
+
+  - it: rejects a non-numeric string webhookService.port
+    set:
+      webhookService:
+        port: "abc"
+    asserts:
+      - failedTemplate:
+          errorPattern: "at '/webhookService/port': .* does not match pattern"
+
   - it: accepts webhookService.targetPort at the lower boundary
     set:
       webhookService:
@@ -206,6 +335,37 @@ tests:
       - equal:
           path: spec.template.spec.containers[0].ports[?(@.name == "webhook-server")].containerPort
           value: 9443
+
+  - it: accepts a string webhookService.targetPort at the upper boundary
+    set:
+      webhookService:
+        targetPort: "65535"
+    asserts:
+      - notFailedTemplate: {}
+
+  - it: rejects a string webhookService.targetPort above the maximum
+    set:
+      webhookService:
+        targetPort: "65536"
+    asserts:
+      - failedTemplate:
+          errorPattern: "at '/webhookService/targetPort': .* does not match pattern"
+
+  - it: rejects a string webhookService.targetPort of 0
+    set:
+      webhookService:
+        targetPort: "0"
+    asserts:
+      - failedTemplate:
+          errorPattern: "at '/webhookService/targetPort': .* does not match pattern"
+
+  - it: rejects a non-numeric string webhookService.targetPort
+    set:
+      webhookService:
+        targetPort: "abc"
+    asserts:
+      - failedTemplate:
+          errorPattern: "at '/webhookService/targetPort': .* does not match pattern"
 
   - it: accepts each valid webhookService.type
     set:

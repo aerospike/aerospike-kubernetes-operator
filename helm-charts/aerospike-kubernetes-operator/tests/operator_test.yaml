@@ -45,12 +45,45 @@ tests:
     asserts:
       - notFailedTemplate: {}
 
-  - it: rejects failedPodGracePeriodSeconds integer of 0 (below minimum)
+  - it: accepts failedPodGracePeriodSeconds integer of 0
     set:
       failedPodGracePeriodSeconds: 0
     asserts:
+      - notFailedTemplate: {}
+
+  - it: accepts a string failedPodGracePeriodSeconds of 0
+    set:
+      failedPodGracePeriodSeconds: "0"
+    asserts:
+      - notFailedTemplate: {}
+
+  - it: rejects a negative integer failedPodGracePeriodSeconds
+    set:
+      failedPodGracePeriodSeconds: -1
+    asserts:
       - failedTemplate:
-          errorPattern: "at '/failedPodGracePeriodSeconds': minimum: got 0, want 1"
+          errorPattern: "at '/failedPodGracePeriodSeconds': minimum: got -1, want 0"
+
+  - it: rejects a negative string failedPodGracePeriodSeconds
+    set:
+      failedPodGracePeriodSeconds: "-1"
+    asserts:
+      - failedTemplate:
+          errorPattern: "at '/failedPodGracePeriodSeconds': .* does not match pattern"
+
+  - it: rejects a non-numeric string failedPodGracePeriodSeconds
+    set:
+      failedPodGracePeriodSeconds: "abc"
+    asserts:
+      - failedTemplate:
+          errorPattern: "at '/failedPodGracePeriodSeconds': .* does not match pattern"
+
+  - it: rejects a string failedPodGracePeriodSeconds with a leading zero
+    set:
+      failedPodGracePeriodSeconds: "060"
+    asserts:
+      - failedTemplate:
+          errorPattern: "at '/failedPodGracePeriodSeconds': .* does not match pattern"
 
   # -- watchNamespaces --
   - it: accepts an empty watchNamespaces (cluster-wide)

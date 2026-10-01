@@ -194,11 +194,12 @@
             "description": "Grace period to delete/recover failed pods (in seconds)",
             "anyOf": [
                 {
-                    "type": "string"
+                    "type": "string",
+                    "pattern": "^(0|[1-9][0-9]*)$"
                 },
                 {
                     "type": "integer",
-                    "minimum": 1
+                    "minimum": 0
                 }
             ]
         },
@@ -208,12 +209,17 @@
         },
         "healthPort": {
             "description": "Port for the operator's health probe bind address",
-            "type": [
-                "integer",
-                "string"
-            ],
-            "maximum": 65535,
-            "minimum": 1
+            "anyOf": [
+                {
+                    "type": "string",
+                    "pattern": "^([1-9][0-9]{0,3}|[1-5][0-9]{4}|6[0-4][0-9]{3}|65[0-4][0-9]{2}|655[0-2][0-9]|6553[0-5])$"
+                },
+                {
+                    "type": "integer",
+                    "maximum": 65535,
+                    "minimum": 1
+                }
+            ]
         },
         "ignoreNamespaces": {
             "description": "Comma-separated list of namespaces to ignore. Only used for eviction webhook",
@@ -312,12 +318,17 @@
         },
         "metricsPort": {
             "description": "Port for the operator's metrics bind address",
-            "type": [
-                "integer",
-                "string"
-            ],
-            "maximum": 65535,
-            "minimum": 1
+            "anyOf": [
+                {
+                    "type": "string",
+                    "pattern": "^([1-9][0-9]{0,3}|[1-5][0-9]{4}|6[0-4][0-9]{3}|65[0-4][0-9]{2}|655[0-2][0-9]|6553[0-5])$"
+                },
+                {
+                    "type": "integer",
+                    "maximum": 65535,
+                    "minimum": 1
+                }
+            ]
         },
         "metricsService": {
             "description": "Service configuration",
@@ -335,12 +346,17 @@
                     "type": "object"
                 },
                 "port": {
-                    "type": [
-                        "integer",
-                        "string"
-                    ],
-                    "maximum": 65535,
-                    "minimum": 1
+                    "anyOf": [
+                        {
+                            "type": "string",
+                            "pattern": "^([1-9][0-9]{0,3}|[1-5][0-9]{4}|6[0-4][0-9]{3}|65[0-4][0-9]{2}|655[0-2][0-9]|6553[0-5])$"
+                        },
+                        {
+                            "type": "integer",
+                            "maximum": 65535,
+                            "minimum": 1
+                        }
+                    ]
                 },
                 "type": {
                     "type": [
@@ -393,9 +409,10 @@
                 "create": {
                     "description": "Create RBAC resources and a service account for the operator",
                     "type": "boolean"
-                },
-                "serviceAccountName": {
-                    "description": "Name of an existing service account to use when rbac.create is false",
+                }
+            },
+            "patternProperties": {
+                "^serviceAccountName$": {
                     "type": "string"
                 }
             },
@@ -482,20 +499,30 @@
                     "type": "object"
                 },
                 "port": {
-                    "type": [
-                        "integer",
-                        "string"
-                    ],
-                    "maximum": 65535,
-                    "minimum": 1
+                    "anyOf": [
+                        {
+                            "type": "string",
+                            "pattern": "^([1-9][0-9]{0,3}|[1-5][0-9]{4}|6[0-4][0-9]{3}|65[0-4][0-9]{2}|655[0-2][0-9]|6553[0-5])$"
+                        },
+                        {
+                            "type": "integer",
+                            "maximum": 65535,
+                            "minimum": 1
+                        }
+                    ]
                 },
                 "targetPort": {
-                    "type": [
-                        "integer",
-                        "string"
-                    ],
-                    "maximum": 65535,
-                    "minimum": 1
+                    "anyOf": [
+                        {
+                            "type": "string",
+                            "pattern": "^([1-9][0-9]{0,3}|[1-5][0-9]{4}|6[0-4][0-9]{3}|65[0-4][0-9]{2}|655[0-2][0-9]|6553[0-5])$"
+                        },
+                        {
+                            "type": "integer",
+                            "maximum": 65535,
+                            "minimum": 1
+                        }
+                    ]
                 },
                 "type": {
                     "description": "Kubernetes Service type",
