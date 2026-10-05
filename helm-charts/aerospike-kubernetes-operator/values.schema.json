@@ -195,11 +195,11 @@
             "anyOf": [
                 {
                     "type": "string",
-                    "pattern": "^(0|[1-9][0-9]*)$"
+                    "pattern": "^[1-9][0-9]*$"
                 },
                 {
                     "type": "integer",
-                    "minimum": 0
+                    "minimum": 1
                 }
             ]
         },

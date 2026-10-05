@@ -45,24 +45,26 @@ tests:
     asserts:
       - notFailedTemplate: {}
 
-  - it: accepts failedPodGracePeriodSeconds integer of 0
+  - it: rejects failedPodGracePeriodSeconds integer of 0
     set:
       failedPodGracePeriodSeconds: 0
     asserts:
-      - notFailedTemplate: {}
+      - failedTemplate:
+          errorPattern: "at '/failedPodGracePeriodSeconds': minimum: got 0, want 1"
 
-  - it: accepts a string failedPodGracePeriodSeconds of 0
+  - it: rejects a string failedPodGracePeriodSeconds of 0
     set:
       failedPodGracePeriodSeconds: "0"
     asserts:
-      - notFailedTemplate: {}
+      - failedTemplate:
+          errorPattern: "at '/failedPodGracePeriodSeconds': .* does not match pattern"
 
   - it: rejects a negative integer failedPodGracePeriodSeconds
     set:
       failedPodGracePeriodSeconds: -1
     asserts:
       - failedTemplate:
-          errorPattern: "at '/failedPodGracePeriodSeconds': minimum: got -1, want 0"
+          errorPattern: "at '/failedPodGracePeriodSeconds': minimum: got -1, want 1"
 
   - it: rejects a negative string failedPodGracePeriodSeconds
     set:
