@@ -340,8 +340,6 @@ func (r *SingleBackupServiceReconciler) updateBackupSvcConfig(ctx context.Contex
 		return nil
 	}
 
-	var currentConfig, desiredConfig dto.Config
-
 	backupSvc := &asdbv1beta1.BackupService{
 		Name:      r.aeroBackupService.Name,
 		Namespace: r.aeroBackupService.Namespace,
@@ -369,34 +367,35 @@ func (r *SingleBackupServiceReconciler) updateBackupSvcConfig(ctx context.Contex
 		return err
 	}
 
+	// The API hides literal secret values, so a change to a secret alone never shows up as a mismatch
+	// between the API and the ConfigMap. Spec and status both hold real values: status is written only
+	// after a successful reconcile, so a difference means the change has not been applied yet.
+	specConfigApplied, err := common.RawConfigsEqual(r.aeroBackupService.Spec.Config, r.aeroBackupService.Status.Config)
+	if err != nil {
+		return fmt.Errorf("compare backup service spec and status config: %w", err)
+	}
+
 	synced, err := common.IsBackupSvcFullConfigSynced(apiBackupSvcConfig, desiredData, r.Log)
 	if err != nil {
 		return fmt.Errorf("check backup service config sync: %w", err)
 	}
 
-	if synced {
+	if synced && specConfigApplied {
 		r.Log.Info("Skipping update, backup service config is already latest")
 		return nil
 	}
 
-	r.Log.Info("Detected backup service config mismatch, reloading config")
+	r.Log.Info("Detected backup service config change, reloading config",
+		"specChanged", !specConfigApplied, "configMismatch", !synced)
 
-	apiBackupSvcConfigData, err := yaml.Marshal(apiBackupSvcConfig)
+	staticChangeErr, err := r.findStaticConfigChange(apiBackupSvcConfig, desiredData, specConfigApplied, synced)
 	if err != nil {
-		return fmt.Errorf("marshal backup service config from API: %w", err)
+		return err
 	}
 
-	if err := yaml.Unmarshal(apiBackupSvcConfigData, &currentConfig); err != nil {
-		return fmt.Errorf("unmarshal backup service config from API: %w", err)
-	}
-
-	if err := yaml.Unmarshal([]byte(desiredData), &desiredConfig); err != nil {
-		return fmt.Errorf("unmarshal desired backup service config: %w", err)
-	}
-
-	if err := validation.ValidateStaticFieldChanges(&currentConfig, &desiredConfig); err != nil {
+	if staticChangeErr != nil {
 		r.Log.Info("Static config change detected, rolling restart of backup service Pod",
-			"err", err)
+			"err", staticChangeErr)
 		// In case of static config change restart the backup service pod
 		return r.restartBackupSvcPod(ctx)
 	}
@@ -406,6 +405,54 @@ func (r *SingleBackupServiceReconciler) updateBackupSvcConfig(ctx context.Contex
 	}
 
 	return nil
+}
+
+// findStaticConfigChange returns a non-nil staticChangeErr if a field that the backup service cannot reload
+// without a restart has changed. A spec change is checked on spec versus status, which hold real values.
+// A mismatch between the API and the ConfigMap is checked on both configs after normalization, because the
+// API hides literal secret values and a raw comparison would report every secret as changed.
+func (r *SingleBackupServiceReconciler) findStaticConfigChange(
+	apiBackupSvcConfig map[string]interface{}, desiredData string, specConfigApplied, synced bool,
+) (staticChangeErr, err error) {
+	if !specConfigApplied {
+		var statusConfig, specConfig dto.Config
+
+		if uErr := yaml.Unmarshal(r.aeroBackupService.Status.Config.Raw, &statusConfig); uErr != nil {
+			return nil, fmt.Errorf("unmarshal backup service status config: %w", uErr)
+		}
+
+		if uErr := yaml.Unmarshal(r.aeroBackupService.Spec.Config.Raw, &specConfig); uErr != nil {
+			return nil, fmt.Errorf("unmarshal backup service spec config: %w", uErr)
+		}
+
+		if staticChangeErr := validation.ValidateStaticFieldChanges(&statusConfig, &specConfig); staticChangeErr != nil {
+			return staticChangeErr, nil
+		}
+	}
+
+	if synced {
+		return nil, nil
+	}
+
+	desiredBackupSvcConfig := make(map[string]interface{})
+
+	if uErr := yaml.Unmarshal([]byte(desiredData), &desiredBackupSvcConfig); uErr != nil {
+		return nil, fmt.Errorf("unmarshal desired backup service config: %w", uErr)
+	}
+
+	current, desired, _ := common.ComparableBackupSvcConfigs(r.Log, apiBackupSvcConfig, desiredBackupSvcConfig)
+
+	currentConfig, err := common.ToBackupSvcDTOConfig(current)
+	if err != nil {
+		return nil, fmt.Errorf("decode backup service config from API: %w", err)
+	}
+
+	desiredConfig, err := common.ToBackupSvcDTOConfig(desired)
+	if err != nil {
+		return nil, fmt.Errorf("decode desired backup service config: %w", err)
+	}
+
+	return validation.ValidateStaticFieldChanges(currentConfig, desiredConfig), nil
 }
 
 func (r *SingleBackupServiceReconciler) restartBackupSvcPod(ctx context.Context) error {
