@@ -108,8 +108,14 @@ func (r *SingleRestoreReconciler) Reconcile(ctx context.Context) (result ctrl.Re
 		return ctrl.Result{RequeueAfter: r.aeroRestore.Spec.PollingPeriod.Duration}, nil
 	}
 
-	r.Recorder.Eventf(r.aeroRestore, corev1.EventTypeNormal, "RestoreCompleted",
-		"Restore completed")
+	switch r.aeroRestore.Status.Phase {
+	case asdbv1beta1.AerospikeRestoreCompleted:
+		r.Recorder.Eventf(r.aeroRestore, corev1.EventTypeNormal, "RestoreCompleted",
+			"Restore completed")
+	case asdbv1beta1.AerospikeRestoreFailed:
+		r.Recorder.Eventf(r.aeroRestore, corev1.EventTypeWarning, "RestoreFailed",
+			"Restore failed")
+	}
 
 	return ctrl.Result{}, nil
 }
