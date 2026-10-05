@@ -1240,7 +1240,7 @@ func validateRackConfig(aslog logr.Logger, cluster *asdbv1.AerospikeCluster,
 	}
 
 	rackMap := map[int]bool{}
-	migrateFillDelaySet := sets.Set[int]{}
+	migrateFillDelaySet := sets.Set[uint32]{}
 
 	var racksBlockedFromRoster int
 

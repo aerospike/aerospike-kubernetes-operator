@@ -168,6 +168,12 @@ spec:
         displayName: Pod Configuration
         path: podSpec
       - description: |-
+          PreviewFeatures is a list of Aerospike server preview feature names to enable via the
+          --preview startup flag. Features gated behind this flag (e.g. "index-checkpoint")
+          will cause the server to crash at startup if the flag is not present.
+        displayName: Preview Features
+        path: previewFeatures
+      - description: |-
           RackConfig Configures the operator to deploy rack aware Aerospike cluster.
           Pods will be deployed in given racks based on given configuration
         displayName: Rack Config

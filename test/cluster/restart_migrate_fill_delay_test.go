@@ -30,7 +30,9 @@ func RestartMigrateFillDelayTest(ctx goctx.Context) {
 			clusterNamespacedName := test.GetNamespacedName(
 				fmt.Sprintf("restart-mfd-cluster-%d", GinkgoParallelProcess()), namespace,
 			)
-			restartMigrateFillDelay := int64(120)
+
+			var restartMigrateFillDelay uint32 = 120
+
 			configMFD := int64(60)
 
 			BeforeEach(

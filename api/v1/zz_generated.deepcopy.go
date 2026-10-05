@@ -1080,7 +1080,7 @@ func (in *RestartStrategy) DeepCopyInto(out *RestartStrategy) {
 	*out = *in
 	if in.OverrideMigrateFillDelay != nil {
 		in, out := &in.OverrideMigrateFillDelay, &out.OverrideMigrateFillDelay
-		*out = new(int64)
+		*out = new(uint32)
 		**out = **in
 	}
 }

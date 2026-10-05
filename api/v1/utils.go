@@ -589,7 +589,7 @@ func GetIntType(value interface{}) (int, error) {
 }
 
 // GetMigrateFillDelay returns the migrate-fill-delay from the Aerospike configuration
-func GetMigrateFillDelay(asConfig *AerospikeConfigSpec) (int, error) {
+func GetMigrateFillDelay(asConfig *AerospikeConfigSpec) (uint32, error) {
 	if asConfig == nil {
 		return 0, nil
 	}
@@ -609,7 +609,7 @@ func GetMigrateFillDelay(asConfig *AerospikeConfigSpec) (int, error) {
 		return 0, fmt.Errorf("migrate-fill-delay %v", err)
 	}
 
-	return fillDelay, nil
+	return uint32(fillDelay), nil //nolint:gosec // fillDelay can't exceed int32 range
 }
 
 // IsClusterSCEnabled returns true if cluster has a sc namespace
