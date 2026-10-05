@@ -49,7 +49,7 @@ func minimalRestoreConfigMap() map[string]interface{} {
 				"path": "/tmp/localStorage",
 			},
 		},
-		"backup-data-path": "/tmp/backup-data",
+		"backup-data-path": "test-routine/backup/1722408895094/data/test",
 	}
 }
 

@@ -399,15 +399,6 @@ func updateValidateBackupSvcConfig(
 		backupSvcConfig.BackupRoutines[name] = routine
 	}
 
-	// Add empty placeholders for missing backupSvcConfig sections. This is required for validation to work.
-	if backupSvcConfig.ServiceConfig.HTTPServer == nil {
-		backupSvcConfig.ServiceConfig.HTTPServer = &dto.HTTPServerConfig{}
-	}
-
-	if backupSvcConfig.ServiceConfig.Logger == nil {
-		backupSvcConfig.ServiceConfig.Logger = &dto.LoggerConfig{}
-	}
-
 	return validation.ValidateConfiguration(backupSvcConfig)
 }
 

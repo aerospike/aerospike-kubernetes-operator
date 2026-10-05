@@ -405,37 +405,52 @@ func (r *SingleBackupReconciler) reconcileScheduledBackup(ctx context.Context) e
 		return fmt.Errorf("fetch backup service config: %w", err)
 	}
 
-	r.Log.Info("Fetched backup service config", "config", backupSvcConfig)
-
 	specBackupConfig, err := r.getBackupConfigInMap()
 	if err != nil {
 		return err
 	}
 
-	var (
-		hotReloadRequired bool
-		clusterName       string
-	)
+	// The API hides literal secret values, so a change to a secret alone never shows up when comparing
+	// the API with the spec. Spec and status both hold real values: status is written only after a
+	// successful reconcile, so a difference means the change has not been applied yet.
+	specConfigApplied, err := common.RawConfigsEqual(r.aeroBackup.Spec.Config, r.aeroBackup.Status.Config)
+	if err != nil {
+		return fmt.Errorf("compare backup spec and status config: %w", err)
+	}
 
-	if cluster, ok := specBackupConfig[asdbv1beta1.AerospikeClusterKey].(map[string]interface{}); ok {
-		hotReloadRequired = r.checkForConfigUpdate(
-			cluster,
-			asdbv1beta1.AerospikeClustersKey,
-			backupSvcConfig,
-		)
+	hotReloadRequired := !specConfigApplied
+	if hotReloadRequired {
+		r.Log.Info("Backup config in spec not yet applied, reload required")
+	}
 
+	desiredConfig, currentConfig, err := r.comparableBackupConfig(ctx, specBackupConfig, backupSvcConfig)
+	if err != nil {
+		return err
+	}
+
+	var clusterName string
+
+	if cluster, ok := desiredConfig[asdbv1beta1.AerospikeClusterKey].(map[string]interface{}); ok {
 		for name := range cluster {
 			clusterName = name
+		}
+
+		if !hotReloadRequired {
+			hotReloadRequired = r.checkForConfigUpdate(
+				cluster,
+				asdbv1beta1.AerospikeClustersKey,
+				currentConfig,
+			)
 		}
 	}
 
 	// Skip further checks if hotReloadRequired is already true
 	if !hotReloadRequired {
-		if routines, ok := specBackupConfig[asdbv1beta1.BackupRoutinesKey].(map[string]interface{}); ok {
+		if routines, ok := desiredConfig[asdbv1beta1.BackupRoutinesKey].(map[string]interface{}); ok {
 			hotReloadRequired = r.checkForConfigUpdate(
 				routines,
 				asdbv1beta1.BackupRoutinesKey,
-				backupSvcConfig,
+				currentConfig,
 			)
 
 			if !hotReloadRequired {
@@ -456,6 +471,67 @@ func (r *SingleBackupReconciler) reconcileScheduledBackup(ctx context.Context) e
 		"Reconciled scheduled backup")
 
 	return nil
+}
+
+// comparableBackupConfig returns the cluster and routines of this backup and the config returned by the
+// backup service API, in a form that can be compared entry by entry. The API hides literal secret values,
+// so the entries are taken from the normalized ConfigMap, which the backup service loads and which holds
+// this backup's entries, and compared with the normalized API config. If normalization is not possible,
+// the spec and the raw API config are returned and compared as they are.
+func (r *SingleBackupReconciler) comparableBackupConfig(
+	ctx context.Context, specBackupConfig, apiBackupSvcConfig map[string]interface{},
+) (desiredConfig, currentConfig map[string]interface{}, err error) {
+	desiredData, err := common.GetBackupSvcConfigFromCM(ctx, r.Client, &r.aeroBackup.Spec.BackupService)
+	if err != nil {
+		return nil, nil, err
+	}
+
+	desiredBackupSvcConfig := make(map[string]interface{})
+
+	if err := yaml.Unmarshal([]byte(desiredData), &desiredBackupSvcConfig); err != nil {
+		return nil, nil, fmt.Errorf("unmarshal backup service config from ConfigMap data: %w", err)
+	}
+
+	current, desired, normalized := common.ComparableBackupSvcConfigs(r.Log, apiBackupSvcConfig, desiredBackupSvcConfig)
+	if !normalized {
+		return specBackupConfig, apiBackupSvcConfig, nil
+	}
+
+	desiredConfig = make(map[string]interface{}, len(specBackupConfig))
+	for key, value := range specBackupConfig {
+		desiredConfig[key] = value
+	}
+
+	// The spec uses the aerospike-cluster key for its single cluster, the backup service config uses
+	// aerospike-clusters for all clusters.
+	for specKey, svcKey := range map[string]string{
+		asdbv1beta1.AerospikeClusterKey: asdbv1beta1.AerospikeClustersKey,
+		asdbv1beta1.BackupRoutinesKey:   asdbv1beta1.BackupRoutinesKey,
+	} {
+		specSection, ok := specBackupConfig[specKey].(map[string]interface{})
+		if !ok {
+			continue
+		}
+
+		svcSection, err := common.GetConfigSection(desired, svcKey)
+		if err != nil {
+			return nil, nil, fmt.Errorf("get %s section from normalized backup service config: %w", svcKey, err)
+		}
+
+		entries := make(map[string]interface{}, len(specSection))
+
+		for name, specEntry := range specSection {
+			if entry, exists := svcSection[name]; exists {
+				entries[name] = entry
+			} else {
+				entries[name] = specEntry
+			}
+		}
+
+		desiredConfig[specKey] = entries
+	}
+
+	return desiredConfig, current, nil
 }
 
 func (r *SingleBackupReconciler) checkForConfigUpdate(

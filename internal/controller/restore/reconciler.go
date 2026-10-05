@@ -8,6 +8,7 @@ import (
 	"net/http"
 
 	"github.com/aerospike/aerospike-backup-service/v3/pkg/dto"
+	"github.com/aerospike/aerospike-backup-service/v3/pkg/model"
 	"github.com/go-logr/logr"
 	corev1 "k8s.io/api/core/v1"
 	k8sRuntime "k8s.io/apimachinery/pkg/runtime"
@@ -339,17 +340,19 @@ func (r *SingleRestoreReconciler) cancelRestoreJob() error {
 }
 
 func statusToPhase(log logr.Logger, status string) asdbv1beta1.AerospikeRestorePhase {
-	jobStatus, ok := dto.ParseJobStatus(status)
-	if !ok {
+	// Validate must run before ToModel: ToModel returns an unknown value unchanged.
+	// Both accept any letter case and the legacy "Done"/"Failed" values.
+	jobStatus := dto.JobStatus(status)
+	if err := jobStatus.Validate(); err != nil {
 		return ""
 	}
 
-	switch jobStatus {
-	case dto.RestoreRunning:
+	switch jobStatus.ToModel() {
+	case model.RestoreRunning:
 		return asdbv1beta1.AerospikeRestoreInProgress
-	case dto.RestoreSuccess:
+	case model.RestoreSuccess:
 		return asdbv1beta1.AerospikeRestoreCompleted
-	case dto.RestoreFailure, dto.RestoreCanceled:
+	case model.RestoreFailure, model.RestoreCanceled:
 		return asdbv1beta1.AerospikeRestoreFailed
 	default:
 		log.Info("Unmapped ABS restore job status; update statusToPhase for new dto.JobStatus value",
