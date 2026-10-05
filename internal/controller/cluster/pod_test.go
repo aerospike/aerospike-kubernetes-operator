@@ -236,7 +236,7 @@ func TestMFDDelayForRestart(t *testing.T) {
 				// Apply configMFD to both the cluster-level and rack-level AerospikeConfig so
 				// GetMigrateFillDelay reads the correct value regardless of which is used.
 				svcMap := cluster.Spec.RackConfig.Racks[0].AerospikeConfig.Value[asdbv1.ConfKeyService].(map[string]interface{})
-				svcMap[asdbv1.ConfKeyMigrateFillDelay] = tc.configMFD
+				svcMap[asdbv1.ConfKeyMigrateFillDelay] = int64(tc.configMFD)
 			}
 
 			rackState := newTestRackState(cluster)
