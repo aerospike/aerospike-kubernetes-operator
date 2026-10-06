@@ -11,19 +11,26 @@ tests:
     asserts:
       - notFailedTemplate: {}
 
+  # 4.5.0 compatibility: an empty env var makes the operator fall back to its
+  # built-in default init image registry and name/tag.
+  - it: accepts a null aerospikeKubernetesInitRegistry
+    set:
+      aerospikeKubernetesInitRegistry: null
+    asserts:
+      - notFailedTemplate: {}
+
+  - it: accepts a null aerospikeKubernetesInitNameTag
+    set:
+      aerospikeKubernetesInitNameTag: null
+    asserts:
+      - notFailedTemplate: {}
+
   # -- aerospikeKubernetesInitRegistryNamespace --
   - it: accepts a non-empty aerospikeKubernetesInitRegistryNamespace
     set:
       aerospikeKubernetesInitRegistryNamespace: "my-namespace"
     asserts:
       - notFailedTemplate: {}
-
-  - it: rejects an empty aerospikeKubernetesInitRegistryNamespace
-    set:
-      aerospikeKubernetesInitRegistryNamespace: ""
-    asserts:
-      - failedTemplate:
-          errorPattern: "at '/aerospikeKubernetesInitRegistryNamespace': minLength: got 0, want 1"
 
   # -- operatorImage --
   - it: accepts a custom operatorImage.repository string
@@ -79,10 +86,23 @@ tests:
     asserts:
       - notFailedTemplate: {}
 
-  - it: rejects imagePullSecrets items that are not strings
+  - it: accepts imagePullSecrets as an object for backwards compatibility (deprecated, to be removed in a future major release)
     set:
       imagePullSecrets:
-        - 123
+        secret_with_credentials_to_custom_registry: {}
+    asserts:
+      - notFailedTemplate: {}
+
+  # 4.5.0 compatibility: the template's {{- with }} skips an empty string.
+  - it: accepts an empty imagePullSecrets string
+    set:
+      imagePullSecrets: ""
+    asserts:
+      - notFailedTemplate: {}
+
+  - it: rejects a non-array non-object imagePullSecrets value
+    set:
+      imagePullSecrets: "not-valid"
     asserts:
       - failedTemplate:
-          errorPattern: "imagePullSecrets/0.*got number, want string"
+          errorPattern: "imagePullSecrets.*got string, want array"

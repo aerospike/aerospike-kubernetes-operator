@@ -45,48 +45,6 @@ tests:
     asserts:
       - notFailedTemplate: {}
 
-  - it: rejects failedPodGracePeriodSeconds integer of 0
-    set:
-      failedPodGracePeriodSeconds: 0
-    asserts:
-      - failedTemplate:
-          errorPattern: "at '/failedPodGracePeriodSeconds': minimum: got 0, want 1"
-
-  - it: rejects a string failedPodGracePeriodSeconds of 0
-    set:
-      failedPodGracePeriodSeconds: "0"
-    asserts:
-      - failedTemplate:
-          errorPattern: "at '/failedPodGracePeriodSeconds': .* does not match pattern"
-
-  - it: rejects a negative integer failedPodGracePeriodSeconds
-    set:
-      failedPodGracePeriodSeconds: -1
-    asserts:
-      - failedTemplate:
-          errorPattern: "at '/failedPodGracePeriodSeconds': minimum: got -1, want 1"
-
-  - it: rejects a negative string failedPodGracePeriodSeconds
-    set:
-      failedPodGracePeriodSeconds: "-1"
-    asserts:
-      - failedTemplate:
-          errorPattern: "at '/failedPodGracePeriodSeconds': .* does not match pattern"
-
-  - it: rejects a non-numeric string failedPodGracePeriodSeconds
-    set:
-      failedPodGracePeriodSeconds: "abc"
-    asserts:
-      - failedTemplate:
-          errorPattern: "at '/failedPodGracePeriodSeconds': .* does not match pattern"
-
-  - it: rejects a string failedPodGracePeriodSeconds with a leading zero
-    set:
-      failedPodGracePeriodSeconds: "060"
-    asserts:
-      - failedTemplate:
-          errorPattern: "at '/failedPodGracePeriodSeconds': .* does not match pattern"
-
   # -- watchNamespaces --
   - it: accepts an empty watchNamespaces (cluster-wide)
     set:
@@ -106,46 +64,11 @@ tests:
     asserts:
       - notFailedTemplate: {}
 
-  - it: rejects watchNamespaces with a double comma (empty segment)
-    set:
-      watchNamespaces: "ns1,,ns2"
-    asserts:
-      - failedTemplate:
-          errorPattern: "watchNamespaces.*does not match pattern"
-
-  - it: rejects watchNamespaces with an uppercase namespace
-    set:
-      watchNamespaces: "Ns1"
-    asserts:
-      - failedTemplate:
-          errorPattern: "watchNamespaces.*does not match pattern"
-
-  - it: rejects watchNamespaces with a leading hyphen
-    set:
-      watchNamespaces: "-ns1"
-    asserts:
-      - failedTemplate:
-          errorPattern: "watchNamespaces.*does not match pattern"
-
-  - it: rejects watchNamespaces with a trailing comma
-    set:
-      watchNamespaces: "ns1,"
-    asserts:
-      - failedTemplate:
-          errorPattern: "watchNamespaces.*does not match pattern"
-
   - it: accepts watchNamespaces with spaces around commas
     set:
       watchNamespaces: " default , aerospike "
     asserts:
       - notFailedTemplate: {}
-
-  - it: rejects watchNamespaces with a space inside a namespace name
-    set:
-      watchNamespaces: "aero spike"
-    asserts:
-      - failedTemplate:
-          errorPattern: "watchNamespaces.*does not match pattern"
 
   # -- ignoreNamespaces --
   - it: accepts a comma-joined multi-namespace ignoreNamespaces
@@ -160,13 +83,6 @@ tests:
     asserts:
       - notFailedTemplate: {}
 
-  - it: rejects ignoreNamespaces with the same invalid shape (shared pattern with watchNamespaces)
-    set:
-      ignoreNamespaces: "kube-system,,kube-node-lease"
-    asserts:
-      - failedTemplate:
-          errorPattern: "ignoreNamespaces.*does not match pattern"
-
   # -- safePodEviction --
   - it: accepts safePodEviction.enable as a boolean
     set:
@@ -175,42 +91,22 @@ tests:
     asserts:
       - notFailedTemplate: {}
 
-  - it: accepts safePodEviction.timeoutSeconds at the upper string boundary
+  # 4.5.0 compatibility: a null enable leaves the eviction webhook off, and a null
+  # timeoutSeconds renders an empty value so Kubernetes applies its default (10s).
+  - it: accepts a null safePodEviction.enable
     set:
       safePodEviction:
-        timeoutSeconds: "30"
+        enable: null
     asserts:
       - notFailedTemplate: {}
 
-  - it: accepts safePodEviction.timeoutSeconds at the lower boundary
+  - it: accepts a null safePodEviction.timeoutSeconds when enable is true
     set:
       safePodEviction:
-        timeoutSeconds: 1
+        enable: true
+        timeoutSeconds: null
     asserts:
       - notFailedTemplate: {}
-
-  - it: accepts safePodEviction.timeoutSeconds at the upper integer boundary
-    set:
-      safePodEviction:
-        timeoutSeconds: 30
-    asserts:
-      - notFailedTemplate: {}
-
-  - it: rejects an integer safePodEviction.timeoutSeconds above 30
-    set:
-      safePodEviction:
-        timeoutSeconds: 999
-    asserts:
-      - failedTemplate:
-          errorPattern: "safePodEviction/timeoutSeconds.*'anyOf' failed"
-
-  - it: rejects an integer safePodEviction.timeoutSeconds of 0
-    set:
-      safePodEviction:
-        timeoutSeconds: 0
-    asserts:
-      - failedTemplate:
-          errorPattern: "safePodEviction/timeoutSeconds.*'anyOf' failed"
 
   # -- logging --
   - it: accepts logging.development as a boolean
@@ -234,13 +130,52 @@ tests:
     asserts:
       - notFailedTemplate: {}
 
-  - it: rejects logging.level as a numeric-looking string (must be a real integer, not a string)
+  # Zap lowercases the level and Atoi's numeric strings, so these all start the operator.
+  - it: accepts logging.level in any case
+    set:
+      logging:
+        level: "DEBUG"
+    asserts:
+      - notFailedTemplate: {}
+
+  - it: accepts logging.level as a positive integer string
     set:
       logging:
         level: "1"
     asserts:
+      - notFailedTemplate: {}
+
+  - it: accepts logging.level as an integer 0 and leaves the flag off
+    set:
+      logging:
+        level: 0
+    asserts:
+      - notContains:
+          path: spec.template.spec.containers[0].args
+          content: --zap-log-level=0
+
+  # --zap-devel is parsed by strconv.ParseBool.
+  - it: accepts logging.development in any form strconv.ParseBool accepts
+    set:
+      logging:
+        development: "True"
+    asserts:
+      - notFailedTemplate: {}
+
+  - it: accepts logging.development as an integer
+    set:
+      logging:
+        development: 1
+    asserts:
+      - notFailedTemplate: {}
+
+  - it: rejects a logging.development value strconv.ParseBool rejects
+    set:
+      logging:
+        development: "yes"
+    asserts:
       - failedTemplate:
-          errorPattern: "logging/level.*'anyOf' failed"
+          errorPattern: "logging/development.*'anyOf' failed"
 
   - it: accepts each valid logging.encoder
     set:
@@ -249,26 +184,17 @@ tests:
     asserts:
       - notFailedTemplate: {}
 
-  - it: rejects an unknown logging.encoder
-    set:
-      logging:
-        encoder: "text"
-    asserts:
-      - failedTemplate:
-          errorPattern: "logging/encoder.*value must be one of"
-
-  - it: rejects logging.encoder with wrong casing
+  # Zap lowercases the encoder, so any casing starts the operator.
+  - it: accepts logging.encoder in any case
     set:
       logging:
         encoder: "JSON"
     asserts:
-      - failedTemplate:
-          errorPattern: "logging/encoder.*value must be one of"
+      - notFailedTemplate: {}
 
   # -- rbac --
-  # rbac.create itself is not a required field: the "required": ["create"] inside
-  # the if-block only scopes the conditional (so it doesn't vacuously match when
-  # create is absent) and does not force callers to set create.
+  # An empty rbac map passes because Helm merges it with the chart default
+  # (create: true) before validation.
   - it: accepts rbac.create being entirely absent
     set:
       rbac: {}
@@ -279,34 +205,6 @@ tests:
     set:
       rbac:
         create: true
-    asserts:
-      - notFailedTemplate: {}
-
-  # rbac.serviceAccountName has no minLength constraint on its own, but is required
-  # non-empty when rbac.create is false, since the Deployment then relies on the
-  # user-supplied service account existing. values.yaml always defines it (as ""),
-  # so the conditional surfaces as a minLength failure rather than a missing property.
-  - it: accepts an empty rbac.serviceAccountName when rbac.create is true (unused by the template)
-    set:
-      rbac:
-        create: true
-        serviceAccountName: ""
-    asserts:
-      - notFailedTemplate: {}
-
-  - it: accepts a non-empty rbac.serviceAccountName when rbac.create is true
-    set:
-      rbac:
-        create: true
-        serviceAccountName: "my-sa"
-    asserts:
-      - notFailedTemplate: {}
-
-  - it: accepts a non-empty rbac.serviceAccountName when rbac.create is false
-    set:
-      rbac:
-        create: false
-        serviceAccountName: "my-sa"
     asserts:
       - notFailedTemplate: {}
 
@@ -324,14 +222,6 @@ tests:
         "FOO": "bar"
     asserts:
       - notFailedTemplate: {}
-
-  - it: rejects an extraEnv key starting with a digit
-    set:
-      extraEnv:
-        9FOO: "bar"
-    asserts:
-      - failedTemplate:
-          errorPattern: "invalid propertyName '9FOO'"
 
   - it: renders a numeric extraEnv value as a string
     set:
@@ -351,11 +241,33 @@ tests:
           path: spec.template.spec.containers[0].env[?(@.name == "FOO")].value
           value: "true"
 
-  - it: rejects an object extraEnv value
+  # 4.5.0 had no schema and rendered a null extraEnv value as an empty string.
+  - it: renders a null extraEnv value as an empty string
     set:
       extraEnv:
-        FOO:
-          bar: baz
+        FOO: null
+    asserts:
+      - equal:
+          path: spec.template.spec.containers[0].env[?(@.name == "FOO")].value
+          value: ""
+
+  # 4.5.0 compatibility: the template's {{- if .Values.extraEnv }} skips an empty
+  # list or empty string.
+  - it: accepts an empty extraEnv list
+    set:
+      extraEnv: []
+    asserts:
+      - notFailedTemplate: {}
+
+  - it: accepts an empty extraEnv string
+    set:
+      extraEnv: ""
+    asserts:
+      - notFailedTemplate: {}
+
+  - it: rejects a non-empty extraEnv string
+    set:
+      extraEnv: "FOO=bar"
     asserts:
       - failedTemplate:
-          errorPattern: "extraEnv/FOO.*got object, want boolean or number or string"
+          errorPattern: "at '/extraEnv': 'anyOf' failed"

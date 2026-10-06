@@ -10,25 +10,30 @@
         "logging",
         "metrics",
         "safePodEviction",
-        "aerospikeKubernetesInitRegistry",
-        "aerospikeKubernetesInitRegistryNamespace",
-        "aerospikeKubernetesInitNameTag",
         "metricsService",
         "webhookService"
     ],
     "properties": {
         "aerospikeKubernetesInitNameTag": {
             "description": "Name and tag of aerospike-init image",
-            "type": "string"
+            "type": [
+                "string",
+                "null"
+            ]
         },
         "aerospikeKubernetesInitRegistry": {
             "description": "Registry used to pull aerospike-init image",
-            "type": "string"
+            "type": [
+                "string",
+                "null"
+            ]
         },
         "aerospikeKubernetesInitRegistryNamespace": {
             "description": "Namespace in registry used to pull aerospike-init image",
-            "type": "string",
-            "minLength": 1
+            "type": [
+                "string",
+                "null"
+            ]
         },
         "certs": {
             "description": "Certificate configuration for the webhook and metrics endpoints",
@@ -67,16 +72,22 @@
                             }
                         }
                     ],
-                    "required": [
-                        "create"
-                    ],
                     "properties": {
                         "create": {
-                            "type": "boolean"
+                            "type": [
+                                "boolean",
+                                "string",
+                                "number",
+                                "null"
+                            ]
                         },
                         "metricsServerCertSecretName": {
                             "description": "Name of the secret holding the metrics server certificate",
-                            "type": "string"
+                            "type": [
+                                "string",
+                                "number",
+                                "null"
+                            ]
                         }
                     },
                     "additionalProperties": false
@@ -128,7 +139,12 @@
                         },
                         "create": {
                             "description": "DEPRECATED: use `provider` instead. Only consulted when `provider` is empty. Will be removed in a future release.",
-                            "type": "boolean"
+                            "type": [
+                                "boolean",
+                                "string",
+                                "number",
+                                "null"
+                            ]
                         },
                         "external": {
                             "type": "object",
@@ -169,7 +185,7 @@
         },
         "extraEnv": {
             "description": "Extra environment variables that will be passed into the operator pods",
-            "allOf": [
+            "anyOf": [
                 {
                     "type": [
                         "object",
@@ -177,69 +193,62 @@
                     ]
                 },
                 {
-                    "propertyNames": {
-                        "pattern": "^[-._a-zA-Z][-._a-zA-Z0-9]*$"
-                    }
+                    "type": "array",
+                    "maxItems": 0
+                },
+                {
+                    "const": ""
                 }
-            ],
-            "additionalProperties": {
-                "type": [
-                    "string",
-                    "number",
-                    "boolean"
-                ]
-            }
+            ]
         },
         "failedPodGracePeriodSeconds": {
             "description": "Grace period to delete/recover failed pods (in seconds)",
-            "anyOf": [
-                {
-                    "type": "string",
-                    "pattern": "^[1-9][0-9]*$"
-                },
-                {
-                    "type": "integer",
-                    "minimum": 1
-                }
+            "type": [
+                "string",
+                "number",
+                "null"
             ]
         },
         "fullnameOverride": {
             "description": "Override the fully qualified name used for generated resource names",
-            "type": "string"
+            "type": [
+                "string",
+                "null"
+            ]
         },
         "healthPort": {
             "description": "Port for the operator's health probe bind address",
             "anyOf": [
                 {
-                    "type": "string",
-                    "pattern": "^([1-9][0-9]{0,3}|[1-5][0-9]{4}|6[0-4][0-9]{3}|65[0-4][0-9]{2}|655[0-2][0-9]|6553[0-5])$"
+                    "type": "string"
                 },
                 {
-                    "type": "integer",
-                    "maximum": 65535,
-                    "minimum": 1
+                    "type": "integer"
                 }
             ]
         },
         "ignoreNamespaces": {
             "description": "Comma-separated list of namespaces to ignore. Only used for eviction webhook",
-            "type": "string",
-            "pattern": "^$|^ *[a-z0-9]([-a-z0-9]*[a-z0-9])? *(, *[a-z0-9]([-a-z0-9]*[a-z0-9])? *)*$"
+            "type": [
+                "string",
+                "array",
+                "null"
+            ]
         },
         "imagePullSecrets": {
             "description": "In case the above image is pulled from a registry that requires authentication, a secret containing credentials can be added imagePullSecrets: - secret_with_credentials_to_custom_registry",
             "anyOf": [
                 {
-                    "type": "array",
-                    "items": {
-                        "type": "string"
-                    }
+                    "type": "array"
                 },
                 {
                     "type": "object"
                 },
                 {
                     "type": "null"
+                },
+                {
+                    "const": ""
                 }
             ]
         },
@@ -257,36 +266,56 @@
                         },
                         {
                             "enum": [
+                                0,
+                                1,
+                                "0",
+                                "1",
+                                "t",
+                                "f",
+                                "T",
+                                "F",
                                 "true",
-                                "false"
+                                "false",
+                                "True",
+                                "False",
+                                "TRUE",
+                                "FALSE"
                             ]
                         }
                     ]
                 },
                 "encoder": {
-                    "description": "Zap log encoder (--zap-encoder). Empty leaves the flag off",
-                    "type": "string",
-                    "enum": [
-                        "",
-                        "json",
-                        "console"
-                    ]
-                },
-                "level": {
-                    "description": "Zap log level (--zap-log-level): debug, info, error, panic, or a positive integer for custom verbosity. Empty leaves the flag off",
+                    "description": "Zap log encoder (--zap-encoder): json or console (any case). Empty leaves the flag off",
                     "anyOf": [
                         {
-                            "enum": [
-                                "",
-                                "debug",
-                                "info",
-                                "error",
-                                "panic"
+                            "type": [
+                                "string",
+                                "null"
                             ]
                         },
                         {
+                            "const": false
+                        },
+                        {
+                            "const": 0
+                        }
+                    ]
+                },
+                "level": {
+                    "description": "Zap log level (--zap-log-level): debug, info, error, panic (any case), or a positive integer for custom verbosity. Empty (or 0) leaves the flag off",
+                    "anyOf": [
+                        {
+                            "type": "string"
+                        },
+                        {
                             "type": "integer",
-                            "minimum": 1
+                            "minimum": 0
+                        },
+                        {
+                            "const": false
+                        },
+                        {
+                            "type": "null"
                         }
                     ]
                 }
@@ -307,8 +336,20 @@
                         },
                         {
                             "enum": [
+                                0,
+                                1,
+                                "0",
+                                "1",
+                                "t",
+                                "f",
+                                "T",
+                                "F",
                                 "true",
-                                "false"
+                                "false",
+                                "True",
+                                "False",
+                                "TRUE",
+                                "FALSE"
                             ]
                         }
                     ]
@@ -320,13 +361,10 @@
             "description": "Port for the operator's metrics bind address",
             "anyOf": [
                 {
-                    "type": "string",
-                    "pattern": "^([1-9][0-9]{0,3}|[1-5][0-9]{4}|6[0-4][0-9]{3}|65[0-4][0-9]{2}|655[0-2][0-9]|6553[0-5])$"
+                    "type": "string"
                 },
                 {
-                    "type": "integer",
-                    "maximum": 65535,
-                    "minimum": 1
+                    "type": "integer"
                 }
             ]
         },
@@ -337,24 +375,13 @@
                 "port"
             ],
             "properties": {
-                "annotations": {
-                    "description": "Extra annotations for the service",
-                    "type": "object"
-                },
-                "labels": {
-                    "description": "Extra labels for the service",
-                    "type": "object"
-                },
                 "port": {
                     "anyOf": [
                         {
-                            "type": "string",
-                            "pattern": "^([1-9][0-9]{0,3}|[1-5][0-9]{4}|6[0-4][0-9]{3}|65[0-4][0-9]{2}|655[0-2][0-9]|6553[0-5])$"
+                            "type": "string"
                         },
                         {
-                            "type": "integer",
-                            "maximum": 65535,
-                            "minimum": 1
+                            "type": "integer"
                         }
                     ]
                 },
@@ -364,12 +391,14 @@
                         "null"
                     ]
                 }
-            },
-            "additionalProperties": false
+            }
         },
         "nameOverride": {
             "description": "Override the chart name used in generated resource names",
-            "type": "string"
+            "type": [
+                "string",
+                "null"
+            ]
         },
         "operatorImage": {
             "description": "Operator image",
@@ -402,73 +431,50 @@
         "rbac": {
             "description": "RBAC resource creation for the operator",
             "type": "object",
-            "required": [
-                "create"
-            ],
             "properties": {
                 "create": {
                     "description": "Create RBAC resources and a service account for the operator",
-                    "type": "boolean"
+                    "type": [
+                        "boolean",
+                        "string",
+                        "number",
+                        "null"
+                    ]
                 }
-            },
-            "patternProperties": {
-                "^serviceAccountName$": {
-                    "type": "string"
-                }
-            },
-            "additionalProperties": false
+            }
         },
         "replicas": {
             "description": "Number of operator replicas to deploy",
-            "type": [
-                "integer",
-                "string",
-                "null"
-            ],
-            "minimum": 0
+            "anyOf": [
+                {
+                    "type": "integer",
+                    "minimum": 0
+                },
+                {
+                    "type": "string"
+                },
+                {
+                    "type": "null"
+                }
+            ]
         },
         "safePodEviction": {
             "description": "Enable the eviction webhook to safely block Aerospike pod evictions during node maintenance Also enables Prometheus metrics: aerospike_ako_eviction_webhook_requests_total (labels: eviction_namespace, decision)",
-            "allOf": [
-                {
-                    "type": "object"
-                },
-                {
-                    "if": {
-                        "required": [
-                            "enable"
-                        ],
-                        "properties": {
-                            "enable": {
-                                "const": true
-                            }
-                        }
-                    },
-                    "then": {
-                        "required": [
-                            "timeoutSeconds"
-                        ]
-                    }
-                }
-            ],
-            "required": [
-                "enable"
-            ],
+            "type": "object",
             "properties": {
                 "enable": {
-                    "type": "boolean"
+                    "type": [
+                        "boolean",
+                        "string",
+                        "number",
+                        "null"
+                    ]
                 },
                 "timeoutSeconds": {
-                    "anyOf": [
-                        {
-                            "type": "string",
-                            "pattern": "^([1-9]|[12][0-9]|30)$"
-                        },
-                        {
-                            "type": "integer",
-                            "maximum": 30,
-                            "minimum": 1
-                        }
+                    "type": [
+                        "string",
+                        "number",
+                        "null"
                     ]
                 }
             },
@@ -478,9 +484,9 @@
             "description": "Comma-separated list of namespaces to watch for Aerospike custom resources",
             "type": [
                 "string",
+                "array",
                 "null"
-            ],
-            "pattern": "^$|^ *[a-z0-9]([-a-z0-9]*[a-z0-9])? *(, *[a-z0-9]([-a-z0-9]*[a-z0-9])? *)*$"
+            ]
         },
         "webhookService": {
             "description": "Service configuration",
@@ -490,37 +496,23 @@
                 "targetPort"
             ],
             "properties": {
-                "annotations": {
-                    "description": "Extra annotations for the service",
-                    "type": "object"
-                },
-                "labels": {
-                    "description": "Extra labels for the service",
-                    "type": "object"
-                },
                 "port": {
                     "anyOf": [
                         {
-                            "type": "string",
-                            "pattern": "^([1-9][0-9]{0,3}|[1-5][0-9]{4}|6[0-4][0-9]{3}|65[0-4][0-9]{2}|655[0-2][0-9]|6553[0-5])$"
+                            "type": "string"
                         },
                         {
-                            "type": "integer",
-                            "maximum": 65535,
-                            "minimum": 1
+                            "type": "integer"
                         }
                     ]
                 },
                 "targetPort": {
                     "anyOf": [
                         {
-                            "type": "string",
-                            "pattern": "^([1-9][0-9]{0,3}|[1-5][0-9]{4}|6[0-4][0-9]{3}|65[0-4][0-9]{2}|655[0-2][0-9]|6553[0-5])$"
+                            "type": "string"
                         },
                         {
-                            "type": "integer",
-                            "maximum": 65535,
-                            "minimum": 1
+                            "type": "integer"
                         }
                     ]
                 },
@@ -531,8 +523,7 @@
                         "null"
                     ]
                 }
-            },
-            "additionalProperties": false
+            }
         }
     },
     "additionalProperties": true

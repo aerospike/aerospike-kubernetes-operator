@@ -41,20 +41,20 @@ tests:
     asserts:
       - notFailedTemplate: {}
 
-  - it: rejects certs.webhook.create as a string
-    set:
-      certs:
-        webhook:
-          create: "true"
-    asserts:
-      - failedTemplate:
-          errorPattern: "certs/webhook/create.*got string, want boolean"
-
   - it: accepts certs.metrics.create as a boolean
     set:
       certs:
         metrics:
           create: true
+    asserts:
+      - notFailedTemplate: {}
+
+  # 4.5.0 compatibility: a null create is treated the same as false.
+  - it: accepts a null certs.metrics.create
+    set:
+      certs:
+        metrics:
+          create: null
     asserts:
       - notFailedTemplate: {}
 
@@ -299,3 +299,19 @@ tests:
         secure: false
     asserts:
       - notFailedTemplate: {}
+
+  # --metrics-secure is parsed by strconv.ParseBool.
+  - it: accepts metrics.secure in any form strconv.ParseBool accepts
+    set:
+      metrics:
+        secure: "False"
+    asserts:
+      - notFailedTemplate: {}
+
+  - it: rejects a metrics.secure value strconv.ParseBool rejects
+    set:
+      metrics:
+        secure: "no"
+    asserts:
+      - failedTemplate:
+          errorPattern: "metrics/secure.*'anyOf' failed"
