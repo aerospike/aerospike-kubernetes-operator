@@ -35,7 +35,7 @@ healthPort: 8081 # @schema required; anyOf: [{type: string}, {type: integer}]
 metricsPort: 8443 # @schema required; anyOf: [{type: string}, {type: integer}]
 
 # -- Certificate configuration for the webhook and metrics endpoints
-certs: # @schema required; additionalProperties: false
+certs: # @schema required
   # @schema allOf: [{type: object}, {if: {properties: {provider: {const: external}}, required: [provider]}, then: {required: [external], properties: {external: {required: [caBundle], properties: {caBundle: {minLength: 1}}}}}}]
   # @schema additionalProperties: false
   # -- Webhook server certificate configuration

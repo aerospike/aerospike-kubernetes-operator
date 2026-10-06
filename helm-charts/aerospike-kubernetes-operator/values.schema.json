@@ -180,8 +180,7 @@
                     },
                     "additionalProperties": false
                 }
-            },
-            "additionalProperties": false
+            }
         },
         "extraEnv": {
             "description": "Extra environment variables that will be passed into the operator pods",
