@@ -76,6 +76,19 @@ podSpec: {}
 #      limits:
 #        cpu: 100m
 #        memory: 128Mi
+#    # Hardened container settings, matching the backup service's own Helm chart.
+#    # runAsUser/runAsGroup are required with runAsNonRoot: the image user is the name "absuser", so the kubelet
+#    # needs the numeric ID to verify a non-root user. readOnlyRootFilesystem is not supported yet: the pod has
+#    # no writable /tmp or local-storage volume. Local backup files are written owner-only (0600/0700).
+#    securityContext:
+#      runAsNonRoot: true
+#      runAsUser: 65532
+#      runAsGroup: 65532
+#      allowPrivilegeEscalation: false
+#      capabilities:
+#        drop: ["ALL"]
+#      seccompProfile:
+#        type: RuntimeDefault
 
 ## OperatorClientCert configures how the operator connects to the backup service over HTTPS.
 ## When set, the operator uses the service.https listener from backupServiceConfig, which must be enabled.
