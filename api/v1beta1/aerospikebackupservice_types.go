@@ -80,6 +80,13 @@ type AerospikeBackupServiceSpec struct {
 	// +operator-sdk:csv:customresourcedefinitions:type=spec,displayName="K8s Service"
 	// +optional
 	Service *Service `json:"service,omitempty"`
+
+	// OperatorClientCert configures how the operator connects to the backup service over HTTPS.
+	// When set, the operator uses the service.https listener from config, which must be enabled.
+	// When not set, the operator uses the service.http listener, which must be enabled.
+	// +operator-sdk:csv:customresourcedefinitions:type=spec,displayName="Operator Client Cert"
+	// +optional
+	OperatorClientCert *OperatorClientCertSpec `json:"operatorClientCert,omitempty"`
 }
 
 // AerospikeBackupServiceStatus defines the observed state of AerospikeBackupService
@@ -116,6 +123,10 @@ type AerospikeBackupServiceStatus struct {
 	// +optional
 	Service *Service `json:"service,omitempty"`
 
+	// OperatorClientCert is the configuration the operator uses to connect to the backup service over HTTPS.
+	// +optional
+	OperatorClientCert *OperatorClientCertSpec `json:"operatorClientCert,omitempty"`
+
 	// ContextPath is the backup service API context path
 	// +optional
 	ContextPath string `json:"contextPath,omitempty"`
@@ -123,9 +134,50 @@ type AerospikeBackupServiceStatus struct {
 	// Phase denotes Backup service phase
 	Phase AerospikeBackupServicePhase `json:"phase"`
 
-	// Port is the listening port of backup service
+	// Scheme is the URL scheme the operator uses to connect to the backup service.
+	// An empty value means HTTP.
+	// +kubebuilder:validation:Enum=HTTP;HTTPS
+	// +optional
+	Scheme corev1.URIScheme `json:"scheme,omitempty"`
+
+	// Port is the port the operator uses to connect to the backup service.
 	// +optional
 	Port int32 `json:"port,omitempty"`
+}
+
+// OperatorClientCertSpec configures the TLS connection from the operator to the backup service HTTPS listener.
+type OperatorClientCertSpec struct {
+	// SecretCertSource is the Secret holding the CA certificate used to verify the backup service certificate
+	// and, when the backup service requires client certificates, the operator's client certificate and key.
+	SecretCertSource SecretCertSource `json:"secretCertSource"`
+
+	// ServerName is the host name expected in the backup service certificate.
+	// Defaults to <name>.<namespace>.svc of the AerospikeBackupService.
+	// +optional
+	ServerName string `json:"serverName,omitempty"`
+}
+
+// SecretCertSource is a Secret in the namespace of the AerospikeBackupService holding the operator's TLS files.
+// Each *Filename field is a key in the Secret's data, for example ca.crt.
+type SecretCertSource struct {
+	// SecretName is the name of the Secret.
+	// +kubebuilder:validation:MinLength=1
+	SecretName string `json:"secretName"`
+
+	// CaCertsFilename is the key of the CA certificate that signed the backup service certificate.
+	// When set, only this CA is trusted. If not set, the system CA certificates are used.
+	// +optional
+	CaCertsFilename string `json:"caCertsFilename,omitempty"`
+
+	// ClientCertFilename is the key of the operator's client certificate.
+	// Required when the backup service sets client-auth to require-and-verify.
+	// Must be set together with ClientKeyFilename.
+	// +optional
+	ClientCertFilename string `json:"clientCertFilename,omitempty"`
+
+	// ClientKeyFilename is the key of the private key for ClientCertFilename.
+	// +optional
+	ClientKeyFilename string `json:"clientKeyFilename,omitempty"`
 }
 
 type ServicePodSpec struct {

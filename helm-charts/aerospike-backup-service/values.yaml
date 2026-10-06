@@ -73,3 +73,14 @@ podSpec: {}
 #      limits:
 #        cpu: 100m
 #        memory: 128Mi
+
+## OperatorClientCert configures how the operator connects to the backup service over HTTPS.
+## When set, the operator uses the service.https listener from backupServiceConfig, which must be enabled.
+## When not set, the operator uses the service.http listener, which must be enabled.
+operatorClientCert: {}
+#  serverName: aerospike-backup-service.aerospike.svc  # Defaults to <name>.<namespace>.svc
+#  secretCertSource:
+#    secretName: operator-tls       # Secret in the release namespace
+#    caCertsFilename: ca.crt        # CA that signed the backup service certificate
+#    clientCertFilename: tls.crt    # Only for service.https.client-auth: require-and-verify
+#    clientKeyFilename: tls.key

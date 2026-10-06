@@ -344,6 +344,10 @@ func statusToPhase(log logr.Logger, status string) asdbv1beta1.AerospikeRestoreP
 	// Both accept any letter case and the legacy "Done"/"Failed" values.
 	jobStatus := dto.JobStatus(status)
 	if err := jobStatus.Validate(); err != nil {
+		// A backup service newer than the vendored DTOs can report a status this operator does not know.
+		log.Info("Unknown ABS restore job status; update the vendored ABS module and statusToPhase",
+			"status", status, "err", err)
+
 		return ""
 	}
 
