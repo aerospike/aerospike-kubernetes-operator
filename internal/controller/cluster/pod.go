@@ -2152,10 +2152,12 @@ func (r *SingleClusterReconciler) mfdDelayForRestart(rackState *RackState, podsT
 		}
 	}
 
-	delay, err = asdbv1.GetMigrateFillDelay(&rackState.Rack.AerospikeConfig)
+	configMFD, err := asdbv1.GetMigrateFillDelay(&rackState.Rack.AerospikeConfig)
 	if err != nil {
 		return 0, false, err
 	}
+
+	delay = uint32(configMFD) //nolint:gosec // migrate-fill-delay is bounded by uint32 range
 
 	if !podRestartNeeded {
 		// Warm-only batch: return configMFD so waitForMultipleNodesSafeStopReady can correct any
@@ -2202,7 +2204,8 @@ func (r *SingleClusterReconciler) revertMFDToConfig(
 		return common.ReconcileError(fmt.Errorf("read configMFD for revert: %w", err))
 	}
 
-	return r.setMigrateFillDelay(ctx, policy, configMFD, ignorablePodNames, nil, force)
+	return r.setMigrateFillDelay(ctx, policy,
+		uint32(configMFD), ignorablePodNames, nil, force) //nolint:gosec // migrate-fill-delay is bounded by uint32 range
 }
 
 // isPreviewFeaturesUpdated reports whether the pod's server container is running with
