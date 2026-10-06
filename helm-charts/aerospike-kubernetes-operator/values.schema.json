@@ -231,7 +231,6 @@
             "description": "Comma-separated list of namespaces to ignore. Only used for eviction webhook",
             "type": [
                 "string",
-                "array",
                 "null"
             ]
         },
@@ -484,7 +483,6 @@
             "description": "Comma-separated list of namespaces to watch for Aerospike custom resources",
             "type": [
                 "string",
-                "array",
                 "null"
             ]
         },
