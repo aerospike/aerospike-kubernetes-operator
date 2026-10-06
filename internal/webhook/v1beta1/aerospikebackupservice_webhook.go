@@ -165,6 +165,10 @@ func validateBackupServiceConfig(svcConfig runtime.RawExtension) error {
 		return fmt.Errorf("aerospike-clusters field cannot be specified in backup service config")
 	}
 
+	if err := validateNoSecretPlaceholder(&config, &dto.Config{}); err != nil {
+		return err
+	}
+
 	return validation.ValidateConfiguration(&config)
 }
 

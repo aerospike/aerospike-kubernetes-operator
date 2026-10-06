@@ -141,12 +141,20 @@ func validateRestoreConfig(k8sClient client.Client, restore *asdbv1beta1.Aerospi
 			return err
 		}
 
+		if err := validateNoSecretPlaceholder(&restoreRequest, &dto.RestoreRequest{}); err != nil {
+			return err
+		}
+
 		return validation.ValidateRestoreRequest(&restoreRequest, backupSvcConfig)
 
 	case asdbv1beta1.Timestamp:
 		var restoreRequest dto.RestoreTimestampRequest
 
 		if err := yaml.UnmarshalStrict(restore.Spec.Config.Raw, &restoreRequest); err != nil {
+			return err
+		}
+
+		if err := validateNoSecretPlaceholder(&restoreRequest, &dto.RestoreTimestampRequest{}); err != nil {
 			return err
 		}
 

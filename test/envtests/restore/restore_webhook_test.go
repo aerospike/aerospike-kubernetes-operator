@@ -108,6 +108,21 @@ var _ = Describe("AerospikeRestore CRD schema marker validation", Ordered, func(
 						WithMessageSubstrings(testutil.RestoreCRDSchemaErrorPrefix, "config").
 						Validate(err)
 				})
+
+				It("rejects the [secret] placeholder as the destination password", func() {
+					config := minimalRestoreConfigMap()
+					destination := config["destination"].(map[string]interface{})
+					destination["credentials"].(map[string]interface{})["password"] = "[secret]"
+
+					restore := buildRestoreCR(restoreNsNm, absNsNm, asdbv1beta1.Full)
+					restore.Spec.Config = runtime.RawExtension{Raw: backupconfig.MustMarshalConfig(config)}
+
+					err := envtests.K8sClient.Create(ctx, restore)
+					Expect(err).To(HaveOccurred())
+					envtests.NewStatusErrorMatcher().
+						WithMessageSubstrings(testutil.RestoreWebhookErrorPrefix, `"[secret]"`, "placeholder").
+						Validate(err)
+				})
 			})
 		})
 

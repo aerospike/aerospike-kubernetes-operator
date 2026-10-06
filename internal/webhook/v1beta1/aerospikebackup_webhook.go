@@ -173,6 +173,11 @@ func validateBackupConfig(k8sClient client.Client, backup *asdbv1beta1.Aerospike
 		return err
 	}
 
+	emptyClusters := map[string]*dto.AerospikeCluster{}
+	if placeholderErr := validateNoSecretPlaceholder(aeroClusters, emptyClusters); placeholderErr != nil {
+		return placeholderErr
+	}
+
 	backupRoutines, err := getValidatedBackupRoutines(backupConfig, aeroClusters, utils.GetNamespacedName(backup))
 	if err != nil {
 		return err
