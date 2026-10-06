@@ -40,6 +40,24 @@ spec:
   service:
     type: LoadBalancer
 
+  podSpec:
+    serviceContainer:
+      # Hardened container settings, matching the backup service's own Helm chart.
+      # - runAsUser and runAsGroup are required with runAsNonRoot: the image runs as the user name "absuser",
+      #   so the kubelet cannot verify a non-root user without the numeric ID (65532) and the pod fails to start.
+      # - readOnlyRootFilesystem is not set: the pod has no writable /tmp or local-storage volume, so local
+      #   backups would fail with "Read-only file system".
+      # - Local backup files are written owner-only (0600/0700) for this user.
+      securityContext:
+        runAsNonRoot: true
+        runAsUser: 65532
+        runAsGroup: 65532
+        allowPrivilegeEscalation: false
+        capabilities:
+          drop: ["ALL"]
+        seccompProfile:
+          type: RuntimeDefault
+
 # HTTPS: the backup service serves its API over TLS and the operator connects to it with operatorClientCert.
 # The Secret mounted under secrets holds the backup service certificate and key; operatorClientCert reads the
 # CA that signed that certificate from its own Secret. Set http.disabled: true to allow HTTPS only.
