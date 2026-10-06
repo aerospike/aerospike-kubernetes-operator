@@ -12,7 +12,7 @@ import (
 )
 
 const (
-	BackupServiceImage  = "aerospike/aerospike-backup-service:3.6.2"
+	BackupServiceImage  = "aerospike/aerospike-backup-service:3.7.0"
 	DefaultClusterHost  = "aerocluster.test.svc.cluster.local"
 	DefaultBackupPolicy = "test-policy"
 )
@@ -46,8 +46,9 @@ func BackupServiceBaseConfig() map[string]interface{} {
 		},
 		asdbv1beta1.BackupPoliciesKey: map[string]interface{}{
 			DefaultBackupPolicy: map[string]interface{}{
-				"parallel": 3,
-				"compact":  true,
+				"parallel":  3,
+				"compact":   true,
+				"incr-mode": "cumulative",
 			},
 		},
 		asdbv1beta1.StorageKey: map[string]interface{}{
@@ -137,6 +138,8 @@ func routineConfig(clusterName string, crons BackupRoutineCrons) map[string]inte
 		"namespaces":         []string{"test"},
 		"source-cluster":     clusterName,
 		"storage":            "local",
+		// The crons fire every few seconds or hourly, so the timezone does not change when tests run.
+		"schedule-timezone": "Asia/Kolkata",
 	}
 }
 

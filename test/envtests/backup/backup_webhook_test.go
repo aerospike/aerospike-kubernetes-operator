@@ -3,8 +3,10 @@ package backup
 import (
 	"context"
 
+	as "github.com/aerospike/aerospike-client-go/v8"
 	. "github.com/onsi/ginkgo/v2"
 	. "github.com/onsi/gomega"
+	"k8s.io/apimachinery/pkg/runtime"
 	"k8s.io/apimachinery/pkg/types"
 
 	asdbv1beta1 "github.com/aerospike/aerospike-kubernetes-operator/v4/api/v1beta1"
@@ -41,6 +43,28 @@ var _ = Describe("AerospikeBackup validation", Ordered, func() {
 	})
 
 	Context("Deploy validation", func() {
+		Context("spec.config", func() {
+			Context("positive", func() {
+				It("accepts a routine with filter-exp and a single set", func() {
+					filterExp, err := as.ExpEq(as.ExpStringBin("status"), as.ExpStringVal("active")).Base64()
+					Expect(err).ToNot(HaveOccurred())
+
+					prefix := asdbv1beta1.NamePrefix(backupNsNm)
+					config := backupconfig.BackupCRConfig(prefix, backupconfig.DefaultClusterHost,
+						backupconfig.EnvtestRoutineCrons)
+					routines := config[asdbv1beta1.BackupRoutinesKey].(map[string]interface{})
+					routine := routines[backupconfig.BuildRoutineNameForBackup(backupNsNm)].(map[string]interface{})
+					routine["set-list"] = []string{"users"}
+					routine["filter-exp"] = filterExp
+
+					backup := buildBackupCR(backupNsNm, absNsNm)
+					backup.Spec.Config = runtime.RawExtension{Raw: backupconfig.MustMarshalConfig(config)}
+
+					Expect(envtests.K8sClient.Create(ctx, backup)).To(Succeed())
+				})
+			})
+		})
+
 		Context("spec.backupService", func() {
 			Context("negative", func() {
 				It("rejects empty backup service name (MinLength=1)", func() {

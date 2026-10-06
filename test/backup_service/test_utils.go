@@ -276,8 +276,9 @@ func getBackupServiceConfMap() map[string]interface{} {
 		},
 		asdbv1beta1.BackupPoliciesKey: map[string]interface{}{
 			"test-policy": map[string]interface{}{
-				"parallel": 3,
-				"compact":  true,
+				"parallel":  3,
+				"compact":   true,
+				"incr-mode": "cumulative",
 			},
 			"test-policy1": map[string]interface{}{
 				"parallel": 3,
@@ -292,7 +293,6 @@ func getBackupServiceConfMap() map[string]interface{} {
 			"s3Storage": map[string]interface{}{
 				"s3-storage": map[string]interface{}{
 					"bucket":     "aerospike-kubernetes-operator-test",
-					"path":       "/",
 					"s3-region":  "us-east-1",
 					"s3-profile": "default",
 				},

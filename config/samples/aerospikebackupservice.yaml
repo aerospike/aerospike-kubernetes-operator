@@ -4,15 +4,20 @@ metadata:
   name: aerospikebackupservice-sample
   namespace: aerospike
 spec:
-  image: aerospike/aerospike-backup-service:3.6.2
+  image: aerospike/aerospike-backup-service:3.7.0
   config:
     service:
       http:
         port: 8081
+      # Timezone for backup cron expressions: UTC (default), Local, or an IANA name. Changing it restarts the pod.
+      # backup:
+      #   schedule-timezone: Asia/Kolkata
     backup-policies:
       test-policy:
         parallel: 3
         compact: true
+        # Incremental backups cover changes since the last full backup (default: differential).
+        incr-mode: cumulative
       test-policy1:
         parallel: 3
     storage:

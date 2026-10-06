@@ -27,9 +27,14 @@ spec:
         backup-policy: test-policy
         interval-cron: "@daily"
         incr-interval-cron: "@hourly"
+        # Timezone for this routine's crons. When omitted, service.backup.schedule-timezone (default UTC) applies.
+        schedule-timezone: Asia/Kolkata
         namespaces: ["test"]
         source-cluster: aerospike-aerospikebackup-test-cluster
         storage: local
+        # Back up only records matching a base64-encoded filter expression; allows at most one set in set-list.
+        # set-list: ["users"]
+        # filter-exp: "<base64 expression>"
       aerospike-aerospikebackup-test-routine1:
         backup-policy: test-policy1
         interval-cron: "@daily"

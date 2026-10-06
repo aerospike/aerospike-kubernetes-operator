@@ -31,6 +31,7 @@ backupConfig: {}
 #      backup-policy: test-policy
 #      interval-cron: "@daily"
 #      incr-interval-cron: "@hourly"
+#      schedule-timezone: Asia/Kolkata  # Optional; inherits service.backup.schedule-timezone (default UTC)
 #      namespaces: ["test"]
 #      source-cluster: aerospike-aerospikebackup-test-cluster
 #      storage: local
