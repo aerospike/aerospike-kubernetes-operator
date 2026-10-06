@@ -60,6 +60,7 @@ helm install aerospike-backup-service aerospike/aerospike-backup-service \
 | `resources`           | Aerospike backup service pod resource requirements                            | `{}` (nil)                           |
 | `service`             | Kubernetes service configuration for Aerospike backup service                 | `{}` (nil)                           |
 | `podSpec`             | Aerospike backup service pod configuration                                    | `{}` (nil)                           |
+| `operatorClientCert`  | TLS configuration the operator uses to connect to the backup service over HTTPS | `{}` (nil)                         |
 
 ### Configurations Explained
 Refer

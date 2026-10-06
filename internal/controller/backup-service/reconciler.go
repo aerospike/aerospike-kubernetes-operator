@@ -31,18 +31,6 @@ import (
 	lib "github.com/aerospike/aerospike-management-lib"
 )
 
-type serviceConfig struct {
-	portInfo    map[string]int32
-	contextPath string
-}
-
-var defaultServiceConfig = serviceConfig{
-	portInfo: map[string]int32{
-		asdbv1beta1.HTTPKey: 8080,
-	},
-	contextPath: "/",
-}
-
 // SingleBackupServiceReconciler reconciles a single AerospikeBackupService
 type SingleBackupServiceReconciler struct {
 	client.Client
@@ -345,17 +333,16 @@ func (r *SingleBackupServiceReconciler) updateBackupSvcConfig(ctx context.Contex
 		Namespace: r.aeroBackupService.Namespace,
 	}
 
-	svcConfig, err := r.getBackupServiceConfig()
+	listeners, err := r.getListeners()
 	if err != nil {
 		return err
 	}
 
 	// Always create client with the latest config in spec
-	backupServiceClient := backup_service.NewClient(
-		fmt.Sprintf("%s.%s.svc", backupSvc.Name, backupSvc.Namespace),
-		svcConfig.portInfo[asdbv1beta1.HTTPKey],
-		svcConfig.contextPath,
-	)
+	backupServiceClient, err := r.newBackupServiceClient(ctx, listeners)
+	if err != nil {
+		return err
+	}
 
 	apiBackupSvcConfig, err := backupServiceClient.GetBackupServiceConfig()
 	if err != nil {
@@ -455,6 +442,25 @@ func (r *SingleBackupServiceReconciler) findStaticConfigChange(
 	return validation.ValidateStaticFieldChanges(currentConfig, desiredConfig), nil
 }
 
+// newBackupServiceClient returns a client for the listener the operator connects to, as configured in spec.
+func (r *SingleBackupServiceReconciler) newBackupServiceClient(
+	ctx context.Context, listeners *backup_service.Listeners,
+) (*backup_service.Client, error) {
+	address := fmt.Sprintf("%s.%s.svc", r.aeroBackupService.Name, r.aeroBackupService.Namespace)
+
+	if listeners.Scheme != corev1.URISchemeHTTPS {
+		return backup_service.NewClient(address, listeners.Port, listeners.ContextPath), nil
+	}
+
+	tlsConfig, err := backup_service.BuildOperatorTLSConfig(ctx, r.Client, r.aeroBackupService.Namespace,
+		r.aeroBackupService.Spec.OperatorClientCert, address)
+	if err != nil {
+		return nil, fmt.Errorf("build backup service TLS config: %w", err)
+	}
+
+	return backup_service.NewClientWithTLS(address, listeners.Port, listeners.ContextPath, "", tlsConfig), nil
+}
+
 func (r *SingleBackupServiceReconciler) restartBackupSvcPod(ctx context.Context) error {
 	podList, err := common.GetBackupServicePodList(ctx, r.Client, r.aeroBackupService.Name, r.aeroBackupService.Namespace)
 	if err != nil {
@@ -477,17 +483,17 @@ func (r *SingleBackupServiceReconciler) getDeploymentObject() (*app.Deployment, 
 	svcLabels := utils.LabelsForAerospikeBackupService(r.aeroBackupService.Name)
 	volumeMounts, volumes := r.getVolumeAndMounts()
 
-	svcConf, err := r.getBackupServiceConfig()
+	listeners, err := r.getListeners()
 	if err != nil {
 		return nil, err
 	}
 
-	containerPorts := make([]corev1.ContainerPort, 0, len(svcConf.portInfo))
+	containerPorts := make([]corev1.ContainerPort, 0, len(listeners.Ports))
 
-	for name, port := range svcConf.portInfo {
+	for _, listener := range listeners.Ports {
 		containerPorts = append(containerPorts, corev1.ContainerPort{
-			Name:          name,
-			ContainerPort: port,
+			Name:          listener.Name,
+			ContainerPort: listener.Port,
 		})
 	}
 
@@ -673,17 +679,17 @@ func (r *SingleBackupServiceReconciler) reconcileService(ctx context.Context) er
 }
 
 func (r *SingleBackupServiceReconciler) getServiceObject() (*corev1.Service, error) {
-	svcConfig, err := r.getBackupServiceConfig()
+	listeners, err := r.getListeners()
 	if err != nil {
 		return nil, err
 	}
 
-	servicePort := make([]corev1.ServicePort, 0, len(svcConfig.portInfo))
+	servicePort := make([]corev1.ServicePort, 0, len(listeners.Ports))
 
-	for name, port := range svcConfig.portInfo {
+	for _, listener := range listeners.Ports {
 		servicePort = append(servicePort, corev1.ServicePort{
-			Name: name,
-			Port: port,
+			Name: listener.Name,
+			Port: listener.Port,
 		})
 	}
 
@@ -706,54 +712,9 @@ func (r *SingleBackupServiceReconciler) getServiceObject() (*corev1.Service, err
 	return svc, nil
 }
 
-func (r *SingleBackupServiceReconciler) getBackupServiceConfig() (*serviceConfig, error) {
-	config := make(map[string]interface{})
-
-	if err := yaml.Unmarshal(r.aeroBackupService.Spec.Config.Raw, &config); err != nil {
-		return nil, fmt.Errorf("unmarshal backup service spec config: %w", err)
-	}
-
-	if _, ok := config[asdbv1beta1.ServiceKey]; !ok {
-		r.Log.Info("Missing section in backup service config, using defaults",
-			"section", asdbv1beta1.ServiceKey)
-
-		return &defaultServiceConfig, nil
-	}
-
-	svc, ok := config[asdbv1beta1.ServiceKey].(map[string]interface{})
-	if !ok {
-		return nil, fmt.Errorf("backup service config %q section is not in correct format", asdbv1beta1.ServiceKey)
-	}
-
-	if _, ok = svc[asdbv1beta1.HTTPKey]; !ok {
-		r.Log.Info("Missing section in backup service config, using defaults",
-			"section", asdbv1beta1.HTTPKey)
-
-		return &defaultServiceConfig, nil
-	}
-
-	httpConf, ok := svc[asdbv1beta1.HTTPKey].(map[string]interface{})
-	if !ok {
-		return nil, fmt.Errorf("backup service config %q section is not in correct format", asdbv1beta1.HTTPKey)
-	}
-
-	var svcConfig serviceConfig
-
-	port, ok := httpConf["port"]
-	if !ok {
-		svcConfig.portInfo = defaultServiceConfig.portInfo
-	} else {
-		svcConfig.portInfo = map[string]int32{asdbv1beta1.HTTPKey: int32(port.(float64))}
-	}
-
-	ctxPath, ok := httpConf["context-path"]
-	if !ok {
-		svcConfig.contextPath = defaultServiceConfig.contextPath
-	} else {
-		svcConfig.contextPath = ctxPath.(string)
-	}
-
-	return &svcConfig, nil
+// getListeners returns the listeners in the spec config and the one the operator connects to.
+func (r *SingleBackupServiceReconciler) getListeners() (*backup_service.Listeners, error) {
+	return backup_service.GetListeners(r.aeroBackupService.Spec.Config.Raw, r.aeroBackupService.Spec.OperatorClientCert)
 }
 
 func (r *SingleBackupServiceReconciler) waitForDeploymentToBeReady(ctx context.Context) error {
@@ -841,14 +802,15 @@ func (r *SingleBackupServiceReconciler) setStatusPhase(
 }
 
 func (r *SingleBackupServiceReconciler) updateStatus(ctx context.Context) error {
-	svcConfig, err := r.getBackupServiceConfig()
+	listeners, err := r.getListeners()
 	if err != nil {
 		return err
 	}
 
 	status := r.CopySpecToStatus()
-	status.ContextPath = svcConfig.contextPath
-	status.Port = svcConfig.portInfo[asdbv1beta1.HTTPKey]
+	status.ContextPath = listeners.ContextPath
+	status.Port = listeners.Port
+	status.Scheme = listeners.Scheme
 	status.Phase = asdbv1beta1.AerospikeBackupServiceCompleted
 
 	r.aeroBackupService.Status = *status
@@ -870,6 +832,10 @@ func (r *SingleBackupServiceReconciler) CopySpecToStatus() *asdbv1beta1.Aerospik
 	status.Resources = r.aeroBackupService.Spec.Resources
 	status.SecretMounts = r.aeroBackupService.Spec.SecretMounts
 	status.Service = r.aeroBackupService.Spec.Service
+
+	if r.aeroBackupService.Spec.OperatorClientCert != nil {
+		status.OperatorClientCert = r.aeroBackupService.Spec.OperatorClientCert.DeepCopy()
+	}
 
 	return &status
 }

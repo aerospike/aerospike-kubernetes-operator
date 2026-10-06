@@ -34,3 +34,26 @@ spec:
 
   service:
     type: LoadBalancer
+
+# HTTPS: the backup service serves its API over TLS and the operator connects to it with operatorClientCert.
+# The Secret mounted under secrets holds the backup service certificate and key; operatorClientCert reads the
+# CA that signed that certificate from its own Secret. Set http.disabled: true to allow HTTPS only.
+# spec:
+#   secrets:
+#     - secretName: abs-tls
+#       volumeMount:
+#         name: abs-tls
+#         mountPath: /etc/abs-tls
+#         readOnly: true
+#   config:
+#     service:
+#       http:
+#         port: 8081
+#       https:
+#         port: 8443
+#         cert-file: /etc/abs-tls/tls.crt
+#         key-file: /etc/abs-tls/tls.key
+#   operatorClientCert:
+#     secretCertSource:
+#       secretName: operator-tls
+#       caCertsFilename: ca.crt

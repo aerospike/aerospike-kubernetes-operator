@@ -38,3 +38,8 @@ spec:
   {{- with .Values.podSpec }}
   podSpec: {{- toYaml . | nindent 4 }}
   {{- end }}
+
+  # TLS configuration the operator uses to connect to the backup service HTTPS listener
+  {{- with .Values.operatorClientCert }}
+  operatorClientCert: {{- toYaml . | nindent 4 }}
+  {{- end }}

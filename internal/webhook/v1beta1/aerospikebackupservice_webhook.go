@@ -18,6 +18,7 @@ package v1beta1
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"reflect"
 
@@ -32,6 +33,7 @@ import (
 	"github.com/aerospike/aerospike-backup-service/v3/pkg/validation"
 	asdbv1 "github.com/aerospike/aerospike-kubernetes-operator/v4/api/v1"
 	asdbv1beta1 "github.com/aerospike/aerospike-kubernetes-operator/v4/api/v1beta1"
+	backup_service "github.com/aerospike/aerospike-kubernetes-operator/v4/pkg/backup-service"
 )
 
 // SetupAerospikeBackupServiceWebhookWithManager registers the webhook for AerospikeBackupService in the manager.
@@ -121,11 +123,31 @@ func validateBackupService(backupSvc *asdbv1beta1.AerospikeBackupService) (admis
 		return nil, err
 	}
 
+	if err := validateOperatorConnection(backupSvc); err != nil {
+		return nil, err
+	}
+
 	if err := validateBackupServiceSecrets(backupSvc.Spec.SecretMounts); err != nil {
 		return nil, err
 	}
 
 	return validateServicePodSpec(backupSvc)
+}
+
+// validateOperatorConnection rejects a config where the operator cannot reach the backup service:
+// the listener the operator connects to must be enabled, and its TLS settings must be complete.
+func validateOperatorConnection(backupSvc *asdbv1beta1.AerospikeBackupService) error {
+	if certSpec := backupSvc.Spec.OperatorClientCert; certSpec != nil {
+		source := certSpec.SecretCertSource
+		if (source.ClientCertFilename == "") != (source.ClientKeyFilename == "") {
+			return errors.New("clientCertFilename and clientKeyFilename in spec.operatorClientCert.secretCertSource " +
+				"must be set together")
+		}
+	}
+
+	_, err := backup_service.GetListeners(backupSvc.Spec.Config.Raw, backupSvc.Spec.OperatorClientCert)
+
+	return err
 }
 
 func validateBackupServiceConfig(svcConfig runtime.RawExtension) error {
