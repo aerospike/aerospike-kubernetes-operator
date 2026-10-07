@@ -267,6 +267,12 @@ func TestClientAPIScheme(t *testing.T) {
 		NewClientWithTLS("abs.aerospike.svc", 8443, "/abs", "", &tls.Config{MinVersion: tls.VersionTLS12}).
 			systemURL("health"))
 
+	// TLS clients are short-lived, so their connections must not idle in a keep-alive pool.
+	tlsClient := NewClientWithTLS("abs.aerospike.svc", 8443, "/", "", &tls.Config{MinVersion: tls.VersionTLS12})
+	transport, ok := tlsClient.client().Transport.(*http.Transport)
+	require.True(t, ok)
+	require.True(t, transport.DisableKeepAlives)
+
 	// A Client built as a struct literal, as some callers do, defaults to HTTP and still has an HTTP client.
 	literal := &Client{Address: "abs.aerospike.svc", Port: 8081}
 	require.Equal(t, "http://abs.aerospike.svc:8081/v1/config", literal.API("/config"))

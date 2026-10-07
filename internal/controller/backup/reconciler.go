@@ -413,10 +413,7 @@ func (r *SingleBackupReconciler) reconcileScheduledBackup(ctx context.Context) e
 	// The API hides literal secret values, so a change to a secret alone never shows up when comparing
 	// the API with the spec. Spec and status both hold real values: status is written only after a
 	// successful reconcile, so a difference means the change has not been applied yet.
-	specConfigApplied, err := common.RawConfigsEqual(r.aeroBackup.Spec.Config, r.aeroBackup.Status.Config)
-	if err != nil {
-		return fmt.Errorf("compare backup spec and status config: %w", err)
-	}
+	specConfigApplied := reflect.DeepEqual(r.aeroBackup.Spec.Config.Raw, r.aeroBackup.Status.Config.Raw)
 
 	hotReloadRequired := !specConfigApplied
 	if hotReloadRequired {
