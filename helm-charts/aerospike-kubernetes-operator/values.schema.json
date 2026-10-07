@@ -256,34 +256,8 @@
                             "type": "string"
                         }
                     ]
-                },
-                "encoder": {
-                    "description": "Zap log encoder (--zap-encoder): json or console (any case). Empty leaves the flag off",
-                    "anyOf": [
-                        {
-                            "type": [
-                                "string",
-                                "null"
-                            ]
-                        }
-                    ]
-                },
-                "level": {
-                    "description": "Zap log level (--zap-log-level): debug, info, error, panic (any case), or a positive integer for custom verbosity. Empty (or 0) leaves the flag off",
-                    "anyOf": [
-                        {
-                            "type": "string"
-                        },
-                        {
-                            "type": "integer"
-                        },
-                        {
-                            "type": "null"
-                        }
-                    ]
                 }
-            },
-            "additionalProperties": false
+            }
         },
         "metrics": {
             "description": "Operator manager /metrics endpoint configuration Always passed in the Deployment args for clarity; defaults to TLS on (`true`).",

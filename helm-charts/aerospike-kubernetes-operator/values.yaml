@@ -79,12 +79,12 @@ certs: # @schema required
 
 # -- Operator manager logging (controller-runtime / Zap).
 # `development` must stay set; level/encoder are optional (set them in values or on the CLI).
-logging: # @schema required; additionalProperties: false
+logging: # @schema required
   development: true # @schema required; anyOf: [{type: boolean}, {type: string}]
   # -- (Optional) Zap log level (--zap-log-level): debug, info, error, panic (any case), or a positive integer for custom verbosity. Empty (or 0) leaves the flag off
-  level: "" # @schema anyOf: [{type: string}, {type: integer}, {type: "null"}]
+  # level: "" # @schema anyOf: [{type: string}, {type: integer}, {type: "null"}]
   # -- (Optional) Zap log encoder (--zap-encoder): json or console (any case). Empty leaves the flag off
-  encoder: "" # @schema anyOf: [{type: [string, "null"]}]
+  # encoder: "" # @schema anyOf: [{type: [string, "null"]}]
 
 # -- Operator manager /metrics endpoint configuration
 # Always passed in the Deployment args for clarity; defaults to TLS on (`true`).
