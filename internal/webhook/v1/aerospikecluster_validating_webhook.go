@@ -1240,7 +1240,7 @@ func validateRackConfig(aslog logr.Logger, cluster *asdbv1.AerospikeCluster,
 	}
 
 	rackMap := map[int]bool{}
-	migrateFillDelaySet := sets.Set[int]{}
+	migrateFillDelaySet := sets.Set[uint32]{}
 
 	var racksBlockedFromRoster int
 
@@ -1327,7 +1327,7 @@ func validateRackConfig(aslog logr.Logger, cluster *asdbv1.AerospikeCluster,
 			return warnings, err
 		}
 
-		migrateFillDelaySet.Insert(migrateFillDelay)
+		migrateFillDelaySet.Insert(uint32(migrateFillDelay)) //nolint:gosec // migrate-fill-delay is bounded by uint32 range
 
 		if asdbv1.GetBool(rack.ForceBlockFromRoster) {
 			racksBlockedFromRoster++

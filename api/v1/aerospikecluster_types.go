@@ -336,13 +336,12 @@ type RestartStrategy struct {
 	// This settings is applied dynamically before the first pod is taken down and
 	// reverted once all pods have rejoined; they are never written to aerospike.conf.
 	// +operator-sdk:csv:customresourcedefinitions:type=spec,displayName="Override Migrate Fill Delay"
-	// +kubebuilder:validation:Minimum=0
 	// +optional
-	OverrideMigrateFillDelay *int64 `json:"overrideMigrateFillDelay,omitempty"`
+	OverrideMigrateFillDelay *uint32 `json:"overrideMigrateFillDelay,omitempty"`
 }
 
 // GetOverrideMigrateFillDelay returns OverrideMigrateFillDelay or 0 when the receiver or the field is nil.
-func (rs *RestartStrategy) GetOverrideMigrateFillDelay() int64 {
+func (rs *RestartStrategy) GetOverrideMigrateFillDelay() uint32 {
 	if rs == nil || rs.OverrideMigrateFillDelay == nil {
 		return 0
 	}
@@ -1251,7 +1250,7 @@ type AerospikeClusterStatus struct { //nolint:govet // for readability
 	// aerospikeConfig.service.migrate-fill-delay during rolling restarts, upgrades, or scale-down.
 	// Defaults to the aerospikeConfig.service.migrate-fill-delay value on cluster creation.
 	// +optional
-	DynamicMigrateFillDelay int64 `json:"dynamicMigrateFillDelay,omitempty"`
+	DynamicMigrateFillDelay uint32 `json:"dynamicMigrateFillDelay,omitempty"`
 }
 
 // AerospikeNetworkType specifies the type of network address to use.

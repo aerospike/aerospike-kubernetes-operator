@@ -67,7 +67,7 @@ import (
 //     MFD is not raised again before quiesce on this path (it is already at migrateFillDelay).
 func (r *SingleClusterReconciler) waitForMultipleNodesSafeStopReady(
 	ctx context.Context, pods []*corev1.Pod, ignorablePodNames sets.Set[string],
-	migrateFillDelay int, drainBeforeStability bool,
+	migrateFillDelay uint32, drainBeforeStability bool,
 ) common.ReconcileResult {
 	if len(pods) == 0 {
 		return common.ReconcileSuccess()
@@ -124,7 +124,7 @@ func (r *SingleClusterReconciler) waitForMultipleNodesSafeStopReady(
 	//     set MFD to migrateFillDelay (configMFD or 0) to correct any stale value left by a
 	//     previous batch — e.g. when a warm-only batch follows a podRestart batch that raised the
 	//     override. The DynamicMigrateFillDelay guard skips the call when MFD is already correct.
-	preStabilityMFD := 0
+	var preStabilityMFD uint32
 	if !drainBeforeStability {
 		preStabilityMFD = migrateFillDelay
 	}
@@ -479,12 +479,12 @@ func hostID(hostName string, hostPort int) string {
 func (r *SingleClusterReconciler) setMigrateFillDelay(
 	ctx context.Context,
 	policy *as.ClientPolicy,
-	delay int,
+	delay uint32,
 	ignorablePodNames sets.Set[string],
 	hostConns []*deployment.HostConn,
 	force bool,
 ) common.ReconcileResult {
-	if !force && int64(delay) == r.aeroCluster.Status.DynamicMigrateFillDelay {
+	if !force && delay == r.aeroCluster.Status.DynamicMigrateFillDelay {
 		r.Log.Info("migrate-fill-delay already at desired value, skipping", "value", delay)
 		return common.ReconcileSuccess()
 	}
@@ -503,7 +503,7 @@ func (r *SingleClusterReconciler) setMigrateFillDelay(
 
 	r.Log.Info("Setting migrate-fill-delay", "migrateFillDelay", delay)
 
-	if err := deployment.SetMigrateFillDelay(r.Log, policy, allHostConns, delay); err != nil {
+	if err := deployment.SetMigrateFillDelay(r.Log, policy, allHostConns, int(delay)); err != nil {
 		return common.ReconcileError(err)
 	}
 
@@ -515,7 +515,7 @@ func (r *SingleClusterReconciler) setMigrateFillDelay(
 	patchTarget := r.aeroCluster.DeepCopy()
 	patch := client.MergeFrom(r.aeroCluster.DeepCopy())
 
-	patchTarget.Status.DynamicMigrateFillDelay = int64(delay)
+	patchTarget.Status.DynamicMigrateFillDelay = delay
 
 	if err := r.Client.Status().Patch(ctx, patchTarget, patch); err != nil {
 		return common.ReconcileError(fmt.Errorf("persist dynamic migrate-fill-delay in status: %w", err))

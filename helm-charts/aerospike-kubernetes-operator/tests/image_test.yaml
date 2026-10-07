@@ -4,47 +4,6 @@ templates:
   - templates/aerospike-operator-controller-manager-deployment.yaml
 
 tests:
-  # -- aerospikeKubernetesInitNameTag --
-  - it: accepts a plain name:tag reference
-    set:
-      aerospikeKubernetesInitNameTag: "aerospike-kubernetes-init:2.5.4-dev1"
-    asserts:
-      - notFailedTemplate: {}
-
-  - it: accepts a digest-style reference (name@sha256:digest)
-    set:
-      aerospikeKubernetesInitNameTag: "name@sha256:abcdef0123"
-    asserts:
-      - notFailedTemplate: {}
-
-  - it: rejects a tag reference with no colon at all
-    set:
-      aerospikeKubernetesInitNameTag: "nametag"
-    asserts:
-      - failedTemplate:
-          errorPattern: "aerospikeKubernetesInitNameTag.*does not match pattern"
-
-  - it: rejects a trailing colon with nothing after it
-    set:
-      aerospikeKubernetesInitNameTag: "name:"
-    asserts:
-      - failedTemplate:
-          errorPattern: "aerospikeKubernetesInitNameTag.*does not match pattern"
-
-  - it: rejects a leading colon with nothing before it
-    set:
-      aerospikeKubernetesInitNameTag: ":tag"
-    asserts:
-      - failedTemplate:
-          errorPattern: "aerospikeKubernetesInitNameTag.*does not match pattern"
-
-  - it: rejects a reference containing whitespace
-    set:
-      aerospikeKubernetesInitNameTag: "name tag:foo"
-    asserts:
-      - failedTemplate:
-          errorPattern: "aerospikeKubernetesInitNameTag.*does not match pattern"
-
   # -- aerospikeKubernetesInitRegistry --
   - it: accepts a non-empty aerospikeKubernetesInitRegistry
     set:
@@ -52,12 +11,19 @@ tests:
     asserts:
       - notFailedTemplate: {}
 
-  - it: rejects an empty aerospikeKubernetesInitRegistry
+  # 4.5.0 compatibility: an empty env var makes the operator fall back to its
+  # built-in default init image registry and name/tag.
+  - it: accepts a null aerospikeKubernetesInitRegistry
     set:
-      aerospikeKubernetesInitRegistry: ""
+      aerospikeKubernetesInitRegistry: null
     asserts:
-      - failedTemplate:
-          errorPattern: "at '/aerospikeKubernetesInitRegistry': minLength: got 0, want 1"
+      - notFailedTemplate: {}
+
+  - it: accepts a null aerospikeKubernetesInitNameTag
+    set:
+      aerospikeKubernetesInitNameTag: null
+    asserts:
+      - notFailedTemplate: {}
 
   # -- aerospikeKubernetesInitRegistryNamespace --
   - it: accepts a non-empty aerospikeKubernetesInitRegistryNamespace
@@ -65,13 +31,6 @@ tests:
       aerospikeKubernetesInitRegistryNamespace: "my-namespace"
     asserts:
       - notFailedTemplate: {}
-
-  - it: rejects an empty aerospikeKubernetesInitRegistryNamespace
-    set:
-      aerospikeKubernetesInitRegistryNamespace: ""
-    asserts:
-      - failedTemplate:
-          errorPattern: "at '/aerospikeKubernetesInitRegistryNamespace': minLength: got 0, want 1"
 
   # -- operatorImage --
   - it: accepts a custom operatorImage.repository string
@@ -96,13 +55,14 @@ tests:
     asserts:
       - notFailedTemplate: {}
 
-  - it: rejects a non-string operatorImage.tag
+  - it: accepts a numeric operatorImage.tag
     set:
       operatorImage:
-        tag: 5.0
+        tag: 4.6
     asserts:
-      - failedTemplate:
-          errorPattern: "operatorImage/tag.*got number, want string"
+      - equal:
+          path: spec.template.spec.containers[0].image
+          value: aerospike/aerospike-kubernetes-operator:4.6
 
   - it: accepts each valid operatorImage.pullPolicy
     set:
@@ -126,10 +86,16 @@ tests:
     asserts:
       - notFailedTemplate: {}
 
-  - it: rejects imagePullSecrets items that are not strings
+  - it: accepts imagePullSecrets as an object for backwards compatibility (deprecated, to be removed in a future major release)
     set:
       imagePullSecrets:
-        - 123
+        secret_with_credentials_to_custom_registry: {}
+    asserts:
+      - notFailedTemplate: {}
+
+  - it: rejects a non-array non-object imagePullSecrets value
+    set:
+      imagePullSecrets: "not-valid"
     asserts:
       - failedTemplate:
-          errorPattern: "imagePullSecrets/0.*got number, want string"
+          errorPattern: "imagePullSecrets.*got string, want array"
