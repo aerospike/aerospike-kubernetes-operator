@@ -77,7 +77,6 @@
                             "type": [
                                 "boolean",
                                 "string",
-                                "number",
                                 "null"
                             ]
                         },
@@ -85,7 +84,6 @@
                             "description": "Name of the secret holding the metrics server certificate",
                             "type": [
                                 "string",
-                                "number",
                                 "null"
                             ]
                         }
@@ -142,7 +140,6 @@
                             "type": [
                                 "boolean",
                                 "string",
-                                "number",
                                 "null"
                             ]
                         },
@@ -192,11 +189,7 @@
                     ]
                 },
                 {
-                    "type": "array",
-                    "maxItems": 0
-                },
-                {
-                    "const": ""
+                    "type": "array"
                 }
             ]
         },
@@ -244,9 +237,6 @@
                 },
                 {
                     "type": "null"
-                },
-                {
-                    "const": ""
                 }
             ]
         },
@@ -263,22 +253,7 @@
                             "type": "boolean"
                         },
                         {
-                            "enum": [
-                                0,
-                                1,
-                                "0",
-                                "1",
-                                "t",
-                                "f",
-                                "T",
-                                "F",
-                                "true",
-                                "false",
-                                "True",
-                                "False",
-                                "TRUE",
-                                "FALSE"
-                            ]
+                            "type": "string"
                         }
                     ]
                 },
@@ -290,12 +265,6 @@
                                 "string",
                                 "null"
                             ]
-                        },
-                        {
-                            "const": false
-                        },
-                        {
-                            "const": 0
                         }
                     ]
                 },
@@ -306,11 +275,7 @@
                             "type": "string"
                         },
                         {
-                            "type": "integer",
-                            "minimum": 0
-                        },
-                        {
-                            "const": false
+                            "type": "integer"
                         },
                         {
                             "type": "null"
@@ -333,22 +298,7 @@
                             "type": "boolean"
                         },
                         {
-                            "enum": [
-                                0,
-                                1,
-                                "0",
-                                "1",
-                                "t",
-                                "f",
-                                "T",
-                                "F",
-                                "true",
-                                "false",
-                                "True",
-                                "False",
-                                "TRUE",
-                                "FALSE"
-                            ]
+                            "type": "string"
                         }
                     ]
                 }
@@ -435,7 +385,6 @@
                     "type": [
                         "boolean",
                         "string",
-                        "number",
                         "null"
                     ]
                 }
@@ -445,8 +394,7 @@
             "description": "Number of operator replicas to deploy",
             "anyOf": [
                 {
-                    "type": "integer",
-                    "minimum": 0
+                    "type": "integer"
                 },
                 {
                     "type": "string"
@@ -464,7 +412,6 @@
                     "type": [
                         "boolean",
                         "string",
-                        "number",
                         "null"
                     ]
                 },

@@ -7,7 +7,7 @@ nameOverride: "" # @schema nullable
 fullnameOverride: "" # @schema nullable
 
 # -- Number of operator replicas to deploy
-replicas: 2 # @schema anyOf: [{type: integer, minimum: 0}, {type: string}, {type: "null"}]
+replicas: 2 # @schema anyOf: [{type: integer}, {type: string}, {type: "null"}]
 
 # -- Operator image
 operatorImage: # @schema required; additionalProperties: false
@@ -19,12 +19,12 @@ operatorImage: # @schema required; additionalProperties: false
 # authentication, a secret containing credentials can be added
 # imagePullSecrets:
 #   - secret_with_credentials_to_custom_registry
-imagePullSecrets: [] # @schema anyOf: [{type: array}, {type: object}, {type: "null"}, {const: ""}]
+imagePullSecrets: [] # @schema anyOf: [{type: array}, {type: object}, {type: "null"}]
 
 # -- RBAC resource creation for the operator
 rbac: # @schema required
   # -- Create RBAC resources and a service account for the operator
-  create: true # @schema type: [boolean, string, number, "null"]
+  create: true # @schema type: [boolean, string, "null"]
   # -- Name of an existing service account to use when rbac.create is false
   # serviceAccountName: "default"
 
@@ -49,7 +49,7 @@ certs: # @schema required
 
     # -- DEPRECATED: use `provider` instead. Only consulted when `provider` is empty.
     # Will be removed in a future release.
-    create: true # @schema type: [boolean, string, number, "null"]
+    create: true # @schema type: [boolean, string, "null"]
 
     # -- Name of the secret holding the webhook server certificate
     webhookServerCertSecretName: "webhook-server-cert" # @schema required; minLength: 1
@@ -73,23 +73,23 @@ certs: # @schema required
   # @schema additionalProperties: false
   # -- Metrics server certificate configuration
   metrics: # @schema required
-    create: false # @schema type: [boolean, string, number, "null"]
+    create: false # @schema type: [boolean, string, "null"]
     # -- Name of the secret holding the metrics server certificate
-    metricsServerCertSecretName: "metrics-server-cert" # @schema type: [string, number, "null"]
+    metricsServerCertSecretName: "metrics-server-cert" # @schema type: [string, "null"]
 
 # -- Operator manager logging (controller-runtime / Zap).
 # `development` must stay set; level/encoder are optional (set them in values or on the CLI).
 logging: # @schema required; additionalProperties: false
-  development: true # @schema required; anyOf: [{type: boolean}, {enum: [0, 1, "0", "1", "t", "f", "T", "F", "true", "false", "True", "False", "TRUE", "FALSE"]}]
+  development: true # @schema required; anyOf: [{type: boolean}, {type: string}]
   # -- (Optional) Zap log level (--zap-log-level): debug, info, error, panic (any case), or a positive integer for custom verbosity. Empty (or 0) leaves the flag off
-  level: "" # @schema anyOf: [{type: string}, {type: integer, minimum: 0}, {const: false}, {type: "null"}]
+  level: "" # @schema anyOf: [{type: string}, {type: integer}, {type: "null"}]
   # -- (Optional) Zap log encoder (--zap-encoder): json or console (any case). Empty leaves the flag off
-  encoder: "" # @schema anyOf: [{type: [string, "null"]}, {const: false}, {const: 0}]
+  encoder: "" # @schema anyOf: [{type: [string, "null"]}]
 
 # -- Operator manager /metrics endpoint configuration
 # Always passed in the Deployment args for clarity; defaults to TLS on (`true`).
 metrics: # @schema required; additionalProperties: false
-  secure: true # @schema required; anyOf: [{type: boolean}, {enum: [0, 1, "0", "1", "t", "f", "T", "F", "true", "false", "True", "False", "TRUE", "FALSE"]}]
+  secure: true # @schema required; anyOf: [{type: boolean}, {type: string}]
 
 # -- Comma-separated list of namespaces to watch for Aerospike custom resources
 watchNamespaces: "default,aerospike" # @schema type: [string, "null"]
@@ -101,7 +101,7 @@ ignoreNamespaces: "kube-system,kube-node-lease" # @schema type: [string, "null"]
 # -- Enable the eviction webhook to safely block Aerospike pod evictions during node maintenance
 # Also enables Prometheus metrics: aerospike_ako_eviction_webhook_requests_total (labels: eviction_namespace, decision)
 safePodEviction: # @schema required
-  enable: false # @schema type: [boolean, string, number, "null"]
+  enable: false # @schema type: [boolean, string, "null"]
   timeoutSeconds: "20" # @schema type: [string, number, "null"]
 
 # -- Grace period to delete/recover failed pods (in seconds)
@@ -136,7 +136,7 @@ affinity: {} # @schema hidden
 #         values:
 #         - <Kubernetes Host>
 
-# @schema anyOf: [{type: [object, "null"]}, {type: array, maxItems: 0}, {const: ""}]
+# @schema anyOf: [{type: [object, "null"]}, {type: array}]
 # -- Extra environment variables that will be passed into the operator pods
 extraEnv: {}
 

@@ -93,13 +93,6 @@ tests:
     asserts:
       - notFailedTemplate: {}
 
-  # 4.5.0 compatibility: the template's {{- with }} skips an empty string.
-  - it: accepts an empty imagePullSecrets string
-    set:
-      imagePullSecrets: ""
-    asserts:
-      - notFailedTemplate: {}
-
   - it: rejects a non-array non-object imagePullSecrets value
     set:
       imagePullSecrets: "not-valid"

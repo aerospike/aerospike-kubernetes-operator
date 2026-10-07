@@ -307,11 +307,3 @@ tests:
         secure: "False"
     asserts:
       - notFailedTemplate: {}
-
-  - it: rejects a metrics.secure value strconv.ParseBool rejects
-    set:
-      metrics:
-        secure: "no"
-    asserts:
-      - failedTemplate:
-          errorPattern: "metrics/secure.*'anyOf' failed"
