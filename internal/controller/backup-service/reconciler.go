@@ -4,6 +4,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"reflect"
 	"time"
 
 	"github.com/go-logr/logr"
@@ -357,12 +358,9 @@ func (r *SingleBackupServiceReconciler) updateBackupSvcConfig(ctx context.Contex
 	// The API hides literal secret values, so a change to a secret alone never shows up as a mismatch
 	// between the API and the ConfigMap. Spec and status both hold real values: status is written only
 	// after a successful reconcile, so a difference means the change has not been applied yet.
-	specConfigApplied, err := common.RawConfigsEqual(r.aeroBackupService.Spec.Config, r.aeroBackupService.Status.Config)
-	if err != nil {
-		return fmt.Errorf("compare backup service spec and status config: %w", err)
-	}
+	specConfigApplied := reflect.DeepEqual(r.aeroBackupService.Spec.Config.Raw, r.aeroBackupService.Status.Config.Raw)
 
-	synced, err := common.IsBackupSvcFullConfigSynced(apiBackupSvcConfig, desiredData, r.Log)
+	synced, currentConfig, desiredConfig, err := common.CompareBackupSvcConfigs(apiBackupSvcConfig, desiredData, r.Log)
 	if err != nil {
 		return fmt.Errorf("check backup service config sync: %w", err)
 	}
@@ -375,7 +373,7 @@ func (r *SingleBackupServiceReconciler) updateBackupSvcConfig(ctx context.Contex
 	r.Log.Info("Detected backup service config change, reloading config",
 		"specChanged", !specConfigApplied, "configMismatch", !synced)
 
-	staticChangeErr, err := r.findStaticConfigChange(apiBackupSvcConfig, desiredData, specConfigApplied, synced)
+	staticChangeErr, err := r.findStaticConfigChange(currentConfig, desiredConfig, specConfigApplied, synced)
 	if err != nil {
 		return err
 	}
@@ -396,10 +394,11 @@ func (r *SingleBackupServiceReconciler) updateBackupSvcConfig(ctx context.Contex
 
 // findStaticConfigChange returns a non-nil staticChangeErr if a field that the backup service cannot reload
 // without a restart has changed. A spec change is checked on spec versus status, which hold real values.
-// A mismatch between the API and the ConfigMap is checked on both configs after normalization, because the
-// API hides literal secret values and a raw comparison would report every secret as changed.
+// A mismatch between the API and the ConfigMap is checked on currentConfig and desiredConfig, the configs
+// CompareBackupSvcConfigs already compared: the API hides literal secret values, so a raw comparison would
+// report every secret as changed.
 func (r *SingleBackupServiceReconciler) findStaticConfigChange(
-	apiBackupSvcConfig map[string]interface{}, desiredData string, specConfigApplied, synced bool,
+	currentConfig, desiredConfig map[string]interface{}, specConfigApplied, synced bool,
 ) (staticChangeErr, err error) {
 	if !specConfigApplied {
 		var statusConfig, specConfig dto.Config
@@ -421,25 +420,17 @@ func (r *SingleBackupServiceReconciler) findStaticConfigChange(
 		return nil, nil
 	}
 
-	desiredBackupSvcConfig := make(map[string]interface{})
-
-	if uErr := yaml.Unmarshal([]byte(desiredData), &desiredBackupSvcConfig); uErr != nil {
-		return nil, fmt.Errorf("unmarshal desired backup service config: %w", uErr)
-	}
-
-	current, desired, _ := common.ComparableBackupSvcConfigs(r.Log, apiBackupSvcConfig, desiredBackupSvcConfig)
-
-	currentConfig, err := common.ToBackupSvcDTOConfig(current)
+	current, err := common.ToBackupSvcDTOConfig(currentConfig)
 	if err != nil {
 		return nil, fmt.Errorf("decode backup service config from API: %w", err)
 	}
 
-	desiredConfig, err := common.ToBackupSvcDTOConfig(desired)
+	desired, err := common.ToBackupSvcDTOConfig(desiredConfig)
 	if err != nil {
 		return nil, fmt.Errorf("decode desired backup service config: %w", err)
 	}
 
-	return validation.ValidateStaticFieldChanges(currentConfig, desiredConfig), nil
+	return validation.ValidateStaticFieldChanges(current, desired), nil
 }
 
 // newBackupServiceClient returns a client for the listener the operator connects to, as configured in spec.

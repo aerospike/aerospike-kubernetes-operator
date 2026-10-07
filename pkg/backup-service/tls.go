@@ -8,10 +8,10 @@ import (
 	"fmt"
 
 	corev1 "k8s.io/api/core/v1"
-	"k8s.io/apimachinery/pkg/types"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 
 	"github.com/aerospike/aerospike-kubernetes-operator/v4/api/v1beta1"
+	"github.com/aerospike/aerospike-kubernetes-operator/v4/pkg/utils"
 )
 
 // BuildOperatorTLSConfig builds the TLS configuration the operator uses to connect to the backup service
@@ -29,11 +29,11 @@ func BuildOperatorTLSConfig(
 	}
 
 	source := certSpec.SecretCertSource
-	secretName := types.NamespacedName{Namespace: namespace, Name: source.SecretName}
+	secretID := utils.NamespacedName(namespace, source.SecretName)
 
 	secret := &corev1.Secret{}
-	if err := k8sClient.Get(ctx, secretName, secret); err != nil {
-		return nil, fmt.Errorf("get operator client cert Secret %s: %w", secretName, err)
+	if err := k8sClient.Get(ctx, utils.NewNamespacedName(namespace, source.SecretName), secret); err != nil {
+		return nil, fmt.Errorf("get operator client cert Secret %s: %w", secretID, err)
 	}
 
 	tlsConfig := &tls.Config{
@@ -51,7 +51,7 @@ func BuildOperatorTLSConfig(
 	if source.CaCertsFilename != "" {
 		caPool, err := caCertPool(secret, source.CaCertsFilename)
 		if err != nil {
-			return nil, fmt.Errorf("load CA certificate from Secret %s: %w", secretName, err)
+			return nil, fmt.Errorf("load CA certificate from Secret %s: %w", secretID, err)
 		}
 
 		tlsConfig.RootCAs = caPool
@@ -60,7 +60,7 @@ func BuildOperatorTLSConfig(
 	if source.ClientCertFilename != "" {
 		cert, err := clientCertificate(secret, source.ClientCertFilename, source.ClientKeyFilename)
 		if err != nil {
-			return nil, fmt.Errorf("load client certificate from Secret %s: %w", secretName, err)
+			return nil, fmt.Errorf("load client certificate from Secret %s: %w", secretID, err)
 		}
 
 		tlsConfig.Certificates = []tls.Certificate{cert}

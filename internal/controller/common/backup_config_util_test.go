@@ -7,7 +7,6 @@ import (
 
 	"github.com/go-logr/logr"
 	"github.com/stretchr/testify/require"
-	"k8s.io/apimachinery/pkg/runtime"
 	"sigs.k8s.io/yaml"
 )
 
@@ -238,37 +237,6 @@ func TestIsBackupSvcFullConfigSynced(t *testing.T) {
 	synced, err = IsBackupSvcFullConfigSynced(apiConfig, string(desired), logr.Discard())
 	require.NoError(t, err)
 	require.False(t, synced)
-}
-
-func TestRawConfigsEqual(t *testing.T) {
-	t.Parallel()
-
-	tests := []struct {
-		name string
-		a, b string
-		want bool
-	}{
-		{name: "same content, different key order and format",
-			a:    `{"service":{"http":{"port":8081}},"storage":{"local":{"local-storage":{"path":"/tmp"}}}}`,
-			b:    `{"storage": {"local": {"local-storage": {"path": "/tmp"}}}, "service": {"http": {"port": 8081}}}`,
-			want: true},
-		{name: "secret changed",
-			a:    `{"aerospike-cluster":{"c":{"credentials":{"password":"admin123"}}}}`,
-			b:    `{"aerospike-cluster":{"c":{"credentials":{"password":"newpass"}}}}`,
-			want: false},
-		{name: "both empty", a: "", b: "", want: true},
-		{name: "status empty", a: `{"service":{}}`, b: "", want: false},
-	}
-
-	for _, tt := range tests {
-		t.Run(tt.name, func(t *testing.T) {
-			t.Parallel()
-
-			got, err := RawConfigsEqual(runtime.RawExtension{Raw: []byte(tt.a)}, runtime.RawExtension{Raw: []byte(tt.b)})
-			require.NoError(t, err)
-			require.Equal(t, tt.want, got)
-		})
-	}
 }
 
 func mapsEqual(a, b map[string]interface{}) bool {

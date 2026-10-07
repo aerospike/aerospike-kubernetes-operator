@@ -10,7 +10,6 @@ import (
 	"github.com/go-logr/logr"
 	corev1 "k8s.io/api/core/v1"
 	"k8s.io/apimachinery/pkg/labels"
-	"k8s.io/apimachinery/pkg/runtime"
 	"k8s.io/apimachinery/pkg/types"
 	"k8s.io/client-go/util/retry"
 	"sigs.k8s.io/controller-runtime/pkg/client"
@@ -143,21 +142,30 @@ func validateBackupSvcConfigReload(ctx context.Context, log logr.Logger, k8sClie
 func IsBackupSvcFullConfigSynced(currentBackupSvcConfig map[string]interface{}, desired string,
 	log logr.Logger,
 ) (bool, error) {
+	synced, _, _, err := CompareBackupSvcConfigs(currentBackupSvcConfig, desired, log)
+
+	return synced, err
+}
+
+// CompareBackupSvcConfigs is IsBackupSvcFullConfigSynced that also returns the two configs it compared, so a
+// caller that needs them again does not normalize them a second time.
+func CompareBackupSvcConfigs(currentBackupSvcConfig map[string]interface{}, desired string, log logr.Logger,
+) (synced bool, comparableCurrent, comparableDesired map[string]interface{}, err error) {
 	desiredBackupSvcConfig := make(map[string]interface{})
 
 	if err := yaml.Unmarshal([]byte(desired), &desiredBackupSvcConfig); err != nil {
-		return false, fmt.Errorf("unmarshal backup service config from ConfigMap data: %w", err)
+		return false, nil, nil, fmt.Errorf("unmarshal backup service config from ConfigMap data: %w", err)
 	}
 
 	current, desiredConfig, normalized := ComparableBackupSvcConfigs(log, currentBackupSvcConfig, desiredBackupSvcConfig)
 
 	// Raw ConfigMap data holds literal secrets, so only normalized configs are logged.
 	if normalized {
-		log.Info("Fetched backup service config from backup service via API", "config", current)
-		log.Info("Found backup service config in backup service ConfigMap", "config", desiredConfig)
+		log.V(1).Info("Fetched backup service config from backup service via API", "config", current)
+		log.V(1).Info("Found backup service config in backup service ConfigMap", "config", desiredConfig)
 	}
 
-	return reflect.DeepEqual(current, desiredConfig), nil
+	return reflect.DeepEqual(current, desiredConfig), current, desiredConfig, nil
 }
 
 // ComparableBackupSvcConfigs prepares a config returned by the backup service API and a desired config
@@ -230,27 +238,6 @@ func ToBackupSvcDTOConfig(config map[string]interface{}) (*dto.Config, error) {
 	}
 
 	return &dtoConfig, nil
-}
-
-// RawConfigsEqual reports whether two raw configs hold the same content. The raw bytes cannot be compared
-// directly, because the API server re-serializes status, which changes key order and formatting.
-// An empty config is equal only to another empty config.
-func RawConfigsEqual(a, b runtime.RawExtension) (bool, error) {
-	if len(a.Raw) == 0 || len(b.Raw) == 0 {
-		return len(a.Raw) == len(b.Raw), nil
-	}
-
-	aConfig := make(map[string]interface{})
-	if err := yaml.Unmarshal(a.Raw, &aConfig); err != nil {
-		return false, fmt.Errorf("unmarshal config: %w", err)
-	}
-
-	bConfig := make(map[string]interface{})
-	if err := yaml.Unmarshal(b.Raw, &bConfig); err != nil {
-		return false, fmt.Errorf("unmarshal config: %w", err)
-	}
-
-	return reflect.DeepEqual(aConfig, bConfig), nil
 }
 
 func GetBackupSvcConfigFromCM(

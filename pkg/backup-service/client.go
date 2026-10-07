@@ -106,6 +106,9 @@ func NewClientWithVersion(address string, port int32, contextPath, version strin
 func NewClientWithTLS(address string, port int32, contextPath, version string, tlsConfig *tls.Config) *Client {
 	transport := http.DefaultTransport.(*http.Transport).Clone()
 	transport.TLSClientConfig = tlsConfig
+	// A client is built for each reconcile and used for a few calls. Without keep-alives its connections
+	// close after each response instead of idling in a pool that outlives the client.
+	transport.DisableKeepAlives = true
 
 	return &Client{
 		Address:     address,
