@@ -8766,8 +8766,7 @@ spec:
                       This field only takes effect when a pod restart (not a warm restart) is required.
                       This settings is applied dynamically before the first pod is taken down and
                       reverted once all pods have rejoined; they are never written to aerospike.conf.
-                    format: int64
-                    minimum: 0
+                    format: int32
                     type: integer
                 type: object
               rosterNodeBlockList:
@@ -9805,7 +9804,7 @@ spec:
                   by AKO on the cluster. This reflects the live value on the server, which may differ from
                   aerospikeConfig.service.migrate-fill-delay during rolling restarts, upgrades, or scale-down.
                   Defaults to the aerospikeConfig.service.migrate-fill-delay value on cluster creation.
-                format: int64
+                format: int32
                 type: integer
               enableDynamicConfigUpdate:
                 description: |-
@@ -18489,8 +18488,7 @@ spec:
                       This field only takes effect when a pod restart (not a warm restart) is required.
                       This settings is applied dynamically before the first pod is taken down and
                       reverted once all pods have rejoined; they are never written to aerospike.conf.
-                    format: int64
-                    minimum: 0
+                    format: int32
                     type: integer
                 type: object
               rosterNodeBlockList:

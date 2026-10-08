@@ -553,7 +553,7 @@ func updateAndValidateIntermediateMFD(ctx goctx.Context, k8sClient client.Client
 
 	intermediateMFD := expectedMigFillDelay
 	if override := aeroCluster.Spec.RestartStrategy.GetOverrideMigrateFillDelay(); override > 0 {
-		intermediateMFD = override
+		intermediateMFD = int64(override)
 	}
 
 	err = validateMigrateFillDelay(ctx, k8sClient, logger, clusterNamespacedName, intermediateMFD,

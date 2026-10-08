@@ -2130,8 +2130,8 @@ func (r *SingleClusterReconciler) getEvictionBlockedPods(ctx context.Context) (s
 // reconcile. MFD is not raised again before quiesce (it is already at delay).
 //
 // restartTypeMap == nil signals the upgrade path, where every pod is a full pod restart.
-func (r *SingleClusterReconciler) mfdDelayForRestart(rackState *RackState,
-	podsToRestart []*corev1.Pod, restartTypeMap map[string]RestartType) (delay int, drainBeforeStability bool, err error) {
+func (r *SingleClusterReconciler) mfdDelayForRestart(rackState *RackState, podsToRestart []*corev1.Pod,
+	restartTypeMap map[string]RestartType) (delay uint32, drainBeforeStability bool, err error) {
 	podRestartNeeded := restartTypeMap == nil // nil → upgrade path, always a full restart
 
 	if !podRestartNeeded {
@@ -2148,14 +2148,16 @@ func (r *SingleClusterReconciler) mfdDelayForRestart(rackState *RackState,
 	// drainBeforeStability=true: MFD will be transiently raised to suppress fills during restart.
 	if podRestartNeeded {
 		if override := r.aeroCluster.Spec.RestartStrategy.GetOverrideMigrateFillDelay(); override > 0 {
-			return int(override), true, nil
+			return override, true, nil
 		}
 	}
 
-	delay, err = asdbv1.GetMigrateFillDelay(&rackState.Rack.AerospikeConfig)
+	configMFD, err := asdbv1.GetMigrateFillDelay(&rackState.Rack.AerospikeConfig)
 	if err != nil {
 		return 0, false, err
 	}
+
+	delay = uint32(configMFD) //nolint:gosec // migrate-fill-delay is bounded by uint32 range
 
 	if !podRestartNeeded {
 		// Warm-only batch: return configMFD so waitForMultipleNodesSafeStopReady can correct any
@@ -2202,7 +2204,8 @@ func (r *SingleClusterReconciler) revertMFDToConfig(
 		return common.ReconcileError(fmt.Errorf("read configMFD for revert: %w", err))
 	}
 
-	return r.setMigrateFillDelay(ctx, policy, configMFD, ignorablePodNames, nil, force)
+	return r.setMigrateFillDelay(ctx, policy,
+		uint32(configMFD), ignorablePodNames, nil, force) //nolint:gosec // migrate-fill-delay is bounded by uint32 range
 }
 
 // isPreviewFeaturesUpdated reports whether the pod's server container is running with
