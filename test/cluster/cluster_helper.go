@@ -35,12 +35,12 @@ import (
 const (
 	baseEnterpriseImage = "aerospike/aerospike-server-enterprise"
 	wrongImage          = "wrong-image"
-	nextServerVersion   = "8.1.2.0-20260417212432" // Get latest server timestamp tag from dockerhub
-	latestServerVersion = "8.1.2.0"
+	nextServerVersion   = "8.2.0.0_20260922T013045Z" // Get latest server timestamp tag from dockerhub
+	latestServerVersion = "8.2.0.0"
 	invalidVersion      = "3.0.0.4"
 	post6Version        = "7.0.0.0"
 	version6            = "6.0.0.5"
-	latestSchemaVersion = "8.1.2"
+	latestSchemaVersion = "8.2.0"
 	testClusterSize     = 4
 )
 
