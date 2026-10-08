@@ -219,8 +219,7 @@ var _ = Describe("AerospikeCluster validation", func() {
 					// Webhook response validation
 					envtests.NewStatusErrorMatcher().
 						WithMessageSubstrings(testutil.WebhookErrorPrefix,
-							"storage-engine cannot be nil for namespace map[name:test replication-factor:2 storage-engine:<nil>",
-							"strong-consistency:true]").
+							"storage-engine is required namespaces").
 						Validate(err)
 				})
 
