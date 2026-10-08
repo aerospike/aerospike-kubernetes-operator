@@ -3,9 +3,9 @@ module github.com/aerospike/aerospike-kubernetes-operator/v4
 go 1.26.8
 
 require (
-	github.com/aerospike/aerospike-backup-service/v3 v3.6.1
+	github.com/aerospike/aerospike-backup-service/v3 v3.6.2
 	github.com/aerospike/aerospike-client-go/v8 v8.9.0
-	github.com/aerospike/aerospike-management-lib v1.11.2-0.20260928141335-d2632f023d11
+	github.com/aerospike/aerospike-management-lib v1.12.0
 	github.com/asaskevich/govalidator v0.0.0-20210307081110-f21760c49a8d
 	github.com/deckarep/golang-set/v2 v2.9.0
 	github.com/evanphx/json-patch v5.9.11+incompatible
@@ -29,7 +29,7 @@ require (
 	cel.dev/expr v0.25.1 // indirect
 	github.com/KyleBanks/depth v1.2.1 // indirect
 	github.com/Masterminds/semver/v3 v3.5.0 // indirect
-	github.com/aerospike/backup-go v0.11.0 // indirect
+	github.com/aerospike/backup-go v0.11.1 // indirect
 	github.com/antlr4-go/antlr/v4 v4.13.0 // indirect
 	github.com/aws/aws-sdk-go-v2 v1.41.9 // indirect
 	github.com/aws/smithy-go v1.26.0 // indirect
