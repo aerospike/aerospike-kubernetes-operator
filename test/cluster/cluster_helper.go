@@ -610,7 +610,7 @@ func validateMigrateFillDelay(
 			}
 
 			if current.(int64) != expectedMigFillDelay {
-				pkgLog.Info("Waiting for migrate-fill-delay to be", "value", expectedMigFillDelay)
+				pkgLog.Info("Waiting for migrate-fill-delay to be", "value", expectedMigFillDelay, "current", current)
 				return false, nil
 			}
 
@@ -2029,7 +2029,46 @@ func markPodAsFailed(ctx goctx.Context, k8sClient client.Client, name, namespace
 
 	pod.Spec.Containers[0].Image = wrongImage
 
-	return k8sClient.Update(ctx, pod)
+	if err := k8sClient.Update(ctx, pod); err != nil {
+		return err
+	}
+
+	// Confirm the pod has actually failed before returning
+	return wait.PollUntilContextTimeout(ctx,
+		1*time.Second, 2*time.Minute, true, func(goctx.Context) (done bool, err error) {
+			updatedPod := &corev1.Pod{}
+
+			if err := k8sClient.Get(
+				ctx, types.NamespacedName{
+					Name:      name,
+					Namespace: namespace,
+				}, updatedPod,
+			); err != nil {
+				return false, err
+			}
+
+			if updatedPod.UID != pod.UID {
+				return false, fmt.Errorf("pod %s was recreated before it was marked as failed", name)
+			}
+
+			containerName := pod.Spec.Containers[0].Name
+
+			for idx := range updatedPod.Status.ContainerStatuses {
+				status := &updatedPod.Status.ContainerStatuses[idx]
+				if status.Name != containerName || status.State.Waiting == nil {
+					continue
+				}
+
+				reason := status.State.Waiting.Reason
+				if reason == utils.ReasonErrImagePull || reason == utils.ReasonImagePullBackOff {
+					pkgLog.Info("Pod marked as failed", "pod", name, "container", containerName, "reason", reason)
+					return true, nil
+				}
+			}
+
+			return false, nil
+		},
+	)
 }
 
 // extractPodPVC returns a map of PVC claim name to UID for volumes attached to the pod.
