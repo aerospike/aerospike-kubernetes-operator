@@ -7,7 +7,7 @@ tests:
   # -- aerospikeKubernetesInitRegistry --
   - it: accepts a non-empty aerospikeKubernetesInitRegistry
     set:
-      aerospikeKubernetesInitNameTag: "aerospike-kubernetes-init:2.5.4"
+      aerospikeKubernetesInitRegistry: "my-registry.example.com"
     asserts:
       - notFailedTemplate: {}
 
