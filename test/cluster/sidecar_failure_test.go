@@ -40,6 +40,12 @@ func crashingSidecar() corev1.Container {
 				corev1.ResourceMemory: resource.MustParse("16Mi"),
 			},
 		},
+		ReadinessProbe: &corev1.Probe{
+			ProbeHandler: corev1.ProbeHandler{
+				Exec: &corev1.ExecAction{Command: []string{"cat", "/tmp/ready"}},
+			},
+			PeriodSeconds: 1,
+		},
 	}
 }
 
