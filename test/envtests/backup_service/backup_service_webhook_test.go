@@ -2,6 +2,7 @@ package backupservice
 
 import (
 	"context"
+	"fmt"
 
 	. "github.com/onsi/ginkgo/v2"
 	. "github.com/onsi/gomega"
@@ -50,6 +51,65 @@ var _ = Describe("AerospikeBackupService validation", func() {
 					envtests.NewStatusErrorMatcher().
 						WithMessageSubstrings(testutil.BackupServiceWebhookErrorPrefix, `"[secret]"`, "placeholder").
 						Validate(err)
+				})
+			})
+		})
+	})
+
+	Context("Update validation", func() {
+		Context("spec.config merged with the ConfigMap", func() {
+			// The ConfigMap holds a routine, added by an AerospikeBackup, that uses the default backup policy.
+			BeforeEach(func() {
+				Expect(backupconfig.CreateStubBackupService(ctx, envtests.K8sClient, absNsNm,
+					backupconfig.DefaultRestoreMergedConfig())).To(Succeed())
+				DeferCleanup(backupconfig.DeleteStubBackupService, ctx, envtests.K8sClient, absNsNm)
+			})
+
+			// updateBackupPolicies replaces the backup policies in the AerospikeBackupService spec.
+			updateBackupPolicies := func(policies map[string]interface{}) error {
+				var backupService asdbv1beta1.AerospikeBackupService
+				Expect(envtests.K8sClient.Get(ctx, absNsNm, &backupService)).To(Succeed())
+
+				config := backupconfig.BackupServiceBaseConfig()
+				config[asdbv1beta1.BackupPoliciesKey] = policies
+				backupService.Spec.Config = runtime.RawExtension{Raw: backupconfig.MustMarshalConfig(config)}
+
+				return envtests.K8sClient.Update(ctx, &backupService)
+			}
+
+			Context("negative", func() {
+				It("rejects removing a backup policy that a backup routine uses", func() {
+					err := updateBackupPolicies(map[string]interface{}{
+						"other-policy": map[string]interface{}{"parallel": 3},
+					})
+					Expect(err).To(HaveOccurred())
+					envtests.NewStatusErrorMatcher().
+						WithMessageSubstrings(testutil.BackupServiceWebhookErrorPrefix,
+							"routines and clusters that AerospikeBackups added to ConfigMap "+absNsNm.String(),
+							"test-routine", fmt.Sprintf("%q", backupconfig.DefaultBackupPolicy)).
+						Validate(err)
+				})
+
+				It("rejects an invalid backup policy without the ConfigMap context", func() {
+					err := updateBackupPolicies(map[string]interface{}{
+						backupconfig.DefaultBackupPolicy: map[string]interface{}{
+							"compression": map[string]interface{}{"level": 3},
+						},
+					})
+					Expect(err).To(HaveOccurred())
+					envtests.NewStatusErrorMatcher().
+						WithMessageSubstrings(testutil.BackupServiceWebhookErrorPrefix, "compression").
+						WithoutMessageSubstrings("added to ConfigMap").
+						Validate(err)
+				})
+			})
+
+			Context("positive", func() {
+				It("accepts adding a backup policy while the routine's policy stays", func() {
+					Expect(updateBackupPolicies(map[string]interface{}{
+						backupconfig.DefaultBackupPolicy: map[string]interface{}{"parallel": 3},
+						"other-policy":                   map[string]interface{}{"parallel": 2},
+					})).To(Succeed())
 				})
 			})
 		})
