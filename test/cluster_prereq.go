@@ -5,11 +5,14 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
+	"slices"
 
 	corev1 "k8s.io/api/core/v1"
 	rbac "k8s.io/api/rbac/v1"
 	"k8s.io/apimachinery/pkg/api/errors"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
+	"k8s.io/apimachinery/pkg/types"
+	"k8s.io/client-go/util/retry"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 
 	"github.com/aerospike/aerospike-kubernetes-operator/v4/api/v1beta1"
@@ -36,6 +39,9 @@ const AuthSecretName = "auth-secret"
 const AuthSecretNameForUpdate = "auth-update"
 const AWSSecretName = "aws-secret"
 
+// Set by test.sh to the name of the pull secret for the init image
+const imagePullSecretNameEnvVar = "IMAGE_PULL_SECRET_NAME" //nolint:gosec // for testing
+
 const MultiClusterNs1 string = "test1"
 const MultiClusterNs2 string = "test2"
 const AerospikeNs string = "aerospike"
@@ -51,10 +57,17 @@ func getLabels() map[string]string {
 func createClusterRBAC(k8sClient client.Client, ctx goctx.Context) error {
 	subjects := make([]rbac.Subject, 0, len(Namespaces))
 
+	// The Aerospike pods run under this service account, so its pull secret
+	// lets them pull an init image from a private registry.
+	var imagePullSecrets []corev1.LocalObjectReference
+	if name := os.Getenv(imagePullSecretNameEnvVar); name != "" {
+		imagePullSecrets = append(imagePullSecrets, corev1.LocalObjectReference{Name: name})
+	}
+
 	for idx := range Namespaces {
 		// Create service account for getting access in cluster specific namespaces
 		if err := createServiceAccount(
-			k8sClient, ctx, aeroClusterServiceAccountName, Namespaces[idx],
+			k8sClient, ctx, aeroClusterServiceAccountName, Namespaces[idx], imagePullSecrets...,
 		); err != nil {
 			return err
 		}
@@ -105,20 +118,50 @@ func createNamespace(
 
 func createServiceAccount(
 	k8sClient client.Client, ctx goctx.Context, name string, namespace string,
+	imagePullSecrets ...corev1.LocalObjectReference,
 ) error {
 	svcAct := &corev1.ServiceAccount{
 		ObjectMeta: metav1.ObjectMeta{
 			Name:      name,
 			Namespace: namespace,
 		},
+		ImagePullSecrets: imagePullSecrets,
 	}
 
 	err := k8sClient.Create(ctx, svcAct)
-	if err != nil && !errors.IsAlreadyExists(err) {
+	if err == nil || !errors.IsAlreadyExists(err) {
 		return err
 	}
 
-	return nil
+	if len(imagePullSecrets) == 0 {
+		return nil
+	}
+
+	// The account already exists. In namespace test, OLM creates it for the
+	// operator. Add any missing pull secrets to it.
+	return retry.RetryOnConflict(retry.DefaultRetry, func() error {
+		existing := &corev1.ServiceAccount{}
+		if err := k8sClient.Get(
+			ctx, types.NamespacedName{Name: name, Namespace: namespace}, existing,
+		); err != nil {
+			return err
+		}
+
+		changed := false
+
+		for _, secret := range imagePullSecrets {
+			if !slices.Contains(existing.ImagePullSecrets, secret) {
+				existing.ImagePullSecrets = append(existing.ImagePullSecrets, secret)
+				changed = true
+			}
+		}
+
+		if !changed {
+			return nil
+		}
+
+		return k8sClient.Update(ctx, existing)
+	})
 }
 
 func initConfigSecret(secretDirectory string) (map[string][]byte, error) {

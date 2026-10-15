@@ -10,8 +10,9 @@ set -e
 #  test.sh -b aerospike/aerospike-kubernetes-operator-bundle:1.1.0
 #  test.sh -b aerospike/aerospike-kubernetes-operator-bundle:1.1.0 -f ".*RackManagement.*" -a "--connect-through-network-type=hostInternal"
 #  test.sh -b <IMAGE> -f "<GINKGO-FOCUS-REGEXP>" -a "<PASS-THROUGHS>"
+#  test.sh -b <IMAGE> -s <DOCKER-CONFIG-JSON>   # bundle and operator images in a private registry
 
-while getopts "b:f:a:r:p:n:i:t:" opt
+while getopts "b:f:a:r:p:n:i:t:s:" opt
 do
    case "$opt" in
       b ) BUNDLE="$OPTARG" ;;
@@ -22,6 +23,7 @@ do
       n ) REGISTRY_NAMESPACE="$OPTARG" ;;
       i ) INIT_IMAGE_NAME_TAG="$OPTARG" ;;
       t ) TEST_TYPE="$OPTARG" ;;
+      s ) OPERATOR_PULL_CRED_PATH="$OPTARG" ;;
 
    esac
 done
@@ -45,7 +47,7 @@ echo "---------------------------------------"
 echo "------------------------------"
 echo "| Deploying the operator.... |"
 echo "------------------------------"
-"$DIR"/deploy-test-operator.sh "$BUNDLE"
+"$DIR"/deploy-test-operator.sh "$BUNDLE" "${OPERATOR_PULL_CRED_PATH:-}"
 
 # Deploy LDAP
 echo "------------------------------"
@@ -53,10 +55,13 @@ echo "| Deploying OpenLDAP....     |"
 echo "------------------------------"
 "$DIR"/deploy-openldap.sh
 
-# Create imagePullSecret for AerospikeInitImage
+# Create imagePullSecret for AerospikeInitImage. The test suite adds it to the
+# Aerospike pods' service account in every namespace.
 IMAGE_PULL_SECRET="registrycred"
 
-"$DIR"/create_image_pull_secret.sh -n ${IMAGE_PULL_SECRET} -p "$CRED_PATH"
+for namespace in test test1 test2 aerospike; do
+  "$DIR"/create_image_pull_secret.sh -n ${IMAGE_PULL_SECRET} -p "$CRED_PATH" -N "$namespace"
+done
 
 # Run tests
 echo "---------------------"
@@ -71,9 +76,8 @@ export IMAGE_PULL_SECRET_NAME="$IMAGE_PULL_SECRET"
 if [ "$TEST_TYPE" = "cluster-test" ]; then
    make cluster-test FOCUS="$FOCUS" ARGS="$ARGS"
 elif [ "$TEST_TYPE" = "backup-test" ]; then
-   make backup-service-test ARGS="$ARGS"
-   make backup-test ARGS="$ARGS"
-   make restore-test ARGS="$ARGS"
+   # -k runs every suite even if an earlier one fails, and still exits non-zero.
+   make -k backup-service-test backup-test restore-test ARGS="$ARGS"
 elif [ "$TEST_TYPE" = "all-test" ]; then
    make -k all-test FOCUS="$FOCUS" ARGS="$ARGS"
 fi
