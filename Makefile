@@ -13,6 +13,18 @@ OPENSHIFT_VERSION="v4.10"
 # TODO: Version must be pulled from git tags
 VERSION ?= 4.6.0
 
+# NEXT_VERSION is the release in development. CI builds versions from it, e.g. 4.7.0-pr-620-a1b2c3d.
+# Bump it right after a release is tagged. CI fails until it is newer than the last release tag.
+NEXT_VERSION ?= 4.7.0
+
+# INIT_TAG is the aerospike-kubernetes-init CI build that goes into the release bundle,
+# as <version>-<pr-N|master>-<short commit sha>, the tag that CI pushes to JFrog.
+INIT_TAG ?= 2.5.5-pr-166-50c3a4c
+
+# INIT_RC_TAG is the aerospike-kubernetes-init release candidate that goes into an operator
+# release candidate, as <version>-rcN, the tag pushed to the init repo.
+INIT_RC_TAG ?= 2.5.5-rc1
+
 # Platforms supported
 PLATFORMS ?= linux/amd64,linux/arm64
 
@@ -244,18 +256,13 @@ build: manifests generate fmt vet ## Build manager binary.
 run: manifests generate fmt vet ## Run a controller from your host.
 	go run ./cmd/main.go
 
+# The image is non-root, so the same image runs on OpenShift and other Kubernetes.
+# IMG can list several space-separated tags; one build is pushed to all of them.
 .PHONY: docker-buildx
 docker-buildx: ## Build and push docker image for the manager for cross-platform support
 	- docker buildx create --name project-v3-builder
 	docker buildx use project-v3-builder
-	docker buildx build --push --no-cache --provenance=false --platform=$(PLATFORMS) --tag ${IMG} --build-arg VERSION=$(VERSION) .
-	- docker buildx rm project-v3-builder
-
-.PHONY: docker-buildx-openshift
-docker-buildx-openshift: ## Build and push docker image for the manager for openshift cross-platform support
-	- docker buildx create --name project-v3-builder
-	docker buildx use project-v3-builder
-	docker buildx build --push --no-cache --provenance=false --platform=$(PLATFORMS) --tag ${IMG} --build-arg VERSION=$(VERSION) --build-arg USER=1001 .
+	docker buildx build --push --no-cache --provenance=false --platform=$(PLATFORMS) $(addprefix --tag ,$(IMG)) --build-arg VERSION=$(VERSION) .
 	- docker buildx rm project-v3-builder
 
 .PHONY: docker-push
@@ -416,7 +423,7 @@ bundle: manifests kustomize operator-sdk
 	cd $(ROOT_DIR)/config/manifests/bases && $(KUSTOMIZE) edit set annotation createdAt:$(DATE)
 	cd $(ROOT_DIR) && $(KUSTOMIZE) build $(OVERLAYS_DIR) | $(OPERATOR_SDK) generate bundle $(BUNDLE_GEN_FLAGS) --output-dir $(BUNDLE_DIR)
 	$(OPERATOR_SDK) bundle validate $(BUNDLE_DIR)
-	sed -i "s@containerImage: controller:latest@containerImage: $(IMG)@g" $(BUNDLE_DIR)/manifests/aerospike-kubernetes-operator.clusterserviceversion.yaml
+	sed -i "s|containerImage: controller:latest|containerImage: $(IMG)|g" $(BUNDLE_DIR)/manifests/aerospike-kubernetes-operator.clusterserviceversion.yaml
 	sed -i "/^FROM.*/a LABEL com.redhat.openshift.versions="$(OPENSHIFT_VERSION)"" $(ROOT_DIR)/bundle.Dockerfile; \
 	sed -i "/^FROM.*/a LABEL com.redhat.delivery.operator.bundle=true" $(ROOT_DIR)/bundle.Dockerfile; \
 	sed -i "/^FROM.*/a LABEL com.redhat.delivery.backport=false" $(ROOT_DIR)/bundle.Dockerfile; \
