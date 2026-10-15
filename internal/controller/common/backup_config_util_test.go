@@ -181,8 +181,8 @@ func TestComparableBackupSvcConfigs(t *testing.T) {
 			desired := desiredConfig(t)
 			tt.mutate(t, desired)
 
-			current, desiredOut, normalized := ComparableBackupSvcConfigs(logr.Discard(), apiConfig, desired)
-			require.True(t, normalized)
+			current, desiredOut, err := ComparableBackupSvcConfigs(apiConfig, desired)
+			require.NoError(t, err)
 			require.Equal(t, tt.wantEqual, mapsEqual(current, desiredOut))
 		})
 	}
@@ -200,12 +200,12 @@ func TestComparableBackupSvcConfigs_CanonicalizesEnums(t *testing.T) {
 	apiPolicy := apiConfig["backup-policies"].(map[string]interface{})["test-policy"].(map[string]interface{})
 	require.Equal(t, "cumulative", apiPolicy["incr-mode"])
 
-	current, desiredOut, normalized := ComparableBackupSvcConfigs(logr.Discard(), apiConfig, desired)
-	require.True(t, normalized)
+	current, desiredOut, err := ComparableBackupSvcConfigs(apiConfig, desired)
+	require.NoError(t, err)
 	require.True(t, mapsEqual(current, desiredOut))
 }
 
-func TestComparableBackupSvcConfigs_FallsBackToRawConfig(t *testing.T) {
+func TestComparableBackupSvcConfigs_InvalidConfigMap(t *testing.T) {
 	t.Parallel()
 
 	desired := desiredConfig(t)
@@ -214,10 +214,38 @@ func TestComparableBackupSvcConfigs_FallsBackToRawConfig(t *testing.T) {
 
 	apiConfig := mustNormalize(t, desiredConfig(t))
 
-	current, desiredOut, normalized := ComparableBackupSvcConfigs(logr.Discard(), apiConfig, desired)
-	require.False(t, normalized)
-	require.Equal(t, apiConfig, current)
-	require.Equal(t, desired, desiredOut)
+	_, _, err := ComparableBackupSvcConfigs(apiConfig, desired)
+	require.ErrorContains(t, err, "validate backup service config in ConfigMap")
+	require.ErrorContains(t, err, "missing-policy")
+}
+
+func TestComparableBackupSvcConfigs_UnreadableAPIConfig(t *testing.T) {
+	t.Parallel()
+
+	// A newer backup service could support a storage type the vendored module does not know: the unknown key is
+	// dropped on decode, and the storage is left without any configuration.
+	apiConfig := mustNormalize(t, desiredConfig(t))
+	apiConfig["storage"].(map[string]interface{})["local"] = map[string]interface{}{
+		"nfs-storage": map[string]interface{}{"path": "/backups"},
+	}
+
+	_, _, err := ComparableBackupSvcConfigs(apiConfig, desiredConfig(t))
+	require.ErrorContains(t, err, "read backup service config from API")
+	require.ErrorContains(t, err, "no storage configuration provided")
+}
+
+func TestIsBackupSvcFullConfigSynced_InvalidConfigMap(t *testing.T) {
+	t.Parallel()
+
+	desired := desiredConfig(t)
+	routine(t, desired)["backup-policy"] = "missing-policy"
+
+	desiredData, err := yaml.Marshal(desired)
+	require.NoError(t, err)
+
+	synced, err := IsBackupSvcFullConfigSynced(mustNormalize(t, desiredConfig(t)), string(desiredData), logr.Discard())
+	require.Error(t, err)
+	require.False(t, synced)
 }
 
 func TestIsBackupSvcFullConfigSynced(t *testing.T) {

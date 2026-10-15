@@ -473,8 +473,8 @@ func (r *SingleBackupReconciler) reconcileScheduledBackup(ctx context.Context) e
 // comparableBackupConfig returns the cluster and routines of this backup and the config returned by the
 // backup service API, in a form that can be compared entry by entry. The API hides literal secret values,
 // so the entries are taken from the normalized ConfigMap, which the backup service loads and which holds
-// this backup's entries, and compared with the normalized API config. If normalization is not possible,
-// the spec and the raw API config are returned and compared as they are.
+// this backup's entries, and compared with the normalized API config. A config that cannot be normalized is
+// returned as an error, see common.ComparableBackupSvcConfigs.
 func (r *SingleBackupReconciler) comparableBackupConfig(
 	ctx context.Context, specBackupConfig, apiBackupSvcConfig map[string]interface{},
 ) (desiredConfig, currentConfig map[string]interface{}, err error) {
@@ -485,13 +485,13 @@ func (r *SingleBackupReconciler) comparableBackupConfig(
 
 	desiredBackupSvcConfig := make(map[string]interface{})
 
-	if err := yaml.Unmarshal([]byte(desiredData), &desiredBackupSvcConfig); err != nil {
+	if err = yaml.Unmarshal([]byte(desiredData), &desiredBackupSvcConfig); err != nil {
 		return nil, nil, fmt.Errorf("unmarshal backup service config from ConfigMap data: %w", err)
 	}
 
-	current, desired, normalized := common.ComparableBackupSvcConfigs(r.Log, apiBackupSvcConfig, desiredBackupSvcConfig)
-	if !normalized {
-		return specBackupConfig, apiBackupSvcConfig, nil
+	current, desired, err := common.ComparableBackupSvcConfigs(apiBackupSvcConfig, desiredBackupSvcConfig)
+	if err != nil {
+		return nil, nil, err
 	}
 
 	desiredConfig = make(map[string]interface{}, 2)

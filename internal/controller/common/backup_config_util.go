@@ -153,45 +153,46 @@ func CompareBackupSvcConfigs(currentBackupSvcConfig map[string]interface{}, desi
 ) (synced bool, comparableCurrent, comparableDesired map[string]interface{}, err error) {
 	desiredBackupSvcConfig := make(map[string]interface{})
 
-	if err := yaml.Unmarshal([]byte(desired), &desiredBackupSvcConfig); err != nil {
+	if err = yaml.Unmarshal([]byte(desired), &desiredBackupSvcConfig); err != nil {
 		return false, nil, nil, fmt.Errorf("unmarshal backup service config from ConfigMap data: %w", err)
 	}
 
-	current, desiredConfig, normalized := ComparableBackupSvcConfigs(log, currentBackupSvcConfig, desiredBackupSvcConfig)
-
-	// Raw ConfigMap data holds literal secrets, so only normalized configs are logged.
-	if normalized {
-		log.V(1).Info("Fetched backup service config from backup service via API", "config", current)
-		log.V(1).Info("Found backup service config in backup service ConfigMap", "config", desiredConfig)
+	current, desiredConfig, err := ComparableBackupSvcConfigs(currentBackupSvcConfig, desiredBackupSvcConfig)
+	if err != nil {
+		return false, nil, nil, err
 	}
+
+	// Only normalized configs are logged: the raw ConfigMap data holds literal secrets.
+	log.V(1).Info("Fetched backup service config from backup service via API", "config", current)
+	log.V(1).Info("Found backup service config in backup service ConfigMap", "config", desiredConfig)
 
 	return reflect.DeepEqual(current, desiredConfig), current, desiredConfig, nil
 }
 
-// ComparableBackupSvcConfigs prepares a config returned by the backup service API and a desired config
-// for comparison. The API hides literal secret values (ABS 3.7.0 and later), so comparing it with raw
-// ConfigMap data would never match. Both configs are normalized with NormalizeBackupSvcConfig and returned
-// with normalized set to true. If either config cannot be normalized, both are returned unchanged with
-// normalized set to false, so that callers fall back to comparing raw values instead of failing.
-func ComparableBackupSvcConfigs(log logr.Logger, current, desired map[string]interface{},
-) (comparableCurrent, comparableDesired map[string]interface{}, normalized bool) {
+// ComparableBackupSvcConfigs normalizes a config returned by the backup service API and the desired config from
+// the ConfigMap with NormalizeBackupSvcConfig, so that they can be compared: the API hides literal secret values
+// (ABS 3.7.0 and later), so comparing it with raw ConfigMap data would never match.
+//
+// A config that cannot be normalized is an error, not a reason to compare raw values: a raw comparison never
+// matches, so the caller would reload on every reconcile without ever verifying the result. An invalid ConfigMap
+// would fail the reload anyway. An API config the vendored backup service module cannot read comes from a backup
+// service version this operator does not support, so no comparison is possible until the versions match.
+func ComparableBackupSvcConfigs(current, desired map[string]interface{},
+) (comparableCurrent, comparableDesired map[string]interface{}, err error) {
+	normalizedDesired, err := NormalizeBackupSvcConfig(desired)
+	if err != nil {
+		return nil, nil, fmt.Errorf("validate backup service config in ConfigMap: %w", err)
+	}
+
 	// The API config is normalized too: versions before 3.7.0 return literal secret values, and the running
 	// image may render fields differently from the vendored module. Normalizing a normalized config is a no-op.
 	normalizedCurrent, err := NormalizeBackupSvcConfig(current)
 	if err != nil {
-		log.Info("Failed to normalize backup service config from API, comparing raw config", "err", err)
-
-		return current, desired, false
+		return nil, nil, fmt.Errorf("read backup service config from API, the backup service version may not be "+
+			"supported by this operator: %w", err)
 	}
 
-	normalizedDesired, err := NormalizeBackupSvcConfig(desired)
-	if err != nil {
-		log.Info("Failed to normalize desired backup service config, comparing raw config", "err", err)
-
-		return current, desired, false
-	}
-
-	return normalizedCurrent, normalizedDesired, true
+	return normalizedCurrent, normalizedDesired, nil
 }
 
 // NormalizeBackupSvcConfig renders a backup service config the way the backup service renders
