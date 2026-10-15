@@ -1635,11 +1635,79 @@ func validateNoIndexCheckpointKeys(config map[string]interface{}) error {
 	return nil
 }
 
+const (
+	confKeyModLua         = "mod-lua"
+	confKeyAllowUnsafeLua = "allow-unsafe-lua"
+)
+
+// allowUnsafeLuaMinByBaseVersion maps a config-schema version to the first server
+// build on that schema that accepts mod-lua.allow-unsafe-lua. Support arrived in a
+// patch, and asconfig selects a schema by major.minor.patch, so the field is in the
+// schema for every build. These floors reject builds that predate the backport.
+//
+// Introduced in 8.1.2.2 and backported to 8.0.0.17, 7.2.0.19, and 7.1.0.25.
+// 8.1.0 and 8.1.1 never received it; their schemas omit the field.
+// 8.2.0 and later include it with no build floor. KO-650.
+var allowUnsafeLuaMinByBaseVersion = map[string]string{
+	"7.1.0": "7.1.0.25",
+	"7.2.0": "7.2.0.19",
+	"8.0.0": "8.0.0.17",
+	"8.1.2": "8.1.2.2",
+}
+
+// validateAllowUnsafeLua rejects mod-lua.allow-unsafe-lua on server builds that do not
+// recognize the config. The key is rejected whenever it is set, including an explicit
+// false, because an older server fails at startup on an unknown config name.
+func validateAllowUnsafeLua(version string, config map[string]interface{}) error {
+	if config == nil {
+		return nil
+	}
+
+	modLua, ok := config[confKeyModLua].(map[string]interface{})
+	if !ok {
+		return nil
+	}
+
+	if _, exists := modLua[confKeyAllowUnsafeLua]; !exists {
+		return nil
+	}
+
+	base, err := asconfig.BaseVersion(version)
+	if err != nil {
+		return fmt.Errorf("check allow-unsafe-lua support for image version %s: %w", version, err)
+	}
+
+	minVersion, ok := allowUnsafeLuaMinByBaseVersion[base]
+	if !ok {
+		return nil
+	}
+
+	cmp, err := lib.CompareVersions(version, minVersion)
+	if err != nil {
+		return fmt.Errorf("check allow-unsafe-lua support for image version %s: %w", version, err)
+	}
+
+	if cmp < 0 {
+		return fmt.Errorf(
+			"allow-unsafe-lua requires Aerospike Server >= %s; image version %s does not support it",
+			minVersion, version,
+		)
+	}
+
+	return nil
+}
+
 func validateAerospikeConfig(
 	aslog logr.Logger, version string, configSpec *asdbv1.AerospikeConfigSpec,
 	storage *asdbv1.AerospikeStorageSpec, clSize int,
 	clientCert *asdbv1.AerospikeOperatorClientCertSpec,
 ) (admission.Warnings, error) {
+	// The schema accepts allow-unsafe-lua for the whole line. This is the check
+	// that rejects builds older than the backport.
+	if err := validateAllowUnsafeLua(version, configSpec.Value); err != nil {
+		return nil, err
+	}
+
 	// It validates the aerospikeConfig schema and generic aerospikeConfig fields
 	if err := validation.ValidateAerospikeConfig(
 		aslog, version, configSpec.Value, clSize,

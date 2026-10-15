@@ -158,6 +158,47 @@ var _ = Describe("AerospikeCluster validation", func() {
 			})
 		})
 
+		Context("spec.aerospikeConfig (mod-lua allow-unsafe-lua)", func() {
+			setAllowUnsafeLua := func(imageVersion string) *asdbv1.AerospikeCluster {
+				aeroCluster := testCluster.CreateAerospikeClusterPost640(
+					clusterNamespacedName, 1, testutil.GetEnterpriseImage(imageVersion),
+				)
+				aeroCluster.Spec.AerospikeConfig.Value["mod-lua"] = map[string]interface{}{
+					"allow-unsafe-lua": true,
+				}
+
+				return aeroCluster
+			}
+
+			DescribeTable("rejects builds that predate support",
+				func(imageVersion, wantSubstr string) {
+					err := envtests.K8sClient.Create(ctx, setAllowUnsafeLua(imageVersion))
+					Expect(err).To(HaveOccurred())
+
+					envtests.NewStatusErrorMatcher().
+						WithMessageSubstrings(testutil.WebhookErrorPrefix, wantSubstr).
+						Validate(err)
+				},
+				Entry("8.0.0.16", "8.0.0.16", "image version 8.0.0.16 does not support it"),
+				Entry("8.0.0.16 build suffix", "8.0.0.16-15_20261008T195914Z",
+					"image version 8.0.0.16 does not support it"),
+				Entry("7.2.0.18", "7.2.0.18", ">= 7.2.0.19"),
+				Entry("7.1.0.24", "7.1.0.24", ">= 7.1.0.25"),
+				Entry("8.1.2.1", "8.1.2.1", "image version 8.1.2.1 does not support it"),
+			)
+
+			DescribeTable("allows builds that include support",
+				func(imageVersion string) {
+					Expect(envtests.K8sClient.Create(ctx, setAllowUnsafeLua(imageVersion))).To(Succeed())
+				},
+				Entry("8.0.0.17", "8.0.0.17"),
+				Entry("8.0.0.20 build suffix", "8.0.0.20-15_20261008T195914Z"),
+				Entry("7.2.0.19", "7.2.0.19"),
+				Entry("7.1.0.25", "7.1.0.25"),
+				Entry("8.1.2.2", "8.1.2.2"),
+			)
+		})
+
 		Context("spec.storage", func() {
 			Context("negative", func() {
 				It("rejects when volumes are missing", func() {
