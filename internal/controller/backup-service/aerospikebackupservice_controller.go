@@ -47,6 +47,7 @@ type AerospikeBackupServiceReconciler struct {
 // +kubebuilder:rbac:groups=asdb.aerospike.com,resources=aerospikebackupservices/status,verbs=get;update;patch
 // +kubebuilder:rbac:groups=asdb.aerospike.com,resources=aerospikebackupservices/finalizers,verbs=update
 // +kubebuilder:rbac:groups=apps,resources=deployments,verbs=get;watch;create;update;patch;delete
+// +kubebuilder:rbac:groups=core,resources=secrets,verbs=get
 
 // Reconcile is part of the main kubernetes reconciliation loop which aims to
 // move the current state of the cluster closer to the desired state.
