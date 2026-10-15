@@ -410,19 +410,78 @@ func (r *SingleBackupReconciler) reconcileScheduledBackup(ctx context.Context) e
 		return err
 	}
 
-	// The API hides literal secret values, so a change to a secret alone never shows up when comparing
-	// the API with the spec. Spec and status both hold real values: status is written only after a
-	// successful reconcile, so a difference means the change has not been applied yet.
+	// Spec and status both hold real values, and status is written only after a successful reconcile, so they
+	// differ while a change is pending. That includes a change to a secret alone, which the API hides.
 	specConfigApplied := reflect.DeepEqual(r.aeroBackup.Spec.Config.Raw, r.aeroBackup.Status.Config.Raw)
-
-	hotReloadRequired := !specConfigApplied
-	if hotReloadRequired {
-		r.Log.Info("Backup config in spec not yet applied, reload required")
+	if !specConfigApplied {
+		r.Log.Info("Backup config in spec not yet applied")
 	}
 
-	desiredConfig, currentConfig, err := r.comparableBackupConfig(ctx, specBackupConfig, backupSvcConfig)
+	drifted, err := r.backupConfigDrifted(ctx, specBackupConfig, backupSvcConfig)
 	if err != nil {
 		return err
+	}
+
+	var hiddenChange bool
+
+	if !drifted && !specConfigApplied {
+		if hiddenChange, err = common.IsHiddenConfigChange(r.aeroBackup.Status.Config.Raw,
+			r.aeroBackup.Spec.Config.Raw); err != nil {
+			return fmt.Errorf("compare backup spec with status: %w", err)
+		}
+
+		if hiddenChange {
+			r.Log.Info("Config change hidden from the backup service API detected")
+		}
+	}
+
+	// StaticChange is left false: static fields are only in the service section, which a backup config cannot hold.
+	action := common.BackupSvcConfigChange{
+		Synced:            !drifted,
+		SpecConfigApplied: specConfigApplied,
+		HiddenChange:      hiddenChange,
+	}.Action()
+
+	if err := common.ApplyBackupSvcConfigAction(ctx, r.Log, r.Client, serviceClient,
+		&r.aeroBackup.Spec.BackupService, action, r.restartBackupService); err != nil {
+		return err
+	}
+
+	r.Log.Info("Reconciled scheduled backup")
+	r.Recorder.Eventf(r.aeroBackup, corev1.EventTypeNormal, "BackupScheduled",
+		"Reconciled scheduled backup")
+
+	return nil
+}
+
+// restartBackupService deletes the backup service pods so that they load the ConfigMap when they start. A change to
+// a secret alone cannot be verified through the API, which shows "[secret]", so a restart is the only way to know it
+// is loaded. status.config is written right away: the new pods read the current ConfigMap, so the change is applied
+// once the pods are deleted, and a later failure in this reconcile does not restart them again.
+func (r *SingleBackupReconciler) restartBackupService(ctx context.Context) error {
+	if err := common.DeleteBackupServicePods(ctx, r.Client, &r.aeroBackup.Spec.BackupService); err != nil {
+		return err
+	}
+
+	appliedConfig := r.aeroBackup.Spec.Config.DeepCopy()
+
+	if err := common.PatchStatusConfig(ctx, r.Client, r.aeroBackup,
+		func(backup *asdbv1beta1.AerospikeBackup) { backup.Status.Config = *appliedConfig.DeepCopy() },
+	); err != nil {
+		return fmt.Errorf("patch AerospikeBackup status config: %w", err)
+	}
+
+	return nil
+}
+
+// backupConfigDrifted reports whether the backup service config is missing this backup's cluster or routines,
+// holds an outdated copy of them, or still has a routine of this backup that the spec no longer has.
+func (r *SingleBackupReconciler) backupConfigDrifted(
+	ctx context.Context, specBackupConfig, backupSvcConfig map[string]interface{},
+) (bool, error) {
+	desiredConfig, currentConfig, err := r.comparableBackupConfig(ctx, specBackupConfig, backupSvcConfig)
+	if err != nil {
+		return false, err
 	}
 
 	var clusterName string
@@ -432,42 +491,21 @@ func (r *SingleBackupReconciler) reconcileScheduledBackup(ctx context.Context) e
 			clusterName = name
 		}
 
-		if !hotReloadRequired {
-			hotReloadRequired = r.checkForConfigUpdate(
-				cluster,
-				asdbv1beta1.AerospikeClustersKey,
-				currentConfig,
-			)
+		if r.checkForConfigUpdate(cluster, asdbv1beta1.AerospikeClustersKey, currentConfig) {
+			return true, nil
 		}
 	}
 
-	// Skip further checks if hotReloadRequired is already true
-	if !hotReloadRequired {
-		if routines, ok := desiredConfig[asdbv1beta1.BackupRoutinesKey].(map[string]interface{}); ok {
-			hotReloadRequired = r.checkForConfigUpdate(
-				routines,
-				asdbv1beta1.BackupRoutinesKey,
-				currentConfig,
-			)
-
-			if !hotReloadRequired {
-				hotReloadRequired = r.checkForDeletedRoutines(routines, backupSvcConfig, clusterName)
-			}
-		}
+	routines, ok := desiredConfig[asdbv1beta1.BackupRoutinesKey].(map[string]interface{})
+	if !ok {
+		return false, nil
 	}
 
-	if hotReloadRequired {
-		err = common.ReloadBackupServiceConfigInPods(ctx, r.Log, r.Client, serviceClient, &r.aeroBackup.Spec.BackupService)
-		if err != nil {
-			return fmt.Errorf("reload backup service config: %w", err)
-		}
+	if r.checkForConfigUpdate(routines, asdbv1beta1.BackupRoutinesKey, currentConfig) {
+		return true, nil
 	}
 
-	r.Log.Info("Reconciled scheduled backup")
-	r.Recorder.Eventf(r.aeroBackup, corev1.EventTypeNormal, "BackupScheduled",
-		"Reconciled scheduled backup")
-
-	return nil
+	return r.checkForDeletedRoutines(routines, backupSvcConfig, clusterName), nil
 }
 
 // comparableBackupConfig returns the cluster and routines of this backup and the config returned by the
