@@ -89,7 +89,7 @@ pipeline {
                     steps {
                         script {
                             dir("${env.GO_REPO}") {
-                                if(isNightly() || env.BRANCH_NAME == 'master') {
+                                if(true || isNightly() || env.BRANCH_NAME == 'master') {
                                     // Run all-test cases for master and nightly builds
                                     env.RUN_ALL_TEST = 'true'
                                 }
