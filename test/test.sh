@@ -10,8 +10,9 @@ set -e
 #  test.sh -b aerospike/aerospike-kubernetes-operator-bundle:1.1.0
 #  test.sh -b aerospike/aerospike-kubernetes-operator-bundle:1.1.0 -f ".*RackManagement.*" -a "--connect-through-network-type=hostInternal"
 #  test.sh -b <IMAGE> -f "<GINKGO-FOCUS-REGEXP>" -a "<PASS-THROUGHS>"
+#  test.sh -b <IMAGE> -s <DOCKER-CONFIG-JSON>   # bundle and operator images in a private registry
 
-while getopts "b:f:a:r:p:n:i:t:" opt
+while getopts "b:f:a:r:p:n:i:t:s:" opt
 do
    case "$opt" in
       b ) BUNDLE="$OPTARG" ;;
@@ -22,6 +23,7 @@ do
       n ) REGISTRY_NAMESPACE="$OPTARG" ;;
       i ) INIT_IMAGE_NAME_TAG="$OPTARG" ;;
       t ) TEST_TYPE="$OPTARG" ;;
+      s ) OPERATOR_PULL_CRED_PATH="$OPTARG" ;;
 
    esac
 done
@@ -45,7 +47,7 @@ echo "---------------------------------------"
 echo "------------------------------"
 echo "| Deploying the operator.... |"
 echo "------------------------------"
-"$DIR"/deploy-test-operator.sh "$BUNDLE"
+"$DIR"/deploy-test-operator.sh "$BUNDLE" "${OPERATOR_PULL_CRED_PATH:-}"
 
 # Deploy LDAP
 echo "------------------------------"
