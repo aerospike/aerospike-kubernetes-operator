@@ -346,15 +346,17 @@ jobs:
         with:
           install_components: gke-gcloud-auth-plugin
 
-      # The auth plugin refreshes the cluster token. A plain access token
-      # expires after an hour, long before the tests finish.
+      # gcloud writes a kubeconfig that uses gke-gcloud-auth-plugin, which
+      # refreshes the cluster token. A plain access token expires after an hour,
+      # long before the tests finish. get-gke-credentials (v3.0.0) can't be used:
+      # its use_auth_provider writes the old "gcp" auth-provider, which kubectl
+      # no longer supports.
       - name: Get GKE credentials
-        uses: google-github-actions/get-gke-credentials@3da1e46a907576cefaa90c484278bb5b259dd395 # v3.0.0
-        with:
-          project_id: ${{ vars.GKE_PROJECT }}
-          location: ${{ vars.GKE_LOCATION }}
-          cluster_name: ${{ vars.GKE_CLUSTER }}
-          use_auth_provider: true
+        env:
+          GKE_CLUSTER: ${{ vars.GKE_CLUSTER }}
+          GKE_LOCATION: ${{ vars.GKE_LOCATION }}
+          GKE_PROJECT: ${{ vars.GKE_PROJECT }}
+        run: gcloud container clusters get-credentials "$GKE_CLUSTER" --location "$GKE_LOCATION" --project "$GKE_PROJECT"
 
       - name: Set up JFrog CLI
         id: jf
