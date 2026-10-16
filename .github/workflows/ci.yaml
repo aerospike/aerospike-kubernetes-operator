@@ -208,14 +208,15 @@ jobs:
           oidc-audience: aerospike
 
       # The manifests are what the Red Hat community operators PR needs, so they
-      # travel in the release bundle. Laid out like that repo:
-      # aerospike-kubernetes-operator/<version>/ with manifests/ and metadata/ under it.
+      # travel in the release bundle, as one zip of bundle/ (manifests/ and
+      # metadata/ at its root) under aerospike-kubernetes-operator/<version>/.
       - name: Upload bundle manifests to JFrog
-        working-directory: bundle
         env:
           VERSION: ${{ needs.prepare.outputs.version }}
         run: |
-          jf rt upload "*" "platforms-generic-dev-local/aerospike-kubernetes-operator/${VERSION}/" \
+          zip_file="aerospike-kubernetes-operator-olm-${VERSION}.zip"
+          (cd bundle && zip -qr "../$zip_file" .)
+          jf rt upload "$zip_file" "platforms-generic-dev-local/aerospike-kubernetes-operator/${VERSION}/" --flat \
             --build-name=ako-olm-manifests --build-number="$GITHUB_RUN_NUMBER" --project=platforms
           jf rt build-publish ako-olm-manifests "$GITHUB_RUN_NUMBER" --project=platforms
 
