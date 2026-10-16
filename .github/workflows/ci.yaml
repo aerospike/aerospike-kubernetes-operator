@@ -2,6 +2,7 @@
 #
 #   prepare -> operator image -> OLM bundle -> bundle image -> scan -> e2e -> release bundle -> promote to DEV
 #   operator image -> helm charts -> release bundle
+#   OLM bundle -> release bundle (the OLM bundle job also uploads the manifests to the generic repo)
 #
 # Images and charts go to JFrog first, because the e2e tests install the
 # operator from there. The release bundle is created only after the scan and
@@ -174,6 +175,7 @@ jobs:
     runs-on: ubuntu-24.04
     permissions:
       contents: read
+      id-token: write
     steps:
       - name: Harden the runner (Audit all outbound calls)
         uses: step-security/harden-runner@351661ca32ac09a36dc5ee2d536e3128f2a3c8ed # v2.22.0
@@ -198,6 +200,24 @@ jobs:
           make bundle IMG="$IMG" VERSION="$VERSION"
           mkdir -p ci-olm
           cp bundle.Dockerfile ci-olm/
+
+      - name: Set up JFrog CLI
+        uses: step-security/setup-jfrog-cli@53aeacb709fce45d0baf69a13ec3342f7e2d71a9 # v5.1.0
+        with:
+          oidc-provider-name: gh-aerospike
+          oidc-audience: aerospike
+
+      # The manifests are what the Red Hat community operators PR needs, so they
+      # travel in the release bundle. Laid out like that repo:
+      # aerospike-kubernetes-operator/<version>/ with manifests/ and metadata/ under it.
+      - name: Upload bundle manifests to JFrog
+        working-directory: bundle
+        env:
+          VERSION: ${{ needs.prepare.outputs.version }}
+        run: |
+          jf rt upload "*" "platforms-generic-dev-local/aerospike-kubernetes-operator/${VERSION}/" \
+            --build-name=ako-olm-manifests --build-number="$GITHUB_RUN_NUMBER" --project=platforms
+          jf rt build-publish ako-olm-manifests "$GITHUB_RUN_NUMBER" --project=platforms
 
       - name: Upload bundle manifests
         uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
@@ -414,7 +434,7 @@ jobs:
 
   release-bundle:
     name: Release bundle
-    needs: [prepare, helm-charts, scan]
+    needs: [prepare, olm-bundle, helm-charts, scan]
     # e2e is skipped when the PR changes nothing that needs it.
     # if: ${{ !cancelled() && !failure() && needs.scan.result == 'success' }}
     permissions:
@@ -427,7 +447,7 @@ jobs:
       jf-bundle-name: aerospike-kubernetes-operator
       version: ${{ needs.prepare.outputs.version }}
       # Every build-info is published under the run number.
-      jf-build-names: ako-operator:${{ github.run_number }},ako-olm-bundle:${{ github.run_number }},ako-helm-charts:${{ github.run_number }}
+      jf-build-names: ako-operator:${{ github.run_number }},ako-olm-bundle:${{ github.run_number }},ako-olm-manifests:${{ github.run_number }},ako-helm-charts:${{ github.run_number }}
 
   promote-dev:
     name: Promote to DEV
