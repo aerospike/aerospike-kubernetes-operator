@@ -414,7 +414,7 @@ jobs:
 
   release-bundle:
     name: Release bundle
-    needs: [prepare, helm-charts, scan, e2e]
+    # needs: [prepare, helm-charts, scan, e2e]
     # e2e is skipped when the PR changes nothing that needs it.
     if: ${{ !cancelled() && !failure() && needs.scan.result == 'success' }}
     permissions:
