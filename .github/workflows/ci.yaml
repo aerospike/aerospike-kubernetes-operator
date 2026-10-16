@@ -64,12 +64,14 @@ jobs:
           fetch-depth: 0
           submodules: true
 
-      # e.g. 4.6.0-pr-620-1234, 4.6.0-master-1235, 4.6.0-scheduled-1236.
-      # The run number makes every version, and so every release bundle, unique.
+      # e.g. 4.6.0-pr-620-a1b2c3d, 4.6.0-master-e4f5a6b, 4.6.0-scheduled-e4f5a6b.
+      # The short commit SHA ties every version, and so every release bundle, to
+      # the commit it was built from. For a PR it is the PR's head commit.
       - name: Compute version
         id: version
         env:
           PR_NUMBER: ${{ github.event.pull_request.number }}
+          SHA: ${{ github.event.pull_request.head.sha || github.sha }}
         run: |
           base=$(sed -n 's/^VERSION ?= *//p' Makefile)
           case "$GITHUB_EVENT_NAME" in
@@ -78,7 +80,7 @@ jobs:
             *) label=$(echo "$GITHUB_REF_NAME" | tr '[:upper:]' '[:lower:]' | sed -E 's/[^a-z0-9]+/-/g; s/^-+|-+$//g') ;;
           esac
           echo "base-version=$base" >> "$GITHUB_OUTPUT"
-          echo "version=$base-$label-$GITHUB_RUN_NUMBER" | tee -a "$GITHUB_OUTPUT"
+          echo "version=$base-$label-${SHA::7}" | tee -a "$GITHUB_OUTPUT"
 
       - name: Select e2e tests
         id: tests
@@ -158,9 +160,12 @@ jobs:
             helm package "$chart" --version "$VERSION" --destination dist
           done
 
+      # Same layout as the shared deploy workflow: <chart>/<version>/<chart>-<version>.tgz.
+      # --flat stops the local dist/ folder from becoming part of the path.
       - name: Upload charts to JFrog
         run: |
-          jf rt upload "dist/*.tgz" platforms-helm-dev-local/ --build-name=ako-helm-charts --build-number="$GITHUB_RUN_NUMBER" --project=platforms
+          jf rt upload "dist/(*)-${VERSION}.tgz" "platforms-helm-dev-local/{1}/${VERSION}/" --flat \
+            --build-name=ako-helm-charts --build-number="$GITHUB_RUN_NUMBER" --project=platforms
           jf rt build-publish ako-helm-charts "$GITHUB_RUN_NUMBER" --project=platforms
 
   olm-bundle:
@@ -365,17 +370,19 @@ jobs:
           username: ${{ steps.jf.outputs.oidc-user }}
           password: ${{ steps.jf.outputs.oidc-token }}
 
-      # The custom init registry tests pull the init image from ECR, as in Jenkins.
-      - name: Configure AWS credentials
-        uses: aws-actions/configure-aws-credentials@e1253824e5c10ff9df46874f81ed3ec929e19cfd # v6.3.0
-        with:
-          role-to-assume: ${{ vars.AWS_ECR_ROLE_ARN }}
-          aws-region: ap-south-1
-
-      - name: Login to ECR
-        run: |
-          aws ecr get-login-password --region ap-south-1 |
-            docker login --username AWS --password-stdin 568976754000.dkr.ecr.ap-south-1.amazonaws.com
+      # The custom init registry test pulls the init image from ECR, as in Jenkins.
+      # TODO: Disabled until CI has an AWS role for ECR. The test is commented out
+      # in test/cluster/podspec_test.go; re-enable both together.
+      # - name: Configure AWS credentials
+      #   uses: aws-actions/configure-aws-credentials@e1253824e5c10ff9df46874f81ed3ec929e19cfd # v6.3.0
+      #   with:
+      #     role-to-assume: ${{ vars.AWS_ECR_ROLE_ARN }}
+      #     aws-region: ap-south-1
+      #
+      # - name: Login to ECR
+      #   run: |
+      #     aws ecr get-login-password --region ap-south-1 |
+      #       docker login --username AWS --password-stdin 568976754000.dkr.ecr.ap-south-1.amazonaws.com
 
       - name: Write features.conf
         env:
