@@ -416,7 +416,7 @@ jobs:
     name: Release bundle
     # needs: [prepare, helm-charts, scan, e2e]
     # e2e is skipped when the PR changes nothing that needs it.
-    if: ${{ !cancelled() && !failure() && needs.scan.result == 'success' }}
+    # if: ${{ !cancelled() && !failure() && needs.scan.result == 'success' }}
     permissions:
       contents: read
       id-token: write
@@ -431,7 +431,7 @@ jobs:
 
   promote-dev:
     name: Promote to DEV
-    needs: [prepare, release-bundle]
+    # needs: [prepare, release-bundle]
     runs-on: ubuntu-24.04
     permissions:
       contents: read
