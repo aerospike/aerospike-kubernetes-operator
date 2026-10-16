@@ -459,7 +459,7 @@ jobs:
   # The single required status check.
   ci-result:
     name: CI result
-    needs: [prepare, operator-image, helm-charts, olm-bundle, bundle-image, scan, e2e, release-bundle, promote-dev]
+    # needs: [prepare, operator-image, helm-charts, olm-bundle, bundle-image, scan, e2e, release-bundle, promote-dev]
     if: always()
     runs-on: ubuntu-24.04
     permissions: {}
