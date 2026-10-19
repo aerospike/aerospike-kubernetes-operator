@@ -14,7 +14,7 @@ jobs:
       IMG_BASE: ${{ github.repository }}
     steps:
       - name: Harden the runner (Audit all outbound calls)
-        uses: step-security/harden-runner@351661ca32ac09a36dc5ee2d536e3128f2a3c8ed # v2.22.0
+        uses: step-security/harden-runner@ccd8616d44fd3846e67624a50d5aad6d37bf2d25 # v2.22.1
         with:
           egress-policy: audit
 
@@ -83,12 +83,12 @@ jobs:
       QUAY_IMAGE: quay.io/${{ github.repository }}:${{ needs.build-and-push.outputs.TAG }}
     steps:
       - name: Harden the runner (Audit all outbound calls)
-        uses: step-security/harden-runner@351661ca32ac09a36dc5ee2d536e3128f2a3c8ed # v2.22.0
+        uses: step-security/harden-runner@ccd8616d44fd3846e67624a50d5aad6d37bf2d25 # v2.22.1
         with:
           egress-policy: audit
 
       - name: Install preflight
-        uses: redhat-actions/openshift-tools-installer@37eb3cfb20ac2df6f0511ffa71cd917e4d49cabf # v3.1
+        uses: redhat-actions/openshift-tools-installer@1f130822bb0930e0ee02a119adcc3271a22b1499 # v3.2
         with:
           source: "github"
           github_pat: ${{ github.token }}
