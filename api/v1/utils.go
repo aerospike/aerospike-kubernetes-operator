@@ -99,6 +99,10 @@ const (
 	ConfKeySecurity                    = "security"
 	confKeySecurityDefaultPasswordFile = "default-password-file"
 
+	// mod-lua keys.
+	ConfKeyModLua         = "mod-lua"
+	ConfKeyAllowUnsafeLua = "allow-unsafe-lua"
+
 	// Service section keys.
 	ConfKeyService                    = "service"
 	confKeyWorkDirectory              = "work-directory"

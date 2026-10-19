@@ -1658,12 +1658,12 @@ func validateAllowUnsafeLua(version string, config map[string]interface{}) error
 		return nil
 	}
 
-	modLua, ok := config[confKeyModLua].(map[string]interface{})
+	modLua, ok := config[asdbv1.ConfKeyModLua].(map[string]interface{})
 	if !ok {
 		return nil
 	}
 
-	if _, exists := modLua[confKeyAllowUnsafeLua]; !exists {
+	if _, exists := modLua[asdbv1.ConfKeyAllowUnsafeLua]; !exists {
 		return nil
 	}
 
