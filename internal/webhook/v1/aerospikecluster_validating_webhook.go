@@ -1635,11 +1635,6 @@ func validateNoIndexCheckpointKeys(config map[string]interface{}) error {
 	return nil
 }
 
-const (
-	confKeyModLua         = "mod-lua"
-	confKeyAllowUnsafeLua = "allow-unsafe-lua"
-)
-
 // allowUnsafeLuaMinByBaseVersion maps a config-schema version to the first server
 // build on that schema that accepts mod-lua.allow-unsafe-lua. Support arrived in a
 // patch, and asconfig selects a schema by major.minor.patch, so the field is in the
@@ -1702,8 +1697,8 @@ func validateAerospikeConfig(
 	storage *asdbv1.AerospikeStorageSpec, clSize int,
 	clientCert *asdbv1.AerospikeOperatorClientCertSpec,
 ) (admission.Warnings, error) {
-	// The schema accepts allow-unsafe-lua for the whole line. This is the check
-	// that rejects builds older than the backport.
+	// On schema lines where allow-unsafe-lua arrived in a patch, reject builds
+	// older than that line's backport. Other versions are left to schema validation.
 	if err := validateAllowUnsafeLua(version, configSpec.Value); err != nil {
 		return nil, err
 	}

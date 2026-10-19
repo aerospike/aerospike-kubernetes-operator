@@ -179,12 +179,16 @@ var _ = Describe("AerospikeCluster validation", func() {
 						WithMessageSubstrings(testutil.WebhookErrorPrefix, wantSubstr).
 						Validate(err)
 				},
-				Entry("8.0.0.16", "8.0.0.16", "image version 8.0.0.16 does not support it"),
+				Entry("8.0.0.16", "8.0.0.16",
+					">= 8.0.0.17; image version 8.0.0.16 does not support it"),
 				Entry("8.0.0.16 build suffix", "8.0.0.16-15_20261008T195914Z",
-					"image version 8.0.0.16 does not support it"),
-				Entry("7.2.0.18", "7.2.0.18", ">= 7.2.0.19"),
-				Entry("7.1.0.24", "7.1.0.24", ">= 7.1.0.25"),
-				Entry("8.1.2.1", "8.1.2.1", "image version 8.1.2.1 does not support it"),
+					">= 8.0.0.17; image version 8.0.0.16 does not support it"),
+				Entry("7.2.0.18", "7.2.0.18",
+					">= 7.2.0.19; image version 7.2.0.18 does not support it"),
+				Entry("7.1.0.24", "7.1.0.24",
+					">= 7.1.0.25; image version 7.1.0.24 does not support it"),
+				Entry("8.1.2.1", "8.1.2.1",
+					">= 8.1.2.2; image version 8.1.2.1 does not support it"),
 			)
 
 			DescribeTable("allows builds that include support",
