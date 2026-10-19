@@ -2640,17 +2640,20 @@ func (r *SingleClusterReconciler) handleFailedPodsInRack(
 			}
 		}
 
-		// Check res.Err rather than !res.IsSuccess intentionally. reconcileRack
-		// can return {IsSuccess: false, Err: nil} when checkPodsFailedAfterRackOp
-		// defers scale-up for one cycle (a pod is still failed after an upgrade
-		// or rolling restart). In that case there is no operation needed on failed pod — we still
-		// want to fall through to the re-fetch and force-restart logic below so
-		// that genuinely stuck server-failed pods can be force-restarted in the
-		// same reconcile cycle.
+		// Return on error or an explicit requeue. reconcileRack can return
+		// ReconcileRequeueAfter (Err == nil, RequeueAfter > 0) when a rolling
+		// upgrade or restart still has batches left; continuing would
+		// force-restart those Pods in the same cycle.
+		//
+		// Fall through only for {IsSuccess: false, Err: nil, RequeueAfter: 0},
+		// which checkPodsFailedAfterRackOp returns to defer scale-up for one
+		// cycle. In that case there is no operation needed on the failed Pod —
+		// we still want to re-fetch and force-restart genuinely stuck
+		// server-failed Pods in the same reconcile cycle.
 		if res := r.reconcileRack(
 			ctx, found, rackState, ignorablePodNames,
 			&failedPodsInfo{pods: serverFailedPods, isServerFailed: true},
-		); res.Err != nil {
+		); res.Err != nil || res.Result.RequeueAfter > 0 {
 			return res
 		}
 
@@ -2723,13 +2726,13 @@ func (r *SingleClusterReconciler) handleFailedPodsInRack(
 		"rackID", rackState.Rack.ID, "rackRevision", rackState.Rack.Revision,
 		"sidecarNotReadyPods", getPodNames(sidecarNotReadyPods))
 
-	// Same res.Err-only check as the server-failed path: a {IsSuccess: false,
-	// Err: nil} result means checkPodsFailedAfterRackOp deferred scale-up for
-	// one cycle — not an error. We still fall through to the re-fetch below so
-	// the sidecar-not-ready state is re-evaluated and the requeue is issued.
+	// Same check as the server-failed path: return on error or an explicit
+	// requeue. Fall through only for {IsSuccess: false, Err: nil,
+	// RequeueAfter: 0} from checkPodsFailedAfterRackOp so the
+	// sidecar-not-ready state is re-evaluated and a requeue is issued.
 	if res := r.reconcileRack(ctx, found, rackState, ignorablePodNames,
 		&failedPodsInfo{pods: sidecarNotReadyPods, isServerFailed: false},
-	); res.Err != nil {
+	); res.Err != nil || res.Result.RequeueAfter > 0 {
 		return res
 	}
 
