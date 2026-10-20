@@ -107,222 +107,222 @@ jobs:
           if-no-files-found: error
           retention-days: 1
 
-  # operator-image:
-  #   name: Operator image
-  #   needs: prepare
-  #   permissions:
-  #     contents: read
-  #     packages: write
-  #     attestations: write
-  #     id-token: write
-  #   uses: aerospike/shared-workflows/.github/workflows/reusable_docker-build-deploy.yaml@b4b1e9dc89314a2d542f9d6fe0ee150ad06f9860 # v5.0.0
-  #   with:
-  #     jf-project: platforms
-  #     image-name: aerospike-kubernetes-operator
-  #     app-version: ${{ needs.prepare.outputs.version }}
-  #     jf-build-name: ako-operator
-  #     build-args-json: '{"VERSION": "${{ needs.prepare.outputs.base-version }}"}'
-  #     gh-context-artifacts-json: '[{"name": "config-schemas", "dest": "pkg/configschema/schemas/json/aerospike"}]'
+  operator-image:
+    name: Operator image
+    needs: prepare
+    permissions:
+      contents: read
+      packages: write
+      attestations: write
+      id-token: write
+    uses: aerospike/shared-workflows/.github/workflows/reusable_docker-build-deploy.yaml@b4b1e9dc89314a2d542f9d6fe0ee150ad06f9860 # v5.0.0
+    with:
+      jf-project: platforms
+      image-name: aerospike-kubernetes-operator
+      app-version: ${{ needs.prepare.outputs.version }}
+      jf-build-name: ako-operator
+      build-args-json: '{"VERSION": "${{ needs.prepare.outputs.base-version }}"}'
+      gh-context-artifacts-json: '[{"name": "config-schemas", "dest": "pkg/configschema/schemas/json/aerospike"}]'
 
-  # helm-charts:
-  #   name: Helm charts
-  #   needs: [prepare, operator-image]
-  #   runs-on: ubuntu-24.04
-  #   permissions:
-  #     contents: read
-  #     id-token: write
-  #   env:
-  #     VERSION: ${{ needs.prepare.outputs.version }}
-  #     OPERATOR_IMG: ${{ needs.operator-image.outputs.immutable-tag }}
-  #   steps:
-  #     - name: Harden the runner (Audit all outbound calls)
-  #       uses: step-security/harden-runner@351661ca32ac09a36dc5ee2d536e3128f2a3c8ed # v2.22.0
-  #       with:
-  #         egress-policy: audit
+  helm-charts:
+    name: Helm charts
+    needs: [prepare, operator-image]
+    runs-on: ubuntu-24.04
+    permissions:
+      contents: read
+      id-token: write
+    env:
+      VERSION: ${{ needs.prepare.outputs.version }}
+      OPERATOR_IMG: ${{ needs.operator-image.outputs.immutable-tag }}
+    steps:
+      - name: Harden the runner (Audit all outbound calls)
+        uses: step-security/harden-runner@351661ca32ac09a36dc5ee2d536e3128f2a3c8ed # v2.22.0
+        with:
+          egress-policy: audit
 
-  #     - name: Checkout code
-  #       uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      - name: Checkout code
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
 
-  #     - name: Set up JFrog CLI
-  #       uses: step-security/setup-jfrog-cli@53aeacb709fce45d0baf69a13ec3342f7e2d71a9 # v5.1.0
-  #       with:
-  #         oidc-provider-name: gh-aerospike
-  #         oidc-audience: aerospike
+      - name: Set up JFrog CLI
+        uses: step-security/setup-jfrog-cli@53aeacb709fce45d0baf69a13ec3342f7e2d71a9 # v5.1.0
+        with:
+          oidc-provider-name: gh-aerospike
+          oidc-audience: aerospike
 
-  #     # The DEV operator chart deploys the operator image built in this run.
-  #     # TODO: Decide if we want this. Without it, the chart keeps the original
-  #     # image.
-  #     - name: Set operator image
-  #       run: |
-  #         export REPO="${OPERATOR_IMG%:*}" TAG="${OPERATOR_IMG##*:}"
-  #         yq -i '.operatorImage.repository = strenv(REPO) | .operatorImage.tag = strenv(TAG)' \
-  #           helm-charts/aerospike-kubernetes-operator/values.yaml
+      # The DEV operator chart deploys the operator image built in this run.
+      # TODO: Decide if we want this. Without it, the chart keeps the original
+      # image.
+      - name: Set operator image
+        run: |
+          export REPO="${OPERATOR_IMG%:*}" TAG="${OPERATOR_IMG##*:}"
+          yq -i '.operatorImage.repository = strenv(REPO) | .operatorImage.tag = strenv(TAG)' \
+            helm-charts/aerospike-kubernetes-operator/values.yaml
 
-  #     - name: Package charts
-  #       run: |
-  #         for chart in helm-charts/*/; do
-  #           helm package "$chart" --version "$VERSION" --destination dist
-  #         done
+      - name: Package charts
+        run: |
+          for chart in helm-charts/*/; do
+            helm package "$chart" --version "$VERSION" --destination dist
+          done
 
-  #     # Same layout as the shared deploy workflow: <chart>/<version>/<chart>-<version>.tgz.
-  #     # --flat stops the local dist/ folder from becoming part of the path.
-  #     - name: Upload charts to JFrog
-  #       run: |
-  #         jf rt upload "dist/(*)-${VERSION}.tgz" "platforms-helm-dev-local/{1}/${VERSION}/" --flat \
-  #           --build-name=ako-helm-charts --build-number="$GITHUB_RUN_NUMBER" --project=platforms
-  #         jf rt build-publish ako-helm-charts "$GITHUB_RUN_NUMBER" --project=platforms
+      # Same layout as the shared deploy workflow: <chart>/<version>/<chart>-<version>.tgz.
+      # --flat stops the local dist/ folder from becoming part of the path.
+      - name: Upload charts to JFrog
+        run: |
+          jf rt upload "dist/(*)-${VERSION}.tgz" "platforms-helm-dev-local/{1}/${VERSION}/" --flat \
+            --build-name=ako-helm-charts --build-number="$GITHUB_RUN_NUMBER" --project=platforms
+          jf rt build-publish ako-helm-charts "$GITHUB_RUN_NUMBER" --project=platforms
 
-  # olm-bundle:
-  #   name: OLM bundle manifests
-  #   needs: [prepare, operator-image]
-  #   runs-on: ubuntu-24.04
-  #   permissions:
-  #     contents: read
-  #     id-token: write
-  #   steps:
-  #     - name: Harden the runner (Audit all outbound calls)
-  #       uses: step-security/harden-runner@351661ca32ac09a36dc5ee2d536e3128f2a3c8ed # v2.22.0
-  #       with:
-  #         egress-policy: audit
+  olm-bundle:
+    name: OLM bundle manifests
+    needs: [prepare, operator-image]
+    runs-on: ubuntu-24.04
+    permissions:
+      contents: read
+      id-token: write
+    steps:
+      - name: Harden the runner (Audit all outbound calls)
+        uses: step-security/harden-runner@351661ca32ac09a36dc5ee2d536e3128f2a3c8ed # v2.22.0
+        with:
+          egress-policy: audit
 
-  #     - name: Checkout code
-  #       uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
-  #       with:
-  #         submodules: true
+      - name: Checkout code
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          submodules: true
 
-  #     - name: Setup Go
-  #       uses: actions/setup-go@b7ad1dad31e06c5925ef5d2fc7ad053ef454303e # v7.0.0
-  #       with:
-  #         go-version-file: go.mod
+      - name: Setup Go
+        uses: actions/setup-go@b7ad1dad31e06c5925ef5d2fc7ad053ef454303e # v7.0.0
+        with:
+          go-version-file: go.mod
 
-  #     - name: Generate bundle
-  #       env:
-  #         IMG: ${{ needs.operator-image.outputs.immutable-tag }}
-  #         VERSION: ${{ needs.prepare.outputs.version }}
-  #       run: |
-  #         make bundle IMG="$IMG" VERSION="$VERSION"
-  #         mkdir -p ci-olm
-  #         cp bundle.Dockerfile ci-olm/
+      - name: Generate bundle
+        env:
+          IMG: ${{ needs.operator-image.outputs.immutable-tag }}
+          VERSION: ${{ needs.prepare.outputs.version }}
+        run: |
+          make bundle IMG="$IMG" VERSION="$VERSION"
+          mkdir -p ci-olm
+          cp bundle.Dockerfile ci-olm/
 
-  #     - name: Set up JFrog CLI
-  #       uses: step-security/setup-jfrog-cli@53aeacb709fce45d0baf69a13ec3342f7e2d71a9 # v5.1.0
-  #       with:
-  #         oidc-provider-name: gh-aerospike
-  #         oidc-audience: aerospike
+      - name: Set up JFrog CLI
+        uses: step-security/setup-jfrog-cli@53aeacb709fce45d0baf69a13ec3342f7e2d71a9 # v5.1.0
+        with:
+          oidc-provider-name: gh-aerospike
+          oidc-audience: aerospike
 
-  #     # The manifests are what the Red Hat community operators PR needs, so they
-  #     # travel in the release bundle, as one zip of bundle/ (manifests/ and
-  #     # metadata/ at its root) under aerospike-kubernetes-operator/<version>/.
-  #     - name: Upload bundle manifests to JFrog
-  #       env:
-  #         VERSION: ${{ needs.prepare.outputs.version }}
-  #       run: |
-  #         zip_file="aerospike-kubernetes-operator-olm-${VERSION}.zip"
-  #         (cd bundle && zip -qr "../$zip_file" .)
-  #         jf rt upload "$zip_file" "platforms-generic-dev-local/aerospike-kubernetes-operator/${VERSION}/" --flat \
-  #           --build-name=ako-olm-manifests --build-number="$GITHUB_RUN_NUMBER" --project=platforms
-  #         jf rt build-publish ako-olm-manifests "$GITHUB_RUN_NUMBER" --project=platforms
+      # The manifests are what the Red Hat community operators PR needs, so they
+      # travel in the release bundle, as one zip of bundle/ (manifests/ and
+      # metadata/ at its root) under aerospike-kubernetes-operator/<version>/.
+      - name: Upload bundle manifests to JFrog
+        env:
+          VERSION: ${{ needs.prepare.outputs.version }}
+        run: |
+          zip_file="aerospike-kubernetes-operator-olm-${VERSION}.zip"
+          (cd bundle && zip -qr "../$zip_file" .)
+          jf rt upload "$zip_file" "platforms-generic-dev-local/aerospike-kubernetes-operator/${VERSION}/" --flat \
+            --build-name=ako-olm-manifests --build-number="$GITHUB_RUN_NUMBER" --project=platforms
+          jf rt build-publish ako-olm-manifests "$GITHUB_RUN_NUMBER" --project=platforms
 
-  #     - name: Upload bundle manifests
-  #       uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
-  #       with:
-  #         name: olm-bundle
-  #         path: bundle/
-  #         if-no-files-found: error
-  #         retention-days: 1
+      - name: Upload bundle manifests
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        with:
+          name: olm-bundle
+          path: bundle/
+          if-no-files-found: error
+          retention-days: 1
 
-  #     - name: Upload bundle Dockerfile
-  #       uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
-  #       with:
-  #         name: olm-bundle-dockerfile
-  #         path: ci-olm/bundle.Dockerfile
-  #         if-no-files-found: error
-  #         retention-days: 1
+      - name: Upload bundle Dockerfile
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        with:
+          name: olm-bundle-dockerfile
+          path: ci-olm/bundle.Dockerfile
+          if-no-files-found: error
+          retention-days: 1
 
-  # bundle-image:
-  #   name: OLM bundle image
-  #   needs: [prepare, olm-bundle]
-  #   permissions:
-  #     contents: read
-  #     packages: write
-  #     attestations: write
-  #     id-token: write
-  #   uses: aerospike/shared-workflows/.github/workflows/reusable_docker-build-deploy.yaml@b4b1e9dc89314a2d542f9d6fe0ee150ad06f9860 # v5.0.0
-  #   with:
-  #     jf-project: platforms
-  #     image-name: aerospike-kubernetes-operator-bundle
-  #     app-version: ${{ needs.prepare.outputs.version }}
-  #     jf-build-name: ako-olm-bundle
-  #     platforms: linux/amd64
-  #     # Same as the plain `docker build` used for bundles so far
-  #     provenance: "false"
-  #     sbom: false
-  #     # Relative to the workspace, not the context
-  #     file: ci-olm/bundle.Dockerfile
-  #     gh-context-artifacts-json: '[{"name": "olm-bundle", "dest": "bundle"}, {"name": "olm-bundle-dockerfile", "dest": "ci-olm"}]'
+  bundle-image:
+    name: OLM bundle image
+    needs: [prepare, olm-bundle]
+    permissions:
+      contents: read
+      packages: write
+      attestations: write
+      id-token: write
+    uses: aerospike/shared-workflows/.github/workflows/reusable_docker-build-deploy.yaml@b4b1e9dc89314a2d542f9d6fe0ee150ad06f9860 # v5.0.0
+    with:
+      jf-project: platforms
+      image-name: aerospike-kubernetes-operator-bundle
+      app-version: ${{ needs.prepare.outputs.version }}
+      jf-build-name: ako-olm-bundle
+      platforms: linux/amd64
+      # Same as the plain `docker build` used for bundles so far
+      provenance: "false"
+      sbom: false
+      # Relative to the workspace, not the context
+      file: ci-olm/bundle.Dockerfile
+      gh-context-artifacts-json: '[{"name": "olm-bundle", "dest": "bundle"}, {"name": "olm-bundle-dockerfile", "dest": "ci-olm"}]'
 
-  # scan:
-  #   name: Vulnerability scan
-  #   needs: [operator-image, bundle-image]
-  #   runs-on: ubuntu-24.04
-  #   permissions:
-  #     contents: read
-  #     id-token: write
-  #   env:
-  #     OPERATOR_IMG: ${{ needs.operator-image.outputs.immutable-tag }}
-  #     BUNDLE_IMG: ${{ needs.bundle-image.outputs.immutable-tag }}
-  #     SNYK_TOKEN: ${{ secrets.SNYK_TOKEN }}
-  #   steps:
-  #     - name: Harden the runner (Audit all outbound calls)
-  #       uses: step-security/harden-runner@351661ca32ac09a36dc5ee2d536e3128f2a3c8ed # v2.22.0
-  #       with:
-  #         egress-policy: audit
+  scan:
+    name: Vulnerability scan
+    needs: [operator-image, bundle-image]
+    runs-on: ubuntu-24.04
+    permissions:
+      contents: read
+      id-token: write
+    env:
+      OPERATOR_IMG: ${{ needs.operator-image.outputs.immutable-tag }}
+      BUNDLE_IMG: ${{ needs.bundle-image.outputs.immutable-tag }}
+      SNYK_TOKEN: ${{ secrets.SNYK_TOKEN }}
+    steps:
+      - name: Harden the runner (Audit all outbound calls)
+        uses: step-security/harden-runner@351661ca32ac09a36dc5ee2d536e3128f2a3c8ed # v2.22.0
+        with:
+          egress-policy: audit
 
-  #     - name: Checkout code
-  #       uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
-  #       with:
-  #         submodules: true
+      - name: Checkout code
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          submodules: true
 
-  #     - name: Setup Go
-  #       uses: actions/setup-go@b7ad1dad31e06c5925ef5d2fc7ad053ef454303e # v7.0.0
-  #       with:
-  #         go-version-file: go.mod
+      - name: Setup Go
+        uses: actions/setup-go@b7ad1dad31e06c5925ef5d2fc7ad053ef454303e # v7.0.0
+        with:
+          go-version-file: go.mod
 
-  #     - name: Set up JFrog CLI
-  #       id: jf
-  #       uses: step-security/setup-jfrog-cli@53aeacb709fce45d0baf69a13ec3342f7e2d71a9 # v5.1.0
-  #       with:
-  #         oidc-provider-name: gh-aerospike
-  #         oidc-audience: aerospike
+      - name: Set up JFrog CLI
+        id: jf
+        uses: step-security/setup-jfrog-cli@53aeacb709fce45d0baf69a13ec3342f7e2d71a9 # v5.1.0
+        with:
+          oidc-provider-name: gh-aerospike
+          oidc-audience: aerospike
 
-  #     - name: Login to JFrog
-  #       uses: docker/login-action@dbcb813823bdd20940b903addbd779551569679f # v4.6.0
-  #       with:
-  #         registry: artifact.aerospike.io
-  #         username: ${{ steps.jf.outputs.oidc-user }}
-  #         password: ${{ steps.jf.outputs.oidc-token }}
+      - name: Login to JFrog
+        uses: docker/login-action@dbcb813823bdd20940b903addbd779551569679f # v4.6.0
+        with:
+          registry: artifact.aerospike.io
+          username: ${{ steps.jf.outputs.oidc-user }}
+          password: ${{ steps.jf.outputs.oidc-token }}
 
-  #     - name: Set up Snyk
-  #       uses: snyk/actions/setup@9adf32b1121593767fc3c057af55b55db032dc04
+      - name: Set up Snyk
+        uses: snyk/actions/setup@9adf32b1121593767fc3c057af55b55db032dc04
 
-  #     # Same commands and thresholds as the Jenkins job
-  #     - name: Scan dependencies
-  #       run: snyk test --severity-threshold=high --fail-on=all
+      # Same commands and thresholds as the Jenkins job
+      - name: Scan dependencies
+        run: snyk test --severity-threshold=high --fail-on=all
 
-  #     - name: Scan operator image
-  #       run: |
-  #         docker pull "$OPERATOR_IMG"
-  #         snyk container test "$OPERATOR_IMG" --severity-threshold=high --file=Dockerfile --policy-path=.snyk --fail-on=all
+      - name: Scan operator image
+        run: |
+          docker pull "$OPERATOR_IMG"
+          snyk container test "$OPERATOR_IMG" --severity-threshold=high --file=Dockerfile --policy-path=.snyk --fail-on=all
 
-  #     - name: Scan bundle image
-  #       run: |
-  #         docker pull "$BUNDLE_IMG"
-  #         snyk container test "$BUNDLE_IMG" --severity-threshold=high --file=Dockerfile --policy-path=.snyk --fail-on=all
+      - name: Scan bundle image
+        run: |
+          docker pull "$BUNDLE_IMG"
+          snyk container test "$BUNDLE_IMG" --severity-threshold=high --file=Dockerfile --policy-path=.snyk --fail-on=all
 
   e2e:
     name: E2E ${{ matrix.suite }}
-    # needs: [prepare, bundle-image, scan]
-    # if: needs.prepare.outputs.suites != '[]'
+    needs: [prepare, bundle-image, scan]
+    if: needs.prepare.outputs.suites != '[]'
     runs-on: ubuntu-24.04
     # GitHub-hosted runners stop a job after 6 hours.
     timeout-minutes: 360
@@ -436,72 +436,72 @@ jobs:
         if: always()
         run: ./test/cleanup-test-namespace.sh || true
 
-  # release-bundle:
-  #   name: Release bundle
-  #   needs: [prepare, olm-bundle, helm-charts, scan, e2e]
-  #   # e2e is skipped when the PR changes nothing that needs it.
-  #   if: ${{ !cancelled() && !failure() && needs.scan.result == 'success' }}
-  #   permissions:
-  #     contents: read
-  #     id-token: write
-  #   uses: aerospike/shared-workflows/.github/workflows/reusable_create-release-bundle.yaml@b4b1e9dc89314a2d542f9d6fe0ee150ad06f9860 # v5.0.0
-  #   with:
-  #     gh-workflows-ref: b4b1e9dc89314a2d542f9d6fe0ee150ad06f9860
-  #     jf-project: platforms
-  #     jf-bundle-name: aerospike-kubernetes-operator
-  #     version: ${{ needs.prepare.outputs.version }}
-  #     # Every build-info is published under the run number.
-  #     jf-build-names: ako-operator:${{ github.run_number }},ako-olm-bundle:${{ github.run_number }},ako-olm-manifests:${{ github.run_number }},ako-helm-charts:${{ github.run_number }}
+  release-bundle:
+    name: Release bundle
+    needs: [prepare, olm-bundle, helm-charts, scan, e2e]
+    # e2e is skipped when the PR changes nothing that needs it.
+    if: ${{ !cancelled() && !failure() && needs.scan.result == 'success' }}
+    permissions:
+      contents: read
+      id-token: write
+    uses: aerospike/shared-workflows/.github/workflows/reusable_create-release-bundle.yaml@b4b1e9dc89314a2d542f9d6fe0ee150ad06f9860 # v5.0.0
+    with:
+      gh-workflows-ref: b4b1e9dc89314a2d542f9d6fe0ee150ad06f9860
+      jf-project: platforms
+      jf-bundle-name: aerospike-kubernetes-operator
+      version: ${{ needs.prepare.outputs.version }}
+      # Every build-info is published under the run number.
+      jf-build-names: ako-operator:${{ github.run_number }},ako-olm-bundle:${{ github.run_number }},ako-olm-manifests:${{ github.run_number }},ako-helm-charts:${{ github.run_number }}
 
-  # promote-dev:
-  #   name: Promote to DEV
-  #   needs: [prepare, release-bundle]
-  #   # A skipped e2e would otherwise skip this job too, even after the bundle
-  #   # was created.
-  #   if: ${{ !cancelled() && needs.release-bundle.result == 'success' }}
-  #   runs-on: ubuntu-24.04
-  #   permissions:
-  #     contents: read
-  #     id-token: write
-  #   steps:
-  #     - name: Harden the runner (Audit all outbound calls)
-  #       uses: step-security/harden-runner@351661ca32ac09a36dc5ee2d536e3128f2a3c8ed # v2.22.0
-  #       with:
-  #         egress-policy: audit
+  promote-dev:
+    name: Promote to DEV
+    needs: [prepare, release-bundle]
+    # A skipped e2e would otherwise skip this job too, even after the bundle
+    # was created.
+    if: ${{ !cancelled() && needs.release-bundle.result == 'success' }}
+    runs-on: ubuntu-24.04
+    permissions:
+      contents: read
+      id-token: write
+    steps:
+      - name: Harden the runner (Audit all outbound calls)
+        uses: step-security/harden-runner@351661ca32ac09a36dc5ee2d536e3128f2a3c8ed # v2.22.0
+        with:
+          egress-policy: audit
 
-  #     - name: Set up JFrog CLI
-  #       uses: step-security/setup-jfrog-cli@53aeacb709fce45d0baf69a13ec3342f7e2d71a9 # v5.1.0
-  #       with:
-  #         oidc-provider-name: gh-aerospike
-  #         oidc-audience: aerospike
+      - name: Set up JFrog CLI
+        uses: step-security/setup-jfrog-cli@53aeacb709fce45d0baf69a13ec3342f7e2d71a9 # v5.1.0
+        with:
+          oidc-provider-name: gh-aerospike
+          oidc-audience: aerospike
 
-  #     - name: Promote release bundle to DEV
-  #       uses: aerospike/shared-workflows/.github/actions/promote-release-bundle@b4b1e9dc89314a2d542f9d6fe0ee150ad06f9860 # v5.0.0
-  #       with:
-  #         bundle-name: aerospike-kubernetes-operator
-  #         version: ${{ needs.prepare.outputs.version }}
-  #         environment: DEV
-  #         jf-project: platforms
+      - name: Promote release bundle to DEV
+        uses: aerospike/shared-workflows/.github/actions/promote-release-bundle@b4b1e9dc89314a2d542f9d6fe0ee150ad06f9860 # v5.0.0
+        with:
+          bundle-name: aerospike-kubernetes-operator
+          version: ${{ needs.prepare.outputs.version }}
+          environment: DEV
+          jf-project: platforms
 
-  # # The single required status check.
-  # ci-result:
-  #   name: CI result
-  #   needs: [prepare, operator-image, helm-charts, olm-bundle, bundle-image, scan, e2e, release-bundle, promote-dev]
-  #   if: always()
-  #   runs-on: ubuntu-24.04
-  #   permissions: {}
-  #   steps:
-  #     - name: Check results
-  #       env:
-  #         FORK_PR: ${{ github.event_name == 'pull_request' && github.event.pull_request.head.repo.full_name != github.repository }}
-  #         RESULTS: ${{ join(needs.*.result, ' ') }}
-  #       run: |
-  #         if [ "$FORK_PR" = "true" ]; then
-  #           echo "::error::CI does not run on fork PRs. A maintainer needs to push this branch to the repository."
-  #           exit 1
-  #         fi
-  #         echo "Job results: $RESULTS"
-  #         if [[ " $RESULTS " == *" failure "* || " $RESULTS " == *" cancelled "* ]]; then
-  #           echo "::error::One or more CI jobs failed or were cancelled"
-  #           exit 1
-  #         fi
+  # The single required status check.
+  ci-result:
+    name: CI result
+    needs: [prepare, operator-image, helm-charts, olm-bundle, bundle-image, scan, e2e, release-bundle, promote-dev]
+    if: always()
+    runs-on: ubuntu-24.04
+    permissions: {}
+    steps:
+      - name: Check results
+        env:
+          FORK_PR: ${{ github.event_name == 'pull_request' && github.event.pull_request.head.repo.full_name != github.repository }}
+          RESULTS: ${{ join(needs.*.result, ' ') }}
+        run: |
+          if [ "$FORK_PR" = "true" ]; then
+            echo "::error::CI does not run on fork PRs. A maintainer needs to push this branch to the repository."
+            exit 1
+          fi
+          echo "Job results: $RESULTS"
+          if [[ " $RESULTS " == *" failure "* || " $RESULTS " == *" cancelled "* ]]; then
+            echo "::error::One or more CI jobs failed or were cancelled"
+            exit 1
+          fi
