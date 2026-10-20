@@ -3,6 +3,7 @@ package cluster
 import (
 	goctx "context"
 	"fmt"
+	"os"
 	"reflect"
 	"time"
 
@@ -17,14 +18,12 @@ import (
 	"github.com/aerospike/aerospike-kubernetes-operator/v4/test"
 )
 
-// TODO: Used only by the custom init registry test, which is disabled until CI
-// has an ECR login. Re-enable with that test, along with getEnvVar and the "os" import.
-// var (
-// 	customInitRegistryEnvVar          = "CUSTOM_INIT_REGISTRY"
-// 	customInitRegistryNamespaceEnvVar = "CUSTOM_INIT_REGISTRY_NAMESPACE"
-// 	customInitNameAndTagEnvVar        = "CUSTOM_INIT_NAME_TAG"
-// 	imagePullSecretNameEnvVar         = "IMAGE_PULL_SECRET_NAME" //nolint:gosec // for testing
-// )
+var (
+	customInitRegistryEnvVar          = "CUSTOM_INIT_REGISTRY"
+	customInitRegistryNamespaceEnvVar = "CUSTOM_INIT_REGISTRY_NAMESPACE"
+	customInitNameAndTagEnvVar        = "CUSTOM_INIT_NAME_TAG"
+	imagePullSecretNameEnvVar         = "IMAGE_PULL_SECRET_NAME" //nolint:gosec // for testing
+)
 
 var _ = Describe(
 	"PodSpec", func() {
@@ -645,58 +644,55 @@ var _ = Describe(
 					},
 				)
 
-				// TODO: Disabled because it pulls the init image from ECR, and the GitHub
-				// Actions CI has no ECR login yet. Re-enable together with the ECR steps
-				// in .github/workflows/ci.yaml.
-				// It(
-				// 	"Should be able to set/update aerospike-init custom registry, namespace and name", func() {
-				// 		customRegistry := getEnvVar(customInitRegistryEnvVar)
-				// 		customRegistryNamespace := getEnvVar(customInitRegistryNamespaceEnvVar)
-				// 		customInitNameAndTag := getEnvVar(customInitNameAndTagEnvVar)
-				// 		imagePullSecret := getEnvVar(imagePullSecretNameEnvVar)
-				//
-				// 		By("Updating imagePullSecret")
-				//
-				// 		aeroCluster, err := getCluster(k8sClient, ctx, clusterNamespacedName)
-				// 		Expect(err).ToNot(HaveOccurred())
-				//
-				// 		aeroCluster.Spec.PodSpec.ImagePullSecrets = []corev1.LocalObjectReference{
-				// 			{
-				// 				Name: imagePullSecret,
-				// 			},
-				// 		}
-				//
-				// 		err = updateCluster(k8sClient, ctx, aeroCluster)
-				// 		Expect(err).ToNot(HaveOccurred())
-				//
-				// 		By("Using registry, namespace and name in CR")
-				//
-				// 		aeroCluster.Spec.PodSpec.AerospikeInitContainerSpec.ImageRegistry = customRegistry
-				// 		aeroCluster.Spec.PodSpec.AerospikeInitContainerSpec.ImageRegistryNamespace = &customRegistryNamespace
-				// 		aeroCluster.Spec.PodSpec.AerospikeInitContainerSpec.ImageNameAndTag = customInitNameAndTag
-				// 		err = updateCluster(k8sClient, ctx, aeroCluster)
-				// 		Expect(err).ToNot(HaveOccurred())
-				//
-				// 		validateInitImage(
-				// 			k8sClient, aeroCluster, customRegistry,
-				// 			customRegistryNamespace, customInitNameAndTag,
-				// 		)
-				//
-				// 		By("Using envVar registry, namespace and name")
-				//
-				// 		// Empty imageRegistry, should use operator envVar docker.io
-				// 		aeroCluster.Spec.PodSpec.AerospikeInitContainerSpec.ImageRegistry = ""
-				// 		aeroCluster.Spec.PodSpec.AerospikeInitContainerSpec.ImageRegistryNamespace = nil
-				// 		aeroCluster.Spec.PodSpec.AerospikeInitContainerSpec.ImageNameAndTag = ""
-				// 		err = updateCluster(k8sClient, ctx, aeroCluster)
-				// 		Expect(err).ToNot(HaveOccurred())
-				//
-				// 		validateInitImage(
-				// 			k8sClient, aeroCluster, asdbv1.AerospikeInitContainerDefaultRegistry,
-				// 			asdbv1.AerospikeInitContainerDefaultRegistryNamespace, asdbv1.AerospikeInitContainerDefaultNameAndTag,
-				// 		)
-				// 	},
-				// )
+				It(
+					"Should be able to set/update aerospike-init custom registry, namespace and name", func() {
+						customRegistry := getEnvVar(customInitRegistryEnvVar)
+						customRegistryNamespace := getEnvVar(customInitRegistryNamespaceEnvVar)
+						customInitNameAndTag := getEnvVar(customInitNameAndTagEnvVar)
+						imagePullSecret := getEnvVar(imagePullSecretNameEnvVar)
+
+						By("Updating imagePullSecret")
+
+						aeroCluster, err := getCluster(k8sClient, ctx, clusterNamespacedName)
+						Expect(err).ToNot(HaveOccurred())
+
+						aeroCluster.Spec.PodSpec.ImagePullSecrets = []corev1.LocalObjectReference{
+							{
+								Name: imagePullSecret,
+							},
+						}
+
+						err = updateCluster(k8sClient, ctx, aeroCluster)
+						Expect(err).ToNot(HaveOccurred())
+
+						By("Using registry, namespace and name in CR")
+
+						aeroCluster.Spec.PodSpec.AerospikeInitContainerSpec.ImageRegistry = customRegistry
+						aeroCluster.Spec.PodSpec.AerospikeInitContainerSpec.ImageRegistryNamespace = &customRegistryNamespace
+						aeroCluster.Spec.PodSpec.AerospikeInitContainerSpec.ImageNameAndTag = customInitNameAndTag
+						err = updateCluster(k8sClient, ctx, aeroCluster)
+						Expect(err).ToNot(HaveOccurred())
+
+						validateInitImage(
+							k8sClient, aeroCluster, customRegistry,
+							customRegistryNamespace, customInitNameAndTag,
+						)
+
+						By("Using envVar registry, namespace and name")
+
+						// Empty imageRegistry, should use operator envVar docker.io
+						aeroCluster.Spec.PodSpec.AerospikeInitContainerSpec.ImageRegistry = ""
+						aeroCluster.Spec.PodSpec.AerospikeInitContainerSpec.ImageRegistryNamespace = nil
+						aeroCluster.Spec.PodSpec.AerospikeInitContainerSpec.ImageNameAndTag = ""
+						err = updateCluster(k8sClient, ctx, aeroCluster)
+						Expect(err).ToNot(HaveOccurred())
+
+						validateInitImage(
+							k8sClient, aeroCluster, asdbv1.AerospikeInitContainerDefaultRegistry,
+							asdbv1.AerospikeInitContainerDefaultRegistryNamespace, asdbv1.AerospikeInitContainerDefaultNameAndTag,
+						)
+					},
+				)
 
 				It(
 					"Should be able to recover cluster after setting correct aerospike-init custom registry/namespace",
@@ -806,12 +802,12 @@ var _ = Describe(
 	},
 )
 
-// func getEnvVar(envVar string) string {
-// 	envVarVal, found := os.LookupEnv(envVar)
-// 	Expect(found).To(BeTrue())
-//
-// 	return envVarVal
-// }
+func getEnvVar(envVar string) string {
+	envVarVal, found := os.LookupEnv(envVar)
+	Expect(found).To(BeTrue())
+
+	return envVarVal
+}
 
 func validateInitImage(
 	k8sClient client.Client, aeroCluster *asdbv1.AerospikeCluster,
