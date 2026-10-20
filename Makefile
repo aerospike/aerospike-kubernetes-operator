@@ -244,18 +244,13 @@ build: manifests generate fmt vet ## Build manager binary.
 run: manifests generate fmt vet ## Run a controller from your host.
 	go run ./cmd/main.go
 
+# The image is non-root, so the same image runs on OpenShift and other Kubernetes.
+# IMG can list several space-separated tags; one build is pushed to all of them.
 .PHONY: docker-buildx
 docker-buildx: ## Build and push docker image for the manager for cross-platform support
 	- docker buildx create --name project-v3-builder
 	docker buildx use project-v3-builder
-	docker buildx build --push --no-cache --provenance=false --platform=$(PLATFORMS) --tag ${IMG} --build-arg VERSION=$(VERSION) --build-arg USER=1001 .
-	- docker buildx rm project-v3-builder
-
-.PHONY: docker-buildx-openshift
-docker-buildx-openshift: ## Build and push docker image for the manager for openshift cross-platform support
-	- docker buildx create --name project-v3-builder
-	docker buildx use project-v3-builder
-	docker buildx build --push --no-cache --provenance=false --platform=$(PLATFORMS) --tag ${IMG} --build-arg VERSION=$(VERSION) --build-arg USER=1001 .
+	docker buildx build --push --no-cache --provenance=false --platform=$(PLATFORMS) $(addprefix --tag ,$(IMG)) --build-arg VERSION=$(VERSION) .
 	- docker buildx rm project-v3-builder
 
 .PHONY: docker-push

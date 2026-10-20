@@ -46,11 +46,10 @@ jobs:
           username: ${{ secrets.QUAY_USERNAME }}
           password: ${{ secrets.QUAY_TOKEN }}
 
-      - name: Build and push image on Dockerhub
-        run: make docker-buildx IMG=${{ env.IMG_BASE }}:${{ env.TAG }} VERSION=${{ env.TAG }}
-
-      - name: Build and push image on Quay
-        run: make docker-buildx-openshift IMG=quay.io/${{ env.IMG_BASE }}:${{ env.TAG }} VERSION=${{ env.TAG }}
+      # One build pushed to both registries, so Docker Hub and Quay serve the
+      # same image, with the same digest.
+      - name: Build and push image on Dockerhub and Quay
+        run: make docker-buildx IMG="${{ env.IMG_BASE }}:${{ env.TAG }} quay.io/${{ env.IMG_BASE }}:${{ env.TAG }}" VERSION=${{ env.TAG }}
 
       - name: Run Snyk image security scan
         uses: snyk/actions/docker@9adf32b1121593767fc3c057af55b55db032dc04
