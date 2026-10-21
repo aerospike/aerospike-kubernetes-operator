@@ -38,10 +38,12 @@ type SingleBackupServiceReconciler struct {
 	client.Client
 	Recorder          record.EventRecorder
 	aeroBackupService *asdbv1beta1.AerospikeBackupService
-	KubeClient        *kubernetes.Clientset
-	KubeConfig        *rest.Config
-	Scheme            *k8sRuntime.Scheme
-	Log               logr.Logger
+	// KubeClient and KubeConfig exec into the backup service pods to check that they have the latest ConfigMap
+	// before a reload; client.Client cannot run pods/exec.
+	KubeClient *kubernetes.Clientset
+	KubeConfig *rest.Config
+	Scheme     *k8sRuntime.Scheme
+	Log        logr.Logger
 }
 
 // finishReconcile logs the reconcile exit once at the boundary and sets the AerospikeBackupService

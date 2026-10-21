@@ -124,6 +124,8 @@ type AerospikeBackupServiceStatus struct {
 	Service *Service `json:"service,omitempty"`
 
 	// OperatorClientCert is the configuration the operator uses to connect to the backup service over HTTPS.
+	// The backup and restore controllers build their client from status, so it matches the listener the backup
+	// service runs with, not a spec change that is not applied yet.
 	// +optional
 	OperatorClientCert *OperatorClientCertSpec `json:"operatorClientCert,omitempty"`
 
@@ -135,7 +137,7 @@ type AerospikeBackupServiceStatus struct {
 	Phase AerospikeBackupServicePhase `json:"phase"`
 
 	// Scheme is the URL scheme the operator uses to connect to the backup service.
-	// An empty value means HTTP.
+	// An empty value means HTTP, which is what a backup service reconciled by an older operator serves.
 	// +kubebuilder:validation:Enum=HTTP;HTTPS
 	// +optional
 	Scheme corev1.URIScheme `json:"scheme,omitempty"`
@@ -152,7 +154,9 @@ type OperatorClientCertSpec struct {
 	SecretCertSource SecretCertSource `json:"secretCertSource"`
 
 	// ServerName is the host name expected in the backup service certificate.
-	// Defaults to <name>.<namespace>.svc of the AerospikeBackupService.
+	// Defaults to <name>.<namespace>.svc of the AerospikeBackupService, the address the operator connects to.
+	// Set it when the certificate does not list that name, for example when it is issued only for
+	// <name>.<namespace>.svc.cluster.local or for an external DNS name.
 	// +optional
 	ServerName string `json:"serverName,omitempty"`
 }

@@ -14,6 +14,7 @@ import (
 
 // ListenerPort is the name and port of one enabled backup service listener.
 type ListenerPort struct {
+	// Name is the container and Service port name, http or https.
 	Name string
 	Port int32
 }
@@ -24,7 +25,8 @@ type Listeners struct {
 	Scheme      corev1.URIScheme
 	ContextPath string
 
-	// Ports holds every enabled listener, http before https.
+	// Ports holds every enabled listener, http before https. Each one is exposed on the Deployment and Service; the
+	// fixed order keeps the rendered Deployment the same on every reconcile.
 	Ports []ListenerPort
 
 	// Port is the port the operator connects to. It is one of the entries in Ports.

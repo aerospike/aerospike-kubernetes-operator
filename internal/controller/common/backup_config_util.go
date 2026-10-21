@@ -61,6 +61,8 @@ func GetBackupServicePodList(
 	return &podList, nil
 }
 
+// Bounds of the wait for kubelet to write a new ConfigMap into the backup service pods before a reload; the same
+// bounds waitForDeploymentToBeReady uses.
 const (
 	configInPodsPollInterval = 2 * time.Second
 	configInPodsTimeout      = 2 * time.Minute

@@ -28,7 +28,9 @@ const defaultContextPath = "/"
 const contentTypeJSON = "application/json"
 
 type Client struct {
-	// httpClient sends the requests. It is nil when the Client is built as a struct literal.
+	// httpClient sends the requests. It carries the TLS settings for an HTTPS listener (CA, client certificate,
+	// server name), which the package-level http.Get and http.Post cannot. It is nil when the Client is built as a
+	// struct literal; client() then falls back to a plain HTTP client.
 	httpClient *http.Client
 
 	// The address to listen on.
@@ -41,7 +43,8 @@ type Client struct {
 	// Used for API version-aware dispatch.
 	Version string `json:"version,omitempty"`
 
-	// Scheme is the URL scheme used to connect to the backup service. An empty value means HTTP.
+	// Scheme is the URL scheme used to connect to the backup service. An empty value means HTTP, so a Client built
+	// as a struct literal keeps using HTTP.
 	Scheme corev1.URIScheme `json:"scheme,omitempty"`
 
 	// The port to listen on.

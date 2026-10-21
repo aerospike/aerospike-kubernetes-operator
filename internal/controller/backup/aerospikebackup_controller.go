@@ -40,7 +40,9 @@ const finalizerName = "asdb.aerospike.com/backup-finalizer"
 // AerospikeBackupReconciler reconciles a AerospikeBackup object
 type AerospikeBackupReconciler struct {
 	client.Client
-	Scheme     *k8sruntime.Scheme
+	Scheme *k8sruntime.Scheme
+	// KubeClient and KubeConfig exec into the backup service pods to check that they have the latest ConfigMap
+	// before a reload; client.Client cannot run pods/exec.
 	KubeClient *kubernetes.Clientset
 	KubeConfig *rest.Config
 	Recorder   record.EventRecorder
