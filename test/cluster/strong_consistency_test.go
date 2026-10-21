@@ -403,30 +403,6 @@ var _ = Describe("SCMode", func() {
 			Expect(DeployCluster(k8sClient, ctx, aeroCluster)).To(HaveOccurred())
 		})
 
-		It("Should not allow in-memory sc namespace", func() {
-			aeroCluster := createDummyAerospikeCluster(clusterNamespacedName, 3)
-			racks := getDummyRackConf(1)
-
-			racks[0].InputAerospikeConfig = &asdbv1.AerospikeConfigSpec{
-				Value: map[string]interface{}{
-					"namespaces": []interface{}{
-						map[string]interface{}{
-							"name":               sc1Name,
-							"replication-factor": 2,
-							"strong-consistency": true,
-							"storage-engine": map[string]interface{}{
-								"type":      "memory",
-								"data-size": 1073741824,
-							},
-						},
-					},
-				},
-			}
-
-			aeroCluster.Spec.RackConfig.Racks = racks
-			Expect(DeployCluster(k8sClient, ctx, aeroCluster)).To(HaveOccurred())
-		})
-
 		It("Should not allow MRT fields in non-SC namespace", func() {
 			aeroCluster := createDummyAerospikeCluster(clusterNamespacedName, 3)
 			racks := getDummyRackConf(1)
