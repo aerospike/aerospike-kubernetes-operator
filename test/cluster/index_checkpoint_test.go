@@ -358,8 +358,81 @@ var _ = Describe(
 				[]asdbv1.AerospikeClusterPhase{asdbv1.AerospikeClusterCompleted},
 			)).ToNot(HaveOccurred())
 		})
+
+		It("Should preserve SC in-memory data across pod restart via checkpoint", func() {
+			By("Deploying a cluster with a pure in-memory SC namespace and checkpointing enabled")
+
+			aeroCluster := createIndexCheckpointCluster(clusterNamespacedName)
+			// Promote the in-memory namespace to SC — the index-checkpoint-path is already
+			// configured by createIndexCheckpointCluster, satisfying the webhook's requirement
+			// that pure in-memory SC namespaces must have checkpointing enabled.
+			getClusterNamespaceConfig(aeroCluster, ckptNsName)[asdbv1.ConfKeyStrongConsistency] = true
+
+			Expect(DeployCluster(k8sClient, ctx, aeroCluster)).ToNot(HaveOccurred())
+
+			aeroCluster, err := getCluster(k8sClient, ctx, clusterNamespacedName)
+			Expect(err).ToNot(HaveOccurred())
+
+			By("Verifying no dead or unavailable partitions after initial deployment")
+			validateNoDeadOrUnavailablePartitions(aeroCluster, ckptNsName)
+
+			By("Writing records to the SC in-memory namespace")
+			Expect(LoadBulkDataInCluster(aeroCluster, k8sClient, ckptNsName, ckptNumKeys)).ToNot(HaveOccurred())
+
+			By("Forcing a pod-restart rolling update — data must survive via the checkpoint")
+			// A pod restart destroys the sandbox and with it the shared-memory segments.
+			// For a pure in-memory SC namespace the checkpoint is the only way this data
+			// can be recovered: save → park → delete pod → hydrate on the new pod.
+			aeroCluster.Spec.PodSpec.AerospikeObjectMeta.Labels = map[string]string{"test-key": "test-value"}
+
+			// Both the SC in-memory namespace and the device-backed AP namespace are checkpointed:
+			// the SC one saves index + data, the AP one saves index only (data is on device).
+			applyAndExpectCheckpoint(ctx, aeroCluster, []string{ckptNsName, testNsName})
+
+			By("Verifying no dead or unavailable partitions after the rolling restart")
+
+			aeroCluster, err = getCluster(k8sClient, ctx, clusterNamespacedName)
+			Expect(err).ToNot(HaveOccurred())
+			validateNoDeadOrUnavailablePartitions(aeroCluster, ckptNsName)
+
+			expectRecords(ctx, clusterNamespacedName, ckptNsName,
+				"record should survive the pod restart via the index checkpoint on the SC in-memory namespace")
+		})
 	},
 )
+
+// validateNoDeadOrUnavailablePartitions asserts that neither dead_partitions nor
+// unavailable_partitions are non-zero on any node for the given SC namespace.
+// A non-zero value after deploy or after a clean rolling restart indicates the
+// checkpoint did not hydrate correctly, or the roster was not set up properly.
+func validateNoDeadOrUnavailablePartitions(aeroCluster *asdbv1.AerospikeCluster, nsName string) {
+	GinkgoHelper()
+
+	podList, err := getPodList(aeroCluster, k8sClient)
+	Expect(err).ToNot(HaveOccurred())
+	Expect(podList.Items).ToNot(BeEmpty())
+
+	cp := getClientPolicy(aeroCluster, k8sClient)
+	cmd := "namespace/" + nsName
+
+	for idx := range podList.Items {
+		pod := &podList.Items[idx]
+
+		asConn, err := newAsConn(logger, aeroCluster, pod, k8sClient)
+		Expect(err).ToNot(HaveOccurred())
+
+		res, err := runInfo(cp, asConn, cmd)
+		Expect(err).ToNot(HaveOccurred())
+
+		stats, err := deployment.ParseInfoIntoMap(res[cmd], ";", "=")
+		Expect(err).ToNot(HaveOccurred())
+
+		Expect(stats["dead_partitions"]).To(Equal("0"),
+			"pod %s has dead partitions in namespace %q", pod.Name, nsName)
+		Expect(stats["unavailable_partitions"]).To(Equal("0"),
+			"pod %s has unavailable partitions in namespace %q", pod.Name, nsName)
+	}
+}
 
 // applyAndExpectCheckpoint applies an already-mutated spec without waiting, catches a pod
 // while it is still holding its checkpoint park, asserts what the server says it saved, and
