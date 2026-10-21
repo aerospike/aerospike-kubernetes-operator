@@ -266,7 +266,8 @@ func (r *SingleClusterReconciler) waitForSTSPodsServerReady(
 		"maxWaitTimePerPod", podStatusRetryInterval*time.Duration(podStatusMaxRetry),
 	)
 
-	for podIndex := int32(0); podIndex < *st.Spec.Replicas; podIndex++ {
+	ordStart := stsOrdinalStart(st)
+	for podIndex := ordStart; podIndex < ordStart+*st.Spec.Replicas; podIndex++ {
 		podName := getSTSPodName(st.Name, podIndex)
 
 		if ignorablePodNames.Has(podName) {
@@ -334,8 +335,8 @@ func (r *SingleClusterReconciler) waitForSTSToBeReady(
 		podStatusRetryInterval*time.Duration(podStatusMaxRetry),
 	)
 
-	var podIndex int32
-	for podIndex = 0; podIndex < *st.Spec.Replicas; podIndex++ {
+	ordStart2 := stsOrdinalStart(st)
+	for podIndex := ordStart2; podIndex < ordStart2+*st.Spec.Replicas; podIndex++ {
 		podName := getSTSPodName(st.Name, podIndex)
 		if ignorablePodNames.Has(podName) {
 			continue
@@ -1822,6 +1823,16 @@ func getSTSPodOrdinal(podName string) (*int32, error) {
 	result := int32(ordinal)
 
 	return &result, nil
+}
+
+// stsOrdinalStart returns the ordinals.start value for the given StatefulSet,
+// or 0 if spec.ordinals is not set (the Kubernetes default).
+func stsOrdinalStart(sts *appsv1.StatefulSet) int32 {
+	if sts.Spec.Ordinals != nil {
+		return sts.Spec.Ordinals.Start
+	}
+
+	return 0
 }
 
 func getSTSPodName(statefulSetName string, index int32) string {

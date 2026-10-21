@@ -6,7 +6,7 @@ import (
 	"fmt"
 	"path/filepath"
 	"reflect"
-	"strconv"
+	"sort"
 	"strings"
 
 	appsv1 "k8s.io/api/apps/v1"
@@ -869,16 +869,17 @@ func (r *SingleClusterReconciler) scaleUpRack(
 	*appsv1.StatefulSet, common.ReconcileResult,
 ) {
 	desiredSize := rackState.Size
+	oldReplicas := *found.Spec.Replicas
+	oldOrdinalStart := stsOrdinalStart(found)
 
-	oldSz := *found.Spec.Replicas
-
-	r.Log.Info("Scaling up Pods", "currentSz", oldSz, "desiredSz", desiredSize)
+	r.Log.Info("Scaling up Pods",
+		"currentReplicas", oldReplicas, "ordinalStart", oldOrdinalStart, "desiredSize", desiredSize)
 
 	// Suppressed for a rack under revision migration: there the scale-up is one step of a
 	// migration that also scales the old revision down, so claiming here would toggle ScalingUp
 	// and ScalingDown once per batch as the two revisions trade Pods. The migration reports itself
 	// as RackRevisionRollingOut for its whole duration, and its message carries the progress
-	// towards the target size. This holds even when the rack is genuinely resized in the same pass
+	// towards the target size. This holds even when the rack is genuinely resized in the same pass.
 	if !r.computedState.revisionChangedRackIDs.Has(rackState.Rack.ID) {
 		if err := r.setConditions(ctx, metav1.Condition{
 			Type:    string(asdbv1.AerospikeClusterConditionScalingUp),
@@ -894,9 +895,63 @@ func (r *SingleClusterReconciler) scaleUpRack(
 		r.aeroCluster, corev1.EventTypeNormal, "RackScaleUp",
 		eventRackScaleMessage(
 			"Scaling up", rackState.Rack.ID,
-			utils.GetNamespacedNameString(found), oldSz, desiredSize,
+			utils.GetNamespacedNameString(found), oldReplicas, desiredSize,
 		),
 	)
+
+	// Determine the next step for staged reverse-ordinal scale-up.
+	//
+	// For fresh racks (replicas==0, desiredSize>1) pods are brought up in
+	// descending ordinal order by using spec.ordinals.start:
+	//
+	//   step | replicas | ordinals.start | pod created
+	//     1  |    1     |    N-1         | pod-(N-1)
+	//     2  |    2     |    N-2         | pod-(N-2)
+	//    ...
+	//     N  |    N     |     0          | pod-0
+	//
+	// Each reconcile cycle advances by one step. The STS manages the range
+	// [ordinals.start, ordinals.start+replicas), so existing pods are kept
+	// while the next lower-ordinal pod is added. Once ordinals.start reaches 0
+	// the STS is back to its normal state and spec.ordinals is cleared.
+	//
+	// scaleUpRack never initiates staging on its own — it only continues a
+	// staged sequence that was already started externally (e.g. the vertical
+	// scaling flow). Normal cluster creation and scale-up always use the direct
+	// path (ordinals.start == 0, all pods created from 0 to desiredSize-1).
+	var nextReplicas, nextOrdinalStart int32
+
+	switch {
+	case oldOrdinalStart > 0 && oldReplicas == 0:
+		// First step of staged sequence: the initiator has set ordinals.start
+		// but no pods exist yet. Create the first (highest-ordinal) pod without
+		// decrementing ordinals.start — it stays at its initial value so the
+		// STS manages [ordinals.start, ordinals.start+1).
+		nextReplicas = 1
+		nextOrdinalStart = oldOrdinalStart
+
+	case oldOrdinalStart > 0:
+		// Subsequent staged steps: add the next lower-ordinal pod.
+		nextReplicas = oldReplicas + 1
+		nextOrdinalStart = oldOrdinalStart - 1
+
+	default:
+		// Normal scale-up (fresh rack or adding pods to an existing cluster):
+		// create all pods from oldReplicas to desiredSize-1 directly.
+		nextReplicas = desiredSize
+		nextOrdinalStart = 0
+	}
+
+	// Identify the pod(s) being newly created in this step.
+	// New pods are those in [nextOrdinalStart, nextOrdinalStart+nextReplicas)
+	// that were NOT in the old range [oldOrdinalStart, oldOrdinalStart+oldReplicas).
+	var newPodNames []string
+
+	for i := nextOrdinalStart; i < nextOrdinalStart+nextReplicas; i++ {
+		if i < oldOrdinalStart || i >= oldOrdinalStart+oldReplicas {
+			newPodNames = append(newPodNames, getSTSPodName(found.Name, i))
+		}
+	}
 
 	podList, err := r.getOrderedRackPodList(ctx, rackState.Rack.ID, rackState.Rack.Revision)
 	if err != nil {
@@ -906,12 +961,7 @@ func (r *SingleClusterReconciler) scaleUpRack(
 		))
 	}
 
-	var newPodNames []string
-	for i := oldSz; i < desiredSize; i++ {
-		newPodNames = append(newPodNames, getSTSPodName(found.Name, i))
-	}
-
-	// Ensure none of the to be launched pods are active.
+	// Ensure none of the to-be-launched pods are already present.
 	for _, newPodName := range newPodNames {
 		for idx := range podList {
 			if podList[idx].Name == newPodName {
@@ -934,23 +984,29 @@ func (r *SingleClusterReconciler) scaleUpRack(
 		)
 	}
 
-	// Create pod service for the scaled up pod when node network is used in network policy
+	// Create pod service for the scaled-up pod when node network is used in network policy.
 	if err = r.createOrUpdatePodServiceIfNeeded(ctx, newPodNames); err != nil {
 		return nil, common.ReconcileError(err)
 	}
 
-	// Scale up the statefulset. Re-fetch the STS inside a RetryOnConflict
-	// loop so that a stale resourceVersion (e.g. from a status update made by
-	// the Kubernetes StatefulSet controller between our last Get and this
-	// Update) does not cause a permanent conflict error. The replica count is
-	// set inside the closure so each retry operates on the latest object.
+	// Apply the next staged step to the STS. Re-fetch inside a RetryOnConflict
+	// loop so that a stale resourceVersion does not cause a permanent conflict error.
 	if err = retry.RetryOnConflict(retry.DefaultRetry, func() error {
 		current, getStsErr := r.getSTS(ctx, rackState)
 		if getStsErr != nil {
 			return getStsErr
 		}
 
-		current.Spec.Replicas = &desiredSize
+		current.Spec.Replicas = &nextReplicas
+
+		if nextOrdinalStart == 0 {
+			// ordinals field is not needed once we reach start==0; clear it so
+			// the STS looks identical to one that was never staged.
+			current.Spec.Ordinals = nil
+		} else {
+			current.Spec.Ordinals = &appsv1.StatefulSetOrdinals{Start: nextOrdinalStart}
+		}
+
 		found = current
 
 		return r.Update(ctx, current, common.UpdateOption)
@@ -958,7 +1014,7 @@ func (r *SingleClusterReconciler) scaleUpRack(
 		return found, common.ReconcileError(err)
 	}
 
-	// return a fresh copy
+	// Return a fresh copy.
 	found, err = r.getSTS(ctx, rackState)
 	if err != nil {
 		return found, common.ReconcileError(err)
@@ -968,7 +1024,7 @@ func (r *SingleClusterReconciler) scaleUpRack(
 		r.aeroCluster, corev1.EventTypeNormal, "RackScaledUp",
 		eventRackScaleMessage(
 			"Scaled up", rackState.Rack.ID,
-			utils.GetNamespacedNameString(found), oldSz, *found.Spec.Replicas,
+			utils.GetNamespacedNameString(found), oldReplicas, *found.Spec.Replicas,
 		),
 	)
 
@@ -2097,22 +2153,26 @@ func (r *SingleClusterReconciler) getOrderedRackPodList(ctx context.Context, rac
 		return nil, err
 	}
 
-	sortedList := make([]*corev1.Pod, len(podList.Items))
-
+	sorted := make([]*corev1.Pod, len(podList.Items))
 	for idx := range podList.Items {
-		indexStr := strings.Split(podList.Items[idx].Name, "-")
-		// Index is last, [1] can be rackID
-		indexInt, _ := strconv.Atoi(indexStr[len(indexStr)-1])
-
-		if indexInt >= len(podList.Items) {
-			// Happens if we do not get full list of pods due to a crash,
-			return nil, fmt.Errorf("error get pod list for rack:%v, rackRevision:%v", rackID, rackRevision)
-		}
-
-		sortedList[(len(podList.Items)-1)-indexInt] = &podList.Items[idx]
+		sorted[idx] = &podList.Items[idx]
 	}
 
-	return sortedList, nil
+	// Sort descending by ordinal (highest-ordinal pod first). This matches the
+	// convention that rolling operations process the highest-ordinal pod first
+	// and also handles non-contiguous ordinals that arise when spec.ordinals.start
+	// is used during staged scale-up.
+	sort.Slice(sorted, func(i, j int) bool {
+		oi, errI := getSTSPodOrdinal(sorted[i].Name)
+		oj, errJ := getSTSPodOrdinal(sorted[j].Name)
+		if errI != nil || errJ != nil || oi == nil || oj == nil {
+			return false
+		}
+
+		return *oi > *oj
+	})
+
+	return sorted, nil
 }
 
 func (r *SingleClusterReconciler) getCurrentRackList(ctx context.Context) (
@@ -2493,7 +2553,39 @@ func (r *SingleClusterReconciler) reconcileRevisionChangedRacks(
 	totalCurrentPods := oldReplicas + newReplicas
 
 	if totalCurrentPods < targetSize && newReplicas < targetSize {
-		// Scale up new rack
+		// Initiate staged reverse-ordinal scale-up on the first reconcile
+		// where the new STS has no pods yet. Set ordinals.start = targetSize-1
+		// so that scaleUpRack brings pods up in descending ordinal order:
+		// pod-(N-1) first, then pod-(N-2), ..., pod-0 last.
+		if newReplicas == 0 && targetSize > 1 && stsOrdinalStart(newSts) == 0 {
+			r.Log.Info("Initiating staged scale-up for rack revision migration",
+				"statefulSet", utils.GetNamespacedName(newSts),
+				"targetSize", targetSize,
+				"initialOrdinalStart", int32(targetSize)-1,
+			)
+
+			if err = retry.RetryOnConflict(retry.DefaultRetry, func() error {
+				current, getStsErr := r.getSTS(ctx, newRack)
+				if getStsErr != nil {
+					return getStsErr
+				}
+
+				current.Spec.Ordinals = &appsv1.StatefulSetOrdinals{Start: int32(targetSize) - 1}
+				newSts = current
+
+				return r.Update(ctx, current, common.UpdateOption)
+			}); err != nil {
+				return common.ReconcileError(fmt.Errorf(
+					"initiate staged scale-up for rack %d: %w", newRack.Rack.ID, err))
+			}
+
+			newSts, err = r.getSTS(ctx, newRack)
+			if err != nil {
+				return common.ReconcileError(err)
+			}
+		}
+
+		// Scale up new rack by one batch.
 		podsToScaleUp := min(batchSizeInt32, targetSize-totalCurrentPods)
 		tempState := &RackState{Rack: newRack.Rack, Size: newReplicas + podsToScaleUp}
 

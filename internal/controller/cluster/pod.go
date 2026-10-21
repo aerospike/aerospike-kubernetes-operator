@@ -1159,7 +1159,11 @@ func (r *SingleClusterReconciler) cleanupDanglingPodsRack(
 			)
 		}
 
-		if *ordinal >= *sts.Spec.Replicas {
+		// A pod is dangling when its ordinal meets or exceeds the rack's configured
+		// size. Pod ordinals are always bounded by rackState.Size-1 — even during
+		// staged scale-up where spec.ordinals.start shifts the STS-managed range,
+		// the ordinals used are always drawn from [0, rackState.Size).
+		if *ordinal >= rackState.Size {
 			danglingPods = append(danglingPods, podName)
 		}
 	}
