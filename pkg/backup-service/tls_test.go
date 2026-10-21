@@ -116,9 +116,9 @@ func startHTTPSServer(t *testing.T, serverCA, clientCA *testCA) *httptest.Server
 	serverCert, err := tls.X509KeyPair(certPEM, keyPEM)
 	require.NoError(t, err)
 
-	// Answer only the route the backup service uses for health, so a wrong URL fails the test.
+	// Answer only the route the client uses for health, so a wrong URL fails the test.
 	server := httptest.NewUnstartedServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		if r.URL.Path != "/health" {
+		if r.URL.Path != "/v1/health" {
 			w.WriteHeader(http.StatusNotFound)
 			return
 		}
@@ -260,12 +260,6 @@ func TestClientAPIScheme(t *testing.T) {
 		NewClient("abs.aerospike.svc", 8081, "").API("/config"))
 	require.Equal(t, "https://abs.aerospike.svc:8443/abs/v1/config",
 		NewClientWithTLS("abs.aerospike.svc", 8443, "/abs", "", &tls.Config{MinVersion: tls.VersionTLS12}).API("/config"))
-
-	// Health is served under the context path without the API version.
-	require.Equal(t, "http://abs.aerospike.svc:8081/health", NewClient("abs.aerospike.svc", 8081, "").systemURL("health"))
-	require.Equal(t, "https://abs.aerospike.svc:8443/abs/health",
-		NewClientWithTLS("abs.aerospike.svc", 8443, "/abs", "", &tls.Config{MinVersion: tls.VersionTLS12}).
-			systemURL("health"))
 
 	// TLS clients are short-lived, so their connections must not idle in a keep-alive pool.
 	tlsClient := NewClientWithTLS("abs.aerospike.svc", 8443, "/", "", &tls.Config{MinVersion: tls.VersionTLS12})

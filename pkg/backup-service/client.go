@@ -153,9 +153,7 @@ func (c *Client) getContextPath() string {
 }
 
 func (c *Client) CheckBackupServiceHealth() error {
-	// The backup service serves health, ready and metrics directly under the context path, not under the
-	// versioned API path, so this URL is built without v1.
-	url := c.systemURL("health")
+	url := c.API("/health")
 
 	resp, err := c.client().Get(url)
 	if err != nil {
@@ -941,24 +939,14 @@ func (c *Client) CancelRestoreJob(jobID int64) (int, error) {
 	return resp.StatusCode, nil
 }
 
-// API returns the URL of a versioned API route, for example /config becomes <base>/v1/config.
 func (c *Client) API(pattern string) string {
-	return c.baseURL() + restAPIVersion + pattern
-}
-
-// systemURL returns the URL of a route the backup service serves directly under the context path,
-// for example health becomes <base>/health.
-func (c *Client) systemURL(route string) string {
-	return c.baseURL() + route
-}
-
-// baseURL returns scheme, address and context path, ending with a slash.
-func (c *Client) baseURL() string {
 	contextPath := c.getContextPath()
 
 	if !strings.HasSuffix(contextPath, "/") {
 		contextPath += "/"
 	}
 
-	return fmt.Sprintf("%s://%s:%d%s", c.getScheme(), c.getAddress(), c.getPort(), contextPath)
+	address := fmt.Sprintf("%s:%d", c.getAddress(), c.getPort())
+
+	return fmt.Sprintf("%s://%s%s%s%s", c.getScheme(), address, contextPath, restAPIVersion, pattern)
 }

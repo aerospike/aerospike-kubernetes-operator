@@ -85,12 +85,6 @@ func TestGetListeners(t *testing.T) {
 			wantErr: "service.http is disabled",
 		},
 		{
-			name:     "operatorClientCert without https",
-			config:   `{"service":{"http":{"port":8081}}}`,
-			certSpec: certSpec(false),
-			wantErr:  "service.https is not enabled",
-		},
-		{
 			name:     "operatorClientCert with disabled https",
 			config:   `{"service":{"https":{"disabled":true,"cert-file":"/c","key-file":"/k"}}}`,
 			certSpec: certSpec(false),

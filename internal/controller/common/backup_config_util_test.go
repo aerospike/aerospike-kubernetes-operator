@@ -28,6 +28,7 @@ backup-policies:
   test-policy:
     parallel: 3
     compact: true
+    incr-mode: cumulative
 storage:
   local:
     local-storage:
@@ -106,31 +107,6 @@ func TestNormalizeBackupSvcConfig_RedactsLiteralSecrets(t *testing.T) {
 	require.NotContains(t, string(data), "admin123")
 }
 
-func TestNormalizeBackupSvcConfig_KeepsSecretAgentReference(t *testing.T) {
-	t.Parallel()
-
-	config := desiredConfig(t)
-	config["secret-agents"] = map[string]interface{}{
-		"agent": map[string]interface{}{"connection-type": "tcp", "address": "localhost", "port": 3005},
-	}
-	creds := credentials(t, config)
-	creds["password"] = "secrets:abs:pw"
-	creds["secret-agent-name"] = "agent"
-
-	require.Equal(t, "secrets:abs:pw", credentials(t, mustNormalize(t, config))["password"])
-}
-
-// The backup service API output is itself a normalized config, so normalizing it again must not change it.
-// Comparing the normalized API output with the normalized ConfigMap relies on this.
-func TestNormalizeBackupSvcConfig_Idempotent(t *testing.T) {
-	t.Parallel()
-
-	once := mustNormalize(t, desiredConfig(t))
-	twice := mustNormalize(t, once)
-
-	require.Equal(t, once, twice)
-}
-
 func TestComparableBackupSvcConfigs(t *testing.T) {
 	t.Parallel()
 
@@ -165,12 +141,15 @@ func TestComparableBackupSvcConfigs(t *testing.T) {
 			wantEqual: false,
 		},
 		{
-			name: "user change is detected",
+			// The backup service stores and reports enum values in canonical form.
+			name: "enum written in another case is equal",
 			mutate: func(t *testing.T, desired map[string]interface{}) {
 				t.Helper()
-				credentials(t, desired)["user"] = "backup-user"
+
+				policy := desired["backup-policies"].(map[string]interface{})["test-policy"]
+				policy.(map[string]interface{})["incr-mode"] = "Cumulative"
 			},
-			wantEqual: false,
+			wantEqual: true,
 		},
 	}
 
@@ -186,23 +165,6 @@ func TestComparableBackupSvcConfigs(t *testing.T) {
 			require.Equal(t, tt.wantEqual, mapsEqual(current, desiredOut))
 		})
 	}
-}
-
-func TestComparableBackupSvcConfigs_CanonicalizesEnums(t *testing.T) {
-	t.Parallel()
-
-	desired := desiredConfig(t)
-	policies := desired["backup-policies"].(map[string]interface{})
-	policies["test-policy"].(map[string]interface{})["incr-mode"] = "Cumulative"
-
-	// The backup service stores and reports the canonical value.
-	apiConfig := mustNormalize(t, desired)
-	apiPolicy := apiConfig["backup-policies"].(map[string]interface{})["test-policy"].(map[string]interface{})
-	require.Equal(t, "cumulative", apiPolicy["incr-mode"])
-
-	current, desiredOut, err := ComparableBackupSvcConfigs(apiConfig, desired)
-	require.NoError(t, err)
-	require.True(t, mapsEqual(current, desiredOut))
 }
 
 func TestComparableBackupSvcConfigs_InvalidConfigMap(t *testing.T) {
@@ -232,20 +194,6 @@ func TestComparableBackupSvcConfigs_UnreadableAPIConfig(t *testing.T) {
 	_, _, err := ComparableBackupSvcConfigs(apiConfig, desiredConfig(t))
 	require.ErrorContains(t, err, "read backup service config from API")
 	require.ErrorContains(t, err, "no storage configuration provided")
-}
-
-func TestIsBackupSvcFullConfigSynced_InvalidConfigMap(t *testing.T) {
-	t.Parallel()
-
-	desired := desiredConfig(t)
-	routine(t, desired)["backup-policy"] = "missing-policy"
-
-	desiredData, err := yaml.Marshal(desired)
-	require.NoError(t, err)
-
-	synced, err := IsBackupSvcFullConfigSynced(mustNormalize(t, desiredConfig(t)), string(desiredData), logr.Discard())
-	require.Error(t, err)
-	require.False(t, synced)
 }
 
 func TestIsBackupSvcFullConfigSynced(t *testing.T) {

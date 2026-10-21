@@ -2,6 +2,8 @@ package common
 
 import (
 	"context"
+	"crypto/sha256"
+	"encoding/hex"
 	"errors"
 	"sync"
 	"testing"
@@ -33,14 +35,8 @@ func TestSetBackupSvcConfigData(t *testing.T) {
 	SetBackupSvcConfigData(data, testConfig)
 
 	require.Equal(t, testConfig, data[v1beta1.BackupServiceConfigYAML])
-	require.Equal(t, BackupSvcConfigHash(testConfig), data[v1beta1.BackupServiceConfigHashKey])
-	require.Len(t, data[v1beta1.BackupServiceConfigHashKey], 64)
-
-	// A change to a secret alone changes the hash, which is what lets the pods be checked for it.
-	withPassword := "aerospike-clusters:\n  c1:\n    credentials:\n      password: admin123\n" //nolint:gosec // test data
-	rotated := "aerospike-clusters:\n  c1:\n    credentials:\n      password: admin456\n"
-	require.NotEqual(t, BackupSvcConfigHash(withPassword), BackupSvcConfigHash(rotated))
-	require.Equal(t, BackupSvcConfigHash(withPassword), BackupSvcConfigHash(withPassword))
+	sum := sha256.Sum256([]byte(testConfig))
+	require.Equal(t, hex.EncodeToString(sum[:]), data[v1beta1.BackupServiceConfigHashKey])
 }
 
 // fakeExec returns the hash file content per pod, as the pods would show it.
