@@ -166,10 +166,6 @@ func validateBackupServiceConfig(backupSvc *asdbv1beta1.AerospikeBackupService) 
 		return fmt.Errorf("aerospike-clusters field cannot be specified in backup service config")
 	}
 
-	if err := validateNoSecretPlaceholder(&config, &dto.Config{}); err != nil {
-		return err
-	}
-
 	// An error here is in this spec alone, so it is returned without the merged-config context below.
 	if err := validation.ValidateConfiguration(&config); err != nil {
 		return err

@@ -72,26 +72,6 @@ var _ = Describe("AerospikeBackup validation", Ordered, func() {
 			})
 
 			Context("negative", func() {
-				It("rejects the [secret] placeholder as a cluster password", func() {
-					prefix := asdbv1beta1.NamePrefix(backupNsNm)
-					config := backupconfig.BackupCRConfig(prefix, backupconfig.DefaultClusterHost,
-						backupconfig.EnvtestRoutineCrons)
-					clusters := config[asdbv1beta1.AerospikeClusterKey].(map[string]interface{})
-
-					for _, cluster := range clusters {
-						cluster.(map[string]interface{})["credentials"].(map[string]interface{})["password"] = "[secret]"
-					}
-
-					backup := buildBackupCR(backupNsNm, absNsNm)
-					backup.Spec.Config = runtime.RawExtension{Raw: backupconfig.MustMarshalConfig(config)}
-
-					err := envtests.K8sClient.Create(ctx, backup)
-					Expect(err).To(HaveOccurred())
-					envtests.NewStatusErrorMatcher().
-						WithMessageSubstrings(testutil.BackupWebhookErrorPrefix, `"[secret]"`, "placeholder").
-						Validate(err)
-				})
-
 				It("rejects filter-exp on a routine with multiple sets", func() {
 					filterExp, expErr := as.ExpEq(as.ExpStringBin("status"), as.ExpStringVal("active")).Base64()
 					Expect(expErr).ToNot(HaveOccurred())

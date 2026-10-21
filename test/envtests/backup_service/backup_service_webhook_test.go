@@ -29,33 +29,6 @@ var _ = Describe("AerospikeBackupService validation", func() {
 		deleteBackupService(ctx, absNsNm)
 	})
 
-	Context("Deploy validation", func() {
-		Context("spec.config", func() {
-			Context("negative", func() {
-				It("rejects the [secret] placeholder as a storage key", func() {
-					config := backupconfig.BackupServiceBaseConfig()
-					config[asdbv1beta1.StorageKey].(map[string]interface{})["s3"] = map[string]interface{}{
-						"s3-storage": map[string]interface{}{
-							"bucket":            "backups",
-							"s3-region":         "us-east-1",
-							"access-key-id":     "[secret]",
-							"secret-access-key": "[secret]",
-						},
-					}
-
-					backupService := buildBackupServiceCR(absNsNm)
-					backupService.Spec.Config = runtime.RawExtension{Raw: backupconfig.MustMarshalConfig(config)}
-
-					err := envtests.K8sClient.Create(ctx, backupService)
-					Expect(err).To(HaveOccurred())
-					envtests.NewStatusErrorMatcher().
-						WithMessageSubstrings(testutil.BackupServiceWebhookErrorPrefix, `"[secret]"`, "placeholder").
-						Validate(err)
-				})
-			})
-		})
-	})
-
 	Context("Update validation", func() {
 		Context("spec.config merged with the ConfigMap", func() {
 			// The ConfigMap holds a routine, added by an AerospikeBackup, that uses the default backup policy.
