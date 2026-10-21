@@ -2,15 +2,22 @@ package common
 
 import (
 	"context"
+	"crypto/sha256"
+	"encoding/hex"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"reflect"
+	"strings"
 	"time"
 
 	"github.com/go-logr/logr"
 	corev1 "k8s.io/api/core/v1"
 	"k8s.io/apimachinery/pkg/labels"
 	"k8s.io/apimachinery/pkg/types"
+	"k8s.io/apimachinery/pkg/util/wait"
+	"k8s.io/client-go/kubernetes"
+	"k8s.io/client-go/rest"
 	"k8s.io/client-go/util/retry"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 	"sigs.k8s.io/yaml"
@@ -54,6 +61,42 @@ func GetBackupServicePodList(
 	return &podList, nil
 }
 
+const (
+	configInPodsPollInterval = 2 * time.Second
+	configInPodsTimeout      = 2 * time.Minute
+)
+
+// PodExecFunc runs a command in a container of a pod and returns its stdout.
+type PodExecFunc func(pod types.NamespacedName, container string, cmd []string) (string, error)
+
+// NewPodExecFunc returns a PodExecFunc that runs commands through the pods/exec API.
+func NewPodExecFunc(kubeClient *kubernetes.Clientset, kubeConfig *rest.Config) PodExecFunc {
+	return func(pod types.NamespacedName, container string, cmd []string) (string, error) {
+		stdout, stderr, err := utils.Exec(pod, container, cmd, kubeClient, kubeConfig)
+		if err != nil {
+			// The exec runs with a TTY, so the command's error message is in stdout, not stderr.
+			return "", fmt.Errorf("exec %v in Pod %s: %w, output: %s", cmd, pod, err,
+				strings.TrimSpace(stdout+stderr))
+		}
+
+		return stdout, nil
+	}
+}
+
+// BackupSvcConfigHash returns the value written under BackupServiceConfigHashKey for a backup service config.
+func BackupSvcConfigHash(config string) string {
+	sum := sha256.Sum256([]byte(config))
+
+	return hex.EncodeToString(sum[:])
+}
+
+// SetBackupSvcConfigData sets the backup service config in ConfigMap data together with its hash. Every write of
+// the config must go through it, otherwise the hash in the pods no longer tells which config they have.
+func SetBackupSvcConfigData(data map[string]string, config string) {
+	data[v1beta1.BackupServiceConfigYAML] = config
+	data[v1beta1.BackupServiceConfigHashKey] = BackupSvcConfigHash(config)
+}
+
 // ReloadBackupServiceConfigInPods reloads backup service configuration in running Pods.
 //
 //nolint:logcheck // ctx for client calls; explicit logger (no contextual logging in AKO).
@@ -61,6 +104,7 @@ func ReloadBackupServiceConfigInPods(
 	ctx context.Context,
 	log logr.Logger,
 	k8sClient client.Client,
+	podExec PodExecFunc,
 	backupServiceClient *backup_service.Client,
 	backupSvc *v1beta1.BackupService,
 ) error {
@@ -97,14 +141,110 @@ func ReloadBackupServiceConfigInPods(
 		return err
 	}
 
-	// Waiting for 1 second so that pods get the latest configMap update.
-	time.Sleep(1 * time.Second)
+	// Apply makes the backup service read its config file again, so it must not be sent before kubelet has
+	// written the latest ConfigMap into the pods. The API hides literal secrets, so after apply a change to a
+	// secret alone cannot be seen; checking the file in the pods first is the only way to know it is loaded.
+	if err := waitForConfigInPods(ctx, log, k8sClient, podExec, backupSvc,
+		configInPodsPollInterval, configInPodsTimeout); err != nil {
+		return err
+	}
 
 	if err := backupServiceClient.ApplyConfig(); err != nil {
 		return fmt.Errorf("apply backup service config: %w", err)
 	}
 
 	return validateBackupSvcConfigReload(ctx, log, k8sClient, backupServiceClient, backupSvc)
+}
+
+// waitForConfigInPods waits until every running backup service pod has the config that is in the ConfigMap now.
+// kubelet writes all keys of a ConfigMap volume at once, by switching the volume's ..data link to a new directory,
+// so a pod whose hash file matches the hash of the ConfigMap config also has that config file, or a newer one.
+// The ConfigMap is read again on every poll: a newer write while waiting changes the hash to wait for.
+//
+//nolint:logcheck // ctx for client calls; explicit logger (no contextual logging in AKO).
+func waitForConfigInPods(
+	ctx context.Context,
+	log logr.Logger,
+	k8sClient client.Client,
+	podExec PodExecFunc,
+	backupSvc *v1beta1.BackupService,
+	interval, timeout time.Duration,
+) error {
+	hashFile := v1beta1.BackupServiceConfigMountPath + "/" + v1beta1.BackupServiceConfigHashKey
+
+	var lastErr error
+
+	if err := wait.PollUntilContextTimeout(ctx, interval, timeout, true, func(pollCtx context.Context) (bool, error) {
+		config, err := GetBackupSvcConfigFromCM(pollCtx, k8sClient, backupSvc)
+		if err != nil {
+			return false, err
+		}
+
+		wantHash := BackupSvcConfigHash(config)
+
+		podList, err := GetBackupServicePodList(pollCtx, k8sClient, backupSvc.Name, backupSvc.Namespace)
+		if err != nil {
+			return false, err
+		}
+
+		running := 0
+
+		for idx := range podList.Items {
+			pod := &podList.Items[idx]
+
+			// A pod that is not running yet reads the latest ConfigMap when it starts; a terminating pod is going away.
+			if pod.DeletionTimestamp != nil || pod.Status.Phase != corev1.PodRunning {
+				continue
+			}
+
+			// A crashing backup service cannot read the file either, so do not wait for it until the timeout.
+			if err := utils.CheckPodFailed(pod); err != nil {
+				return false, fmt.Errorf("check backup service Pod %s: %w", utils.GetNamespacedNameString(pod), err)
+			}
+
+			running++
+
+			out, err := podExec(utils.GetNamespacedName(pod), v1beta1.AerospikeBackupServiceKey,
+				[]string{"cat", hashFile})
+			if err != nil {
+				lastErr = err
+
+				log.V(1).Info("Backup service Pod config not readable yet", "pod", utils.GetNamespacedName(pod),
+					"err", err)
+
+				return false, nil
+			}
+
+			// The exec runs with a TTY, which can turn the trailing newline into "\r\n".
+			if gotHash := strings.TrimSpace(out); gotHash != wantHash {
+				lastErr = fmt.Errorf("backup service Pod %s has config hash %q, ConfigMap has %q",
+					utils.GetNamespacedNameString(pod), gotHash, wantHash)
+
+				log.Info("Waiting for backup service Pod to get the latest ConfigMap",
+					"pod", utils.GetNamespacedName(pod))
+
+				return false, nil
+			}
+		}
+
+		if running == 0 {
+			lastErr = errors.New("no running backup service Pod")
+
+			return false, nil
+		}
+
+		return true, nil
+	}); err != nil {
+		if lastErr != nil {
+			return fmt.Errorf("wait for backup service Pods to get the latest ConfigMap: %w: %w", err, lastErr)
+		}
+
+		return fmt.Errorf("wait for backup service Pods to get the latest ConfigMap: %w", err)
+	}
+
+	log.Info("Backup service Pods have the latest ConfigMap")
+
+	return nil
 }
 
 //nolint:logcheck // ctx for client calls; explicit logger (no contextual logging in AKO).

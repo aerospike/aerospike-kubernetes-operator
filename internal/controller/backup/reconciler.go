@@ -11,6 +11,7 @@ import (
 	"k8s.io/apimachinery/pkg/api/errors"
 	k8sRuntime "k8s.io/apimachinery/pkg/runtime"
 	"k8s.io/apimachinery/pkg/types"
+	"k8s.io/client-go/kubernetes"
 	"k8s.io/client-go/rest"
 	"k8s.io/client-go/tools/record"
 	ctrl "sigs.k8s.io/controller-runtime"
@@ -29,6 +30,7 @@ type SingleBackupReconciler struct {
 	client.Client
 	Recorder   record.EventRecorder
 	aeroBackup *asdbv1beta1.AerospikeBackup
+	KubeClient *kubernetes.Clientset
 	KubeConfig *rest.Config
 	Scheme     *k8sRuntime.Scheme
 	Log        logr.Logger
@@ -149,7 +151,8 @@ func (r *SingleBackupReconciler) cleanUpAndRemoveFinalizer(ctx context.Context, 
 			return fmt.Errorf("get backup service client: %w", err)
 		}
 
-		if err := common.ReloadBackupServiceConfigInPods(ctx, r.Log, r.Client, backupServiceClient,
+		if err := common.ReloadBackupServiceConfigInPods(ctx, r.Log, r.Client,
+			common.NewPodExecFunc(r.KubeClient, r.KubeConfig), backupServiceClient,
 			&r.aeroBackup.Spec.BackupService); err != nil {
 			return fmt.Errorf("reload backup service config: %w", err)
 		}
@@ -242,7 +245,7 @@ func (r *SingleBackupReconciler) reconcileConfigMap(ctx context.Context) error {
 		return fmt.Errorf("marshal backup service config: %w", err)
 	}
 
-	cm.Data[asdbv1beta1.BackupServiceConfigYAML] = string(updatedConfig)
+	common.SetBackupSvcConfigData(cm.Data, string(updatedConfig))
 
 	if err := r.Update(ctx, cm, common.UpdateOption); err != nil {
 		return fmt.Errorf("update backup service ConfigMap %s: %w",
@@ -331,7 +334,7 @@ func (r *SingleBackupReconciler) removeBackupInfoFromConfigMap(ctx context.Conte
 		return fmt.Errorf("marshal backup service config: %w", err)
 	}
 
-	cm.Data[asdbv1beta1.BackupServiceConfigYAML] = string(updatedConfig)
+	common.SetBackupSvcConfigData(cm.Data, string(updatedConfig))
 
 	if err := r.Update(ctx, cm, common.UpdateOption); err != nil {
 		return fmt.Errorf("update backup service ConfigMap %s: %w",
@@ -457,7 +460,8 @@ func (r *SingleBackupReconciler) reconcileScheduledBackup(ctx context.Context) e
 	}
 
 	if hotReloadRequired {
-		err = common.ReloadBackupServiceConfigInPods(ctx, r.Log, r.Client, serviceClient, &r.aeroBackup.Spec.BackupService)
+		err = common.ReloadBackupServiceConfigInPods(ctx, r.Log, r.Client,
+			common.NewPodExecFunc(r.KubeClient, r.KubeConfig), serviceClient, &r.aeroBackup.Spec.BackupService)
 		if err != nil {
 			return fmt.Errorf("reload backup service config: %w", err)
 		}

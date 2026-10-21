@@ -22,6 +22,8 @@ import (
 	"github.com/go-logr/logr"
 	"k8s.io/apimachinery/pkg/api/errors"
 	k8sruntime "k8s.io/apimachinery/pkg/runtime"
+	"k8s.io/client-go/kubernetes"
+	"k8s.io/client-go/rest"
 	"k8s.io/client-go/tools/record"
 	ctrl "sigs.k8s.io/controller-runtime"
 	"sigs.k8s.io/controller-runtime/pkg/client"
@@ -38,9 +40,11 @@ const finalizerName = "asdb.aerospike.com/backup-finalizer"
 // AerospikeBackupReconciler reconciles a AerospikeBackup object
 type AerospikeBackupReconciler struct {
 	client.Client
-	Scheme   *k8sruntime.Scheme
-	Recorder record.EventRecorder
-	Log      logr.Logger
+	Scheme     *k8sruntime.Scheme
+	KubeClient *kubernetes.Clientset
+	KubeConfig *rest.Config
+	Recorder   record.EventRecorder
+	Log        logr.Logger
 }
 
 //nolint:lll // for readability
@@ -48,6 +52,7 @@ type AerospikeBackupReconciler struct {
 // +kubebuilder:rbac:groups=asdb.aerospike.com,resources=aerospikebackups/status,verbs=get;update;patch
 // +kubebuilder:rbac:groups=asdb.aerospike.com,resources=aerospikebackups/finalizers,verbs=update
 // +kubebuilder:rbac:groups=core,resources=secrets,verbs=get
+// +kubebuilder:rbac:groups=core,resources=pods/exec,verbs=create
 
 // Reconcile is part of the main kubernetes reconciliation loop which aims to
 // move the current state of the cluster closer to the desired state.
@@ -73,6 +78,8 @@ func (r *AerospikeBackupReconciler) Reconcile(ctx context.Context, request ctrl.
 		Log:        log,
 		Scheme:     r.Scheme,
 		Recorder:   r.Recorder,
+		KubeClient: r.KubeClient,
+		KubeConfig: r.KubeConfig,
 	}
 
 	return cr.Reconcile(ctx)
