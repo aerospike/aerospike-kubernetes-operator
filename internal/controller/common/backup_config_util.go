@@ -77,7 +77,7 @@ func NewPodExecFunc(kubeClient *kubernetes.Clientset, kubeConfig *rest.Config) P
 		stdout, stderr, err := utils.Exec(pod, container, cmd, kubeClient, kubeConfig)
 		if err != nil {
 			// The exec runs with a TTY, so the command's error message is in stdout, not stderr.
-			return "", fmt.Errorf("exec %v in Pod %s: %w, output: %s", cmd, pod, err,
+			return "", fmt.Errorf("exec %v in Pod %s: %w, output: %s", cmd, utils.NamespacedName(pod.Namespace, pod.Name), err,
 				strings.TrimSpace(stdout+stderr))
 		}
 

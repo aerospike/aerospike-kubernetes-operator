@@ -371,7 +371,7 @@ func (r *SingleBackupServiceReconciler) updateBackupSvcConfig(ctx context.Contex
 		return nil
 	}
 
-	r.Log.Info("Detected backup service config change, reloading config",
+	r.Log.Info("Detected backup service config change",
 		"specChanged", !specConfigApplied, "configMismatch", !synced)
 
 	staticChangeErr, err := r.findStaticConfigChange(currentConfig, desiredConfig, specConfigApplied, synced)
