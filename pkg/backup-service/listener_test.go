@@ -27,90 +27,70 @@ func TestGetListeners(t *testing.T) {
 
 	const httpsBlock = `"https":{"port":9443,"context-path":"/abs","cert-file":"/c","key-file":"/k"}`
 
+	httpOnly := func(port int32) []ListenerPort { return []ListenerPort{{Name: "http", Port: port}} }
+	both := func(httpPort, httpsPort int32) []ListenerPort {
+		return []ListenerPort{{Name: "http", Port: httpPort}, {Name: "https", Port: httpsPort}}
+	}
+
 	tests := []struct {
-		certSpec    *v1beta1.OperatorClientCertSpec
-		name        string
-		config      string
-		wantErr     string
-		wantScheme  corev1.URIScheme
-		wantCtxPath string
-		wantPorts   []ListenerPort
-		wantPort    int32
+		certSpec *v1beta1.OperatorClientCertSpec
+		want     *Listeners
+		name     string
+		config   string
+		wantErr  string
 	}{
 		{
-			name:        "no service section uses http defaults",
-			config:      `{"backup-policies":{}}`,
-			wantPorts:   []ListenerPort{{Name: "http", Port: 8080}},
-			wantScheme:  corev1.URISchemeHTTP,
-			wantPort:    8080,
-			wantCtxPath: "/",
+			name: "no service section uses http defaults", config: `{"backup-policies":{}}`,
+			want: &Listeners{Scheme: corev1.URISchemeHTTP, ContextPath: "/", Ports: httpOnly(8080), Port: 8080},
 		},
 		{
-			name:        "http port and context path",
-			config:      `{"service":{"http":{"port":8081,"context-path":"/api"}}}`,
-			wantPorts:   []ListenerPort{{Name: "http", Port: 8081}},
-			wantScheme:  corev1.URISchemeHTTP,
-			wantPort:    8081,
-			wantCtxPath: "/api",
+			name: "http port and context path", config: `{"service":{"http":{"port":8081,"context-path":"/api"}}}`,
+			want: &Listeners{Scheme: corev1.URISchemeHTTP, ContextPath: "/api", Ports: httpOnly(8081), Port: 8081},
 		},
 		{
-			name:        "https enabled without operatorClientCert keeps operator on http",
-			config:      `{"service":{"http":{"port":8081},` + httpsBlock + `}}`,
-			wantPorts:   []ListenerPort{{Name: "http", Port: 8081}, {Name: "https", Port: 9443}},
-			wantScheme:  corev1.URISchemeHTTP,
-			wantPort:    8081,
-			wantCtxPath: "/",
+			name:   "https enabled without operatorClientCert keeps operator on http",
+			config: `{"service":{"http":{"port":8081},` + httpsBlock + `}}`,
+			want:   &Listeners{Scheme: corev1.URISchemeHTTP, ContextPath: "/", Ports: both(8081, 9443), Port: 8081},
 		},
 		{
-			name:        "operatorClientCert makes operator use https while http stays enabled",
-			config:      `{"service":{"http":{"port":8081},` + httpsBlock + `}}`,
-			certSpec:    certSpec(false),
-			wantPorts:   []ListenerPort{{Name: "http", Port: 8081}, {Name: "https", Port: 9443}},
-			wantScheme:  corev1.URISchemeHTTPS,
-			wantPort:    9443,
-			wantCtxPath: "/abs",
+			name:   "operatorClientCert makes operator use https while http stays enabled",
+			config: `{"service":{"http":{"port":8081},` + httpsBlock + `}}`, certSpec: certSpec(false),
+			want: &Listeners{Scheme: corev1.URISchemeHTTPS, ContextPath: "/abs", Ports: both(8081, 9443), Port: 9443},
 		},
 		{
-			name:        "https only with default port",
-			config:      `{"service":{"http":{"disabled":true},"https":{"cert-file":"/c","key-file":"/k"}}}`,
-			certSpec:    certSpec(false),
-			wantPorts:   []ListenerPort{{Name: "https", Port: 8443}},
-			wantScheme:  corev1.URISchemeHTTPS,
-			wantPort:    8443,
-			wantCtxPath: "/",
+			name:     "https only with default port",
+			config:   `{"service":{"http":{"disabled":true},"https":{"cert-file":"/c","key-file":"/k"}}}`,
+			certSpec: certSpec(false),
+			want: &Listeners{
+				Scheme: corev1.URISchemeHTTPS, ContextPath: "/", Ports: []ListenerPort{{Name: "https", Port: 8443}},
+				Port: 8443,
+			},
 		},
 		{
-			name:    "http disabled without operatorClientCert",
-			config:  `{"service":{"http":{"disabled":true},` + httpsBlock + `}}`,
-			wantErr: "service.http is disabled",
+			name: "require-and-verify with client cert, enum in another case",
+			config: `{"service":{"https":{"cert-file":"/c","key-file":"/k","client-ca-file":"/ca",` +
+				`"client-auth":"Require-And-Verify"}}}`,
+			certSpec: certSpec(true),
+			want:     &Listeners{Scheme: corev1.URISchemeHTTPS, ContextPath: "/", Ports: both(8080, 8443), Port: 8443},
+		},
+		{
+			name: "http disabled without operatorClientCert", wantErr: "service.http is disabled",
+			config: `{"service":{"http":{"disabled":true},` + httpsBlock + `}}`,
 		},
 		{
 			name:     "operatorClientCert with disabled https",
 			config:   `{"service":{"https":{"disabled":true,"cert-file":"/c","key-file":"/k"}}}`,
-			certSpec: certSpec(false),
-			wantErr:  "service.https is not enabled",
+			certSpec: certSpec(false), wantErr: "service.https is not enabled",
 		},
 		{
 			name: "require-and-verify without client cert",
 			config: `{"service":{"https":{"cert-file":"/c","key-file":"/k","client-ca-file":"/ca",` +
 				`"client-auth":"require-and-verify"}}}`,
-			certSpec: certSpec(false),
-			wantErr:  "require-and-verify",
+			certSpec: certSpec(false), wantErr: "require-and-verify",
 		},
 		{
-			name: "require-and-verify with client cert",
-			config: `{"service":{"https":{"cert-file":"/c","key-file":"/k","client-ca-file":"/ca",` +
-				`"client-auth":"Require-And-Verify"}}}`,
-			certSpec:    certSpec(true),
-			wantPorts:   []ListenerPort{{Name: "http", Port: 8080}, {Name: "https", Port: 8443}},
-			wantScheme:  corev1.URISchemeHTTPS,
-			wantPort:    8443,
-			wantCtxPath: "/",
-		},
-		{
-			name:    "malformed service section",
-			config:  `{"service":{"http":{"port":"not-a-number"}}}`,
-			wantErr: "unmarshal backup service config",
+			name: "malformed service section", wantErr: "unmarshal backup service config",
+			config: `{"service":{"http":{"port":"not-a-number"}}}`,
 		},
 	}
 
@@ -125,10 +105,7 @@ func TestGetListeners(t *testing.T) {
 			}
 
 			require.NoError(t, err)
-			require.Equal(t, tt.wantPorts, listeners.Ports)
-			require.Equal(t, tt.wantScheme, listeners.Scheme)
-			require.Equal(t, tt.wantPort, listeners.Port)
-			require.Equal(t, tt.wantCtxPath, listeners.ContextPath)
+			require.Equal(t, tt.want, listeners)
 		})
 	}
 }

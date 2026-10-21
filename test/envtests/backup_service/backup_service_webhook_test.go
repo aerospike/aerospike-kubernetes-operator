@@ -42,38 +42,31 @@ var _ = Describe("AerospikeBackupService validation", func() {
 			})
 
 			Context("negative", func() {
-				It("rejects operatorClientCert without service.https", func() {
-					backupService := buildBackupServiceCR(absNsNm)
-					backupService.Spec.OperatorClientCert = operatorCertSpec()
+				DescribeTable("rejects a backup service the operator cannot connect to",
+					func(httpsListener bool, mutate func(*asdbv1beta1.OperatorClientCertSpec), errPrefix, errSubstr string) {
+						certSpec := operatorCertSpec()
+						mutate(certSpec)
 
-					err := envtests.K8sClient.Create(ctx, backupService)
-					Expect(err).To(HaveOccurred())
-					envtests.NewStatusErrorMatcher().
-						WithMessageSubstrings(testutil.BackupServiceWebhookErrorPrefix, "service.https is not enabled").
-						Validate(err)
-				})
+						backupService := backupServiceWithHTTPS(absNsNm, certSpec)
+						if !httpsListener {
+							backupService = buildBackupServiceCR(absNsNm)
+							backupService.Spec.OperatorClientCert = certSpec
+						}
 
-				It("rejects a client cert without a client key", func() {
-					certSpec := operatorCertSpec()
-					certSpec.SecretCertSource.ClientCertFilename = "tls.crt"
-
-					err := envtests.K8sClient.Create(ctx, backupServiceWithHTTPS(absNsNm, certSpec))
-					Expect(err).To(HaveOccurred())
-					envtests.NewStatusErrorMatcher().
-						WithMessageSubstrings(testutil.BackupServiceWebhookErrorPrefix, "must be set together").
-						Validate(err)
-				})
-
-				It("rejects empty secretName (MinLength=1)", func() {
-					certSpec := operatorCertSpec()
-					certSpec.SecretCertSource.SecretName = ""
-
-					err := envtests.K8sClient.Create(ctx, backupServiceWithHTTPS(absNsNm, certSpec))
-					Expect(err).To(HaveOccurred())
-					envtests.NewStatusErrorMatcher().
-						WithMessageSubstrings(testutil.BackupServiceCRDSchemaErrorPrefix, "secretName").
-						Validate(err)
-				})
+						err := envtests.K8sClient.Create(ctx, backupService)
+						Expect(err).To(HaveOccurred())
+						envtests.NewStatusErrorMatcher().WithMessageSubstrings(errPrefix, errSubstr).Validate(err)
+					},
+					Entry("operatorClientCert without service.https", false,
+						func(*asdbv1beta1.OperatorClientCertSpec) {},
+						testutil.BackupServiceWebhookErrorPrefix, "service.https is not enabled"),
+					Entry("client cert without a client key", true,
+						func(s *asdbv1beta1.OperatorClientCertSpec) { s.SecretCertSource.ClientCertFilename = "tls.crt" },
+						testutil.BackupServiceWebhookErrorPrefix, "must be set together"),
+					Entry("empty secretName (MinLength=1)", true,
+						func(s *asdbv1beta1.OperatorClientCertSpec) { s.SecretCertSource.SecretName = "" },
+						testutil.BackupServiceCRDSchemaErrorPrefix, "secretName"),
+				)
 			})
 		})
 	})
