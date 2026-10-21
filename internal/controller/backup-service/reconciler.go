@@ -23,6 +23,7 @@ import (
 	"sigs.k8s.io/controller-runtime/pkg/reconcile"
 	"sigs.k8s.io/yaml"
 
+	"github.com/aerospike/aerospike-backup-service/v3/pkg/dto"
 	"github.com/aerospike/aerospike-backup-service/v3/pkg/validation"
 	asdbv1beta1 "github.com/aerospike/aerospike-kubernetes-operator/v4/api/v1beta1"
 	"github.com/aerospike/aerospike-kubernetes-operator/v4/internal/controller/common"
@@ -354,59 +355,71 @@ func (r *SingleBackupServiceReconciler) updateBackupSvcConfig(ctx context.Contex
 		return err
 	}
 
+	// The API hides literal secret values, so a change to a secret alone never shows up as a mismatch
+	// between the API and the ConfigMap. Spec and status both hold real values: status is written only
+	// after a successful reconcile, so a difference means the change has not been applied yet.
+	specConfigApplied := reflect.DeepEqual(r.aeroBackupService.Spec.Config.Raw, r.aeroBackupService.Status.Config.Raw)
+
 	synced, currentConfig, desiredConfig, err := common.CompareBackupSvcConfigs(apiBackupSvcConfig, desiredData, r.Log)
 	if err != nil {
 		return fmt.Errorf("check backup service config sync: %w", err)
 	}
 
-	// Spec and status both hold real values, and status is written only after the change is applied, so
-	// they differ while a change is pending. That includes a change to a secret alone, which the API hides.
-	specConfigApplied := reflect.DeepEqual(r.aeroBackupService.Spec.Config.Raw, r.aeroBackupService.Status.Config.Raw)
+	if synced && specConfigApplied {
+		r.Log.Info("Skipping update, backup service config is already latest")
+		return nil
+	}
 
-	var staticChange, hiddenChange bool
+	r.Log.Info("Detected backup service config change, reloading config",
+		"specChanged", !specConfigApplied, "configMismatch", !synced)
 
-	if !synced {
-		staticChangeErr, sErr := r.findStaticConfigChange(currentConfig, desiredConfig, specConfigApplied)
-		if sErr != nil {
-			return sErr
+	staticChangeErr, err := r.findStaticConfigChange(currentConfig, desiredConfig, specConfigApplied, synced)
+	if err != nil {
+		return err
+	}
+
+	if staticChangeErr != nil {
+		r.Log.Info("Static config change detected, rolling restart of backup service Pod",
+			"err", staticChangeErr)
+		// In case of static config change restart the backup service pod
+		return r.restartBackupSvcPod(ctx)
+	}
+
+	if err := common.ReloadBackupServiceConfigInPods(ctx, r.Log, r.Client, backupServiceClient, backupSvc); err != nil {
+		return fmt.Errorf("reload backup service config: %w", err)
+	}
+
+	return nil
+}
+
+// findStaticConfigChange returns a non-nil staticChangeErr if a field that the backup service cannot reload
+// without a restart has changed. A spec change is checked on spec versus status, which hold real values.
+// A mismatch between the API and the ConfigMap is checked on currentConfig and desiredConfig, the configs
+// CompareBackupSvcConfigs already compared: the API hides literal secret values, so a raw comparison would
+// report every secret as changed.
+func (r *SingleBackupServiceReconciler) findStaticConfigChange(
+	currentConfig, desiredConfig map[string]interface{}, specConfigApplied, synced bool,
+) (staticChangeErr, err error) {
+	if !specConfigApplied {
+		var statusConfig, specConfig dto.Config
+
+		if uErr := yaml.Unmarshal(r.aeroBackupService.Status.Config.Raw, &statusConfig); uErr != nil {
+			return nil, fmt.Errorf("unmarshal backup service status config: %w", uErr)
 		}
 
-		if staticChangeErr != nil {
-			r.Log.Info("Static config change detected", "err", staticChangeErr)
-
-			staticChange = true
-		}
-	} else if !specConfigApplied {
-		if hiddenChange, err = common.IsHiddenConfigChange(
-			r.aeroBackupService.Status.Config.Raw, r.aeroBackupService.Spec.Config.Raw,
-		); err != nil {
-			return fmt.Errorf("compare backup service spec with status: %w", err)
+		if uErr := yaml.Unmarshal(r.aeroBackupService.Spec.Config.Raw, &specConfig); uErr != nil {
+			return nil, fmt.Errorf("unmarshal backup service spec config: %w", uErr)
 		}
 
-		if hiddenChange {
-			r.Log.Info("Config change hidden from the backup service API detected")
+		if staticChangeErr := validation.ValidateStaticFieldChanges(&statusConfig, &specConfig); staticChangeErr != nil {
+			return staticChangeErr, nil
 		}
 	}
 
-	action := common.BackupSvcConfigChange{
-		Synced:            synced,
-		SpecConfigApplied: specConfigApplied,
-		StaticChange:      staticChange,
-		HiddenChange:      hiddenChange,
-	}.Action()
+	if synced {
+		return nil, nil
+	}
 
-	return common.ApplyBackupSvcConfigAction(ctx, r.Log, r.Client, backupServiceClient, backupSvc, action,
-		r.restartBackupSvcPod)
-}
-
-// findStaticConfigChange returns a non-nil staticChangeErr if a field that the backup service reads only at start
-// differs between the API config and the ConfigMap. The backup service rejects apply in that case, so the pod must
-// restart. currentConfig and desiredConfig are the normalized configs CompareBackupSvcConfigs compared, so secrets
-// are redacted on both sides. A pending spec change is also checked on status versus spec, which hold real values,
-// so that a changed secret in a static field, such as service.https.key-file-password, is not missed.
-func (r *SingleBackupServiceReconciler) findStaticConfigChange(
-	currentConfig, desiredConfig map[string]interface{}, specConfigApplied bool,
-) (staticChangeErr, err error) {
 	current, err := common.ToBackupSvcDTOConfig(currentConfig)
 	if err != nil {
 		return nil, fmt.Errorf("decode backup service config from API: %w", err)
@@ -417,18 +430,9 @@ func (r *SingleBackupServiceReconciler) findStaticConfigChange(
 		return nil, fmt.Errorf("decode desired backup service config: %w", err)
 	}
 
-	if staticChangeErr := validation.ValidateStaticFieldChanges(current, desired); staticChangeErr != nil {
-		return staticChangeErr, nil
-	}
-
-	// A secret in a static field, such as service.https.key-file-password, is "[secret]" on both sides above.
-	// Changed together with a dynamic field, it would be reloaded, and the backup service rejects the apply.
-	if specConfigApplied {
-		return nil, nil
-	}
-
-	return common.FindStaticBackupSvcConfigChange(r.aeroBackupService.Status.Config.Raw,
-		r.aeroBackupService.Spec.Config.Raw)
+	// The backup service rejects apply when its running service config differs from the file in a static
+	// field, so check the same pair here, even after spec and status were compared above.
+	return validation.ValidateStaticFieldChanges(current, desired), nil
 }
 
 // newBackupServiceClient returns a client for the listener the operator connects to, as configured in spec.
@@ -450,27 +454,19 @@ func (r *SingleBackupServiceReconciler) newBackupServiceClient(
 	return backup_service.NewClientWithTLS(address, listeners.Port, listeners.ContextPath, "", tlsConfig), nil
 }
 
-// restartBackupSvcPod deletes the backup service pods and waits for the Deployment to recreate them.
-// The new pods read the current ConfigMap at start, so the config is applied once the pods are deleted:
-// status.config is written before the wait, so a wait that times out does not restart the pods again.
 func (r *SingleBackupServiceReconciler) restartBackupSvcPod(ctx context.Context) error {
-	backupSvc := &asdbv1beta1.BackupService{
-		Name:      r.aeroBackupService.Name,
-		Namespace: r.aeroBackupService.Namespace,
-	}
-
-	if err := common.DeleteBackupServicePods(ctx, r.Client, backupSvc); err != nil {
+	podList, err := common.GetBackupServicePodList(ctx, r.Client, r.aeroBackupService.Name, r.aeroBackupService.Namespace)
+	if err != nil {
 		return err
 	}
 
-	appliedConfig := r.aeroBackupService.Spec.Config.DeepCopy()
+	for idx := range podList.Items {
+		pod := &podList.Items[idx]
 
-	if err := common.PatchStatusConfig(ctx, r.Client, r.aeroBackupService,
-		func(backupSvc *asdbv1beta1.AerospikeBackupService) {
-			backupSvc.Status.Config = *appliedConfig.DeepCopy()
-		},
-	); err != nil {
-		return fmt.Errorf("patch AerospikeBackupService status config: %w", err)
+		err = r.Delete(ctx, pod)
+		if err != nil {
+			return fmt.Errorf("delete backup service Pod %s: %w", utils.GetNamespacedNameString(pod), err)
+		}
 	}
 
 	return r.waitForDeploymentToBeReady(ctx)
