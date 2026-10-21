@@ -6,6 +6,7 @@ import (
 
 	. "github.com/onsi/ginkgo/v2"
 	. "github.com/onsi/gomega"
+	corev1 "k8s.io/api/core/v1"
 	"k8s.io/apimachinery/pkg/runtime"
 	"k8s.io/apimachinery/pkg/types"
 
@@ -27,6 +28,54 @@ var _ = Describe("AerospikeBackupService validation", func() {
 
 	AfterEach(func() {
 		deleteBackupService(ctx, absNsNm)
+	})
+
+	Context("Deploy validation", func() {
+		// The listener rules themselves are covered by the GetListeners unit tests; these check the webhook wiring
+		// and the checks that exist only in the webhook or the CRD schema.
+		Context("spec.operatorClientCert", func() {
+			Context("positive", func() {
+				It("accepts HTTPS only with operatorClientCert", func() {
+					Expect(envtests.K8sClient.Create(ctx,
+						backupServiceWithHTTPS(absNsNm, operatorCertSpec()))).To(Succeed())
+				})
+			})
+
+			Context("negative", func() {
+				It("rejects operatorClientCert without service.https", func() {
+					backupService := buildBackupServiceCR(absNsNm)
+					backupService.Spec.OperatorClientCert = operatorCertSpec()
+
+					err := envtests.K8sClient.Create(ctx, backupService)
+					Expect(err).To(HaveOccurred())
+					envtests.NewStatusErrorMatcher().
+						WithMessageSubstrings(testutil.BackupServiceWebhookErrorPrefix, "service.https is not enabled").
+						Validate(err)
+				})
+
+				It("rejects a client cert without a client key", func() {
+					certSpec := operatorCertSpec()
+					certSpec.SecretCertSource.ClientCertFilename = "tls.crt"
+
+					err := envtests.K8sClient.Create(ctx, backupServiceWithHTTPS(absNsNm, certSpec))
+					Expect(err).To(HaveOccurred())
+					envtests.NewStatusErrorMatcher().
+						WithMessageSubstrings(testutil.BackupServiceWebhookErrorPrefix, "must be set together").
+						Validate(err)
+				})
+
+				It("rejects empty secretName (MinLength=1)", func() {
+					certSpec := operatorCertSpec()
+					certSpec.SecretCertSource.SecretName = ""
+
+					err := envtests.K8sClient.Create(ctx, backupServiceWithHTTPS(absNsNm, certSpec))
+					Expect(err).To(HaveOccurred())
+					envtests.NewStatusErrorMatcher().
+						WithMessageSubstrings(testutil.BackupServiceCRDSchemaErrorPrefix, "secretName").
+						Validate(err)
+				})
+			})
+		})
 	})
 
 	Context("Update validation", func() {
@@ -118,6 +167,23 @@ var _ = Describe("AerospikeBackupService validation", func() {
 						backupService.Status.Phase = phase
 						Expect(envtests.K8sClient.Status().Update(ctx, backupService)).To(Succeed())
 					}
+				})
+			})
+		})
+
+		Context("status.scheme", func() {
+			Context("negative", func() {
+				It("rejects invalid scheme value (Enum)", func() {
+					backupService := buildBackupServiceCR(absNsNm)
+					Expect(envtests.K8sClient.Create(ctx, backupService)).To(Succeed())
+
+					backupService.Status.Phase = asdbv1beta1.AerospikeBackupServiceCompleted
+					backupService.Status.Scheme = corev1.URIScheme("FTP")
+					err := envtests.K8sClient.Status().Update(ctx, backupService)
+					Expect(err).To(HaveOccurred())
+					envtests.NewStatusErrorMatcher().
+						WithMessageSubstrings(testutil.BackupServiceCRDSchemaErrorPrefix, "scheme", "Unsupported value").
+						Validate(err)
 				})
 			})
 		})

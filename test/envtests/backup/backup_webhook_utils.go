@@ -4,6 +4,7 @@ import (
 	"context"
 	"fmt"
 
+	as "github.com/aerospike/aerospike-client-go/v8"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/runtime"
 	"k8s.io/apimachinery/pkg/types"
@@ -16,6 +17,16 @@ import (
 	"github.com/aerospike/aerospike-kubernetes-operator/v4/test/testutil"
 )
 
+// envtestFilterExp is the base64 form of the expression status == "active".
+var envtestFilterExp = func() string {
+	exp, err := as.ExpEq(as.ExpStringBin("status"), as.ExpStringVal("active")).Base64()
+	if err != nil {
+		panic(err)
+	}
+
+	return exp
+}()
+
 func uniqueNamespacedName(suffix string) types.NamespacedName {
 	name := fmt.Sprintf("envtests-%s", suffix)
 
@@ -24,8 +35,15 @@ func uniqueNamespacedName(suffix string) types.NamespacedName {
 
 func buildBackupCR(backupNsNm, absNsNm types.NamespacedName) *asdbv1beta1.AerospikeBackup {
 	prefix := asdbv1beta1.NamePrefix(backupNsNm)
-	configBytes := backupconfig.MustMarshalConfig(backupconfig.BackupCRConfig(
-		prefix, backupconfig.DefaultClusterHost, backupconfig.EnvtestRoutineCrons))
+	config := backupconfig.BackupCRConfig(prefix, backupconfig.DefaultClusterHost, backupconfig.EnvtestRoutineCrons)
+
+	// Every routine carries a filter-exp, so each test also checks that the webhook accepts the field.
+	routines := config[asdbv1beta1.BackupRoutinesKey].(map[string]interface{})
+	for _, routine := range routines {
+		routine.(map[string]interface{})["filter-exp"] = envtestFilterExp
+	}
+
+	configBytes := backupconfig.MustMarshalConfig(config)
 
 	return &asdbv1beta1.AerospikeBackup{
 		ObjectMeta: metav1.ObjectMeta{

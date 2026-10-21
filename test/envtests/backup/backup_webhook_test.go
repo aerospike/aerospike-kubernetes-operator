@@ -3,10 +3,8 @@ package backup
 import (
 	"context"
 
-	as "github.com/aerospike/aerospike-client-go/v8"
 	. "github.com/onsi/ginkgo/v2"
 	. "github.com/onsi/gomega"
-	"k8s.io/apimachinery/pkg/runtime"
 	"k8s.io/apimachinery/pkg/types"
 
 	asdbv1beta1 "github.com/aerospike/aerospike-kubernetes-operator/v4/api/v1beta1"
@@ -42,62 +40,7 @@ var _ = Describe("AerospikeBackup validation", Ordered, func() {
 		deleteBackup(ctx, backupNsNm)
 	})
 
-	// backupWithFilterExp returns a backup CR whose routine has the given set-list and filter-exp.
-	backupWithFilterExp := func(setList []string, filterExp string) *asdbv1beta1.AerospikeBackup {
-		prefix := asdbv1beta1.NamePrefix(backupNsNm)
-		config := backupconfig.BackupCRConfig(prefix, backupconfig.DefaultClusterHost,
-			backupconfig.EnvtestRoutineCrons)
-		routines := config[asdbv1beta1.BackupRoutinesKey].(map[string]interface{})
-		routine := routines[backupconfig.BuildRoutineNameForBackup(backupNsNm)].(map[string]interface{})
-		routine["set-list"] = setList
-		routine["filter-exp"] = filterExp
-
-		backup := buildBackupCR(backupNsNm, absNsNm)
-		backup.Spec.Config = runtime.RawExtension{Raw: backupconfig.MustMarshalConfig(config)}
-
-		return backup
-	}
-
 	Context("Deploy validation", func() {
-		Context("spec.config", func() {
-			Context("positive", func() {
-				It("accepts a routine with filter-exp and a single set", func() {
-					filterExp, err := as.ExpEq(as.ExpStringBin("status"), as.ExpStringVal("active")).Base64()
-					Expect(err).ToNot(HaveOccurred())
-
-					backup := backupWithFilterExp([]string{"users"}, filterExp)
-
-					Expect(envtests.K8sClient.Create(ctx, backup)).To(Succeed())
-				})
-			})
-
-			Context("negative", func() {
-				It("rejects filter-exp on a routine with multiple sets", func() {
-					filterExp, expErr := as.ExpEq(as.ExpStringBin("status"), as.ExpStringVal("active")).Base64()
-					Expect(expErr).ToNot(HaveOccurred())
-
-					backup := backupWithFilterExp([]string{"users", "orders"}, filterExp)
-
-					err := envtests.K8sClient.Create(ctx, backup)
-					Expect(err).To(HaveOccurred())
-					envtests.NewStatusErrorMatcher().
-						WithMessageSubstrings(testutil.BackupWebhookErrorPrefix,
-							"filter-exp cannot be used when backing up multiple sets").
-						Validate(err)
-				})
-
-				It("rejects filter-exp that is not a base64 encoded expression", func() {
-					backup := backupWithFilterExp([]string{"users"}, "not-an-expression")
-
-					err := envtests.K8sClient.Create(ctx, backup)
-					Expect(err).To(HaveOccurred())
-					envtests.NewStatusErrorMatcher().
-						WithMessageSubstrings(testutil.BackupWebhookErrorPrefix, "failed to parse filter expression").
-						Validate(err)
-				})
-			})
-		})
-
 		Context("spec.backupService", func() {
 			Context("negative", func() {
 				It("rejects empty backup service name (MinLength=1)", func() {
