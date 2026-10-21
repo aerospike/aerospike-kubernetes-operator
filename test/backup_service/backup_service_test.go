@@ -207,8 +207,10 @@ var _ = Describe(
 				Expect(err).ToNot(HaveOccurred())
 			})
 
-			It("Should restart backup service deployment pod when static fields are changed in backup service "+
-				"config", func() {
+			// A new port changes the Deployment, so the pod rolls with it. A new context-path changes only the
+			// config, so the operator has to restart the pod itself before it can reach the new path.
+			DescribeTable("Should restart backup service deployment pod when static fields are changed in backup "+
+				"service config", func(config string) {
 				backupService, err = NewBackupService(backupServiceNamespacedName)
 				Expect(err).ToNot(HaveOccurred())
 				err = DeployBackupService(k8sClient, backupService)
@@ -225,8 +227,8 @@ var _ = Describe(
 				Expect(err).ToNot(HaveOccurred())
 
 				By("Change static fields")
-				// Changing static field 'port' to 8080 and removing dynamic fields like backup policies and storage
-				backupService.Spec.Config.Raw = []byte(`{"service":{"http":{"port":8080}}}`)
+				// Changing a static field and removing dynamic fields like backup policies and storage
+				backupService.Spec.Config.Raw = []byte(config)
 				err = updateBackupService(k8sClient, backupService)
 				Expect(err).ToNot(HaveOccurred())
 
@@ -235,7 +237,10 @@ var _ = Describe(
 				Expect(podList.Items).To(HaveLen(1))
 
 				Expect(podList.Items[0].ObjectMeta.UID).ToNot(Equal(PodUID))
-			})
+			},
+				Entry("port", `{"service":{"http":{"port":8080}}}`),
+				Entry("context-path", `{"service":{"http":{"port":8081,"context-path":"/abs"}}}`),
+			)
 
 			It("Should do hot-reload when dynamic fields are changed in backup service config", func() {
 				backupService, err = NewBackupService(backupServiceNamespacedName)

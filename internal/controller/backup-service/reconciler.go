@@ -338,15 +338,12 @@ func (r *SingleBackupServiceReconciler) updateBackupSvcConfig(ctx context.Contex
 		Namespace: r.aeroBackupService.Namespace,
 	}
 
-	listeners, err := r.getListeners()
+	// The client is built from status, the listener the running backup service serves. A static spec change,
+	// such as a new context-path, is not served until the pod restarts, so a client built from spec could not
+	// reach the backup service to find that change.
+	backupServiceClient, err := backup_service.GetBackupServiceClient(r.Client, backupSvc)
 	if err != nil {
-		return err
-	}
-
-	// Always create client with the latest config in spec
-	backupServiceClient, err := r.newBackupServiceClient(ctx, listeners)
-	if err != nil {
-		return err
+		return fmt.Errorf("get backup service client: %w", err)
 	}
 
 	apiBackupSvcConfig, err := backupServiceClient.GetBackupServiceConfig()
@@ -438,25 +435,6 @@ func (r *SingleBackupServiceReconciler) findStaticConfigChange(
 	// The backup service rejects apply when its running service config differs from the file in a static
 	// field, so check the same pair here, even after spec and status were compared above.
 	return validation.ValidateStaticFieldChanges(current, desired), nil
-}
-
-// newBackupServiceClient returns a client for the listener the operator connects to, as configured in spec.
-func (r *SingleBackupServiceReconciler) newBackupServiceClient(
-	ctx context.Context, listeners *backup_service.Listeners,
-) (*backup_service.Client, error) {
-	address := fmt.Sprintf("%s.%s.svc", r.aeroBackupService.Name, r.aeroBackupService.Namespace)
-
-	if listeners.Scheme != corev1.URISchemeHTTPS {
-		return backup_service.NewClient(address, listeners.Port, listeners.ContextPath), nil
-	}
-
-	tlsConfig, err := backup_service.BuildOperatorTLSConfig(ctx, r.Client, r.aeroBackupService.Namespace,
-		r.aeroBackupService.Spec.OperatorClientCert, address)
-	if err != nil {
-		return nil, fmt.Errorf("build backup service TLS config: %w", err)
-	}
-
-	return backup_service.NewClientWithTLS(address, listeners.Port, listeners.ContextPath, "", tlsConfig), nil
 }
 
 func (r *SingleBackupServiceReconciler) restartBackupSvcPod(ctx context.Context) error {
