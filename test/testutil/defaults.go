@@ -32,6 +32,7 @@ const (
 	BackupWebhookErrorPrefix          = "vaerospikebackup.kb.io"
 	BackupCRDSchemaErrorPrefix        = "AerospikeBackup.asdb.aerospike.com"
 	BackupServiceCRDSchemaErrorPrefix = "AerospikeBackupService.asdb.aerospike.com"
+	BackupServiceWebhookErrorPrefix   = "vaerospikebackupservice.kb.io"
 	RestoreCRDSchemaErrorPrefix       = "AerospikeRestore.asdb.aerospike.com"
 )
 
