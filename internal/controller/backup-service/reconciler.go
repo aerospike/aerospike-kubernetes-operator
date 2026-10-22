@@ -369,6 +369,21 @@ func (r *SingleBackupServiceReconciler) updateBackupSvcConfig(ctx context.Contex
 
 	apiBackupSvcConfig, err := backupServiceClient.GetBackupServiceConfig()
 	if err != nil {
+		// After a static spec change such as a new context-path, the running backup service does not serve the
+		// listener in spec until it restarts, so the call fails. Status is written only after the restart succeeds,
+		// so a restart that does not finish is tried again.
+		if !specConfigApplied {
+			staticChangeErr, sErr := r.findStaticSpecChange()
+			if sErr != nil {
+				return sErr
+			}
+
+			if staticChangeErr != nil {
+				r.Log.Info("Static config change detected, rolling restart of backup service Pod", "err", staticChangeErr)
+				return r.restartBackupSvcPod(ctx)
+			}
+		}
+
 		return fmt.Errorf("fetch backup service config from API: %w", err)
 	}
 
