@@ -2,6 +2,7 @@ package common
 
 import (
 	"context"
+	"encoding/json"
 	"fmt"
 	"reflect"
 	"time"
@@ -14,6 +15,8 @@ import (
 	"sigs.k8s.io/controller-runtime/pkg/client"
 	"sigs.k8s.io/yaml"
 
+	"github.com/aerospike/aerospike-backup-service/v3/pkg/dto"
+	"github.com/aerospike/aerospike-backup-service/v3/pkg/dto/decoder"
 	"github.com/aerospike/aerospike-kubernetes-operator/v4/api/v1beta1"
 	backup_service "github.com/aerospike/aerospike-kubernetes-operator/v4/pkg/backup-service"
 	"github.com/aerospike/aerospike-kubernetes-operator/v4/pkg/utils"
@@ -134,19 +137,110 @@ func validateBackupSvcConfigReload(ctx context.Context, log logr.Logger, k8sClie
 	return nil
 }
 
+// IsBackupSvcFullConfigSynced reports whether the config loaded in the backup service, as returned by its API,
+// matches the desired config from the ConfigMap. Both are normalized first, see ComparableBackupSvcConfigs.
 func IsBackupSvcFullConfigSynced(currentBackupSvcConfig map[string]interface{}, desired string,
 	log logr.Logger,
 ) (bool, error) {
+	synced, _, _, err := CompareBackupSvcConfigs(currentBackupSvcConfig, desired, log)
+
+	return synced, err
+}
+
+// CompareBackupSvcConfigs is IsBackupSvcFullConfigSynced that also returns the two configs it compared, so a
+// caller that needs them again does not normalize them a second time.
+func CompareBackupSvcConfigs(currentBackupSvcConfig map[string]interface{}, desired string, log logr.Logger,
+) (synced bool, comparableCurrent, comparableDesired map[string]interface{}, err error) {
 	desiredBackupSvcConfig := make(map[string]interface{})
 
-	if err := yaml.Unmarshal([]byte(desired), &desiredBackupSvcConfig); err != nil {
-		return false, fmt.Errorf("unmarshal backup service config from ConfigMap data: %w", err)
+	if err = yaml.Unmarshal([]byte(desired), &desiredBackupSvcConfig); err != nil {
+		return false, nil, nil, fmt.Errorf("unmarshal backup service config from ConfigMap data: %w", err)
 	}
 
-	log.Info("Fetched backup service config from backup service via API", "config", currentBackupSvcConfig)
-	log.Info("Found backup service config in backup service ConfigMap", "config", desiredBackupSvcConfig)
+	current, desiredConfig, err := ComparableBackupSvcConfigs(currentBackupSvcConfig, desiredBackupSvcConfig)
+	if err != nil {
+		return false, nil, nil, err
+	}
 
-	return reflect.DeepEqual(currentBackupSvcConfig, desiredBackupSvcConfig), nil
+	// Only normalized configs are logged: the raw ConfigMap data holds literal secrets.
+	log.V(1).Info("Fetched backup service config from backup service via API", "config", current)
+	log.V(1).Info("Found backup service config in backup service ConfigMap", "config", desiredConfig)
+
+	return reflect.DeepEqual(current, desiredConfig), current, desiredConfig, nil
+}
+
+// ComparableBackupSvcConfigs normalizes a config returned by the backup service API and the desired config from
+// the ConfigMap with NormalizeBackupSvcConfig, so that they can be compared: the API hides literal secret values
+// (ABS 3.7.0 and later), so comparing it with raw ConfigMap data would never match.
+//
+// A config that cannot be normalized is an error, not a reason to compare raw values: a raw comparison never
+// matches, so the caller would reload on every reconcile without ever verifying the result. An invalid ConfigMap
+// would fail the reload anyway. An API config the vendored backup service module cannot read comes from a backup
+// service version this operator does not support, so no comparison is possible until the versions match.
+func ComparableBackupSvcConfigs(current, desired map[string]interface{},
+) (comparableCurrent, comparableDesired map[string]interface{}, err error) {
+	normalizedDesired, err := NormalizeBackupSvcConfig(desired)
+	if err != nil {
+		return nil, nil, fmt.Errorf("validate backup service config in ConfigMap: %w", err)
+	}
+
+	// The API config is normalized too: versions before 3.7.0 return literal secret values, and the running
+	// image may render fields differently from the vendored module. Normalizing a normalized config is a no-op.
+	normalizedCurrent, err := NormalizeBackupSvcConfig(current)
+	if err != nil {
+		return nil, nil, fmt.Errorf("read backup service config from API, the backup service version may not be "+
+			"supported by this operator: %w", err)
+	}
+
+	return normalizedCurrent, normalizedDesired, nil
+}
+
+// NormalizeBackupSvcConfig renders a backup service config the way the backup service renders
+// GET /v1/config. The config is decoded into the backup service DTOs, converted to its model and back,
+// and marshalled with every secret field replaced by a fixed placeholder. A literal secret becomes the
+// placeholder, a secret agent reference stays as it is, enum values are canonicalized, and fields the
+// backup service omits on output are omitted. Normalizing a config twice gives the same result, so a
+// config read from the API and one read from the ConfigMap can both be normalized and then compared.
+func NormalizeBackupSvcConfig(config map[string]interface{}) (map[string]interface{}, error) {
+	dtoConfig, err := ToBackupSvcDTOConfig(config)
+	if err != nil {
+		return nil, err
+	}
+
+	modelConfig, err := dtoConfig.ToModel()
+	if err != nil {
+		return nil, fmt.Errorf("convert backup service config to model: %w", err)
+	}
+
+	rendered, err := decoder.Marshal(dto.NewConfigFromModel(modelConfig), decoder.JSON, true)
+	if err != nil {
+		return nil, fmt.Errorf("marshal normalized backup service config: %w", err)
+	}
+
+	normalized := make(map[string]interface{})
+
+	if err := json.Unmarshal(rendered, &normalized); err != nil {
+		return nil, fmt.Errorf("unmarshal normalized backup service config: %w", err)
+	}
+
+	return normalized, nil
+}
+
+// ToBackupSvcDTOConfig decodes a backup service config map into the backup service DTO.
+// Unknown fields are ignored, so a config from a newer backup service can still be decoded.
+func ToBackupSvcDTOConfig(config map[string]interface{}) (*dto.Config, error) {
+	data, err := json.Marshal(config)
+	if err != nil {
+		return nil, fmt.Errorf("marshal backup service config: %w", err)
+	}
+
+	var dtoConfig dto.Config
+
+	if err := json.Unmarshal(data, &dtoConfig); err != nil {
+		return nil, fmt.Errorf("unmarshal backup service config: %w", err)
+	}
+
+	return &dtoConfig, nil
 }
 
 func GetBackupSvcConfigFromCM(
