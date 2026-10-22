@@ -64,6 +64,49 @@ spec:
               image:
                 description: Image is the image for the backup service.
                 type: string
+              operatorClientCert:
+                description: |-
+                  OperatorClientCert configures how the operator connects to the backup service over HTTPS.
+                  When set, the operator uses the service.https listener from config, which must be enabled.
+                  When not set, the operator uses the service.http listener, which must be enabled.
+                properties:
+                  secretCertSource:
+                    description: |-
+                      SecretCertSource is the Secret holding the CA certificate used to verify the backup service certificate
+                      and, when the backup service requires client certificates, the operator's client certificate and key.
+                    properties:
+                      caCertsFilename:
+                        description: |-
+                          CaCertsFilename is the key of the CA certificate that signed the backup service certificate.
+                          When set, only this CA is trusted. If not set, the system CA certificates are used.
+                        type: string
+                      clientCertFilename:
+                        description: |-
+                          ClientCertFilename is the key of the operator's client certificate.
+                          Required when the backup service sets client-auth to require-and-verify.
+                          Must be set together with ClientKeyFilename.
+                        type: string
+                      clientKeyFilename:
+                        description: ClientKeyFilename is the key of the private key
+                          for ClientCertFilename.
+                        type: string
+                      secretName:
+                        description: SecretName is the name of the Secret.
+                        minLength: 1
+                        type: string
+                    required:
+                    - secretName
+                    type: object
+                  serverName:
+                    description: |-
+                      ServerName is the host name expected in the backup service certificate.
+                      Defaults to <name>.<namespace>.svc of the AerospikeBackupService, the address the operator connects to.
+                      Set it when the certificate does not list that name, for example when it is issued only for
+                      <name>.<namespace>.svc.cluster.local or for an external DNS name.
+                    type: string
+                required:
+                - secretCertSource
+                type: object
               podSpec:
                 description: Specify additional configuration for the AerospikeBackupService
                   pods
@@ -1516,6 +1559,49 @@ spec:
               image:
                 description: Image is the image for the backup service.
                 type: string
+              operatorClientCert:
+                description: |-
+                  OperatorClientCert is the configuration the operator uses to connect to the backup service over HTTPS.
+                  The backup and restore controllers build their client from status, so it matches the listener the backup
+                  service runs with, not a spec change that is not applied yet.
+                properties:
+                  secretCertSource:
+                    description: |-
+                      SecretCertSource is the Secret holding the CA certificate used to verify the backup service certificate
+                      and, when the backup service requires client certificates, the operator's client certificate and key.
+                    properties:
+                      caCertsFilename:
+                        description: |-
+                          CaCertsFilename is the key of the CA certificate that signed the backup service certificate.
+                          When set, only this CA is trusted. If not set, the system CA certificates are used.
+                        type: string
+                      clientCertFilename:
+                        description: |-
+                          ClientCertFilename is the key of the operator's client certificate.
+                          Required when the backup service sets client-auth to require-and-verify.
+                          Must be set together with ClientKeyFilename.
+                        type: string
+                      clientKeyFilename:
+                        description: ClientKeyFilename is the key of the private key
+                          for ClientCertFilename.
+                        type: string
+                      secretName:
+                        description: SecretName is the name of the Secret.
+                        minLength: 1
+                        type: string
+                    required:
+                    - secretName
+                    type: object
+                  serverName:
+                    description: |-
+                      ServerName is the host name expected in the backup service certificate.
+                      Defaults to <name>.<namespace>.svc of the AerospikeBackupService, the address the operator connects to.
+                      Set it when the certificate does not list that name, for example when it is issued only for
+                      <name>.<namespace>.svc.cluster.local or for an external DNS name.
+                    type: string
+                required:
+                - secretCertSource
+                type: object
               phase:
                 description: Phase denotes Backup service phase
                 enum:
@@ -2794,7 +2880,8 @@ spec:
                     type: array
                 type: object
               port:
-                description: Port is the listening port of backup service
+                description: Port is the port the operator uses to connect to the
+                  backup service.
                 format: int32
                 type: integer
               resources:
@@ -2860,6 +2947,14 @@ spec:
                       More info: https://kubernetes.io/docs/concepts/configuration/manage-resources-containers/
                     type: object
                 type: object
+              scheme:
+                description: |-
+                  Scheme is the URL scheme the operator uses to connect to the backup service.
+                  An empty value means HTTP, which is what a backup service reconciled by an older operator serves.
+                enum:
+                - HTTP
+                - HTTPS
+                type: string
               secrets:
                 description: SecretMounts is the list of secret to be mounted in the
                   backup service.
