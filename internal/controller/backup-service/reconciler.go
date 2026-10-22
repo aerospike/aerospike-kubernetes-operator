@@ -15,6 +15,7 @@ import (
 	k8sRuntime "k8s.io/apimachinery/pkg/runtime"
 	"k8s.io/apimachinery/pkg/types"
 	"k8s.io/apimachinery/pkg/util/wait"
+	"k8s.io/client-go/kubernetes"
 	"k8s.io/client-go/rest"
 	"k8s.io/client-go/tools/record"
 	ctrl "sigs.k8s.io/controller-runtime"
@@ -49,9 +50,12 @@ type SingleBackupServiceReconciler struct {
 	client.Client
 	Recorder          record.EventRecorder
 	aeroBackupService *asdbv1beta1.AerospikeBackupService
-	KubeConfig        *rest.Config
-	Scheme            *k8sRuntime.Scheme
-	Log               logr.Logger
+	// KubeClient and KubeConfig exec into the backup service pods to check that they have the latest ConfigMap
+	// before a reload; client.Client cannot run pods/exec.
+	KubeClient *kubernetes.Clientset
+	KubeConfig *rest.Config
+	Scheme     *k8sRuntime.Scheme
+	Log        logr.Logger
 }
 
 // finishReconcile logs the reconcile exit once at the boundary and sets the AerospikeBackupService
@@ -227,7 +231,7 @@ func (r *SingleBackupServiceReconciler) reconcileConfigMap(ctx context.Context) 
 		return fmt.Errorf("marshal backup service config: %w", err)
 	}
 
-	cm.Data[asdbv1beta1.BackupServiceConfigYAML] = string(updatedConfig)
+	common.SetBackupSvcConfigData(cm.Data, string(updatedConfig))
 
 	if err = r.Update(ctx, cm, common.UpdateOption); err != nil {
 		return fmt.Errorf("update backup service ConfigMap: %w", err)
@@ -243,7 +247,7 @@ func (r *SingleBackupServiceReconciler) reconcileConfigMap(ctx context.Context) 
 
 func (r *SingleBackupServiceReconciler) getConfigMapData() map[string]string {
 	data := make(map[string]string)
-	data[asdbv1beta1.BackupServiceConfigYAML] = string(r.aeroBackupService.Spec.Config.Raw)
+	common.SetBackupSvcConfigData(data, string(r.aeroBackupService.Spec.Config.Raw))
 
 	return data
 }
@@ -396,7 +400,8 @@ func (r *SingleBackupServiceReconciler) updateBackupSvcConfig(ctx context.Contex
 		return r.restartBackupSvcPod(ctx)
 	}
 
-	if err := common.ReloadBackupServiceConfigInPods(ctx, r.Log, r.Client, backupServiceClient, backupSvc); err != nil {
+	if err := common.ReloadBackupServiceConfigInPods(ctx, r.Log, r.Client,
+		common.NewPodExecFunc(r.KubeClient, r.KubeConfig), backupServiceClient, backupSvc); err != nil {
 		return fmt.Errorf("reload backup service config: %w", err)
 	}
 
@@ -629,7 +634,7 @@ func (r *SingleBackupServiceReconciler) getVolumeAndMounts() ([]corev1.VolumeMou
 	// Backup service configMap mountPath
 	volumeMounts = append(volumeMounts, corev1.VolumeMount{
 		Name:      "backup-service-config",
-		MountPath: "/etc/aerospike-backup-service",
+		MountPath: asdbv1beta1.BackupServiceConfigMountPath,
 	})
 
 	// Backup service configMap
