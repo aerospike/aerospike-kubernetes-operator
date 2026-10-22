@@ -143,15 +143,6 @@ func validateBackupServiceConfig(svcConfig runtime.RawExtension) error {
 		return fmt.Errorf("aerospike-clusters field cannot be specified in backup service config")
 	}
 
-	// Add empty placeholders for missing config sections. This is required for validation to work.
-	if config.ServiceConfig.HTTPServer == nil {
-		config.ServiceConfig.HTTPServer = &dto.HTTPServerConfig{}
-	}
-
-	if config.ServiceConfig.Logger == nil {
-		config.ServiceConfig.Logger = &dto.LoggerConfig{}
-	}
-
 	return validation.ValidateConfiguration(&config)
 }
 
