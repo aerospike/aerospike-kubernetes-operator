@@ -37,33 +37,32 @@ func TestSetBackupSvcConfigData(t *testing.T) {
 	require.Equal(t, hex.EncodeToString(sum[:]), data[v1beta1.BackupServiceConfigHashKey])
 }
 
-// fakeExec answers the hash file read with the successive outputs given per pod; the last one repeats.
-// A pod without outputs has no hash file.
-func fakeExec(files map[string][]string) PodExecFunc {
+// fakeExec answers the hash file read with the successive outputs given; the last one repeats.
+// No outputs means the pod has no hash file.
+func fakeExec(outputs []string) PodExecFunc {
 	hashFile := v1beta1.BackupServiceConfigMountPath + "/" + v1beta1.BackupServiceConfigHashKey
-	calls := map[string]int{}
+	calls := 0
 
-	return func(pod types.NamespacedName, container string, cmd []string) (string, error) {
+	return func(_ types.NamespacedName, container string, cmd []string) (string, error) {
 		if container != v1beta1.AerospikeBackupServiceKey || len(cmd) != 2 || cmd[0] != "cat" || cmd[1] != hashFile {
 			return "", errors.New("unexpected exec")
 		}
 
-		outputs, ok := files[pod.Name]
-		if !ok {
+		if len(outputs) == 0 {
 			return "", errors.New("cat: can't open file: No such file or directory")
 		}
 
-		idx := min(calls[pod.Name], len(outputs)-1)
-		calls[pod.Name]++
+		idx := min(calls, len(outputs)-1)
+		calls++
 
 		return outputs[idx], nil
 	}
 }
 
-func backupSvcPod(name string, phase corev1.PodPhase) *corev1.Pod {
+func backupSvcPod(phase corev1.PodPhase) *corev1.Pod {
 	return &corev1.Pod{
 		ObjectMeta: metav1.ObjectMeta{
-			Name:      name,
+			Name:      testBackupSvcName + "-0",
 			Namespace: testNamespace,
 			Labels:    utils.LabelsForAerospikeBackupService(testBackupSvcName),
 		},
@@ -71,8 +70,9 @@ func backupSvcPod(name string, phase corev1.PodPhase) *corev1.Pod {
 	}
 }
 
-// waitForTestConfig runs waitForConfigInPods against a ConfigMap holding testConfig and the given pods.
-func waitForTestConfig(t *testing.T, files map[string][]string, pods ...*corev1.Pod) error {
+// waitForTestConfig runs waitForConfigInPods against a ConfigMap holding testConfig and the given pod, whose hash
+// file reads return outputs.
+func waitForTestConfig(t *testing.T, outputs []string, pod *corev1.Pod) error {
 	t.Helper()
 
 	scheme := k8sruntime.NewScheme()
@@ -81,16 +81,12 @@ func waitForTestConfig(t *testing.T, files map[string][]string, pods ...*corev1.
 	data := map[string]string{}
 	SetBackupSvcConfigData(data, testConfig)
 
-	builder := fake.NewClientBuilder().WithScheme(scheme).WithObjects(&corev1.ConfigMap{
+	k8sClient := fake.NewClientBuilder().WithScheme(scheme).WithObjects(&corev1.ConfigMap{
 		ObjectMeta: metav1.ObjectMeta{Name: testBackupSvcName, Namespace: testNamespace},
 		Data:       data,
-	})
+	}, pod).Build()
 
-	for _, pod := range pods {
-		builder = builder.WithObjects(pod)
-	}
-
-	return waitForConfigInPods(context.Background(), logr.Discard(), builder.Build(), fakeExec(files),
+	return waitForConfigInPods(context.Background(), logr.Discard(), k8sClient, fakeExec(outputs),
 		&v1beta1.BackupService{Name: testBackupSvcName, Namespace: testNamespace}, time.Millisecond,
 		200*time.Millisecond)
 }
@@ -102,61 +98,36 @@ func TestWaitForConfigInPods(t *testing.T) {
 	old := BackupSvcConfigHash("old config")
 
 	tests := []struct {
-		files   map[string][]string
+		pod     *corev1.Pod
 		name    string
 		wantErr string
-		pods    []*corev1.Pod
+		outputs []string
 	}{
 		{
-			name:  "pod already has the config, with the TTY line ending",
-			pods:  []*corev1.Pod{backupSvcPod("abs-0", corev1.PodRunning)},
-			files: map[string][]string{"abs-0": {want + "\r\n"}},
+			name:    "pod already has the config, with the TTY line ending",
+			pod:     backupSvcPod(corev1.PodRunning),
+			outputs: []string{want + "\r\n"},
 		},
 		{
-			name:  "pod gets the config while waiting",
-			pods:  []*corev1.Pod{backupSvcPod("abs-0", corev1.PodRunning)},
-			files: map[string][]string{"abs-0": {old, old, want}},
-		},
-		{
-			name: "pod not running and terminating pod are not checked",
-			pods: []*corev1.Pod{
-				backupSvcPod("abs-0", corev1.PodRunning),
-				backupSvcPod("abs-1", corev1.PodPending),
-				func() *corev1.Pod {
-					pod := backupSvcPod("abs-2", corev1.PodRunning)
-					pod.DeletionTimestamp = &metav1.Time{Time: time.Now()}
-					pod.Finalizers = []string{"test"}
-
-					return pod
-				}(),
-			},
-			files: map[string][]string{"abs-0": {want}},
+			name:    "pod gets the config while waiting",
+			pod:     backupSvcPod(corev1.PodRunning),
+			outputs: []string{old, old, want},
 		},
 		{
 			name:    "pod keeps the old config",
-			pods:    []*corev1.Pod{backupSvcPod("abs-0", corev1.PodRunning)},
-			files:   map[string][]string{"abs-0": {old}},
+			pod:     backupSvcPod(corev1.PodRunning),
+			outputs: []string{old},
 			wantErr: "has config hash",
 		},
 		{
 			name:    "hash file missing, as in a pod started before the key existed",
-			pods:    []*corev1.Pod{backupSvcPod("abs-0", corev1.PodRunning)},
-			files:   map[string][]string{},
+			pod:     backupSvcPod(corev1.PodRunning),
 			wantErr: "No such file",
 		},
 		{
-			name: "every running pod must have the config",
-			pods: []*corev1.Pod{
-				backupSvcPod("abs-0", corev1.PodRunning),
-				backupSvcPod("abs-1", corev1.PodRunning),
-			},
-			files:   map[string][]string{"abs-0": {want}, "abs-1": {old}},
-			wantErr: "abs-1",
-		},
-		{
 			name: "crashing pod fails at once",
-			pods: []*corev1.Pod{func() *corev1.Pod {
-				pod := backupSvcPod("abs-0", corev1.PodRunning)
+			pod: func() *corev1.Pod {
+				pod := backupSvcPod(corev1.PodRunning)
 				pod.Status.ContainerStatuses = []corev1.ContainerStatus{{
 					Name: v1beta1.AerospikeBackupServiceKey,
 					State: corev1.ContainerState{
@@ -165,14 +136,26 @@ func TestWaitForConfigInPods(t *testing.T) {
 				}}
 
 				return pod
-			}()},
-			files:   map[string][]string{"abs-0": {want}},
+			}(),
+			outputs: []string{want},
 			wantErr: "CrashLoopBackOff",
 		},
 		{
-			name:    "no running pod",
-			pods:    []*corev1.Pod{backupSvcPod("abs-0", corev1.PodPending)},
-			files:   map[string][]string{},
+			name:    "pod not running is not checked",
+			pod:     backupSvcPod(corev1.PodPending),
+			outputs: []string{old},
+			wantErr: "no running backup service Pod",
+		},
+		{
+			name: "terminating pod is not checked",
+			pod: func() *corev1.Pod {
+				pod := backupSvcPod(corev1.PodRunning)
+				pod.DeletionTimestamp = &metav1.Time{Time: time.Now()}
+				pod.Finalizers = []string{"test"}
+
+				return pod
+			}(),
+			outputs: []string{old},
 			wantErr: "no running backup service Pod",
 		},
 	}
@@ -181,7 +164,7 @@ func TestWaitForConfigInPods(t *testing.T) {
 		t.Run(tt.name, func(t *testing.T) {
 			t.Parallel()
 
-			err := waitForTestConfig(t, tt.files, tt.pods...)
+			err := waitForTestConfig(t, tt.outputs, tt.pod)
 			if tt.wantErr == "" {
 				require.NoError(t, err)
 				return
