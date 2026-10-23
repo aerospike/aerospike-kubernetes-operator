@@ -499,6 +499,37 @@ func validateStorageVolumeSource(volume *asdbv1.VolumeSpec) error {
 		return fmt.Errorf("can not specify more than 1 source")
 	}
 
+	// These Kubernetes alpha fields are dropped from the pod when their feature gate is off (the default).
+	// The operator compares the live pod volume with the spec, so it would restart the pod on every reconcile.
+	// Reject them until the operator supports them.
+	if source.EmptyDir != nil && source.EmptyDir.Mode != nil {
+		return fmt.Errorf("emptyDir.mode is not supported")
+	}
+
+	if source.Secret != nil {
+		if source.Secret.DefaultUser != nil {
+			return fmt.Errorf("secret.defaultUser is not supported")
+		}
+
+		for idx := range source.Secret.Items {
+			if source.Secret.Items[idx].User != nil {
+				return fmt.Errorf("secret.items[%d].user is not supported", idx)
+			}
+		}
+	}
+
+	if source.ConfigMap != nil {
+		if source.ConfigMap.DefaultUser != nil {
+			return fmt.Errorf("configMap.defaultUser is not supported")
+		}
+
+		for idx := range source.ConfigMap.Items {
+			if source.ConfigMap.Items[idx].User != nil {
+				return fmt.Errorf("configMap.items[%d].user is not supported", idx)
+			}
+		}
+	}
+
 	if source.PersistentVolume != nil {
 		// Validate VolumeMode
 		vm := source.PersistentVolume.VolumeMode

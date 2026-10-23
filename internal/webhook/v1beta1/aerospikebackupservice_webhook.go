@@ -158,7 +158,9 @@ func validateBackupServiceConfig(svcConfig runtime.RawExtension) error {
 func validateBackupServiceSecrets(secretMounts []asdbv1beta1.SecretMount) error {
 	volumeNameSet := set.NewSet[string]()
 
-	for _, secret := range secretMounts {
+	for idx := range secretMounts {
+		secret := &secretMounts[idx]
+
 		if volumeNameSet.Contains(secret.VolumeMount.Name) {
 			return fmt.Errorf("duplicate volume name %s found in secrets field", secret.VolumeMount.Name)
 		}

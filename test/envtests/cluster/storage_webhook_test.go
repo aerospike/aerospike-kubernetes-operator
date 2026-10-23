@@ -219,6 +219,93 @@ var _ = Describe("Storage webhook validation", func() {
 			})
 		})
 
+		// Kubernetes drops these alpha fields from the pod when their feature gate is off,
+		// which would make the operator restart the pod on every reconcile.
+		Context("spec.storage volume source alpha fields", func() {
+			Context("negative", func() {
+				DescribeTable("rejects alpha volume source fields",
+					func(source asdbv1.VolumeSource, field string) {
+						aeroCluster := testCluster.CreateDummyAerospikeCluster(nsName, 2)
+						aeroCluster.Spec.Storage.Volumes = append(aeroCluster.Spec.Storage.Volumes,
+							getVolumeWithSource(source))
+
+						err := envtests.K8sClient.Create(ctx, aeroCluster)
+						Expect(err).To(HaveOccurred())
+						envtests.NewStatusErrorMatcher().
+							WithMessageSubstrings(testutil.WebhookErrorPrefix, field+" is not supported").
+							Validate(err)
+					},
+					Entry("emptyDir.mode", asdbv1.VolumeSource{
+						EmptyDir: &corev1.EmptyDirVolumeSource{Mode: ptr.To[int32](0o700)},
+					}, "emptyDir.mode"),
+					Entry("secret.defaultUser", asdbv1.VolumeSource{
+						Secret: &corev1.SecretVolumeSource{SecretName: "alpha-secret", DefaultUser: ptr.To[int64](1000)},
+					}, "secret.defaultUser"),
+					Entry("secret.items[].user", asdbv1.VolumeSource{
+						Secret: &corev1.SecretVolumeSource{
+							SecretName: "alpha-secret",
+							Items:      []corev1.KeyToPath{{Key: "key", Path: "path", User: ptr.To[int64](1000)}},
+						},
+					}, "secret.items[0].user"),
+					Entry("configMap.defaultUser", asdbv1.VolumeSource{
+						ConfigMap: &corev1.ConfigMapVolumeSource{
+							LocalObjectReference: corev1.LocalObjectReference{Name: "alpha-cm"},
+							DefaultUser:          ptr.To[int64](1000),
+						},
+					}, "configMap.defaultUser"),
+					Entry("configMap.items[].user", asdbv1.VolumeSource{
+						ConfigMap: &corev1.ConfigMapVolumeSource{
+							LocalObjectReference: corev1.LocalObjectReference{Name: "alpha-cm"},
+							Items:                []corev1.KeyToPath{{Key: "key", Path: "path", User: ptr.To[int64](1000)}},
+						},
+					}, "configMap.items[0].user"),
+				)
+
+				It("rejects alpha volume source fields in rack-level storage", func() {
+					aeroCluster := testCluster.CreateDummyAerospikeCluster(nsName, 2)
+					aeroCluster.Spec.Storage = asdbv1.AerospikeStorageSpec{}
+					rackStorage := getStorageSpecForDevice("/test/dev/xvdf")
+					rackStorage.Volumes = append(rackStorage.Volumes, getVolumeWithSource(asdbv1.VolumeSource{
+						EmptyDir: &corev1.EmptyDirVolumeSource{Mode: ptr.To[int32](0o700)},
+					}))
+					aeroCluster.Spec.RackConfig = asdbv1.RackConfig{
+						Namespaces: []string{"test"},
+						Racks: []asdbv1.Rack{
+							{ID: 1, Revision: "v1", InputStorage: &rackStorage},
+						},
+					}
+
+					err := envtests.K8sClient.Create(ctx, aeroCluster)
+					Expect(err).To(HaveOccurred())
+					envtests.NewStatusErrorMatcher().
+						WithMessageSubstrings(testutil.WebhookErrorPrefix, "emptyDir.mode is not supported").
+						Validate(err)
+				})
+			})
+
+			Context("positive", func() {
+				It("allows emptyDir and configMap volumes without alpha fields", func() {
+					aeroCluster := testCluster.CreateDummyAerospikeCluster(nsName, 2)
+					aeroCluster.Spec.Storage.Volumes = append(aeroCluster.Spec.Storage.Volumes,
+						getVolumeWithSource(asdbv1.VolumeSource{
+							ConfigMap: &corev1.ConfigMapVolumeSource{
+								LocalObjectReference: corev1.LocalObjectReference{Name: "alpha-cm"},
+								Items:                []corev1.KeyToPath{{Key: "key", Path: "path", Mode: ptr.To[int32](0o644)}},
+							},
+						}))
+
+					emptyDirVolume := getVolumeWithSource(asdbv1.VolumeSource{
+						EmptyDir: &corev1.EmptyDirVolumeSource{Medium: corev1.StorageMediumMemory},
+					})
+					emptyDirVolume.Name = "plain-emptydir"
+					emptyDirVolume.Aerospike.Path = "/opt/plain-emptydir"
+					aeroCluster.Spec.Storage.Volumes = append(aeroCluster.Spec.Storage.Volumes, emptyDirVolume)
+
+					Expect(envtests.K8sClient.Create(ctx, aeroCluster)).To(Succeed())
+				})
+			})
+		})
+
 		Context("spec.storage deleteLocalStorageOnPodRecovery validation", func() {
 			Context("negative", func() {
 				It("rejects deploy when deleteLocalStorageOnPodRecovery is true "+
@@ -516,6 +603,17 @@ func setFirstPVAccessModes(
 			storage.Volumes[i].Source.PersistentVolume.AccessModes = modes
 			return
 		}
+	}
+}
+
+// getVolumeWithSource returns a volume with the given source, attached to the aerospike container.
+func getVolumeWithSource(source asdbv1.VolumeSource) asdbv1.VolumeSpec {
+	return asdbv1.VolumeSpec{
+		Name:   "extra-volume",
+		Source: source,
+		Aerospike: &asdbv1.AerospikeServerVolumeAttachment{
+			Path: "/opt/extra-volume",
+		},
 	}
 }
 
