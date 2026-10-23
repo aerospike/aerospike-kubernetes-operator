@@ -46,3 +46,29 @@ func deleteBackupService(ctx context.Context, absNsNm types.NamespacedName) {
 	}
 	_ = client.IgnoreNotFound(envtests.K8sClient.Delete(ctx, backupService))
 }
+
+// backupServiceWithHTTPS returns a backup service that serves only HTTPS, with the given operator client cert.
+// The cert and key paths are read by the backup service at startup, not by the webhook, so they need not exist.
+func backupServiceWithHTTPS(absNsNm types.NamespacedName,
+	certSpec *asdbv1beta1.OperatorClientCertSpec,
+) *asdbv1beta1.AerospikeBackupService {
+	config := backupconfig.BackupServiceBaseConfig()
+	config[asdbv1beta1.ServiceKey] = map[string]interface{}{
+		"http": map[string]interface{}{"disabled": true},
+		"https": map[string]interface{}{
+			"port": 8443, "cert-file": "/etc/abs-tls/tls.crt", "key-file": "/etc/abs-tls/tls.key",
+		},
+	}
+
+	backupService := buildBackupServiceCR(absNsNm)
+	backupService.Spec.Config = runtime.RawExtension{Raw: backupconfig.MustMarshalConfig(config)}
+	backupService.Spec.OperatorClientCert = certSpec
+
+	return backupService
+}
+
+func operatorCertSpec() *asdbv1beta1.OperatorClientCertSpec {
+	return &asdbv1beta1.OperatorClientCertSpec{
+		SecretCertSource: asdbv1beta1.SecretCertSource{SecretName: "operator-tls", CaCertsFilename: "ca.crt"},
+	}
+}
