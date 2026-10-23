@@ -22,7 +22,7 @@ import (
 	"reflect"
 
 	set "github.com/deckarep/golang-set/v2"
-	"k8s.io/apimachinery/pkg/runtime"
+	apierrors "k8s.io/apimachinery/pkg/api/errors"
 	ctrl "sigs.k8s.io/controller-runtime"
 	logf "sigs.k8s.io/controller-runtime/pkg/log"
 	"sigs.k8s.io/controller-runtime/pkg/webhook/admission"
@@ -32,6 +32,7 @@ import (
 	"github.com/aerospike/aerospike-backup-service/v3/pkg/validation"
 	asdbv1 "github.com/aerospike/aerospike-kubernetes-operator/v4/api/v1"
 	asdbv1beta1 "github.com/aerospike/aerospike-kubernetes-operator/v4/api/v1beta1"
+	"github.com/aerospike/aerospike-kubernetes-operator/v4/pkg/utils"
 )
 
 // SetupAerospikeBackupServiceWebhookWithManager registers the webhook for AerospikeBackupService in the manager.
@@ -117,7 +118,7 @@ func validateBackupService(backupSvc *asdbv1beta1.AerospikeBackupService) (admis
 		return nil, err
 	}
 
-	if err := validateBackupServiceConfig(backupSvc.Spec.Config); err != nil {
+	if err := validateBackupServiceConfig(backupSvc); err != nil {
 		return nil, err
 	}
 
@@ -128,10 +129,10 @@ func validateBackupService(backupSvc *asdbv1beta1.AerospikeBackupService) (admis
 	return validateServicePodSpec(backupSvc)
 }
 
-func validateBackupServiceConfig(svcConfig runtime.RawExtension) error {
+func validateBackupServiceConfig(backupSvc *asdbv1beta1.AerospikeBackupService) error {
 	var config dto.Config
 
-	if err := yaml.UnmarshalStrict(svcConfig.Raw, &config); err != nil {
+	if err := yaml.UnmarshalStrict(backupSvc.Spec.Config.Raw, &config); err != nil {
 		return err
 	}
 
@@ -143,16 +144,39 @@ func validateBackupServiceConfig(svcConfig runtime.RawExtension) error {
 		return fmt.Errorf("aerospike-clusters field cannot be specified in backup service config")
 	}
 
-	// Add empty placeholders for missing config sections. This is required for validation to work.
-	if config.ServiceConfig.HTTPServer == nil {
-		config.ServiceConfig.HTTPServer = &dto.HTTPServerConfig{}
+	// An error here is in this spec alone, so it is returned without the merged-config context below.
+	if err := validation.ValidateConfiguration(&config); err != nil {
+		return err
 	}
 
-	if config.ServiceConfig.Logger == nil {
-		config.ServiceConfig.Logger = &dto.LoggerConfig{}
+	k8sClient, err := getK8sClient()
+	if err != nil {
+		return err
 	}
 
-	return validation.ValidateConfiguration(&config)
+	// The backup service loads this config merged with the aerospike-clusters and backup-routines that
+	// AerospikeBackups added to its ConfigMap, so validate the merged config. Otherwise a change that is valid
+	// on its own, such as removing a policy a routine still uses, makes every apply fail and the next pod start
+	// crash. A new backup service has no ConfigMap yet, so its config is validated alone.
+	fullConfig, err := getBackupServiceFullConfig(k8sClient, backupSvc.Name, backupSvc.Namespace)
+	if err != nil {
+		if !apierrors.IsNotFound(err) {
+			return err
+		}
+
+		// The controller creates the ConfigMap after the backup service is admitted, and no AerospikeBackup
+		// can add routines or clusters before that, so there is nothing to merge yet.
+		return nil
+	}
+
+	// The error can name a routine or cluster that is not in this spec, so say where those entries come from.
+	if err := updateValidateBackupSvcConfig(fullConfig.AerospikeClusters, fullConfig.BackupRoutines,
+		&config); err != nil {
+		return fmt.Errorf("config is not valid with the backup routines and clusters that AerospikeBackups "+
+			"added to ConfigMap %s: %w", utils.NamespacedName(backupSvc.Namespace, backupSvc.Name), err)
+	}
+
+	return nil
 }
 
 func validateBackupServiceSecrets(secretMounts []asdbv1beta1.SecretMount) error {
