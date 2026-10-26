@@ -938,13 +938,40 @@ var _ = Describe("AerospikeCluster validation", func() {
 							"skip-checkpoint cannot be set").
 						Validate(err)
 				})
+
+				It("rejects adding skip-checkpoint to a pure in-memory SC namespace on update", func() {
+					aeroCluster := testCluster.CreateAerospikeClusterPost640(
+						clusterNamespacedName, 1, testutil.GetEnterpriseImage(testutil.IndexCheckpointServerVersion),
+					)
+					setCheckpointPath(aeroCluster, indexCheckpointWorkdirPath)
+					aeroCluster.Spec.PreviewFeatures = []string{asdbv1.PreviewFeatureIndexCheckpoint}
+					addSCInMemoryNamespace(aeroCluster, "sc-mem")
+					Expect(envtests.K8sClient.Create(ctx, aeroCluster)).To(Succeed())
+
+					current, err := testCluster.GetCluster(envtests.K8sClient, ctx, clusterNamespacedName)
+					Expect(err).ToNot(HaveOccurred())
+
+					nsList := current.Spec.AerospikeConfig.Value[asdbv1.ConfKeyNamespace].([]interface{})
+					for _, nsIface := range nsList {
+						ns := nsIface.(map[string]interface{})
+						if ns[asdbv1.ConfKeyName] == "sc-mem" {
+							ns[asdbv1.ConfKeySkipCheckpoint] = true
+							break
+						}
+					}
+
+					err = envtests.K8sClient.Update(ctx, current)
+					Expect(err).To(HaveOccurred())
+
+					envtests.NewStatusErrorMatcher().
+						WithMessageSubstrings(testutil.WebhookErrorPrefix,
+							"sc-mem", "pure in-memory SC namespace",
+							"skip-checkpoint cannot be set").
+						Validate(err)
+				})
 			})
 
 			Context("positive", func() {
-				BeforeEach(func() {
-					envtests.GlobalWarnings.Reset()
-				})
-
 				It("allows pure in-memory SC namespace when index-checkpoint-path is configured", func() {
 					aeroCluster := testCluster.CreateAerospikeClusterPost640(
 						clusterNamespacedName, 1, testutil.GetEnterpriseImage(testutil.IndexCheckpointServerVersion),
@@ -2311,6 +2338,97 @@ var _ = Describe("AerospikeCluster validation", func() {
 			})
 		})
 
+		Context("spec.aerospikeConfig (checkpoint config changes)", func() {
+			const ckptMemNsName = "mem-ns"
+
+			BeforeEach(func() {
+				envtests.GlobalWarnings.Reset()
+
+				aeroCluster := testCluster.CreateAerospikeClusterPost640(
+					updateValidationClusterNamespacedName, 1, testutil.GetEnterpriseImage(testutil.IndexCheckpointServerVersion),
+				)
+				setCheckpointPath(aeroCluster, indexCheckpointWorkdirPath)
+				aeroCluster.Spec.PreviewFeatures = []string{asdbv1.PreviewFeatureIndexCheckpoint}
+				// Add a pure in-memory namespace so the data-size warning test has a target.
+				nsList := aeroCluster.Spec.AerospikeConfig.Value[asdbv1.ConfKeyNamespace].([]interface{})
+				aeroCluster.Spec.AerospikeConfig.Value[asdbv1.ConfKeyNamespace] = append(nsList,
+					map[string]interface{}{
+						asdbv1.ConfKeyName:              ckptMemNsName,
+						asdbv1.ConfKeyReplicationFactor: 1,
+						asdbv1.ConfKeyStorageEngine: map[string]interface{}{
+							asdbv1.ConfKeyType:     "memory",
+							asdbv1.ConfKeyDataSize: 1073741824,
+						},
+					},
+				)
+				Expect(envtests.K8sClient.Create(ctx, aeroCluster)).To(Succeed())
+			})
+
+			It("warns when index-checkpoint-path is changed", func() {
+				current, err := testCluster.GetCluster(envtests.K8sClient, ctx, updateValidationClusterNamespacedName)
+				Expect(err).ToNot(HaveOccurred())
+
+				// Change the path to a different subpath of the workdir volume — no new volume needed.
+				current.Spec.AerospikeConfig.Value[asdbv1.ConfKeyService].(map[string]interface{})[asdbv1.ConfKeyServiceIndexCheckpointPath] = "/opt/aerospike/index-ckpt-2"
+
+				Expect(envtests.WarningK8sClient.Update(ctx, current)).ToNot(HaveOccurred())
+				Expect(envtests.GlobalWarnings.Warnings).To(ContainElement(ContainSubstring("index-checkpoint-path changed")))
+			})
+
+			It("warns when data-size changes on a checkpointed namespace", func() {
+				current, err := testCluster.GetCluster(envtests.K8sClient, ctx, updateValidationClusterNamespacedName)
+				Expect(err).ToNot(HaveOccurred())
+
+				for _, nsIface := range current.Spec.AerospikeConfig.Value[asdbv1.ConfKeyNamespace].([]interface{}) {
+					ns := nsIface.(map[string]interface{})
+					if ns[asdbv1.ConfKeyName] == ckptMemNsName {
+						ns[asdbv1.ConfKeyStorageEngine].(map[string]interface{})[asdbv1.ConfKeyDataSize] = 2 * 1073741824
+						break
+					}
+				}
+
+				Expect(envtests.WarningK8sClient.Update(ctx, current)).ToNot(HaveOccurred())
+				Expect(envtests.GlobalWarnings.Warnings).To(ContainElement(ContainSubstring("data-size changed")))
+			})
+
+			It("does not warn when checkpointing is enabled for the first time", func() {
+				// Use the BeforeEach cluster but strip checkpointing out of it first,
+				// then re-add it — simulating "first time enable" without adding a new PVC
+				// (adding a PVC on update is rejected by the webhook).
+				current, err := testCluster.GetCluster(envtests.K8sClient, ctx, updateValidationClusterNamespacedName)
+				Expect(err).ToNot(HaveOccurred())
+
+				// Remove checkpoint path so this update looks like "enabling for the first time".
+				delete(current.Spec.AerospikeConfig.Value[asdbv1.ConfKeyService].(map[string]interface{}),
+					asdbv1.ConfKeyServiceIndexCheckpointPath)
+				current.Spec.PreviewFeatures = nil
+
+				Expect(envtests.K8sClient.Update(ctx, current)).To(Succeed())
+
+				// Now re-enable checkpointing via the workdir path (no new PVC needed).
+				envtests.GlobalWarnings.Reset()
+
+				current, err = testCluster.GetCluster(envtests.K8sClient, ctx, updateValidationClusterNamespacedName)
+				Expect(err).ToNot(HaveOccurred())
+
+				current.Spec.AerospikeConfig.Value[asdbv1.ConfKeyService].(map[string]interface{})[asdbv1.ConfKeyServiceIndexCheckpointPath] = indexCheckpointWorkdirPath
+				current.Spec.PreviewFeatures = []string{asdbv1.PreviewFeatureIndexCheckpoint}
+
+				Expect(envtests.WarningK8sClient.Update(ctx, current)).ToNot(HaveOccurred())
+				Expect(envtests.GlobalWarnings.Warnings).NotTo(ContainElement(ContainSubstring("checkpoint")))
+			})
+
+			It("does not warn when checkpoint config is unchanged", func() {
+				current, err := testCluster.GetCluster(envtests.K8sClient, ctx, updateValidationClusterNamespacedName)
+				Expect(err).ToNot(HaveOccurred())
+
+				current.Spec.PodSpec.AerospikeObjectMeta.Labels = map[string]string{"test": "noop"}
+
+				Expect(envtests.WarningK8sClient.Update(ctx, current)).ToNot(HaveOccurred())
+				Expect(envtests.GlobalWarnings.Warnings).NotTo(ContainElement(ContainSubstring("checkpoint")))
+			})
+		})
+
 		Context("spec.operations", func() {
 			Context("negative", func() {
 				It("rejects invalid operation kind on update (Enum)", func() {
@@ -2500,7 +2618,8 @@ func addInMemoryNamespace(aeroCluster *asdbv1.AerospikeCluster, name string, ext
 // addSCInMemoryNamespace appends a pure in-memory SC namespace (data-size only, no device/file
 // backing) with optional extra config keys merged in. RF is set to match the cluster size (1) so
 // the SC RF ≤ cluster-size constraint is satisfied.
-func addSCInMemoryNamespace(aeroCluster *asdbv1.AerospikeCluster, name string, extra ...map[string]interface{}) {
+func addSCInMemoryNamespace(aeroCluster *asdbv1.AerospikeCluster,
+	name string, extra ...map[string]interface{}) { //nolint:unparam // future use
 	ns := map[string]interface{}{
 		asdbv1.ConfKeyName:              name,
 		asdbv1.ConfKeyReplicationFactor: int(aeroCluster.Spec.Size),

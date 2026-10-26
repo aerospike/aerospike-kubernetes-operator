@@ -383,7 +383,7 @@ var _ = Describe(
 			// A pod restart destroys the sandbox and with it the shared-memory segments.
 			// For a pure in-memory SC namespace the checkpoint is the only way this data
 			// can be recovered: save → park → delete pod → hydrate on the new pod.
-			aeroCluster.Spec.PodSpec.AerospikeObjectMeta.Labels = map[string]string{"test-key": "test-value"}
+			aeroCluster.Spec.PodSpec.AerospikeObjectMeta.Labels = testLabels
 
 			// Both the SC in-memory namespace and the device-backed AP namespace are checkpointed:
 			// the SC one saves index + data, the AP one saves index only (data is on device).

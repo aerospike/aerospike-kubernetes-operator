@@ -746,26 +746,6 @@ func IsInMemoryNamespace(namespaceConf map[string]interface{}) bool {
 	return ok && typeStr == "memory"
 }
 
-// IsInMemoryNamespaceDeviceBacked returns true if the namespace uses the memory
-// storage-engine but is backed by physical devices or files. A pure in-memory
-// namespace carries only a data-size budget and loses all data on pod restart
-// without index checkpointing.
-func IsInMemoryNamespaceDeviceBacked(namespaceConf map[string]interface{}) bool {
-	if !IsInMemoryNamespace(namespaceConf) {
-		return false
-	}
-
-	storage, ok := namespaceConf[asdbv1.ConfKeyStorageEngine].(map[string]interface{})
-	if !ok {
-		return false
-	}
-
-	_, hasDevices := storage["devices"]
-	_, hasFiles := storage["files"]
-
-	return hasDevices || hasFiles
-}
-
 // IsDeviceOrPmemNamespace returns true if this namespace config uses device for storage.
 func IsDeviceOrPmemNamespace(namespaceConf map[string]interface{}) bool {
 	storage, ok := namespaceConf[asdbv1.ConfKeyStorageEngine]
