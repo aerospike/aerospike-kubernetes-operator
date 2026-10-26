@@ -8,9 +8,28 @@ import (
 )
 
 const (
-	clusterLabelKey   = "cluster_name"
-	namespaceLabelKey = "cluster_namespace"
-	phaseLabelKey     = "phase"
+	clusterLabelKey     = "cluster_name"
+	namespaceLabelKey   = "cluster_namespace"
+	phaseLabelKey       = "phase"
+	restartTypeLabelKey = "type"
+	triggerLabelKey     = "trigger"
+	resultLabelKey      = "result"
+)
+
+// Label values of aerospike_ako_pod_restarts_total.
+const (
+	restartTypeWarm        = "warm"
+	restartTypeCold        = "cold"
+	triggerPlanned         = "planned"
+	triggerUpgrade         = "upgrade"
+	triggerFailureRecovery = "failure_recovery"
+)
+
+// Label values of aerospike_ako_dynamic_config_updates_total.
+const (
+	dynamicConfigResultSuccess         = "success"
+	dynamicConfigResultFailed          = "failed"
+	dynamicConfigResultPartiallyFailed = "partially_failed"
 )
 
 // aerospikeClusterPhase is a custom metric that tracks the phase of AerospikeCluster CRs.
@@ -22,9 +41,29 @@ var aerospikeClusterPhase = prometheus.NewGaugeVec(
 	[]string{clusterLabelKey, namespaceLabelKey, phaseLabelKey},
 )
 
+// podRestartsTotal counts the Aerospike pods restarted by the operator.
+var podRestartsTotal = prometheus.NewCounterVec(
+	prometheus.CounterOpts{
+		Name: "aerospike_ako_pod_restarts_total",
+		Help: "Number of Aerospike pod restarts performed by the operator, " +
+			"by restart type (warm, cold) and trigger (planned, upgrade, failure_recovery)",
+	},
+	[]string{clusterLabelKey, namespaceLabelKey, restartTypeLabelKey, triggerLabelKey},
+)
+
+// dynamicConfigUpdatesTotal counts the dynamic config updates the operator applied to Aerospike pods.
+var dynamicConfigUpdatesTotal = prometheus.NewCounterVec(
+	prometheus.CounterOpts{
+		Name: "aerospike_ako_dynamic_config_updates_total",
+		Help: "Number of per-pod dynamic config updates sent to the Aerospike server by the operator, " +
+			"by result (success, failed, partially_failed)",
+	},
+	[]string{clusterLabelKey, namespaceLabelKey, resultLabelKey},
+)
+
 func init() {
 	// Register custom metrics with the global prometheus registry
-	metrics.Registry.MustRegister(aerospikeClusterPhase)
+	metrics.Registry.MustRegister(aerospikeClusterPhase, podRestartsTotal, dynamicConfigUpdatesTotal)
 }
 
 var phases = []asdbv1.AerospikeClusterPhase{
@@ -50,12 +89,65 @@ func (r *SingleClusterReconciler) addClusterPhaseMetric() {
 	}
 }
 
-// It removes the metric for the AerospikeCluster CR with the specified name and namespace.
-func (r *SingleClusterReconciler) removeClusterPhaseMetric() {
-	aerospikeClusterPhase.DeletePartialMatch(
-		prometheus.Labels{
-			clusterLabelKey:   r.aeroCluster.Name,
-			namespaceLabelKey: r.aeroCluster.Namespace,
-		},
-	)
+// podRestartTrigger returns the trigger label value of a pod restart. A failed pod is always
+// failure_recovery, also when it is replaced as part of an image upgrade.
+func podRestartTrigger(isFailureRecovery, isUpgrade bool) string {
+	switch {
+	case isFailureRecovery:
+		return triggerFailureRecovery
+	case isUpgrade:
+		return triggerUpgrade
+	default:
+		return triggerPlanned
+	}
+}
+
+// incPodRestartMetric counts one pod restart. Restart types that do not restart the pod
+// (noRestart, noRestartUpdateConf) are not counted.
+func (r *SingleClusterReconciler) incPodRestartMetric(restartType RestartType, trigger string) {
+	var restartTypeValue string
+
+	switch restartType {
+	case quickRestart:
+		restartTypeValue = restartTypeWarm
+	case podRestart:
+		restartTypeValue = restartTypeCold
+	case noRestart, noRestartUpdateConf:
+		return
+	}
+
+	podRestartsTotal.WithLabelValues(
+		r.aeroCluster.Name,
+		r.aeroCluster.Namespace,
+		restartTypeValue,
+		trigger).Inc()
+}
+
+// incDynamicConfigUpdateMetric counts one dynamic config update on a pod with the given result.
+func (r *SingleClusterReconciler) incDynamicConfigUpdateMetric(result string) {
+	dynamicConfigUpdatesTotal.WithLabelValues(
+		r.aeroCluster.Name,
+		r.aeroCluster.Namespace,
+		result).Inc()
+}
+
+// dynamicConfigResultFromStatus maps a failed dynamicConfigUpdateStatus to its result label value.
+func dynamicConfigResultFromStatus(status asdbv1.DynamicConfigUpdateStatus) string {
+	if status == asdbv1.PartiallyFailed {
+		return dynamicConfigResultPartiallyFailed
+	}
+
+	return dynamicConfigResultFailed
+}
+
+// It removes all custom metrics of the AerospikeCluster CR with the specified name and namespace.
+func (r *SingleClusterReconciler) removeClusterMetrics() {
+	clusterLabels := prometheus.Labels{
+		clusterLabelKey:   r.aeroCluster.Name,
+		namespaceLabelKey: r.aeroCluster.Namespace,
+	}
+
+	aerospikeClusterPhase.DeletePartialMatch(clusterLabels)
+	podRestartsTotal.DeletePartialMatch(clusterLabels)
+	dynamicConfigUpdatesTotal.DeletePartialMatch(clusterLabels)
 }
