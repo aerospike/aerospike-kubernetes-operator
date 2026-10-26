@@ -37,10 +37,6 @@ func ValidateAerospikeConfig(
 		)
 	}
 
-	if val, exists := serviceConf["advertise-ipv6"]; exists && val.(bool) {
-		return fmt.Errorf("advertise-ipv6 is not supported")
-	}
-
 	// TODO: Shouldn't be set by user, confirm this
 	if _, ok = serviceConf["cluster-name"]; !ok {
 		return fmt.Errorf("aerospikeCluster name not found in config. Looks like object is not mutated by webhook")

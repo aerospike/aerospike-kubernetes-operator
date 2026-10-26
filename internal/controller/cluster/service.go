@@ -12,6 +12,7 @@ import (
 	"k8s.io/apimachinery/pkg/types"
 	"k8s.io/apimachinery/pkg/util/intstr"
 	"k8s.io/apimachinery/pkg/util/sets"
+	"k8s.io/utils/ptr"
 	"sigs.k8s.io/controller-runtime/pkg/controller/controllerutil"
 
 	asdbv1 "github.com/aerospike/aerospike-kubernetes-operator/v4/api/v1"
@@ -69,6 +70,10 @@ func (r *SingleClusterReconciler) createOrUpdateSTSHeadlessSvc(ctx context.Conte
 				ClusterIP:                corev1.ClusterIPNone,
 				Selector:                 utils.LabelsForAerospikeCluster(r.aeroCluster.Name),
 			},
+		}
+
+		if asdbv1.IsAdvertiseIPv6Enabled(r.aeroCluster) {
+			service.Spec.IPFamilyPolicy = ptr.To(corev1.IPFamilyPolicyPreferDualStack)
 		}
 
 		service.Spec.Ports = r.getServicePorts()
@@ -318,6 +323,10 @@ func (r *SingleClusterReconciler) createOrUpdatePodService(ctx context.Context, 
 				},
 				ExternalTrafficPolicy: "Local",
 			},
+		}
+
+		if asdbv1.IsAdvertiseIPv6Enabled(r.aeroCluster) {
+			service.Spec.IPFamilyPolicy = ptr.To(corev1.IPFamilyPolicyPreferDualStack)
 		}
 
 		service.Spec.Ports = r.getServicePorts()
@@ -577,6 +586,25 @@ func (r *SingleClusterReconciler) isServiceMetadataUpdated(
 	return needsUpdate
 }
 
+// isIPFamilyPolicyUpdated returns true if the Service's ipFamilyPolicy had to be updated: PreferDualStack
+// while advertise-ipv6 is set, as kube-proxy and DNS cover only a Service's own families, and
+// SingleStack otherwise.
+func (r *SingleClusterReconciler) isIPFamilyPolicyUpdated(service *corev1.Service) bool {
+	want := corev1.IPFamilyPolicySingleStack
+	if asdbv1.IsAdvertiseIPv6Enabled(r.aeroCluster) {
+		want = corev1.IPFamilyPolicyPreferDualStack
+	}
+
+	// An unset policy is defaulted to SingleStack by the API server.
+	if ptr.Deref(service.Spec.IPFamilyPolicy, corev1.IPFamilyPolicySingleStack) == want {
+		return false
+	}
+
+	service.Spec.IPFamilyPolicy = new(want)
+
+	return true
+}
+
 func (r *SingleClusterReconciler) updateService(
 	ctx context.Context,
 	service *corev1.Service,
@@ -600,6 +628,10 @@ func (r *SingleClusterReconciler) updateService(
 	// on services created by older AKO versions and must be backfilled on upgrade.
 	if !service.Spec.PublishNotReadyAddresses {
 		service.Spec.PublishNotReadyAddresses = true
+		needsUpdate = true
+	}
+
+	if r.isIPFamilyPolicyUpdated(service) {
 		needsUpdate = true
 	}
 

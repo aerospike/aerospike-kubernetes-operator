@@ -17,6 +17,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"net"
 	"strconv"
 	"strings"
 	"time"
@@ -460,7 +461,7 @@ func (r *SingleClusterReconciler) newAsConn(pod *corev1.Pod) *deployment.ASConn 
 }
 
 func hostID(hostName string, hostPort int) string {
-	return fmt.Sprintf("%s:%d", hostName, hostPort)
+	return net.JoinHostPort(hostName, strconv.Itoa(hostPort))
 }
 
 // setMigrateFillDelay sets the migrate-fill-delay on all cluster nodes to delay fill migrations.

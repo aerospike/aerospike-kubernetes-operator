@@ -6,6 +6,8 @@ package cluster
 import (
 	goctx "context"
 	"fmt"
+	"net"
+	"strconv"
 	"time"
 
 	"github.com/go-logr/logr"
@@ -212,7 +214,7 @@ func newHostConn(
 		return nil, err
 	}
 
-	host := fmt.Sprintf("%s:%d", asConn.AerospikeHostName, asConn.AerospikePort)
+	host := net.JoinHostPort(asConn.AerospikeHostName, strconv.Itoa(asConn.AerospikePort))
 
 	return deployment.NewHostConn(log, host, asConn), nil
 }

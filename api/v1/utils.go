@@ -109,6 +109,7 @@ const (
 	ConfigKeyCgroupMemTracking        = "cgroup-mem-tracking"
 	ConfKeyMigrateFillDelay           = "migrate-fill-delay"
 	ConfKeyServiceIndexCheckpointPath = "index-checkpoint-path"
+	ConfKeyAdvertiseIPv6              = "advertise-ipv6"
 
 	// Defaults.
 	DefaultWorkDirectory = "/opt/aerospike"
@@ -616,6 +617,22 @@ func GetMigrateFillDelay(asConfig *AerospikeConfigSpec) (int, error) {
 	return fillDelay, nil
 }
 
+// GetAdvertiseIPv6 returns the service.advertise-ipv6 value from the Aerospike configuration.
+func GetAdvertiseIPv6(asConfig *AerospikeConfigSpec) bool {
+	if asConfig == nil {
+		return false
+	}
+
+	serviceConfig, ok := asConfig.Value[ConfKeyService].(map[string]interface{})
+	if !ok {
+		return false
+	}
+
+	advertise, _ := serviceConfig[ConfKeyAdvertiseIPv6].(bool)
+
+	return advertise
+}
+
 // IsClusterSCEnabled returns true if cluster has a sc namespace
 func IsClusterSCEnabled(aeroCluster *AerospikeCluster) bool {
 	// Look inside only 1st rack. SC namespaces should be same across all the racks
@@ -630,6 +647,12 @@ func IsClusterSCEnabled(aeroCluster *AerospikeCluster) bool {
 	}
 
 	return false
+}
+
+// IsAdvertiseIPv6Enabled returns true if the cluster sets service.advertise-ipv6.
+func IsAdvertiseIPv6Enabled(aeroCluster *AerospikeCluster) bool {
+	// Look inside only 1st rack. advertise-ipv6 should be same across all the racks
+	return GetAdvertiseIPv6(&aeroCluster.Spec.RackConfig.Racks[0].AerospikeConfig)
 }
 
 func IsNSSCEnabled(nsConf map[string]interface{}) bool {

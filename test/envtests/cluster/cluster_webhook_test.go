@@ -1011,19 +1011,38 @@ var _ = Describe("AerospikeCluster validation", func() {
 				envtests.GlobalWarnings.Reset()
 			})
 
-			Context("negative", func() {
-				It("rejects setting advertise-ipv6", func() {
-					aeroCluster := testCluster.CreateDummyAerospikeCluster(clusterNamespacedName, 1)
+			Context("positive", func() {
+				It("allows setting advertise-ipv6", func() {
+					aeroCluster := testCluster.CreateDummyAerospikeCluster(clusterNamespacedName, 2)
 					aeroCluster.Spec.AerospikeConfig.Value[asdbv1.ConfKeyService].(map[string]interface{})["advertise-ipv6"] = true
 
-					// Deploy cluster
+					Expect(envtests.K8sClient.Create(ctx, aeroCluster)).To(Succeed())
+				})
+
+				It("allows identical advertise-ipv6 rack overrides", func() {
+					aeroCluster := testCluster.CreateDummyAerospikeCluster(clusterNamespacedName, 2)
+					aeroCluster.Spec.RackConfig.Racks = testCluster.GetDummyRackConf(1, 2)
+
+					for idx := range aeroCluster.Spec.RackConfig.Racks {
+						aeroCluster.Spec.RackConfig.Racks[idx].InputAerospikeConfig = advertiseIPv6RackConfig()
+					}
+
+					Expect(envtests.K8sClient.Create(ctx, aeroCluster)).To(Succeed())
+				})
+			})
+
+			Context("negative", func() {
+				It("rejects advertise-ipv6 differing across racks", func() {
+					aeroCluster := testCluster.CreateDummyAerospikeCluster(clusterNamespacedName, 2)
+					aeroCluster.Spec.RackConfig.Racks = testCluster.GetDummyRackConf(1, 2)
+					aeroCluster.Spec.RackConfig.Racks[0].InputAerospikeConfig = advertiseIPv6RackConfig()
+
 					err := envtests.K8sClient.Create(ctx, aeroCluster)
 					Expect(err).To(HaveOccurred())
 
-					// Webhook response validation
 					envtests.NewStatusErrorMatcher().
 						WithMessageSubstrings(testutil.WebhookErrorPrefix,
-							"advertise-ipv6 is not supported").
+							"advertise-ipv6 value should be same across all racks").
 						Validate(err)
 				})
 
@@ -2477,4 +2496,12 @@ func setCheckpointPath(aeroCluster *asdbv1.AerospikeCluster, path string) {
 		},
 		Aerospike: &asdbv1.AerospikeServerVolumeAttachment{Path: path},
 	})
+}
+
+func advertiseIPv6RackConfig() *asdbv1.AerospikeConfigSpec {
+	return &asdbv1.AerospikeConfigSpec{
+		Value: map[string]interface{}{
+			asdbv1.ConfKeyService: map[string]interface{}{asdbv1.ConfKeyAdvertiseIPv6: true},
+		},
+	}
 }

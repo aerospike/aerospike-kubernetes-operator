@@ -1308,8 +1308,8 @@ func getExpectedServicePortForPod(
 }
 
 // getIPs returns the pod IP, host internal IP and the host external IP unless there is an error.
-// Note: the IPs returned from here should match the IPs generated in the pod
-// initialization script for the init container.
+// Note: the IPs returned from here should match the first (primary-family) IPs the init
+// container advertises.
 func getIPs(ctx goctx.Context, pod *corev1.Pod) (
 	podIP string, hostInternalIP string, hostExternalIP string, err error,
 ) {
@@ -1328,11 +1328,20 @@ func getIPs(ctx goctx.Context, pod *corev1.Pod) (
 			pod.Name, err,
 		)
 	}
-	// If externalIP is present than give external ip
+	// Only the host IP's family: on a dual-stack node the addresses come in no guaranteed order.
+	hostIP := net.ParseIP(pod.Status.HostIP)
+	primaryIPv4 := hostIP == nil || hostIP.To4() != nil
+
 	for _, add := range k8sNode.Status.Addresses {
-		if add.Type == corev1.NodeExternalIP && add.Address != "" {
+		ip := net.ParseIP(add.Address)
+		if ip == nil || (ip.To4() != nil) != primaryIPv4 {
+			continue
+		}
+
+		switch add.Type { //nolint:exhaustive // other address types are hostnames
+		case corev1.NodeExternalIP:
 			hostExternalIP = add.Address
-		} else if add.Type == corev1.NodeInternalIP && add.Address != "" {
+		case corev1.NodeInternalIP:
 			hostInternalIP = add.Address
 		}
 	}

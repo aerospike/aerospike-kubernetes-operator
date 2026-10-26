@@ -1241,6 +1241,7 @@ func validateRackConfig(aslog logr.Logger, cluster *asdbv1.AerospikeCluster,
 
 	rackMap := map[int]bool{}
 	migrateFillDelaySet := sets.Set[uint32]{}
+	advertiseIPv6Set := sets.Set[bool]{}
 
 	var racksBlockedFromRoster int
 
@@ -1329,6 +1330,8 @@ func validateRackConfig(aslog logr.Logger, cluster *asdbv1.AerospikeCluster,
 
 		migrateFillDelaySet.Insert(uint32(migrateFillDelay)) //nolint:gosec // migrate-fill-delay is bounded by uint32 range
 
+		advertiseIPv6Set.Insert(asdbv1.GetAdvertiseIPv6(&rack.AerospikeConfig))
+
 		if asdbv1.GetBool(rack.ForceBlockFromRoster) {
 			racksBlockedFromRoster++
 		}
@@ -1341,6 +1344,11 @@ func validateRackConfig(aslog logr.Logger, cluster *asdbv1.AerospikeCluster,
 	// If len of migrateFillDelaySet is more than 1, it means that different migrate-fill-delay is set across racks
 	if migrateFillDelaySet.Len() > 1 {
 		return warnings, fmt.Errorf("migrate-fill-delay value should be same across all racks")
+	}
+
+	// A mixed value would advertise IPv6 from some nodes only, leaving IPv6 clients a partial cluster.
+	if advertiseIPv6Set.Len() > 1 {
+		return warnings, fmt.Errorf("advertise-ipv6 value should be same across all racks")
 	}
 
 	// Validate batch upgrade/restart param
