@@ -2369,7 +2369,8 @@ var _ = Describe("AerospikeCluster validation", func() {
 				Expect(err).ToNot(HaveOccurred())
 
 				// Change the path to a different subpath of the workdir volume — no new volume needed.
-				current.Spec.AerospikeConfig.Value[asdbv1.ConfKeyService].(map[string]interface{})[asdbv1.ConfKeyServiceIndexCheckpointPath] = "/opt/aerospike/index-ckpt-2"
+				current.Spec.AerospikeConfig.Value[asdbv1.ConfKeyService].(map[string]interface{})[asdbv1.
+					ConfKeyServiceIndexCheckpointPath] = "/opt/aerospike/index-ckpt-2"
 
 				Expect(envtests.WarningK8sClient.Update(ctx, current)).ToNot(HaveOccurred())
 				Expect(envtests.GlobalWarnings.Warnings).To(ContainElement(ContainSubstring("index-checkpoint-path changed")))
@@ -2411,7 +2412,8 @@ var _ = Describe("AerospikeCluster validation", func() {
 				current, err = testCluster.GetCluster(envtests.K8sClient, ctx, updateValidationClusterNamespacedName)
 				Expect(err).ToNot(HaveOccurred())
 
-				current.Spec.AerospikeConfig.Value[asdbv1.ConfKeyService].(map[string]interface{})[asdbv1.ConfKeyServiceIndexCheckpointPath] = indexCheckpointWorkdirPath
+				current.Spec.AerospikeConfig.Value[asdbv1.ConfKeyService].(map[string]interface{})[asdbv1.
+					ConfKeyServiceIndexCheckpointPath] = indexCheckpointWorkdirPath
 				current.Spec.PreviewFeatures = []string{asdbv1.PreviewFeatureIndexCheckpoint}
 
 				Expect(envtests.WarningK8sClient.Update(ctx, current)).ToNot(HaveOccurred())
