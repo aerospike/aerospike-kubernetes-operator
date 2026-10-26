@@ -174,9 +174,60 @@ func newTestReconciler(
 func clusterPhaseSeries(t *testing.T, cluster string) int {
 	t.Helper()
 
+	return clusterMetricSeries(t, aerospikeClusterPhase, cluster)
+}
+
+// clusterMetricSeries reports how many series of the given collector currently exist for the
+// named cluster, gathered through a private registry like clusterPhaseSeries.
+func clusterMetricSeries(t *testing.T, collector prometheus.Collector, cluster string) int {
+	t.Helper()
+
+	return len(gatherClusterSeries(t, collector, cluster))
+}
+
+// clusterMetricValue returns the value of the series of the named cluster whose labels include
+// wantLabels. It fails the test if no such series exists.
+func clusterMetricValue(
+	t *testing.T, collector prometheus.Collector, cluster string, wantLabels map[string]string,
+) float64 {
+	t.Helper()
+
+	for _, series := range gatherClusterSeries(t, collector, cluster) {
+		matched := true
+
+		for name, value := range wantLabels {
+			if series.labels[name] != value {
+				matched = false
+
+				break
+			}
+		}
+
+		if matched {
+			return series.value
+		}
+	}
+
+	t.Fatalf("no series for cluster %s with labels %v", cluster, wantLabels)
+
+	return 0
+}
+
+// metricSeries is one gathered series: its labels and its counter or gauge value.
+type metricSeries struct {
+	labels map[string]string
+	value  float64
+}
+
+// gatherClusterSeries gathers the series of the given collector that belong to the named cluster.
+// Gathering through a private registry keeps the result scoped to that one cluster, so it is
+// unaffected by whatever else has been written to the package-global vec.
+func gatherClusterSeries(t *testing.T, collector prometheus.Collector, cluster string) []metricSeries {
+	t.Helper()
+
 	reg := prometheus.NewRegistry()
-	if err := reg.Register(aerospikeClusterPhase); err != nil {
-		t.Fatalf("register phase gauge: %v", err)
+	if err := reg.Register(collector); err != nil {
+		t.Fatalf("register collector: %v", err)
 	}
 
 	families, err := reg.Gather()
@@ -184,21 +235,30 @@ func clusterPhaseSeries(t *testing.T, cluster string) int {
 		t.Fatalf("gather metrics: %v", err)
 	}
 
-	count := 0
+	var result []metricSeries
 
 	for _, family := range families {
 		for _, metric := range family.GetMetric() {
+			labels := make(map[string]string, len(metric.GetLabel()))
 			for _, label := range metric.GetLabel() {
-				if label.GetName() == clusterLabelKey && label.GetValue() == cluster {
-					count++
-
-					break
-				}
+				labels[label.GetName()] = label.GetValue()
 			}
+
+			if labels[clusterLabelKey] != cluster {
+				continue
+			}
+
+			// GetCounter is nil for a gauge, so read the value that matches the metric type.
+			value := metric.GetCounter().GetValue()
+			if gauge := metric.GetGauge(); gauge != nil {
+				value = gauge.GetValue()
+			}
+
+			result = append(result, metricSeries{labels: labels, value: value})
 		}
 	}
 
-	return count
+	return result
 }
 
 // failOnAnyAPIRead returns interceptors that fail the test if the code under test issues any
