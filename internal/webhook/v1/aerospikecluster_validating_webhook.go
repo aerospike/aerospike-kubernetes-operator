@@ -359,7 +359,7 @@ func warnCheckpointChanges(oldCluster, newCluster *asdbv1.AerospikeCluster) admi
 	if asdbv1.GetIndexCheckpointPath(newCfg) != asdbv1.GetIndexCheckpointPath(oldCfg) {
 		warnings = append(warnings,
 			"index-checkpoint-path changed — checkpoint save will be skipped on any pod restart"+
-				" triggered with this update, data will not be preserved")
+				" triggered with this update")
 	}
 
 	// Warn for each namespace that was checkpointed in the old config and whose data-size changed.
@@ -391,7 +391,7 @@ func warnCheckpointChanges(oldCluster, newCluster *asdbv1.AerospikeCluster) admi
 
 		if hasOld && hasNew && oldDataSize != newDataSize {
 			warnings = append(warnings, fmt.Sprintf(
-				"namespace %q: data-size changed — checkpoint save will be skipped on pod restart, data will not be preserved",
+				"namespace %q: data-size changed — checkpoint save will be skipped on pod restart",
 				name,
 			))
 		}

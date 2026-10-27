@@ -2350,17 +2350,7 @@ var _ = Describe("AerospikeCluster validation", func() {
 				setCheckpointPath(aeroCluster, indexCheckpointWorkdirPath)
 				aeroCluster.Spec.PreviewFeatures = []string{asdbv1.PreviewFeatureIndexCheckpoint}
 				// Add a pure in-memory namespace so the data-size warning test has a target.
-				nsList := aeroCluster.Spec.AerospikeConfig.Value[asdbv1.ConfKeyNamespace].([]interface{})
-				aeroCluster.Spec.AerospikeConfig.Value[asdbv1.ConfKeyNamespace] = append(nsList,
-					map[string]interface{}{
-						asdbv1.ConfKeyName:              ckptMemNsName,
-						asdbv1.ConfKeyReplicationFactor: 1,
-						asdbv1.ConfKeyStorageEngine: map[string]interface{}{
-							asdbv1.ConfKeyType:     "memory",
-							asdbv1.ConfKeyDataSize: 1073741824,
-						},
-					},
-				)
+				addSCInMemoryNamespace(aeroCluster, ckptMemNsName)
 				Expect(envtests.K8sClient.Create(ctx, aeroCluster)).To(Succeed())
 			})
 
@@ -2621,7 +2611,7 @@ func addInMemoryNamespace(aeroCluster *asdbv1.AerospikeCluster, name string, ext
 // backing) with optional extra config keys merged in. RF is set to match the cluster size (1) so
 // the SC RF ≤ cluster-size constraint is satisfied.
 func addSCInMemoryNamespace(aeroCluster *asdbv1.AerospikeCluster,
-	name string, extra ...map[string]interface{}) { //nolint:unparam // future use
+	name string, extra ...map[string]interface{}) {
 	ns := map[string]interface{}{
 		asdbv1.ConfKeyName:              name,
 		asdbv1.ConfKeyReplicationFactor: int(aeroCluster.Spec.Size),
