@@ -2500,6 +2500,41 @@ func validateNetworkPolicy(cluster *asdbv1.AerospikeCluster) error {
 		}
 	}
 
+	if err := validateNLBNetworkPolicy(cluster); err != nil {
+		return err
+	}
+
+	return nil
+}
+
+func validateNLBNetworkPolicy(cluster *asdbv1.AerospikeCluster) error {
+	np := &cluster.Spec.AerospikeNetworkPolicy
+
+	isNLB := np.AccessType == asdbv1.AerospikeNetworkTypeNLB ||
+		np.AlternateAccessType == asdbv1.AerospikeNetworkTypeNLB ||
+		np.TLSAccessType == asdbv1.AerospikeNetworkTypeNLB ||
+		np.TLSAlternateAccessType == asdbv1.AerospikeNetworkTypeNLB
+
+	if !isNLB {
+		return nil
+	}
+
+	if np.AccessType == asdbv1.AerospikeNetworkTypeNLB && np.NLBAccessAddress == "" {
+		return fmt.Errorf("nlbAccessAddress is required when access is 'clusterNLB'")
+	}
+
+	if np.AlternateAccessType == asdbv1.AerospikeNetworkTypeNLB && np.NLBAlternateAccessAddress == "" {
+		return fmt.Errorf("nlbAlternateAccessAddress is required when alternateAccess is 'clusterNLB'")
+	}
+
+	if np.TLSAccessType == asdbv1.AerospikeNetworkTypeNLB && np.NLBTLSAccessAddress == "" {
+		return fmt.Errorf("nlbTLSAccessAddress is required when tlsAccess is 'clusterNLB'")
+	}
+
+	if np.TLSAlternateAccessType == asdbv1.AerospikeNetworkTypeNLB && np.NLBTLSAlternateAccessAddress == "" {
+		return fmt.Errorf("nlbTLSAlternateAccessAddress is required when tlsAlternateAccess is 'clusterNLB'")
+	}
+
 	return nil
 }
 

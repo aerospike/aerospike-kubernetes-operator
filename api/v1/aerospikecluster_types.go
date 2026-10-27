@@ -1281,13 +1281,19 @@ const (
 
 	// AerospikeNetworkTypeCustomInterface specifies any other custom interface to be used with Aerospike
 	AerospikeNetworkTypeCustomInterface AerospikeNetworkType = "customInterface"
+
+	// AerospikeNetworkTypeNLB specifies access via a cluster-level NLB or PSC endpoint.
+	// All pods advertise the same NLBAccessAddress but unique ports assigned by the init
+	// container and stored in status.pods[podName].nlbPortOffset.
+	// Works with both multiPodPerHost true and false.
+	AerospikeNetworkTypeNLB AerospikeNetworkType = "clusterNLB"
 )
 
 // AerospikeNetworkPolicy specifies how clients and tools access the Aerospike cluster.
 type AerospikeNetworkPolicy struct {
 	// AccessType is the type of network address to use for Aerospike access address.
 	// Defaults to hostInternal.
-	// +kubebuilder:validation:Enum=pod;hostInternal;hostExternal;configuredIP;customInterface
+	// +kubebuilder:validation:Enum=pod;hostInternal;hostExternal;configuredIP;customInterface;clusterNLB
 	// +kubebuilder:default="hostInternal"
 	// +optional
 	AccessType AerospikeNetworkType `json:"access,omitempty"`
@@ -1304,7 +1310,7 @@ type AerospikeNetworkPolicy struct {
 
 	// AlternateAccessType is the type of network address to use for Aerospike alternate access address.
 	// Defaults to hostExternal.
-	// +kubebuilder:validation:Enum=pod;hostInternal;hostExternal;configuredIP;customInterface
+	// +kubebuilder:validation:Enum=pod;hostInternal;hostExternal;configuredIP;customInterface;clusterNLB
 	// +kubebuilder:default="hostExternal"
 	// +optional
 	AlternateAccessType AerospikeNetworkType `json:"alternateAccess,omitempty"`
@@ -1322,7 +1328,7 @@ type AerospikeNetworkPolicy struct {
 
 	// TLSAccessType is the type of network address to use for Aerospike TLS access address.
 	// Defaults to hostInternal.
-	// +kubebuilder:validation:Enum=pod;hostInternal;hostExternal;configuredIP;customInterface
+	// +kubebuilder:validation:Enum=pod;hostInternal;hostExternal;configuredIP;customInterface;clusterNLB
 	// +kubebuilder:default="hostInternal"
 	// +optional
 	TLSAccessType AerospikeNetworkType `json:"tlsAccess,omitempty"`
@@ -1339,7 +1345,7 @@ type AerospikeNetworkPolicy struct {
 
 	// TLSAlternateAccessType is the type of network address to use for Aerospike TLS alternate access address.
 	// Defaults to hostExternal.
-	// +kubebuilder:validation:Enum=pod;hostInternal;hostExternal;configuredIP;customInterface
+	// +kubebuilder:validation:Enum=pod;hostInternal;hostExternal;configuredIP;customInterface;clusterNLB
 	// +kubebuilder:default="hostExternal"
 	// +optional
 	TLSAlternateAccessType AerospikeNetworkType `json:"tlsAlternateAccess,omitempty"`
@@ -1354,6 +1360,27 @@ type AerospikeNetworkPolicy struct {
 	// +kubebuilder:validation:MinItems:=1
 	// +optional
 	CustomTLSAlternateAccessNetworkNames []string `json:"customTLSAlternateAccessNetworkNames,omitempty"`
+
+	// NLBAccessAddress is the FQDN or IP of the cluster-level NLB / PSC endpoint
+	// advertised as the access address for all pods.
+	// Required when access is 'clusterNLB'.
+	// +optional
+	NLBAccessAddress string `json:"nlbAccessAddress,omitempty"`
+
+	// NLBAlternateAccessAddress is the FQDN or IP for alternate access via NLB/PSC.
+	// Required when alternateAccess is 'clusterNLB'.
+	// +optional
+	NLBAlternateAccessAddress string `json:"nlbAlternateAccessAddress,omitempty"`
+
+	// NLBTLSAccessAddress is the FQDN or IP for TLS access via NLB/PSC.
+	// Required when tlsAccess is 'clusterNLB'.
+	// +optional
+	NLBTLSAccessAddress string `json:"nlbTLSAccessAddress,omitempty"`
+
+	// NLBTLSAlternateAccessAddress is the FQDN or IP for TLS alternate access via NLB/PSC.
+	// Required when tlsAlternateAccess is 'clusterNLB'.
+	// +optional
+	NLBTLSAlternateAccessAddress string `json:"nlbTLSAlternateAccessAddress,omitempty"`
 
 	// FabricType is the type of network address to use for Aerospike fabric address.
 	// Defaults is empty meaning all interfaces 'any'.
@@ -1497,6 +1524,13 @@ type AerospikePodStatus struct { //nolint:govet // for readability
 	// from the pod annotation rather than the static rack configuration.
 	// +optional
 	RackIDOverridden bool `json:"rackIDOverridden,omitempty"`
+
+	// NLBPortOffset is the unique port offset (1-255) assigned for clusterNLB access.
+	// Advertised port = servicePort + NLBPortOffset.
+	// 0 means not assigned (clusterNLB not in use).
+	// Assigned by the init container using Kubernetes optimistic concurrency.
+	// +optional
+	NLBPortOffset int32 `json:"nlbPortOffset,omitempty"`
 }
 
 // +kubebuilder:object:root=true
