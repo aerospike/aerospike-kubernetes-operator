@@ -119,6 +119,68 @@ var _ = Describe("Pod eviction webhook", func() {
 					return pod.Annotations != nil && pod.Annotations[asdbv1.EvictionBlockedAnnotation] != ""
 				}, 5*time.Second, 500*time.Millisecond).Should(BeTrue())
 			})
+
+			It("should block dry-run eviction of Aerospike pod without setting eviction-blocked annotation", func() {
+				By("creating a pod")
+				Expect(envtests.K8sClient.Create(ctx, pod)).To(Succeed())
+
+				// Wait until pod is visible
+				Eventually(func() error {
+					return envtests.K8sClient.Get(ctx, client.ObjectKey{Name: podName, Namespace: testutil.DefaultNamespace}, pod)
+				}, 5*time.Second, 500*time.Millisecond).Should(Succeed())
+
+				By("creating dry-run eviction object")
+
+				eviction := &policyv1.Eviction{
+					ObjectMeta:    metav1.ObjectMeta{Name: podName, Namespace: testutil.DefaultNamespace},
+					DeleteOptions: &metav1.DeleteOptions{DryRun: []string{metav1.DryRunAll}},
+				}
+
+				By("attempting dry-run eviction")
+
+				err := envtests.ClientSet.CoreV1().Pods(testutil.DefaultNamespace).EvictV1(ctx, eviction)
+				Expect(err).To(HaveOccurred())
+				Expect(err.Error()).To(ContainSubstring("blocked by admission webhook"))
+
+				By("verifying eviction-blocked annotation is not set")
+				Consistently(func() bool {
+					_ = envtests.K8sClient.Get(ctx, client.ObjectKey{Name: podName, Namespace: testutil.DefaultNamespace}, pod)
+					return pod.Annotations[asdbv1.EvictionBlockedAnnotation] == ""
+				}, 3*time.Second, 500*time.Millisecond).Should(BeTrue())
+			})
+
+			It("should block dry-run eviction sent as query parameter without setting eviction-blocked annotation", func() {
+				By("creating a pod")
+				Expect(envtests.K8sClient.Create(ctx, pod)).To(Succeed())
+
+				// Wait until pod is visible
+				Eventually(func() error {
+					return envtests.K8sClient.Get(ctx, client.ObjectKey{Name: podName, Namespace: testutil.DefaultNamespace}, pod)
+				}, 5*time.Second, 500*time.Millisecond).Should(Succeed())
+
+				By("creating eviction object without DeleteOptions")
+
+				// No DeleteOptions in the body, so the webhook sees dry-run only through Request.DryRun.
+				eviction := &policyv1.Eviction{
+					ObjectMeta: metav1.ObjectMeta{Name: podName, Namespace: testutil.DefaultNamespace},
+				}
+
+				By("attempting eviction with dryRun=All query parameter")
+
+				// EvictV1 cannot send query parameters, so the request is built with the REST client.
+				err := envtests.ClientSet.CoreV1().RESTClient().Post().
+					Namespace(testutil.DefaultNamespace).Resource("pods").Name(podName).
+					SubResource("eviction").Param("dryRun", metav1.DryRunAll).
+					Body(eviction).Do(ctx).Error()
+				Expect(err).To(HaveOccurred())
+				Expect(err.Error()).To(ContainSubstring("blocked by admission webhook"))
+
+				By("verifying eviction-blocked annotation is not set")
+				Consistently(func() bool {
+					_ = envtests.K8sClient.Get(ctx, client.ObjectKey{Name: podName, Namespace: testutil.DefaultNamespace}, pod)
+					return pod.Annotations[asdbv1.EvictionBlockedAnnotation] == ""
+				}, 3*time.Second, 500*time.Millisecond).Should(BeTrue())
+			})
 		})
 
 		Context("Non-Aerospike pods", func() {
