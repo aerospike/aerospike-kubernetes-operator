@@ -2427,32 +2427,52 @@ var _ = Describe("AerospikeCluster validation", func() {
 				Expect(envtests.GlobalWarnings.Warnings).To(ContainElement(ContainSubstring("data-size changed")))
 			})
 
-			It("does not warn when checkpointing is enabled for the first time", func() {
-				// Use the BeforeEach cluster but strip checkpointing out of it first,
-				// then re-add it — simulating "first time enable" without adding a new PVC
-				// (adding a PVC on update is rejected by the webhook).
-				current, err := testCluster.GetCluster(envtests.K8sClient, ctx, updateValidationClusterNamespacedName)
-				Expect(err).ToNot(HaveOccurred())
+			Context("when checkpointing is enabled for the first time", func() {
+				// Use a separate cluster without any SC in-memory namespace, so that
+				// stripping and re-adding index-checkpoint-path is always valid.
+				const firstTimeClusterName = "ckpt-first-time-cluster"
 
-				// Remove checkpoint path so this update looks like "enabling for the first time".
-				delete(current.Spec.AerospikeConfig.Value[asdbv1.ConfKeyService].(map[string]interface{}),
-					asdbv1.ConfKeyServiceIndexCheckpointPath)
-				current.Spec.PreviewFeatures = nil
+				firstTimeClusterNSN := uniqueNamespacedName(firstTimeClusterName)
 
-				Expect(envtests.K8sClient.Update(ctx, current)).To(Succeed())
+				BeforeEach(func() {
+					envtests.GlobalWarnings.Reset()
 
-				// Now re-enable checkpointing via the workdir path (no new PVC needed).
-				envtests.GlobalWarnings.Reset()
+					aeroCluster := testCluster.CreateAerospikeClusterPost640(
+						firstTimeClusterNSN, 1, testutil.GetEnterpriseImage(testutil.IndexCheckpointServerVersion),
+					)
+					setCheckpointPath(aeroCluster, indexCheckpointWorkdirPath)
+					aeroCluster.Spec.PreviewFeatures = []string{asdbv1.PreviewFeatureIndexCheckpoint}
+					Expect(envtests.K8sClient.Create(ctx, aeroCluster)).To(Succeed())
+				})
 
-				current, err = testCluster.GetCluster(envtests.K8sClient, ctx, updateValidationClusterNamespacedName)
-				Expect(err).ToNot(HaveOccurred())
+				AfterEach(func() {
+					deleteCluster(ctx, firstTimeClusterNSN)
+				})
 
-				current.Spec.AerospikeConfig.Value[asdbv1.ConfKeyService].(map[string]interface{})[asdbv1.
-					ConfKeyServiceIndexCheckpointPath] = indexCheckpointWorkdirPath
-				current.Spec.PreviewFeatures = []string{asdbv1.PreviewFeatureIndexCheckpoint}
+				It("does not warn", func() {
+					// Strip checkpointing — valid because there is no SC in-memory namespace.
+					current, err := testCluster.GetCluster(envtests.K8sClient, ctx, firstTimeClusterNSN)
+					Expect(err).ToNot(HaveOccurred())
 
-				Expect(envtests.WarningK8sClient.Update(ctx, current)).ToNot(HaveOccurred())
-				Expect(envtests.GlobalWarnings.Warnings).NotTo(ContainElement(ContainSubstring("checkpoint")))
+					delete(current.Spec.AerospikeConfig.Value[asdbv1.ConfKeyService].(map[string]interface{}),
+						asdbv1.ConfKeyServiceIndexCheckpointPath)
+					current.Spec.PreviewFeatures = nil
+
+					Expect(envtests.K8sClient.Update(ctx, current)).To(Succeed())
+
+					// Re-enable via workdir path (no new PVC needed — workdir already covers it).
+					envtests.GlobalWarnings.Reset()
+
+					current, err = testCluster.GetCluster(envtests.K8sClient, ctx, firstTimeClusterNSN)
+					Expect(err).ToNot(HaveOccurred())
+
+					current.Spec.AerospikeConfig.Value[asdbv1.ConfKeyService].(map[string]interface{})[asdbv1.
+						ConfKeyServiceIndexCheckpointPath] = indexCheckpointWorkdirPath
+					current.Spec.PreviewFeatures = []string{asdbv1.PreviewFeatureIndexCheckpoint}
+
+					Expect(envtests.WarningK8sClient.Update(ctx, current)).ToNot(HaveOccurred())
+					Expect(envtests.GlobalWarnings.Warnings).NotTo(ContainElement(ContainSubstring("checkpoint")))
+				})
 			})
 
 			It("does not warn when checkpoint config is unchanged", func() {
