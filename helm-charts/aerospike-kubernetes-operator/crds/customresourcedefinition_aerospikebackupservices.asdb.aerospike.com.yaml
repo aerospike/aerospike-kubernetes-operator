@@ -4,7 +4,7 @@ kind: CustomResourceDefinition
 metadata:
   annotations:
     aerospike-kubernetes-operator/version: 4.6.0
-    controller-gen.kubebuilder.io/version: v0.22.0
+    controller-gen.kubebuilder.io/version: v0.23.0
   name: aerospikebackupservices.asdb.aerospike.com
 spec:
   group: asdb.aerospike.com
@@ -1411,10 +1411,21 @@ spec:
                       description: VolumeMount is the volume mount options for the
                         secret.
                       properties:
-                        mountPath:
+                        bindMountOptions:
                           description: |-
-                            Path within the container at which the volume should be mounted.  Must
-                            not contain ':'.
+                            bindMountOptions is the list of additional bind mount options to apply when
+                            mounting this volume into the container. Allowed values are noexec,
+                            nodev, and nosuid. These are Linux mount options and have no effect on
+                            Windows nodes.
+                            This field is not supported with image volumes.
+                            This is an alpha field and requires enabling the VolumeBindMountOptions feature gate.
+                          items:
+                            type: string
+                          type: array
+                          x-kubernetes-list-type: set
+                        mountPath:
+                          description: Path within the container at which the volume
+                            should be mounted.
                           type: string
                         mountPropagation:
                           description: |-
@@ -2863,10 +2874,21 @@ spec:
                       description: VolumeMount is the volume mount options for the
                         secret.
                       properties:
-                        mountPath:
+                        bindMountOptions:
                           description: |-
-                            Path within the container at which the volume should be mounted.  Must
-                            not contain ':'.
+                            bindMountOptions is the list of additional bind mount options to apply when
+                            mounting this volume into the container. Allowed values are noexec,
+                            nodev, and nosuid. These are Linux mount options and have no effect on
+                            Windows nodes.
+                            This field is not supported with image volumes.
+                            This is an alpha field and requires enabling the VolumeBindMountOptions feature gate.
+                          items:
+                            type: string
+                          type: array
+                          x-kubernetes-list-type: set
+                        mountPath:
+                          description: Path within the container at which the volume
+                            should be mounted.
                           type: string
                         mountPropagation:
                           description: |-
