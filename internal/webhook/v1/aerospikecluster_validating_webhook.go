@@ -337,67 +337,87 @@ func (acv *AerospikeClusterCustomValidator) ValidateUpdate(_ context.Context,
 	return warnings, nil
 }
 
-// warnCheckpointChanges emits warnings for config changes that cause the operator to skip
-// the checkpoint save on the outgoing pod, leaving the replacement pod with no data to restore:
-//   - index-checkpoint-path changed: every namespace's save is skipped because the checkpoint
-//     would land at the abandoned path.
-//   - data-size changed on a checkpointed namespace: that namespace's save is skipped because
-//     the checkpoint would be incompatible with the replacement pod's new layout.
+// warnCheckpointChanges emits a warning for the first config change found that causes the
+// operator to skip the checkpoint save on the outgoing pod, leaving the replacement pod with
+// no data to restore.
+//
+// Conditions that skip the save:
+//   - index-checkpoint-path changed: every namespace's save is skipped (checkpoint lands at abandoned path).
+//   - data-size changed (or storage backing switched): that namespace's save is skipped because the
+//     checkpoint is incompatible with the replacement pod's new layout.
 func warnCheckpointChanges(oldCluster, newCluster *asdbv1.AerospikeCluster) admission.Warnings {
-	newCfg := newCluster.Spec.AerospikeConfig.Value
-	oldCfg := oldCluster.Spec.AerospikeConfig.Value
+	oldRackMap := buildRackConfigMap(oldCluster)
 
-	// Nothing to warn about if checkpointing was not previously enabled — no checkpoint exists to lose.
-	if asdbv1.GetIndexCheckpointPath(oldCfg) == "" {
-		return nil
-	}
+	for idx := range newCluster.Spec.RackConfig.Racks {
+		newRack := &newCluster.Spec.RackConfig.Racks[idx]
+		newCfg := newRack.AerospikeConfig.Value
 
-	var warnings admission.Warnings
-
-	// Warn if index-checkpoint-path changed — any pod restart triggered with this update will skip
-	// the checkpoint save because it would land at the abandoned path.
-	if asdbv1.GetIndexCheckpointPath(newCfg) != asdbv1.GetIndexCheckpointPath(oldCfg) {
-		warnings = append(warnings,
-			"index-checkpoint-path changed — checkpoint save will be skipped on any pod restart"+
-				" triggered with this update")
-	}
-
-	// Warn for each namespace that was checkpointed in the old config and whose data-size changed.
-	oldCheckpointedNS := sets.NewString(asdbv1.GetIndexCheckpointNamespaces(oldCfg)...)
-	if oldCheckpointedNS.Len() == 0 {
-		return warnings
-	}
-
-	newNSMap := buildNamespaceMap(newCfg)
-
-	for _, nsIface := range oldCfg[asdbv1.ConfKeyNamespace].([]interface{}) {
-		nsConf, ok := nsIface.(map[string]interface{})
-		if !ok {
-			continue
-		}
-
-		name, _ := nsConf[asdbv1.ConfKeyName].(string)
-		if !oldCheckpointedNS.Has(name) {
-			continue
-		}
-
-		newNS, exists := newNSMap[name]
+		oldCfg, exists := oldRackMap[newRack.ID]
 		if !exists {
 			continue
 		}
 
-		oldDataSize, hasOld := asdbv1.GetNamespaceDataSize(nsConf)
-		newDataSize, hasNew := asdbv1.GetNamespaceDataSize(newNS)
+		// Skip rack if checkpointing was not previously enabled on it.
+		if asdbv1.GetIndexCheckpointPath(oldCfg) == "" {
+			continue
+		}
 
-		if hasOld && hasNew && oldDataSize != newDataSize {
-			warnings = append(warnings, fmt.Sprintf(
-				"namespace %q: data-size changed — checkpoint save will be skipped on pod restart",
-				name,
-			))
+		// Path changed — warn and return; it affects all namespaces on this rack.
+		if asdbv1.GetIndexCheckpointPath(newCfg) != asdbv1.GetIndexCheckpointPath(oldCfg) {
+			return admission.Warnings{
+				"index-checkpoint-path changed — checkpoint save will be skipped on any pod restart" +
+					" triggered with this update",
+			}
+		}
+
+		// Warn on the first namespace whose in-memory data layout changed.
+		// Treat missing data-size as 0, matching GetInMemoryNsDataSizes in the controller.
+		// This catches both plain data-size changes and switches between pure in-memory
+		// and device/file-backed storage (which also invalidate the checkpoint).
+		oldCheckpointedNS := sets.NewString(asdbv1.GetIndexCheckpointNamespaces(oldCfg)...)
+		newNSMap := buildNamespaceMap(newCfg)
+
+		for _, nsIface := range oldCfg[asdbv1.ConfKeyNamespace].([]interface{}) {
+			nsConf, ok := nsIface.(map[string]interface{})
+			if !ok {
+				continue
+			}
+
+			name, _ := nsConf[asdbv1.ConfKeyName].(string)
+			if !oldCheckpointedNS.Has(name) {
+				continue
+			}
+
+			newNS, exists := newNSMap[name]
+			if !exists {
+				continue
+			}
+
+			oldDataSize, _ := asdbv1.GetNamespaceDataSize(nsConf)
+			newDataSize, _ := asdbv1.GetNamespaceDataSize(newNS)
+
+			if oldDataSize != newDataSize {
+				return admission.Warnings{fmt.Sprintf(
+					"namespace %q: data-size changed — checkpoint save will be skipped on pod restart",
+					name,
+				)}
+			}
 		}
 	}
 
-	return warnings
+	return nil
+}
+
+// buildRackConfigMap indexes a cluster's rack list by rack ID for O(1) lookup.
+func buildRackConfigMap(cluster *asdbv1.AerospikeCluster) map[int]map[string]interface{} {
+	result := make(map[int]map[string]interface{}, len(cluster.Spec.RackConfig.Racks))
+
+	for idx := range cluster.Spec.RackConfig.Racks {
+		rack := &cluster.Spec.RackConfig.Racks[idx]
+		result[rack.ID] = rack.AerospikeConfig.Value
+	}
+
+	return result
 }
 
 // buildNamespaceMap indexes a rack's namespace list by name for O(1) lookup.
