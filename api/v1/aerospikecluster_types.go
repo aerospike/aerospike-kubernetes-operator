@@ -1524,13 +1524,6 @@ type AerospikePodStatus struct { //nolint:govet // for readability
 	// from the pod annotation rather than the static rack configuration.
 	// +optional
 	RackIDOverridden bool `json:"rackIDOverridden,omitempty"`
-
-	// NLBPortOffset is the unique port offset (1-255) assigned for clusterNLB access.
-	// Advertised port = servicePort + NLBPortOffset.
-	// 0 means not assigned (clusterNLB not in use).
-	// Assigned by the init container using Kubernetes optimistic concurrency.
-	// +optional
-	NLBPortOffset int32 `json:"nlbPortOffset,omitempty"`
 }
 
 // +kubebuilder:object:root=true

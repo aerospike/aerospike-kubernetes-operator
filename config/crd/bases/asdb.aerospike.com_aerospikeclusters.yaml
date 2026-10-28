@@ -185,6 +185,7 @@ spec:
                     - hostExternal
                     - configuredIP
                     - customInterface
+                    - clusterNLB
                     type: string
                   alternateAccess:
                     default: hostExternal
@@ -197,6 +198,7 @@ spec:
                     - hostExternal
                     - configuredIP
                     - customInterface
+                    - clusterNLB
                     type: string
                   customAccessNetworkNames:
                     description: |-
@@ -279,6 +281,27 @@ spec:
                     enum:
                     - customInterface
                     type: string
+                  nlbAccessAddress:
+                    description: |-
+                      NLBAccessAddress is the FQDN or IP of the cluster-level NLB / PSC endpoint
+                      advertised as the access address for all pods.
+                      Required when access is 'clusterNLB'.
+                    type: string
+                  nlbAlternateAccessAddress:
+                    description: |-
+                      NLBAlternateAccessAddress is the FQDN or IP for alternate access via NLB/PSC.
+                      Required when alternateAccess is 'clusterNLB'.
+                    type: string
+                  nlbTLSAccessAddress:
+                    description: |-
+                      NLBTLSAccessAddress is the FQDN or IP for TLS access via NLB/PSC.
+                      Required when tlsAccess is 'clusterNLB'.
+                    type: string
+                  nlbTLSAlternateAccessAddress:
+                    description: |-
+                      NLBTLSAlternateAccessAddress is the FQDN or IP for TLS alternate access via NLB/PSC.
+                      Required when tlsAlternateAccess is 'clusterNLB'.
+                    type: string
                   tlsAccess:
                     default: hostInternal
                     description: |-
@@ -290,6 +313,7 @@ spec:
                     - hostExternal
                     - configuredIP
                     - customInterface
+                    - clusterNLB
                     type: string
                   tlsAlternateAccess:
                     default: hostExternal
@@ -302,6 +326,7 @@ spec:
                     - hostExternal
                     - configuredIP
                     - customInterface
+                    - clusterNLB
                     type: string
                   tlsFabric:
                     description: |-
@@ -9842,6 +9867,7 @@ spec:
                     - hostExternal
                     - configuredIP
                     - customInterface
+                    - clusterNLB
                     type: string
                   alternateAccess:
                     default: hostExternal
@@ -9854,6 +9880,7 @@ spec:
                     - hostExternal
                     - configuredIP
                     - customInterface
+                    - clusterNLB
                     type: string
                   customAccessNetworkNames:
                     description: |-
@@ -9936,6 +9963,27 @@ spec:
                     enum:
                     - customInterface
                     type: string
+                  nlbAccessAddress:
+                    description: |-
+                      NLBAccessAddress is the FQDN or IP of the cluster-level NLB / PSC endpoint
+                      advertised as the access address for all pods.
+                      Required when access is 'clusterNLB'.
+                    type: string
+                  nlbAlternateAccessAddress:
+                    description: |-
+                      NLBAlternateAccessAddress is the FQDN or IP for alternate access via NLB/PSC.
+                      Required when alternateAccess is 'clusterNLB'.
+                    type: string
+                  nlbTLSAccessAddress:
+                    description: |-
+                      NLBTLSAccessAddress is the FQDN or IP for TLS access via NLB/PSC.
+                      Required when tlsAccess is 'clusterNLB'.
+                    type: string
+                  nlbTLSAlternateAccessAddress:
+                    description: |-
+                      NLBTLSAlternateAccessAddress is the FQDN or IP for TLS alternate access via NLB/PSC.
+                      Required when tlsAlternateAccess is 'clusterNLB'.
+                    type: string
                   tlsAccess:
                     default: hostInternal
                     description: |-
@@ -9947,6 +9995,7 @@ spec:
                     - hostExternal
                     - configuredIP
                     - customInterface
+                    - clusterNLB
                     type: string
                   tlsAlternateAccess:
                     default: hostExternal
@@ -9959,6 +10008,7 @@ spec:
                     - hostExternal
                     - configuredIP
                     - customInterface
+                    - clusterNLB
                     type: string
                   tlsFabric:
                     description: |-
