@@ -397,10 +397,7 @@ func warnCheckpointChanges(oldCluster, newCluster *asdbv1.AerospikeCluster) admi
 			newDataSize, _ := asdbv1.GetNamespaceDataSize(newNS)
 
 			if oldDataSize != newDataSize {
-				return admission.Warnings{fmt.Sprintf(
-					"namespace %q: data-size changed — checkpoint save will be skipped on pod restart",
-					name,
-				)}
+				return admission.Warnings{"data-size changed — checkpoint save will be skipped on pod restart"}
 			}
 		}
 	}
@@ -658,7 +655,7 @@ func validateSCNamespaces(cluster *asdbv1.AerospikeCluster) error {
 // validateSCInMemoryNamespace enforces checkpointing durability rules for a namespace
 // that combines strong-consistency: true with storage-engine.type = "memory".
 //
-//	Pure in-memory (data-size only, no device/file backing):
+//	Pure in-memory (no devices or files in storage-engine):
 //	  - service.index-checkpoint-path MUST be set in the rack's aerospikeConfig.
 //	  - skip-checkpoint MUST NOT be set on this namespace.
 //
@@ -666,9 +663,13 @@ func validateSCNamespaces(cluster *asdbv1.AerospikeCluster) error {
 //	  - skip-checkpoint may be freely set.
 //	  - index-checkpoint-path is not required.
 func validateSCInMemoryNamespace(nsConf, aerospikeConfig map[string]interface{}) error {
-	// storage-engine.type = "memory" is oneOf: data-size (pure in-memory), devices, or files.
-	// Absence of data-size means the namespace is device/file-backed; no extra restrictions needed.
-	if _, hasDataSize := asdbv1.GetNamespaceDataSize(nsConf); !hasDataSize {
+	// A memory namespace backed by devices or files has persistent storage
+	storageConf, _ := nsConf[asdbv1.ConfKeyStorageEngine].(map[string]interface{})
+	if _, hasDevices := storageConf["devices"]; hasDevices {
+		return nil
+	}
+
+	if _, hasFiles := storageConf["files"]; hasFiles {
 		return nil
 	}
 
