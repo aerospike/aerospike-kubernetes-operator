@@ -1,7 +1,6 @@
 package backupservice
 
 import (
-	"fmt"
 	"testing"
 
 	"github.com/stretchr/testify/require"
@@ -10,29 +9,40 @@ import (
 	asdbv1beta1 "github.com/aerospike/aerospike-kubernetes-operator/v4/api/v1beta1"
 )
 
-// absConfig returns a backup service config with an HTTP and an HTTPS listener.
-func absConfig(httpPort int, keyFilePassword string, parallel int) []byte {
-	return fmt.Appendf(nil, `{"service":{"http":{"port":%d},"https":{"port":8443,"cert-file":"/c","key-file":"/k",`+
-		`"key-file-password":%q}},"backup-policies":{"p1":{"parallel":%d}},`+
-		`"storage":{"s1":{"local-storage":{"path":"/tmp/backups"}}}}`, httpPort, keyFilePassword, parallel)
-}
-
-func TestFindStaticSecretChange(t *testing.T) {
+func TestFindStaticSpecChange(t *testing.T) {
 	t.Parallel()
 
-	status := absConfig(8081, "pass1", 1)
+	const status = `{"service":{"http":{"port":8081},"https":{"port":8443,"cert-file":"/c","key-file":"/k",` +
+		`"key-file-password":"pass1"}},"backup-policies":{"p1":{"parallel":1}}}`
 
 	tests := []struct {
 		name        string
+		spec        string
 		wantRestart string
-		spec        []byte
 	}{
-		// The backup service API shows the port, so the comparison of its running config with the ConfigMap
-		// decides whether it is applied, for example by a Deployment rollout that finished after a failed reconcile.
-		{name: "visible static field", spec: absConfig(8080, "pass1", 1)},
-		{name: "secret static field", spec: absConfig(8081, "pass2", 1), wantRestart: "KeyFilePassword"},
-		{name: "visible and secret static fields", spec: absConfig(8080, "pass2", 1)},
-		{name: "dynamic field", spec: absConfig(8081, "pass1", 2)},
+		{
+			name: "dynamic field",
+			spec: `{"service":{"http":{"port":8081},"https":{"port":8443,"cert-file":"/c","key-file":"/k",` +
+				`"key-file-password":"pass1"}},"backup-policies":{"p1":{"parallel":2}}}`,
+		},
+		{
+			name: "static field",
+			spec: `{"service":{"http":{"port":8080},"https":{"port":8443,"cert-file":"/c","key-file":"/k",` +
+				`"key-file-password":"pass1"}},"backup-policies":{"p1":{"parallel":1}}}`,
+			wantRestart: "Port",
+		},
+		{
+			name: "secret static field",
+			spec: `{"service":{"http":{"port":8081},"https":{"port":8443,"cert-file":"/c","key-file":"/k",` +
+				`"key-file-password":"pass2"}},"backup-policies":{"p1":{"parallel":1}}}`,
+			wantRestart: "KeyFilePassword",
+		},
+		{
+			name: "context-path",
+			spec: `{"service":{"http":{"port":8081,"context-path":"/abs"},"https":{"port":8443,"cert-file":"/c",` +
+				`"key-file":"/k","key-file-password":"pass1"}},"backup-policies":{"p1":{"parallel":1}}}`,
+			wantRestart: "ContextPath",
+		},
 	}
 
 	for _, tt := range tests {
@@ -40,11 +50,11 @@ func TestFindStaticSecretChange(t *testing.T) {
 			t.Parallel()
 
 			r := &SingleBackupServiceReconciler{aeroBackupService: &asdbv1beta1.AerospikeBackupService{
-				Spec:   asdbv1beta1.AerospikeBackupServiceSpec{Config: runtime.RawExtension{Raw: tt.spec}},
-				Status: asdbv1beta1.AerospikeBackupServiceStatus{Config: runtime.RawExtension{Raw: status}},
+				Spec:   asdbv1beta1.AerospikeBackupServiceSpec{Config: runtime.RawExtension{Raw: []byte(tt.spec)}},
+				Status: asdbv1beta1.AerospikeBackupServiceStatus{Config: runtime.RawExtension{Raw: []byte(status)}},
 			}}
 
-			staticChangeErr, err := r.findStaticSecretChange()
+			staticChangeErr, err := r.findStaticSpecChange()
 			require.NoError(t, err)
 
 			if tt.wantRestart == "" {
