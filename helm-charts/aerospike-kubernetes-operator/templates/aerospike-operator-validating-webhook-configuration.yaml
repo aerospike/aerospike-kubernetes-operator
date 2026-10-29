@@ -185,6 +185,6 @@ webhooks:
         - CREATE
       resources:
         - pods/eviction
-  sideEffects: None
+  sideEffects: NoneOnDryRun
   timeoutSeconds: {{ .Values.safePodEviction.timeoutSeconds }}
 {{- end }}

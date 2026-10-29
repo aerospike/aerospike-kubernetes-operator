@@ -115,7 +115,7 @@ func SetupEvictionWebhookWithManager(mgr ctrl.Manager) *EvictionWebhook {
 }
 
 //nolint:lll // for readability
-// +kubebuilder:webhook:path=/validate-eviction,mutating=false,failurePolicy=ignore,sideEffects=None,groups="",resources=pods/eviction,verbs=create,versions=v1,timeoutSeconds=20,name=vaerospikeeviction.kb.io,admissionReviewVersions={v1}
+// +kubebuilder:webhook:path=/validate-eviction,mutating=false,failurePolicy=ignore,sideEffects=NoneOnDryRun,groups="",resources=pods/eviction,verbs=create,versions=v1,timeoutSeconds=20,name=vaerospikeeviction.kb.io,admissionReviewVersions={v1}
 
 func (ew *EvictionWebhook) Handle(w http.ResponseWriter, r *http.Request) {
 	ctx := r.Context()
@@ -166,9 +166,9 @@ func (ew *EvictionWebhook) isWebhookEnabled() bool {
 	return ew.Enable
 }
 
-// recordMetric records an eviction webhook metric if the webhook is enabled
-func (ew *EvictionWebhook) recordMetric(namespace, decision string) {
-	if ew.isWebhookEnabled() {
+// recordMetric records an eviction webhook metric if the webhook is enabled and the request is not a dry-run
+func (ew *EvictionWebhook) recordMetric(namespace, decision string, dryRun bool) {
+	if ew.isWebhookEnabled() && !dryRun {
 		evictionRequestsTotal.WithLabelValues(namespace, decision).Inc()
 	}
 }
@@ -188,6 +188,12 @@ func (ew *EvictionWebhook) processEvictionRequest(ctx context.Context, admission
 			http.StatusBadRequest)
 	}
 
+	// A dry-run eviction (e.g. kubectl drain --dry-run=server) must not change the pod or the metrics.
+	// Request.DryRun is set only by the ?dryRun query parameter. kubectl drain sends
+	// dry-run in the Eviction's DeleteOptions instead, so check both.
+	isDryRun := (admissionReview.Request.DryRun != nil && *admissionReview.Request.DryRun) ||
+		(eviction.DeleteOptions != nil && len(eviction.DeleteOptions.DryRun) > 0)
+
 	// Get pod information
 	podKey := types.NamespacedName{
 		Name:      eviction.Name,
@@ -199,7 +205,7 @@ func (ew *EvictionWebhook) processEvictionRequest(ctx context.Context, admission
 		// If pod doesn't exist, allow the eviction request to proceed
 		if apierrors.IsNotFound(err) {
 			log.V(1).Info("Pod not found, allowing eviction request to proceed", "pod", podKey.String())
-			ew.recordMetric(admissionReview.Request.Namespace, EvictionAllowed)
+			ew.recordMetric(admissionReview.Request.Namespace, EvictionAllowed, isDryRun)
 
 			return podKey.String(), getSuccessResponse(admissionReview.Request.UID)
 		}
@@ -218,7 +224,7 @@ func (ew *EvictionWebhook) processEvictionRequest(ctx context.Context, admission
 	// Check if this is an Aerospike pod (runtime filtering required for pods/eviction subresource)
 	if !utils.IsAerospikePod(pod) {
 		log.V(1).Info("Allowing eviction of non-Aerospike pod", "pod", podKey.String())
-		ew.recordMetric(admissionReview.Request.Namespace, EvictionAllowed)
+		ew.recordMetric(admissionReview.Request.Namespace, EvictionAllowed, isDryRun)
 
 		return podKey.String(), getSuccessResponse(admissionReview.Request.UID)
 	}
@@ -226,7 +232,10 @@ func (ew *EvictionWebhook) processEvictionRequest(ctx context.Context, admission
 	// Block Aerospike pod eviction
 	log.Info("Blocking eviction of Aerospike pod", "pod", podKey.String())
 
-	if err := ew.setEvictionBlockedAnnotation(ctx, pod); err != nil {
+	// The annotation makes the operator restart the pod, so a dry-run skips it and only gets the denial.
+	if isDryRun {
+		log.Info("Dry-run eviction, skipping eviction blocked annotation", "pod", podKey.String())
+	} else if err := ew.setEvictionBlockedAnnotation(ctx, pod); err != nil {
 		log.Info("Failed to set eviction blocked annotation (eviction still blocked)",
 			"pod", podKey.String(), "error", err)
 
@@ -239,7 +248,7 @@ func (ew *EvictionWebhook) processEvictionRequest(ctx context.Context, admission
 		)
 	}
 
-	ew.recordMetric(admissionReview.Request.Namespace, EvictionBlocked)
+	ew.recordMetric(admissionReview.Request.Namespace, EvictionBlocked, isDryRun)
 	// Block eviction regardless of annotation success/failure
 	return podKey.String(), getFailureResponse(
 		admissionReview.Request.UID,

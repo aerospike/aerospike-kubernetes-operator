@@ -128,7 +128,7 @@ webhooks:
     - CREATE
     resources:
     - pods/eviction
-  sideEffects: None
+  sideEffects: NoneOnDryRun
   timeoutSeconds: 20
 - admissionReviewVersions:
   - v1
