@@ -6,10 +6,12 @@ import (
 
 	. "github.com/onsi/ginkgo/v2"
 	. "github.com/onsi/gomega"
+	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/runtime"
 	"k8s.io/apimachinery/pkg/types"
 
 	asdbv1beta1 "github.com/aerospike/aerospike-kubernetes-operator/v4/api/v1beta1"
+	"github.com/aerospike/aerospike-kubernetes-operator/v4/internal/controller/common"
 	"github.com/aerospike/aerospike-kubernetes-operator/v4/test/envtests"
 	"github.com/aerospike/aerospike-kubernetes-operator/v4/test/fixtures/backupconfig"
 	"github.com/aerospike/aerospike-kubernetes-operator/v4/test/testutil"
@@ -58,12 +60,12 @@ var _ = Describe("AerospikeBackupService validation", func() {
 					Expect(err).To(HaveOccurred())
 					envtests.NewStatusErrorMatcher().
 						WithMessageSubstrings(testutil.BackupServiceWebhookErrorPrefix,
-							"routines and clusters that AerospikeBackups added to ConfigMap "+absNsNm.String(),
+							"aerospike backup config is not valid "+absNsNm.String(),
 							"test-routine", fmt.Sprintf("%q", backupconfig.DefaultBackupPolicy)).
 						Validate(err)
 				})
 
-				It("rejects an invalid backup policy without the ConfigMap context", func() {
+				It("rejects an invalid backup policy", func() {
 					err := updateBackupPolicies(map[string]interface{}{
 						backupconfig.DefaultBackupPolicy: map[string]interface{}{
 							"compression": map[string]interface{}{"level": 3},
@@ -72,7 +74,6 @@ var _ = Describe("AerospikeBackupService validation", func() {
 					Expect(err).To(HaveOccurred())
 					envtests.NewStatusErrorMatcher().
 						WithMessageSubstrings(testutil.BackupServiceWebhookErrorPrefix, "compression").
-						WithoutMessageSubstrings("added to ConfigMap").
 						Validate(err)
 				})
 			})
@@ -121,5 +122,34 @@ var _ = Describe("AerospikeBackupService validation", func() {
 				})
 			})
 		})
+	})
+})
+
+var _ = Describe("AerospikeBackupService status patch", func() {
+	ctx := context.TODO()
+
+	It("keeps the null values of the spec config in the status config", func() {
+		absNsNm := uniqueNamespacedName("status-patch")
+		DeferCleanup(deleteBackupService, ctx, absNsNm)
+
+		backupService := &asdbv1beta1.AerospikeBackupService{
+			ObjectMeta: metav1.ObjectMeta{Name: absNsNm.Name, Namespace: absNsNm.Namespace},
+			Spec: asdbv1beta1.AerospikeBackupServiceSpec{
+				Image: backupconfig.BackupServiceImage,
+				Config: runtime.RawExtension{Raw: []byte(`{"service":{"http":{"port":8081},"logger":null},` +
+					`"backup-policies":{"test-policy":{"parallel":3,"retention":null}},` +
+					`"storage":{"local":{"local-storage":{"path":"/tmp/localStorage"}}}}`)},
+			},
+		}
+		Expect(envtests.K8sClient.Create(ctx, backupService)).To(Succeed())
+		Expect(envtests.K8sClient.Get(ctx, absNsNm, backupService)).To(Succeed())
+
+		status := backupService.Status.DeepCopy()
+		status.Config = backupService.Spec.Config
+		status.Phase = asdbv1beta1.AerospikeBackupServiceCompleted
+
+		Expect(common.PatchStatus(ctx, envtests.K8sClient, backupService, status)).To(Succeed())
+		Expect(envtests.K8sClient.Get(ctx, absNsNm, backupService)).To(Succeed())
+		Expect(backupService.Status.Config.Raw).To(Equal(backupService.Spec.Config.Raw))
 	})
 })

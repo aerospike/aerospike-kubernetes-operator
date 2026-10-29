@@ -113,34 +113,6 @@ func (c *Client) CheckBackupServiceHealth() error {
 	return nil
 }
 
-func (c *Client) GetBackupServiceConfig() (map[string]interface{}, error) {
-	url := c.API("/config")
-
-	resp, err := http.Get(url)
-	if err != nil {
-		return nil, err
-	}
-
-	defer resp.Body.Close()
-
-	if resp.StatusCode != http.StatusOK {
-		return nil, fmt.Errorf("failed to get backup service config")
-	}
-
-	conf := make(map[string]interface{})
-
-	body, err := io.ReadAll(resp.Body)
-	if err != nil {
-		return nil, err
-	}
-
-	if err := json.Unmarshal(body, &conf); err != nil {
-		return nil, err
-	}
-
-	return conf, nil
-}
-
 func (c *Client) ApplyConfig() error {
 	url := c.API("/config/apply")
 

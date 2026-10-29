@@ -2,8 +2,6 @@ package common
 
 import (
 	"context"
-	"crypto/sha256"
-	"encoding/hex"
 	"errors"
 	"fmt"
 	"strings"
@@ -80,18 +78,18 @@ func NewPodExecFunc(kubeClient *kubernetes.Clientset, kubeConfig *rest.Config) P
 	}
 }
 
-// BackupSvcConfigHash returns the value written under BackupServiceConfigHashKey for a backup service config.
-func BackupSvcConfigHash(config string) string {
-	sum := sha256.Sum256([]byte(config))
-
-	return hex.EncodeToString(sum[:])
-}
-
 // SetBackupSvcConfigData sets the backup service config in ConfigMap data together with its hash. Every write of
 // the config must go through it, otherwise the hash in the pods no longer tells which config they have.
-func SetBackupSvcConfigData(data map[string]string, config string) {
+func SetBackupSvcConfigData(data map[string]string, config string) error {
+	hash, err := utils.GetHash(config)
+	if err != nil {
+		return fmt.Errorf("hash backup service config: %w", err)
+	}
+
 	data[v1beta1.BackupServiceConfigYAML] = config
-	data[v1beta1.BackupServiceConfigHashKey] = BackupSvcConfigHash(config)
+	data[v1beta1.BackupServiceConfigHashKey] = hash
+
+	return nil
 }
 
 // ReloadBackupServiceConfigInPods reloads backup service configuration in running Pods.
@@ -156,7 +154,7 @@ func ReloadBackupServiceConfigInPods(
 
 // waitForConfigInPods waits until every running backup service pod has the config that is in the ConfigMap now.
 // kubelet writes all keys of a ConfigMap volume at once, by switching the volume's ..data link to a new directory,
-// so a pod whose hash file matches the hash of the ConfigMap config also has that config file, or a newer one.
+// so a pod whose hash file matches the hash stored in the ConfigMap also has that config file, or a newer one.
 // The ConfigMap is read again on every poll: a newer write while waiting changes the hash to wait for.
 //
 //nolint:logcheck // ctx for client calls; explicit logger (no contextual logging in AKO).
@@ -173,12 +171,10 @@ func waitForConfigInPods(
 	var lastErr error
 
 	if err := wait.PollUntilContextTimeout(ctx, interval, timeout, true, func(pollCtx context.Context) (bool, error) {
-		config, err := GetBackupSvcConfigFromCM(pollCtx, k8sClient, backupSvc)
+		wantHash, err := getBackupSvcConfigHash(pollCtx, k8sClient, backupSvc)
 		if err != nil {
 			return false, err
 		}
-
-		wantHash := BackupSvcConfigHash(config)
 
 		podList, err := GetBackupServicePodList(pollCtx, k8sClient, backupSvc.Name, backupSvc.Namespace)
 		if err != nil {
@@ -245,7 +241,9 @@ func waitForConfigInPods(
 	return nil
 }
 
-func GetBackupSvcConfigFromCM(
+// getBackupSvcConfigHash returns the hash stored with the config in the backup service ConfigMap. Every operator
+// write of the config sets both keys together, through SetBackupSvcConfigData.
+func getBackupSvcConfigHash(
 	ctx context.Context, k8sClient client.Client, backupSvc *v1beta1.BackupService,
 ) (string, error) {
 	var cm corev1.ConfigMap
@@ -258,5 +256,11 @@ func GetBackupSvcConfigFromCM(
 			utils.NamespacedName(backupSvc.Namespace, backupSvc.Name), err)
 	}
 
-	return cm.Data[v1beta1.BackupServiceConfigYAML], nil
+	hash := cm.Data[v1beta1.BackupServiceConfigHashKey]
+	if hash == "" {
+		return "", fmt.Errorf("backup service ConfigMap %s has no %s key",
+			utils.NamespacedName(backupSvc.Namespace, backupSvc.Name), v1beta1.BackupServiceConfigHashKey)
+	}
+
+	return hash, nil
 }

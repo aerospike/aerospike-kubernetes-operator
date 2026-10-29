@@ -11,7 +11,7 @@ const (
 	SecretAgentsKey         = "secret-agents"
 	SourceClusterKey        = "source-cluster"
 	BackupServiceConfigYAML = "aerospike-backup-service.yml"
-	// BackupServiceConfigHashKey is the ConfigMap key that holds the SHA-256 of the BackupServiceConfigYAML value.
+	// BackupServiceConfigHashKey is the ConfigMap key that holds the utils.GetHash of the BackupServiceConfigYAML value.
 	// The backup service pods see it as a file next to the config, so the operator can tell when a pod has the
 	// latest config.
 	BackupServiceConfigHashKey = "revision-hash"

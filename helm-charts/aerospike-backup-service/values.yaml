@@ -22,13 +22,10 @@ backupServiceConfig: {}
 #  service:
 #    http:
 #      port: 8080
-#    backup:
-#      schedule-timezone: Asia/Kolkata  # UTC (default), Local, or an IANA name
 #  backup-policies:
 #    test-policy:
 #      parallel: 3
 #      compact: true
-#      incr-mode: cumulative  # differential (default) or cumulative
 #  storage:
 #    local:
 #      local-storage:

@@ -24,9 +24,6 @@ package envtests
 
 import (
 	"context"
-	"crypto/rand"
-	"encoding/hex"
-	"os"
 	"path/filepath"
 	"time"
 
@@ -67,7 +64,6 @@ var (
 	scheme          = k8Runtime.NewScheme()
 	cancel          context.CancelFunc
 	EvictionWebhook *evictionwebhook.EvictionWebhook
-	kubeconfigRel   string
 )
 
 // SetupTestEnv starts the envtest environment and webhook server. Idempotent.
@@ -103,8 +99,6 @@ func SetupTestEnv() {
 	cfg, err = testEnv.Start()
 	Expect(err).NotTo(HaveOccurred())
 	Expect(cfg).NotTo(BeNil())
-
-	Expect(configureEnvtestKubeconfig()).To(Succeed())
 
 	err = clientgoscheme.AddToScheme(scheme)
 	Expect(err).NotTo(HaveOccurred())
@@ -166,50 +160,6 @@ func SetupTestEnv() {
 	time.Sleep(3 * time.Second)
 }
 
-// TODO: Fix k8s client creation in the backup and restore webhook flow by creating
-// a client once in webhook setup (inject mgr.GetClient() into validators).
-// Remove this KUBECONFIG file workaround once webhooks stop using getK8sClient()/GetConfigOrDie().
-func configureEnvtestKubeconfig() error {
-	root, err := os.OpenRoot(os.TempDir())
-	if err != nil {
-		return err
-	}
-
-	defer func() { _ = root.Close() }()
-
-	var buf [12]byte
-	if _, err = rand.Read(buf[:]); err != nil {
-		return err
-	}
-
-	kubeconfigRel = "envtest-kubeconfig-" + hex.EncodeToString(buf[:]) + ".yaml"
-	if err := root.WriteFile(kubeconfigRel, testEnv.KubeConfig, 0o600); err != nil {
-		return err
-	}
-
-	return os.Setenv("KUBECONFIG", filepath.Join(os.TempDir(), kubeconfigRel))
-}
-
-func removeEnvtestKubeconfig() {
-	if kubeconfigRel == "" {
-		return
-	}
-
-	defer func() {
-		kubeconfigRel = ""
-		_ = os.Unsetenv("KUBECONFIG")
-	}()
-
-	root, err := os.OpenRoot(os.TempDir())
-	if err != nil {
-		return
-	}
-
-	defer func() { _ = root.Close() }()
-
-	_ = root.Remove(kubeconfigRel)
-}
-
 // TeardownTestEnv stops the envtest environment. Idempotent.
 func TeardownTestEnv() {
 	if testEnv == nil {
@@ -226,8 +176,6 @@ func TeardownTestEnv() {
 
 	err := testEnv.Stop()
 	Expect(err).ToNot(HaveOccurred())
-
-	removeEnvtestKubeconfig()
 
 	testEnv = nil
 	K8sClient = nil

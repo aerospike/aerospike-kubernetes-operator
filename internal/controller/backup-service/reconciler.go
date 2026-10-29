@@ -50,8 +50,8 @@ type SingleBackupServiceReconciler struct {
 	client.Client
 	Recorder          record.EventRecorder
 	aeroBackupService *asdbv1beta1.AerospikeBackupService
-	// KubeClient and KubeConfig exec into the backup service pods to check that they have the latest ConfigMap
-	// before a reload; client.Client cannot run pods/exec.
+	// KubeClient and KubeConfig are used to exec into the backup service pods to check that they have the latest
+	// ConfigMap before a reload; client.Client cannot run pods/exec.
 	KubeClient *kubernetes.Clientset
 	KubeConfig *rest.Config
 	Scheme     *k8sRuntime.Scheme
@@ -161,13 +161,18 @@ func (r *SingleBackupServiceReconciler) reconcileConfigMap(ctx context.Context) 
 		r.Log.Info("Creating backup service ConfigMap",
 			"configMap", utils.GetNamespacedName(r.aeroBackupService))
 
+		data, err := r.getConfigMapData()
+		if err != nil {
+			return err
+		}
+
 		cm = &corev1.ConfigMap{
 			ObjectMeta: metav1.ObjectMeta{
 				Name:      r.aeroBackupService.Name,
 				Namespace: r.aeroBackupService.Namespace,
 				Labels:    utils.LabelsForAerospikeBackupService(r.aeroBackupService.Name),
 			},
-			Data: r.getConfigMapData(),
+			Data: data,
 		}
 
 		// Set AerospikeBackupService instance as the owner and controller
@@ -231,7 +236,10 @@ func (r *SingleBackupServiceReconciler) reconcileConfigMap(ctx context.Context) 
 		return fmt.Errorf("marshal backup service config: %w", err)
 	}
 
-	common.SetBackupSvcConfigData(cm.Data, string(updatedConfig))
+	err = common.SetBackupSvcConfigData(cm.Data, string(updatedConfig))
+	if err != nil {
+		return err
+	}
 
 	if err = r.Update(ctx, cm, common.UpdateOption); err != nil {
 		return fmt.Errorf("update backup service ConfigMap: %w", err)
@@ -245,11 +253,13 @@ func (r *SingleBackupServiceReconciler) reconcileConfigMap(ctx context.Context) 
 	return nil
 }
 
-func (r *SingleBackupServiceReconciler) getConfigMapData() map[string]string {
+func (r *SingleBackupServiceReconciler) getConfigMapData() (map[string]string, error) {
 	data := make(map[string]string)
-	common.SetBackupSvcConfigData(data, string(r.aeroBackupService.Spec.Config.Raw))
+	if err := common.SetBackupSvcConfigData(data, string(r.aeroBackupService.Spec.Config.Raw)); err != nil {
+		return nil, err
+	}
 
-	return data
+	return data, nil
 }
 
 func (r *SingleBackupServiceReconciler) reconcileDeployment(ctx context.Context) error {
@@ -818,10 +828,7 @@ func (r *SingleBackupServiceReconciler) updateStatus(
 	status.Port = svcConfig.portInfo[asdbv1beta1.HTTPKey]
 	status.Phase = phase
 
-	patch := client.MergeFrom(r.aeroBackupService.DeepCopy())
-	r.aeroBackupService.Status = *status
-
-	if err := r.Client.Status().Patch(ctx, r.aeroBackupService, patch); err != nil {
+	if err := common.PatchStatus(ctx, r.Client, r.aeroBackupService, status); err != nil {
 		return fmt.Errorf("update AerospikeBackupService status: %w", err)
 	}
 

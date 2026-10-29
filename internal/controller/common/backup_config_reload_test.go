@@ -2,8 +2,6 @@ package common
 
 import (
 	"context"
-	"crypto/sha256"
-	"encoding/hex"
 	"errors"
 	"testing"
 	"time"
@@ -25,17 +23,6 @@ const (
 	testNamespace     = "aerospike"
 	testConfig        = "service:\n  http:\n    port: 8081\n"
 )
-
-func TestSetBackupSvcConfigData(t *testing.T) {
-	t.Parallel()
-
-	data := map[string]string{}
-	SetBackupSvcConfigData(data, testConfig)
-
-	require.Equal(t, testConfig, data[v1beta1.BackupServiceConfigYAML])
-	sum := sha256.Sum256([]byte(testConfig))
-	require.Equal(t, hex.EncodeToString(sum[:]), data[v1beta1.BackupServiceConfigHashKey])
-}
 
 // fakeExec answers the hash file read with the successive outputs given; the last one repeats.
 // No outputs means the pod has no hash file.
@@ -70,16 +57,18 @@ func backupSvcPod(phase corev1.PodPhase) *corev1.Pod {
 	}
 }
 
-// waitForTestConfig runs waitForConfigInPods against a ConfigMap holding testConfig and the given pod, whose hash
-// file reads return outputs.
-func waitForTestConfig(t *testing.T, outputs []string, pod *corev1.Pod) error {
+// waitForTestConfig runs waitForConfigInPods against a ConfigMap holding testConfig, with its hash unless noHash, and
+// the given pod, whose hash file reads return outputs.
+func waitForTestConfig(t *testing.T, outputs []string, pod *corev1.Pod, noHash bool) error {
 	t.Helper()
 
 	scheme := k8sruntime.NewScheme()
 	require.NoError(t, corev1.AddToScheme(scheme))
 
-	data := map[string]string{}
-	SetBackupSvcConfigData(data, testConfig)
+	data := map[string]string{v1beta1.BackupServiceConfigYAML: testConfig}
+	if !noHash {
+		require.NoError(t, SetBackupSvcConfigData(data, testConfig))
+	}
 
 	k8sClient := fake.NewClientBuilder().WithScheme(scheme).WithObjects(&corev1.ConfigMap{
 		ObjectMeta: metav1.ObjectMeta{Name: testBackupSvcName, Namespace: testNamespace},
@@ -94,14 +83,18 @@ func waitForTestConfig(t *testing.T, outputs []string, pod *corev1.Pod) error {
 func TestWaitForConfigInPods(t *testing.T) {
 	t.Parallel()
 
-	want := BackupSvcConfigHash(testConfig)
-	old := BackupSvcConfigHash("old config")
+	want, err := utils.GetHash(testConfig)
+	require.NoError(t, err)
+
+	old, err := utils.GetHash("old config")
+	require.NoError(t, err)
 
 	tests := []struct {
 		pod     *corev1.Pod
 		name    string
 		wantErr string
 		outputs []string
+		noHash  bool
 	}{
 		{
 			name:    "pod already has the config, with the TTY line ending",
@@ -158,13 +151,19 @@ func TestWaitForConfigInPods(t *testing.T) {
 			outputs: []string{old},
 			wantErr: "no running backup service Pod",
 		},
+		{
+			name:    "ConfigMap written without its hash fails at once",
+			pod:     backupSvcPod(corev1.PodRunning),
+			noHash:  true,
+			wantErr: "has no " + v1beta1.BackupServiceConfigHashKey + " key",
+		},
 	}
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			t.Parallel()
 
-			err := waitForTestConfig(t, tt.outputs, tt.pod)
+			err := waitForTestConfig(t, tt.outputs, tt.pod, tt.noHash)
 			if tt.wantErr == "" {
 				require.NoError(t, err)
 				return
