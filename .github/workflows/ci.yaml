@@ -47,11 +47,12 @@ jobs:
     runs-on: ubuntu-24.04
     permissions:
       contents: read
+      id-token: write
     outputs:
       base-version: ${{ steps.version.outputs.base-version }}
       version: ${{ steps.version.outputs.version }}
-      init-tag: ${{ steps.init.outputs.tag }}
       init-build: ${{ steps.init.outputs.build }}
+      init-name-tag: ${{ steps.init-image.outputs.name-tag }}
       suites: ${{ steps.tests.outputs.suites }}
       focus: ${{ steps.tests.outputs.focus }}
     steps:
@@ -110,6 +111,33 @@ jobs:
           fi
           echo "tag=$tag" >> "$GITHUB_OUTPUT"
           echo "build=$build" | tee -a "$GITHUB_OUTPUT"
+
+      - name: Set up JFrog CLI
+        uses: step-security/setup-jfrog-cli@53aeacb709fce45d0baf69a13ec3342f7e2d71a9 # v5.1.0
+        with:
+          oidc-provider-name: gh-aerospike
+          oidc-audience: aerospike
+
+      # The release bundle holds only the timestamped tag that the init build-info
+      # records, e.g. pr-166-dd04cc5_20261030T091706Z, not the plain INIT_TAG. The
+      # chart, the OLM bundle and e2e use it, so it is there after promotion and
+      # an init CI re-run can't move it.
+      - name: Resolve init image
+        id: init-image
+        env:
+          TAG: ${{ steps.init.outputs.tag }}
+          BUILD: ${{ steps.init.outputs.build }}
+        run: |
+          # Module IDs are <image>:<tag>. The per-platform and attestation modules
+          # add a prefix, e.g. linux/amd64/<image>:<tag>.
+          name_tag=$(jf rt curl -s "/api/build/ako-init/$BUILD?project=platforms" |
+            jq -r --arg prefix "aerospike-kubernetes-init:${TAG}_" \
+              '[.buildInfo.modules[].id | sub(".*/"; "") | select(startswith($prefix))] | unique | .[]')
+          if [ "$(grep -c . <<< "$name_tag")" -ne 1 ]; then
+            echo "::error::Expected one aerospike-kubernetes-init:${TAG}_<timestamp> image in build ako-init/$BUILD, got: $name_tag"
+            exit 1
+          fi
+          echo "name-tag=$name_tag" | tee -a "$GITHUB_OUTPUT"
 
       - name: Select e2e tests
         id: tests
@@ -189,11 +217,11 @@ jobs:
       # another repo, so these values have to change then.
       - name: Set init image
         env:
-          INIT_TAG: ${{ needs.prepare.outputs.init-tag }}
+          INIT_NAME_TAG: ${{ needs.prepare.outputs.init-name-tag }}
         run: |
           yq -i '.aerospikeKubernetesInitRegistry = "artifact.aerospike.io" |
             .aerospikeKubernetesInitRegistryNamespace = "platforms-docker-dev-local" |
-            .aerospikeKubernetesInitNameTag = "aerospike-kubernetes-init:" + strenv(INIT_TAG)' \
+            .aerospikeKubernetesInitNameTag = strenv(INIT_NAME_TAG)' \
             helm-charts/aerospike-kubernetes-operator/values.yaml
 
       - name: Package charts
@@ -239,11 +267,11 @@ jobs:
       # another repo, so these values have to change then.
       - name: Set init image
         env:
-          INIT_TAG: ${{ needs.prepare.outputs.init-tag }}
+          INIT_NAME_TAG: ${{ needs.prepare.outputs.init-name-tag }}
         run: |
           yq -i '(select(.kind == "Deployment").spec.template.spec.containers[].env[] | select(.name == "AEROSPIKE_KUBERNETES_INIT_REGISTRY")).value = "artifact.aerospike.io" |
             (select(.kind == "Deployment").spec.template.spec.containers[].env[] | select(.name == "AEROSPIKE_KUBERNETES_INIT_REGISTRY_NAMESPACE")).value = "platforms-docker-dev-local" |
-            (select(.kind == "Deployment").spec.template.spec.containers[].env[] | select(.name == "AEROSPIKE_KUBERNETES_INIT_NAME_TAG")).value = "aerospike-kubernetes-init:" + strenv(INIT_TAG)' \
+            (select(.kind == "Deployment").spec.template.spec.containers[].env[] | select(.name == "AEROSPIKE_KUBERNETES_INIT_NAME_TAG")).value = strenv(INIT_NAME_TAG)' \
             config/manager/manager.yaml
 
       - name: Generate bundle
@@ -477,10 +505,10 @@ jobs:
           BUNDLE_IMG: ${{ needs.bundle-image.outputs.immutable-tag }}
           SUITE: ${{ matrix.suite }}
           FOCUS: ${{ needs.prepare.outputs.focus }}
-          INIT_TAG: ${{ needs.prepare.outputs.init-tag }}
+          INIT_NAME_TAG: ${{ needs.prepare.outputs.init-name-tag }}
         run: |
           ./test/test.sh -b "$BUNDLE_IMG" -s "$HOME/.docker/config.json" -t "$SUITE" -f "$FOCUS" \
-            -r artifact.aerospike.io -n platforms-docker-dev-local -i "aerospike-kubernetes-init:$INIT_TAG"
+            -r artifact.aerospike.io -n platforms-docker-dev-local -i "$INIT_NAME_TAG"
 
       - name: Upload test results
         if: always()
