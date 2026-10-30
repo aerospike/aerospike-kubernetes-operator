@@ -494,11 +494,11 @@ jobs:
       # TODO: Restore once the AWS_S3_ROLE_ARN secret exists. Until then the
       # credentials file below has empty keys, and the s3 storage backup test is
       # pending.
-      # - name: Configure AWS credentials
-      #   uses: aws-actions/configure-aws-credentials@e1253824e5c10ff9df46874f81ed3ec929e19cfd # v6.3.0
-      #   with:
-      #     role-to-assume: ${{ secrets.AWS_S3_ROLE_ARN }}
-      #     aws-region: us-east-1
+      - name: Configure AWS credentials
+        uses: aws-actions/configure-aws-credentials@e1253824e5c10ff9df46874f81ed3ec929e19cfd # v6.3.0
+        with:
+          role-to-assume: ${{ secrets.AWS_S3_ROLE_ARN }}
+          aws-region: us-east-1
 
       # The backup service tests read ~/.aws/credentials, not env vars.
       - name: Write AWS credentials file
