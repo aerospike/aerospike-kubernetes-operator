@@ -1,9 +1,9 @@
-//nolint:gosec // to ignore potential HTTP request made with variable url (gosec)
 package backupservice
 
 import (
 	"bytes"
 	"context"
+	"crypto/tls"
 	"encoding/json"
 	"fmt"
 	"io"
@@ -12,6 +12,7 @@ import (
 	"strings"
 
 	"github.com/go-logr/logr"
+	corev1 "k8s.io/api/core/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/types"
 	"sigs.k8s.io/controller-runtime/pkg/client"
@@ -27,6 +28,11 @@ const defaultContextPath = "/"
 const contentTypeJSON = "application/json"
 
 type Client struct {
+	// httpClient sends the requests. It carries the TLS settings for an HTTPS listener (CA, client certificate,
+	// server name), which the package-level http.Get and http.Post cannot. It is nil when the Client is built as a
+	// struct literal; client() then falls back to a plain HTTP client.
+	httpClient *http.Client
+
 	// The address to listen on.
 	Address string `json:"address,omitempty"`
 
@@ -36,6 +42,10 @@ type Client struct {
 	// Version is the ABS version.
 	// Used for API version-aware dispatch.
 	Version string `json:"version,omitempty"`
+
+	// Scheme is the URL scheme used to connect to the backup service. An empty value means HTTP, so a Client built
+	// as a struct literal keeps using HTTP.
+	Scheme corev1.URIScheme `json:"scheme,omitempty"`
 
 	// The port to listen on.
 	Port int32 `json:"port,omitempty"`
@@ -59,12 +69,34 @@ func GetBackupServiceClient(k8sClient client.Client, svc *v1beta1.BackupService)
 		version = ""
 	}
 
-	return NewClientWithVersion(
-		fmt.Sprintf("%s.%s.svc", backupSvc.Name, backupSvc.Namespace),
-		backupSvc.Status.Port,
-		backupSvc.Status.ContextPath,
-		version,
-	), nil
+	address := fmt.Sprintf("%s.%s.svc", backupSvc.Name, backupSvc.Namespace)
+
+	// Status describes the listener the backup service was last reconciled with, which is the one it serves.
+	scheme, port, contextPath := backupSvc.Status.Scheme, backupSvc.Status.Port, backupSvc.Status.ContextPath
+	certSpec := backupSvc.Status.OperatorClientCert
+
+	// Status has no port until the backup service controller first writes it, for example when an AerospikeBackup
+	// is created right after its AerospikeBackupService. Spec is the only source of the listener then.
+	if port == 0 {
+		listeners, lErr := GetListeners(backupSvc.Spec.Config.Raw, backupSvc.Spec.OperatorClientCert)
+		if lErr != nil {
+			return nil, lErr
+		}
+
+		scheme, port, contextPath = listeners.Scheme, listeners.Port, listeners.ContextPath
+		certSpec = backupSvc.Spec.OperatorClientCert
+	}
+
+	if scheme != corev1.URISchemeHTTPS {
+		return NewClientWithVersion(address, port, contextPath, version), nil
+	}
+
+	tlsConfig, err := BuildOperatorTLSConfig(context.TODO(), k8sClient, backupSvc.Namespace, certSpec)
+	if err != nil {
+		return nil, err
+	}
+
+	return NewClientWithTLS(address, port, contextPath, version, tlsConfig), nil
 }
 
 func NewClient(address string, port int32, contextPath string) *Client {
@@ -77,7 +109,45 @@ func NewClientWithVersion(address string, port int32, contextPath, version strin
 		Port:        port,
 		ContextPath: contextPath,
 		Version:     version,
+		Scheme:      corev1.URISchemeHTTP,
+		httpClient:  &http.Client{},
 	}
+}
+
+// NewClientWithTLS returns a client that connects to the backup service HTTPS listener using tlsConfig.
+func NewClientWithTLS(address string, port int32, contextPath, version string, tlsConfig *tls.Config) *Client {
+	transport := http.DefaultTransport.(*http.Transport).Clone()
+	transport.TLSClientConfig = tlsConfig
+	// A client is built for each reconcile and used for a few calls. Without keep-alives its connections
+	// close after each response instead of idling in a pool that outlives the client.
+	transport.DisableKeepAlives = true
+
+	return &Client{
+		Address:     address,
+		Port:        port,
+		ContextPath: contextPath,
+		Version:     version,
+		Scheme:      corev1.URISchemeHTTPS,
+		httpClient:  &http.Client{Transport: transport},
+	}
+}
+
+// client returns the HTTP client for requests. A Client built as a struct literal has none configured
+// and gets a plain HTTP client.
+func (c *Client) client() *http.Client {
+	if c.httpClient != nil {
+		return c.httpClient
+	}
+
+	return &http.Client{}
+}
+
+func (c *Client) getScheme() string {
+	if c.Scheme == "" {
+		return "http"
+	}
+
+	return strings.ToLower(string(c.Scheme))
 }
 
 func (c *Client) getAddress() string {
@@ -99,7 +169,7 @@ func (c *Client) getContextPath() string {
 func (c *Client) CheckBackupServiceHealth() error {
 	url := c.API("/health")
 
-	resp, err := http.Get(url)
+	resp, err := c.client().Get(url)
 	if err != nil {
 		return err
 	}
@@ -116,7 +186,7 @@ func (c *Client) CheckBackupServiceHealth() error {
 func (c *Client) GetBackupServiceConfig() (map[string]interface{}, error) {
 	url := c.API("/config")
 
-	resp, err := http.Get(url)
+	resp, err := c.client().Get(url)
 	if err != nil {
 		return nil, err
 	}
@@ -144,7 +214,7 @@ func (c *Client) GetBackupServiceConfig() (map[string]interface{}, error) {
 func (c *Client) ApplyConfig() error {
 	url := c.API("/config/apply")
 
-	resp, err := http.Post(url, contentTypeJSON, nil)
+	resp, err := c.client().Post(url, contentTypeJSON, nil)
 	if err != nil {
 		return err
 	}
@@ -166,7 +236,7 @@ func (c *Client) ApplyConfig() error {
 func (c *Client) GetClusters() (map[string]interface{}, error) {
 	url := c.API("/config/clusters")
 
-	resp, err := http.Get(url)
+	resp, err := c.client().Get(url)
 	if err != nil {
 		return nil, err
 	}
@@ -206,7 +276,7 @@ func (c *Client) PutCluster(name, cluster interface{}) error {
 		return err
 	}
 
-	cl := &http.Client{}
+	cl := c.client()
 
 	resp, err := cl.Do(req)
 	if err != nil {
@@ -235,7 +305,7 @@ func (c *Client) DeleteCluster(name string) error {
 		return err
 	}
 
-	cl := &http.Client{}
+	cl := c.client()
 
 	resp, err := cl.Do(req)
 	if err != nil {
@@ -266,7 +336,7 @@ func (c *Client) AddCluster(name, cluster interface{}) error {
 
 	bodyReader := bytes.NewReader(jsonBody)
 
-	resp, err := http.Post(url, contentTypeJSON, bodyReader)
+	resp, err := c.client().Post(url, contentTypeJSON, bodyReader)
 	if err != nil {
 		return err
 	}
@@ -288,7 +358,7 @@ func (c *Client) AddCluster(name, cluster interface{}) error {
 func (c *Client) GetBackupPolicies() (map[string]interface{}, error) {
 	url := c.API("/config/policies")
 
-	resp, err := http.Get(url)
+	resp, err := c.client().Get(url)
 	if err != nil {
 		return nil, err
 	}
@@ -328,7 +398,7 @@ func (c *Client) PutBackupPolicy(name string, policy interface{}) error {
 		return err
 	}
 
-	cl := &http.Client{}
+	cl := c.client()
 
 	resp, err := cl.Do(req)
 	if err != nil {
@@ -359,7 +429,7 @@ func (c *Client) AddBackupPolicy(name string, policy interface{}) error {
 
 	bodyReader := bytes.NewReader(jsonBody)
 
-	resp, err := http.Post(url, contentTypeJSON, bodyReader)
+	resp, err := c.client().Post(url, contentTypeJSON, bodyReader)
 	if err != nil {
 		return err
 	}
@@ -395,7 +465,7 @@ func (c *Client) PutBackupRoutine(name string, routine interface{}) error {
 		return err
 	}
 
-	cl := &http.Client{}
+	cl := c.client()
 
 	resp, err := cl.Do(req)
 	if err != nil {
@@ -426,7 +496,7 @@ func (c *Client) AddBackupRoutine(name string, routine interface{}) error {
 
 	bodyReader := bytes.NewReader(jsonBody)
 
-	resp, err := http.Post(url, contentTypeJSON, bodyReader)
+	resp, err := c.client().Post(url, contentTypeJSON, bodyReader)
 	if err != nil {
 		return err
 	}
@@ -453,7 +523,7 @@ func (c *Client) DeleteBackupRoutine(name string) error {
 		return err
 	}
 
-	cl := &http.Client{}
+	cl := c.client()
 
 	resp, err := cl.Do(req)
 	if err != nil {
@@ -477,7 +547,7 @@ func (c *Client) DeleteBackupRoutine(name string) error {
 func (c *Client) GetStorage() (map[string]interface{}, error) {
 	url := c.API("/config/storage")
 
-	resp, err := http.Get(url)
+	resp, err := c.client().Get(url)
 	if err != nil {
 		return nil, err
 	}
@@ -517,7 +587,7 @@ func (c *Client) PutStorage(name string, storage interface{}) error {
 		return err
 	}
 
-	cl := &http.Client{}
+	cl := c.client()
 
 	resp, err := cl.Do(req)
 	if err != nil {
@@ -548,7 +618,7 @@ func (c *Client) AddStorage(name string, storage interface{}) error {
 
 	bodyReader := bytes.NewReader(jsonBody)
 
-	resp, err := http.Post(url, contentTypeJSON, bodyReader)
+	resp, err := c.client().Post(url, contentTypeJSON, bodyReader)
 	if err != nil {
 		return err
 	}
@@ -570,7 +640,7 @@ func (c *Client) AddStorage(name string, storage interface{}) error {
 func (c *Client) GetFullBackups() (map[string][]interface{}, error) {
 	url := c.API("/backups/full")
 
-	resp, err := http.Get(url)
+	resp, err := c.client().Get(url)
 	if err != nil {
 		return nil, err
 	}
@@ -598,7 +668,7 @@ func (c *Client) GetFullBackups() (map[string][]interface{}, error) {
 func (c *Client) GetFullBackupsForRoutine(routineName string) ([]interface{}, error) {
 	url := c.API(fmt.Sprintf("/backups/full/%s", routineName))
 
-	resp, err := http.Get(url)
+	resp, err := c.client().Get(url)
 	if err != nil {
 		return nil, err
 	}
@@ -626,7 +696,7 @@ func (c *Client) GetFullBackupsForRoutine(routineName string) ([]interface{}, er
 func (c *Client) GetIncrementalBackupsForRoutine(routineName string) ([]interface{}, error) {
 	url := c.API(fmt.Sprintf("/backups/incremental/%s", routineName))
 
-	resp, err := http.Get(url)
+	resp, err := c.client().Get(url)
 	if err != nil {
 		return nil, err
 	}
@@ -665,7 +735,7 @@ func (c *Client) ScheduleBackup(routineName string, delay metav1.Duration) error
 		url.RawQuery = query.Encode()
 	}
 
-	resp, err := http.Post(url.String(), contentTypeJSON, nil)
+	resp, err := c.client().Post(url.String(), contentTypeJSON, nil)
 	if err != nil {
 		return err
 	}
@@ -703,7 +773,7 @@ func (c *Client) triggerOnDemandBackup(backupType, routineName string, delay met
 		parsedURL.RawQuery = query.Encode()
 	}
 
-	resp, err := http.Post(parsedURL.String(), contentTypeJSON, nil)
+	resp, err := c.client().Post(parsedURL.String(), contentTypeJSON, nil)
 	if err != nil {
 		return err
 	}
@@ -796,7 +866,7 @@ func (c *Client) TriggerRestoreWithType(log logr.Logger, restoreType string,
 
 	bodyReader := bytes.NewReader(jsonBody)
 
-	resp, err := http.Post(url, contentTypeJSON, bodyReader)
+	resp, err := c.client().Post(url, contentTypeJSON, bodyReader)
 	if err != nil {
 		return nil, nil, err
 	}
@@ -834,7 +904,7 @@ func (c *Client) TriggerRestoreWithType(log logr.Logger, restoreType string,
 func (c *Client) CheckRestoreStatus(jobID int64) (map[string]interface{}, error) {
 	url := c.API(fmt.Sprintf("/restore/status/%d", jobID))
 
-	resp, err := http.Get(url)
+	resp, err := c.client().Get(url)
 	if err != nil {
 		return nil, err
 	}
@@ -862,7 +932,7 @@ func (c *Client) CheckRestoreStatus(jobID int64) (map[string]interface{}, error)
 func (c *Client) CancelRestoreJob(jobID int64) (int, error) {
 	url := c.API(fmt.Sprintf("/restore/cancel/%d", jobID))
 
-	resp, err := http.Post(url, contentTypeJSON, nil)
+	resp, err := c.client().Post(url, contentTypeJSON, nil)
 	if err != nil {
 		return 0, err
 	}
@@ -892,5 +962,5 @@ func (c *Client) API(pattern string) string {
 
 	address := fmt.Sprintf("%s:%d", c.getAddress(), c.getPort())
 
-	return fmt.Sprintf("http://%s%s%s%s", address, contextPath, restAPIVersion, pattern)
+	return fmt.Sprintf("%s://%s%s%s%s", c.getScheme(), address, contextPath, restAPIVersion, pattern)
 }

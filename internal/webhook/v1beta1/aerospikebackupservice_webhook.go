@@ -18,6 +18,7 @@ package v1beta1
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"reflect"
 
@@ -32,7 +33,9 @@ import (
 	"github.com/aerospike/aerospike-backup-service/v3/pkg/dto"
 	asdbv1 "github.com/aerospike/aerospike-kubernetes-operator/v4/api/v1"
 	asdbv1beta1 "github.com/aerospike/aerospike-kubernetes-operator/v4/api/v1beta1"
+	backup_service "github.com/aerospike/aerospike-kubernetes-operator/v4/pkg/backup-service"
 	"github.com/aerospike/aerospike-kubernetes-operator/v4/pkg/utils"
+	lib "github.com/aerospike/aerospike-management-lib"
 )
 
 // SetupAerospikeBackupServiceWebhookWithManager registers the webhook for AerospikeBackupService in the manager.
@@ -119,7 +122,8 @@ func (absv *AerospikeBackupServiceCustomValidator) ValidateDelete(_ context.Cont
 func validateBackupService(
 	reader client.Reader, backupSvc *asdbv1beta1.AerospikeBackupService,
 ) (admission.Warnings, error) {
-	if _, err := asdbv1beta1.ValidateBackupSvcVersion(backupSvc.Spec.Image); err != nil {
+	version, err := asdbv1beta1.ValidateBackupSvcVersion(backupSvc.Spec.Image)
+	if err != nil {
 		return nil, err
 	}
 
@@ -127,11 +131,54 @@ func validateBackupService(
 		return nil, err
 	}
 
+	if err := validateOperatorConnection(backupSvc, version); err != nil {
+		return nil, err
+	}
+
 	if err := validateBackupServiceSecrets(backupSvc.Spec.SecretMounts); err != nil {
 		return nil, err
 	}
 
+	if err := validateHTTPSFilesMounted(backupSvc); err != nil {
+		return nil, err
+	}
+
 	return validateServicePodSpec(backupSvc)
+}
+
+// validateOperatorConnection rejects a config where the operator cannot reach the backup service:
+// the listener the operator connects to must be enabled, and its TLS settings must be complete.
+func validateOperatorConnection(backupSvc *asdbv1beta1.AerospikeBackupService, version string) error {
+	if certSpec := backupSvc.Spec.OperatorClientCert; certSpec != nil {
+		source := certSpec.SecretCertSource
+		if (source.ClientCertFilename == "") != (source.ClientKeyFilename == "") {
+			return errors.New("clientCertFilename and clientKeyFilename in spec.operatorClientCert.secretCertSource " +
+				"must be set together")
+		}
+	}
+
+	var config dto.Config
+
+	if err := yaml.Unmarshal(backupSvc.Spec.Config.Raw, &config); err != nil {
+		return err
+	}
+
+	// An older backup service does not start with a config that has service.https, even a disabled one.
+	if config.ServiceConfig.ServerHTTPS != nil || backupSvc.Spec.OperatorClientCert != nil {
+		val, err := lib.CompareVersions(version, asdbv1beta1.BackupSvcHTTPSMinVersion)
+		if err != nil {
+			return fmt.Errorf("check backup service image version: %w", err)
+		}
+
+		if val < 0 {
+			return fmt.Errorf("service.https and spec.operatorClientCert need backup service %s or later, "+
+				"image has %s", asdbv1beta1.BackupSvcHTTPSMinVersion, version)
+		}
+	}
+
+	_, err := backup_service.GetListeners(backupSvc.Spec.Config.Raw, backupSvc.Spec.OperatorClientCert)
+
+	return err
 }
 
 func validateBackupServiceConfig(reader client.Reader, backupSvc *asdbv1beta1.AerospikeBackupService) error {
@@ -171,6 +218,53 @@ func validateBackupServiceConfig(reader client.Reader, backupSvc *asdbv1beta1.Ae
 	if err := updateValidateBackupSvcConfig(clusters, routines, &config); err != nil {
 		return fmt.Errorf("aerospike backup config is not valid %s: %w",
 			utils.NamespacedName(backupSvc.Namespace, backupSvc.Name), err)
+	}
+
+	return nil
+}
+
+// validateHTTPSFilesMounted rejects an enabled service.https whose certificate, key, CA or CRL file is not under a
+// Secret mounted in spec.secrets. The backup service reads these files at startup and does not start without them.
+func validateHTTPSFilesMounted(backupSvc *asdbv1beta1.AerospikeBackupService) error {
+	var config dto.Config
+
+	if err := yaml.Unmarshal(backupSvc.Spec.Config.Raw, &config); err != nil {
+		return err
+	}
+
+	https := config.ServiceConfig.ServerHTTPS
+	if https == nil || https.Disabled {
+		return nil
+	}
+
+	files := []struct {
+		field string
+		path  dto.Path
+	}{
+		{"cert-file", https.CertFile},
+		{"key-file", https.KeyFile},
+		{"client-ca-file", https.ClientCAFile},
+		{"crl-file", https.CRLFile},
+	}
+
+	for _, file := range files {
+		if file.path == "" {
+			continue
+		}
+
+		mounted := false
+
+		for idx := range backupSvc.Spec.SecretMounts {
+			if asdbv1.IsPathParentOrSame(backupSvc.Spec.SecretMounts[idx].VolumeMount.MountPath, string(file.path)) {
+				mounted = true
+				break
+			}
+		}
+
+		if !mounted {
+			return fmt.Errorf("service.https.%s %s is not in a mounted Secret; add its Secret to spec.secrets",
+				file.field, file.path)
+		}
 	}
 
 	return nil

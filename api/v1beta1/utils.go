@@ -18,6 +18,10 @@ const BackupSvcMinSupportedVersion = "3.0.0"
 // Versions below this fall back to the deprecated POST /v1/backups/schedule/{name}.
 const BackupSvcNewOnDemandAPIVersion = "3.5.0"
 
+// BackupSvcHTTPSMinVersion is the minimum ABS version with the service.https listener. An older backup service does
+// not start with a config that has it.
+const BackupSvcHTTPSMinVersion = "3.7.0"
+
 func ValidateBackupSvcVersion(image string) (string, error) {
 	version, err := asdbv1.GetImageVersion(image)
 	if err != nil {

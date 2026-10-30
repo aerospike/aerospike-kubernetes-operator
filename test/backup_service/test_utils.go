@@ -2,8 +2,15 @@ package backupservice
 
 import (
 	"context"
+	"crypto/ecdsa"
+	"crypto/elliptic"
+	"crypto/rand"
+	"crypto/x509"
+	"crypto/x509/pkix"
 	"encoding/json"
+	"encoding/pem"
 	"fmt"
+	"math/big"
 	"time"
 
 	app "k8s.io/api/apps/v1"
@@ -417,4 +424,97 @@ func validateLabelsOrAnnotations(
 	}
 
 	return true
+}
+
+// newHTTPSTestCert generates one self-signed certificate and its PKCS#8 key, in PEM, for the names of the backup
+// service Service. It is the backup service certificate, the CA it trusts for client certificates, and the
+// operator's CA and client certificate. It is generated for each test, so no key is kept in the repository.
+func newHTTPSTestCert(serviceName, serviceNamespace string) (certPEM, keyPEM []byte, err error) {
+	key, err := ecdsa.GenerateKey(elliptic.P256(), rand.Reader)
+	if err != nil {
+		return nil, nil, err
+	}
+
+	template := &x509.Certificate{
+		SerialNumber: big.NewInt(1),
+		Subject:      pkix.Name{CommonName: serviceName},
+		DNSNames: []string{
+			fmt.Sprintf("%s.%s.svc", serviceName, serviceNamespace),
+			fmt.Sprintf("%s.%s.svc.cluster.local", serviceName, serviceNamespace),
+		},
+		NotBefore:             time.Now().Add(-time.Hour),
+		NotAfter:              time.Now().Add(24 * time.Hour),
+		IsCA:                  true,
+		BasicConstraintsValid: true,
+		KeyUsage:              x509.KeyUsageCertSign | x509.KeyUsageDigitalSignature,
+		ExtKeyUsage:           []x509.ExtKeyUsage{x509.ExtKeyUsageServerAuth, x509.ExtKeyUsageClientAuth},
+	}
+
+	der, err := x509.CreateCertificate(rand.Reader, template, template, &key.PublicKey, key)
+	if err != nil {
+		return nil, nil, err
+	}
+
+	keyDER, err := x509.MarshalPKCS8PrivateKey(key)
+	if err != nil {
+		return nil, nil, err
+	}
+
+	return pem.EncodeToMemory(&pem.Block{Type: "CERTIFICATE", Bytes: der}),
+		pem.EncodeToMemory(&pem.Block{Type: "PRIVATE KEY", Bytes: keyDER}), nil
+}
+
+// httpsSecret returns the Secret that both the backup service mounts and the operator reads its TLS files from.
+func httpsSecret(backupServiceNamespacedName types.NamespacedName) *corev1.Secret {
+	return &corev1.Secret{ObjectMeta: metav1.ObjectMeta{
+		Name: backupServiceNamespacedName.Name + "-tls", Namespace: backupServiceNamespacedName.Namespace,
+	}}
+}
+
+// newBackupServiceWithHTTPS returns a backup service that serves HTTPS with the Secret from httpsSecret, and
+// that the operator connects to over HTTPS. With mTLS the backup service requires the operator's client certificate.
+func newBackupServiceWithHTTPS(backupServiceNamespacedName types.NamespacedName,
+	httpDisabled, mTLS bool) (*asdbv1beta1.AerospikeBackupService, error) {
+	https := map[string]interface{}{
+		"port": 8443, "cert-file": "/etc/abs-tls/tls.crt", "key-file": "/etc/abs-tls/tls.key",
+	}
+
+	if mTLS {
+		https["client-ca-file"] = "/etc/abs-tls/ca.crt"
+		https["client-auth"] = "require-and-verify"
+	}
+
+	config := getBackupServiceConfMap()
+	config[asdbv1beta1.ServiceKey] = map[string]interface{}{
+		"http":  map[string]interface{}{"port": 8081, "disabled": httpDisabled},
+		"https": https,
+	}
+
+	configBytes, err := json.Marshal(config)
+	if err != nil {
+		return nil, err
+	}
+
+	backupService := newBackupServiceWithConfig(backupServiceNamespacedName, configBytes)
+	secretName := httpsSecret(backupServiceNamespacedName).Name
+
+	backupService.Spec.SecretMounts = append(backupService.Spec.SecretMounts, asdbv1beta1.SecretMount{
+		SecretName: secretName,
+		VolumeMount: corev1.VolumeMount{
+			Name: "abs-tls", MountPath: "/etc/abs-tls", ReadOnly: true,
+		},
+	})
+
+	certSource := asdbv1beta1.SecretCertSource{
+		SecretName: secretName, CaCertsFilename: "ca.crt",
+	}
+
+	if mTLS {
+		certSource.ClientCertFilename = "tls.crt"
+		certSource.ClientKeyFilename = "tls.key"
+	}
+
+	backupService.Spec.OperatorClientCert = &asdbv1beta1.OperatorClientCertSpec{SecretCertSource: certSource}
+
+	return backupService, nil
 }

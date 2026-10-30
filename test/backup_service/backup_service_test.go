@@ -279,6 +279,77 @@ var _ = Describe(
 				Expect(config[asdbv1beta1.StorageKey]).To(BeNil())
 			})
 
+			// The operator writes status.config only after it reloaded the backup service through its HTTPS client,
+			// so a status that catches up with a dynamic change, on the same pod, shows that the reload used HTTPS.
+			DescribeTable("Should serve HTTPS and hot-reload the backup service over it",
+				func(httpDisabled, mTLS bool) {
+					certPEM, keyPEM, gErr := newHTTPSTestCert(backupServiceName, namespace)
+					Expect(gErr).ToNot(HaveOccurred())
+
+					secret := httpsSecret(backupServiceNamespacedName)
+					secret.Data = map[string][]byte{"tls.crt": certPEM, "tls.key": keyPEM, "ca.crt": certPEM}
+					_ = k8sClient.Delete(testCtx, secret.DeepCopy())
+					Expect(k8sClient.Create(testCtx, secret)).To(Succeed())
+					DeferCleanup(k8sClient.Delete, testCtx, secret)
+
+					backupService, err = newBackupServiceWithHTTPS(backupServiceNamespacedName, httpDisabled, mTLS)
+					Expect(err).ToNot(HaveOccurred())
+					Expect(DeployBackupService(k8sClient, backupService)).To(Succeed())
+
+					backupService, err = getBackupServiceObj(k8sClient, backupServiceNamespacedName)
+					Expect(err).ToNot(HaveOccurred())
+					Expect(backupService.Status.Scheme).To(Equal(corev1.URISchemeHTTPS))
+					Expect(backupService.Status.Port).To(BeEquivalentTo(8443))
+
+					svc, gErr := getBackupK8sServiceObj(k8sClient, backupServiceNamespacedName)
+					Expect(gErr).ToNot(HaveOccurred())
+
+					portNames := make([]string, 0, len(svc.Spec.Ports))
+					for idx := range svc.Spec.Ports {
+						portNames = append(portNames, svc.Spec.Ports[idx].Name)
+					}
+
+					Expect(portNames).To(ContainElement(asdbv1beta1.HTTPSKey))
+
+					if httpDisabled {
+						Expect(portNames).ToNot(ContainElement(asdbv1beta1.HTTPKey))
+					}
+
+					podList, gErr := getBackupServicePodList(k8sClient, backupService)
+					Expect(gErr).ToNot(HaveOccurred())
+					Expect(podList.Items).To(HaveLen(1))
+
+					podUID := podList.Items[0].UID
+
+					By("Change a dynamic field")
+
+					config := map[string]interface{}{}
+					Expect(json.Unmarshal(backupService.Spec.Config.Raw, &config)).To(Succeed())
+
+					policies := config[asdbv1beta1.BackupPoliciesKey].(map[string]interface{})
+					policies["test-policy"].(map[string]interface{})["parallel"] = 4
+
+					backupService.Spec.Config.Raw, err = json.Marshal(config)
+					Expect(err).ToNot(HaveOccurred())
+					Expect(k8sClient.Update(testCtx, backupService)).To(Succeed())
+
+					Eventually(func(g Gomega) {
+						current, cErr := getBackupServiceObj(k8sClient, backupServiceNamespacedName)
+						g.Expect(cErr).ToNot(HaveOccurred())
+						g.Expect(current.Status.Phase).To(Equal(asdbv1beta1.AerospikeBackupServiceCompleted))
+						g.Expect(current.Status.Config.Raw).To(Equal(current.Spec.Config.Raw))
+					}, timeout, interval).Should(Succeed())
+
+					podList, err = getBackupServicePodList(k8sClient, backupService)
+					Expect(err).ToNot(HaveOccurred())
+					Expect(podList.Items).To(HaveLen(1))
+					Expect(podList.Items[0].UID).To(Equal(podUID))
+				},
+				Entry("HTTP and HTTPS", false, false),
+				Entry("HTTPS only", true, false),
+				Entry("mutual TLS", false, true),
+			)
+
 			It("Should restart backup service deployment pod when pod spec is changed", func() {
 				backupService, err = NewBackupService(backupServiceNamespacedName)
 				Expect(err).ToNot(HaveOccurred())

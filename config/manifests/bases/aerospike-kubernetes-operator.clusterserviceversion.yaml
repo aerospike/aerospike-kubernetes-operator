@@ -54,6 +54,12 @@ spec:
       - description: Image is the image for the backup service.
         displayName: Backup Service Image
         path: image
+      - description: |-
+          OperatorClientCert configures how the operator connects to the backup service over HTTPS.
+          When set, the operator uses the service.https listener from config, which must be enabled.
+          When not set, the operator uses the service.http listener, which must be enabled.
+        displayName: Operator Client Cert
+        path: operatorClientCert
       - description: Specify additional configuration for the AerospikeBackupService
           pods
         displayName: Pod Configuration
