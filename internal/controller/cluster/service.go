@@ -272,8 +272,10 @@ func (r *SingleClusterReconciler) updateLBService(ctx context.Context, service *
 }
 
 func (r *SingleClusterReconciler) reconcilePodService(ctx context.Context, rackState *RackState) error {
-	// PodService is only created if MultiPodPerHost is enabled
-	if !asdbv1.GetBool(r.aeroCluster.Spec.PodSpec.MultiPodPerHost) {
+	// PodService is only created if MultiPodPerHost is enabled.
+	// clusterNLB also needs a per-pod NodePort when MultiPodPerHost is false.
+	if !asdbv1.GetBool(r.aeroCluster.Spec.PodSpec.MultiPodPerHost) &&
+		!r.aeroCluster.Spec.AerospikeNetworkPolicy.UsesClusterNLB() {
 		return nil
 	}
 
@@ -499,7 +501,8 @@ func (r *SingleClusterReconciler) cleanupDanglingPodServices(ctx context.Context
 }
 
 func podServiceNeeded(multiPodPerHost *bool, networkPolicy *asdbv1.AerospikeNetworkPolicy) bool {
-	if !asdbv1.GetBool(multiPodPerHost) || networkPolicy == nil {
+	// clusterNLB needs a per-pod NodePort even when multiPodPerHost is false.
+	if networkPolicy == nil || (!asdbv1.GetBool(multiPodPerHost) && !networkPolicy.UsesClusterNLB()) {
 		return false
 	}
 

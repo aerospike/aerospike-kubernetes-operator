@@ -646,6 +646,19 @@ func GetBool(boolPtr *bool) bool {
 	return ptr.Deref(boolPtr, false)
 }
 
+// UsesClusterNLB reports whether any client access type advertises the cluster NLB address.
+// AKO creates a per-pod NodePort Service in that case even when multiPodPerHost is false.
+func (p *AerospikeNetworkPolicy) UsesClusterNLB() bool {
+	if p == nil {
+		return false
+	}
+
+	return p.AccessType == AerospikeNetworkTypeNLB ||
+		p.AlternateAccessType == AerospikeNetworkTypeNLB ||
+		p.TLSAccessType == AerospikeNetworkTypeNLB ||
+		p.TLSAlternateAccessType == AerospikeNetworkTypeNLB
+}
+
 // GetDefaultPasswordFilePath returns the default-password-fille path if configured.
 func GetDefaultPasswordFilePath(aerospikeConfigSpec *AerospikeConfigSpec) *string {
 	aerospikeConfig := aerospikeConfigSpec.Value

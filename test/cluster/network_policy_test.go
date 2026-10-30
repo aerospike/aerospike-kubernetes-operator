@@ -1279,7 +1279,8 @@ func getExpectedServicePortForPod(
 	var port int32
 
 	if (networkType != asdbv1.AerospikeNetworkTypePod && networkType != asdbv1.AerospikeNetworkTypeCustomInterface) &&
-		asdbv1.GetBool(aeroCluster.Spec.PodSpec.MultiPodPerHost) {
+		(asdbv1.GetBool(aeroCluster.Spec.PodSpec.MultiPodPerHost) ||
+			networkType == asdbv1.AerospikeNetworkTypeNLB) {
 		svc, err := getServiceForPod(pod, k8sClient)
 		if err != nil {
 			return 0, fmt.Errorf("error getting service port: %v", err)

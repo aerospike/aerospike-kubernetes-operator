@@ -20,12 +20,14 @@ import (
 	"context"
 	"testing"
 
+	"github.com/stretchr/testify/require"
 	corev1 "k8s.io/api/core/v1"
 	"k8s.io/apimachinery/pkg/types"
 	"k8s.io/client-go/tools/record"
+	"k8s.io/utils/ptr"
 	"sigs.k8s.io/controller-runtime/pkg/client/interceptor"
 
-	"github.com/stretchr/testify/require"
+	asdbv1 "github.com/aerospike/aerospike-kubernetes-operator/v4/api/v1"
 )
 
 // TestCreateOrUpdatePodService verifies invariants of the NodePort service that
@@ -109,4 +111,26 @@ func TestCreateOrUpdatePodService(t *testing.T) {
 			tt.checkSvc(t, svc)
 		})
 	}
+}
+
+func TestPodServiceNeeded(t *testing.T) {
+	t.Parallel()
+
+	nlb := &asdbv1.AerospikeNetworkPolicy{AccessType: asdbv1.AerospikeNetworkTypeNLB}
+	host := &asdbv1.AerospikeNetworkPolicy{
+		AccessType:          asdbv1.AerospikeNetworkTypeHostInternal,
+		AlternateAccessType: asdbv1.AerospikeNetworkTypeHostExternal,
+	}
+	podOnly := &asdbv1.AerospikeNetworkPolicy{
+		AccessType:             asdbv1.AerospikeNetworkTypePod,
+		AlternateAccessType:    asdbv1.AerospikeNetworkTypePod,
+		TLSAccessType:          asdbv1.AerospikeNetworkTypePod,
+		TLSAlternateAccessType: asdbv1.AerospikeNetworkTypePod,
+	}
+
+	require.True(t, podServiceNeeded(ptr.To(false), nlb))
+	require.False(t, podServiceNeeded(ptr.To(false), host))
+	require.True(t, podServiceNeeded(ptr.To(true), host))
+	require.False(t, podServiceNeeded(ptr.To(true), podOnly))
+	require.False(t, podServiceNeeded(ptr.To(false), nil))
 }

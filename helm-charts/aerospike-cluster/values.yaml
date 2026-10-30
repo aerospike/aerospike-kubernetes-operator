@@ -64,6 +64,16 @@ aerospikeNetworkPolicy: {}
 #   alternateAccess: hostExternal
 #   tlsAccess: pod
 #   tlsAlternateAccess: hostExternal
+#   # clusterNLB advertises one NLB or PSC IP or FQDN for every pod.
+#   # The per-pod NodePort distinguishes nodes. AKO creates that Service even when multiPodPerHost is false.
+#   # access: clusterNLB
+#   # nlbAccessAddress: aerospike-nlb.example.com
+#   # alternateAccess: clusterNLB
+#   # nlbAlternateAccessAddress: aerospike-nlb-alt.example.com
+#   # tlsAccess: clusterNLB
+#   # nlbTLSAccessAddress: aerospike-nlb.example.com
+#   # tlsAlternateAccess: clusterNLB
+#   # nlbTLSAlternateAccessAddress: aerospike-nlb-alt.example.com
 
 ## Pod spec
 podSpec: {}

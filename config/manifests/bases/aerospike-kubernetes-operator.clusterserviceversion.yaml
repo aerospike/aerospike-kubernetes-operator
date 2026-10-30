@@ -159,7 +159,8 @@ spec:
         path: paused
       - description: |-
           PodService defines additional configuration parameters for the pod service created to expose the
-          Aerospike Cluster nodes outside the Kubernetes cluster. This service is created only created when
+          Aerospike Cluster nodes outside the Kubernetes cluster. This service is only created when
+          `aerospikeNetworkPolicy` is 'clusterNLB' or
           `multiPodPerHost` is set to `true` and `aerospikeNetworkPolicy` has one of the network types:
           'hostInternal', 'hostExternal', 'configuredIP'
         displayName: Pod Service

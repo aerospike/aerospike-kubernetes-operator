@@ -2025,6 +2025,29 @@ func validateNetworkPolicyUpdate(oldPolicy, newPolicy *asdbv1.AerospikeNetworkPo
 		return fmt.Errorf("cannot change/update customTLSFabricNetworkNames")
 	}
 
+	return validateClusterNLBUnchanged(oldPolicy, newPolicy)
+}
+
+func validateClusterNLBUnchanged(oldPolicy, newPolicy *asdbv1.AerospikeNetworkPolicy) error {
+	type nlbTypeField struct {
+		name    string
+		oldType asdbv1.AerospikeNetworkType
+		newType asdbv1.AerospikeNetworkType
+	}
+
+	fields := []nlbTypeField{
+		{"access", oldPolicy.AccessType, newPolicy.AccessType},
+		{"alternateAccess", oldPolicy.AlternateAccessType, newPolicy.AlternateAccessType},
+		{"tlsAccess", oldPolicy.TLSAccessType, newPolicy.TLSAccessType},
+		{"tlsAlternateAccess", oldPolicy.TLSAlternateAccessType, newPolicy.TLSAlternateAccessType},
+	}
+
+	for _, field := range fields {
+		if field.oldType == asdbv1.AerospikeNetworkTypeNLB && field.newType != asdbv1.AerospikeNetworkTypeNLB {
+			return fmt.Errorf("cannot update %s once it is set to clusterNLB", field.name)
+		}
+	}
+
 	return nil
 }
 
@@ -2497,6 +2520,42 @@ func validateNetworkPolicy(cluster *asdbv1.AerospikeCluster) error {
 			"tlsFabric", "customTLSFabricNetworkNames",
 		); err != nil {
 			return err
+		}
+	}
+
+	if err := validateNLBNetworkPolicy(cluster); err != nil {
+		return err
+	}
+
+	return nil
+}
+
+func validateNLBNetworkPolicy(cluster *asdbv1.AerospikeCluster) error {
+	networkPolicy := &cluster.Spec.AerospikeNetworkPolicy
+
+	type nlbField struct {
+		networkType asdbv1.AerospikeNetworkType
+		address     string
+		typeName    string
+		fieldName   string
+	}
+
+	fields := []nlbField{
+		{networkPolicy.AccessType, networkPolicy.NLBAccessAddress, "access", "nlbAccessAddress"},
+		{networkPolicy.AlternateAccessType, networkPolicy.NLBAlternateAccessAddress,
+			"alternateAccess", "nlbAlternateAccessAddress"},
+		{networkPolicy.TLSAccessType, networkPolicy.NLBTLSAccessAddress, "tlsAccess", "nlbTLSAccessAddress"},
+		{networkPolicy.TLSAlternateAccessType, networkPolicy.NLBTLSAlternateAccessAddress,
+			"tlsAlternateAccess", "nlbTLSAlternateAccessAddress"},
+	}
+
+	for _, field := range fields {
+		if field.networkType != asdbv1.AerospikeNetworkTypeNLB {
+			continue
+		}
+
+		if field.address == "" {
+			return fmt.Errorf("%s is required when %s is 'clusterNLB'", field.fieldName, field.typeName)
 		}
 	}
 

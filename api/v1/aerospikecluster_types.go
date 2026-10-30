@@ -261,7 +261,8 @@ type AerospikeClusterSpec struct { //nolint:govet // for readability
 	HeadlessService ServiceSpec `json:"headlessService,omitempty"`
 
 	// PodService defines additional configuration parameters for the pod service created to expose the
-	// Aerospike Cluster nodes outside the Kubernetes cluster. This service is created only created when
+	// Aerospike Cluster nodes outside the Kubernetes cluster. This service is only created when
+	// `aerospikeNetworkPolicy` is 'clusterNLB' or
 	// `multiPodPerHost` is set to `true` and `aerospikeNetworkPolicy` has one of the network types:
 	// 'hostInternal', 'hostExternal', 'configuredIP'
 	// +operator-sdk:csv:customresourcedefinitions:type=spec,displayName="Pod Service"
@@ -528,7 +529,7 @@ type AerospikePodSpec struct { //nolint:govet // for readability
 
 	// If set true then multiple pods can be created per Kubernetes Node.
 	// This will create a NodePort service for each Pod if aerospikeNetworkPolicy defined
-	// has one of the network types: 'hostInternal', 'hostExternal', 'configuredIP'
+	// has one of the network types: 'hostInternal', 'hostExternal', 'configuredIP', 'clusterNLB'
 	// NodePort, as the name implies, opens a specific port on all the Kubernetes Nodes ,
 	// and any traffic that is sent to this port is forwarded to the service.
 	// Here service picks a random port in range (30000-32767), so these port should be open.
@@ -538,6 +539,7 @@ type AerospikePodSpec struct { //nolint:govet // for readability
 	// The container port will be exposed to the external network at <hostIP>:<hostPort>,
 	// where the hostIP is the IP address of the Kubernetes Node where the container is running and
 	// the hostPort is the port requested by the user.
+	// clusterNLB still creates a per-pod NodePort Service in this mode so each pod has a unique port.
 	// +optional
 	MultiPodPerHost *bool `json:"multiPodPerHost,omitempty"`
 
@@ -1182,7 +1184,8 @@ type AerospikeClusterStatusSpec struct { //nolint:govet // for readability
 	HeadlessService ServiceSpec `json:"headlessService,omitempty"`
 
 	// PodService defines additional configuration parameters for the pod service created to expose the
-	// Aerospike Cluster nodes outside the Kubernetes cluster. This service is created only created when
+	// Aerospike Cluster nodes outside the Kubernetes cluster. This service is only created when
+	// `aerospikeNetworkPolicy` is 'clusterNLB' or
 	// `multiPodPerHost` is set to `true` and `aerospikeNetworkPolicy` has one of the network types:
 	// 'hostInternal', 'hostExternal', 'configuredIP'
 	// +optional
@@ -1281,13 +1284,18 @@ const (
 
 	// AerospikeNetworkTypeCustomInterface specifies any other custom interface to be used with Aerospike
 	AerospikeNetworkTypeCustomInterface AerospikeNetworkType = "customInterface"
+
+	// AerospikeNetworkTypeNLB specifies access using one cluster-level NLB or PSC address.
+	// Every pod advertises the same IP address or FQDN from the matching nlb*Address field.
+	// The per-pod NodePort distinguishes nodes. AKO creates that Service even when multiPodPerHost is false.
+	AerospikeNetworkTypeNLB AerospikeNetworkType = "clusterNLB"
 )
 
 // AerospikeNetworkPolicy specifies how clients and tools access the Aerospike cluster.
 type AerospikeNetworkPolicy struct {
 	// AccessType is the type of network address to use for Aerospike access address.
 	// Defaults to hostInternal.
-	// +kubebuilder:validation:Enum=pod;hostInternal;hostExternal;configuredIP;customInterface
+	// +kubebuilder:validation:Enum=pod;hostInternal;hostExternal;configuredIP;customInterface;clusterNLB
 	// +kubebuilder:default="hostInternal"
 	// +optional
 	AccessType AerospikeNetworkType `json:"access,omitempty"`
@@ -1304,7 +1312,7 @@ type AerospikeNetworkPolicy struct {
 
 	// AlternateAccessType is the type of network address to use for Aerospike alternate access address.
 	// Defaults to hostExternal.
-	// +kubebuilder:validation:Enum=pod;hostInternal;hostExternal;configuredIP;customInterface
+	// +kubebuilder:validation:Enum=pod;hostInternal;hostExternal;configuredIP;customInterface;clusterNLB
 	// +kubebuilder:default="hostExternal"
 	// +optional
 	AlternateAccessType AerospikeNetworkType `json:"alternateAccess,omitempty"`
@@ -1322,7 +1330,7 @@ type AerospikeNetworkPolicy struct {
 
 	// TLSAccessType is the type of network address to use for Aerospike TLS access address.
 	// Defaults to hostInternal.
-	// +kubebuilder:validation:Enum=pod;hostInternal;hostExternal;configuredIP;customInterface
+	// +kubebuilder:validation:Enum=pod;hostInternal;hostExternal;configuredIP;customInterface;clusterNLB
 	// +kubebuilder:default="hostInternal"
 	// +optional
 	TLSAccessType AerospikeNetworkType `json:"tlsAccess,omitempty"`
@@ -1339,7 +1347,7 @@ type AerospikeNetworkPolicy struct {
 
 	// TLSAlternateAccessType is the type of network address to use for Aerospike TLS alternate access address.
 	// Defaults to hostExternal.
-	// +kubebuilder:validation:Enum=pod;hostInternal;hostExternal;configuredIP;customInterface
+	// +kubebuilder:validation:Enum=pod;hostInternal;hostExternal;configuredIP;customInterface;clusterNLB
 	// +kubebuilder:default="hostExternal"
 	// +optional
 	TLSAlternateAccessType AerospikeNetworkType `json:"tlsAlternateAccess,omitempty"`
@@ -1354,6 +1362,27 @@ type AerospikeNetworkPolicy struct {
 	// +kubebuilder:validation:MinItems:=1
 	// +optional
 	CustomTLSAlternateAccessNetworkNames []string `json:"customTLSAlternateAccessNetworkNames,omitempty"`
+
+	// NLBAccessAddress is the FQDN or IP of the cluster-level NLB or PSC endpoint
+	// advertised as the access address for all pods.
+	// Required when access is 'clusterNLB'.
+	// +optional
+	NLBAccessAddress string `json:"nlbAccessAddress,omitempty"`
+
+	// NLBAlternateAccessAddress is the FQDN or IP for alternate access via NLB or PSC.
+	// Required when alternateAccess is 'clusterNLB'.
+	// +optional
+	NLBAlternateAccessAddress string `json:"nlbAlternateAccessAddress,omitempty"`
+
+	// NLBTLSAccessAddress is the FQDN or IP for TLS access via NLB or PSC.
+	// Required when tlsAccess is 'clusterNLB'.
+	// +optional
+	NLBTLSAccessAddress string `json:"nlbTLSAccessAddress,omitempty"`
+
+	// NLBTLSAlternateAccessAddress is the FQDN or IP for TLS alternate access via NLB or PSC.
+	// Required when tlsAlternateAccess is 'clusterNLB'.
+	// +optional
+	NLBTLSAlternateAccessAddress string `json:"nlbTLSAlternateAccessAddress,omitempty"`
 
 	// FabricType is the type of network address to use for Aerospike fabric address.
 	// Defaults is empty meaning all interfaces 'any'.
