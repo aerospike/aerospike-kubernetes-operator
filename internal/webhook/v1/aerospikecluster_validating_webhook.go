@@ -718,6 +718,17 @@ func validateClientCertSpec(cluster *asdbv1.AerospikeCluster) error {
 	return nil
 }
 
+// getRackStatusStorage returns the storage last applied to the rack with this ID and revision, or nil.
+func getRackStatusStorage(obj *asdbv1.AerospikeCluster, rackID int, revision string) *asdbv1.AerospikeStorageSpec {
+	for idx := range obj.Status.RackConfig.Racks {
+		if obj.Status.RackConfig.Racks[idx].ID == rackID && obj.Status.RackConfig.Racks[idx].Revision == revision {
+			return &obj.Status.RackConfig.Racks[idx].Storage
+		}
+	}
+
+	return nil
+}
+
 func validateRackUpdate(
 	aslog logr.Logger, oldObj, newObj *asdbv1.AerospikeCluster,
 ) error {
@@ -776,8 +787,13 @@ func validateRackUpdate(
 
 					// Storage update is allowed only when rack revision is changed.
 					// In case of the same rack revision, check for storage update
+					statusStorage := getRackStatusStorage(oldObj, newRack.ID, newRack.Revision)
+
 					if oldRack.Revision == newRack.Revision {
-						if err := validateStorageSpecChange(&oldStorage, &newStorage); err != nil {
+						// A change that is safe from the applied storage is also allowed: it reverts
+						// a volume size increase the operator has not applied yet.
+						if err := validateStorageSpecChange(&oldStorage, &newStorage); err != nil &&
+							(statusStorage == nil || validateStorageSpecChange(statusStorage, &newStorage) != nil) {
 							return fmt.Errorf(
 								"rack storage config cannot be updated: %v", err,
 							)
@@ -785,16 +801,6 @@ func validateRackUpdate(
 					} else {
 						// Even if revision changed, validate against current status storage
 						// for the same rack ID to prevent "revision bump and rollback" bypass
-						var statusStorage *asdbv1.AerospikeStorageSpec
-
-						for idx := range oldObj.Status.RackConfig.Racks {
-							if oldObj.Status.RackConfig.Racks[idx].ID == newRack.ID &&
-								oldObj.Status.RackConfig.Racks[idx].Revision == newRack.Revision {
-								statusStorage = &oldObj.Status.RackConfig.Racks[idx].Storage
-								break
-							}
-						}
-
 						if statusStorage != nil {
 							if err := validateStorageSpecChange(statusStorage, &newStorage); err != nil {
 								return fmt.Errorf(
