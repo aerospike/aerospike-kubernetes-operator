@@ -13,6 +13,10 @@ OPENSHIFT_VERSION="v4.10"
 # TODO: Version must be pulled from git tags
 VERSION ?= 4.6.0
 
+# INIT_TAG is the aerospike-kubernetes-init CI build that goes into the release bundle,
+# as <pr-N|master>-<short commit sha>, the tag that CI pushes to JFrog.
+INIT_TAG ?= pr-166-dd04cc5
+
 # Platforms supported
 PLATFORMS ?= linux/amd64,linux/arm64
 

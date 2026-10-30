@@ -9,7 +9,7 @@
 # the e2e tests pass, so every bundle in DEV is a build that passed CI.
 #
 # Secrets: SNYK_TOKEN, AKO_FEATURES_CONF_B64, GKE_WIF_PROVIDER, GKE_SERVICE_ACCOUNT,
-#          GKE_PROJECT, GKE_LOCATION, GKE_CLUSTER, AWS_ECR_ROLE_ARN
+#          GKE_PROJECT, GKE_LOCATION, GKE_CLUSTER, AWS_S3_ROLE_ARN
 
 name: CI
 
@@ -50,6 +50,8 @@ jobs:
     outputs:
       base-version: ${{ steps.version.outputs.base-version }}
       version: ${{ steps.version.outputs.version }}
+      init-tag: ${{ steps.init.outputs.tag }}
+      init-build: ${{ steps.init.outputs.build }}
       suites: ${{ steps.tests.outputs.suites }}
       focus: ${{ steps.tests.outputs.focus }}
     steps:
@@ -82,20 +84,43 @@ jobs:
           echo "base-version=$base" >> "$GITHUB_OUTPUT"
           echo "version=$base-$label-${SHA::7}" | tee -a "$GITHUB_OUTPUT"
 
+      # The release bundle takes the init images by build-info number, which is
+      # the run number of the init CI run that built INIT_TAG.
+      # TODO(sidntrivedi): Add a build number input to reusable_docker-build-deploy.yaml in
+      # shared-workflows, so the init CI can publish its build-info under INIT_TAG
+      # and this lookup can go.
+      - name: Resolve init build
+        id: init
+        env:
+          GH_TOKEN: ${{ github.token }}
+          INIT_REPO: aerospike/aerospike-kubernetes-init
+        run: |
+          tag=$(sed -n 's/^INIT_TAG ?= *//p' Makefile)
+          case "$tag" in
+            pr-*) event=pull_request ;;
+            master-*) event=push ;;
+            *) echo "::error::Unexpected INIT_TAG: $tag"; exit 1 ;;
+          esac
+          sha=$(gh api "repos/$INIT_REPO/commits/${tag##*-}" --jq .sha)
+          build=$(gh api "repos/$INIT_REPO/actions/runs?head_sha=$sha&event=$event&status=success" \
+            --jq '[.workflow_runs[] | select(.path == ".github/workflows/ci.yaml")][0].run_number')
+          if [ -z "$build" ] || [ "$build" = "null" ]; then
+            echo "::error::No successful init CI run for $tag"
+            exit 1
+          fi
+          echo "tag=$tag" >> "$GITHUB_OUTPUT"
+          echo "build=$build" | tee -a "$GITHUB_OUTPUT"
+
       - name: Select e2e tests
         id: tests
         env:
           BASE_REF: ${{ github.base_ref }}
         run: |
-          # TODO: Temporary. Runs only the custom init registry test, to check the
-          # ECR login. Restore the selection below before merging.
-          echo 'suites=["cluster-test"]' | tee -a "$GITHUB_OUTPUT"
-          echo 'focus=custom registry, namespace and name' | tee -a "$GITHUB_OUTPUT"
-          # if [ "$GITHUB_EVENT_NAME" = "pull_request" ]; then
-          #   git diff --name-only "origin/$BASE_REF...HEAD" | hack/ci/select-tests.sh
-          # else
-          #   hack/ci/select-tests.sh all
-          # fi | tee -a "$GITHUB_OUTPUT"
+          if [ "$GITHUB_EVENT_NAME" = "pull_request" ]; then
+            git diff --name-only "origin/$BASE_REF...HEAD" | hack/ci/select-tests.sh
+          else
+            hack/ci/select-tests.sh all
+          fi | tee -a "$GITHUB_OUTPUT"
 
       # The shared docker workflow checks out without submodules, and the
       # operator embeds pkg/configschema/schemas. Hand it the schemas instead.
@@ -158,6 +183,19 @@ jobs:
           yq -i '.operatorImage.repository = strenv(REPO) | .operatorImage.tag = strenv(TAG)' \
             helm-charts/aerospike-kubernetes-operator/values.yaml
 
+      # The DEV operator chart deploys the INIT_TAG init image, the one in the
+      # release bundle.
+      # TODO: These point at the DEV repo. Promotion to TEST copies the images to
+      # another repo, so these values have to change then.
+      - name: Set init image
+        env:
+          INIT_TAG: ${{ needs.prepare.outputs.init-tag }}
+        run: |
+          yq -i '.aerospikeKubernetesInitRegistry = "artifact.aerospike.io" |
+            .aerospikeKubernetesInitRegistryNamespace = "platforms-docker-dev-local" |
+            .aerospikeKubernetesInitNameTag = "aerospike-kubernetes-init:" + strenv(INIT_TAG)' \
+            helm-charts/aerospike-kubernetes-operator/values.yaml
+
       - name: Package charts
         run: |
           for chart in helm-charts/*/; do
@@ -194,6 +232,19 @@ jobs:
         uses: actions/setup-go@b7ad1dad31e06c5925ef5d2fc7ad053ef454303e # v7.0.0
         with:
           go-version-file: go.mod
+
+      # The OLM bundle deploys the INIT_TAG init image, the one in the release
+      # bundle. make bundle takes it from config/manager/manager.yaml.
+      # TODO: These point at the DEV repo. Promotion to TEST copies the images to
+      # another repo, so these values have to change then.
+      - name: Set init image
+        env:
+          INIT_TAG: ${{ needs.prepare.outputs.init-tag }}
+        run: |
+          yq -i '(select(.kind == "Deployment").spec.template.spec.containers[].env[] | select(.name == "AEROSPIKE_KUBERNETES_INIT_REGISTRY")).value = "artifact.aerospike.io" |
+            (select(.kind == "Deployment").spec.template.spec.containers[].env[] | select(.name == "AEROSPIKE_KUBERNETES_INIT_REGISTRY_NAMESPACE")).value = "platforms-docker-dev-local" |
+            (select(.kind == "Deployment").spec.template.spec.containers[].env[] | select(.name == "AEROSPIKE_KUBERNETES_INIT_NAME_TAG")).value = "aerospike-kubernetes-init:" + strenv(INIT_TAG)' \
+            config/manager/manager.yaml
 
       - name: Generate bundle
         env:
@@ -396,33 +447,38 @@ jobs:
           username: ${{ steps.jf.outputs.oidc-user }}
           password: ${{ steps.jf.outputs.oidc-token }}
 
-      # The custom init registry test pulls the init image from ECR, as in Jenkins.
-      # TODO: Disabled until CI has an AWS role for ECR. The test is commented out
-      # in test/cluster/podspec_test.go; re-enable both together.
+      # The backup tests store backups in the aerospike-kubernetes-operator-test
+      # bucket, and cleanup-test-namespace.sh empties it.
       - name: Configure AWS credentials
         uses: aws-actions/configure-aws-credentials@e1253824e5c10ff9df46874f81ed3ec929e19cfd # v6.3.0
         with:
-          role-to-assume: ${{ secrets.AWS_ECR_ROLE_ARN }}
-          aws-region: ap-south-1
-      
-      - name: Login to ECR
+          role-to-assume: ${{ secrets.AWS_S3_ROLE_ARN }}
+          aws-region: us-east-1
+
+      # The backup service tests read ~/.aws/credentials, not env vars.
+      - name: Write AWS credentials file
         run: |
-          aws ecr get-login-password --region ap-south-1 |
-            docker login --username AWS --password-stdin 568976754000.dkr.ecr.ap-south-1.amazonaws.com
+          mkdir -p ~/.aws
+          printf '[default]\naws_access_key_id=%s\naws_secret_access_key=%s\naws_session_token=%s\n' \
+            "$AWS_ACCESS_KEY_ID" "$AWS_SECRET_ACCESS_KEY" "$AWS_SESSION_TOKEN" > ~/.aws/credentials
 
       - name: Write features.conf
         env:
           FEATURES_CONF_B64: ${{ secrets.AKO_FEATURES_CONF_B64 }}
         run: echo "$FEATURES_CONF_B64" | base64 -d > config/samples/secrets/features.conf
 
-      # The docker config holds the JFrog and ECR logins. test.sh turns it into
-      # the pull secrets for the operator and init images.
+      # The docker config holds the JFrog login. test.sh turns it into the pull
+      # secrets for the operator and init images. The custom init registry test
+      # pulls the INIT_TAG init image from JFrog.
       - name: Run ${{ matrix.suite }}
         env:
           BUNDLE_IMG: ${{ needs.bundle-image.outputs.immutable-tag }}
           SUITE: ${{ matrix.suite }}
           FOCUS: ${{ needs.prepare.outputs.focus }}
-        run: ./test/test.sh -b "$BUNDLE_IMG" -s "$HOME/.docker/config.json" -t "$SUITE" -f "$FOCUS"
+          INIT_TAG: ${{ needs.prepare.outputs.init-tag }}
+        run: |
+          ./test/test.sh -b "$BUNDLE_IMG" -s "$HOME/.docker/config.json" -t "$SUITE" -f "$FOCUS" \
+            -r artifact.aerospike.io -n platforms-docker-dev-local -i "aerospike-kubernetes-init:$INIT_TAG"
 
       - name: Upload test results
         if: always()
@@ -450,8 +506,9 @@ jobs:
       jf-project: platforms
       jf-bundle-name: aerospike-kubernetes-operator
       version: ${{ needs.prepare.outputs.version }}
-      # Every build-info is published under the run number.
-      jf-build-names: ako-operator:${{ github.run_number }},ako-olm-bundle:${{ github.run_number }},ako-olm-manifests:${{ github.run_number }},ako-helm-charts:${{ github.run_number }}
+      # Every build-info is published under the run number. The init ones under
+      # the init CI's run number.
+      jf-build-names: ako-operator:${{ github.run_number }},ako-olm-bundle:${{ github.run_number }},ako-olm-manifests:${{ github.run_number }},ako-helm-charts:${{ github.run_number }},ako-init:${{ needs.prepare.outputs.init-build }},ako-init-openshift:${{ needs.prepare.outputs.init-build }}
 
   promote-dev:
     name: Promote to DEV
