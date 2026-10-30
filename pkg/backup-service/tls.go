@@ -16,13 +16,14 @@ import (
 
 // BuildOperatorTLSConfig builds the TLS configuration the operator uses to connect to the backup service
 // HTTPS listener. The files are read from the Secret in certSpec on every call, so rotated certificates
-// are picked up on the next request without restarting the operator.
+// are picked up on the next request without restarting the operator. Without certSpec.TLSName, the server
+// name checked against the certificate is the host the client connects to, which net/http sets.
 //
 // Unlike a misconfigured client certificate for an Aerospike cluster, any error here makes every call to the
 // backup service fail, so errors are returned instead of being logged and skipped.
 func BuildOperatorTLSConfig(
 	ctx context.Context, k8sClient client.Client, namespace string,
-	certSpec *v1beta1.OperatorClientCertSpec, defaultServerName string,
+	certSpec *v1beta1.OperatorClientCertSpec,
 ) (*tls.Config, error) {
 	if certSpec == nil {
 		return nil, errors.New("operatorClientCert is not set")
@@ -41,11 +42,7 @@ func BuildOperatorTLSConfig(
 		// or a middleman offering only TLS 1.0 or 1.1 fails the handshake instead of getting a weaker
 		// connection. TLS 1.3 is still used whenever both sides support it.
 		MinVersion: tls.VersionTLS12,
-		ServerName: certSpec.ServerName,
-	}
-
-	if tlsConfig.ServerName == "" {
-		tlsConfig.ServerName = defaultServerName
+		ServerName: certSpec.TLSName,
 	}
 
 	if source.CaCertsFilename != "" {

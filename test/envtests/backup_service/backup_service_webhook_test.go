@@ -43,29 +43,49 @@ var _ = Describe("AerospikeBackupService validation", func() {
 
 			Context("negative", func() {
 				DescribeTable("rejects a backup service the operator cannot connect to",
-					func(httpsListener bool, mutate func(*asdbv1beta1.OperatorClientCertSpec), errPrefix, errSubstr string) {
-						certSpec := operatorCertSpec()
-						mutate(certSpec)
-
-						backupService := backupServiceWithHTTPS(absNsNm, certSpec)
-						if !httpsListener {
-							backupService = buildBackupServiceCR(absNsNm)
-							backupService.Spec.OperatorClientCert = certSpec
-						}
+					func(mutate func(*asdbv1beta1.AerospikeBackupService), errPrefix, errSubstr string) {
+						backupService := backupServiceWithHTTPS(absNsNm, operatorCertSpec())
+						mutate(backupService)
 
 						err := envtests.K8sClient.Create(ctx, backupService)
 						Expect(err).To(HaveOccurred())
 						envtests.NewStatusErrorMatcher().WithMessageSubstrings(errPrefix, errSubstr).Validate(err)
 					},
-					Entry("operatorClientCert without service.https", false,
-						func(*asdbv1beta1.OperatorClientCertSpec) {},
+					Entry("operatorClientCert without service.https",
+						func(b *asdbv1beta1.AerospikeBackupService) {
+							b.Spec.Config = buildBackupServiceCR(absNsNm).Spec.Config
+						},
 						testutil.BackupServiceWebhookErrorPrefix, "service.https is not enabled"),
-					Entry("client cert without a client key", true,
-						func(s *asdbv1beta1.OperatorClientCertSpec) { s.SecretCertSource.ClientCertFilename = "tls.crt" },
+					Entry("client cert without a client key",
+						func(b *asdbv1beta1.AerospikeBackupService) {
+							b.Spec.OperatorClientCert.SecretCertSource.ClientCertFilename = "tls.crt"
+						},
 						testutil.BackupServiceWebhookErrorPrefix, "must be set together"),
-					Entry("empty secretName (MinLength=1)", true,
-						func(s *asdbv1beta1.OperatorClientCertSpec) { s.SecretCertSource.SecretName = "" },
+					Entry("empty secretName (MinLength=1)",
+						func(b *asdbv1beta1.AerospikeBackupService) {
+							b.Spec.OperatorClientCert.SecretCertSource.SecretName = ""
+						},
 						testutil.BackupServiceCRDSchemaErrorPrefix, "secretName"),
+					Entry("service.https on a backup service older than 3.7.0",
+						func(b *asdbv1beta1.AerospikeBackupService) {
+							b.Spec.Image = "aerospike/aerospike-backup-service:3.6.2"
+						},
+						testutil.BackupServiceWebhookErrorPrefix, "need backup service 3.7.0 or later, image has 3.6.2"),
+					Entry("disabled service.https on a backup service older than 3.7.0",
+						func(b *asdbv1beta1.AerospikeBackupService) {
+							config := backupconfig.BackupServiceBaseConfig()
+							config[asdbv1beta1.ServiceKey] = map[string]interface{}{
+								"https": map[string]interface{}{"disabled": true},
+							}
+							b.Spec.Config = runtime.RawExtension{Raw: backupconfig.MustMarshalConfig(config)}
+							b.Spec.OperatorClientCert = nil
+							b.Spec.Image = "aerospike/aerospike-backup-service:3.6.2"
+						},
+						testutil.BackupServiceWebhookErrorPrefix, "need backup service 3.7.0 or later, image has 3.6.2"),
+					Entry("HTTPS file not in a mounted Secret",
+						func(b *asdbv1beta1.AerospikeBackupService) { b.Spec.SecretMounts = nil },
+						testutil.BackupServiceWebhookErrorPrefix,
+						"service.https.cert-file /etc/abs-tls/tls.crt is not in a mounted Secret"),
 				)
 			})
 		})

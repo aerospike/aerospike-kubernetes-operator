@@ -27,11 +27,7 @@ import (
 	"github.com/aerospike/aerospike-kubernetes-operator/v4/api/v1beta1"
 )
 
-const (
-	testNamespace = "aerospike"
-	// testServerName is a name in the certificate of every httptest TLS server.
-	testServerName = "example.com"
-)
+const testNamespace = "aerospike"
 
 // selfSignedClientCert returns a client certificate and key that also act as their own CA.
 func selfSignedClientCert(t *testing.T) (cert *x509.Certificate, certPEM, keyPEM []byte) {
@@ -110,7 +106,7 @@ func TestBuildOperatorTLSConfig(t *testing.T) {
 			name: "server name not in the certificate", data: allFiles,
 			spec: func() *v1beta1.OperatorClientCertSpec {
 				spec := certSpec(true)
-				spec.ServerName = "other.aerospike.svc"
+				spec.TLSName = "other.aerospike.svc"
 
 				return spec
 			}(),
@@ -148,7 +144,7 @@ func TestBuildOperatorTLSConfig(t *testing.T) {
 				namespace = tt.namespace
 			}
 
-			tlsConfig, err := BuildOperatorTLSConfig(context.TODO(), k8sClient, namespace, tt.spec, testServerName)
+			tlsConfig, err := BuildOperatorTLSConfig(context.TODO(), k8sClient, namespace, tt.spec)
 			if err == nil {
 				//nolint:gosec // port was parsed with a 32-bit size
 				err = NewClientWithTLS(host, int32(port), "/", "", tlsConfig).CheckBackupServiceHealth()
@@ -182,4 +178,37 @@ func TestClientAPIScheme(t *testing.T) {
 	literal := &Client{Address: "abs.aerospike.svc", Port: 8081}
 	require.Equal(t, "http://abs.aerospike.svc:8081/v1/config", literal.API("/config"))
 	require.NotNil(t, literal.client())
+}
+
+func TestGetBackupServiceClientListener(t *testing.T) {
+	t.Parallel()
+
+	scheme := runtime.NewScheme()
+	require.NoError(t, v1beta1.AddToScheme(scheme))
+
+	clientURL := func(status v1beta1.AerospikeBackupServiceStatus) string {
+		k8sClient := fake.NewClientBuilder().WithScheme(scheme).WithObjects(&v1beta1.AerospikeBackupService{
+			ObjectMeta: metav1.ObjectMeta{Name: "abs", Namespace: testNamespace},
+			Spec: v1beta1.AerospikeBackupServiceSpec{
+				Image: "aerospike/aerospike-backup-service:3.7.0",
+				Config: runtime.RawExtension{
+					Raw: []byte(`{"service":{"http":{"port":8081,"context-path":"/abs"}}}`),
+				},
+			},
+			Status: status,
+		}).Build()
+
+		serviceClient, err := GetBackupServiceClient(k8sClient,
+			&v1beta1.BackupService{Name: "abs", Namespace: testNamespace})
+		require.NoError(t, err)
+
+		return serviceClient.API("/config")
+	}
+
+	// Status written: the listener the backup service runs with.
+	require.Equal(t, "http://abs.aerospike.svc:9090/running/v1/config",
+		clientURL(v1beta1.AerospikeBackupServiceStatus{Port: 9090, ContextPath: "/running"}))
+
+	// Status not written yet: the listener in spec.
+	require.Equal(t, "http://abs.aerospike.svc:8081/abs/v1/config", clientURL(v1beta1.AerospikeBackupServiceStatus{}))
 }

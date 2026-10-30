@@ -72,17 +72,31 @@ func GetBackupServiceClient(k8sClient client.Client, svc *v1beta1.BackupService)
 	address := fmt.Sprintf("%s.%s.svc", backupSvc.Name, backupSvc.Namespace)
 
 	// Status describes the listener the backup service was last reconciled with, which is the one it serves.
-	if backupSvc.Status.Scheme != corev1.URISchemeHTTPS {
-		return NewClientWithVersion(address, backupSvc.Status.Port, backupSvc.Status.ContextPath, version), nil
+	scheme, port, contextPath := backupSvc.Status.Scheme, backupSvc.Status.Port, backupSvc.Status.ContextPath
+	certSpec := backupSvc.Status.OperatorClientCert
+
+	// Status has no port until the backup service controller first writes it, for example when an AerospikeBackup
+	// is created right after its AerospikeBackupService. Spec is the only source of the listener then.
+	if port == 0 {
+		listeners, lErr := GetListeners(backupSvc.Spec.Config.Raw, backupSvc.Spec.OperatorClientCert)
+		if lErr != nil {
+			return nil, lErr
+		}
+
+		scheme, port, contextPath = listeners.Scheme, listeners.Port, listeners.ContextPath
+		certSpec = backupSvc.Spec.OperatorClientCert
 	}
 
-	tlsConfig, err := BuildOperatorTLSConfig(context.TODO(), k8sClient, backupSvc.Namespace,
-		backupSvc.Status.OperatorClientCert, address)
+	if scheme != corev1.URISchemeHTTPS {
+		return NewClientWithVersion(address, port, contextPath, version), nil
+	}
+
+	tlsConfig, err := BuildOperatorTLSConfig(context.TODO(), k8sClient, backupSvc.Namespace, certSpec)
 	if err != nil {
 		return nil, err
 	}
 
-	return NewClientWithTLS(address, backupSvc.Status.Port, backupSvc.Status.ContextPath, version, tlsConfig), nil
+	return NewClientWithTLS(address, port, contextPath, version, tlsConfig), nil
 }
 
 func NewClient(address string, port int32, contextPath string) *Client {

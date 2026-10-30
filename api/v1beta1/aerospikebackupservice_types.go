@@ -153,12 +153,12 @@ type OperatorClientCertSpec struct {
 	// and, when the backup service requires client certificates, the operator's client certificate and key.
 	SecretCertSource SecretCertSource `json:"secretCertSource"`
 
-	// ServerName is the host name expected in the backup service certificate.
+	// TLSName is the host name expected in the backup service certificate.
 	// Defaults to <name>.<namespace>.svc of the AerospikeBackupService, the address the operator connects to.
 	// Set it when the certificate does not list that name, for example when it is issued only for
 	// <name>.<namespace>.svc.cluster.local or for an external DNS name.
 	// +optional
-	ServerName string `json:"serverName,omitempty"`
+	TLSName string `json:"tlsName,omitempty"`
 }
 
 // SecretCertSource is a Secret in the namespace of the AerospikeBackupService holding the operator's TLS files.

@@ -4,6 +4,7 @@ import (
 	"context"
 	"fmt"
 
+	corev1 "k8s.io/api/core/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/runtime"
 	"k8s.io/apimachinery/pkg/types"
@@ -48,7 +49,8 @@ func deleteBackupService(ctx context.Context, absNsNm types.NamespacedName) {
 }
 
 // backupServiceWithHTTPS returns a backup service that serves only HTTPS, with the given operator client cert.
-// The cert and key paths are read by the backup service at startup, not by the webhook, so they need not exist.
+// The webhook checks that the cert and key paths are in a mounted Secret; the files themselves are read by the
+// backup service at startup, so the Secret need not exist.
 func backupServiceWithHTTPS(absNsNm types.NamespacedName,
 	certSpec *asdbv1beta1.OperatorClientCertSpec,
 ) *asdbv1beta1.AerospikeBackupService {
@@ -63,6 +65,10 @@ func backupServiceWithHTTPS(absNsNm types.NamespacedName,
 	backupService := buildBackupServiceCR(absNsNm)
 	backupService.Spec.Config = runtime.RawExtension{Raw: backupconfig.MustMarshalConfig(config)}
 	backupService.Spec.OperatorClientCert = certSpec
+	backupService.Spec.SecretMounts = []asdbv1beta1.SecretMount{{
+		SecretName:  "abs-tls",
+		VolumeMount: corev1.VolumeMount{Name: "abs-tls", MountPath: "/etc/abs-tls", ReadOnly: true},
+	}}
 
 	return backupService
 }

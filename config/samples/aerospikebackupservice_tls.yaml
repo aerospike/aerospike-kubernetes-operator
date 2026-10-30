@@ -1,0 +1,45 @@
+# The backup service serves its API over HTTPS, and the operator connects to it with operatorClientCert.
+# The Secret mounted under secrets holds the backup service certificate and key. operatorClientCert reads the CA
+# that signed that certificate from its own Secret. Set http.disabled: true to serve HTTPS only.
+apiVersion: asdb.aerospike.com/v1beta1
+kind: AerospikeBackupService
+metadata:
+  name: aerospikebackupservice-tls-sample
+  namespace: aerospike
+spec:
+  image: aerospike/aerospike-backup-service:3.7.0
+  config:
+    service:
+      http:
+        port: 8081
+      https:
+        port: 8443
+        cert-file: /etc/abs-tls/tls.crt
+        key-file: /etc/abs-tls/tls.key
+        # mTLS: require a client certificate signed by this CA, and set clientCertFilename and
+        # clientKeyFilename in operatorClientCert.
+        # client-ca-file: /etc/abs-tls/ca.crt
+        # client-auth: require-and-verify
+    backup-policies:
+      test-policy:
+        parallel: 3
+        compact: true
+    storage:
+      local:
+        local-storage:
+          path: /tmp/localStorage
+
+  secrets:
+    - secretName: abs-tls
+      volumeMount:
+        name: abs-tls
+        mountPath: /etc/abs-tls
+        readOnly: true
+
+  operatorClientCert:
+    # tlsName: aerospikebackupservice-tls-sample.aerospike.svc  # Defaults to <name>.<namespace>.svc
+    secretCertSource:
+      secretName: operator-tls
+      caCertsFilename: ca.crt
+      # clientCertFilename: tls.crt
+      # clientKeyFilename: tls.key

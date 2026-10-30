@@ -370,12 +370,13 @@ func (r *SingleBackupServiceReconciler) updateBackupSvcConfig(ctx context.Contex
 
 	r.Log.Info("Detected backup service config change, reloading config")
 
-	listeners, err := r.getListeners()
+	listeners, err := backup_service.GetListeners(r.aeroBackupService.Spec.Config.Raw,
+		r.aeroBackupService.Spec.OperatorClientCert)
 	if err != nil {
 		return err
 	}
 
-	// The client is built from spec, so a fix to operatorClientCert, such as a new serverName or Secret, is used
+	// The client is built from spec, so a fix to operatorClientCert, such as a new tlsName or Secret, is used
 	// right away instead of the setting in status that could not connect.
 	backupServiceClient, err := r.newBackupServiceClient(ctx, listeners)
 	if err != nil {
@@ -423,7 +424,7 @@ func (r *SingleBackupServiceReconciler) newBackupServiceClient(
 	}
 
 	tlsConfig, err := backup_service.BuildOperatorTLSConfig(ctx, r.Client, r.aeroBackupService.Namespace,
-		r.aeroBackupService.Spec.OperatorClientCert, address)
+		r.aeroBackupService.Spec.OperatorClientCert)
 	if err != nil {
 		return nil, fmt.Errorf("build backup service TLS config: %w", err)
 	}
@@ -457,7 +458,8 @@ func (r *SingleBackupServiceReconciler) getDeploymentObject() (*app.Deployment, 
 	svcLabels := utils.LabelsForAerospikeBackupService(r.aeroBackupService.Name)
 	volumeMounts, volumes := r.getVolumeAndMounts()
 
-	listeners, err := r.getListeners()
+	listeners, err := backup_service.GetListeners(r.aeroBackupService.Spec.Config.Raw,
+		r.aeroBackupService.Spec.OperatorClientCert)
 	if err != nil {
 		return nil, err
 	}
@@ -653,7 +655,8 @@ func (r *SingleBackupServiceReconciler) reconcileService(ctx context.Context) er
 }
 
 func (r *SingleBackupServiceReconciler) getServiceObject() (*corev1.Service, error) {
-	listeners, err := r.getListeners()
+	listeners, err := backup_service.GetListeners(r.aeroBackupService.Spec.Config.Raw,
+		r.aeroBackupService.Spec.OperatorClientCert)
 	if err != nil {
 		return nil, err
 	}
@@ -684,11 +687,6 @@ func (r *SingleBackupServiceReconciler) getServiceObject() (*corev1.Service, err
 	}
 
 	return svc, nil
-}
-
-// getListeners returns the listeners in the spec config and the one the operator connects to.
-func (r *SingleBackupServiceReconciler) getListeners() (*backup_service.Listeners, error) {
-	return backup_service.GetListeners(r.aeroBackupService.Spec.Config.Raw, r.aeroBackupService.Spec.OperatorClientCert)
 }
 
 func (r *SingleBackupServiceReconciler) waitForDeploymentToBeReady(ctx context.Context) error {
@@ -787,7 +785,8 @@ func (r *SingleBackupServiceReconciler) setStatusPhase(
 // started and before waiting for the new pod: the new pod loads the latest ConfigMap when it starts, so a wait that
 // times out must not make the next reconcile restart the pod again.
 func (r *SingleBackupServiceReconciler) updateStatus(ctx context.Context) error {
-	listeners, err := r.getListeners()
+	listeners, err := backup_service.GetListeners(r.aeroBackupService.Spec.Config.Raw,
+		r.aeroBackupService.Spec.OperatorClientCert)
 	if err != nil {
 		return err
 	}
@@ -823,9 +822,7 @@ func (r *SingleBackupServiceReconciler) CopySpecToStatus() *asdbv1beta1.Aerospik
 	status.SecretMounts = r.aeroBackupService.Spec.SecretMounts
 	status.Service = r.aeroBackupService.Spec.Service
 
-	if r.aeroBackupService.Spec.OperatorClientCert != nil {
-		status.OperatorClientCert = r.aeroBackupService.Spec.OperatorClientCert.DeepCopy()
-	}
+	status.OperatorClientCert = r.aeroBackupService.Spec.OperatorClientCert.DeepCopy()
 
 	return &status
 }
