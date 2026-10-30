@@ -70,7 +70,7 @@ var _ = Describe("AerospikeBackupService validation", func() {
 						func(b *asdbv1beta1.AerospikeBackupService) {
 							b.Spec.Image = "aerospike/aerospike-backup-service:3.6.2"
 						},
-						testutil.BackupServiceWebhookErrorPrefix, "need backup service 3.7.0 or later, image has 3.6.2"),
+						testutil.BackupServiceWebhookErrorPrefix, "needs backup service 3.7.0 or later, image has 3.6.2"),
 					Entry("disabled service.https on a backup service older than 3.7.0",
 						func(b *asdbv1beta1.AerospikeBackupService) {
 							config := backupconfig.BackupServiceBaseConfig()
@@ -81,7 +81,7 @@ var _ = Describe("AerospikeBackupService validation", func() {
 							b.Spec.OperatorClientCert = nil
 							b.Spec.Image = "aerospike/aerospike-backup-service:3.6.2"
 						},
-						testutil.BackupServiceWebhookErrorPrefix, "need backup service 3.7.0 or later, image has 3.6.2"),
+						testutil.BackupServiceWebhookErrorPrefix, "needs backup service 3.7.0 or later, image has 3.6.2"),
 					Entry("HTTPS file not in a mounted Secret",
 						func(b *asdbv1beta1.AerospikeBackupService) { b.Spec.SecretMounts = nil },
 						testutil.BackupServiceWebhookErrorPrefix,

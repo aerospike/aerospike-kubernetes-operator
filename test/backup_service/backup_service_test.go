@@ -331,14 +331,7 @@ var _ = Describe(
 
 					backupService.Spec.Config.Raw, err = json.Marshal(config)
 					Expect(err).ToNot(HaveOccurred())
-					Expect(k8sClient.Update(testCtx, backupService)).To(Succeed())
-
-					Eventually(func(g Gomega) {
-						current, cErr := getBackupServiceObj(k8sClient, backupServiceNamespacedName)
-						g.Expect(cErr).ToNot(HaveOccurred())
-						g.Expect(current.Status.Phase).To(Equal(asdbv1beta1.AerospikeBackupServiceCompleted))
-						g.Expect(current.Status.Config.Raw).To(Equal(current.Spec.Config.Raw))
-					}, timeout, interval).Should(Succeed())
+					Expect(updateBackupService(k8sClient, backupService)).To(Succeed())
 
 					podList, err = getBackupServicePodList(k8sClient, backupService)
 					Expect(err).ToNot(HaveOccurred())
