@@ -497,7 +497,7 @@ jobs:
       - name: Configure AWS credentials
         uses: aws-actions/configure-aws-credentials@e1253824e5c10ff9df46874f81ed3ec929e19cfd # v6.3.0
         with:
-          role-to-assume: ${{ secrets.AWS_S3_ROLE_ARN }}
+          role-to-assume: ${{ secrets.AWS_ECR_ROLE_ARN }}
           aws-region: us-east-1
 
       # The backup service tests read ~/.aws/credentials, not env vars.
