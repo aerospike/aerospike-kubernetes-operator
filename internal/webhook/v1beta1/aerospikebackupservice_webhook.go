@@ -127,11 +127,11 @@ func validateBackupService(
 		return nil, err
 	}
 
-	if err := validateBackupServiceConfig(reader, backupSvc); err != nil {
+	if err := validateBackupServiceConfig(reader, backupSvc, version); err != nil {
 		return nil, err
 	}
 
-	if err := validateOperatorConnection(backupSvc, version); err != nil {
+	if err := validateOperatorConnection(backupSvc); err != nil {
 		return nil, err
 	}
 
@@ -148,7 +148,7 @@ func validateBackupService(
 
 // validateOperatorConnection rejects a config where the operator cannot reach the backup service:
 // the listener the operator connects to must be enabled, and its TLS settings must be complete.
-func validateOperatorConnection(backupSvc *asdbv1beta1.AerospikeBackupService, version string) error {
+func validateOperatorConnection(backupSvc *asdbv1beta1.AerospikeBackupService) error {
 	if certSpec := backupSvc.Spec.OperatorClientCert; certSpec != nil {
 		source := certSpec.SecretCertSource
 		if (source.ClientCertFilename == "") != (source.ClientKeyFilename == "") {
@@ -157,35 +157,31 @@ func validateOperatorConnection(backupSvc *asdbv1beta1.AerospikeBackupService, v
 		}
 	}
 
+	_, err := backup_service.GetListeners(backupSvc.Spec.Config.Raw, backupSvc.Spec.OperatorClientCert)
+
+	return err
+}
+
+func validateBackupServiceConfig(
+	reader client.Reader, backupSvc *asdbv1beta1.AerospikeBackupService, version string,
+) error {
 	var config dto.Config
 
-	if err := yaml.Unmarshal(backupSvc.Spec.Config.Raw, &config); err != nil {
+	if err := yaml.UnmarshalStrict(backupSvc.Spec.Config.Raw, &config); err != nil {
 		return err
 	}
 
 	// An older backup service does not start with a config that has service.https, even a disabled one.
-	if config.ServiceConfig.ServerHTTPS != nil || backupSvc.Spec.OperatorClientCert != nil {
+	if config.ServiceConfig.ServerHTTPS != nil {
 		val, err := lib.CompareVersions(version, asdbv1beta1.BackupSvcHTTPSMinVersion)
 		if err != nil {
 			return fmt.Errorf("check backup service image version: %w", err)
 		}
 
 		if val < 0 {
-			return fmt.Errorf("service.https and spec.operatorClientCert need backup service %s or later, "+
-				"image has %s", asdbv1beta1.BackupSvcHTTPSMinVersion, version)
+			return fmt.Errorf("service.https needs backup service %s or later, image has %s",
+				asdbv1beta1.BackupSvcHTTPSMinVersion, version)
 		}
-	}
-
-	_, err := backup_service.GetListeners(backupSvc.Spec.Config.Raw, backupSvc.Spec.OperatorClientCert)
-
-	return err
-}
-
-func validateBackupServiceConfig(reader client.Reader, backupSvc *asdbv1beta1.AerospikeBackupService) error {
-	var config dto.Config
-
-	if err := yaml.UnmarshalStrict(backupSvc.Spec.Config.Raw, &config); err != nil {
-		return err
 	}
 
 	if len(config.BackupRoutines) != 0 {
