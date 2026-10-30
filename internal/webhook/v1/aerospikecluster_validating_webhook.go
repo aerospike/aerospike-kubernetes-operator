@@ -332,7 +332,105 @@ func (acv *AerospikeClusterCustomValidator) ValidateUpdate(_ context.Context,
 		return warnings, err
 	}
 
+	warnings = append(warnings, warnCheckpointChanges(oldObject, aerospikeCluster)...)
+
 	return warnings, nil
+}
+
+// warnCheckpointChanges emits a warning for the first config change found that causes the
+// operator to skip the checkpoint save on the outgoing pod, leaving the replacement pod with
+// no data to restore.
+//
+// Conditions that skip the save:
+//   - index-checkpoint-path changed: every namespace's save is skipped (checkpoint lands at abandoned path).
+//   - data-size changed (or storage backing switched): that namespace's save is skipped because the
+//     checkpoint is incompatible with the replacement pod's new layout.
+func warnCheckpointChanges(oldCluster, newCluster *asdbv1.AerospikeCluster) admission.Warnings {
+	oldRackMap := buildRackConfigMap(oldCluster)
+
+	for idx := range newCluster.Spec.RackConfig.Racks {
+		newRack := &newCluster.Spec.RackConfig.Racks[idx]
+		newCfg := newRack.AerospikeConfig.Value
+
+		oldCfg, exists := oldRackMap[newRack.ID]
+		if !exists {
+			continue
+		}
+
+		// Skip rack if checkpointing was not previously enabled on it.
+		if asdbv1.GetIndexCheckpointPath(oldCfg) == "" {
+			continue
+		}
+
+		// Path changed — warn and return; it affects all namespaces on this rack.
+		if asdbv1.GetIndexCheckpointPath(newCfg) != asdbv1.GetIndexCheckpointPath(oldCfg) {
+			return admission.Warnings{
+				"index-checkpoint-path changed — checkpoint save will be skipped on any pod restart" +
+					" triggered with this update",
+			}
+		}
+
+		// Warn on the first namespace whose in-memory data layout changed.
+		// Treat missing data-size as 0, matching GetInMemoryNsDataSizes in the controller.
+		// This catches both plain data-size changes and switches between pure in-memory
+		// and device/file-backed storage (which also invalidate the checkpoint).
+		oldCheckpointedNS := sets.NewString(asdbv1.GetIndexCheckpointNamespaces(oldCfg)...)
+		newNSMap := buildNamespaceMap(newCfg)
+
+		for _, nsIface := range oldCfg[asdbv1.ConfKeyNamespace].([]interface{}) {
+			nsConf, ok := nsIface.(map[string]interface{})
+			if !ok {
+				continue
+			}
+
+			name, _ := nsConf[asdbv1.ConfKeyName].(string)
+			if !oldCheckpointedNS.Has(name) {
+				continue
+			}
+
+			newNS, exists := newNSMap[name]
+			if !exists {
+				continue
+			}
+
+			oldDataSize, _ := asdbv1.GetNamespaceDataSize(nsConf)
+			newDataSize, _ := asdbv1.GetNamespaceDataSize(newNS)
+
+			if oldDataSize != newDataSize {
+				return admission.Warnings{"data-size changed — checkpoint save will be skipped on pod restart"}
+			}
+		}
+	}
+
+	return nil
+}
+
+// buildRackConfigMap indexes a cluster's rack list by rack ID for O(1) lookup.
+func buildRackConfigMap(cluster *asdbv1.AerospikeCluster) map[int]map[string]interface{} {
+	result := make(map[int]map[string]interface{}, len(cluster.Spec.RackConfig.Racks))
+
+	for idx := range cluster.Spec.RackConfig.Racks {
+		rack := &cluster.Spec.RackConfig.Racks[idx]
+		result[rack.ID] = rack.AerospikeConfig.Value
+	}
+
+	return result
+}
+
+// buildNamespaceMap indexes a rack's namespace list by name for O(1) lookup.
+func buildNamespaceMap(aerospikeConfig map[string]interface{}) map[string]map[string]interface{} {
+	nsList, _ := aerospikeConfig[asdbv1.ConfKeyNamespace].([]interface{})
+	result := make(map[string]map[string]interface{}, len(nsList))
+
+	for _, nsIface := range nsList {
+		if nsConf, ok := nsIface.(map[string]interface{}); ok {
+			if name, _ := nsConf[asdbv1.ConfKeyName].(string); name != "" {
+				result[name] = nsConf
+			}
+		}
+	}
+
+	return result
 }
 
 func validate(aslog logr.Logger, cluster *asdbv1.AerospikeCluster) (admission.Warnings, error) {
@@ -534,7 +632,9 @@ func validateSCNamespaces(cluster *asdbv1.AerospikeCluster) error {
 				tmpSCNamespaceSet.Insert(nsConf[asdbv1.ConfKeyName].(string))
 
 				if validation.IsInMemoryNamespace(nsConf) {
-					return fmt.Errorf("in-memory SC namespace is not supported, namespace %v", nsConf[asdbv1.ConfKeyName])
+					if err := validateSCInMemoryNamespace(nsConf, rack.AerospikeConfig.Value); err != nil {
+						return err
+					}
 				}
 			}
 		}
@@ -547,6 +647,52 @@ func validateSCNamespaces(cluster *asdbv1.AerospikeCluster) error {
 		if !scNamespaceSet.Equal(tmpSCNamespaceSet) {
 			return fmt.Errorf("SC namespaces list is different for different racks. All racks should have same SC namespaces")
 		}
+	}
+
+	return nil
+}
+
+// validateSCInMemoryNamespace enforces checkpointing durability rules for a namespace
+// that combines strong-consistency: true with storage-engine.type = "memory".
+//
+//	Pure in-memory (no devices or files in storage-engine):
+//	  - service.index-checkpoint-path MUST be set in the rack's aerospikeConfig.
+//	  - skip-checkpoint MUST NOT be set on this namespace.
+//
+//	Device/file-backed in-memory (devices or files present):
+//	  - skip-checkpoint may be freely set.
+//	  - index-checkpoint-path is not required.
+func validateSCInMemoryNamespace(nsConf, aerospikeConfig map[string]interface{}) error {
+	// A memory namespace backed by devices or files has persistent storage
+	storageConf, _ := nsConf[asdbv1.ConfKeyStorageEngine].(map[string]interface{})
+	if _, hasDevices := storageConf["devices"]; hasDevices {
+		return nil
+	}
+
+	if _, hasFiles := storageConf["files"]; hasFiles {
+		return nil
+	}
+
+	nsName, _ := nsConf[asdbv1.ConfKeyName].(string)
+
+	// index-checkpoint-path is mandatory for data durability on a pure in-memory SC namespace.
+	// Checkpointing is only available on server >= MinVersion for PreviewFeatureIndexCheckpoint.
+	if asdbv1.GetIndexCheckpointPath(aerospikeConfig) == "" {
+		return fmt.Errorf(
+			"namespace %q is a pure in-memory SC namespace: "+
+				"either enable checkpointing (requires server >= %s) "+
+				"or back the namespace with persistent storage (add devices or files to storage-engine)",
+			nsName, asdbv1.PreviewFeatureVersions[asdbv1.PreviewFeatureIndexCheckpoint].MinVersion,
+		)
+	}
+
+	// skip-checkpoint would bypass the save that is required for durability on this namespace.
+	if asdbv1.IsCheckpointSkipped(nsConf) {
+		return fmt.Errorf(
+			"namespace %q is a pure in-memory SC namespace: "+
+				"skip-checkpoint cannot be set (checkpointing is required for data durability)",
+			nsName,
+		)
 	}
 
 	return nil
@@ -1859,6 +2005,14 @@ func validateNamespaceConfig(
 					for _, d := range dList {
 						// Namespace device should be present in BlockStorage config section
 						if !utils.ContainsString(blockStorageDeviceList, d) {
+							if utils.ContainsString(fileStorageList, d) {
+								return fmt.Errorf(
+									"namespace storage device %v is configured as a Filesystem-mode volume; "+
+										"storage-engine devices require a Block-mode PersistentVolume",
+									d,
+								)
+							}
+
 							return fmt.Errorf(
 								"namespace storage device related devicePath %v not found in Storage config %v",
 								d, storage,
