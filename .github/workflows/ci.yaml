@@ -235,7 +235,7 @@ jobs:
       - name: Package charts
         run: |
           for chart in helm-charts/*/; do
-            helm package "$chart" --version "$VERSION" --destination dist
+            helm package "$chart" --version "$VERSION" --app-version "$VERSION" --destination dist
           done
 
       # Same layout as the shared deploy workflow: <chart>/<version>/<chart>-<version>.tgz.
