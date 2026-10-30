@@ -4,6 +4,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"reflect"
 	"time"
 
 	"github.com/go-logr/logr"
@@ -14,6 +15,7 @@ import (
 	k8sRuntime "k8s.io/apimachinery/pkg/runtime"
 	"k8s.io/apimachinery/pkg/types"
 	"k8s.io/apimachinery/pkg/util/wait"
+	"k8s.io/client-go/kubernetes"
 	"k8s.io/client-go/rest"
 	"k8s.io/client-go/tools/record"
 	ctrl "sigs.k8s.io/controller-runtime"
@@ -48,9 +50,12 @@ type SingleBackupServiceReconciler struct {
 	client.Client
 	Recorder          record.EventRecorder
 	aeroBackupService *asdbv1beta1.AerospikeBackupService
-	KubeConfig        *rest.Config
-	Scheme            *k8sRuntime.Scheme
-	Log               logr.Logger
+	// KubeClient and KubeConfig are used to exec into the backup service pods to check that they have the latest
+	// ConfigMap before a reload; client.Client cannot run pods/exec.
+	KubeClient *kubernetes.Clientset
+	KubeConfig *rest.Config
+	Scheme     *k8sRuntime.Scheme
+	Log        logr.Logger
 }
 
 // finishReconcile logs the reconcile exit once at the boundary and sets the AerospikeBackupService
@@ -130,6 +135,8 @@ func (r *SingleBackupServiceReconciler) Reconcile(ctx context.Context) (result c
 		return ctrl.Result{}, err
 	}
 
+	r.aeroBackupService.Status.Phase = asdbv1beta1.AerospikeBackupServiceCompleted
+
 	if err := r.updateStatus(ctx); err != nil {
 		r.Recorder.Eventf(r.aeroBackupService, corev1.EventTypeWarning,
 			"StatusUpdateFailed", "Failed to update status")
@@ -156,13 +163,18 @@ func (r *SingleBackupServiceReconciler) reconcileConfigMap(ctx context.Context) 
 		r.Log.Info("Creating backup service ConfigMap",
 			"configMap", utils.GetNamespacedName(r.aeroBackupService))
 
+		data, err := r.getConfigMapData()
+		if err != nil {
+			return err
+		}
+
 		cm = &corev1.ConfigMap{
 			ObjectMeta: metav1.ObjectMeta{
 				Name:      r.aeroBackupService.Name,
 				Namespace: r.aeroBackupService.Namespace,
 				Labels:    utils.LabelsForAerospikeBackupService(r.aeroBackupService.Name),
 			},
-			Data: r.getConfigMapData(),
+			Data: data,
 		}
 
 		// Set AerospikeBackupService instance as the owner and controller
@@ -226,7 +238,10 @@ func (r *SingleBackupServiceReconciler) reconcileConfigMap(ctx context.Context) 
 		return fmt.Errorf("marshal backup service config: %w", err)
 	}
 
-	cm.Data[asdbv1beta1.BackupServiceConfigYAML] = string(updatedConfig)
+	err = common.SetBackupSvcConfigData(cm.Data, string(updatedConfig))
+	if err != nil {
+		return err
+	}
 
 	if err = r.Update(ctx, cm, common.UpdateOption); err != nil {
 		return fmt.Errorf("update backup service ConfigMap: %w", err)
@@ -240,11 +255,13 @@ func (r *SingleBackupServiceReconciler) reconcileConfigMap(ctx context.Context) 
 	return nil
 }
 
-func (r *SingleBackupServiceReconciler) getConfigMapData() map[string]string {
+func (r *SingleBackupServiceReconciler) getConfigMapData() (map[string]string, error) {
 	data := make(map[string]string)
-	data[asdbv1beta1.BackupServiceConfigYAML] = string(r.aeroBackupService.Spec.Config.Raw)
+	if err := common.SetBackupSvcConfigData(data, string(r.aeroBackupService.Spec.Config.Raw)); err != nil {
+		return nil, err
+	}
 
-	return data
+	return data, nil
 }
 
 func (r *SingleBackupServiceReconciler) reconcileDeployment(ctx context.Context) error {
@@ -308,6 +325,10 @@ func (r *SingleBackupServiceReconciler) reconcileDeployment(ctx context.Context)
 		r.Log.Info("Updated backup service Deployment spec, rolling restart of backup service Pod",
 			"deployment", utils.GetNamespacedName(deployment))
 
+		if err := r.updateStatus(ctx); err != nil {
+			return err
+		}
+
 		return r.waitForDeploymentToBeReady(ctx)
 	}
 
@@ -340,12 +361,26 @@ func (r *SingleBackupServiceReconciler) updateBackupSvcConfig(ctx context.Contex
 		return nil
 	}
 
-	var currentConfig, desiredConfig dto.Config
-
-	backupSvc := &asdbv1beta1.BackupService{
-		Name:      r.aeroBackupService.Name,
-		Namespace: r.aeroBackupService.Namespace,
+	// Status is written immediately after applying the latest config via a pod restart or reload, so any diff
+	// between spec and status is a real diff and needs to be applied.
+	if reflect.DeepEqual(r.aeroBackupService.Spec.Config.Raw, r.aeroBackupService.Status.Config.Raw) {
+		r.Log.Info("Skipping update, backup service config is already latest")
+		return nil
 	}
+
+	staticChangeErr, err := r.findStaticSpecChange()
+	if err != nil {
+		return err
+	}
+
+	// A static change, such as a new context-path, is checked before any backup service call: the running
+	// backup service may not serve the listener in spec until it restarts.
+	if staticChangeErr != nil {
+		r.Log.Info("Static config change detected, rolling restart of backup service Pod", "err", staticChangeErr)
+		return r.restartBackupSvcPod(ctx)
+	}
+
+	r.Log.Info("Detected backup service config change, reloading config")
 
 	svcConfig, err := r.getBackupServiceConfig()
 	if err != nil {
@@ -354,58 +389,39 @@ func (r *SingleBackupServiceReconciler) updateBackupSvcConfig(ctx context.Contex
 
 	// Always create client with the latest config in spec
 	backupServiceClient := backup_service.NewClient(
-		fmt.Sprintf("%s.%s.svc", backupSvc.Name, backupSvc.Namespace),
+		fmt.Sprintf("%s.%s.svc", r.aeroBackupService.Name, r.aeroBackupService.Namespace),
 		svcConfig.portInfo[asdbv1beta1.HTTPKey],
 		svcConfig.contextPath,
 	)
 
-	apiBackupSvcConfig, err := backupServiceClient.GetBackupServiceConfig()
-	if err != nil {
-		return fmt.Errorf("fetch backup service config from API: %w", err)
+	backupSvc := &asdbv1beta1.BackupService{
+		Name:      r.aeroBackupService.Name,
+		Namespace: r.aeroBackupService.Namespace,
 	}
 
-	desiredData, err := common.GetBackupSvcConfigFromCM(ctx, r.Client, backupSvc)
-	if err != nil {
-		return err
-	}
-
-	synced, err := common.IsBackupSvcFullConfigSynced(apiBackupSvcConfig, desiredData, r.Log)
-	if err != nil {
-		return fmt.Errorf("check backup service config sync: %w", err)
-	}
-
-	if synced {
-		r.Log.Info("Skipping update, backup service config is already latest")
-		return nil
-	}
-
-	r.Log.Info("Detected backup service config mismatch, reloading config")
-
-	apiBackupSvcConfigData, err := yaml.Marshal(apiBackupSvcConfig)
-	if err != nil {
-		return fmt.Errorf("marshal backup service config from API: %w", err)
-	}
-
-	if err := yaml.Unmarshal(apiBackupSvcConfigData, &currentConfig); err != nil {
-		return fmt.Errorf("unmarshal backup service config from API: %w", err)
-	}
-
-	if err := yaml.Unmarshal([]byte(desiredData), &desiredConfig); err != nil {
-		return fmt.Errorf("unmarshal desired backup service config: %w", err)
-	}
-
-	if err := validation.ValidateStaticFieldChanges(&currentConfig, &desiredConfig); err != nil {
-		r.Log.Info("Static config change detected, rolling restart of backup service Pod",
-			"err", err)
-		// In case of static config change restart the backup service pod
-		return r.restartBackupSvcPod(ctx)
-	}
-
-	if err := common.ReloadBackupServiceConfigInPods(ctx, r.Log, r.Client, backupServiceClient, backupSvc); err != nil {
+	if err := common.ReloadBackupServiceConfigInPods(ctx, r.Log, r.Client,
+		common.NewPodExecFunc(r.KubeClient, r.KubeConfig), backupServiceClient, backupSvc); err != nil {
 		return fmt.Errorf("reload backup service config: %w", err)
 	}
 
 	return nil
+}
+
+// findStaticSpecChange returns a non-nil staticChangeErr if spec changes a field that the backup service reads
+// only at start and required a pod restart to update, compared with status. Spec and status hold real values, so a
+// changed secret in a static field, such as service.https.key-file-password, is found too.
+func (r *SingleBackupServiceReconciler) findStaticSpecChange() (staticChangeErr, err error) {
+	var statusConfig, specConfig dto.Config
+
+	if err := yaml.Unmarshal(r.aeroBackupService.Status.Config.Raw, &statusConfig); err != nil {
+		return nil, fmt.Errorf("unmarshal backup service status config: %w", err)
+	}
+
+	if err := yaml.Unmarshal(r.aeroBackupService.Spec.Config.Raw, &specConfig); err != nil {
+		return nil, fmt.Errorf("unmarshal backup service spec config: %w", err)
+	}
+
+	return validation.ValidateStaticFieldChanges(&statusConfig, &specConfig), nil
 }
 
 func (r *SingleBackupServiceReconciler) restartBackupSvcPod(ctx context.Context) error {
@@ -421,6 +437,10 @@ func (r *SingleBackupServiceReconciler) restartBackupSvcPod(ctx context.Context)
 		if err != nil {
 			return fmt.Errorf("delete backup service Pod %s: %w", utils.GetNamespacedNameString(pod), err)
 		}
+	}
+
+	if err := r.updateStatus(ctx); err != nil {
+		return err
 	}
 
 	return r.waitForDeploymentToBeReady(ctx)
@@ -543,7 +563,7 @@ func (r *SingleBackupServiceReconciler) getVolumeAndMounts() ([]corev1.VolumeMou
 	// Backup service configMap mountPath
 	volumeMounts = append(volumeMounts, corev1.VolumeMount{
 		Name:      "backup-service-config",
-		MountPath: "/etc/aerospike-backup-service",
+		MountPath: asdbv1beta1.BackupServiceConfigMountPath,
 	})
 
 	// Backup service configMap
@@ -783,16 +803,27 @@ func (r *SingleBackupServiceReconciler) setStatusPhase(
 	ctx context.Context, phase asdbv1beta1.AerospikeBackupServicePhase,
 ) error {
 	if r.aeroBackupService.Status.Phase != phase {
-		r.aeroBackupService.Status.Phase = phase
+		patchTarget := r.aeroBackupService.DeepCopy()
+		patch := client.MergeFrom(r.aeroBackupService.DeepCopy())
 
-		if err := r.Client.Status().Update(ctx, r.aeroBackupService); err != nil {
+		patchTarget.Status.Phase = phase
+
+		if err := r.Client.Status().Patch(ctx, patchTarget, patch); err != nil {
 			return fmt.Errorf("set AerospikeBackupService status phase %s: %w", phase, err)
 		}
+
+		// Copy back only status and resourceVersion so r.aeroBackupService.Spec is never overwritten.
+		r.aeroBackupService.Status.Phase = patchTarget.Status.Phase
+		r.aeroBackupService.ResourceVersion = patchTarget.ResourceVersion
 	}
 
 	return nil
 }
 
+// updateStatus records spec as applied, with the phase already set in r.aeroBackupService.Status: InProgress from the
+// start of the reconcile, or Completed set by the caller at its end. It is also called right after a restart is
+// started and before waiting for the new pod: the new pod loads the latest ConfigMap when it starts, so a wait that
+// times out must not make the next reconcile restart the pod again.
 func (r *SingleBackupServiceReconciler) updateStatus(ctx context.Context) error {
 	svcConfig, err := r.getBackupServiceConfig()
 	if err != nil {
@@ -802,13 +833,18 @@ func (r *SingleBackupServiceReconciler) updateStatus(ctx context.Context) error 
 	status := r.CopySpecToStatus()
 	status.ContextPath = svcConfig.contextPath
 	status.Port = svcConfig.portInfo[asdbv1beta1.HTTPKey]
-	status.Phase = asdbv1beta1.AerospikeBackupServiceCompleted
+	status.Phase = r.aeroBackupService.Status.Phase
 
-	r.aeroBackupService.Status = *status
+	patchTarget := r.aeroBackupService.DeepCopy()
+	patchTarget.Status = *status
 
-	if err := r.Client.Status().Update(ctx, r.aeroBackupService); err != nil {
+	if err := common.PatchStatus(ctx, r.Client, patchTarget, &patchTarget.Status); err != nil {
 		return fmt.Errorf("update AerospikeBackupService status: %w", err)
 	}
+
+	// Copy back only status and resourceVersion so r.aeroBackupService.Spec is never overwritten.
+	r.aeroBackupService.Status = patchTarget.Status
+	r.aeroBackupService.ResourceVersion = patchTarget.ResourceVersion
 
 	return nil
 }

@@ -39,7 +39,7 @@ import (
 // SetupAerospikeBackupWebhookWithManager registers the webhook for AerospikeBackup in the manager.
 func SetupAerospikeBackupWebhookWithManager(mgr ctrl.Manager) error {
 	return ctrl.NewWebhookManagedBy(mgr, &asdbv1beta1.AerospikeBackup{}).
-		WithValidator(&AerospikeBackupCustomValidator{}).
+		WithValidator(&AerospikeBackupCustomValidator{reader: mgr.GetAPIReader()}).
 		Complete()
 }
 
@@ -59,6 +59,9 @@ func (abd *AerospikeBackupCustomDefaulter) Default(_ context.Context, backup *as
 
 // +kubebuilder:object:generate=false
 type AerospikeBackupCustomValidator struct {
+	// reader reads the backup service and its ConfigMap straight from the API server. It is created once, with the
+	// manager, and shared by all requests.
+	reader client.Reader
 }
 
 var _ admission.Validator[*asdbv1beta1.AerospikeBackup] = &AerospikeBackupCustomValidator{}
@@ -73,7 +76,7 @@ func (abv *AerospikeBackupCustomValidator) ValidateCreate(_ context.Context, bac
 
 	abLog.Info("Validate create")
 
-	if _, err := validateBackup(backup); err != nil {
+	if _, err := validateBackup(abv.reader, backup); err != nil {
 		return nil, err
 	}
 
@@ -95,7 +98,7 @@ func (abv *AerospikeBackupCustomValidator) ValidateUpdate(_ context.Context,
 		return nil, fmt.Errorf("backup service cannot be updated")
 	}
 
-	version, err := validateBackup(backup)
+	version, err := validateBackup(abv.reader, backup)
 	if err != nil {
 		return nil, err
 	}
@@ -111,13 +114,8 @@ func (abv *AerospikeBackupCustomValidator) ValidateUpdate(_ context.Context,
 	return nil, nil
 }
 
-func validateBackup(backup *asdbv1beta1.AerospikeBackup) (string, error) {
-	k8sClient, gErr := getK8sClient()
-	if gErr != nil {
-		return "", gErr
-	}
-
-	version, err := asdbv1beta1.ValidateBackupSvcSupportedVersion(k8sClient,
+func validateBackup(reader client.Reader, backup *asdbv1beta1.AerospikeBackup) (string, error) {
+	version, err := asdbv1beta1.ValidateBackupSvcSupportedVersionWithReader(reader,
 		backup.Spec.BackupService.Name,
 		backup.Spec.BackupService.Namespace,
 	)
@@ -125,7 +123,7 @@ func validateBackup(backup *asdbv1beta1.AerospikeBackup) (string, error) {
 		return "", err
 	}
 
-	return version, validateBackupConfig(k8sClient, backup)
+	return version, validateBackupConfig(reader, backup)
 }
 
 // ValidateDelete implements admission.Validator so a webhook will be registered for the type
@@ -139,7 +137,7 @@ func (abv *AerospikeBackupCustomValidator) ValidateDelete(_ context.Context, bac
 	return nil, nil
 }
 
-func validateBackupConfig(k8sClient client.Client, backup *asdbv1beta1.AerospikeBackup) error {
+func validateBackupConfig(reader client.Reader, backup *asdbv1beta1.AerospikeBackup) error {
 	backupConfig := make(map[string]interface{})
 
 	if err := yaml.Unmarshal(backup.Spec.Config.Raw, &backupConfig); err != nil {
@@ -162,7 +160,7 @@ func validateBackupConfig(k8sClient client.Client, backup *asdbv1beta1.Aerospike
 		return fmt.Errorf("secret-agent field cannot be specified in backup config")
 	}
 
-	backupSvcConfig, err := getBackupServiceFullConfig(k8sClient, backup.Spec.BackupService.Name,
+	backupSvcConfig, err := getBackupServiceFullConfig(reader, backup.Spec.BackupService.Name,
 		backup.Spec.BackupService.Namespace)
 	if err != nil {
 		return err
@@ -397,15 +395,6 @@ func updateValidateBackupSvcConfig(
 
 	for name, routine := range routines {
 		backupSvcConfig.BackupRoutines[name] = routine
-	}
-
-	// Add empty placeholders for missing backupSvcConfig sections. This is required for validation to work.
-	if backupSvcConfig.ServiceConfig.HTTPServer == nil {
-		backupSvcConfig.ServiceConfig.HTTPServer = &dto.HTTPServerConfig{}
-	}
-
-	if backupSvcConfig.ServiceConfig.Logger == nil {
-		backupSvcConfig.ServiceConfig.Logger = &dto.LoggerConfig{}
 	}
 
 	return validation.ValidateConfiguration(backupSvcConfig)

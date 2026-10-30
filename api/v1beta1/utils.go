@@ -40,9 +40,15 @@ func ValidateBackupSvcVersion(image string) (string, error) {
 // ValidateBackupSvcSupportedVersion validates the supported backup service version.
 // It returns an error if the backup service version is less than 3.0.0.
 func ValidateBackupSvcSupportedVersion(k8sClient client.Client, name, namespace string) (string, error) {
+	return ValidateBackupSvcSupportedVersionWithReader(k8sClient, name, namespace)
+}
+
+// ValidateBackupSvcSupportedVersionWithReader is ValidateBackupSvcSupportedVersion for callers that have only a
+// client.Reader, such as the manager's API reader.
+func ValidateBackupSvcSupportedVersionWithReader(reader client.Reader, name, namespace string) (string, error) {
 	var backupSvc AerospikeBackupService
 
-	if err := k8sClient.Get(context.TODO(),
+	if err := reader.Get(context.TODO(),
 		types.NamespacedName{Name: name, Namespace: namespace},
 		&backupSvc,
 	); err != nil {

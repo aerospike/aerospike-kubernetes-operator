@@ -12,7 +12,7 @@ import (
 )
 
 const (
-	BackupServiceImage  = "aerospike/aerospike-backup-service:3.6.2"
+	BackupServiceImage  = "aerospike/aerospike-backup-service:3.7.0"
 	DefaultClusterHost  = "aerocluster.test.svc.cluster.local"
 	DefaultBackupPolicy = "test-policy"
 )

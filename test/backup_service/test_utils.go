@@ -292,7 +292,6 @@ func getBackupServiceConfMap() map[string]interface{} {
 			"s3Storage": map[string]interface{}{
 				"s3-storage": map[string]interface{}{
 					"bucket":     "aerospike-kubernetes-operator-test",
-					"path":       "/",
 					"s3-region":  "us-east-1",
 					"s3-profile": "default",
 				},

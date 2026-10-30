@@ -11,6 +11,7 @@ import (
 	"k8s.io/apimachinery/pkg/api/errors"
 	k8sRuntime "k8s.io/apimachinery/pkg/runtime"
 	"k8s.io/apimachinery/pkg/types"
+	"k8s.io/client-go/kubernetes"
 	"k8s.io/client-go/rest"
 	"k8s.io/client-go/tools/record"
 	ctrl "sigs.k8s.io/controller-runtime"
@@ -22,6 +23,7 @@ import (
 	"github.com/aerospike/aerospike-kubernetes-operator/v4/internal/controller/common"
 	backup_service "github.com/aerospike/aerospike-kubernetes-operator/v4/pkg/backup-service"
 	"github.com/aerospike/aerospike-kubernetes-operator/v4/pkg/utils"
+	lib "github.com/aerospike/aerospike-management-lib"
 )
 
 // SingleBackupReconciler reconciles a single AerospikeBackup object
@@ -29,6 +31,9 @@ type SingleBackupReconciler struct {
 	client.Client
 	Recorder   record.EventRecorder
 	aeroBackup *asdbv1beta1.AerospikeBackup
+	// KubeClient and KubeConfig are used to exec into the backup service pods to check that they have the latest
+	// ConfigMap before a reload; client.Client cannot run pods/exec.
+	KubeClient *kubernetes.Clientset
 	KubeConfig *rest.Config
 	Scheme     *k8sRuntime.Scheme
 	Log        logr.Logger
@@ -91,7 +96,8 @@ func (r *SingleBackupReconciler) Reconcile(ctx context.Context) (result ctrl.Res
 		return reconcile.Result{}, err
 	}
 
-	if err := r.reconcileConfigMap(ctx); err != nil {
+	configMapChanged, err := r.reconcileConfigMap(ctx)
+	if err != nil {
 		bs := r.aeroBackup.Spec.BackupService
 		r.Recorder.Eventf(r.aeroBackup, corev1.EventTypeWarning,
 			"ConfigMapReconcileFailed", "Failed to reconcile ConfigMap %s",
@@ -100,7 +106,7 @@ func (r *SingleBackupReconciler) Reconcile(ctx context.Context) (result ctrl.Res
 		return reconcile.Result{}, err
 	}
 
-	if err := r.reconcileBackup(ctx); err != nil {
+	if err := r.reconcileBackup(ctx, configMapChanged); err != nil {
 		r.Recorder.Eventf(r.aeroBackup, corev1.EventTypeWarning,
 			"BackupReconcileFailed", "Failed to reconcile backup")
 
@@ -149,7 +155,8 @@ func (r *SingleBackupReconciler) cleanUpAndRemoveFinalizer(ctx context.Context, 
 			return fmt.Errorf("get backup service client: %w", err)
 		}
 
-		if err := common.ReloadBackupServiceConfigInPods(ctx, r.Log, r.Client, backupServiceClient,
+		if err := common.ReloadBackupServiceConfigInPods(ctx, r.Log, r.Client,
+			common.NewPodExecFunc(r.KubeClient, r.KubeConfig), backupServiceClient,
 			&r.aeroBackup.Spec.BackupService); err != nil {
 			return fmt.Errorf("reload backup service config: %w", err)
 		}
@@ -169,12 +176,15 @@ func (r *SingleBackupReconciler) cleanUpAndRemoveFinalizer(ctx context.Context, 
 	return nil
 }
 
-func (r *SingleBackupReconciler) reconcileConfigMap(ctx context.Context) error {
+// reconcileConfigMap writes the cluster and routines of this backup into the backup service ConfigMap. It returns
+// true if that changed the config, for example when the backup service was recreated with a ConfigMap that has
+// none of them, so the backup service must reload even though this backup's spec is already applied.
+func (r *SingleBackupReconciler) reconcileConfigMap(ctx context.Context) (bool, error) {
 	bs := r.aeroBackup.Spec.BackupService
 
 	cm, err := r.getBackupSvcConfigMap(ctx)
 	if err != nil {
-		return fmt.Errorf("get backup service ConfigMap %s: %w",
+		return false, fmt.Errorf("get backup service ConfigMap %s: %w",
 			utils.NamespacedName(bs.Namespace, bs.Name), err)
 	}
 
@@ -182,26 +192,30 @@ func (r *SingleBackupReconciler) reconcileConfigMap(ctx context.Context) error {
 		"configMap", utils.NewNamespacedName(bs.Namespace, bs.Name),
 	)
 
-	specBackupConfig, err := r.getBackupConfigInMap()
+	specConfig, err := r.getBackupConfigInMap()
 	if err != nil {
-		return err
+		return false, err
 	}
 
-	backupSvcConfig := make(map[string]interface{})
+	cmConfig := make(map[string]interface{})
 
 	data := cm.Data[asdbv1beta1.BackupServiceConfigYAML]
 
-	err = yaml.Unmarshal([]byte(data), &backupSvcConfig)
+	err = yaml.Unmarshal([]byte(data), &cmConfig)
 	if err != nil {
-		return fmt.Errorf("unmarshal backup service config: %w", err)
+		return false, fmt.Errorf("unmarshal backup service config: %w", err)
 	}
 
-	clusterMap, err := common.GetConfigSection(backupSvcConfig, asdbv1beta1.AerospikeClustersKey)
+	// Merge this backup's cluster and routines from spec into a copy, so cmConfig stays as it is in the ConfigMap for
+	// the comparison below.
+	mergedConfig := lib.DeepCopy(cmConfig).(map[string]interface{})
+
+	mergedClusters, err := common.GetConfigSection(mergedConfig, asdbv1beta1.AerospikeClustersKey)
 	if err != nil {
-		return fmt.Errorf("get aerospike-clusters section from backup service config: %w", err)
+		return false, fmt.Errorf("get aerospike-clusters section from backup service config: %w", err)
 	}
 
-	cluster := specBackupConfig[asdbv1beta1.AerospikeClusterKey].(map[string]interface{})
+	specCluster := specConfig[asdbv1beta1.AerospikeClusterKey].(map[string]interface{})
 
 	var clusterName string
 
@@ -209,43 +223,57 @@ func (r *SingleBackupReconciler) reconcileConfigMap(ctx context.Context) error {
 	// Cluster name in the CR will always be unique.
 	// Uniqueness is maintained by having a prefix with format <backup-namespace>-<backup-name>-<cluster-name>.
 	// It is enforced by the webhook.
-	for name, clusterInfo := range cluster {
+	for name, clusterInfo := range specCluster {
 		clusterName = name
-		clusterMap[name] = clusterInfo
+		mergedClusters[name] = clusterInfo
 	}
 
-	backupSvcConfig[asdbv1beta1.AerospikeClustersKey] = clusterMap
+	mergedConfig[asdbv1beta1.AerospikeClustersKey] = mergedClusters
 
-	routineMap, err := common.GetConfigSection(backupSvcConfig, asdbv1beta1.BackupRoutinesKey)
+	mergedRoutines, err := common.GetConfigSection(mergedConfig, asdbv1beta1.BackupRoutinesKey)
 	if err != nil {
-		return fmt.Errorf("get backup-routines section from backup service config: %w", err)
+		return false, fmt.Errorf("get backup-routines section from backup service config: %w", err)
 	}
 
-	routines := specBackupConfig[asdbv1beta1.BackupRoutinesKey].(map[string]interface{})
+	specRoutines := specConfig[asdbv1beta1.BackupRoutinesKey].(map[string]interface{})
 
-	// Remove the routines which are not in spec
-	routinesToBeDeleted := r.routinesToDelete(routines, routineMap, clusterName)
+	// Remove the routines of this backup that are no longer in its spec
+	staleRoutines := r.routinesToDelete(specRoutines, mergedRoutines, clusterName)
 
-	for idx := range routinesToBeDeleted {
-		delete(routineMap, routinesToBeDeleted[idx])
+	for idx := range staleRoutines {
+		delete(mergedRoutines, staleRoutines[idx])
 	}
 
-	// Add/update spec routines
-	for name, routine := range routines {
-		routineMap[name] = routine
+	// Add or update the routines of this backup from its spec
+	for name, routine := range specRoutines {
+		mergedRoutines[name] = routine
 	}
 
-	backupSvcConfig[asdbv1beta1.BackupRoutinesKey] = routineMap
+	mergedConfig[asdbv1beta1.BackupRoutinesKey] = mergedRoutines
 
-	updatedConfig, err := yaml.Marshal(backupSvcConfig)
+	// Compare the parsed configs, not the text: a ConfigMap that the backup service controller has just created
+	// holds the spec as JSON, and this function writes YAML.
+	changed := !reflect.DeepEqual(cmConfig, mergedConfig)
+
+	// A ConfigMap written by an older operator has no hash yet, and the reload waits for it, so write it then too.
+	if !changed && cm.Data[asdbv1beta1.BackupServiceConfigHashKey] != "" {
+		r.Log.Info("Backup service ConfigMap already has this backup's config",
+			"configMap", utils.NewNamespacedName(bs.Namespace, bs.Name))
+
+		return false, nil
+	}
+
+	updatedConfig, err := yaml.Marshal(mergedConfig)
 	if err != nil {
-		return fmt.Errorf("marshal backup service config: %w", err)
+		return false, fmt.Errorf("marshal backup service config: %w", err)
 	}
 
-	cm.Data[asdbv1beta1.BackupServiceConfigYAML] = string(updatedConfig)
+	if err := common.SetBackupSvcConfigData(cm.Data, string(updatedConfig)); err != nil {
+		return false, err
+	}
 
 	if err := r.Update(ctx, cm, common.UpdateOption); err != nil {
-		return fmt.Errorf("update backup service ConfigMap %s: %w",
+		return false, fmt.Errorf("update backup service ConfigMap %s: %w",
 			utils.NamespacedName(bs.Namespace, bs.Name), err)
 	}
 
@@ -255,7 +283,7 @@ func (r *SingleBackupReconciler) reconcileConfigMap(ctx context.Context) error {
 	r.Recorder.Eventf(r.aeroBackup, corev1.EventTypeNormal, "ConfigMapUpdated",
 		"Updated backup service ConfigMap %s", utils.NamespacedName(bs.Namespace, bs.Name))
 
-	return nil
+	return changed, nil
 }
 
 func (r *SingleBackupReconciler) removeBackupInfoFromConfigMap(ctx context.Context) error {
@@ -331,7 +359,9 @@ func (r *SingleBackupReconciler) removeBackupInfoFromConfigMap(ctx context.Conte
 		return fmt.Errorf("marshal backup service config: %w", err)
 	}
 
-	cm.Data[asdbv1beta1.BackupServiceConfigYAML] = string(updatedConfig)
+	if err := common.SetBackupSvcConfigData(cm.Data, string(updatedConfig)); err != nil {
+		return err
+	}
 
 	if err := r.Update(ctx, cm, common.UpdateOption); err != nil {
 		return fmt.Errorf("update backup service ConfigMap %s: %w",
@@ -384,70 +414,34 @@ func (r *SingleBackupReconciler) triggerOnDemandBackup() error {
 	return nil
 }
 
-func (r *SingleBackupReconciler) reconcileBackup(ctx context.Context) error {
-	if err := r.reconcileScheduledBackup(ctx); err != nil {
+func (r *SingleBackupReconciler) reconcileBackup(ctx context.Context, configMapChanged bool) error {
+	if err := r.reconcileScheduledBackup(ctx, configMapChanged); err != nil {
 		return err
 	}
 
 	return r.reconcileOnDemandBackup()
 }
 
-func (r *SingleBackupReconciler) reconcileScheduledBackup(ctx context.Context) error {
+func (r *SingleBackupReconciler) reconcileScheduledBackup(ctx context.Context, configMapChanged bool) error {
 	r.Log.Info("Reconciling scheduled backup")
 
-	serviceClient, err := backup_service.GetBackupServiceClient(r.Client, &r.aeroBackup.Spec.BackupService)
-	if err != nil {
-		return fmt.Errorf("get backup service client: %w", err)
-	}
+	// Status is written only after a successful reconcile, so a config in spec that differs from status has
+	// not been applied yet. Spec and status hold real values, so a change to a secret alone is found too.
+	specApplied := reflect.DeepEqual(r.aeroBackup.Spec.Config.Raw, r.aeroBackup.Status.Config.Raw)
 
-	backupSvcConfig, err := serviceClient.GetBackupServiceConfig()
-	if err != nil {
-		return fmt.Errorf("fetch backup service config: %w", err)
-	}
+	if !specApplied || configMapChanged {
+		r.Log.Info("Backup config not yet loaded in backup service, reload required",
+			"specApplied", specApplied, "configMapChanged", configMapChanged)
 
-	r.Log.Info("Fetched backup service config", "config", backupSvcConfig)
-
-	specBackupConfig, err := r.getBackupConfigInMap()
-	if err != nil {
-		return err
-	}
-
-	var (
-		hotReloadRequired bool
-		clusterName       string
-	)
-
-	if cluster, ok := specBackupConfig[asdbv1beta1.AerospikeClusterKey].(map[string]interface{}); ok {
-		hotReloadRequired = r.checkForConfigUpdate(
-			cluster,
-			asdbv1beta1.AerospikeClustersKey,
-			backupSvcConfig,
-		)
-
-		for name := range cluster {
-			clusterName = name
-		}
-	}
-
-	// Skip further checks if hotReloadRequired is already true
-	if !hotReloadRequired {
-		if routines, ok := specBackupConfig[asdbv1beta1.BackupRoutinesKey].(map[string]interface{}); ok {
-			hotReloadRequired = r.checkForConfigUpdate(
-				routines,
-				asdbv1beta1.BackupRoutinesKey,
-				backupSvcConfig,
-			)
-
-			if !hotReloadRequired {
-				hotReloadRequired = r.checkForDeletedRoutines(routines, backupSvcConfig, clusterName)
+		if err := r.reloadBackupServiceConfig(ctx); err != nil {
+			// With spec already applied, the reload is needed only because this pass changed the ConfigMap, and the
+			// next pass finds the ConfigMap already changed. Mark the config as not applied, so the next pass
+			// reloads again.
+			if specApplied {
+				r.markConfigNotApplied(ctx)
 			}
-		}
-	}
 
-	if hotReloadRequired {
-		err = common.ReloadBackupServiceConfigInPods(ctx, r.Log, r.Client, serviceClient, &r.aeroBackup.Spec.BackupService)
-		if err != nil {
-			return fmt.Errorf("reload backup service config: %w", err)
+			return err
 		}
 	}
 
@@ -458,54 +452,34 @@ func (r *SingleBackupReconciler) reconcileScheduledBackup(ctx context.Context) e
 	return nil
 }
 
-func (r *SingleBackupReconciler) checkForConfigUpdate(
-	desiredConfig map[string]interface{},
-	sectionKey string,
-	backupSvcConfig map[string]interface{},
-) bool {
-	updated := false
-
-	currentConfig, err := common.GetConfigSection(backupSvcConfig, sectionKey)
+func (r *SingleBackupReconciler) reloadBackupServiceConfig(ctx context.Context) error {
+	serviceClient, err := backup_service.GetBackupServiceClient(r.Client, &r.aeroBackup.Spec.BackupService)
 	if err != nil {
-		r.Log.Error(err, "Failed to fetch config section", "section", sectionKey)
-		return false
+		return fmt.Errorf("get backup service client: %w", err)
 	}
 
-	for name, config := range desiredConfig {
-		if existingConfig, exists := currentConfig[name]; exists {
-			if !reflect.DeepEqual(existingConfig, config) {
-				r.Log.Info("Config section changed, updating", "section", sectionKey, "name", name)
-
-				updated = true
-			}
-		} else {
-			r.Log.Info("Adding new entry in config section", "section", sectionKey, "name", name)
-
-			updated = true
-		}
+	if err := common.ReloadBackupServiceConfigInPods(ctx, r.Log, r.Client,
+		common.NewPodExecFunc(r.KubeClient, r.KubeConfig), serviceClient, &r.aeroBackup.Spec.BackupService); err != nil {
+		return fmt.Errorf("reload backup service config: %w", err)
 	}
 
-	return updated
+	return nil
 }
 
-func (r *SingleBackupReconciler) checkForDeletedRoutines(
-	desired map[string]interface{},
-	currentConfig map[string]interface{},
-	clusterName string,
-) bool {
-	currentRoutines, err := common.GetConfigSection(currentConfig, asdbv1beta1.BackupRoutinesKey)
-	if err != nil {
-		r.Log.Error(err, "Failed to fetch current routines")
-		return false
+// markConfigNotApplied sets an empty status config, so it differs from spec until a reload succeeds and the
+// reconcile writes status again. A failure is only logged: the reconcile already returns the reload error.
+func (r *SingleBackupReconciler) markConfigNotApplied(ctx context.Context) {
+	patchTarget := r.aeroBackup.DeepCopy()
+	patchTarget.Status.Config = k8sRuntime.RawExtension{Raw: []byte("{}")}
+
+	if err := common.PatchStatus(ctx, r.Client, patchTarget, &patchTarget.Status); err != nil {
+		r.Log.Error(err, "Failed to mark backup config as not applied")
+		return
 	}
 
-	toDelete := r.routinesToDelete(desired, currentRoutines, clusterName)
-	if len(toDelete) > 0 {
-		r.Log.Info("Routines to be deleted", "count", len(toDelete))
-		return true
-	}
-
-	return false
+	// Copy back only status and resourceVersion so r.aeroBackup.Spec is never overwritten.
+	r.aeroBackup.Status = patchTarget.Status
+	r.aeroBackup.ResourceVersion = patchTarget.ResourceVersion
 }
 
 func (r *SingleBackupReconciler) reconcileOnDemandBackup() error {
@@ -520,13 +494,18 @@ func (r *SingleBackupReconciler) reconcileOnDemandBackup() error {
 }
 
 func (r *SingleBackupReconciler) updateStatus(ctx context.Context) error {
-	r.aeroBackup.Status.BackupService = r.aeroBackup.Spec.BackupService
-	r.aeroBackup.Status.Config = r.aeroBackup.Spec.Config
-	r.aeroBackup.Status.OnDemandBackups = r.aeroBackup.Spec.OnDemandBackups
+	patchTarget := r.aeroBackup.DeepCopy()
+	patchTarget.Status.BackupService = r.aeroBackup.Spec.BackupService
+	patchTarget.Status.Config = r.aeroBackup.Spec.Config
+	patchTarget.Status.OnDemandBackups = r.aeroBackup.Spec.OnDemandBackups
 
-	if err := r.Client.Status().Update(ctx, r.aeroBackup); err != nil {
+	if err := common.PatchStatus(ctx, r.Client, patchTarget, &patchTarget.Status); err != nil {
 		return fmt.Errorf("update AerospikeBackup status: %w", err)
 	}
+
+	// Copy back only status and resourceVersion so r.aeroBackup.Spec is never overwritten.
+	r.aeroBackup.Status = patchTarget.Status
+	r.aeroBackup.ResourceVersion = patchTarget.ResourceVersion
 
 	return nil
 }

@@ -23,6 +23,8 @@ import (
 	corev1 "k8s.io/api/core/v1"
 	"k8s.io/apimachinery/pkg/api/errors"
 	k8sruntime "k8s.io/apimachinery/pkg/runtime"
+	"k8s.io/client-go/kubernetes"
+	"k8s.io/client-go/rest"
 	"k8s.io/client-go/tools/record"
 	ctrl "sigs.k8s.io/controller-runtime"
 	"sigs.k8s.io/controller-runtime/pkg/client"
@@ -38,8 +40,12 @@ import (
 type AerospikeBackupServiceReconciler struct {
 	Scheme *k8sruntime.Scheme
 	client.Client
-	Recorder record.EventRecorder
-	Log      logr.Logger
+	// KubeClient and KubeConfig are used to exec into the backup service pods to check that they have the latest
+	// ConfigMap before a reload; client.Client cannot run pods/exec.
+	KubeClient *kubernetes.Clientset
+	KubeConfig *rest.Config
+	Recorder   record.EventRecorder
+	Log        logr.Logger
 }
 
 //nolint:lll // for readability
@@ -47,6 +53,7 @@ type AerospikeBackupServiceReconciler struct {
 // +kubebuilder:rbac:groups=asdb.aerospike.com,resources=aerospikebackupservices/status,verbs=get;update;patch
 // +kubebuilder:rbac:groups=asdb.aerospike.com,resources=aerospikebackupservices/finalizers,verbs=update
 // +kubebuilder:rbac:groups=apps,resources=deployments,verbs=get;watch;create;update;patch;delete
+// +kubebuilder:rbac:groups=core,resources=pods/exec,verbs=create
 
 // Reconcile is part of the main kubernetes reconciliation loop which aims to
 // move the current state of the cluster closer to the desired state.
@@ -81,6 +88,8 @@ func (r *AerospikeBackupServiceReconciler) Reconcile(ctx context.Context, reques
 		Log:               log,
 		Scheme:            r.Scheme,
 		Recorder:          r.Recorder,
+		KubeClient:        r.KubeClient,
+		KubeConfig:        r.KubeConfig,
 	}
 
 	return cr.Reconcile(ctx)

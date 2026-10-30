@@ -312,9 +312,11 @@ func main() {
 	}
 
 	if err = (&backupservice.AerospikeBackupServiceReconciler{
-		Client: client,
-		Scheme: mgr.GetScheme(),
-		Log:    ctrl.Log.WithName("controller").WithName("AerospikeBackupService"),
+		Client:     client,
+		KubeClient: kubeClient,
+		KubeConfig: kubeConfig,
+		Scheme:     mgr.GetScheme(),
+		Log:        ctrl.Log.WithName("controller").WithName("AerospikeBackupService"),
 		Recorder: eventBroadcaster.NewRecorder(
 			mgr.GetScheme(), v1.EventSource{Component: "aerospikeBackupService-controller"},
 		),
@@ -329,9 +331,11 @@ func main() {
 	}
 
 	if err = (&backup.AerospikeBackupReconciler{
-		Client: client,
-		Scheme: mgr.GetScheme(),
-		Log:    ctrl.Log.WithName("controller").WithName("AerospikeBackup"),
+		Client:     client,
+		KubeClient: kubeClient,
+		KubeConfig: kubeConfig,
+		Scheme:     mgr.GetScheme(),
+		Log:        ctrl.Log.WithName("controller").WithName("AerospikeBackup"),
 		Recorder: eventBroadcaster.NewRecorder(
 			mgr.GetScheme(), v1.EventSource{Component: "aerospikeBackup-controller"},
 		),

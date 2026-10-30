@@ -35,7 +35,7 @@ import (
 // SetupAerospikeRestoreWebhookWithManager registers the webhook for AerospikeRestore in the manager.
 func SetupAerospikeRestoreWebhookWithManager(mgr ctrl.Manager) error {
 	return ctrl.NewWebhookManagedBy(mgr, &asdbv1beta1.AerospikeRestore{}).
-		WithValidator(&AerospikeRestoreCustomValidator{}).
+		WithValidator(&AerospikeRestoreCustomValidator{reader: mgr.GetAPIReader()}).
 		Complete()
 }
 
@@ -55,6 +55,9 @@ func (ard *AerospikeRestoreCustomDefaulter) Default(_ context.Context, restore *
 
 // +kubebuilder:object:generate=false
 type AerospikeRestoreCustomValidator struct {
+	// reader reads the backup service and its ConfigMap straight from the API server. It is created once, with the
+	// manager, and shared by all requests.
+	reader client.Reader
 }
 
 var _ admission.Validator[*asdbv1beta1.AerospikeRestore] = &AerospikeRestoreCustomValidator{}
@@ -68,19 +71,14 @@ func (arv *AerospikeRestoreCustomValidator) ValidateCreate(_ context.Context, re
 	arLog := logf.Log.WithName(namespacedName(restore))
 	arLog.Info("Validate create")
 
-	k8sClient, gErr := getK8sClient()
-	if gErr != nil {
-		return nil, gErr
-	}
-
-	if _, err := asdbv1beta1.ValidateBackupSvcSupportedVersion(k8sClient,
+	if _, err := asdbv1beta1.ValidateBackupSvcSupportedVersionWithReader(arv.reader,
 		restore.Spec.BackupService.Name,
 		restore.Spec.BackupService.Namespace,
 	); err != nil {
 		return nil, err
 	}
 
-	if err := validateRestoreConfig(k8sClient, restore); err != nil {
+	if err := validateRestoreConfig(arv.reader, restore); err != nil {
 		return nil, err
 	}
 
@@ -112,14 +110,14 @@ func (arv *AerospikeRestoreCustomValidator) ValidateDelete(_ context.Context, re
 	return nil, nil
 }
 
-func validateRestoreConfig(k8sClient client.Client, restore *asdbv1beta1.AerospikeRestore) error {
+func validateRestoreConfig(reader client.Reader, restore *asdbv1beta1.AerospikeRestore) error {
 	restoreConfig := make(map[string]interface{})
 
 	if err := yaml.Unmarshal(restore.Spec.Config.Raw, &restoreConfig); err != nil {
 		return err
 	}
 
-	backupSvcConfig, err := getBackupServiceFullConfig(k8sClient, restore.Spec.BackupService.Name,
+	backupSvcConfig, err := getBackupServiceFullConfig(reader, restore.Spec.BackupService.Name,
 		restore.Spec.BackupService.Namespace)
 	if err != nil {
 		return err

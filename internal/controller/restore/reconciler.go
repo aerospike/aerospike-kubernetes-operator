@@ -224,7 +224,12 @@ func (r *SingleRestoreReconciler) checkRestoreStatus(ctx context.Context) error 
 	r.Log.Info("Restore status received", "status", restoreStatus, "jobID", jobID)
 
 	if status, ok := restoreStatus["status"]; ok {
-		r.aeroRestore.Status.Phase = statusToPhase(r.Log, status.(string))
+		phase, pErr := statusToPhase(status.(string))
+		if pErr != nil {
+			return fmt.Errorf("check restore status for jobID %d: %w", jobID, pErr)
+		}
+
+		r.aeroRestore.Status.Phase = phase
 	}
 
 	statusBytes, err := json.Marshal(restoreStatus)
@@ -338,23 +343,18 @@ func (r *SingleRestoreReconciler) cancelRestoreJob() error {
 	return nil
 }
 
-func statusToPhase(log logr.Logger, status string) asdbv1beta1.AerospikeRestorePhase {
-	jobStatus, ok := dto.ParseJobStatus(status)
-	if !ok {
-		return ""
-	}
-
-	switch jobStatus {
+// statusToPhase maps a restore job status reported by the backup service to the AerospikeRestore phase.
+func statusToPhase(status string) (asdbv1beta1.AerospikeRestorePhase, error) {
+	// ToModel accepts any letter case and the legacy "Done"/"Failed" values, and returns an unknown value
+	// unchanged, so it reaches the default case.
+	switch dto.NewJobStatusFromModel(dto.JobStatus(status).ToModel()) {
 	case dto.RestoreRunning:
-		return asdbv1beta1.AerospikeRestoreInProgress
+		return asdbv1beta1.AerospikeRestoreInProgress, nil
 	case dto.RestoreSuccess:
-		return asdbv1beta1.AerospikeRestoreCompleted
+		return asdbv1beta1.AerospikeRestoreCompleted, nil
 	case dto.RestoreFailure, dto.RestoreCanceled:
-		return asdbv1beta1.AerospikeRestoreFailed
+		return asdbv1beta1.AerospikeRestoreFailed, nil
 	default:
-		log.Info("Unmapped ABS restore job status; update statusToPhase for new dto.JobStatus value",
-			"status", status, "jobStatus", jobStatus)
-
-		return ""
+		return "", fmt.Errorf("backup service returned unknown restore job status %q", status)
 	}
 }
