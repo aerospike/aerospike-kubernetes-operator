@@ -13,9 +13,13 @@ OPENSHIFT_VERSION="v4.10"
 # TODO: Version must be pulled from git tags
 VERSION ?= 4.6.0
 
+# NEXT_VERSION is the release in development. CI builds versions from it, e.g. 4.7.0-pr-620-a1b2c3d.
+# Bump it right after a release is tagged. CI fails until it is newer than the last release tag.
+NEXT_VERSION ?= 4.7.0
+
 # INIT_TAG is the aerospike-kubernetes-init CI build that goes into the release bundle,
-# as <pr-N|master>-<short commit sha>, the tag that CI pushes to JFrog.
-INIT_TAG ?= pr-166-dd04cc5
+# as <version>-<pr-N|master>-<short commit sha>, the tag that CI pushes to JFrog.
+INIT_TAG ?= 2.5.5-pr-166-50c3a4c
 
 # Platforms supported
 PLATFORMS ?= linux/amd64,linux/arm64
