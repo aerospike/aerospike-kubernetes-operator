@@ -1,4 +1,4 @@
-# CI for pull requests, master and the scheduled run. Replaces the Jenkins job.
+# CI for pull requests, master and the nightly run. Replaces the Jenkins job.
 #
 #   prepare -> operator image -> OLM bundle -> bundle image -> scan -> e2e -> release bundle -> promote to DEV
 #   operator image -> helm charts -> release bundle
@@ -7,6 +7,9 @@
 # Images and charts go to JFrog first, because the e2e tests install the
 # operator from there. The release bundle is created only after the scan and
 # the e2e tests pass, so every bundle in DEV is a build that passed CI.
+#
+# The nightly run only builds, pushes and tests the images. It skips the helm
+# charts, the OLM manifests upload and the release bundle.
 #
 # Secrets: SNYK_TOKEN, AKO_FEATURES_CONF_B64, GKE_WIF_PROVIDER, GKE_SERVICE_ACCOUNT,
 #          GKE_PROJECT, GKE_LOCATION, GKE_CLUSTER, AWS_S3_ROLE_ARN
@@ -18,8 +21,8 @@ on:
   push:
     branches:
       - master
+  # Nightly run: 20:00 UTC every 2 days (odd days of the month)
   schedule:
-    # 20:00 UTC every 2 days (odd days of the month)
     - cron: "0 20 */2 * *"
   workflow_dispatch:
 
@@ -67,7 +70,7 @@ jobs:
           fetch-depth: 0
           submodules: true
 
-      # e.g. 4.7.0-pr-620-a1b2c3d, 4.7.0-master-e4f5a6b, 4.7.0-scheduled-e4f5a6b.
+      # e.g. 4.7.0-pr-620-a1b2c3d, 4.7.0-master-e4f5a6b, 4.7.0-nightly-e4f5a6b.
       # The short commit SHA ties every version, and so every release bundle, to
       # the commit it was built from. For a PR it is the PR's head commit.
       # The base is NEXT_VERSION, which must be newer than the last release tag,
@@ -87,7 +90,7 @@ jobs:
           fi
           case "$GITHUB_EVENT_NAME" in
             pull_request) label="pr-$PR_NUMBER" ;;
-            schedule) label="scheduled" ;;
+            schedule) label="nightly" ;;
             *) label=$(echo "$GITHUB_REF_NAME" | tr '[:upper:]' '[:lower:]' | sed -E 's/[^a-z0-9]+/-/g; s/^-+|-+$//g') ;;
           esac
           echo "base-version=$base" >> "$GITHUB_OUTPUT"
@@ -151,8 +154,9 @@ jobs:
         id: tests
         env:
           BASE_REF: ${{ github.base_ref }}
+        # TODO: Revert. Runs every suite on PRs too, to test the e2e job.
         run: |
-          if [ "$GITHUB_EVENT_NAME" = "pull_request" ]; then
+          if false && [ "$GITHUB_EVENT_NAME" = "pull_request" ]; then
             git diff --name-only "origin/$BASE_REF...HEAD" | hack/ci/select-tests.sh
           else
             hack/ci/select-tests.sh all
@@ -188,6 +192,7 @@ jobs:
   helm-charts:
     name: Helm charts
     needs: [prepare, operator-image]
+    if: github.event_name != 'schedule'
     runs-on: ubuntu-24.04
     permissions:
       contents: read
@@ -301,6 +306,7 @@ jobs:
       # travel in the release bundle, as one zip of bundle/ (manifests/ and
       # metadata/ at its root) under aerospike-kubernetes-operator/<version>/.
       - name: Upload bundle manifests to JFrog
+        if: github.event_name != 'schedule'
         env:
           VERSION: ${{ needs.prepare.outputs.version }}
         run: |
@@ -409,9 +415,7 @@ jobs:
   e2e:
     name: E2E ${{ matrix.suite }}
     needs: [prepare, bundle-image, scan]
-    # TODO: Skipped until the AWS_S3_ROLE_ARN secret exists for the backup tests.
-    # Restore to: needs.prepare.outputs.suites != '[]'
-    if: false && needs.prepare.outputs.suites != '[]'
+    if: needs.prepare.outputs.suites != '[]'
     runs-on: ubuntu-24.04
     # GitHub-hosted runners stop a job after 6 hours.
     timeout-minutes: 360
@@ -487,11 +491,14 @@ jobs:
 
       # The backup tests store backups in the aerospike-kubernetes-operator-test
       # bucket, and cleanup-test-namespace.sh empties it.
-      - name: Configure AWS credentials
-        uses: aws-actions/configure-aws-credentials@e1253824e5c10ff9df46874f81ed3ec929e19cfd # v6.3.0
-        with:
-          role-to-assume: ${{ secrets.AWS_ECR_ROLE_ARN }}
-          aws-region: us-east-1
+      # TODO: Restore once the AWS_S3_ROLE_ARN secret exists. Until then the
+      # credentials file below has empty keys, and the s3 storage backup test is
+      # pending.
+      # - name: Configure AWS credentials
+      #   uses: aws-actions/configure-aws-credentials@e1253824e5c10ff9df46874f81ed3ec929e19cfd # v6.3.0
+      #   with:
+      #     role-to-assume: ${{ secrets.AWS_S3_ROLE_ARN }}
+      #     aws-region: us-east-1
 
       # The backup service tests read ~/.aws/credentials, not env vars.
       - name: Write AWS credentials file
@@ -534,7 +541,7 @@ jobs:
     name: Release bundle
     needs: [prepare, olm-bundle, helm-charts, scan, e2e]
     # e2e is skipped when the PR changes nothing that needs it.
-    if: ${{ !cancelled() && !failure() && needs.scan.result == 'success' }}
+    if: ${{ github.event_name != 'schedule' && !cancelled() && !failure() && needs.scan.result == 'success' }}
     permissions:
       contents: read
       id-token: write

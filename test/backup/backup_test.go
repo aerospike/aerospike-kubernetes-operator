@@ -400,7 +400,8 @@ var _ = Describe(
 				Expect(err).ToNot(HaveOccurred())
 			})
 
-			It("Should trigger backup when correct backup config with s3 storage is given", func() {
+			// TODO: Change back to It once CI has AWS credentials.
+			PIt("Should trigger backup when correct backup config with s3 storage is given", func() {
 				config := getBackupConfigInMap(namePrefix(backupNsNm))
 				backupRoutines := config[asdbv1beta1.BackupRoutinesKey].(map[string]interface{})
 				backupRoutines[namePrefix(backupNsNm)+"-"+"test-routine"].(map[string]interface{})[asdbv1beta1.StorageKey] =
