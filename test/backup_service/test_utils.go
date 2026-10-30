@@ -4,8 +4,6 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
-	"io"
-	"net/http"
 	"time"
 
 	app "k8s.io/api/apps/v1"
@@ -382,7 +380,7 @@ func GetAPIBackupSvcConfig(k8sClient client.Client, backupServiceName, backupSer
 	// Wait for Backup service to be ready
 	if err := wait.PollUntilContextTimeout(testCtx, interval, timeout, true,
 		func(_ context.Context) (bool, error) {
-			config, err := getBackupServiceConfig(&serviceClient)
+			config, err := serviceClient.GetBackupServiceConfig()
 			if err != nil {
 				pkgLog.Error(err, "Failed to get backup service config")
 				return false, nil
@@ -396,33 +394,6 @@ func GetAPIBackupSvcConfig(k8sClient client.Client, backupServiceName, backupSer
 	}
 
 	return backupSvcConfig, nil
-}
-
-// getBackupServiceConfig returns the config that the backup service runs with, from its API.
-func getBackupServiceConfig(serviceClient *backup_service.Client) (map[string]interface{}, error) {
-	resp, err := http.Get(serviceClient.API("/config"))
-	if err != nil {
-		return nil, err
-	}
-
-	defer resp.Body.Close()
-
-	if resp.StatusCode != http.StatusOK {
-		return nil, fmt.Errorf("get backup service config: HTTP status %d", resp.StatusCode)
-	}
-
-	conf := make(map[string]interface{})
-
-	body, err := io.ReadAll(resp.Body)
-	if err != nil {
-		return nil, err
-	}
-
-	if err := json.Unmarshal(body, &conf); err != nil {
-		return nil, err
-	}
-
-	return conf, nil
 }
 
 func getBackupServiceDeployment(k8sClient client.Client,

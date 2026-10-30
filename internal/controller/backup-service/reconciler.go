@@ -135,7 +135,9 @@ func (r *SingleBackupServiceReconciler) Reconcile(ctx context.Context) (result c
 		return ctrl.Result{}, err
 	}
 
-	if err := r.updateStatus(ctx, asdbv1beta1.AerospikeBackupServiceCompleted); err != nil {
+	r.aeroBackupService.Status.Phase = asdbv1beta1.AerospikeBackupServiceCompleted
+
+	if err := r.updateStatus(ctx); err != nil {
 		r.Recorder.Eventf(r.aeroBackupService, corev1.EventTypeWarning,
 			"StatusUpdateFailed", "Failed to update status")
 
@@ -323,7 +325,7 @@ func (r *SingleBackupServiceReconciler) reconcileDeployment(ctx context.Context)
 		r.Log.Info("Updated backup service Deployment spec, rolling restart of backup service Pod",
 			"deployment", utils.GetNamespacedName(deployment))
 
-		if err := r.updateStatus(ctx, asdbv1beta1.AerospikeBackupServiceInProgress); err != nil {
+		if err := r.updateStatus(ctx); err != nil {
 			return err
 		}
 
@@ -359,14 +361,12 @@ func (r *SingleBackupServiceReconciler) updateBackupSvcConfig(ctx context.Contex
 		return nil
 	}
 
-	// Status is written only after a successful reconcile, so a config in spec that differs from status has
-	// not been applied yet. Spec and status hold real values, so a change to a secret alone is found too.
+	// Status is written immediately after applying the latest config via a pod restart or reload, so any diff
+	// between spec and status is a real diff and needs to be applied.
 	if reflect.DeepEqual(r.aeroBackupService.Spec.Config.Raw, r.aeroBackupService.Status.Config.Raw) {
 		r.Log.Info("Skipping update, backup service config is already latest")
 		return nil
 	}
-
-	r.Log.Info("Detected backup service config change")
 
 	staticChangeErr, err := r.findStaticSpecChange()
 	if err != nil {
@@ -379,6 +379,8 @@ func (r *SingleBackupServiceReconciler) updateBackupSvcConfig(ctx context.Contex
 		r.Log.Info("Static config change detected, rolling restart of backup service Pod", "err", staticChangeErr)
 		return r.restartBackupSvcPod(ctx)
 	}
+
+	r.Log.Info("Detected backup service config change, reloading config")
 
 	svcConfig, err := r.getBackupServiceConfig()
 	if err != nil {
@@ -406,8 +408,8 @@ func (r *SingleBackupServiceReconciler) updateBackupSvcConfig(ctx context.Contex
 }
 
 // findStaticSpecChange returns a non-nil staticChangeErr if spec changes a field that the backup service reads
-// only at start, compared with status. Spec and status hold real values, so a changed secret in a static field,
-// such as service.https.key-file-password, is found too.
+// only at start and required a pod restart to update, compared with status. Spec and status hold real values, so a
+// changed secret in a static field, such as service.https.key-file-password, is found too.
 func (r *SingleBackupServiceReconciler) findStaticSpecChange() (staticChangeErr, err error) {
 	var statusConfig, specConfig dto.Config
 
@@ -437,7 +439,7 @@ func (r *SingleBackupServiceReconciler) restartBackupSvcPod(ctx context.Context)
 		}
 	}
 
-	if err := r.updateStatus(ctx, asdbv1beta1.AerospikeBackupServiceInProgress); err != nil {
+	if err := r.updateStatus(ctx); err != nil {
 		return err
 	}
 
@@ -801,23 +803,28 @@ func (r *SingleBackupServiceReconciler) setStatusPhase(
 	ctx context.Context, phase asdbv1beta1.AerospikeBackupServicePhase,
 ) error {
 	if r.aeroBackupService.Status.Phase != phase {
+		patchTarget := r.aeroBackupService.DeepCopy()
 		patch := client.MergeFrom(r.aeroBackupService.DeepCopy())
-		r.aeroBackupService.Status.Phase = phase
 
-		if err := r.Client.Status().Patch(ctx, r.aeroBackupService, patch); err != nil {
+		patchTarget.Status.Phase = phase
+
+		if err := r.Client.Status().Patch(ctx, patchTarget, patch); err != nil {
 			return fmt.Errorf("set AerospikeBackupService status phase %s: %w", phase, err)
 		}
+
+		// Copy back only status and resourceVersion so r.aeroBackupService.Spec is never overwritten.
+		r.aeroBackupService.Status.Phase = patchTarget.Status.Phase
+		r.aeroBackupService.ResourceVersion = patchTarget.ResourceVersion
 	}
 
 	return nil
 }
 
-// updateStatus records spec as applied. It is also called with the InProgress phase right after a restart is
+// updateStatus records spec as applied, with the phase already set in r.aeroBackupService.Status: InProgress from the
+// start of the reconcile, or Completed set by the caller at its end. It is also called right after a restart is
 // started and before waiting for the new pod: the new pod loads the latest ConfigMap when it starts, so a wait that
 // times out must not make the next reconcile restart the pod again.
-func (r *SingleBackupServiceReconciler) updateStatus(
-	ctx context.Context, phase asdbv1beta1.AerospikeBackupServicePhase,
-) error {
+func (r *SingleBackupServiceReconciler) updateStatus(ctx context.Context) error {
 	svcConfig, err := r.getBackupServiceConfig()
 	if err != nil {
 		return err
@@ -826,11 +833,18 @@ func (r *SingleBackupServiceReconciler) updateStatus(
 	status := r.CopySpecToStatus()
 	status.ContextPath = svcConfig.contextPath
 	status.Port = svcConfig.portInfo[asdbv1beta1.HTTPKey]
-	status.Phase = phase
+	status.Phase = r.aeroBackupService.Status.Phase
 
-	if err := common.PatchStatus(ctx, r.Client, r.aeroBackupService, status); err != nil {
+	patchTarget := r.aeroBackupService.DeepCopy()
+	patchTarget.Status = *status
+
+	if err := common.PatchStatus(ctx, r.Client, patchTarget, &patchTarget.Status); err != nil {
 		return fmt.Errorf("update AerospikeBackupService status: %w", err)
 	}
+
+	// Copy back only status and resourceVersion so r.aeroBackupService.Spec is never overwritten.
+	r.aeroBackupService.Status = patchTarget.Status
+	r.aeroBackupService.ResourceVersion = patchTarget.ResourceVersion
 
 	return nil
 }
