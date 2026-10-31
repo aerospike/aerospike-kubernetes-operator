@@ -55,10 +55,13 @@ echo "| Deploying OpenLDAP....     |"
 echo "------------------------------"
 "$DIR"/deploy-openldap.sh
 
-# Create imagePullSecret for AerospikeInitImage
+# Create imagePullSecret for AerospikeInitImage. The test suite adds it to the
+# Aerospike pods' service account in every namespace.
 IMAGE_PULL_SECRET="registrycred"
 
-"$DIR"/create_image_pull_secret.sh -n ${IMAGE_PULL_SECRET} -p "$CRED_PATH"
+for namespace in test test1 test2 aerospike; do
+  "$DIR"/create_image_pull_secret.sh -n ${IMAGE_PULL_SECRET} -p "$CRED_PATH" -N "$namespace"
+done
 
 # Run tests
 echo "---------------------"
