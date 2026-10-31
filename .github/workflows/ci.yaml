@@ -1,0 +1,287 @@
+# CI for pull requests, master and the nightly run. Replaces the Jenkins job.
+#
+#   prepare -> build -> e2e -> release bundle -> promote to DEV (and TEST on master)
+#
+# build (build.yaml) builds the operator image, the helm charts, the OLM bundle
+# and its image, and scans the images. e2e (e2e.yaml) runs the suites on GKE.
+#
+# Images and charts go to JFrog first, because the e2e tests install the
+# operator from there. The release bundle is created only after the scan and
+# the e2e tests pass, so every bundle in DEV is a build that passed CI.
+#
+# The nightly run only builds, pushes and tests the images. It skips the helm
+# charts, the OLM manifests upload and the release bundle.
+#
+# Secrets: SNYK_TOKEN, AKO_FEATURES_CONF_B64, GKE_WIF_PROVIDER, GKE_SERVICE_ACCOUNT,
+#          GKE_PROJECT, GKE_LOCATION, GKE_CLUSTER, AWS_S3_ROLE_ARN
+
+name: CI
+
+on:
+  pull_request:
+  push:
+    branches:
+      - master
+  # Nightly run: 20:00 UTC every 2 days (odd days of the month)
+  schedule:
+    - cron: "0 20 */2 * *"
+  workflow_dispatch:
+
+permissions: {}
+
+# A new push to a PR cancels its previous run. Other runs are never cancelled.
+concurrency:
+  group: ci-${{ github.event.pull_request.number || github.run_id }}
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
+
+defaults:
+  run:
+    shell: bash
+
+# Read by setup-jfrog-cli
+env:
+  JF_PROJECT: platforms
+  JF_URL: https://artifact.aerospike.io
+
+jobs:
+  prepare:
+    name: Prepare
+    # Fork PRs get no secrets or OIDC token, so nothing below can run for them.
+    if: github.event_name != 'pull_request' || github.event.pull_request.head.repo.full_name == github.repository
+    runs-on: ubuntu-24.04
+    permissions:
+      contents: read
+      id-token: write
+    outputs:
+      base-version: ${{ steps.version.outputs.base-version }}
+      version: ${{ steps.version.outputs.version }}
+      init-build: ${{ steps.init.outputs.build }}
+      init-name-tag: ${{ steps.init-image.outputs.name-tag }}
+      suites: ${{ steps.tests.outputs.suites }}
+      focus: ${{ steps.tests.outputs.focus }}
+    steps:
+      - name: Harden the runner (Audit all outbound calls)
+        uses: step-security/harden-runner@351661ca32ac09a36dc5ee2d536e3128f2a3c8ed # v2.22.0
+        with:
+          egress-policy: audit
+
+      - name: Checkout code
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          fetch-depth: 0
+          submodules: true
+
+      # e.g. 4.7.0-pr-620-a1b2c3d, 4.7.0-master-e4f5a6b, 4.7.0-nightly-e4f5a6b.
+      # The short commit SHA ties every version, and so every release bundle, to
+      # the commit it was built from. For a PR it is the PR's head commit.
+      # The base is NEXT_VERSION, which must be newer than the last release tag,
+      # or the dev versions would sort below that release.
+      - name: Compute version
+        id: version
+        env:
+          PR_NUMBER: ${{ github.event.pull_request.number }}
+          SHA: ${{ github.event.pull_request.head.sha || github.sha }}
+        run: |
+          base=$(sed -n 's/^NEXT_VERSION ?= *//p' Makefile)
+          last=$(git describe --tags --abbrev=0 --match 'v[0-9]*.[0-9]*.[0-9]*' --exclude '*-*')
+          last=${last#v}
+          if [ "$(printf '%s\n' "$last" "$base" | sort -V | tail -1)" = "$last" ]; then
+            echo "::error::NEXT_VERSION ($base) must be newer than the last release ($last). Bump it in the Makefile."
+            exit 1
+          fi
+          case "$GITHUB_EVENT_NAME" in
+            pull_request) label="pr-$PR_NUMBER" ;;
+            schedule) label="nightly" ;;
+            *) label=$(echo "$GITHUB_REF_NAME" | tr '[:upper:]' '[:lower:]' | sed -E 's/[^a-z0-9]+/-/g; s/^-+|-+$//g') ;;
+          esac
+          echo "base-version=$base" >> "$GITHUB_OUTPUT"
+          echo "version=$base-$label-${SHA::7}" | tee -a "$GITHUB_OUTPUT"
+
+      # The release bundle takes the init images by build-info number, which is
+      # the run number of the init CI run that built INIT_TAG.
+      # TODO(sidntrivedi): Add a build number input to reusable_docker-build-deploy.yaml in
+      # shared-workflows, so the init CI can publish its build-info under INIT_TAG
+      # and this lookup can go.
+      - name: Resolve init build
+        id: init
+        env:
+          GH_TOKEN: ${{ github.token }}
+          INIT_REPO: aerospike/aerospike-kubernetes-init
+        run: |
+          tag=$(sed -n 's/^INIT_TAG ?= *//p' Makefile)
+          case "$tag" in
+            *-pr-*) event=pull_request ;;
+            *-master-*) event=push ;;
+            *) echo "::error::Unexpected INIT_TAG: $tag"; exit 1 ;;
+          esac
+          sha=$(gh api "repos/$INIT_REPO/commits/${tag##*-}" --jq .sha)
+          build=$(gh api "repos/$INIT_REPO/actions/runs?head_sha=$sha&event=$event&status=success" \
+            --jq '[.workflow_runs[] | select(.path == ".github/workflows/ci.yaml")][0].run_number')
+          if [ -z "$build" ] || [ "$build" = "null" ]; then
+            echo "::error::No successful init CI run for $tag"
+            exit 1
+          fi
+          echo "tag=$tag" >> "$GITHUB_OUTPUT"
+          echo "build=$build" | tee -a "$GITHUB_OUTPUT"
+
+      - name: Set up JFrog CLI
+        uses: step-security/setup-jfrog-cli@53aeacb709fce45d0baf69a13ec3342f7e2d71a9 # v5.1.0
+        with:
+          oidc-provider-name: gh-aerospike
+          oidc-audience: aerospike
+
+      # The release bundle holds only the timestamped tag that the init build-info
+      # records, e.g. pr-166-dd04cc5_20261030T091706Z, not the plain INIT_TAG. The
+      # chart, the OLM bundle and e2e use it, so it is there after promotion and
+      # an init CI re-run can't move it.
+      - name: Resolve init image
+        id: init-image
+        env:
+          TAG: ${{ steps.init.outputs.tag }}
+          BUILD: ${{ steps.init.outputs.build }}
+        run: |
+          # Module IDs are <image>:<tag>. The per-platform and attestation modules
+          # add a prefix, e.g. linux/amd64/<image>:<tag>.
+          name_tag=$(jf rt curl -s "/api/build/ako-init/$BUILD?project=platforms" |
+            jq -r --arg prefix "aerospike-kubernetes-init:${TAG}_" \
+              '[.buildInfo.modules[].id | sub(".*/"; "") | select(startswith($prefix))] | unique | .[]')
+          if [ "$(grep -c . <<< "$name_tag")" -ne 1 ]; then
+            echo "::error::Expected one aerospike-kubernetes-init:${TAG}_<timestamp> image in build ako-init/$BUILD, got: $name_tag"
+            exit 1
+          fi
+          echo "name-tag=$name_tag" | tee -a "$GITHUB_OUTPUT"
+
+      - name: Select e2e tests
+        id: tests
+        env:
+          BASE_REF: ${{ github.base_ref }}
+        # TODO: Revert. Runs every suite on PRs too, to test the e2e job.
+        run: |
+          if false && [ "$GITHUB_EVENT_NAME" = "pull_request" ]; then
+            git diff --name-only "origin/$BASE_REF...HEAD" | hack/ci/select-tests.sh
+          else
+            hack/ci/select-tests.sh all
+          fi | tee -a "$GITHUB_OUTPUT"
+
+      # The shared docker workflow checks out without submodules, and the
+      # operator embeds pkg/configschema/schemas. Hand it the schemas instead.
+      - name: Upload config schemas
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        with:
+          name: config-schemas
+          path: pkg/configschema/schemas/json/aerospike
+          if-no-files-found: error
+          retention-days: 1
+
+  build:
+    name: Build
+    needs: prepare
+    permissions:
+      contents: read
+      packages: write
+      attestations: write
+      id-token: write
+    uses: ./.github/workflows/build.yaml
+    with:
+      version: ${{ needs.prepare.outputs.version }}
+      base-version: ${{ needs.prepare.outputs.base-version }}
+      artifact-version: ${{ needs.prepare.outputs.version }}
+      init-name-tag: ${{ needs.prepare.outputs.init-name-tag }}
+      publish-manifests: ${{ github.event_name != 'schedule' }}
+    secrets: inherit
+
+  e2e:
+    name: E2E
+    needs: [prepare, build]
+    if: needs.prepare.outputs.suites != '[]'
+    permissions:
+      contents: read
+      id-token: write
+    uses: ./.github/workflows/e2e.yaml
+    with:
+      bundle-image: ${{ needs.build.outputs.bundle-image }}
+      init-name-tag: ${{ needs.prepare.outputs.init-name-tag }}
+      suites: ${{ needs.prepare.outputs.suites }}
+      focus: ${{ needs.prepare.outputs.focus }}
+    secrets: inherit
+
+  release-bundle:
+    name: Release bundle
+    needs: [prepare, build, e2e]
+    # e2e is skipped when the PR changes nothing that needs it.
+    if: ${{ github.event_name != 'schedule' && !cancelled() && !failure() && needs.build.result == 'success' }}
+    permissions:
+      contents: read
+      id-token: write
+    uses: aerospike/shared-workflows/.github/workflows/reusable_create-release-bundle.yaml@b4b1e9dc89314a2d542f9d6fe0ee150ad06f9860 # v5.0.0
+    with:
+      gh-workflows-ref: b4b1e9dc89314a2d542f9d6fe0ee150ad06f9860
+      jf-project: platforms
+      jf-bundle-name: aerospike-kubernetes-operator
+      version: ${{ needs.prepare.outputs.version }}
+      # Every build-info is published under the run number. The init ones under
+      # the init CI's run number.
+      jf-build-names: ako-operator:${{ github.run_number }},ako-olm-bundle:${{ github.run_number }},ako-olm-manifests:${{ github.run_number }},ako-helm-charts:${{ github.run_number }},ako-init:${{ needs.prepare.outputs.init-build }},ako-init-openshift:${{ needs.prepare.outputs.init-build }}
+
+  promote:
+    name: Promote release bundle
+    needs: [prepare, release-bundle]
+    # A skipped e2e would otherwise skip this job too, even after the bundle
+    # was created.
+    if: ${{ !cancelled() && needs.release-bundle.result == 'success' }}
+    runs-on: ubuntu-24.04
+    permissions:
+      contents: read
+      id-token: write
+    steps:
+      - name: Harden the runner (Audit all outbound calls)
+        uses: step-security/harden-runner@351661ca32ac09a36dc5ee2d536e3128f2a3c8ed # v2.22.0
+        with:
+          egress-policy: audit
+
+      - name: Set up JFrog CLI
+        uses: step-security/setup-jfrog-cli@53aeacb709fce45d0baf69a13ec3342f7e2d71a9 # v5.1.0
+        with:
+          oidc-provider-name: gh-aerospike
+          oidc-audience: aerospike
+
+      - name: Promote release bundle to DEV
+        uses: aerospike/shared-workflows/.github/actions/promote-release-bundle@b4b1e9dc89314a2d542f9d6fe0ee150ad06f9860 # v5.0.0
+        with:
+          bundle-name: aerospike-kubernetes-operator
+          version: ${{ needs.prepare.outputs.version }}
+          environment: DEV
+          jf-project: platforms
+
+      # Only master builds go on to TEST. PR builds stop at DEV.
+      - name: Promote release bundle to TEST
+        if: github.event_name == 'push' && github.ref == 'refs/heads/master'
+        uses: aerospike/shared-workflows/.github/actions/promote-release-bundle@b4b1e9dc89314a2d542f9d6fe0ee150ad06f9860 # v5.0.0
+        with:
+          bundle-name: aerospike-kubernetes-operator
+          version: ${{ needs.prepare.outputs.version }}
+          environment: TEST
+          jf-project: platforms
+
+  # The single required status check.
+  ci-result:
+    name: CI result
+    needs: [prepare, build, e2e, release-bundle, promote]
+    if: always()
+    runs-on: ubuntu-24.04
+    permissions: {}
+    steps:
+      - name: Check results
+        env:
+          FORK_PR: ${{ github.event_name == 'pull_request' && github.event.pull_request.head.repo.full_name != github.repository }}
+          RESULTS: ${{ join(needs.*.result, ' ') }}
+        run: |
+          if [ "$FORK_PR" = "true" ]; then
+            echo "::error::CI does not run on fork PRs. A maintainer needs to push this branch to the repository."
+            exit 1
+          fi
+          echo "Job results: $RESULTS"
+          if [[ " $RESULTS " == *" failure "* || " $RESULTS " == *" cancelled "* ]]; then
+            echo "::error::One or more CI jobs failed or were cancelled"
+            exit 1
+          fi

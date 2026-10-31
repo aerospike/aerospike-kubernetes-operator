@@ -9,6 +9,7 @@ import (
 
 	. "github.com/onsi/ginkgo/v2"
 	. "github.com/onsi/gomega"
+	appsv1 "k8s.io/api/apps/v1"
 	corev1 "k8s.io/api/core/v1"
 	"k8s.io/apimachinery/pkg/api/resource"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
@@ -680,17 +681,15 @@ var _ = Describe(
 
 						By("Using envVar registry, namespace and name")
 
-						// Empty imageRegistry, should use operator envVar docker.io
+						// Empty registry, namespace and name, should use the operator's envVars
 						aeroCluster.Spec.PodSpec.AerospikeInitContainerSpec.ImageRegistry = ""
 						aeroCluster.Spec.PodSpec.AerospikeInitContainerSpec.ImageRegistryNamespace = nil
 						aeroCluster.Spec.PodSpec.AerospikeInitContainerSpec.ImageNameAndTag = ""
 						err = updateCluster(k8sClient, ctx, aeroCluster)
 						Expect(err).ToNot(HaveOccurred())
 
-						validateInitImage(
-							k8sClient, aeroCluster, asdbv1.AerospikeInitContainerDefaultRegistry,
-							asdbv1.AerospikeInitContainerDefaultRegistryNamespace, asdbv1.AerospikeInitContainerDefaultNameAndTag,
-						)
+						registry, registryNamespace, nameAndTag := getOperatorInitImage(ctx)
+						validateInitImage(k8sClient, aeroCluster, registry, registryNamespace, nameAndTag)
 					},
 				)
 
@@ -708,22 +707,17 @@ var _ = Describe(
 						err = updateClusterWithTO(k8sClient, ctx, aeroCluster, time.Minute*1)
 						Expect(err).Should(HaveOccurred())
 
-						validateInitImage(
-							k8sClient, aeroCluster, asdbv1.AerospikeInitContainerDefaultRegistry,
-							incorrectCustomRegistryNamespace, asdbv1.AerospikeInitContainerDefaultNameAndTag,
-						)
+						registry, registryNamespace, nameAndTag := getOperatorInitImage(ctx)
+						validateInitImage(k8sClient, aeroCluster, registry, incorrectCustomRegistryNamespace, nameAndTag)
 
 						By("Using correct registry namespace in CR")
 
-						// Nil ImageRegistryNamespace, should use operator envVar aerospike
+						// Nil ImageRegistryNamespace, should use the operator's envVar
 						aeroCluster.Spec.PodSpec.AerospikeInitContainerSpec.ImageRegistryNamespace = nil
 						err = updateCluster(k8sClient, ctx, aeroCluster)
 						Expect(err).ToNot(HaveOccurred())
 
-						validateInitImage(
-							k8sClient, aeroCluster, asdbv1.AerospikeInitContainerDefaultRegistry,
-							asdbv1.AerospikeInitContainerDefaultRegistryNamespace, asdbv1.AerospikeInitContainerDefaultNameAndTag,
-						)
+						validateInitImage(k8sClient, aeroCluster, registry, registryNamespace, nameAndTag)
 					},
 				)
 			},
@@ -807,6 +801,52 @@ func getEnvVar(envVar string) string {
 	Expect(found).To(BeTrue())
 
 	return envVarVal
+}
+
+// getOperatorInitImage returns the init image registry, registry namespace and
+// name that the operator uses when the CR leaves them empty: its
+// AEROSPIKE_KUBERNETES_INIT_* envVars, else the built-in defaults.
+func getOperatorInitImage(ctx goctx.Context) (registry, registryNamespace, nameAndTag string) {
+	registry = asdbv1.AerospikeInitContainerDefaultRegistry
+	registryNamespace = asdbv1.AerospikeInitContainerDefaultRegistryNamespace
+	nameAndTag = asdbv1.AerospikeInitContainerDefaultNameAndTag
+
+	// Other kubebuilder operators use the same label, so match the name too.
+	deployments := &appsv1.DeploymentList{}
+	Expect(k8sClient.List(ctx, deployments, client.MatchingLabels{"control-plane": "controller-manager"})).
+		To(Succeed())
+
+	var operators []appsv1.Deployment
+
+	for idx := range deployments.Items {
+		if deployments.Items[idx].Name == "aerospike-operator-controller-manager" {
+			operators = append(operators, deployments.Items[idx])
+		}
+	}
+
+	Expect(operators).To(HaveLen(1), "expected exactly one operator deployment")
+
+	manager := test.GetContainerByName(operators[0].Spec.Template.Spec.Containers, "manager")
+	Expect(manager).NotTo(BeNil(), "operator manager container not found")
+
+	// Same precedence as the operator: an empty registry or name falls back to
+	// the default, while a namespace envVar is used even when empty.
+	for _, env := range manager.Env {
+		switch env.Name {
+		case asdbv1.AerospikeInitContainerRegistryEnvVar:
+			if env.Value != "" {
+				registry = env.Value
+			}
+		case asdbv1.AerospikeInitContainerRegistryNamespaceEnvVar:
+			registryNamespace = env.Value
+		case asdbv1.AerospikeInitContainerNameTagEnvVar:
+			if env.Value != "" {
+				nameAndTag = env.Value
+			}
+		}
+	}
+
+	return registry, registryNamespace, nameAndTag
 }
 
 func validateInitImage(

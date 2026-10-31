@@ -1,0 +1,243 @@
+# Release candidate for a code freeze. A tag like v4.7.0-rc1 builds the
+# operator and OLM bundle images as 4.7.0, packages the helm charts and the OLM
+# manifests, scans the images, promotes the release bundle 4.7.0-rc1 to DEV and
+# TEST, and then runs the e2e tests against it.
+#
+#   prepare -> build -> release bundle -> promote -> e2e
+#
+# build (build.yaml) and e2e (e2e.yaml) are the same as in CI, with these inputs.
+#
+# The shared workflow tags each image <version>_<timestamp> and <version>-rcN.
+# The helm charts and the OLM bundle point at the images as <version>@<digest>,
+# for the operator and for the INIT_RC_TAG init image. The digest pins the
+# exact image, so the tag in front of it is only for people reading it.
+#
+# Build names are separate from the CI ones, because run numbers are per
+# workflow, so the same build number could otherwise come from two workflows.
+# The init images come from the init repo's release candidate run for
+# INIT_RC_TAG (build names ako-init-rc and ako-init-openshift-rc).
+#
+# Secrets: SNYK_TOKEN, AKO_FEATURES_CONF_B64, GKE_WIF_PROVIDER, GKE_SERVICE_ACCOUNT,
+#          GKE_PROJECT, GKE_LOCATION, GKE_CLUSTER
+
+name: Release candidate
+
+on:
+  push:
+    tags:
+      - 'v[0-9]+.[0-9]+.[0-9]+-rc[0-9]+'
+
+permissions: {}
+
+defaults:
+  run:
+    shell: bash
+
+# Read by setup-jfrog-cli
+env:
+  JF_PROJECT: platforms
+  JF_URL: https://artifact.aerospike.io
+
+jobs:
+  prepare:
+    name: Prepare
+    runs-on: ubuntu-24.04
+    permissions:
+      contents: read
+      id-token: write
+    outputs:
+      version: ${{ steps.version.outputs.version }}
+      rc-version: ${{ steps.version.outputs.rc-version }}
+      init-build: ${{ steps.init.outputs.build }}
+      init-name-tag: ${{ steps.init-image.outputs.name-tag }}
+      suites: ${{ steps.tests.outputs.suites }}
+      focus: ${{ steps.tests.outputs.focus }}
+    steps:
+      - name: Harden the runner (Audit all outbound calls)
+        uses: step-security/harden-runner@351661ca32ac09a36dc5ee2d536e3128f2a3c8ed # v2.22.0
+        with:
+          egress-policy: audit
+
+      - name: Checkout code
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          submodules: true
+
+      # e.g. v4.7.0-rc1 gives version 4.7.0 and rc-version 4.7.0-rc1. The
+      # Makefile VERSION goes into the OLM bundle, so it must already be bumped
+      # to the release version.
+      - name: Compute version
+        id: version
+        run: |
+          rc="${GITHUB_REF_NAME#v}"
+          version="${rc%-rc*}"
+          makefile=$(sed -n 's/^VERSION ?= *//p' Makefile)
+          if [ "$makefile" != "$version" ]; then
+            echo "::error::Makefile VERSION ($makefile) does not match the tag version ($version). Bump it before tagging."
+            exit 1
+          fi
+          echo "version=$version" | tee -a "$GITHUB_OUTPUT"
+          echo "rc-version=$rc" | tee -a "$GITHUB_OUTPUT"
+
+      # The init release bundle builds are numbered by the run number of the
+      # init repo's release candidate run for INIT_RC_TAG. A tag push run has
+      # the tag as its head branch.
+      - name: Resolve init build
+        id: init
+        env:
+          GH_TOKEN: ${{ github.token }}
+          INIT_REPO: aerospike/aerospike-kubernetes-init
+        run: |
+          tag=$(sed -n 's/^INIT_RC_TAG ?= *//p' Makefile)
+          if ! [[ "$tag" =~ ^[0-9]+\.[0-9]+\.[0-9]+-rc[0-9]+$ ]]; then
+            echo "::error::Unexpected INIT_RC_TAG: $tag"
+            exit 1
+          fi
+          build=$(gh api "repos/$INIT_REPO/actions/workflows/release-candidate.yaml/runs?branch=$tag&event=push&status=success" \
+            --jq '.workflow_runs[0].run_number')
+          if [ -z "$build" ] || [ "$build" = "null" ]; then
+            echo "::error::No successful init release candidate run for $tag"
+            exit 1
+          fi
+          echo "version=${tag%-rc*}" >> "$GITHUB_OUTPUT"
+          echo "build=$build" | tee -a "$GITHUB_OUTPUT"
+
+      - name: Set up JFrog CLI
+        id: jf
+        uses: step-security/setup-jfrog-cli@53aeacb709fce45d0baf69a13ec3342f7e2d71a9 # v5.1.0
+        with:
+          oidc-provider-name: gh-aerospike
+          oidc-audience: aerospike
+
+      - name: Login to JFrog
+        uses: docker/login-action@dbcb813823bdd20940b903addbd779551569679f # v4.6.0
+        with:
+          registry: artifact.aerospike.io
+          username: ${{ steps.jf.outputs.oidc-user }}
+          password: ${{ steps.jf.outputs.oidc-token }}
+
+      # The init build-info records the timestamped tag, e.g.
+      # aerospike-kubernetes-init:2.5.5_20261030T091706Z. Its index digest gives
+      # aerospike-kubernetes-init:2.5.5@sha256:..., which the operator reads the
+      # init version from, so the tag must stay in front of the digest.
+      - name: Resolve init image
+        id: init-image
+        env:
+          VERSION: ${{ steps.init.outputs.version }}
+          BUILD: ${{ steps.init.outputs.build }}
+        run: |
+          # Module IDs are <image>:<tag>. The per-platform and attestation modules
+          # add a prefix, e.g. linux/amd64/<image>:<tag>.
+          name_tag=$(jf rt curl -s "/api/build/ako-init-rc/$BUILD?project=platforms" |
+            jq -r --arg prefix "aerospike-kubernetes-init:${VERSION}_" \
+              '[.buildInfo.modules[].id | sub(".*/"; "") | select(startswith($prefix))] | unique | .[]')
+          if [ "$(grep -c . <<< "$name_tag")" -ne 1 ]; then
+            echo "::error::Expected one aerospike-kubernetes-init:${VERSION}_<timestamp> image in build ako-init-rc/$BUILD, got: $name_tag"
+            exit 1
+          fi
+          digest=$(docker buildx imagetools inspect "artifact.aerospike.io/platforms-docker-dev-local/$name_tag" \
+            --format '{{json .Manifest}}' | jq -r .digest)
+          echo "name-tag=aerospike-kubernetes-init:${VERSION}@${digest}" | tee -a "$GITHUB_OUTPUT"
+
+      # A release candidate runs every suite.
+      - name: Select e2e tests
+        id: tests
+        run: hack/ci/select-tests.sh all | tee -a "$GITHUB_OUTPUT"
+
+      # The shared docker workflow checks out without submodules, and the
+      # operator embeds pkg/configschema/schemas. Hand it the schemas instead.
+      - name: Upload config schemas
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        with:
+          name: config-schemas
+          path: pkg/configschema/schemas/json/aerospike
+          if-no-files-found: error
+          retention-days: 1
+
+  # Every release candidate builds the charts and the OLM bundle as <version>,
+  # so they are uploaded under the rc version to keep each candidate's apart.
+  build:
+    name: Build
+    needs: prepare
+    permissions:
+      contents: read
+      packages: write
+      attestations: write
+      id-token: write
+    uses: ./.github/workflows/build.yaml
+    with:
+      version: ${{ needs.prepare.outputs.version }}
+      base-version: ${{ needs.prepare.outputs.version }}
+      versions-override: ${{ needs.prepare.outputs.rc-version }}
+      build-name-suffix: -rc
+      artifact-version: ${{ needs.prepare.outputs.rc-version }}
+      init-name-tag: ${{ needs.prepare.outputs.init-name-tag }}
+      pin-digest: true
+    secrets: inherit
+
+  release-bundle:
+    name: Release bundle
+    needs: [prepare, build]
+    permissions:
+      contents: read
+      id-token: write
+    uses: aerospike/shared-workflows/.github/workflows/reusable_create-release-bundle.yaml@b4b1e9dc89314a2d542f9d6fe0ee150ad06f9860 # v5.0.0
+    with:
+      gh-workflows-ref: b4b1e9dc89314a2d542f9d6fe0ee150ad06f9860
+      jf-project: platforms
+      jf-bundle-name: aerospike-kubernetes-operator
+      version: ${{ needs.prepare.outputs.rc-version }}
+      # Every build-info is published under the run number. The init ones under
+      # the init release candidate's run number.
+      jf-build-names: ako-operator-rc:${{ github.run_number }},ako-olm-bundle-rc:${{ github.run_number }},ako-olm-manifests-rc:${{ github.run_number }},ako-helm-charts-rc:${{ github.run_number }},ako-init-rc:${{ needs.prepare.outputs.init-build }},ako-init-openshift-rc:${{ needs.prepare.outputs.init-build }}
+
+  promote:
+    name: Promote release bundle
+    needs: [prepare, release-bundle]
+    runs-on: ubuntu-24.04
+    permissions:
+      contents: read
+      id-token: write
+    steps:
+      - name: Harden the runner (Audit all outbound calls)
+        uses: step-security/harden-runner@351661ca32ac09a36dc5ee2d536e3128f2a3c8ed # v2.22.0
+        with:
+          egress-policy: audit
+
+      - name: Set up JFrog CLI
+        uses: step-security/setup-jfrog-cli@53aeacb709fce45d0baf69a13ec3342f7e2d71a9 # v5.1.0
+        with:
+          oidc-provider-name: gh-aerospike
+          oidc-audience: aerospike
+
+      - name: Promote release bundle to DEV
+        uses: aerospike/shared-workflows/.github/actions/promote-release-bundle@b4b1e9dc89314a2d542f9d6fe0ee150ad06f9860 # v5.0.0
+        with:
+          bundle-name: aerospike-kubernetes-operator
+          version: ${{ needs.prepare.outputs.rc-version }}
+          environment: DEV
+          jf-project: platforms
+
+      - name: Promote release bundle to TEST
+        uses: aerospike/shared-workflows/.github/actions/promote-release-bundle@b4b1e9dc89314a2d542f9d6fe0ee150ad06f9860 # v5.0.0
+        with:
+          bundle-name: aerospike-kubernetes-operator
+          version: ${{ needs.prepare.outputs.rc-version }}
+          environment: TEST
+          jf-project: platforms
+
+  # Tests the candidate once it is in TEST. A failure here doesn't take it out
+  # of TEST, it means this candidate must not go further.
+  e2e:
+    name: E2E
+    needs: [prepare, build, promote]
+    permissions:
+      contents: read
+      id-token: write
+    uses: ./.github/workflows/e2e.yaml
+    with:
+      bundle-image: ${{ needs.build.outputs.bundle-image }}
+      init-name-tag: ${{ needs.prepare.outputs.init-name-tag }}
+      suites: ${{ needs.prepare.outputs.suites }}
+      focus: ${{ needs.prepare.outputs.focus }}
+    secrets: inherit
