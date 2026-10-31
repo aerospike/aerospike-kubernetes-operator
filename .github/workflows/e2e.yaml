@@ -1,0 +1,167 @@
+# Runs the e2e suites on the shared GKE cluster. Called by CI and by the release
+# candidate workflow.
+#
+# Secrets: AKO_FEATURES_CONF_B64, GKE_WIF_PROVIDER, GKE_SERVICE_ACCOUNT,
+#          GKE_PROJECT, GKE_LOCATION, GKE_CLUSTER, AWS_S3_ROLE_ARN
+
+name: E2E
+
+on:
+  workflow_call:
+    inputs:
+      bundle-image:
+        description: OLM bundle image to install the operator from
+        type: string
+        required: true
+      init-name-tag:
+        description: Init image name and tag, pulled from the JFrog DEV repo
+        type: string
+        required: true
+      suites:
+        description: JSON list of test.sh -t values
+        type: string
+        required: true
+      focus:
+        description: Ginkgo focus for cluster-test; empty runs the whole suite
+        type: string
+        default: ""
+
+permissions: {}
+
+defaults:
+  run:
+    shell: bash
+
+# Read by setup-jfrog-cli. A caller's env doesn't reach a called workflow.
+env:
+  JF_PROJECT: platforms
+  JF_URL: https://artifact.aerospike.io
+
+jobs:
+  e2e:
+    name: E2E ${{ matrix.suite }}
+    runs-on: ubuntu-24.04
+    # GitHub-hosted runners stop a job after 6 hours.
+    timeout-minutes: 360
+    # All suites share one GKE cluster, so they run one at a time across all
+    # runs, like the Jenkins lock. queue: max lets up to 100 jobs wait.
+    concurrency:
+      group: gke-e2e
+      queue: max
+    strategy:
+      fail-fast: false
+      matrix:
+        suite: ${{ fromJSON(inputs.suites) }}
+    permissions:
+      contents: read
+      id-token: write
+    steps:
+      - name: Harden the runner (Audit all outbound calls)
+        uses: step-security/harden-runner@351661ca32ac09a36dc5ee2d536e3128f2a3c8ed # v2.22.0
+        with:
+          egress-policy: audit
+
+      - name: Checkout code
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          submodules: true
+
+      - name: Setup Go
+        uses: actions/setup-go@b7ad1dad31e06c5925ef5d2fc7ad053ef454303e # v7.0.0
+        with:
+          go-version-file: go.mod
+
+      - name: Install operator-sdk
+        run: |
+          make operator-sdk
+          echo "$GITHUB_WORKSPACE/bin" >> "$GITHUB_PATH"
+
+      - name: Authenticate to Google Cloud
+        uses: google-github-actions/auth@7c6bc770dae815cd3e89ee6cdf493a5fab2cc093 # v3.0.0
+        with:
+          workload_identity_provider: ${{ secrets.GKE_WIF_PROVIDER }}
+          service_account: ${{ secrets.GKE_SERVICE_ACCOUNT }}
+
+      - name: Set up gcloud
+        uses: google-github-actions/setup-gcloud@aa5489c8933f4cc7a4f7d45035b3b1440c9c10db # v3.0.1
+        with:
+          install_components: gke-gcloud-auth-plugin
+
+      # gcloud writes a kubeconfig that uses gke-gcloud-auth-plugin, which
+      # refreshes the cluster token. A plain access token expires after an hour,
+      # long before the tests finish. get-gke-credentials (v3.0.0) can't be used:
+      # its use_auth_provider writes the old "gcp" auth-provider, which kubectl
+      # no longer supports.
+      - name: Get GKE credentials
+        env:
+          GKE_CLUSTER: ${{ secrets.GKE_CLUSTER }}
+          GKE_LOCATION: ${{ secrets.GKE_LOCATION }}
+          GKE_PROJECT: ${{ secrets.GKE_PROJECT }}
+        run: gcloud container clusters get-credentials "$GKE_CLUSTER" --location "$GKE_LOCATION" --project "$GKE_PROJECT"
+
+      - name: Set up JFrog CLI
+        id: jf
+        uses: step-security/setup-jfrog-cli@53aeacb709fce45d0baf69a13ec3342f7e2d71a9 # v5.1.0
+        with:
+          oidc-provider-name: gh-aerospike
+          oidc-audience: aerospike
+
+      - name: Login to JFrog
+        uses: docker/login-action@dbcb813823bdd20940b903addbd779551569679f # v4.6.0
+        with:
+          registry: artifact.aerospike.io
+          username: ${{ steps.jf.outputs.oidc-user }}
+          password: ${{ steps.jf.outputs.oidc-token }}
+
+      # The backup tests store backups in the aerospike-kubernetes-operator-test
+      # bucket, and cleanup-test-namespace.sh empties it.
+      # TODO: Restore once the AWS_S3_ROLE_ARN secret exists. Until then the
+      # credentials file below has empty keys, and the s3 storage backup test is
+      # pending.
+      # - name: Configure AWS credentials
+      #   uses: aws-actions/configure-aws-credentials@e1253824e5c10ff9df46874f81ed3ec929e19cfd # v6.3.0
+      #   with:
+      #     role-to-assume: ${{ secrets.AWS_S3_ROLE_ARN }}
+      #     aws-region: us-east-1
+
+      # The backup service tests read ~/.aws/credentials, not env vars.
+      - name: Write AWS credentials file
+        run: |
+          mkdir -p ~/.aws
+          printf '[default]\naws_access_key_id=%s\naws_secret_access_key=%s\naws_session_token=%s\n' \
+            "$AWS_ACCESS_KEY_ID" "$AWS_SECRET_ACCESS_KEY" "$AWS_SESSION_TOKEN" > ~/.aws/credentials
+
+      - name: Write features.conf
+        env:
+          FEATURES_CONF_B64: ${{ secrets.AKO_FEATURES_CONF_B64 }}
+        run: echo "$FEATURES_CONF_B64" | base64 -d > config/samples/secrets/features.conf
+
+      # The docker config holds the JFrog login. test.sh turns it into the pull
+      # secrets for the operator and init images. The custom init registry test
+      # pulls the init image from JFrog.
+      - name: Run ${{ matrix.suite }}
+        env:
+          BUNDLE_IMG: ${{ inputs.bundle-image }}
+          SUITE: ${{ matrix.suite }}
+          FOCUS: ${{ inputs.focus }}
+          INIT_NAME_TAG: ${{ inputs.init-name-tag }}
+        run: |
+          ./test/test.sh -b "$BUNDLE_IMG" -s "$HOME/.docker/config.json" -t "$SUITE" -f "$FOCUS" \
+            -r artifact.aerospike.io -n platforms-docker-dev-local -i "$INIT_NAME_TAG"
+
+      # Lists the failed specs in the job summary, with their logs, and as
+      # annotations on the run. annotate_only skips the check run, so the job
+      # needs no checks: write permission.
+      - name: Report test results
+        if: always()
+        uses: mikepenz/action-junit-report@6ef3fdcfcd5f0b5d14df3e659ef19b8c6820f93d # v6.6.1
+        with:
+          report_paths: test/test-results/*.xml
+          check_name: E2E ${{ matrix.suite }}
+          annotate_only: true
+          detailed_summary: true
+          failed_summary_logs: true
+
+      - name: Clean up test cluster
+        if: always()
+        run: ./test/cleanup-test-namespace.sh || true

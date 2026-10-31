@@ -13,10 +13,10 @@ spec:
     racks:
       - id: 1
         # Change to the zone for your k8s cluster.
-        zone: asia-south1-a
+        zone: us-west1-a
       - id: 2
         # Change to the zone for your k8s cluster.
-        zone: asia-south1-b
+        zone: us-west1-b
 
   storage:
     filesystemVolumePolicy:
@@ -24,7 +24,6 @@ spec:
       initMethod: deleteFiles
     blockVolumePolicy:
       cascadeDelete: true
-      initMethod: headerCleanup
     volumes:
       - name: workdir
         aerospike:

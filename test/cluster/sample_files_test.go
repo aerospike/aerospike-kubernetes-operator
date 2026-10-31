@@ -6,6 +6,7 @@ import (
 	"io/fs"
 	"os"
 	"path/filepath"
+	"sort"
 	"strings"
 
 	. "github.com/onsi/ginkgo/v2"
@@ -189,6 +190,26 @@ func deployClusterUsingFile(ctx context.Context, filePath string) (*asdbv1.Aeros
 	if !strings.Contains(filePath, asdbv1.ConfKeyXdr) {
 		baseName := strings.TrimSuffix(filepath.Base(filePath), "_cr.yaml")
 		aeroCluster.Name = strings.ReplaceAll(baseName, "_", "-")
+	}
+
+	// Rack samples name the zones of one particular cluster, and tell users to
+	// change them. Spread the racks over this cluster's zones instead.
+	racks := aeroCluster.Spec.RackConfig.Racks
+	if len(racks) > 0 && racks[0].Zone != "" {
+		zones, err := getZones(ctx, k8sClient)
+		if err != nil {
+			return aeroCluster, err
+		}
+
+		if len(zones) == 0 {
+			return aeroCluster, fmt.Errorf("no node zones found for the racks in %s", filePath)
+		}
+
+		sort.Strings(zones)
+
+		for idx := range racks {
+			racks[idx].Zone = zones[idx%len(zones)]
+		}
 	}
 
 	// Deploy the cluster

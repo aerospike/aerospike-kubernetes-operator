@@ -14,14 +14,13 @@ spec:
       cascadeDelete: true
     blockVolumePolicy:
       cascadeDelete: true
-      initMethod: headerCleanup
     volumes:
       - name: workdir
         aerospike:
           path: /opt/aerospike
         source:
           persistentVolume:
-            storageClass: crc-csi-hostpath-provisioner
+            storageClass: ssd
             volumeMode: Filesystem
             size: 1Gi
       - name: ns
@@ -29,9 +28,9 @@ spec:
           path: /test/dev/xvdf
         source:
           persistentVolume:
-            storageClass: local-ssd
+            storageClass: ssd
             volumeMode: Block
-            size: 2Gi
+            size: 5Gi
       - name: aerospike-config-secret
         source:
           secret:
@@ -54,7 +53,6 @@ spec:
     service:
       feature-key-file: /etc/aerospike/secret/features.conf
       cgroup-mem-tracking: true
-      proto-fd-max: 1024
     security: {}
     network:
       service:

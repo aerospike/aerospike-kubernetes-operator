@@ -1,0 +1,322 @@
+# Builds and scans everything that goes into a release bundle. Called by CI and
+# by the release candidate workflow, which differ only in the inputs.
+#
+#   operator image -> OLM bundle -> bundle image -> scan
+#   operator image -> helm charts
+#
+# The OLM bundle job also uploads the manifests to the generic repo. The caller
+# runs prepare before this (it uploads the config-schemas artifact) and creates
+# the release bundle from the build names after it.
+#
+# Secrets: SNYK_TOKEN
+
+name: Build
+
+on:
+  workflow_call:
+    inputs:
+      version:
+        description: Image app version, and the helm chart and OLM bundle version
+        type: string
+        required: true
+      base-version:
+        description: Release the build belongs to, passed to the operator image as VERSION
+        type: string
+        required: true
+      versions-override:
+        description: Image tags instead of the version tag (the immutable tag is always added)
+        type: string
+        default: ""
+      build-name-suffix:
+        description: Appended to every JFrog build name
+        type: string
+        default: ""
+      artifact-version:
+        description: Path segment that the helm charts and OLM manifests are uploaded under
+        type: string
+        required: true
+      init-name-tag:
+        description: Init image name and tag that the chart and the OLM bundle deploy
+        type: string
+        required: true
+      pin-digest:
+        description: Point the chart and the OLM bundle at <version>@<digest> instead of the immutable tag
+        type: boolean
+        default: false
+      publish-manifests:
+        description: Package the helm charts and upload the OLM manifests
+        type: boolean
+        default: true
+    outputs:
+      bundle-image:
+        description: OLM bundle image, as its immutable tag
+        value: ${{ jobs.scan.outputs.bundle-image }}
+
+permissions: {}
+
+defaults:
+  run:
+    shell: bash
+
+# Read by setup-jfrog-cli. A caller's env doesn't reach a called workflow.
+env:
+  JF_PROJECT: platforms
+  JF_URL: https://artifact.aerospike.io
+
+jobs:
+  operator-image:
+    name: Operator image
+    permissions:
+      contents: read
+      packages: write
+      attestations: write
+      id-token: write
+    uses: aerospike/shared-workflows/.github/workflows/reusable_docker-build-deploy.yaml@b4b1e9dc89314a2d542f9d6fe0ee150ad06f9860 # v5.0.0
+    with:
+      jf-project: platforms
+      image-name: aerospike-kubernetes-operator
+      app-version: ${{ inputs.version }}
+      versions-override: ${{ inputs.versions-override }}
+      jf-build-name: ako-operator${{ inputs.build-name-suffix }}
+      build-args-json: '{"VERSION": "${{ inputs.base-version }}"}'
+      gh-context-artifacts-json: '[{"name": "config-schemas", "dest": "pkg/configschema/schemas/json/aerospike"}]'
+
+  helm-charts:
+    name: Helm charts
+    needs: operator-image
+    if: inputs.publish-manifests
+    runs-on: ubuntu-24.04
+    permissions:
+      contents: read
+      id-token: write
+    env:
+      VERSION: ${{ inputs.version }}
+      ARTIFACT_VERSION: ${{ inputs.artifact-version }}
+      BUILD_NAME: ako-helm-charts${{ inputs.build-name-suffix }}
+      PIN_DIGEST: ${{ inputs.pin-digest }}
+      OPERATOR_IMG: ${{ needs.operator-image.outputs.immutable-tag }}
+      OPERATOR_DIGEST: ${{ needs.operator-image.outputs.digest }}
+    steps:
+      - name: Harden the runner (Audit all outbound calls)
+        uses: step-security/harden-runner@351661ca32ac09a36dc5ee2d536e3128f2a3c8ed # v2.22.0
+        with:
+          egress-policy: audit
+
+      - name: Checkout code
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+
+      - name: Set up JFrog CLI
+        uses: step-security/setup-jfrog-cli@53aeacb709fce45d0baf69a13ec3342f7e2d71a9 # v5.1.0
+        with:
+          oidc-provider-name: gh-aerospike
+          oidc-audience: aerospike
+
+      # The operator chart deploys the operator image built in this run.
+      # TODO: Decide if we want this for CI builds. Without it, the chart keeps
+      # the original image.
+      - name: Set operator image
+        run: |
+          export REPO="${OPERATOR_IMG%:*}" TAG="${OPERATOR_IMG##*:}"
+          if [ "$PIN_DIGEST" = "true" ]; then
+            TAG="${VERSION}@${OPERATOR_DIGEST}"
+          fi
+          yq -i '.operatorImage.repository = strenv(REPO) | .operatorImage.tag = strenv(TAG)' \
+            helm-charts/aerospike-kubernetes-operator/values.yaml
+
+      # The operator chart deploys the init image that is in the release bundle.
+      # TODO: These point at the DEV repo. Promotion to TEST copies the images to
+      # another repo, so these values have to change then.
+      - name: Set init image
+        env:
+          INIT_NAME_TAG: ${{ inputs.init-name-tag }}
+        run: |
+          yq -i '.aerospikeKubernetesInitRegistry = "artifact.aerospike.io" |
+            .aerospikeKubernetesInitRegistryNamespace = "platforms-docker-dev-local" |
+            .aerospikeKubernetesInitNameTag = strenv(INIT_NAME_TAG)' \
+            helm-charts/aerospike-kubernetes-operator/values.yaml
+
+      - name: Package charts
+        run: |
+          for chart in helm-charts/*/; do
+            helm package "$chart" --version "$VERSION" --app-version "$VERSION" --destination dist
+          done
+
+      # Same layout as the shared deploy workflow: <chart>/<artifact-version>/<chart>-<version>.tgz.
+      # --flat stops the local dist/ folder from becoming part of the path.
+      - name: Upload charts to JFrog
+        run: |
+          jf rt upload "dist/(*)-${VERSION}.tgz" "platforms-helm-dev-local/{1}/${ARTIFACT_VERSION}/" --flat \
+            --build-name="$BUILD_NAME" --build-number="$GITHUB_RUN_NUMBER" --project=platforms
+          jf rt build-publish "$BUILD_NAME" "$GITHUB_RUN_NUMBER" --project=platforms
+
+  olm-bundle:
+    name: OLM bundle manifests
+    needs: operator-image
+    runs-on: ubuntu-24.04
+    permissions:
+      contents: read
+      id-token: write
+    env:
+      VERSION: ${{ inputs.version }}
+      ARTIFACT_VERSION: ${{ inputs.artifact-version }}
+      BUILD_NAME: ako-olm-manifests${{ inputs.build-name-suffix }}
+    steps:
+      - name: Harden the runner (Audit all outbound calls)
+        uses: step-security/harden-runner@351661ca32ac09a36dc5ee2d536e3128f2a3c8ed # v2.22.0
+        with:
+          egress-policy: audit
+
+      - name: Checkout code
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          submodules: true
+
+      - name: Setup Go
+        uses: actions/setup-go@b7ad1dad31e06c5925ef5d2fc7ad053ef454303e # v7.0.0
+        with:
+          go-version-file: go.mod
+
+      # The OLM bundle deploys the init image that is in the release bundle.
+      # make bundle takes it from config/manager/manager.yaml.
+      # TODO: These point at the DEV repo. Promotion to TEST copies the images to
+      # another repo, so these values have to change then.
+      - name: Set init image
+        env:
+          INIT_NAME_TAG: ${{ inputs.init-name-tag }}
+        run: |
+          yq -i '(select(.kind == "Deployment").spec.template.spec.containers[].env[] | select(.name == "AEROSPIKE_KUBERNETES_INIT_REGISTRY")).value = "artifact.aerospike.io" |
+            (select(.kind == "Deployment").spec.template.spec.containers[].env[] | select(.name == "AEROSPIKE_KUBERNETES_INIT_REGISTRY_NAMESPACE")).value = "platforms-docker-dev-local" |
+            (select(.kind == "Deployment").spec.template.spec.containers[].env[] | select(.name == "AEROSPIKE_KUBERNETES_INIT_NAME_TAG")).value = strenv(INIT_NAME_TAG)' \
+            config/manager/manager.yaml
+
+      - name: Generate bundle
+        env:
+          PIN_DIGEST: ${{ inputs.pin-digest }}
+          OPERATOR_IMG: ${{ needs.operator-image.outputs.immutable-tag }}
+          OPERATOR_DIGEST: ${{ needs.operator-image.outputs.digest }}
+        run: |
+          img="$OPERATOR_IMG"
+          if [ "$PIN_DIGEST" = "true" ]; then
+            img="${OPERATOR_IMG%:*}:${VERSION}@${OPERATOR_DIGEST}"
+          fi
+          make bundle IMG="$img" VERSION="$VERSION"
+          mkdir -p ci-olm
+          cp bundle.Dockerfile ci-olm/
+
+      - name: Set up JFrog CLI
+        uses: step-security/setup-jfrog-cli@53aeacb709fce45d0baf69a13ec3342f7e2d71a9 # v5.1.0
+        with:
+          oidc-provider-name: gh-aerospike
+          oidc-audience: aerospike
+
+      # The manifests are what the Red Hat community operators PR needs, so they
+      # travel in the release bundle, as one zip of bundle/ (manifests/ and
+      # metadata/ at its root) under aerospike-kubernetes-operator/<artifact-version>/.
+      - name: Upload bundle manifests to JFrog
+        if: inputs.publish-manifests
+        run: |
+          zip_file="aerospike-kubernetes-operator-olm-${VERSION}.zip"
+          (cd bundle && zip -qr "../$zip_file" .)
+          jf rt upload "$zip_file" "platforms-generic-dev-local/aerospike-kubernetes-operator/${ARTIFACT_VERSION}/" --flat \
+            --build-name="$BUILD_NAME" --build-number="$GITHUB_RUN_NUMBER" --project=platforms
+          jf rt build-publish "$BUILD_NAME" "$GITHUB_RUN_NUMBER" --project=platforms
+
+      - name: Upload bundle manifests
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        with:
+          name: olm-bundle
+          path: bundle/
+          if-no-files-found: error
+          retention-days: 1
+
+      - name: Upload bundle Dockerfile
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        with:
+          name: olm-bundle-dockerfile
+          path: ci-olm/bundle.Dockerfile
+          if-no-files-found: error
+          retention-days: 1
+
+  bundle-image:
+    name: OLM bundle image
+    needs: olm-bundle
+    permissions:
+      contents: read
+      packages: write
+      attestations: write
+      id-token: write
+    uses: aerospike/shared-workflows/.github/workflows/reusable_docker-build-deploy.yaml@b4b1e9dc89314a2d542f9d6fe0ee150ad06f9860 # v5.0.0
+    with:
+      jf-project: platforms
+      image-name: aerospike-kubernetes-operator-bundle
+      app-version: ${{ inputs.version }}
+      versions-override: ${{ inputs.versions-override }}
+      jf-build-name: ako-olm-bundle${{ inputs.build-name-suffix }}
+      platforms: linux/amd64
+      # Same as the plain `docker build` used for bundles so far
+      provenance: "false"
+      sbom: false
+      # Relative to the workspace, not the context
+      file: ci-olm/bundle.Dockerfile
+      gh-context-artifacts-json: '[{"name": "olm-bundle", "dest": "bundle"}, {"name": "olm-bundle-dockerfile", "dest": "ci-olm"}]'
+
+  scan:
+    name: Vulnerability scan
+    needs: [operator-image, bundle-image]
+    runs-on: ubuntu-24.04
+    permissions:
+      contents: read
+      id-token: write
+    # The workflow output comes from here, so callers only get a scanned image.
+    outputs:
+      bundle-image: ${{ needs.bundle-image.outputs.immutable-tag }}
+    env:
+      OPERATOR_IMG: ${{ needs.operator-image.outputs.immutable-tag }}
+      BUNDLE_IMG: ${{ needs.bundle-image.outputs.immutable-tag }}
+      SNYK_TOKEN: ${{ secrets.SNYK_TOKEN }}
+    steps:
+      - name: Harden the runner (Audit all outbound calls)
+        uses: step-security/harden-runner@351661ca32ac09a36dc5ee2d536e3128f2a3c8ed # v2.22.0
+        with:
+          egress-policy: audit
+
+      - name: Checkout code
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          submodules: true
+
+      - name: Setup Go
+        uses: actions/setup-go@b7ad1dad31e06c5925ef5d2fc7ad053ef454303e # v7.0.0
+        with:
+          go-version-file: go.mod
+
+      - name: Set up JFrog CLI
+        id: jf
+        uses: step-security/setup-jfrog-cli@53aeacb709fce45d0baf69a13ec3342f7e2d71a9 # v5.1.0
+        with:
+          oidc-provider-name: gh-aerospike
+          oidc-audience: aerospike
+
+      - name: Login to JFrog
+        uses: docker/login-action@dbcb813823bdd20940b903addbd779551569679f # v4.6.0
+        with:
+          registry: artifact.aerospike.io
+          username: ${{ steps.jf.outputs.oidc-user }}
+          password: ${{ steps.jf.outputs.oidc-token }}
+
+      - name: Set up Snyk
+        uses: snyk/actions/setup@9adf32b1121593767fc3c057af55b55db032dc04
+
+      # Same commands and thresholds as the Jenkins job
+      - name: Scan dependencies
+        run: snyk test --severity-threshold=high --fail-on=all
+
+      - name: Scan operator image
+        run: |
+          docker pull "$OPERATOR_IMG"
+          snyk container test "$OPERATOR_IMG" --severity-threshold=high --file=Dockerfile --policy-path=.snyk --fail-on=all
+
+      - name: Scan bundle image
+        run: |
+          docker pull "$BUNDLE_IMG"
+          snyk container test "$BUNDLE_IMG" --severity-threshold=high --file=Dockerfile --policy-path=.snyk --fail-on=all

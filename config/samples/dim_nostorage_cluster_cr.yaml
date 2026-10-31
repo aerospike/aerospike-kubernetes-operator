@@ -18,7 +18,7 @@ spec:
       - name: workdir
         source:
           persistentVolume:
-            storageClass: crc-csi-hostpath-provisioner
+            storageClass: ssd
             volumeMode: Filesystem
             size: 3Gi
         aerospike:

@@ -17,10 +17,13 @@ OPERATOR_SA="aerospike-operator-controller-manager"
 DIR="$( cd "$( dirname "${BASH_SOURCE[0]}" )" >/dev/null 2>&1 && pwd )"
 
 # Create storage classes.
+IS_GKE_CLUSTER=0
 case $(kubectl get nodes -o yaml) in
   *"cloud.google.com"*)
-    echo "Installing ssd storage class for GKE."
+    IS_GKE_CLUSTER=1
+    echo "Installing ssd and local-ssd storage classes for GKE."
     kubectl apply -f config/samples/storage/gke_ssd_storage_class.yaml
+    kubectl apply -f config/samples/storage/local_storage_class.yaml
     ;;
   *"eks.amazonaws.com"*)
     echo "Installing ssd storage class for EKS."
@@ -53,6 +56,14 @@ for namespace in $namespaces; do
     oc adm policy add-scc-to-user privileged -z aerospike-operator-controller-manager -n $namespace
   fi
 done
+
+# The local-ssd volumes come from local SSDs that the nodes expose under
+# /mnt/disks. The provisioner runs in the aerospike namespace, so it goes in
+# after the namespaces exist.
+if [ $IS_GKE_CLUSTER == 1 ]; then
+  echo "Installing local volume provisioner for the local-ssd storage class."
+  kubectl apply -f config/samples/storage/aerospike_local_volume_provisioner.yaml
+fi
 
 RUN_BUNDLE_ARGS=()
 if [ -n "$PULL_CRED_PATH" ]; then

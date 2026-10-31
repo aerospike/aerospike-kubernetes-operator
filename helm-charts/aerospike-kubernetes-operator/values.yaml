@@ -111,10 +111,10 @@ failedPodGracePeriodSeconds: "60" # @schema type: [string, number, "null"]
 aerospikeKubernetesInitRegistry: "docker.io" # @schema nullable
 
 # -- Namespace in registry used to pull aerospike-init image
-aerospikeKubernetesInitRegistryNamespace: "sidntrivedi" # @schema nullable
+aerospikeKubernetesInitRegistryNamespace: "aerospike" # @schema nullable
 
 # -- Name and tag of aerospike-init image
-aerospikeKubernetesInitNameTag: "aerospike-kubernetes-init:2.5.4-1" # @schema nullable
+aerospikeKubernetesInitNameTag: "aerospike-kubernetes-init:2.5.4" # @schema nullable
 
 # -- Resources - limits / requests
 resources: # @schema hidden

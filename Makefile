@@ -21,6 +21,10 @@ NEXT_VERSION ?= 4.7.0
 # as <version>-<pr-N|master>-<short commit sha>, the tag that CI pushes to JFrog.
 INIT_TAG ?= 2.5.5-pr-166-50c3a4c
 
+# INIT_RC_TAG is the aerospike-kubernetes-init release candidate that goes into an operator
+# release candidate, as <version>-rcN, the tag pushed to the init repo.
+INIT_RC_TAG ?= 2.5.5-rc1
+
 # Platforms supported
 PLATFORMS ?= linux/amd64,linux/arm64
 
@@ -419,7 +423,7 @@ bundle: manifests kustomize operator-sdk
 	cd $(ROOT_DIR)/config/manifests/bases && $(KUSTOMIZE) edit set annotation createdAt:$(DATE)
 	cd $(ROOT_DIR) && $(KUSTOMIZE) build $(OVERLAYS_DIR) | $(OPERATOR_SDK) generate bundle $(BUNDLE_GEN_FLAGS) --output-dir $(BUNDLE_DIR)
 	$(OPERATOR_SDK) bundle validate $(BUNDLE_DIR)
-	sed -i "s@containerImage: controller:latest@containerImage: $(IMG)@g" $(BUNDLE_DIR)/manifests/aerospike-kubernetes-operator.clusterserviceversion.yaml
+	sed -i "s|containerImage: controller:latest|containerImage: $(IMG)|g" $(BUNDLE_DIR)/manifests/aerospike-kubernetes-operator.clusterserviceversion.yaml
 	sed -i "/^FROM.*/a LABEL com.redhat.openshift.versions="$(OPENSHIFT_VERSION)"" $(ROOT_DIR)/bundle.Dockerfile; \
 	sed -i "/^FROM.*/a LABEL com.redhat.delivery.operator.bundle=true" $(ROOT_DIR)/bundle.Dockerfile; \
 	sed -i "/^FROM.*/a LABEL com.redhat.delivery.backport=false" $(ROOT_DIR)/bundle.Dockerfile; \
