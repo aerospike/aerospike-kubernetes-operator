@@ -525,13 +525,18 @@ jobs:
           ./test/test.sh -b "$BUNDLE_IMG" -s "$HOME/.docker/config.json" -t "$SUITE" -f "$FOCUS" \
             -r artifact.aerospike.io -n platforms-docker-dev-local -i "$INIT_NAME_TAG"
 
-      - name: Upload test results
+      # Lists the failed specs in the job summary, with their logs, and as
+      # annotations on the run. annotate_only skips the check run, so the job
+      # needs no checks: write permission.
+      - name: Report test results
         if: always()
-        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        uses: mikepenz/action-junit-report@6ef3fdcfcd5f0b5d14df3e659ef19b8c6820f93d # v6.6.1
         with:
-          name: junit-${{ matrix.suite }}
-          path: test/test-results/*.xml
-          if-no-files-found: ignore
+          report_paths: test/test-results/*.xml
+          check_name: E2E ${{ matrix.suite }}
+          annotate_only: true
+          detailed_summary: true
+          failed_summary_logs: true
 
       - name: Clean up test cluster
         if: always()
