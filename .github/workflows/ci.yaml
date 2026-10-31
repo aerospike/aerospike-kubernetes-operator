@@ -1,6 +1,6 @@
 # CI for pull requests, master and the nightly run. Replaces the Jenkins job.
 #
-#   prepare -> operator image -> OLM bundle -> bundle image -> scan -> e2e -> release bundle -> promote to DEV
+#   prepare -> operator image -> OLM bundle -> bundle image -> scan -> e2e -> release bundle -> promote to DEV (and TEST on master)
 #   operator image -> helm charts -> release bundle
 #   OLM bundle -> release bundle (the OLM bundle job also uploads the manifests to the generic repo)
 #
@@ -560,8 +560,8 @@ jobs:
       # the init CI's run number.
       jf-build-names: ako-operator:${{ github.run_number }},ako-olm-bundle:${{ github.run_number }},ako-olm-manifests:${{ github.run_number }},ako-helm-charts:${{ github.run_number }},ako-init:${{ needs.prepare.outputs.init-build }},ako-init-openshift:${{ needs.prepare.outputs.init-build }}
 
-  promote-dev:
-    name: Promote to DEV
+  promote:
+    name: Promote release bundle
     needs: [prepare, release-bundle]
     # A skipped e2e would otherwise skip this job too, even after the bundle
     # was created.
@@ -590,10 +590,20 @@ jobs:
           environment: DEV
           jf-project: platforms
 
+      # Only master builds go on to TEST. PR builds stop at DEV.
+      - name: Promote release bundle to TEST
+        if: github.event_name == 'push' && github.ref == 'refs/heads/master'
+        uses: aerospike/shared-workflows/.github/actions/promote-release-bundle@b4b1e9dc89314a2d542f9d6fe0ee150ad06f9860 # v5.0.0
+        with:
+          bundle-name: aerospike-kubernetes-operator
+          version: ${{ needs.prepare.outputs.version }}
+          environment: TEST
+          jf-project: platforms
+
   # The single required status check.
   ci-result:
     name: CI result
-    needs: [prepare, operator-image, helm-charts, olm-bundle, bundle-image, scan, e2e, release-bundle, promote-dev]
+    needs: [prepare, operator-image, helm-charts, olm-bundle, bundle-image, scan, e2e, release-bundle, promote]
     if: always()
     runs-on: ubuntu-24.04
     permissions: {}
