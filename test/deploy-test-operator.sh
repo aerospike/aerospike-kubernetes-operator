@@ -69,7 +69,10 @@ if [ -n "$PULL_CRED_PATH" ]; then
     ((ATTEMPT += 1))
   done
 
-  "$DIR"/create_image_pull_secret.sh -n "$PULL_SECRET_NAME" -p "$PULL_CRED_PATH"
+  # The Aerospike pods in every namespace pull the init image with it too.
+  for namespace in $namespaces; do
+    "$DIR"/create_image_pull_secret.sh -n "$PULL_SECRET_NAME" -p "$PULL_CRED_PATH" -N "$namespace"
+  done
 
   # operator-sdk runs the bundle registry pod under the default service account.
   kubectl patch serviceaccount default -n test -p "{\"imagePullSecrets\":[{\"name\":\"$PULL_SECRET_NAME\"}]}"
@@ -105,4 +108,12 @@ for namespace in $namespaces; do
     ((ATTEMPT += 1))
   done
 done
+
+# OLM creates the operator's service account in every namespace. The Aerospike
+# pods run under it, so it needs the pull secret everywhere, not just in test.
+if [ -n "$PULL_CRED_PATH" ]; then
+  for namespace in $namespaces; do
+    kubectl patch serviceaccount "$OPERATOR_SA" -n "$namespace" -p "{\"imagePullSecrets\":[{\"name\":\"$PULL_SECRET_NAME\"}]}"
+  done
+fi
 sleep 10
