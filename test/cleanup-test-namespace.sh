@@ -7,8 +7,8 @@
 #
 ################################################
 
-# echo "Cleaning up s3 bucket contents s3://aerospike-kubernetes-operator-test"
-# aws s3 rm s3://aerospike-kubernetes-operator-test --recursive
+echo "Cleaning up s3 bucket contents s3://aerospike-kubernetes-operator-test"
+aws s3 rm s3://aerospike-kubernetes-operator-test --recursive
 
 namespaces="test test1 test2 aerospike"
 
