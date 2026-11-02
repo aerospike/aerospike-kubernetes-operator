@@ -374,7 +374,12 @@ func warnCheckpointChanges(oldCluster, newCluster *asdbv1.AerospikeCluster) admi
 		// Treat missing data-size as 0, matching GetInMemoryNsDataSizes in the controller.
 		// This catches both plain data-size changes and switches between pure in-memory
 		// and device/file-backed storage (which also invalidate the checkpoint).
-		oldCheckpointedNS := sets.NewString(asdbv1.GetIndexCheckpointNamespaces(oldCfg)...)
+		oldCheckpointedNSList := asdbv1.GetIndexCheckpointNamespaces(oldCfg)
+		if len(oldCheckpointedNSList) == 0 {
+			continue
+		}
+
+		oldCheckpointedNS := sets.NewString(oldCheckpointedNSList...)
 		newNSMap := buildNamespaceMap(newCfg)
 
 		for _, nsIface := range oldCfg[asdbv1.ConfKeyNamespace].([]interface{}) {
