@@ -94,6 +94,13 @@ func (abv *AerospikeBackupCustomValidator) ValidateUpdate(_ context.Context,
 
 	abLog.Info("Validate update")
 
+	// While the backup is being deleted, the operator removes its finalizer with an update that keeps the spec.
+	// Validating that spec again, against the backup service config and rules that may have tightened since it was
+	// written, would deny the update and leave the backup stuck in deletion. A spec change is still validated.
+	if !backup.DeletionTimestamp.IsZero() && reflect.DeepEqual(backup.Spec, oldObject.Spec) {
+		return nil, nil
+	}
+
 	if !reflect.DeepEqual(backup.Spec.BackupService, oldObject.Spec.BackupService) {
 		return nil, fmt.Errorf("backup service cannot be updated")
 	}
