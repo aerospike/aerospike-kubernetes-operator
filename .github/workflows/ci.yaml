@@ -163,16 +163,6 @@ jobs:
             hack/ci/select-tests.sh all
           fi | tee -a "$GITHUB_OUTPUT"
 
-      # The shared docker workflow checks out without submodules, and the
-      # operator embeds pkg/configschema/schemas. Hand it the schemas instead.
-      - name: Upload config schemas
-        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
-        with:
-          name: config-schemas
-          path: pkg/configschema/schemas/json/aerospike
-          if-no-files-found: error
-          retention-days: 1
-
   build:
     name: Build
     needs: prepare
