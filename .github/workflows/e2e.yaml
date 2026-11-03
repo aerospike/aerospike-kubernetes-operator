@@ -145,7 +145,7 @@ jobs:
           INIT_NAME_TAG: ${{ inputs.init-name-tag }}
         run: |
           ./test/test.sh -b "$BUNDLE_IMG" -s "$HOME/.docker/config.json" -t "$SUITE" -f "$FOCUS" \
-            -r artifact.aerospike.io -n platforms-docker-dev-local -i "$INIT_NAME_TAG"
+            -r artifact.aerospike.io -n platforms-docker-virtual -i "$INIT_NAME_TAG"
 
       # Lists the failed specs in the job summary, with their logs, and as
       # annotations on the run. annotate_only skips the check run, so the job

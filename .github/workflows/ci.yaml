@@ -157,8 +157,6 @@ jobs:
           BASE_REF: ${{ github.base_ref }}
         # TODO: Revert. Runs every suite on PRs too, to test the e2e job.
         run: |
-          # TODO: Revert. Runs only the backup suites, to test the S3 credentials.
-          printf 'suites=["backup-test"]\nfocus=\n' | tee -a "$GITHUB_OUTPUT"; exit 0
           if false && [ "$GITHUB_EVENT_NAME" = "pull_request" ]; then
             git diff --name-only "origin/$BASE_REF...HEAD" | hack/ci/select-tests.sh
           else
