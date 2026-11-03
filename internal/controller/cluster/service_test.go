@@ -128,6 +128,11 @@ func TestPodServiceNeeded(t *testing.T) {
 		TLSAlternateAccessType: asdbv1.AerospikeNetworkTypePod,
 	}
 
+	require.False(t, podServiceManaged(false, false, false))
+	require.True(t, podServiceManaged(true, false, false))
+	require.True(t, podServiceManaged(false, true, false))
+	require.True(t, podServiceManaged(false, false, true))
+
 	require.True(t, podServiceNeeded(ptr.To(false), nlb))
 	require.False(t, podServiceNeeded(ptr.To(false), host))
 	require.True(t, podServiceNeeded(ptr.To(true), host))

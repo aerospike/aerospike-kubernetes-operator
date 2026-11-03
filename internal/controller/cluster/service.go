@@ -274,8 +274,13 @@ func (r *SingleClusterReconciler) updateLBService(ctx context.Context, service *
 func (r *SingleClusterReconciler) reconcilePodService(ctx context.Context, rackState *RackState) error {
 	// PodService is only created if MultiPodPerHost is enabled.
 	// clusterNLB also needs a per-pod NodePort when MultiPodPerHost is false.
-	if !asdbv1.GetBool(r.aeroCluster.Spec.PodSpec.MultiPodPerHost) &&
-		!r.aeroCluster.Spec.AerospikeNetworkPolicy.UsesClusterNLB() {
+	// Status still has the previous policy during this reconcile, so a cluster that
+	// just left clusterNLB deletes those Services once.
+	if !podServiceManaged(
+		asdbv1.GetBool(r.aeroCluster.Spec.PodSpec.MultiPodPerHost),
+		r.aeroCluster.Spec.AerospikeNetworkPolicy.UsesClusterNLB(),
+		r.aeroCluster.Status.AerospikeNetworkPolicy.UsesClusterNLB(),
+	) {
 		return nil
 	}
 
@@ -498,6 +503,13 @@ func (r *SingleClusterReconciler) cleanupDanglingPodServices(ctx context.Context
 	}
 
 	return nil
+}
+
+// podServiceManaged reports whether this reconcile should create or delete per-pod Services.
+// statusNLB is the previous policy. It keeps cleanup reachable for one reconcile after clusterNLB is removed
+// when multiPodPerHost is false, without deleting same-named Services on clusters that never used clusterNLB.
+func podServiceManaged(multiPodPerHost, specNLB, statusNLB bool) bool {
+	return multiPodPerHost || specNLB || statusNLB
 }
 
 func podServiceNeeded(multiPodPerHost *bool, networkPolicy *asdbv1.AerospikeNetworkPolicy) bool {

@@ -1083,8 +1083,12 @@ func (r *SingleClusterReconciler) cleanupPodMeshAndStatus(ctx context.Context, p
 
 		// Try to delete the corresponding pod service if it was created.
 		// clusterNLB creates one even when multiPodPerHost is false.
-		if asdbv1.GetBool(r.aeroCluster.Spec.PodSpec.MultiPodPerHost) ||
-			r.aeroCluster.Spec.AerospikeNetworkPolicy.UsesClusterNLB() {
+		// Status covers a pod removed in the same update that leaves clusterNLB.
+		if podServiceManaged(
+			asdbv1.GetBool(r.aeroCluster.Spec.PodSpec.MultiPodPerHost),
+			r.aeroCluster.Spec.AerospikeNetworkPolicy.UsesClusterNLB(),
+			r.aeroCluster.Status.AerospikeNetworkPolicy.UsesClusterNLB(),
+		) {
 			// Remove service for pod
 			// TODO: make it more robust, what if it fails
 			if err := r.deletePodService(

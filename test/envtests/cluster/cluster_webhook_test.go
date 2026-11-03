@@ -2060,24 +2060,6 @@ var _ = Describe("AerospikeCluster validation", func() {
 						Validate(err)
 				})
 
-				It("rejects changing alternateAccess away from clusterNLB", func() {
-					aeroCluster := testCluster.CreateDummyAerospikeCluster(clusterNamespacedName, 1)
-					aeroCluster.Spec.AerospikeNetworkPolicy.AlternateAccessType = asdbv1.AerospikeNetworkTypeNLB
-					aeroCluster.Spec.AerospikeNetworkPolicy.NLBAddress = "aerospike-nlb.example.com"
-					Expect(envtests.K8sClient.Create(ctx, aeroCluster)).To(Succeed())
-
-					fetched, err := testCluster.GetCluster(envtests.K8sClient, ctx, clusterNamespacedName)
-					Expect(err).ToNot(HaveOccurred())
-
-					fetched.Spec.AerospikeNetworkPolicy.AlternateAccessType = asdbv1.AerospikeNetworkTypeHostExternal
-
-					err = envtests.K8sClient.Update(ctx, fetched)
-					Expect(err).To(HaveOccurred())
-					envtests.NewStatusErrorMatcher().
-						WithMessageSubstrings(testutil.WebhookErrorPrefix, "clusterNLB", "alternateAccess").
-						Validate(err)
-				})
-
 				It("rejects clusterNLB when the matching address is empty", func() {
 					aeroCluster := testCluster.CreateDummyAerospikeCluster(clusterNamespacedName, 1)
 					aeroCluster.Spec.AerospikeNetworkPolicy.AlternateAccessType = asdbv1.AerospikeNetworkTypeNLB
@@ -2091,6 +2073,24 @@ var _ = Describe("AerospikeCluster validation", func() {
 			})
 
 			Context("positive", func() {
+				It("accepts changing alternateAccess away from clusterNLB", func() {
+					aeroCluster := testCluster.CreateDummyAerospikeCluster(clusterNamespacedName, 1)
+					aeroCluster.Spec.AerospikeNetworkPolicy.AlternateAccessType = asdbv1.AerospikeNetworkTypeNLB
+					aeroCluster.Spec.AerospikeNetworkPolicy.NLBAddress = "aerospike-nlb.example.com"
+					Expect(envtests.K8sClient.Create(ctx, aeroCluster)).To(Succeed())
+
+					fetched, err := testCluster.GetCluster(envtests.K8sClient, ctx, clusterNamespacedName)
+					Expect(err).ToNot(HaveOccurred())
+					fetched.Spec.AerospikeNetworkPolicy.AlternateAccessType = asdbv1.AerospikeNetworkTypeHostExternal
+
+					Expect(envtests.K8sClient.Update(ctx, fetched)).To(Succeed())
+
+					updated, err := testCluster.GetCluster(envtests.K8sClient, ctx, clusterNamespacedName)
+					Expect(err).ToNot(HaveOccurred())
+					Expect(updated.Spec.AerospikeNetworkPolicy.AlternateAccessType).
+						To(Equal(asdbv1.AerospikeNetworkTypeHostExternal))
+				})
+
 				It("accepts clusterNLB when multiPodPerHost is false and the matching address is set", func() {
 					aeroCluster := testCluster.CreateDummyAerospikeCluster(clusterNamespacedName, 1)
 					aeroCluster.Spec.PodSpec.MultiPodPerHost = ptr.To(false)

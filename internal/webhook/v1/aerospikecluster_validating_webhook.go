@@ -2026,27 +2026,6 @@ func validateNetworkPolicyUpdate(oldPolicy, newPolicy *asdbv1.AerospikeNetworkPo
 		return fmt.Errorf("cannot change/update customTLSFabricNetworkNames")
 	}
 
-	return validateClusterNLBUnchanged(oldPolicy, newPolicy)
-}
-
-func validateClusterNLBUnchanged(oldPolicy, newPolicy *asdbv1.AerospikeNetworkPolicy) error {
-	type nlbTypeField struct {
-		name    string
-		oldType asdbv1.AerospikeNetworkType
-		newType asdbv1.AerospikeNetworkType
-	}
-
-	fields := []nlbTypeField{
-		{"alternateAccess", oldPolicy.AlternateAccessType, newPolicy.AlternateAccessType},
-		{"tlsAlternateAccess", oldPolicy.TLSAlternateAccessType, newPolicy.TLSAlternateAccessType},
-	}
-
-	for _, field := range fields {
-		if field.oldType == asdbv1.AerospikeNetworkTypeNLB && field.newType != asdbv1.AerospikeNetworkTypeNLB {
-			return fmt.Errorf("cannot update %s once it is set to clusterNLB", field.name)
-		}
-	}
-
 	return nil
 }
 
