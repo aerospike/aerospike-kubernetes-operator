@@ -1245,6 +1245,13 @@ func validatePodEndpoint(
 				"expected custom network IP %v got %v", customNetIP, hostIPList,
 			)
 		}
+	case asdbv1.AerospikeNetworkTypeNLB:
+		if aeroCluster.Spec.AerospikeNetworkPolicy.NLBAddress != hostIPList[0] {
+			return fmt.Errorf(
+				"expected nlb address %v got %v",
+				aeroCluster.Spec.AerospikeNetworkPolicy.NLBAddress, hostIPList[0],
+			)
+		}
 	case asdbv1.AerospikeNetworkTypeUnspecified:
 		return fmt.Errorf(
 			"network type cannot be unspecified",

@@ -116,7 +116,7 @@ func TestCreateOrUpdatePodService(t *testing.T) {
 func TestPodServiceNeeded(t *testing.T) {
 	t.Parallel()
 
-	nlb := &asdbv1.AerospikeNetworkPolicy{AccessType: asdbv1.AerospikeNetworkTypeNLB}
+	nlb := &asdbv1.AerospikeNetworkPolicy{AlternateAccessType: asdbv1.AerospikeNetworkTypeNLB}
 	host := &asdbv1.AerospikeNetworkPolicy{
 		AccessType:          asdbv1.AerospikeNetworkTypeHostInternal,
 		AlternateAccessType: asdbv1.AerospikeNetworkTypeHostExternal,

@@ -646,16 +646,14 @@ func GetBool(boolPtr *bool) bool {
 	return ptr.Deref(boolPtr, false)
 }
 
-// UsesClusterNLB reports whether any client access type advertises the cluster NLB address.
+// UsesClusterNLB reports whether alternate access or TLS alternate access advertises the cluster NLB address.
 // AKO creates a per-pod NodePort Service in that case even when multiPodPerHost is false.
 func (p *AerospikeNetworkPolicy) UsesClusterNLB() bool {
 	if p == nil {
 		return false
 	}
 
-	return p.AccessType == AerospikeNetworkTypeNLB ||
-		p.AlternateAccessType == AerospikeNetworkTypeNLB ||
-		p.TLSAccessType == AerospikeNetworkTypeNLB ||
+	return p.AlternateAccessType == AerospikeNetworkTypeNLB ||
 		p.TLSAlternateAccessType == AerospikeNetworkTypeNLB
 }
 

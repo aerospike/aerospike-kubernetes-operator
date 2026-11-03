@@ -191,6 +191,10 @@ func createHost(pod *asdbv1.AerospikePodStatus, network string) (*as.Host, error
 		return nil, fmt.Errorf(
 			"%s not support yet", networkType,
 		)
+	case asdbv1.AerospikeNetworkTypeNLB:
+		return nil, fmt.Errorf(
+			"can not use clusterNLB network type: %s", networkType,
+		)
 	case asdbv1.AerospikeNetworkTypeUnspecified:
 		return nil, fmt.Errorf(
 			"unknown network type: %s", networkType,

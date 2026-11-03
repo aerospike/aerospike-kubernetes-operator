@@ -33,6 +33,7 @@ import (
 	"k8s.io/apimachinery/pkg/util/intstr"
 	"k8s.io/apimachinery/pkg/util/sets"
 	k8svalidation "k8s.io/apimachinery/pkg/util/validation"
+	"k8s.io/apimachinery/pkg/util/validation/field"
 	"k8s.io/utils/ptr"
 	logf "sigs.k8s.io/controller-runtime/pkg/log"
 	"sigs.k8s.io/controller-runtime/pkg/webhook/admission"
@@ -2036,9 +2037,7 @@ func validateClusterNLBUnchanged(oldPolicy, newPolicy *asdbv1.AerospikeNetworkPo
 	}
 
 	fields := []nlbTypeField{
-		{"access", oldPolicy.AccessType, newPolicy.AccessType},
 		{"alternateAccess", oldPolicy.AlternateAccessType, newPolicy.AlternateAccessType},
-		{"tlsAccess", oldPolicy.TLSAccessType, newPolicy.TLSAccessType},
 		{"tlsAlternateAccess", oldPolicy.TLSAlternateAccessType, newPolicy.TLSAlternateAccessType},
 	}
 
@@ -2533,33 +2532,28 @@ func validateNetworkPolicy(cluster *asdbv1.AerospikeCluster) error {
 func validateNLBNetworkPolicy(cluster *asdbv1.AerospikeCluster) error {
 	networkPolicy := &cluster.Spec.AerospikeNetworkPolicy
 
-	type nlbField struct {
-		networkType asdbv1.AerospikeNetworkType
-		address     string
-		typeName    string
-		fieldName   string
+	usesNLB := networkPolicy.AlternateAccessType == asdbv1.AerospikeNetworkTypeNLB ||
+		networkPolicy.TLSAlternateAccessType == asdbv1.AerospikeNetworkTypeNLB
+	if usesNLB && networkPolicy.NLBAddress == "" {
+		return fmt.Errorf("nlbAddress is required when alternateAccess or tlsAlternateAccess is 'clusterNLB'")
 	}
 
-	fields := []nlbField{
-		{networkPolicy.AccessType, networkPolicy.NLBAccessAddress, "access", "nlbAccessAddress"},
-		{networkPolicy.AlternateAccessType, networkPolicy.NLBAlternateAccessAddress,
-			"alternateAccess", "nlbAlternateAccessAddress"},
-		{networkPolicy.TLSAccessType, networkPolicy.NLBTLSAccessAddress, "tlsAccess", "nlbTLSAccessAddress"},
-		{networkPolicy.TLSAlternateAccessType, networkPolicy.NLBTLSAlternateAccessAddress,
-			"tlsAlternateAccess", "nlbTLSAlternateAccessAddress"},
+	return validateNLBAddress(networkPolicy.NLBAddress)
+}
+
+// validateNLBAddress accepts an IPv4 address, an IPv6 address, or an FQDN.
+func validateNLBAddress(address string) error {
+	if address == "" {
+		return nil
 	}
 
-	for _, field := range fields {
-		if field.networkType != asdbv1.AerospikeNetworkTypeNLB {
-			continue
-		}
-
-		if field.address == "" {
-			return fmt.Errorf("%s is required when %s is 'clusterNLB'", field.fieldName, field.typeName)
-		}
+	fldPath := field.NewPath("spec", "aerospikeNetworkPolicy", "nlbAddress")
+	if len(k8svalidation.IsValidIP(fldPath, address)) == 0 ||
+		len(k8svalidation.IsFullyQualifiedDomainName(fldPath, address)) == 0 {
+		return nil
 	}
 
-	return nil
+	return fmt.Errorf("nlbAddress %q must be an IPv4 address, an IPv6 address, or an FQDN", address)
 }
 
 // validateBatchSize validates the batch size for the following types:

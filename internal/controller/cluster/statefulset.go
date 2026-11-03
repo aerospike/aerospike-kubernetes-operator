@@ -1799,8 +1799,10 @@ func getSTSContainerPort(
 		// The hostPort setting applies to the Kubernetes containers.
 		// The container port will be exposed to the external network at <hostIP>:<hostPort>,
 		// where the hostIP is the IP address of the Kubernetes node where
-		// the container is running and the hostPort is the port requested by the user
-		if !asdbv1.GetBool(multiPodPerHost) && portInfo.exposedOnHost && !podOnlyNetwork {
+		// the container is running and the hostPort is the port requested by the user.
+		// clusterNLB uses the per-pod NodePort Service instead, so hostPort stays unset.
+		if !asdbv1.GetBool(multiPodPerHost) && portInfo.exposedOnHost && !podOnlyNetwork &&
+			!aeroNetworkPolicy.UsesClusterNLB() {
 			containerPort.HostPort = containerPort.ContainerPort
 		}
 
