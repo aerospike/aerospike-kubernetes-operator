@@ -2081,6 +2081,7 @@ var _ = Describe("AerospikeCluster validation", func() {
 
 					fetched, err := testCluster.GetCluster(envtests.K8sClient, ctx, clusterNamespacedName)
 					Expect(err).ToNot(HaveOccurred())
+
 					fetched.Spec.AerospikeNetworkPolicy.AlternateAccessType = asdbv1.AerospikeNetworkTypeHostExternal
 
 					Expect(envtests.K8sClient.Update(ctx, fetched)).To(Succeed())

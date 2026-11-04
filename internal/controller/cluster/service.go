@@ -505,9 +505,8 @@ func (r *SingleClusterReconciler) cleanupDanglingPodServices(ctx context.Context
 	return nil
 }
 
-// podServiceManaged reports whether this reconcile should create or delete per-pod Services.
-// statusNLB is the previous policy. It keeps cleanup reachable for one reconcile after clusterNLB is removed
-// when multiPodPerHost is false, without deleting same-named Services on clusters that never used clusterNLB.
+// podServiceManaged reports whether per-pod Services should be reconciled.
+// statusNLB is the previous policy, so leaving clusterNLB still cleans them up once.
 func podServiceManaged(multiPodPerHost, specNLB, statusNLB bool) bool {
 	return multiPodPerHost || specNLB || statusNLB
 }

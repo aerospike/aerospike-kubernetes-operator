@@ -528,9 +528,8 @@ type AerospikePodSpec struct { //nolint:govet // for readability
 	SchedulingPolicy `json:",inline"`
 
 	// If set true then multiple pods can be created per Kubernetes Node.
-	// This will create a NodePort service for each Pod if alternateAccess or tlsAlternateAccess
-	// is 'clusterNLB', or if aerospikeNetworkPolicy has one of the network types:
-	// 'hostInternal', 'hostExternal', 'configuredIP'
+	// This will create a NodePort service for each Pod if aerospikeNetworkPolicy defined
+	// has one of the network types: 'hostInternal', 'hostExternal', 'configuredIP'
 	// NodePort, as the name implies, opens a specific port on all the Kubernetes Nodes ,
 	// and any traffic that is sent to this port is forwarded to the service.
 	// Here service picks a random port in range (30000-32767), so these port should be open.
@@ -540,8 +539,6 @@ type AerospikePodSpec struct { //nolint:govet // for readability
 	// The container port will be exposed to the external network at <hostIP>:<hostPort>,
 	// where the hostIP is the IP address of the Kubernetes Node where the container is running and
 	// the hostPort is the port requested by the user.
-	// clusterNLB on alternateAccess or tlsAlternateAccess still creates a per-pod NodePort Service
-	// in this mode, and does not set hostPort.
 	// +optional
 	MultiPodPerHost *bool `json:"multiPodPerHost,omitempty"`
 
