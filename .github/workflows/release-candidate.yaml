@@ -9,13 +9,14 @@
 #
 # The shared workflow tags each image <version>_<timestamp> and <version>-rcN.
 # The helm charts and the OLM bundle point at the images as <version>@<digest>,
-# for the operator and for the INIT_RC_TAG init image. The digest pins the
+# for the operator and for the INIT_TAG init image. The digest pins the
 # exact image, so the tag in front of it is only for people reading it.
 #
 # Build names are separate from the CI ones, because run numbers are per
 # workflow, so the same build number could otherwise come from two workflows.
 # The init images come from the init repo's release candidate run for
-# INIT_RC_TAG (build names ako-init-rc and ako-init-openshift-rc).
+# INIT_TAG (build names ako-init-rc and ako-init-openshift-rc), so INIT_TAG
+# must be an init release candidate.
 #
 # Secrets: SNYK_TOKEN, AKO_FEATURES_CONF_B64, GKE_WIF_PROVIDER, GKE_SERVICE_ACCOUNT,
 #          GKE_PROJECT, GKE_LOCATION, GKE_CLUSTER
@@ -60,8 +61,6 @@ jobs:
 
       - name: Checkout code
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
-        with:
-          submodules: true
 
       # e.g. v4.7.0-rc1 gives version 4.7.0 and rc-version 4.7.0-rc1. The
       # Makefile VERSION goes into the OLM bundle, so it must already be bumped
@@ -80,7 +79,7 @@ jobs:
           echo "rc-version=$rc" | tee -a "$GITHUB_OUTPUT"
 
       # The init release bundle builds are numbered by the run number of the
-      # init repo's release candidate run for INIT_RC_TAG. A tag push run has
+      # init repo's release candidate run for INIT_TAG. A tag push run has
       # the tag as its head branch.
       - name: Resolve init build
         id: init
@@ -88,11 +87,7 @@ jobs:
           GH_TOKEN: ${{ github.token }}
           INIT_REPO: aerospike/aerospike-kubernetes-init
         run: |
-          tag=$(sed -n 's/^INIT_RC_TAG ?= *//p' Makefile)
-          if ! [[ "$tag" =~ ^[0-9]+\.[0-9]+\.[0-9]+-rc[0-9]+$ ]]; then
-            echo "::error::Unexpected INIT_RC_TAG: $tag"
-            exit 1
-          fi
+          tag=$(sed -n 's/^INIT_TAG ?= *//p' Makefile)
           build=$(gh api "repos/$INIT_REPO/actions/workflows/release-candidate.yaml/runs?branch=$tag&event=push&status=success" \
             --jq '.workflow_runs[0].run_number')
           if [ -z "$build" ] || [ "$build" = "null" ]; then
@@ -144,8 +139,8 @@ jobs:
         id: tests
         run: hack/ci/select-tests.sh all | tee -a "$GITHUB_OUTPUT"
 
-  # Every release candidate builds the charts and the OLM bundle as <version>,
-  # so they are uploaded under the rc version to keep each candidate's apart.
+  # The charts are versioned as the rc version. They and the OLM manifests are
+  # uploaded under it, to keep each candidate's apart.
   build:
     name: Build
     needs: prepare

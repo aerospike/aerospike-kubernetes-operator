@@ -32,7 +32,7 @@ on:
         type: string
         default: ""
       artifact-version:
-        description: Path segment that the helm charts and OLM manifests are uploaded under
+        description: Helm chart version, and the path segment that the helm charts and OLM manifests are uploaded under
         type: string
         required: true
       init-name-tag:
@@ -113,8 +113,6 @@ jobs:
           oidc-audience: aerospike
 
       # The operator chart deploys the operator image built in this run.
-      # TODO: Decide if we want this for CI builds. Without it, the chart keeps
-      # the original image.
       # Images are pushed to the DEV repo but pulled through the virtual repo,
       # which resolves in every environment the release bundle is promoted to.
       - name: Set operator image
@@ -141,14 +139,22 @@ jobs:
       - name: Package charts
         run: |
           for chart in helm-charts/*/; do
-            helm package "$chart" --version "$VERSION" --app-version "$VERSION" --destination dist
+            helm package "$chart" --version "$ARTIFACT_VERSION" --app-version "$VERSION" --destination dist
           done
 
-      # Same layout as the shared deploy workflow: <chart>/<artifact-version>/<chart>-<version>.tgz.
+      # Checks the packaged charts, with the image values set above.
+      - name: Lint and render charts
+        run: |
+          for chart in dist/*.tgz; do
+            helm lint "$chart"
+            helm template test "$chart" > /dev/null
+          done
+
+      # Same layout as the shared deploy workflow: <chart>/<artifact-version>/<chart>-<artifact-version>.tgz.
       # --flat stops the local dist/ folder from becoming part of the path.
       - name: Upload charts to JFrog
         run: |
-          jf rt upload "dist/(*)-${VERSION}.tgz" "platforms-helm-dev-local/{1}/${ARTIFACT_VERSION}/" --flat \
+          jf rt upload "dist/(*)-${ARTIFACT_VERSION}.tgz" "platforms-helm-dev-local/{1}/${ARTIFACT_VERSION}/" --flat \
             --build-name="$BUILD_NAME" --build-number="$GITHUB_RUN_NUMBER" --project=platforms
           jf rt build-publish "$BUILD_NAME" "$GITHUB_RUN_NUMBER" --project=platforms
 

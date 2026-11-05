@@ -17,13 +17,10 @@ VERSION ?= 4.6.0
 # Bump it right after a release is tagged. CI fails until it is newer than the last release tag.
 NEXT_VERSION ?= 4.7.0
 
-# INIT_TAG is the aerospike-kubernetes-init CI build that goes into the release bundle,
-# as <version>-<pr-N|master>-<short commit sha>, the tag that CI pushes to JFrog.
+# INIT_TAG is the aerospike-kubernetes-init build that goes into the jfrog release bundle. Either a CI
+# build, <version>-<pr-N|master>-<short commit sha>, or a release candidate, <version>-rcN.
+# An operator release candidate needs an init release candidate, so set it at code freeze.
 INIT_TAG ?= 2.5.5-pr-166-50c3a4c
-
-# INIT_RC_TAG is the aerospike-kubernetes-init release candidate that goes into an operator
-# release candidate, as <version>-rcN, the tag pushed to the init repo.
-INIT_RC_TAG ?= 2.5.5-rc1
 
 # Platforms supported
 PLATFORMS ?= linux/amd64,linux/arm64

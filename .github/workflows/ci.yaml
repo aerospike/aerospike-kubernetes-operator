@@ -56,6 +56,7 @@ jobs:
       base-version: ${{ steps.version.outputs.base-version }}
       version: ${{ steps.version.outputs.version }}
       init-build: ${{ steps.init.outputs.build }}
+      init-build-name-suffix: ${{ steps.init.outputs.build-name-suffix }}
       init-name-tag: ${{ steps.init-image.outputs.name-tag }}
       suites: ${{ steps.tests.outputs.suites }}
       focus: ${{ steps.tests.outputs.focus }}
@@ -98,7 +99,8 @@ jobs:
           echo "version=$base-$label-${SHA::7}" | tee -a "$GITHUB_OUTPUT"
 
       # The release bundle takes the init images by build-info number, which is
-      # the run number of the init CI run that built INIT_TAG.
+      # the run number of the init run that built INIT_TAG: the init CI run for
+      # a CI build, or the init release candidate run for a release candidate.
       # TODO(sidntrivedi): Add a build number input to reusable_docker-build-deploy.yaml in
       # shared-workflows, so the init CI can publish its build-info under INIT_TAG
       # and this lookup can go.
@@ -112,16 +114,26 @@ jobs:
           case "$tag" in
             *-pr-*) event=pull_request ;;
             *-master-*) event=push ;;
+            *-rc[0-9]*) event=rc ;;
             *) echo "::error::Unexpected INIT_TAG: $tag"; exit 1 ;;
           esac
-          sha=$(gh api "repos/$INIT_REPO/commits/${tag##*-}" --jq .sha)
-          build=$(gh api "repos/$INIT_REPO/actions/runs?head_sha=$sha&event=$event&status=success" \
-            --jq '[.workflow_runs[] | select(.path == ".github/workflows/ci.yaml")][0].run_number')
+          if [ "$event" = "rc" ]; then
+            # Built as <version>, under build names ending in -rc. A tag push
+            # run has the tag as its head branch.
+            build=$(gh api "repos/$INIT_REPO/actions/workflows/release-candidate.yaml/runs?branch=$tag&event=push&status=success" \
+              --jq '.workflow_runs[0].run_number')
+            echo "image-tag=${tag%-rc*}" >> "$GITHUB_OUTPUT"
+            echo "build-name-suffix=-rc" >> "$GITHUB_OUTPUT"
+          else
+            sha=$(gh api "repos/$INIT_REPO/commits/${tag##*-}" --jq .sha)
+            build=$(gh api "repos/$INIT_REPO/actions/runs?head_sha=$sha&event=$event&status=success" \
+              --jq '[.workflow_runs[] | select(.path == ".github/workflows/ci.yaml")][0].run_number')
+            echo "image-tag=$tag" >> "$GITHUB_OUTPUT"
+          fi
           if [ -z "$build" ] || [ "$build" = "null" ]; then
-            echo "::error::No successful init CI run for $tag"
+            echo "::error::No successful init run for $tag"
             exit 1
           fi
-          echo "tag=$tag" >> "$GITHUB_OUTPUT"
           echo "build=$build" | tee -a "$GITHUB_OUTPUT"
 
       - name: Set up JFrog CLI
@@ -131,22 +143,23 @@ jobs:
           oidc-audience: aerospike
 
       # The release bundle holds only the timestamped tag that the init build-info
-      # records, e.g. pr-166-dd04cc5_20261030T091706Z, not the plain INIT_TAG. The
-      # chart, the OLM bundle and e2e use it, so it is there after promotion and
-      # an init CI re-run can't move it.
+      # records, e.g. 2.5.5-pr-166-dd04cc5_20261030T091706Z or 2.5.5_20261030T091706Z,
+      # not the plain INIT_TAG. The chart, the OLM bundle and e2e use it, so it is
+      # there after promotion and an init re-run can't move it.
       - name: Resolve init image
         id: init-image
         env:
-          TAG: ${{ steps.init.outputs.tag }}
+          TAG: ${{ steps.init.outputs.image-tag }}
+          BUILD_NAME: ako-init${{ steps.init.outputs.build-name-suffix }}
           BUILD: ${{ steps.init.outputs.build }}
         run: |
           # Module IDs are <image>:<tag>. The per-platform and attestation modules
           # add a prefix, e.g. linux/amd64/<image>:<tag>.
-          name_tag=$(jf rt curl -s "/api/build/ako-init/$BUILD?project=platforms" |
+          name_tag=$(jf rt curl -s "/api/build/$BUILD_NAME/$BUILD?project=platforms" |
             jq -r --arg prefix "aerospike-kubernetes-init:${TAG}_" \
               '[.buildInfo.modules[].id | sub(".*/"; "") | select(startswith($prefix))] | unique | .[]')
           if [ "$(grep -c . <<< "$name_tag")" -ne 1 ]; then
-            echo "::error::Expected one aerospike-kubernetes-init:${TAG}_<timestamp> image in build ako-init/$BUILD, got: $name_tag"
+            echo "::error::Expected one aerospike-kubernetes-init:${TAG}_<timestamp> image in build $BUILD_NAME/$BUILD, got: $name_tag"
             exit 1
           fi
           echo "name-tag=$name_tag" | tee -a "$GITHUB_OUTPUT"
@@ -155,9 +168,8 @@ jobs:
         id: tests
         env:
           BASE_REF: ${{ github.base_ref }}
-        # TODO: Revert. Runs every suite on PRs too, to test the e2e job.
         run: |
-          if false && [ "$GITHUB_EVENT_NAME" = "pull_request" ]; then
+          if [ "$GITHUB_EVENT_NAME" = "pull_request" ]; then
             git diff --name-only "origin/$BASE_REF...HEAD" | hack/ci/select-tests.sh
           else
             hack/ci/select-tests.sh all
@@ -210,8 +222,8 @@ jobs:
       jf-bundle-name: aerospike-kubernetes-operator
       version: ${{ needs.prepare.outputs.version }}
       # Every build-info is published under the run number. The init ones under
-      # the init CI's run number.
-      jf-build-names: ako-operator:${{ github.run_number }},ako-olm-bundle:${{ github.run_number }},ako-olm-manifests:${{ github.run_number }},ako-helm-charts:${{ github.run_number }},ako-init:${{ needs.prepare.outputs.init-build }},ako-init-openshift:${{ needs.prepare.outputs.init-build }}
+      # the run number of the init run that built INIT_TAG.
+      jf-build-names: ako-operator:${{ github.run_number }},ako-olm-bundle:${{ github.run_number }},ako-olm-manifests:${{ github.run_number }},ako-helm-charts:${{ github.run_number }},ako-init${{ needs.prepare.outputs.init-build-name-suffix }}:${{ needs.prepare.outputs.init-build }},ako-init-openshift${{ needs.prepare.outputs.init-build-name-suffix }}:${{ needs.prepare.outputs.init-build }}
 
   promote:
     name: Promote release bundle
@@ -243,9 +255,9 @@ jobs:
           environment: DEV
           jf-project: platforms
 
-      # Only master builds go on to TEST. PR builds stop at DEV.
+      # Only master builds, pushed or run by hand, go on to TEST. PR builds stop at DEV.
       - name: Promote release bundle to TEST
-        if: github.event_name == 'push' && github.ref == 'refs/heads/master'
+        if: github.ref == 'refs/heads/master'
         uses: aerospike/shared-workflows/.github/actions/promote-release-bundle@39b94aea7c29ee73ee97ea079f16936b474cad6e # main
         with:
           bundle-name: aerospike-kubernetes-operator
