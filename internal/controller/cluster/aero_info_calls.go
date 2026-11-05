@@ -586,6 +586,9 @@ func (r *SingleClusterReconciler) setDynamicConfig(
 				errorStatus = asdbv1.PartiallyFailed
 			}
 
+			// Counted before the status patch so that a failed patch does not lose the update attempt.
+			r.incDynamicConfigUpdateMetric(dynamicConfigResultFromStatus(errorStatus))
+
 			patches := make([]jsonpatch.PatchOperation, 0, 1)
 
 			patch := jsonpatch.PatchOperation{
@@ -612,6 +615,8 @@ func (r *SingleClusterReconciler) setDynamicConfig(
 		if err := r.updateAerospikeConfInPod(podName); err != nil {
 			return common.ReconcileError(err)
 		}
+
+		r.incDynamicConfigUpdateMetric(dynamicConfigResultSuccess)
 	}
 
 	return common.ReconcileSuccess()
@@ -973,6 +978,10 @@ func (r *SingleClusterReconciler) pollAndDeleteParkedPods(
 			if err := r.deletePodWithLocalPVCs(ctx, rackForPod[pod.Name], pod, false); err != nil {
 				return deleted, common.ReconcileError(err)
 			}
+
+			// A parked pod still runs its old image, so an image mismatch means it was parked by
+			// the upgrade path, the same check isRackUpgradeNeeded uses.
+			r.incPodRestartMetric(podRestart, podRestartTrigger(false, !r.isPodOnDesiredImage(pod, false)))
 
 			deleted = append(deleted, pod)
 
