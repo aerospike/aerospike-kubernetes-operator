@@ -286,6 +286,10 @@ var _ = Describe(
 									}}
 								aeroCluster.Spec.RackConfig = rackConf
 
+								// 2.4.0 is a released image, so it comes from Docker Hub, not the
+								// operator's default init registry.
+								aeroCluster.Spec.PodSpec.AerospikeInitContainerSpec.ImageRegistry = "docker.io"
+								aeroCluster.Spec.PodSpec.AerospikeInitContainerSpec.ImageRegistryNamespace = ptr.To("aerospike")
 								aeroCluster.Spec.PodSpec.AerospikeInitContainerSpec.ImageNameAndTag = "aerospike-kubernetes-init:2.4.0"
 
 								Expect(DeployCluster(k8sClient, ctx, aeroCluster)).ToNot(HaveOccurred())

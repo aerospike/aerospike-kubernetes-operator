@@ -36,6 +36,9 @@ const AuthSecretName = "auth-secret"
 const AuthSecretNameForUpdate = "auth-update"
 const AWSSecretName = "aws-secret"
 
+// Set by test.sh to the name of the pull secret for the init image
+const imagePullSecretNameEnvVar = "IMAGE_PULL_SECRET_NAME" //nolint:gosec // for testing
+
 const MultiClusterNs1 string = "test1"
 const MultiClusterNs2 string = "test2"
 const AerospikeNs string = "aerospike"
@@ -51,10 +54,17 @@ func getLabels() map[string]string {
 func createClusterRBAC(k8sClient client.Client, ctx goctx.Context) error {
 	subjects := make([]rbac.Subject, 0, len(Namespaces))
 
+	// The Aerospike pods run under this service account, so its pull secret
+	// lets them pull an init image from a private registry.
+	var imagePullSecrets []corev1.LocalObjectReference
+	if name := os.Getenv(imagePullSecretNameEnvVar); name != "" {
+		imagePullSecrets = append(imagePullSecrets, corev1.LocalObjectReference{Name: name})
+	}
+
 	for idx := range Namespaces {
 		// Create service account for getting access in cluster specific namespaces
 		if err := createServiceAccount(
-			k8sClient, ctx, aeroClusterServiceAccountName, Namespaces[idx],
+			k8sClient, ctx, aeroClusterServiceAccountName, Namespaces[idx], imagePullSecrets...,
 		); err != nil {
 			return err
 		}
@@ -105,12 +115,14 @@ func createNamespace(
 
 func createServiceAccount(
 	k8sClient client.Client, ctx goctx.Context, name string, namespace string,
+	imagePullSecrets ...corev1.LocalObjectReference,
 ) error {
 	svcAct := &corev1.ServiceAccount{
 		ObjectMeta: metav1.ObjectMeta{
 			Name:      name,
 			Namespace: namespace,
 		},
+		ImagePullSecrets: imagePullSecrets,
 	}
 
 	err := k8sClient.Create(ctx, svcAct)
