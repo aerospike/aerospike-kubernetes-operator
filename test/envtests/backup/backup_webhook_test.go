@@ -5,6 +5,9 @@ import (
 
 	. "github.com/onsi/ginkgo/v2"
 	. "github.com/onsi/gomega"
+	corev1 "k8s.io/api/core/v1"
+	apierrors "k8s.io/apimachinery/pkg/api/errors"
+	"k8s.io/apimachinery/pkg/runtime"
 	"k8s.io/apimachinery/pkg/types"
 
 	asdbv1beta1 "github.com/aerospike/aerospike-kubernetes-operator/v4/api/v1beta1"
@@ -211,3 +214,105 @@ var _ = Describe("AerospikeBackup validation", Ordered, func() {
 		})
 	})
 })
+
+var _ = Describe("AerospikeBackup update with a backup service config the current rules reject",
+	Ordered, ContinueOnFailure, func() {
+		ctx := context.TODO()
+
+		const finalizer = "asdb.aerospike.com/backup-finalizer"
+
+		var backupNsNm, absNsNm types.NamespacedName
+
+		BeforeAll(func() {
+			absNsNm = uniqueNamespacedName("rejected-abs")
+			backupNsNm = uniqueNamespacedName("rejected-backup")
+
+			Expect(backupconfig.CreateStubBackupService(ctx, envtests.K8sClient, absNsNm, nil)).To(Succeed())
+			DeferCleanup(backupconfig.DeleteStubBackupService, ctx, envtests.K8sClient, absNsNm)
+
+			backup := buildBackupCR(backupNsNm, absNsNm)
+			backup.Finalizers = []string{finalizer}
+			Expect(envtests.K8sClient.Create(ctx, backup)).To(Succeed())
+			Expect(syncBackupStatus(ctx, backup)).To(Succeed())
+			DeferCleanup(func() {
+				// Delete first: the webhook lets the finalizer go only while the backup is being deleted.
+				deleteBackup(ctx, backupNsNm)
+
+				current := &asdbv1beta1.AerospikeBackup{}
+				if err := envtests.K8sClient.Get(ctx, backupNsNm, current); err == nil {
+					current.Finalizers = nil
+					_ = envtests.K8sClient.Update(ctx, current)
+				}
+			})
+
+			// An S3 storage with path "/" was accepted by older backup service versions and is rejected by the current
+			// rules. Writing it to the ConfigMap after the backup was created reproduces the state an upgrade leaves.
+			config := backupconfig.BackupServiceBaseConfig()
+			config[asdbv1beta1.StorageKey].(map[string]interface{})["s3"] = map[string]interface{}{
+				"s3-storage": map[string]interface{}{
+					"bucket":    "backups",
+					"path":      "/",
+					"s3-region": "us-east-1",
+				},
+			}
+
+			configMap := &corev1.ConfigMap{}
+			Expect(envtests.K8sClient.Get(ctx, absNsNm, configMap)).To(Succeed())
+			configMap.Data[asdbv1beta1.BackupServiceConfigYAML] = string(backupconfig.MustMarshalConfig(config))
+			Expect(envtests.K8sClient.Update(ctx, configMap)).To(Succeed())
+		})
+
+		getBackup := func() *asdbv1beta1.AerospikeBackup {
+			backup := &asdbv1beta1.AerospikeBackup{}
+			Expect(envtests.K8sClient.Get(ctx, backupNsNm, backup)).To(Succeed())
+
+			return backup
+		}
+
+		expectRejected := func(err error) {
+			Expect(err).To(HaveOccurred())
+			envtests.NewStatusErrorMatcher().
+				WithMessageSubstrings(testutil.BackupWebhookErrorPrefix, "must be relative to the storage root").
+				Validate(err)
+		}
+
+		changeRoutineCron := func(backup *asdbv1beta1.AerospikeBackup) {
+			config := backupconfig.BackupCRConfig(asdbv1beta1.NamePrefix(backupNsNm), backupconfig.DefaultClusterHost,
+				backupconfig.BackupRoutineCrons{IntervalCron: "@daily", IncrIntervalCron: "@daily"})
+			backup.Spec.Config = runtime.RawExtension{Raw: backupconfig.MustMarshalConfig(config)}
+		}
+
+		It("rejects a spec change", func() {
+			backup := getBackup()
+			changeRoutineCron(backup)
+			expectRejected(envtests.K8sClient.Update(ctx, backup))
+		})
+
+		It("still validates an update without a spec change while the backup is not being deleted", func() {
+			backup := getBackup()
+			backup.Labels = map[string]string{"team": "backup"}
+			expectRejected(envtests.K8sClient.Update(ctx, backup))
+		})
+
+		It("rejects a spec change while the backup is being deleted", func() {
+			Expect(envtests.K8sClient.Delete(ctx, getBackup())).To(Succeed())
+
+			backup := getBackup()
+			Expect(backup.DeletionTimestamp).ToNot(BeNil())
+
+			changeRoutineCron(backup)
+			expectRejected(envtests.K8sClient.Update(ctx, backup))
+		})
+
+		It("lets the finalizer be removed so the deletion completes", func() {
+			backup := getBackup()
+			Expect(backup.DeletionTimestamp).ToNot(BeNil())
+
+			backup.Finalizers = nil
+			Expect(envtests.K8sClient.Update(ctx, backup)).To(Succeed())
+
+			Eventually(func() bool {
+				return apierrors.IsNotFound(envtests.K8sClient.Get(ctx, backupNsNm, &asdbv1beta1.AerospikeBackup{}))
+			}).Should(BeTrue())
+		})
+	})
