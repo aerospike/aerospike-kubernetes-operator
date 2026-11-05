@@ -464,7 +464,15 @@ func isSafeChange(oldVolume, newVolume *asdbv1.VolumeSpec) bool {
 	oldPV := oldVolume.Source.PersistentVolume
 	newPV := newVolume.Source.PersistentVolume
 
-	return reflect.DeepEqual(oldPV, newPV)
+	// A size increase is the only in-place PV change: the operator expands the existing PVCs.
+	if newPV.Size.Cmp(oldPV.Size) < 0 {
+		return false
+	}
+
+	grownPV := oldPV.DeepCopy()
+	grownPV.Size = newPV.Size
+
+	return reflect.DeepEqual(grownPV, newPV)
 }
 
 func validateStorageVolumeSource(volume *asdbv1.VolumeSpec) error {
