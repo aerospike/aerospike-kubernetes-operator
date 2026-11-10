@@ -261,7 +261,8 @@ type AerospikeClusterSpec struct { //nolint:govet // for readability
 	HeadlessService ServiceSpec `json:"headlessService,omitempty"`
 
 	// PodService defines additional configuration parameters for the pod service created to expose the
-	// Aerospike Cluster nodes outside the Kubernetes cluster. This service is created only created when
+	// Aerospike Cluster nodes outside the Kubernetes cluster. This service is only created when
+	// `aerospikeNetworkPolicy` is 'networkLoadBalancer' or
 	// `multiPodPerHost` is set to `true` and `aerospikeNetworkPolicy` has one of the network types:
 	// 'hostInternal', 'hostExternal', 'configuredIP'
 	// +operator-sdk:csv:customresourcedefinitions:type=spec,displayName="Pod Service"
@@ -1182,7 +1183,8 @@ type AerospikeClusterStatusSpec struct { //nolint:govet // for readability
 	HeadlessService ServiceSpec `json:"headlessService,omitempty"`
 
 	// PodService defines additional configuration parameters for the pod service created to expose the
-	// Aerospike Cluster nodes outside the Kubernetes cluster. This service is created only created when
+	// Aerospike Cluster nodes outside the Kubernetes cluster. This service is only created when
+	// `aerospikeNetworkPolicy` is 'networkLoadBalancer' or
 	// `multiPodPerHost` is set to `true` and `aerospikeNetworkPolicy` has one of the network types:
 	// 'hostInternal', 'hostExternal', 'configuredIP'
 	// +optional
@@ -1281,6 +1283,15 @@ const (
 
 	// AerospikeNetworkTypeCustomInterface specifies any other custom interface to be used with Aerospike
 	AerospikeNetworkTypeCustomInterface AerospikeNetworkType = "customInterface"
+
+	// AerospikeNetworkTypeNetworkLoadBalancer specifies alternate access using one cluster-level
+	// network load balancer or PSC address.
+	// alternateAccess advertises loadBalancerAlternateAccessAddress.
+	// tlsAlternateAccess advertises loadBalancerTLSAlternateAccessAddress.
+	// The per-pod NodePort distinguishes nodes.
+	// Valid only for alternateAccess and tlsAlternateAccess.
+	// AKO creates that Service even when multiPodPerHost is false.
+	AerospikeNetworkTypeNetworkLoadBalancer AerospikeNetworkType = "networkLoadBalancer"
 )
 
 // AerospikeNetworkPolicy specifies how clients and tools access the Aerospike cluster.
@@ -1304,7 +1315,7 @@ type AerospikeNetworkPolicy struct {
 
 	// AlternateAccessType is the type of network address to use for Aerospike alternate access address.
 	// Defaults to hostExternal.
-	// +kubebuilder:validation:Enum=pod;hostInternal;hostExternal;configuredIP;customInterface
+	// +kubebuilder:validation:Enum=pod;hostInternal;hostExternal;configuredIP;customInterface;networkLoadBalancer
 	// +kubebuilder:default="hostExternal"
 	// +optional
 	AlternateAccessType AerospikeNetworkType `json:"alternateAccess,omitempty"`
@@ -1339,7 +1350,7 @@ type AerospikeNetworkPolicy struct {
 
 	// TLSAlternateAccessType is the type of network address to use for Aerospike TLS alternate access address.
 	// Defaults to hostExternal.
-	// +kubebuilder:validation:Enum=pod;hostInternal;hostExternal;configuredIP;customInterface
+	// +kubebuilder:validation:Enum=pod;hostInternal;hostExternal;configuredIP;customInterface;networkLoadBalancer
 	// +kubebuilder:default="hostExternal"
 	// +optional
 	TLSAlternateAccessType AerospikeNetworkType `json:"tlsAlternateAccess,omitempty"`
@@ -1354,6 +1365,18 @@ type AerospikeNetworkPolicy struct {
 	// +kubebuilder:validation:MinItems:=1
 	// +optional
 	CustomTLSAlternateAccessNetworkNames []string `json:"customTLSAlternateAccessNetworkNames,omitempty"`
+
+	// LoadBalancerAlternateAccessAddress is the IPv4 address, IPv6 address, or FQDN of the
+	// cluster-level network load balancer or PSC endpoint advertised for alternate access.
+	// Required when alternateAccess is 'networkLoadBalancer'.
+	// +optional
+	LoadBalancerAlternateAccessAddress string `json:"loadBalancerAlternateAccessAddress,omitempty"`
+
+	// LoadBalancerTLSAlternateAccessAddress is the IPv4 address, IPv6 address, or FQDN of the
+	// cluster-level network load balancer or PSC endpoint advertised for TLS alternate access.
+	// Required when tlsAlternateAccess is 'networkLoadBalancer'.
+	// +optional
+	LoadBalancerTLSAlternateAccessAddress string `json:"loadBalancerTLSAlternateAccessAddress,omitempty"`
 
 	// FabricType is the type of network address to use for Aerospike fabric address.
 	// Defaults is empty meaning all interfaces 'any'.
@@ -1514,7 +1537,7 @@ type AerospikePodStatus struct { //nolint:govet // for readability
 
 // AerospikeCluster is the schema for the AerospikeCluster API
 // +operator-sdk:csv:customresourcedefinitions:displayName="Aerospike Cluster",resources={{Service, v1},{Pod,v1},{StatefulSet,v1}}
-// +kubebuilder:metadata:annotations="aerospike-kubernetes-operator/version=4.7.0"
+// +kubebuilder:metadata:annotations="aerospike-kubernetes-operator/version=4.8.0-dev1"
 //
 //nolint:lll // for readability
 type AerospikeCluster struct {

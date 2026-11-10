@@ -64,6 +64,13 @@ aerospikeNetworkPolicy: {}
 #   alternateAccess: hostExternal
 #   tlsAccess: pod
 #   tlsAlternateAccess: hostExternal
+#   # networkLoadBalancer is valid for alternateAccess and tlsAlternateAccess.
+#   # Each type advertises its own address. The per-pod NodePort distinguishes nodes.
+#   # Each address must be an IPv4 address, an IPv6 address, or an FQDN.
+#   # alternateAccess: networkLoadBalancer
+#   # tlsAlternateAccess: networkLoadBalancer
+#   # loadBalancerAlternateAccessAddress: aerospike-nlb.example.com
+#   # loadBalancerTLSAlternateAccessAddress: aerospike-nlb-tls.example.com
 
 ## Pod spec
 podSpec: {}

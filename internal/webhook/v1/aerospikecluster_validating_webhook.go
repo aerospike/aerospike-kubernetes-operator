@@ -33,6 +33,7 @@ import (
 	"k8s.io/apimachinery/pkg/util/intstr"
 	"k8s.io/apimachinery/pkg/util/sets"
 	k8svalidation "k8s.io/apimachinery/pkg/util/validation"
+	"k8s.io/apimachinery/pkg/util/validation/field"
 	"k8s.io/utils/ptr"
 	logf "sigs.k8s.io/controller-runtime/pkg/log"
 	"sigs.k8s.io/controller-runtime/pkg/webhook/admission"
@@ -2659,7 +2660,51 @@ func validateNetworkPolicy(cluster *asdbv1.AerospikeCluster) error {
 		}
 	}
 
+	if err := validateNLBNetworkPolicy(cluster); err != nil {
+		return err
+	}
+
 	return nil
+}
+
+func validateNLBNetworkPolicy(cluster *asdbv1.AerospikeCluster) error {
+	networkPolicy := &cluster.Spec.AerospikeNetworkPolicy
+
+	if networkPolicy.AlternateAccessType == asdbv1.AerospikeNetworkTypeNetworkLoadBalancer &&
+		networkPolicy.LoadBalancerAlternateAccessAddress == "" {
+		return fmt.Errorf("loadBalancerAlternateAccessAddress is required when alternateAccess is 'networkLoadBalancer'")
+	}
+
+	if networkPolicy.TLSAlternateAccessType == asdbv1.AerospikeNetworkTypeNetworkLoadBalancer &&
+		networkPolicy.LoadBalancerTLSAlternateAccessAddress == "" {
+		return fmt.Errorf("loadBalancerTLSAlternateAccessAddress is required " +
+			"when tlsAlternateAccess is 'networkLoadBalancer'")
+	}
+
+	if err := validateLoadBalancerAddress(
+		networkPolicy.LoadBalancerAlternateAccessAddress, "loadBalancerAlternateAccessAddress",
+	); err != nil {
+		return err
+	}
+
+	return validateLoadBalancerAddress(
+		networkPolicy.LoadBalancerTLSAlternateAccessAddress, "loadBalancerTLSAlternateAccessAddress",
+	)
+}
+
+// validateLoadBalancerAddress accepts an IPv4 address, an IPv6 address, or an FQDN.
+func validateLoadBalancerAddress(address, fieldName string) error {
+	if address == "" {
+		return nil
+	}
+
+	fldPath := field.NewPath("spec", "aerospikeNetworkPolicy", fieldName)
+	if len(k8svalidation.IsValidIP(fldPath, address)) == 0 ||
+		len(k8svalidation.IsFullyQualifiedDomainName(fldPath, address)) == 0 {
+		return nil
+	}
+
+	return fmt.Errorf("%s %q must be an IPv4 address, an IPv6 address, or an FQDN", fieldName, address)
 }
 
 // validateBatchSize validates the batch size for the following types:

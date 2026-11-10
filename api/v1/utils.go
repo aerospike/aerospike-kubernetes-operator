@@ -646,6 +646,18 @@ func GetBool(boolPtr *bool) bool {
 	return ptr.Deref(boolPtr, false)
 }
 
+// UsesNetworkLoadBalancer reports whether alternate access or TLS alternate access advertises the
+// cluster network load balancer address.
+// AKO creates a per-pod NodePort Service in that case even when multiPodPerHost is false.
+func (p *AerospikeNetworkPolicy) UsesNetworkLoadBalancer() bool {
+	if p == nil {
+		return false
+	}
+
+	return p.AlternateAccessType == AerospikeNetworkTypeNetworkLoadBalancer ||
+		p.TLSAlternateAccessType == AerospikeNetworkTypeNetworkLoadBalancer
+}
+
 // GetDefaultPasswordFilePath returns the default-password-fille path if configured.
 func GetDefaultPasswordFilePath(aerospikeConfigSpec *AerospikeConfigSpec) *string {
 	aerospikeConfig := aerospikeConfigSpec.Value
