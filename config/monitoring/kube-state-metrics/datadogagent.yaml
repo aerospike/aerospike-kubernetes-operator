@@ -1,0 +1,50 @@
+# DatadogAgent fields that make the Cluster Agent's kubernetes_state_core check collect the AerospikeCluster
+# status conditions written by AKO 4.6.0+. Requires Datadog Cluster Agent 7.63.0+.
+#
+# Merge spec.features.kubeStateMetricsCore into your existing DatadogAgent; the rest of your spec stays as is.
+# collectCrMetrics is a list, so add this entry to any entries you already have.
+#
+# The Datadog Operator creates the Cluster Agent's RBAC for aerospikeclusters itself, but Kubernetes only lets it
+# grant permissions it holds. Either bind clusterrole.yaml to the Operator's service account, or install the
+# Operator with clusterRole.allowReadAllResources=true. Without one of them the Operator reports a
+# DatadogAgentInternalReconcileError and does not deploy the Cluster Agent.
+#
+# The resource entry under collectCrMetrics must stay identical to the one in datadog-values.yaml.
+apiVersion: datadoghq.com/v2alpha1
+kind: DatadogAgent
+metadata:
+  name: datadog
+spec:
+  features:
+    kubeStateMetricsCore:
+      enabled: true
+      collectCrMetrics:
+        - groupVersionKind:
+            group: asdb.aerospike.com
+            version: v1
+            kind: AerospikeCluster
+          metricNamePrefix: aerospikecluster
+          labelsFromPath:
+            cluster_name: [metadata, name]
+            cluster_namespace: [metadata, namespace]
+          metrics:
+            - name: status_condition
+              help: "AerospikeCluster status condition, 1 for the current status (True, False or Unknown), 0 for the others."
+              each:
+                type: StateSet
+                stateSet:
+                  path: [status, conditions]
+                  labelsFromPath:
+                    type: [type]
+                  labelName: status
+                  valueFrom: [status]
+                  list: ["True", "False", "Unknown"]
+            - name: status_condition_last_transition_time
+              help: "Unix time of the last status change of the AerospikeCluster status condition."
+              each:
+                type: Gauge
+                gauge:
+                  path: [status, conditions]
+                  labelsFromPath:
+                    type: [type]
+                  valueFrom: [lastTransitionTime]
