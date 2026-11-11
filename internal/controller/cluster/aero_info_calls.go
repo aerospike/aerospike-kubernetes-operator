@@ -973,15 +973,15 @@ func (r *SingleClusterReconciler) pollAndDeleteParkedPods(
 			r.Log.Info("Index checkpoint completed", "pod", utils.GetNamespacedName(pod),
 				"namespaces", savedNSs, "status", resp)
 
+			isUpgrade := r.isParkedPodUpgrade(ctx, rackForPod[pod.Name], pod)
+
 			// isFailureRecovery is false by construction: the checkpoint save is only
 			// triggered on the planned path, so a parked pod is never a failure-recovery pod.
 			if err := r.deletePodWithLocalPVCs(ctx, rackForPod[pod.Name], pod, false); err != nil {
 				return deleted, common.ReconcileError(err)
 			}
 
-			// A parked pod still runs its old image, so an image mismatch means it was parked by
-			// the upgrade path, the same check isRackUpgradeNeeded uses.
-			r.incPodRestartMetric(podRestart, podRestartTrigger(false, !r.isPodOnDesiredImage(pod, false)))
+			r.incPodRestartMetric(podRestart, podRestartTrigger(false, isUpgrade))
 
 			deleted = append(deleted, pod)
 

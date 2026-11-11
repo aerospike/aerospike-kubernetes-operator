@@ -195,3 +195,43 @@ func TestIncDynamicConfigUpdateMetric(t *testing.T) {
 		})
 	}
 }
+
+func TestAddClusterPhaseMetricInitializesCounters(t *testing.T) {
+	t.Parallel()
+
+	const cluster = "counters-initialized"
+
+	r := newMetricsTestReconciler(cluster)
+
+	r.addClusterPhaseMetric()
+
+	if got := clusterMetricSeries(t, podRestartsTotal, cluster); got != len(podRestartLabelValues) {
+		t.Fatalf("want %d pod restart series, got %d", len(podRestartLabelValues), got)
+	}
+
+	for _, series := range gatherClusterSeries(t, podRestartsTotal, cluster) {
+		if series.value != 0 {
+			t.Errorf("want 0 for %v, got %v", series.labels, series.value)
+		}
+
+		if series.labels[restartTypeLabelKey] == restartTypeWarm && series.labels[triggerLabelKey] == triggerUpgrade {
+			t.Errorf("unexpected warm upgrade series")
+		}
+	}
+
+	if got := clusterMetricSeries(t, dynamicConfigUpdatesTotal, cluster); got != len(dynamicConfigResults) {
+		t.Fatalf("want %d dynamic config update series, got %d", len(dynamicConfigResults), got)
+	}
+
+	// A later status write must not reset a counted restart.
+	r.incPodRestartMetric(podRestart, triggerFailureRecovery)
+	r.addClusterPhaseMetric()
+
+	got := clusterMetricValue(t, podRestartsTotal, cluster, map[string]string{
+		restartTypeLabelKey: restartTypeCold,
+		triggerLabelKey:     triggerFailureRecovery,
+	})
+	if got != 1 {
+		t.Errorf("want count 1 after a second addClusterPhaseMetric, got %v", got)
+	}
+}

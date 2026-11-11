@@ -72,6 +72,22 @@ var phases = []asdbv1.AerospikeClusterPhase{
 	asdbv1.AerospikeClusterCompleted,
 }
 
+// podRestartLabelValues lists the type and trigger pairs the operator can count. An upgrade always
+// deletes the pod, so there is no warm upgrade.
+var podRestartLabelValues = [][2]string{
+	{restartTypeWarm, triggerPlanned},
+	{restartTypeWarm, triggerFailureRecovery},
+	{restartTypeCold, triggerPlanned},
+	{restartTypeCold, triggerUpgrade},
+	{restartTypeCold, triggerFailureRecovery},
+}
+
+var dynamicConfigResults = []string{
+	dynamicConfigResultSuccess,
+	dynamicConfigResultFailed,
+	dynamicConfigResultPartiallyFailed,
+}
+
 // It sets the metric value to 1.0 for the current phase of the AerospikeCluster
 // and 0.0 for all other phases.
 func (r *SingleClusterReconciler) addClusterPhaseMetric() {
@@ -86,6 +102,20 @@ func (r *SingleClusterReconciler) addClusterPhaseMetric() {
 			r.aeroCluster.Name,
 			r.aeroCluster.Namespace,
 			string(phase)).Set(value)
+	}
+
+	r.initClusterCounterMetrics()
+}
+
+// initClusterCounterMetrics creates the counter series at 0 so that increase() sees their first
+// increment. Add(0) leaves an existing series unchanged.
+func (r *SingleClusterReconciler) initClusterCounterMetrics() {
+	for _, labels := range podRestartLabelValues {
+		podRestartsTotal.WithLabelValues(r.aeroCluster.Name, r.aeroCluster.Namespace, labels[0], labels[1]).Add(0)
+	}
+
+	for _, result := range dynamicConfigResults {
+		dynamicConfigUpdatesTotal.WithLabelValues(r.aeroCluster.Name, r.aeroCluster.Namespace, result).Add(0)
 	}
 }
 
@@ -140,7 +170,7 @@ func dynamicConfigResultFromStatus(status asdbv1.DynamicConfigUpdateStatus) stri
 	return dynamicConfigResultFailed
 }
 
-// It removes all custom metrics of the AerospikeCluster CR with the specified name and namespace.
+// removeClusterMetrics removes all custom metrics of the AerospikeCluster CR with the specified name and namespace.
 func (r *SingleClusterReconciler) removeClusterMetrics() {
 	clusterLabels := prometheus.Labels{
 		clusterLabelKey:   r.aeroCluster.Name,

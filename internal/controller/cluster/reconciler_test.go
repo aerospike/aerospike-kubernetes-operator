@@ -315,8 +315,7 @@ func TestFinishReconcile_DeletedClusterLeavesNoMetrics(t *testing.T) {
 
 	r := newTestReconciler(t, ac, &interceptor.Funcs{})
 
-	// An ordinary pass registers one series per phase, and restarts and dynamic config updates
-	// register their counter series.
+	// An ordinary pass registers one series per phase and every counter series at 0.
 	r.addClusterPhaseMetric()
 	r.incPodRestartMetric(quickRestart, triggerPlanned)
 	r.incPodRestartMetric(podRestart, triggerFailureRecovery)
@@ -332,12 +331,12 @@ func TestFinishReconcile_DeletedClusterLeavesNoMetrics(t *testing.T) {
 		t.Fatalf("precondition: want the Completed phase gauge at 1, got %v", got)
 	}
 
-	if got := clusterMetricSeries(t, podRestartsTotal, deletedCluster); got != 2 {
-		t.Fatalf("precondition: want 2 pod restart series, got %d", got)
+	if got := clusterMetricSeries(t, podRestartsTotal, deletedCluster); got != len(podRestartLabelValues) {
+		t.Fatalf("precondition: want %d pod restart series, got %d", len(podRestartLabelValues), got)
 	}
 
-	if got := clusterMetricSeries(t, dynamicConfigUpdatesTotal, deletedCluster); got != 1 {
-		t.Fatalf("precondition: want 1 dynamic config update series, got %d", got)
+	if got := clusterMetricSeries(t, dynamicConfigUpdatesTotal, deletedCluster); got != len(dynamicConfigResults) {
+		t.Fatalf("precondition: want %d dynamic config update series, got %d", len(dynamicConfigResults), got)
 	}
 
 	// handleTerminatingCluster drops them on a successful delete.
