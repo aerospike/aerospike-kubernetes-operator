@@ -56,5 +56,20 @@ func NewSchemaMap() (SchemaMap, error) {
 		return nil, err
 	}
 
+	// 8.2.1.json is not in the build. An 8.2.1 server tag looks up that key, so
+	// validate it with the 8.2.0 schema until the real file is added.
+	aliasSchema(schema, "8.2.1", "8.2.0")
+
 	return schema, nil
+}
+
+// aliasSchema copies source onto missing when missing is not already loaded.
+func aliasSchema(schema SchemaMap, missing, source string) {
+	if _, ok := schema[missing]; ok {
+		return
+	}
+
+	if src, ok := schema[source]; ok {
+		schema[missing] = src
+	}
 }
