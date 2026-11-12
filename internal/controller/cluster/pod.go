@@ -286,6 +286,17 @@ func (r *SingleClusterReconciler) getRollingRestartTypePod(
 		)
 	}
 
+	volumeExpanded, err := r.isVolumeExpansionRestartNeeded(ctx, rackState, pod)
+	if err != nil {
+		return restartType, err
+	}
+
+	if volumeExpanded {
+		restartType = mergeRestartType(restartType, quickRestart)
+
+		r.Log.Info("Block volume expanded. Need warm restart", "pod", utils.GetNamespacedName(pod))
+	}
+
 	if opType := r.onDemandOperationType(pod.Name, onDemandQuickRestarts, onDemandPodRestarts); opType != noRestart {
 		restartType = mergeRestartType(restartType, opType)
 
@@ -538,6 +549,10 @@ func (r *SingleClusterReconciler) restartPods(
 					"warm restart Pod %s: %w",
 					utils.NamespacedName(r.aeroCluster.Namespace, pod.Name), err,
 				))
+			}
+
+			if err := r.clearVolumeExpansionRestartMark(ctx, pod); err != nil {
+				return common.ReconcileError(err)
 			}
 
 			restartedASDPodNames = append(restartedASDPodNames, pod.Name)
