@@ -1245,6 +1245,18 @@ func validatePodEndpoint(
 				"expected custom network IP %v got %v", customNetIP, hostIPList,
 			)
 		}
+	case asdbv1.AerospikeNetworkTypeNetworkLoadBalancer:
+		expectedAddress := aeroCluster.Spec.AerospikeNetworkPolicy.LoadBalancerAlternateAccessAddress
+		if isTLS {
+			expectedAddress = aeroCluster.Spec.AerospikeNetworkPolicy.LoadBalancerTLSAlternateAccessAddress
+		}
+
+		if expectedAddress != hostIPList[0] {
+			return fmt.Errorf(
+				"expected load balancer address %v got %v",
+				expectedAddress, hostIPList[0],
+			)
+		}
 	case asdbv1.AerospikeNetworkTypeUnspecified:
 		return fmt.Errorf(
 			"network type cannot be unspecified",
@@ -1279,7 +1291,8 @@ func getExpectedServicePortForPod(
 	var port int32
 
 	if (networkType != asdbv1.AerospikeNetworkTypePod && networkType != asdbv1.AerospikeNetworkTypeCustomInterface) &&
-		asdbv1.GetBool(aeroCluster.Spec.PodSpec.MultiPodPerHost) {
+		(asdbv1.GetBool(aeroCluster.Spec.PodSpec.MultiPodPerHost) ||
+			networkType == asdbv1.AerospikeNetworkTypeNetworkLoadBalancer) {
 		svc, err := getServiceForPod(pod, k8sClient)
 		if err != nil {
 			return 0, fmt.Errorf("error getting service port: %v", err)

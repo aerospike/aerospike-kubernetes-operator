@@ -2157,6 +2157,96 @@ var _ = Describe("AerospikeCluster validation", func() {
 						WithMessageSubstrings(testutil.CRDSchemaErrorPrefix, "tlsFabric").
 						Validate(err)
 				})
+
+				It("rejects networkLoadBalancer on access", func() {
+					aeroCluster := testCluster.CreateDummyAerospikeCluster(clusterNamespacedName, 1)
+					aeroCluster.Spec.AerospikeNetworkPolicy.AccessType = asdbv1.AerospikeNetworkTypeNetworkLoadBalancer
+
+					err := envtests.K8sClient.Create(ctx, aeroCluster)
+					Expect(err).To(HaveOccurred())
+					envtests.NewStatusErrorMatcher().
+						WithMessageSubstrings(testutil.CRDSchemaErrorPrefix, "access").
+						Validate(err)
+				})
+
+				It("rejects networkLoadBalancer when the matching address is empty", func() {
+					aeroCluster := testCluster.CreateDummyAerospikeCluster(clusterNamespacedName, 2)
+					aeroCluster.Spec.AerospikeNetworkPolicy.AlternateAccessType = asdbv1.AerospikeNetworkTypeNetworkLoadBalancer
+
+					err := envtests.K8sClient.Create(ctx, aeroCluster)
+					Expect(err).To(HaveOccurred())
+					envtests.NewStatusErrorMatcher().
+						WithMessageSubstrings(testutil.WebhookErrorPrefix, "loadBalancerAlternateAccessAddress").
+						Validate(err)
+				})
+
+				It("rejects networkLoadBalancer when the TLS address is empty", func() {
+					aeroCluster := testCluster.CreateDummyAerospikeCluster(clusterNamespacedName, 2)
+					aeroCluster.Spec.AerospikeNetworkPolicy.TLSAlternateAccessType = asdbv1.AerospikeNetworkTypeNetworkLoadBalancer
+
+					err := envtests.K8sClient.Create(ctx, aeroCluster)
+					Expect(err).To(HaveOccurred())
+					envtests.NewStatusErrorMatcher().
+						WithMessageSubstrings(testutil.WebhookErrorPrefix, "loadBalancerTLSAlternateAccessAddress").
+						Validate(err)
+				})
+			})
+
+			Context("positive", func() {
+				It("accepts changing alternateAccess away from networkLoadBalancer", func() {
+					aeroCluster := testCluster.CreateDummyAerospikeCluster(clusterNamespacedName, 2)
+					aeroCluster.Spec.AerospikeNetworkPolicy.AlternateAccessType = asdbv1.AerospikeNetworkTypeNetworkLoadBalancer
+					aeroCluster.Spec.AerospikeNetworkPolicy.LoadBalancerAlternateAccessAddress = "aerospike-nlb.example.com"
+					Expect(envtests.K8sClient.Create(ctx, aeroCluster)).To(Succeed())
+
+					fetched, err := testCluster.GetCluster(envtests.K8sClient, ctx, clusterNamespacedName)
+					Expect(err).ToNot(HaveOccurred())
+
+					fetched.Spec.AerospikeNetworkPolicy.AlternateAccessType = asdbv1.AerospikeNetworkTypeHostExternal
+
+					Expect(envtests.K8sClient.Update(ctx, fetched)).To(Succeed())
+
+					updated, err := testCluster.GetCluster(envtests.K8sClient, ctx, clusterNamespacedName)
+					Expect(err).ToNot(HaveOccurred())
+					Expect(updated.Spec.AerospikeNetworkPolicy.AlternateAccessType).
+						To(Equal(asdbv1.AerospikeNetworkTypeHostExternal))
+				})
+
+				It("accepts networkLoadBalancer when multiPodPerHost is false and the matching address is set", func() {
+					aeroCluster := testCluster.CreateDummyAerospikeCluster(clusterNamespacedName, 2)
+					aeroCluster.Spec.PodSpec.MultiPodPerHost = ptr.To(false)
+					aeroCluster.Spec.AerospikeNetworkPolicy.AlternateAccessType = asdbv1.AerospikeNetworkTypeNetworkLoadBalancer
+					aeroCluster.Spec.AerospikeNetworkPolicy.LoadBalancerAlternateAccessAddress = "aerospike-nlb.example.com"
+
+					Expect(envtests.K8sClient.Create(ctx, aeroCluster)).To(Succeed())
+
+					fetched, err := testCluster.GetCluster(envtests.K8sClient, ctx, clusterNamespacedName)
+					Expect(err).ToNot(HaveOccurred())
+					Expect(fetched.Spec.PodSpec.MultiPodPerHost).To(Equal(ptr.To(false)))
+					Expect(fetched.Spec.AerospikeNetworkPolicy.LoadBalancerAlternateAccessAddress).
+						To(Equal("aerospike-nlb.example.com"))
+				})
+
+				It("accepts networkLoadBalancer when multiPodPerHost is true and the matching address is set", func() {
+					aeroCluster := testCluster.CreateDummyAerospikeCluster(clusterNamespacedName, 2)
+					aeroCluster.Spec.AerospikeNetworkPolicy.AlternateAccessType = asdbv1.AerospikeNetworkTypeNetworkLoadBalancer
+					aeroCluster.Spec.AerospikeNetworkPolicy.LoadBalancerAlternateAccessAddress = "aerospike-nlb.example.com"
+					aeroCluster.Spec.AerospikeNetworkPolicy.TLSAlternateAccessType = asdbv1.AerospikeNetworkTypeNetworkLoadBalancer
+					aeroCluster.Spec.AerospikeNetworkPolicy.LoadBalancerTLSAlternateAccessAddress = "aerospike-nlb-tls.example.com"
+
+					Expect(envtests.K8sClient.Create(ctx, aeroCluster)).To(Succeed())
+
+					fetched, err := testCluster.GetCluster(envtests.K8sClient, ctx, clusterNamespacedName)
+					Expect(err).ToNot(HaveOccurred())
+					Expect(fetched.Spec.AerospikeNetworkPolicy.AlternateAccessType).To(
+						Equal(asdbv1.AerospikeNetworkTypeNetworkLoadBalancer))
+					Expect(fetched.Spec.AerospikeNetworkPolicy.TLSAlternateAccessType).To(
+						Equal(asdbv1.AerospikeNetworkTypeNetworkLoadBalancer))
+					Expect(fetched.Spec.AerospikeNetworkPolicy.LoadBalancerAlternateAccessAddress).To(
+						Equal("aerospike-nlb.example.com"))
+					Expect(fetched.Spec.AerospikeNetworkPolicy.LoadBalancerTLSAlternateAccessAddress).To(
+						Equal("aerospike-nlb-tls.example.com"))
+				})
 			})
 		})
 

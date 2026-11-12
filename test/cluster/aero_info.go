@@ -31,7 +31,9 @@ func newAsConn(
 	tlsName := getServiceTLSName(aeroCluster)
 
 	networkType := asdbv1.AerospikeNetworkType(*defaultNetworkType)
-	if asdbv1.GetBool(aeroCluster.Spec.PodSpec.MultiPodPerHost) && networkType != asdbv1.AerospikeNetworkTypePod &&
+	if (asdbv1.GetBool(aeroCluster.Spec.PodSpec.MultiPodPerHost) ||
+		networkType == asdbv1.AerospikeNetworkTypeNetworkLoadBalancer) &&
+		networkType != asdbv1.AerospikeNetworkTypePod &&
 		networkType != asdbv1.AerospikeNetworkTypeCustomInterface {
 		svc, err := getServiceForPod(pod, k8sClient)
 		if err != nil {
@@ -136,6 +138,10 @@ func getEndpointIP(
 		return "", fmt.Errorf(
 			"%s not support yet", networkType,
 		)
+	case asdbv1.AerospikeNetworkTypeNetworkLoadBalancer:
+		return "", fmt.Errorf(
+			"can not use networkLoadBalancer network type: %s", networkType,
+		)
 	case asdbv1.AerospikeNetworkTypeUnspecified:
 		return "", fmt.Errorf(
 			"unknown network type: %s", networkType,
@@ -184,6 +190,10 @@ func createHost(pod *asdbv1.AerospikePodStatus, network string) (*as.Host, error
 	case asdbv1.AerospikeNetworkTypeCustomInterface:
 		return nil, fmt.Errorf(
 			"%s not support yet", networkType,
+		)
+	case asdbv1.AerospikeNetworkTypeNetworkLoadBalancer:
+		return nil, fmt.Errorf(
+			"can not use networkLoadBalancer network type: %s", networkType,
 		)
 	case asdbv1.AerospikeNetworkTypeUnspecified:
 		return nil, fmt.Errorf(

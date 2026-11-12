@@ -380,7 +380,7 @@ func getPodFailureSince(pod *corev1.Pod) time.Time {
 
 		isFailureCondition := false
 
-		//nolint:exhaustive // Only required condition types are checked
+		//nolint:exhaustive // Only PodScheduled, Ready, and Initialized are treated as failure times.
 		switch condition.Type {
 		case corev1.PodScheduled:
 			// Check for Unschedulable condition
