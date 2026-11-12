@@ -342,7 +342,7 @@ func (r *SingleClusterReconciler) handleTerminatingCluster(ctx context.Context) 
 		return err
 	}
 
-	r.removeClusterPhaseMetric()
+	r.removeClusterMetrics()
 
 	r.Recorder.Eventf(
 		r.aeroCluster, corev1.EventTypeNormal, "Deleted",
@@ -490,6 +490,8 @@ func (r *SingleClusterReconciler) recoverIgnorablePods(
 				utils.GetNamespacedNameString(&podList.Items[idx]), err,
 			))
 		}
+
+		r.incPodRestartMetric(podRestart, triggerFailureRecovery)
 
 		r.Log.Info("Deleted Pod", "pod", utils.GetNamespacedName(&podList.Items[idx]))
 

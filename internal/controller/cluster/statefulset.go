@@ -595,6 +595,44 @@ func (r *SingleClusterReconciler) isPodUpgraded(pod *corev1.Pod) bool {
 	return r.isPodOnDesiredImage(pod, false)
 }
 
+// isParkedPodUpgrade reports whether the replacement of a parked pod gets a new image. It compares with the
+// StatefulSet template, not spec.image, because parked pods are deleted before the StatefulSet is updated.
+func (r *SingleClusterReconciler) isParkedPodUpgrade(
+	ctx context.Context, rackState *RackState, pod *corev1.Pod,
+) bool {
+	sts, err := r.getSTS(ctx, rackState)
+	if err != nil {
+		r.Log.V(1).Info("Failed to get StatefulSet, comparing parked Pod with spec image instead",
+			"pod", utils.GetNamespacedName(pod), "error", err)
+
+		return !r.isPodOnDesiredImage(pod, false)
+	}
+
+	return !podImagesMatchTemplate(pod, &sts.Spec.Template.Spec)
+}
+
+// podImagesMatchTemplate reports whether the pod's container images match the template.
+// aerospike-init and containers missing from the template are ignored.
+func podImagesMatchTemplate(pod *corev1.Pod, template *corev1.PodSpec) bool {
+	match := func(podContainers, templateContainers []corev1.Container) bool {
+		for idx := range podContainers {
+			podContainer := &podContainers[idx]
+			if podContainer.Name == asdbv1.AerospikeInitContainerName {
+				continue
+			}
+
+			templateContainer := getContainer(templateContainers, podContainer.Name)
+			if templateContainer != nil && !utils.IsImageEqual(podContainer.Image, templateContainer.Image) {
+				return false
+			}
+		}
+
+		return true
+	}
+
+	return match(pod.Spec.Containers, template.Containers) && match(pod.Spec.InitContainers, template.InitContainers)
+}
+
 // isPodOnDesiredImage indicates if the pod is ready and on desired images for
 // all containers.
 func (r *SingleClusterReconciler) isPodOnDesiredImage(
