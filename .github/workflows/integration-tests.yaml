@@ -13,10 +13,6 @@ on:
         description: OLM bundle image to install the operator from
         type: string
         required: true
-      init-name-tag:
-        description: Init image name and tag, pulled from the JFrog DEV repo
-        type: string
-        required: true
       suites:
         description: JSON list of test.sh -t values
         type: string
@@ -129,23 +125,31 @@ jobs:
           printf '[default]\naws_access_key_id=%s\naws_secret_access_key=%s\naws_session_token=%s\n' \
             "$AWS_ACCESS_KEY_ID" "$AWS_SECRET_ACCESS_KEY" "$AWS_SESSION_TOKEN" > ~/.aws/credentials
 
+      # The custom init registry test pulls the init image from ECR. It needs a
+      # registry other than the operator's JFrog one, or the test changes
+      # nothing. The ECR login lasts 12 hours, longer than the job can run.
+      # It goes in its own docker config, so only the CR's imagePullSecrets
+      # can pull from ECR, not the pods' service account.
+      - name: Login to ECR
+        run: |
+          aws ecr get-login-password --region ap-south-1 |
+            DOCKER_CONFIG="$HOME/.docker-ecr" docker login --username AWS --password-stdin 568976754000.dkr.ecr.ap-south-1.amazonaws.com
+
       - name: Write features.conf
         env:
           FEATURES_CONF_B64: ${{ secrets.AKO_FEATURES_CONF_B64 }}
         run: echo "$FEATURES_CONF_B64" | base64 -d > config/samples/secrets/features.conf
 
-      # The docker config holds the JFrog login. test.sh turns it into the pull
-      # secrets for the operator and init images. The custom init registry test
-      # pulls the init image from JFrog.
+      # -s is the JFrog login. It pulls the operator, the bundle and the default
+      # init image. -p is the ECR login, used only by the custom init registry
+      # test, which runs test.sh's default init image from ECR.
       - name: Run ${{ matrix.suite }}
         env:
           BUNDLE_IMG: ${{ inputs.bundle-image }}
           SUITE: ${{ matrix.suite }}
           FOCUS: ${{ inputs.focus }}
-          INIT_NAME_TAG: ${{ inputs.init-name-tag }}
         run: |
-          ./test/test.sh -b "$BUNDLE_IMG" -s "$HOME/.docker/config.json" -t "$SUITE" -f "$FOCUS" \
-            -r artifact.aerospike.io -n platforms-docker-virtual -i "$INIT_NAME_TAG"
+          ./test/test.sh -b "$BUNDLE_IMG" -s "$HOME/.docker/config.json" -p "$HOME/.docker-ecr/config.json" -t "$SUITE" -f "$FOCUS"
 
       # Lists the failed specs in the job summary, with their logs, and as
       # annotations on the run. annotate_only skips the check run, so the job

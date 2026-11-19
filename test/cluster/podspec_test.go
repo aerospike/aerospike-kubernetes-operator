@@ -681,7 +681,10 @@ var _ = Describe(
 
 						By("Using envVar registry, namespace and name")
 
-						// Empty registry, namespace and name, should use the operator's envVars
+						// Empty registry, namespace and name, should use the operator's envVars.
+						// The custom pull secret has only the custom registry's login. Without it,
+						// the pods get the service account's pull secret for the envVar image.
+						aeroCluster.Spec.PodSpec.ImagePullSecrets = nil
 						aeroCluster.Spec.PodSpec.AerospikeInitContainerSpec.ImageRegistry = ""
 						aeroCluster.Spec.PodSpec.AerospikeInitContainerSpec.ImageRegistryNamespace = nil
 						aeroCluster.Spec.PodSpec.AerospikeInitContainerSpec.ImageNameAndTag = ""
@@ -811,23 +814,30 @@ func getOperatorInitImage(ctx goctx.Context) (registry, registryNamespace, nameA
 	registryNamespace = asdbv1.AerospikeInitContainerDefaultRegistryNamespace
 	nameAndTag = asdbv1.AerospikeInitContainerDefaultNameAndTag
 
-	// Other kubebuilder operators use the same label, so match the name too.
+	// OLM and helm name and label the operator Deployment differently.
+	// Both have a manager container with the init registry envVar, so match on that.
 	deployments := &appsv1.DeploymentList{}
-	Expect(k8sClient.List(ctx, deployments, client.MatchingLabels{"control-plane": "controller-manager"})).
-		To(Succeed())
+	Expect(k8sClient.List(ctx, deployments)).To(Succeed())
 
-	var operators []appsv1.Deployment
+	var managers []*corev1.Container
 
 	for idx := range deployments.Items {
-		if deployments.Items[idx].Name == "aerospike-operator-controller-manager" {
-			operators = append(operators, deployments.Items[idx])
+		container := test.GetContainerByName(deployments.Items[idx].Spec.Template.Spec.Containers, "manager")
+		if container == nil {
+			continue
+		}
+
+		for _, env := range container.Env {
+			if env.Name == asdbv1.AerospikeInitContainerRegistryEnvVar {
+				managers = append(managers, container)
+				break
+			}
 		}
 	}
 
-	Expect(operators).To(HaveLen(1), "expected exactly one operator deployment")
+	Expect(managers).To(HaveLen(1), "expected exactly one operator deployment")
 
-	manager := test.GetContainerByName(operators[0].Spec.Template.Spec.Containers, "manager")
-	Expect(manager).NotTo(BeNil(), "operator manager container not found")
+	manager := managers[0]
 
 	// Same precedence as the operator: an empty registry or name falls back to
 	// the default, while a namespace envVar is used even when empty.

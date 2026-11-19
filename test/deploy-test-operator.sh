@@ -8,10 +8,16 @@ set -e
 # Use the input operator image for testing if provided
 BUNDLE_IMG=$1
 
-# Optional docker config.json used to pull the bundle and operator images
-# from a private registry (e.g. JFrog in CI)
+# Optional docker config.json used to pull the bundle, operator and default
+# init images from a private registry (e.g. JFrog in CI). The test suite adds
+# this secret to the Aerospike pods' service account in every namespace.
 PULL_CRED_PATH=${2:-}
 PULL_SECRET_NAME="ako-image-pull"
+
+# Optional docker config.json and secret name for the custom init image. Only
+# the custom init registry test uses it, through the CR's imagePullSecrets.
+INIT_PULL_CRED_PATH=${3:-}
+INIT_PULL_SECRET_NAME=${4:-}
 OPERATOR_SA="aerospike-operator-controller-manager"
 
 DIR="$( cd "$( dirname "${BASH_SOURCE[0]}" )" >/dev/null 2>&1 && pwd )"
@@ -49,6 +55,15 @@ fi
 namespaces="test test1 test2 aerospike"
 for namespace in $namespaces; do
   kubectl create namespace "$namespace" || true
+
+  if [ -n "$PULL_CRED_PATH" ]; then
+    "$DIR"/create_image_pull_secret.sh -n "$PULL_SECRET_NAME" -p "$PULL_CRED_PATH" -N "$namespace"
+  fi
+
+  if [ -n "$INIT_PULL_CRED_PATH" ]; then
+    "$DIR"/create_image_pull_secret.sh -n "$INIT_PULL_SECRET_NAME" -p "$INIT_PULL_CRED_PATH" -N "$namespace"
+  fi
+
   if [ $IS_OPENSHIFT_CLUSTER == 1 ]; then
     echo "Adding security constraints"
     oc adm policy add-scc-to-user anyuid system:serviceaccount:"$namespace":aerospike-operator-controller-manager
@@ -79,8 +94,6 @@ if [ -n "$PULL_CRED_PATH" ]; then
     sleep 2
     ((ATTEMPT += 1))
   done
-
-  "$DIR"/create_image_pull_secret.sh -n "$PULL_SECRET_NAME" -p "$PULL_CRED_PATH"
 
   # operator-sdk runs the bundle registry pod under the default service account.
   kubectl patch serviceaccount default -n test -p "{\"imagePullSecrets\":[{\"name\":\"$PULL_SECRET_NAME\"}]}"

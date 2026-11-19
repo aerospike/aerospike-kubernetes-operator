@@ -47,21 +47,17 @@ echo "---------------------------------------"
 echo "------------------------------"
 echo "| Deploying the operator.... |"
 echo "------------------------------"
-"$DIR"/deploy-test-operator.sh "$BUNDLE" "${OPERATOR_PULL_CRED_PATH:-}"
+# imagePullSecret for the custom init image test. deploy-test-operator.sh
+# creates it in every test namespace.
+IMAGE_PULL_SECRET="registrycred"
+
+"$DIR"/deploy-test-operator.sh "$BUNDLE" "${OPERATOR_PULL_CRED_PATH:-}" "$CRED_PATH" "$IMAGE_PULL_SECRET"
 
 # Deploy LDAP
 echo "------------------------------"
 echo "| Deploying OpenLDAP....     |"
 echo "------------------------------"
 "$DIR"/deploy-openldap.sh
-
-# Create imagePullSecret for AerospikeInitImage. The test suite adds it to the
-# Aerospike pods' service account in every namespace.
-IMAGE_PULL_SECRET="registrycred"
-
-for namespace in test test1 test2 aerospike; do
-  "$DIR"/create_image_pull_secret.sh -n ${IMAGE_PULL_SECRET} -p "$CRED_PATH" -N "$namespace"
-done
 
 # Run tests
 echo "---------------------"
@@ -72,6 +68,12 @@ export CUSTOM_INIT_REGISTRY="$REGISTRY"
 export CUSTOM_INIT_REGISTRY_NAMESPACE="$REGISTRY_NAMESPACE"
 export CUSTOM_INIT_NAME_TAG="$INIT_IMAGE_NAME_TAG"
 export IMAGE_PULL_SECRET_NAME="$IMAGE_PULL_SECRET"
+
+# With -s, deploy-test-operator.sh creates ako-image-pull in every test
+# namespace. The suite adds it to the Aerospike pods' service account.
+if [ -n "${OPERATOR_PULL_CRED_PATH:-}" ]; then
+  export SA_IMAGE_PULL_SECRET_NAME="ako-image-pull"
+fi
 
 if [ "$TEST_TYPE" = "cluster-test" ]; then
    make cluster-test FOCUS="$FOCUS" ARGS="$ARGS"

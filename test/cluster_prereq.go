@@ -39,8 +39,8 @@ const AuthSecretName = "auth-secret"
 const AuthSecretNameForUpdate = "auth-update"
 const AWSSecretName = "aws-secret"
 
-// Set by test.sh to the name of the pull secret for the init image
-const imagePullSecretNameEnvVar = "IMAGE_PULL_SECRET_NAME" //nolint:gosec // for testing
+// Set by test.sh to the name of the pull secret for the Aerospike pods' service account
+const saImagePullSecretNameEnvVar = "SA_IMAGE_PULL_SECRET_NAME" //nolint:gosec // for testing
 
 const MultiClusterNs1 string = "test1"
 const MultiClusterNs2 string = "test2"
@@ -58,9 +58,9 @@ func createClusterRBAC(k8sClient client.Client, ctx goctx.Context) error {
 	subjects := make([]rbac.Subject, 0, len(Namespaces))
 
 	// The Aerospike pods run under this service account, so its pull secret
-	// lets them pull an init image from a private registry.
+	// lets them pull the operator's default init image from a private registry.
 	var imagePullSecrets []corev1.LocalObjectReference
-	if name := os.Getenv(imagePullSecretNameEnvVar); name != "" {
+	if name := os.Getenv(saImagePullSecretNameEnvVar); name != "" {
 		imagePullSecrets = append(imagePullSecrets, corev1.LocalObjectReference{Name: name})
 	}
 

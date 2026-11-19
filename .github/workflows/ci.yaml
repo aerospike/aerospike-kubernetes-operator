@@ -75,7 +75,7 @@ jobs:
           fetch-depth: 0
           submodules: true
 
-      # e.g. 4.7.0-pr-620-a1b2c3d, 4.7.0-master-e4f5a6b, 4.7.0-nightly-e4f5a6b.
+      # e.g. 4.8.0-pr-620-a1b2c3d, 4.8.0-master-e4f5a6b, 4.8.0-nightly-e4f5a6b.
       # The short commit SHA ties every version, and so every release bundle, to
       # the commit it was built from. For a PR it is the PR's head commit.
       # The base is NEXT_VERSION, which must be newer than the last release tag,
@@ -250,36 +250,30 @@ jobs:
       jf-project: platforms
       jf-bundle-name: aerospike-kubernetes-operator
       version: ${{ needs.prepare.outputs.version }}
-      # Every build-info is published under the run number. The init ones under
+      # Adds <run_id>-<run_attempt> to the bundle version, so a re-run gets its
+      # own bundle. Promote the bundle-version output, not version.
+      jf-bundle-revision: auto
+      # The operator build-infos come from build.yaml. The init ones are under
       # the run number of the init run that built INIT_TAG.
-      jf-build-names: ako-operator:${{ github.run_number }},ako-olm-bundle:${{ github.run_number }},ako-olm-manifests:${{ github.run_number }},ako-helm-charts:${{ github.run_number }},ako-init:${{ needs.prepare.outputs.init-build }},ako-init-openshift:${{ needs.prepare.outputs.init-build }}
+      jf-build-names: ${{ needs.build.outputs.jf-build-names }},ako-init:${{ needs.prepare.outputs.init-build }},ako-init-openshift:${{ needs.prepare.outputs.init-build }}
 
+  # The reusable workflow checks the stage order and runs one promotion per
+  # bundle and stage at a time.
   promote-dev:
     name: Promote release bundle to DEV
     needs: [prepare, release-bundle]
-    runs-on: ubuntu-24.04
     permissions:
+      attestations: write
       contents: read
       id-token: write
-    steps:
-      - name: Harden the runner (Audit all outbound calls)
-        uses: step-security/harden-runner@351661ca32ac09a36dc5ee2d536e3128f2a3c8ed # v2.22.0
-        with:
-          egress-policy: audit
-
-      - name: Set up JFrog CLI
-        uses: step-security/setup-jfrog-cli@53aeacb709fce45d0baf69a13ec3342f7e2d71a9 # v5.1.0
-        with:
-          oidc-provider-name: gh-aerospike
-          oidc-audience: aerospike
-
-      - name: Promote release bundle to DEV
-        uses: aerospike/shared-workflows/.github/actions/promote-release-bundle@071324c3300969857d2aaca91f06f84bc0533d06 # main
-        with:
-          bundle-name: aerospike-kubernetes-operator
-          version: ${{ needs.prepare.outputs.version }}
-          environment: DEV
-          jf-project: platforms
+    uses: aerospike/shared-workflows/.github/workflows/reusable_promote-release-bundle.yaml@071324c3300969857d2aaca91f06f84bc0533d06 # main
+    with:
+      gh-workflows-ref: 071324c3300969857d2aaca91f06f84bc0533d06
+      jf-project: platforms
+      jf-bundle-name: aerospike-kubernetes-operator
+      version: ${{ needs.release-bundle.outputs.bundle-version }}
+      target-stage: DEV
+      runs-on: ubuntu-24.04
 
   # Runs after promote-dev. The nightly run skips promote-dev, so a skipped
   # promote-dev must not skip this job, but a failed one must.
@@ -296,7 +290,6 @@ jobs:
     uses: ./.github/workflows/integration-tests.yaml
     with:
       bundle-image: ${{ needs.build.outputs.bundle-image }}
-      init-name-tag: ${{ needs.prepare.outputs.init-name-tag }}
       suites: ${{ needs.prepare.outputs.suites }}
       focus: ${{ needs.prepare.outputs.focus }}
     secrets: inherit
@@ -306,31 +299,20 @@ jobs:
   # promote-dev.
   promote-test:
     name: Promote release bundle to TEST
-    needs: [prepare, integration-tests, promote-dev]
+    needs: [prepare, release-bundle, integration-tests, promote-dev]
     if: github.ref == 'refs/heads/master'
-    runs-on: ubuntu-24.04
     permissions:
+      attestations: write
       contents: read
       id-token: write
-    steps:
-      - name: Harden the runner (Audit all outbound calls)
-        uses: step-security/harden-runner@351661ca32ac09a36dc5ee2d536e3128f2a3c8ed # v2.22.0
-        with:
-          egress-policy: audit
-
-      - name: Set up JFrog CLI
-        uses: step-security/setup-jfrog-cli@53aeacb709fce45d0baf69a13ec3342f7e2d71a9 # v5.1.0
-        with:
-          oidc-provider-name: gh-aerospike
-          oidc-audience: aerospike
-
-      - name: Promote release bundle to TEST
-        uses: aerospike/shared-workflows/.github/actions/promote-release-bundle@071324c3300969857d2aaca91f06f84bc0533d06 # main
-        with:
-          bundle-name: aerospike-kubernetes-operator
-          version: ${{ needs.prepare.outputs.version }}
-          environment: TEST
-          jf-project: platforms
+    uses: aerospike/shared-workflows/.github/workflows/reusable_promote-release-bundle.yaml@071324c3300969857d2aaca91f06f84bc0533d06 # main
+    with:
+      gh-workflows-ref: 071324c3300969857d2aaca91f06f84bc0533d06
+      jf-project: platforms
+      jf-bundle-name: aerospike-kubernetes-operator
+      version: ${{ needs.release-bundle.outputs.bundle-version }}
+      target-stage: TEST
+      runs-on: ubuntu-24.04
 
   # The single required status check.
   ci-result:

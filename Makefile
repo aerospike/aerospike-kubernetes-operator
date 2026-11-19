@@ -13,7 +13,7 @@ OPENSHIFT_VERSION="v4.10"
 # TODO: Version must be pulled from git tags
 VERSION ?= 4.7.0
 
-# NEXT_VERSION is the release in development. CI builds versions from it, e.g. 4.7.0-pr-620-a1b2c3d.
+# NEXT_VERSION is the release in development. CI builds versions from it, e.g. 4.8.0-pr-620-a1b2c3d.
 # Bump it right after a release is tagged. CI fails until it is newer than the last release tag.
 NEXT_VERSION ?= 4.8.0
 

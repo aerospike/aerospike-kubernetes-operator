@@ -34,6 +34,9 @@ on:
       bundle-image:
         description: OLM bundle image, as its immutable tag
         value: ${{ jobs.scan.outputs.bundle-image }}
+      jf-build-names:
+        description: Comma-separated name:number of every build-info this workflow publishes, for the release bundle
+        value: ${{ jobs.operator-image.outputs.jf-build-name }}:${{ jobs.operator-image.outputs.jf-build-id }},${{ jobs.bundle-image.outputs.jf-build-name }}:${{ jobs.bundle-image.outputs.jf-build-id }},${{ jobs.olm-bundle.outputs.jf-build }},${{ jobs.helm-charts.outputs.jf-build }}
 
 permissions: {}
 
@@ -74,6 +77,8 @@ jobs:
     permissions:
       contents: read
       id-token: write
+    outputs:
+      jf-build: ${{ env.BUILD_NAME }}:${{ github.run_number }}
     env:
       VERSION: ${{ inputs.version }}
       BUILD_NAME: ako-helm-charts
@@ -143,6 +148,8 @@ jobs:
     permissions:
       contents: read
       id-token: write
+    outputs:
+      jf-build: ${{ env.BUILD_NAME }}:${{ github.run_number }}
     env:
       VERSION: ${{ inputs.version }}
       BUILD_NAME: ako-olm-manifests
