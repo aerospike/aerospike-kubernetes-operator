@@ -652,21 +652,19 @@ var _ = Describe(
 						customInitNameAndTag := getEnvVar(customInitNameAndTagEnvVar)
 						imagePullSecret := getEnvVar(imagePullSecretNameEnvVar)
 
-						By("Updating imagePullSecret")
+						By("Using imagePullSecret, registry, namespace and name in CR")
 
 						aeroCluster, err := getCluster(k8sClient, ctx, clusterNamespacedName)
 						Expect(err).ToNot(HaveOccurred())
 
+						// Set the pull secret in the same update as the custom image.
+						// Pods with their own pull secrets don't get the service account's,
+						// so on its own this secret can't pull the operator's default init image.
 						aeroCluster.Spec.PodSpec.ImagePullSecrets = []corev1.LocalObjectReference{
 							{
 								Name: imagePullSecret,
 							},
 						}
-
-						err = updateCluster(k8sClient, ctx, aeroCluster)
-						Expect(err).ToNot(HaveOccurred())
-
-						By("Using registry, namespace and name in CR")
 
 						aeroCluster.Spec.PodSpec.AerospikeInitContainerSpec.ImageRegistry = customRegistry
 						aeroCluster.Spec.PodSpec.AerospikeInitContainerSpec.ImageRegistryNamespace = &customRegistryNamespace
@@ -822,6 +820,11 @@ func getOperatorInitImage(ctx goctx.Context) (registry, registryNamespace, nameA
 	var managers []*corev1.Container
 
 	for idx := range deployments.Items {
+		// Skip operator Deployments with no ready pods, such as leftovers on a shared cluster.
+		if deployments.Items[idx].Status.ReadyReplicas == 0 {
+			continue
+		}
+
 		container := test.GetContainerByName(deployments.Items[idx].Spec.Template.Spec.Containers, "manager")
 		if container == nil {
 			continue
