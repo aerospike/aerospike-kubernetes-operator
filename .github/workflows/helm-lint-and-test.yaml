@@ -66,7 +66,7 @@ jobs:
 
       - name: Suggest regenerated values.schema.json for ${{ matrix.chart }}
         if: hashFiles(format('helm-charts/{0}/.schema.yaml', matrix.chart)) != '' && steps.can-suggest.outputs.value == 'true'
-        uses: reviewdog/action-suggester@295fd4e5482381f33925c46ca5c2f66c69370267 # v1.27.0
+        uses: reviewdog/action-suggester@fd22a83b1ebc13fd8aee5d57b06793fce6f20fb9 # v1.27.1
         with:
           tool_name: helm-values-schema-json
           path: helm-charts/${{ matrix.chart }}
