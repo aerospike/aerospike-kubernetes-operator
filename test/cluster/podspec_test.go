@@ -9,6 +9,7 @@ import (
 
 	. "github.com/onsi/ginkgo/v2"
 	. "github.com/onsi/gomega"
+	appsv1 "k8s.io/api/apps/v1"
 	corev1 "k8s.io/api/core/v1"
 	"k8s.io/apimachinery/pkg/api/resource"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
@@ -651,21 +652,19 @@ var _ = Describe(
 						customInitNameAndTag := getEnvVar(customInitNameAndTagEnvVar)
 						imagePullSecret := getEnvVar(imagePullSecretNameEnvVar)
 
-						By("Updating imagePullSecret")
+						By("Using imagePullSecret, registry, namespace and name in CR")
 
 						aeroCluster, err := getCluster(k8sClient, ctx, clusterNamespacedName)
 						Expect(err).ToNot(HaveOccurred())
 
+						// Set the pull secret in the same update as the custom image.
+						// Pods with their own pull secrets don't get the service account's,
+						// so on its own this secret can't pull the operator's default init image.
 						aeroCluster.Spec.PodSpec.ImagePullSecrets = []corev1.LocalObjectReference{
 							{
 								Name: imagePullSecret,
 							},
 						}
-
-						err = updateCluster(k8sClient, ctx, aeroCluster)
-						Expect(err).ToNot(HaveOccurred())
-
-						By("Using registry, namespace and name in CR")
 
 						aeroCluster.Spec.PodSpec.AerospikeInitContainerSpec.ImageRegistry = customRegistry
 						aeroCluster.Spec.PodSpec.AerospikeInitContainerSpec.ImageRegistryNamespace = &customRegistryNamespace
@@ -680,17 +679,18 @@ var _ = Describe(
 
 						By("Using envVar registry, namespace and name")
 
-						// Empty imageRegistry, should use operator envVar docker.io
+						// Empty registry, namespace and name, should use the operator's envVars.
+						// The custom pull secret has only the custom registry's login. Without it,
+						// the pods get the service account's pull secret for the envVar image.
+						aeroCluster.Spec.PodSpec.ImagePullSecrets = nil
 						aeroCluster.Spec.PodSpec.AerospikeInitContainerSpec.ImageRegistry = ""
 						aeroCluster.Spec.PodSpec.AerospikeInitContainerSpec.ImageRegistryNamespace = nil
 						aeroCluster.Spec.PodSpec.AerospikeInitContainerSpec.ImageNameAndTag = ""
 						err = updateCluster(k8sClient, ctx, aeroCluster)
 						Expect(err).ToNot(HaveOccurred())
 
-						validateInitImage(
-							k8sClient, aeroCluster, asdbv1.AerospikeInitContainerDefaultRegistry,
-							asdbv1.AerospikeInitContainerDefaultRegistryNamespace, asdbv1.AerospikeInitContainerDefaultNameAndTag,
-						)
+						registry, registryNamespace, nameAndTag := getOperatorInitImage(ctx)
+						validateInitImage(k8sClient, aeroCluster, registry, registryNamespace, nameAndTag)
 					},
 				)
 
@@ -708,22 +708,17 @@ var _ = Describe(
 						err = updateClusterWithTO(k8sClient, ctx, aeroCluster, time.Minute*1)
 						Expect(err).Should(HaveOccurred())
 
-						validateInitImage(
-							k8sClient, aeroCluster, asdbv1.AerospikeInitContainerDefaultRegistry,
-							incorrectCustomRegistryNamespace, asdbv1.AerospikeInitContainerDefaultNameAndTag,
-						)
+						registry, registryNamespace, nameAndTag := getOperatorInitImage(ctx)
+						validateInitImage(k8sClient, aeroCluster, registry, incorrectCustomRegistryNamespace, nameAndTag)
 
 						By("Using correct registry namespace in CR")
 
-						// Nil ImageRegistryNamespace, should use operator envVar aerospike
+						// Nil ImageRegistryNamespace, should use the operator's envVar
 						aeroCluster.Spec.PodSpec.AerospikeInitContainerSpec.ImageRegistryNamespace = nil
 						err = updateCluster(k8sClient, ctx, aeroCluster)
 						Expect(err).ToNot(HaveOccurred())
 
-						validateInitImage(
-							k8sClient, aeroCluster, asdbv1.AerospikeInitContainerDefaultRegistry,
-							asdbv1.AerospikeInitContainerDefaultRegistryNamespace, asdbv1.AerospikeInitContainerDefaultNameAndTag,
-						)
+						validateInitImage(k8sClient, aeroCluster, registry, registryNamespace, nameAndTag)
 					},
 				)
 			},
@@ -807,6 +802,64 @@ func getEnvVar(envVar string) string {
 	Expect(found).To(BeTrue())
 
 	return envVarVal
+}
+
+// getOperatorInitImage returns the init image registry, registry namespace and
+// name that the operator uses when the CR leaves them empty: its
+// AEROSPIKE_KUBERNETES_INIT_* envVars, else the built-in defaults.
+func getOperatorInitImage(ctx goctx.Context) (registry, registryNamespace, nameAndTag string) {
+	registry = asdbv1.AerospikeInitContainerDefaultRegistry
+	registryNamespace = asdbv1.AerospikeInitContainerDefaultRegistryNamespace
+	nameAndTag = asdbv1.AerospikeInitContainerDefaultNameAndTag
+
+	// OLM and helm name and label the operator Deployment differently.
+	// Both have a manager container with the init registry envVar, so match on that.
+	deployments := &appsv1.DeploymentList{}
+	Expect(k8sClient.List(ctx, deployments)).To(Succeed())
+
+	var managers []*corev1.Container
+
+	for idx := range deployments.Items {
+		// Skip operator Deployments with no ready pods, such as leftovers on a shared cluster.
+		if deployments.Items[idx].Status.ReadyReplicas == 0 {
+			continue
+		}
+
+		container := test.GetContainerByName(deployments.Items[idx].Spec.Template.Spec.Containers, "manager")
+		if container == nil {
+			continue
+		}
+
+		for _, env := range container.Env {
+			if env.Name == asdbv1.AerospikeInitContainerRegistryEnvVar {
+				managers = append(managers, container)
+				break
+			}
+		}
+	}
+
+	Expect(managers).To(HaveLen(1), "expected exactly one operator deployment")
+
+	manager := managers[0]
+
+	// Same precedence as the operator: an empty registry or name falls back to
+	// the default, while a namespace envVar is used even when empty.
+	for _, env := range manager.Env {
+		switch env.Name {
+		case asdbv1.AerospikeInitContainerRegistryEnvVar:
+			if env.Value != "" {
+				registry = env.Value
+			}
+		case asdbv1.AerospikeInitContainerRegistryNamespaceEnvVar:
+			registryNamespace = env.Value
+		case asdbv1.AerospikeInitContainerNameTagEnvVar:
+			if env.Value != "" {
+				nameAndTag = env.Value
+			}
+		}
+	}
+
+	return registry, registryNamespace, nameAndTag
 }
 
 func validateInitImage(

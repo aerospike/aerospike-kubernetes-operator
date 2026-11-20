@@ -29,8 +29,10 @@ FROM registry.access.redhat.com/ubi10/ubi-minimal:latest@sha256:c039ecb9ac9db2db
 # Version of Operator (build arg)
 ARG VERSION="4.7.0"
 
-# User to run container as
-ARG USER="root"
+# User to run container as. Non-root, so the same image runs on OpenShift and
+# other Kubernetes distributions. OpenShift replaces the UID with a random one
+# in group 0, which is why /manager is group-owned by 0 below.
+ARG USER="1001"
 
 # Maintainer
 LABEL maintainer="Aerospike <support@aerospike.com>"
