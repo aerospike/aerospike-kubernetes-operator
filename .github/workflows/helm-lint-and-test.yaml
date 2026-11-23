@@ -34,7 +34,7 @@ jobs:
           - aerospike-restore
     steps:
       - name: Harden the runner (Audit all outbound calls)
-        uses: step-security/harden-runner@1d88384fd173af6ecb012dfd0264a306b711241a # v2.22.4
+        uses: step-security/harden-runner@aebdcf6156ab6691adf63218240e476564a1ed4c # v2.23.0
         with:
           egress-policy: audit
 
@@ -66,7 +66,7 @@ jobs:
 
       - name: Suggest regenerated values.schema.json for ${{ matrix.chart }}
         if: hashFiles(format('helm-charts/{0}/.schema.yaml', matrix.chart)) != '' && steps.can-suggest.outputs.value == 'true'
-        uses: reviewdog/action-suggester@295fd4e5482381f33925c46ca5c2f66c69370267 # v1.27.0
+        uses: reviewdog/action-suggester@fd22a83b1ebc13fd8aee5d57b06793fce6f20fb9 # v1.27.1
         with:
           tool_name: helm-values-schema-json
           path: helm-charts/${{ matrix.chart }}
