@@ -614,9 +614,6 @@ var _ = Describe("SidecarFailure", func() {
 		// once IgnoreSidecarFailure=true is applied the cluster reaches Completed.
 		It("Should defer scale-up when a sidecar spec change and scale-up coincide and sidecar crashes",
 			func() {
-				// TODO: Temporarily skipped, it fails in GHA CI. Re-enable before merge.
-				Skip("Temporarily skipped, fails in GHA CI")
-
 				By("Deploying a 2-node cluster with a signal-controlled sidecar (initially healthy)")
 
 				aeroCluster := createDummyAerospikeCluster(clusterNamespacedName, 2)

@@ -145,10 +145,6 @@ func getSamplesFiles() ([]string, error) {
 		"aerospikebackup.yaml",
 		"aerospikebackupservice.yaml",
 		"aerospikerestore.yaml",
-		// TODO: Temporarily skipped, they fail in GHA CI. Re-enable before merge.
-		"shadow_device_cluster_cr.yaml",
-		"shadow_file_cluster_cr.yaml",
-		"rack_enabled_cluster_cr.yaml",
 	)
 
 	if err := filepath.Walk(absolutePath, func(path string, info fs.FileInfo, err error) error {
