@@ -23,10 +23,6 @@ on:
         description: Version of the images, helm charts and OLM bundle. Also the folder they are uploaded under in JFrog.
         type: string
         required: true
-      base-version:
-        description: Release the build belongs to, passed to the operator image as VERSION
-        type: string
-        required: true
       init-name-tag:
         description: Init image name and tag that the chart and the OLM bundle deploy
         type: string
@@ -63,16 +59,16 @@ jobs:
       attestations: write
       id-token: write
     # TODO: Pin to the first shared-workflows release with gh-checkout-submodules.
-    uses: aerospike/shared-workflows/.github/workflows/reusable_docker-build-deploy.yaml@071324c3300969857d2aaca91f06f84bc0533d06 # main
+    uses: aerospike/shared-workflows/.github/workflows/reusable_docker-build-deploy.yaml@06504b0d75bf3af034fa4e84624eaa96f7326984 # main
     with:
-      jf-project: platforms
-      image-name: aerospike-kubernetes-operator
-      app-version: ${{ inputs.version }}
-      jf-build-name: ako-operator
-      build-args-json: '{"VERSION": "${{ inputs.version }}"}'
-      gh-checkout-submodules: "true"
-      # Same as make docker-buildx
-      no-cache: true
+      jf-project: platforms                                     # JFrog project
+      image-name: aerospike-kubernetes-operator                 # Image repository name
+      app-version: ${{ inputs.version }}                        # Image tag, plus a timestamped immutable tag
+      jf-build-name: ako-operator                               # Build-info name for the release bundle
+      build-args-json: '{"VERSION": "${{ inputs.version }}"}'   # Sets the image version labels
+      gh-checkout-submodules: "true"                            # Needs the pkg/configschema/schemas submodule
+      no-cache: true                                            # Same as make docker-buildx
+      sbom: false                                               # No SBOM
 
   # Runs as the non-root user 1001, like make docker-buildx-openshift.
   openshift-image:
@@ -82,15 +78,17 @@ jobs:
       packages: write
       attestations: write
       id-token: write
-    uses: aerospike/shared-workflows/.github/workflows/reusable_docker-build-deploy.yaml@071324c3300969857d2aaca91f06f84bc0533d06 # main
+    uses: aerospike/shared-workflows/.github/workflows/reusable_docker-build-deploy.yaml@06504b0d75bf3af034fa4e84624eaa96f7326984 # main
     with:
-      jf-project: platforms
-      image-name: aerospike-kubernetes-operator-openshift
-      app-version: ${{ inputs.version }}
-      jf-build-name: ako-operator-openshift
+      jf-project: platforms                                     # JFrog project
+      image-name: aerospike-kubernetes-operator-openshift       # Image repository name
+      app-version: ${{ inputs.version }}                        # Image tag, plus a timestamped immutable tag
+      jf-build-name: ako-operator-openshift                     # Build-info name for the release bundle
+      # Sets the image version labels and runs as the non-root user 1001
       build-args-json: '{"VERSION": "${{ inputs.version }}", "USER": "1001"}'
-      gh-checkout-submodules: "true"
-      no-cache: true
+      gh-checkout-submodules: "true"                            # Needs the pkg/configschema/schemas submodule
+      no-cache: true                                            # Same as make docker-buildx-openshift
+      sbom: false                                               # No SBOM
 
   helm-charts:
     name: Helm charts
@@ -255,19 +253,19 @@ jobs:
       packages: write
       attestations: write
       id-token: write
-    uses: aerospike/shared-workflows/.github/workflows/reusable_docker-build-deploy.yaml@071324c3300969857d2aaca91f06f84bc0533d06 # main
+    uses: aerospike/shared-workflows/.github/workflows/reusable_docker-build-deploy.yaml@06504b0d75bf3af034fa4e84624eaa96f7326984 # main
     with:
-      jf-project: platforms
-      image-name: aerospike-kubernetes-operator-bundle
-      app-version: ${{ inputs.version }}
-      jf-build-name: ako-olm-bundle
-      platforms: linux/amd64
+      jf-project: platforms                                     # JFrog project
+      image-name: aerospike-kubernetes-operator-bundle          # Image repository name
+      app-version: ${{ inputs.version }}                        # Image tag, plus a timestamped immutable tag
+      jf-build-name: ako-olm-bundle                             # Build-info name for the release bundle
+      platforms: linux/amd64                                    # Manifests only, so one platform
       # Same as the plain `docker build` used for bundles so far
-      provenance: "false"
-      sbom: false
-      no-cache: true
-      # Relative to the workspace, not the context
-      file: ci-olm/bundle.Dockerfile
+      provenance: "false"                                       # No provenance attestation
+      sbom: false                                               # No SBOM
+      no-cache: true                                            # Build every layer fresh
+      file: ci-olm/bundle.Dockerfile                            # Relative to the workspace, not the context
+      # Puts the olm-bundle job's bundle/ and Dockerfile into the build context
       gh-context-artifacts-json: '[{"name": "olm-bundle", "dest": "bundle"}, {"name": "olm-bundle-dockerfile", "dest": "ci-olm"}]'
 
   scan:

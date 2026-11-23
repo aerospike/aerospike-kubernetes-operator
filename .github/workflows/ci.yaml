@@ -57,12 +57,11 @@ jobs:
       contents: read
       id-token: write
     outputs:
-      base-version: ${{ steps.version.outputs.base-version }}
-      version: ${{ steps.version.outputs.version }}
-      init-build: ${{ steps.init.outputs.build }}
-      init-name-tag: ${{ steps.init-image.outputs.name-tag }}
-      suites: ${{ steps.tests.outputs.suites }}
-      focus: ${{ steps.tests.outputs.focus }}
+      version: ${{ steps.version.outputs.version }}              # Version of everything this run builds
+      init-build: ${{ steps.init.outputs.build }}                # Init build-info number in JFrog
+      init-name-tag: ${{ steps.init-image.outputs.name-tag }}    # Timestamped init image the operator deploys
+      suites: ${{ steps.tests.outputs.suites }}                  # Integration test suites to run
+      focus: ${{ steps.tests.outputs.focus }}                    # Ginkgo focus for cluster-test
     steps:
       - name: Harden the runner (Audit all outbound calls)
         uses: step-security/harden-runner@351661ca32ac09a36dc5ee2d536e3128f2a3c8ed # v2.22.0
@@ -120,7 +119,6 @@ jobs:
 
           short_sha="${SHA::7}"
 
-          echo "base-version=$base" >> "$GITHUB_OUTPUT"
           echo "version=$base-$label-$short_sha" | tee -a "$GITHUB_OUTPUT"
 
       # Finds the init repo's ci.yaml run that built INIT_TAG and outputs its
@@ -215,8 +213,7 @@ jobs:
         env:
           BASE_REF: ${{ github.base_ref }}
         run: |
-          # DEBUG: run all suites on PRs too. Revert before merge.
-          if false && [ "$GITHUB_EVENT_NAME" = "pull_request" ]; then
+          if [ "$GITHUB_EVENT_NAME" = "pull_request" ]; then
             git diff --name-only "origin/$BASE_REF...HEAD" | hack/ci/select-tests.sh
           else
             hack/ci/select-tests.sh all
@@ -232,27 +229,27 @@ jobs:
       id-token: write
     uses: ./.github/workflows/build.yaml
     with:
-      version: ${{ needs.prepare.outputs.version }}
-      base-version: ${{ needs.prepare.outputs.base-version }}
-      init-name-tag: ${{ needs.prepare.outputs.init-name-tag }}
-      publish-manifests: ${{ github.event_name != 'schedule' }}
+      version: ${{ needs.prepare.outputs.version }}              # Version for the images, charts and OLM bundle
+      init-name-tag: ${{ needs.prepare.outputs.init-name-tag }}  # Init image the chart and OLM bundle deploy
+      publish-manifests: ${{ github.event_name != 'schedule' }}  # Nightly skips charts and OLM manifests upload
     secrets: inherit
 
   release-bundle:
     name: Release bundle
     needs: [prepare, build]
-    if: github.event_name != 'schedule'
+    if: github.event_name != 'schedule'  # Nightly makes no release bundle
     permissions:
       contents: read
       id-token: write
-    uses: aerospike/shared-workflows/.github/workflows/reusable_create-release-bundle.yaml@071324c3300969857d2aaca91f06f84bc0533d06 # main
+    uses: aerospike/shared-workflows/.github/workflows/reusable_create-release-bundle.yaml@06504b0d75bf3af034fa4e84624eaa96f7326984 # main
     with:
-      gh-workflows-ref: 071324c3300969857d2aaca91f06f84bc0533d06
-      jf-project: platforms
-      jf-bundle-name: aerospike-kubernetes-operator
-      version: ${{ needs.prepare.outputs.version }}
+      gh-workflows-ref: 06504b0d75bf3af034fa4e84624eaa96f7326984  # shared-workflow SHA (same  as in uses field above)
+      jf-project: platforms                                       # JFrog project
+      jf-bundle-name: aerospike-kubernetes-operator               # Release bundle name
+      version: ${{ needs.prepare.outputs.version }}               # Bundle version, before the revision suffix
       # Adds <run_id>-<run_attempt> to the bundle version, so a re-run gets its
-      # own bundle. Promote the bundle-version output, not version.
+      # own bundle.
+      # Note: Promote the bundle-version output, not version.
       jf-bundle-revision: auto
       # The operator build-infos come from build.yaml. The init ones are under
       # the run number of the init run that built INIT_TAG.
@@ -267,20 +264,21 @@ jobs:
       attestations: write
       contents: read
       id-token: write
-    uses: aerospike/shared-workflows/.github/workflows/reusable_promote-release-bundle.yaml@071324c3300969857d2aaca91f06f84bc0533d06 # main
+    uses: aerospike/shared-workflows/.github/workflows/reusable_promote-release-bundle.yaml@06504b0d75bf3af034fa4e84624eaa96f7326984 # main
     with:
-      gh-workflows-ref: 071324c3300969857d2aaca91f06f84bc0533d06
-      jf-project: platforms
-      jf-bundle-name: aerospike-kubernetes-operator
-      version: ${{ needs.release-bundle.outputs.bundle-version }}
-      target-stage: DEV
-      runs-on: ubuntu-24.04
+      gh-workflows-ref: 06504b0d75bf3af034fa4e84624eaa96f7326984   # Same SHA as in uses field
+      jf-project: platforms                                        # JFrog project
+      jf-bundle-name: aerospike-kubernetes-operator                # Release bundle name
+      version: ${{ needs.release-bundle.outputs.bundle-version }}  # Bundle version to promote
+      target-stage: DEV                                            # Stage to promote to
+      runs-on: ubuntu-24.04                                        # Runner for the promote job
 
   # Runs after promote-dev. The nightly run skips promote-dev, so a skipped
   # promote-dev must not skip this job, but a failed one must.
   integration-tests:
     name: Integration tests
     needs: [prepare, build, promote-dev]
+    # Nothing failed or was cancelled, the build passed, and some suites were picked.
     if: >-
       !cancelled() && !failure() &&
       needs.build.result == 'success' &&
@@ -290,9 +288,9 @@ jobs:
       id-token: write
     uses: ./.github/workflows/integration-tests.yaml
     with:
-      bundle-image: ${{ needs.build.outputs.bundle-image }}
-      suites: ${{ needs.prepare.outputs.suites }}
-      focus: ${{ needs.prepare.outputs.focus }}
+      bundle-image: ${{ needs.build.outputs.bundle-image }}  # OLM bundle image the tests install the operator from
+      suites: ${{ needs.prepare.outputs.suites }}            # Suites to run, one job each
+      focus: ${{ needs.prepare.outputs.focus }}              # Ginkgo focus for cluster-test
     secrets: inherit
 
   # Only master builds go on to TEST, and only after the integration tests pass.
@@ -301,19 +299,19 @@ jobs:
   promote-test:
     name: Promote release bundle to TEST
     needs: [prepare, release-bundle, integration-tests, promote-dev]
-    if: github.ref == 'refs/heads/master'
+    if: github.ref == 'refs/heads/master' && needs.integration-tests.result == 'success'  # Master only, after tests pass
     permissions:
       attestations: write
       contents: read
       id-token: write
-    uses: aerospike/shared-workflows/.github/workflows/reusable_promote-release-bundle.yaml@071324c3300969857d2aaca91f06f84bc0533d06 # main
+    uses: aerospike/shared-workflows/.github/workflows/reusable_promote-release-bundle.yaml@06504b0d75bf3af034fa4e84624eaa96f7326984 # main
     with:
-      gh-workflows-ref: 071324c3300969857d2aaca91f06f84bc0533d06
-      jf-project: platforms
-      jf-bundle-name: aerospike-kubernetes-operator
-      version: ${{ needs.release-bundle.outputs.bundle-version }}
-      target-stage: TEST
-      runs-on: ubuntu-24.04
+      gh-workflows-ref: 06504b0d75bf3af034fa4e84624eaa96f7326984   # Same SHA as in uses
+      jf-project: platforms                                        # JFrog project
+      jf-bundle-name: aerospike-kubernetes-operator                # Release bundle name
+      version: ${{ needs.release-bundle.outputs.bundle-version }}  # Bundle version to promote
+      target-stage: TEST                                           # Stage to promote to
+      runs-on: ubuntu-24.04                                        # Runner for the promote job
 
   # The single required status check.
   ci-result:
