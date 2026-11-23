@@ -23,13 +23,25 @@ OPERATOR_SA="aerospike-operator-controller-manager"
 DIR="$( cd "$( dirname "${BASH_SOURCE[0]}" )" >/dev/null 2>&1 && pwd )"
 
 # Create storage classes.
-IS_GKE_CLUSTER=0
 case $(kubectl get nodes -o yaml) in
   *"cloud.google.com"*)
-    IS_GKE_CLUSTER=1
     echo "Installing ssd and local-ssd storage classes for GKE."
     kubectl apply -f config/samples/storage/gke_ssd_storage_class.yaml
-    kubectl apply -f config/samples/storage/local_storage_class.yaml
+
+    # The CI cluster's local-ssd class, which is backed by PD-SSD, not local
+    # disks. A storage class can't be changed after it is created, so this must
+    # match the CI cluster's class exactly.
+    kubectl apply -f - <<EOF
+apiVersion: storage.k8s.io/v1
+kind: StorageClass
+metadata:
+  name: local-ssd
+provisioner: kubernetes.io/gce-pd
+parameters:
+  type: pd-ssd
+reclaimPolicy: Delete
+volumeBindingMode: WaitForFirstConsumer
+EOF
     ;;
   *"eks.amazonaws.com"*)
     echo "Installing ssd storage class for EKS."
@@ -71,14 +83,6 @@ for namespace in $namespaces; do
     oc adm policy add-scc-to-user privileged -z aerospike-operator-controller-manager -n $namespace
   fi
 done
-
-# The local-ssd volumes come from local SSDs that the nodes expose under
-# /mnt/disks. The provisioner runs in the aerospike namespace, so it goes in
-# after the namespaces exist.
-if [ $IS_GKE_CLUSTER == 1 ]; then
-  echo "Installing local volume provisioner for the local-ssd storage class."
-  kubectl apply -f config/samples/storage/aerospike_local_volume_provisioner.yaml
-fi
 
 RUN_BUNDLE_ARGS=()
 if [ -n "$PULL_CRED_PATH" ]; then
