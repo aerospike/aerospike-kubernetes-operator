@@ -32,11 +32,11 @@ on:
 
 permissions: {}
 
-# A new push to a PR cancels its previous run. Other runs are never cancelled.
-# TODO: Check if this should be the expected behaviour.
+# Runs of the same PR wait for each other and run one by one, oldest first.
+# None are cancelled. Other runs get their own group, so they never wait.
 concurrency:
   group: ci-${{ github.event.pull_request.number || github.run_id }}
-  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
+  queue: max
 
 defaults:
   run:

@@ -2,6 +2,11 @@
 #
 #   operator image -> OLM bundle -> bundle image -> scan
 #   operator image -> helm charts
+#   openshift operator image -> scan
+#
+# The operator image runs as root. The helm charts, the OLM bundle and so the
+# integration tests use it. The openshift image is the same build run as the
+# non-root user 1001, like make docker-buildx-openshift.
 #
 # The OLM bundle job also uploads the manifests to the generic repo. The caller
 # runs prepare before this and creates the release bundle from the build names
@@ -36,7 +41,7 @@ on:
         value: ${{ jobs.scan.outputs.bundle-image }}
       jf-build-names:
         description: Comma-separated name:number of every build-info this workflow publishes, for the release bundle
-        value: ${{ jobs.operator-image.outputs.jf-build-name }}:${{ jobs.operator-image.outputs.jf-build-id }},${{ jobs.bundle-image.outputs.jf-build-name }}:${{ jobs.bundle-image.outputs.jf-build-id }},${{ jobs.olm-bundle.outputs.jf-build }},${{ jobs.helm-charts.outputs.jf-build }}
+        value: ${{ jobs.operator-image.outputs.jf-build-name }}:${{ jobs.operator-image.outputs.jf-build-id }},${{ jobs.openshift-image.outputs.jf-build-name }}:${{ jobs.openshift-image.outputs.jf-build-id }},${{ jobs.bundle-image.outputs.jf-build-name }}:${{ jobs.bundle-image.outputs.jf-build-id }},${{ jobs.olm-bundle.outputs.jf-build }},${{ jobs.helm-charts.outputs.jf-build }}
 
 permissions: {}
 
@@ -64,9 +69,27 @@ jobs:
       image-name: aerospike-kubernetes-operator
       app-version: ${{ inputs.version }}
       jf-build-name: ako-operator
-      build-args-json: '{"VERSION": "${{ inputs.base-version }}"}'
+      build-args-json: '{"VERSION": "${{ inputs.version }}"}'
       gh-checkout-submodules: "true"
       # Same as make docker-buildx
+      no-cache: true
+
+  # Runs as the non-root user 1001, like make docker-buildx-openshift.
+  openshift-image:
+    name: OpenShift operator image
+    permissions:
+      contents: read
+      packages: write
+      attestations: write
+      id-token: write
+    uses: aerospike/shared-workflows/.github/workflows/reusable_docker-build-deploy.yaml@071324c3300969857d2aaca91f06f84bc0533d06 # main
+    with:
+      jf-project: platforms
+      image-name: aerospike-kubernetes-operator-openshift
+      app-version: ${{ inputs.version }}
+      jf-build-name: ako-operator-openshift
+      build-args-json: '{"VERSION": "${{ inputs.version }}", "USER": "1001"}'
+      gh-checkout-submodules: "true"
       no-cache: true
 
   helm-charts:
@@ -249,7 +272,7 @@ jobs:
 
   scan:
     name: Vulnerability scan
-    needs: [operator-image, bundle-image]
+    needs: [operator-image, openshift-image, bundle-image]
     runs-on: ubuntu-24.04
     permissions:
       contents: read
@@ -259,6 +282,7 @@ jobs:
       bundle-image: ${{ needs.bundle-image.outputs.immutable-tag }}
     env:
       OPERATOR_IMG: ${{ needs.operator-image.outputs.immutable-tag }}
+      OPENSHIFT_IMG: ${{ needs.openshift-image.outputs.immutable-tag }}
       BUNDLE_IMG: ${{ needs.bundle-image.outputs.immutable-tag }}
       SNYK_TOKEN: ${{ secrets.SNYK_TOKEN }}
     steps:
@@ -302,6 +326,11 @@ jobs:
         run: |
           docker pull "$OPERATOR_IMG"
           snyk container test "$OPERATOR_IMG" --severity-threshold=high --file=Dockerfile --policy-path=.snyk --fail-on=all
+
+      - name: Scan openshift operator image
+        run: |
+          docker pull "$OPENSHIFT_IMG"
+          snyk container test "$OPENSHIFT_IMG" --severity-threshold=high --file=Dockerfile --policy-path=.snyk --fail-on=all
 
       - name: Scan bundle image
         run: |
