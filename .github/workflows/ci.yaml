@@ -215,7 +215,8 @@ jobs:
         env:
           BASE_REF: ${{ github.base_ref }}
         run: |
-          if [ "$GITHUB_EVENT_NAME" = "pull_request" ]; then
+          # DEBUG: run all suites on PRs too. Revert before merge.
+          if false && [ "$GITHUB_EVENT_NAME" = "pull_request" ]; then
             git diff --name-only "origin/$BASE_REF...HEAD" | hack/ci/select-tests.sh
           else
             hack/ci/select-tests.sh all
