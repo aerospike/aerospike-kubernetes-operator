@@ -109,6 +109,7 @@ const (
 	ConfigKeyCgroupMemTracking        = "cgroup-mem-tracking"
 	ConfKeyMigrateFillDelay           = "migrate-fill-delay"
 	ConfKeyServiceIndexCheckpointPath = "index-checkpoint-path"
+	ConfKeyEnforceFIPS                = "enforce-fips"
 
 	// Defaults.
 	DefaultWorkDirectory = "/opt/aerospike"
@@ -805,6 +806,33 @@ func IsPathParentOrSame(dir1, dir2 string) bool {
 // IsFederal indicates if the image is a federal image.
 func IsFederal(image string) bool {
 	return strings.Contains(strings.ToLower(image), "federal")
+}
+
+// IsFIPSEnforced indicates if service.enforce-fips is true in the cluster config or in any rack config.
+// Such nodes run in FIPS mode, where the server rejects password logins.
+func IsFIPSEnforced(spec *AerospikeClusterSpec) bool {
+	configs := make([]map[string]interface{}, 0, len(spec.RackConfig.Racks)+1)
+
+	if spec.AerospikeConfig != nil {
+		configs = append(configs, spec.AerospikeConfig.Value)
+	}
+
+	for idx := range spec.RackConfig.Racks {
+		configs = append(configs, spec.RackConfig.Racks[idx].AerospikeConfig.Value)
+	}
+
+	for _, config := range configs {
+		serviceConf, ok := config[ConfKeyService].(map[string]interface{})
+		if !ok {
+			continue
+		}
+
+		if enforce, _ := serviceConf[ConfKeyEnforceFIPS].(bool); enforce {
+			return true
+		}
+	}
+
+	return false
 }
 
 func GetClientAuthMode(authMode AerospikeAuthMode) as.AuthMode {

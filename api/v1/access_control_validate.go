@@ -116,7 +116,8 @@ func IsAerospikeAccessControlValid(aerospikeClusterSpec *AerospikeClusterSpec) (
 
 	// Validate users.
 	_, err = isUserSpecValid(
-		aerospikeClusterSpec.Image, aerospikeClusterSpec.AerospikeAccessControl.Users, roleMap,
+		aerospikeClusterSpec.Image, IsFIPSEnforced(aerospikeClusterSpec),
+		aerospikeClusterSpec.AerospikeAccessControl.Users, roleMap,
 	)
 	if err != nil {
 		return false, err
@@ -397,7 +398,7 @@ func subset(first, second []string) bool {
 
 // isUserSpecValid indicates if input user specification is valid.
 func isUserSpecValid(
-	image string, users []AerospikeUserSpec, roles map[string]AerospikeRoleSpec,
+	image string, fipsEnforced bool, users []AerospikeUserSpec, roles map[string]AerospikeRoleSpec,
 ) (bool, error) {
 	requiredRolesUserFound := false
 	seenUsers := map[string]bool{}
@@ -459,6 +460,11 @@ func isUserSpecValid(
 		default:
 			if isFederal {
 				return false, fmt.Errorf("authMode for all users must be PKI with Federal Edition")
+			}
+
+			// FIPS mode rejects password logins.
+			if fipsEnforced {
+				return false, fmt.Errorf("authMode for all users must be PKIOnly when service.enforce-fips is true")
 			}
 
 			// TODO: We should validate actual password here but we cannot read the secret here.
