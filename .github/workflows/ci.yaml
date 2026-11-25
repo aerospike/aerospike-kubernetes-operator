@@ -58,7 +58,7 @@ jobs:
       id-token: write
     outputs:
       version: ${{ steps.version.outputs.version }}              # Version of everything this run builds
-      init-build: ${{ steps.init.outputs.build }}                # Init build-info number in JFrog
+      init-build: ${{ steps.init.outputs.tag }}                  # Init build-info number in JFrog
       init-name-tag: ${{ steps.init-image.outputs.name-tag }}    # Timestamped init image the operator deploys
       suites: ${{ steps.tests.outputs.suites }}                  # Integration test suites to run
       focus: ${{ steps.tests.outputs.focus }}                    # Ginkgo focus for cluster-test
@@ -121,51 +121,13 @@ jobs:
 
           echo "version=$base-$label-$short_sha" | tee -a "$GITHUB_OUTPUT"
 
-      # Finds the init repo's ci.yaml run that built INIT_TAG and outputs its
-      # run number. JFrog stores the init build-info under that number, and the
-      # release bundle needs it to pick up the init images.
-      #
-      # TODO(sidntrivedi): Remove this lookup once reusable_docker-build-deploy.yaml
-      # in shared-workflows takes a build number, so the init CI can store its
-      # build-info under INIT_TAG instead.
-      - name: Resolve init build
+      # The init CI stores its build-info under INIT_TAG, so INIT_TAG is also
+      # the init build number in JFrog.
+      - name: Read init tag
         id: init
-        env:
-          GH_TOKEN: ${{ github.token }}
-          INIT_REPO: aerospike/aerospike-kubernetes-init
         run: |
           tag=$(sed -n 's/^INIT_TAG ?= *//p' Makefile)
-
-          # The event of the init run that built the tag, from the tag's shape.
-          case "$tag" in
-            # PR build, e.g. 2.5.5-pr-166-50c3a4c
-            *-pr-*)
-              event=pull_request
-              ;;
-            # master build, e.g. 2.5.5-master-50c3a4c
-            *-master-*)
-              event=push
-              ;;
-            *)
-              echo "::error::Unexpected INIT_TAG: $tag"
-              exit 1
-              ;;
-          esac
-
-          # The successful ci.yaml run for the tag's commit. The tag ends in
-          # a short SHA, so look up the full SHA for the head_sha filter.
-          sha=$(gh api "repos/$INIT_REPO/commits/${tag##*-}" --jq .sha)
-          runs="repos/$INIT_REPO/actions/runs?head_sha=$sha&event=$event&status=success"
-          build=$(gh api "$runs" \
-            --jq '[.workflow_runs[] | select(.path == ".github/workflows/ci.yaml")][0].run_number')
-
-          echo "image-tag=$tag" >> "$GITHUB_OUTPUT"
-
-          if [ -z "$build" ] || [ "$build" = "null" ]; then
-            echo "::error::No successful init run for $tag"
-            exit 1
-          fi
-          echo "build=$build" | tee -a "$GITHUB_OUTPUT"
+          echo "tag=$tag" | tee -a "$GITHUB_OUTPUT"
 
       - name: Set up JFrog CLI
         uses: step-security/setup-jfrog-cli@53aeacb709fce45d0baf69a13ec3342f7e2d71a9 # v5.1.0
@@ -173,40 +135,42 @@ jobs:
           oidc-provider-name: gh-aerospike
           oidc-audience: aerospike
 
-      # Finds the timestamped init image tag in the init build-info, e.g.
+      # Finds the timestamped init image tag, e.g.
       # 2.5.5-pr-166-dd04cc5_20261030T091706Z. Only this tag is in the release
       # bundle, not the plain INIT_TAG. The chart, the OLM bundle and the
-      # integration tests use it, so it survives promotion and an init re-run
-      # can't move it.
+      # integration tests use it, so it survives promotion.
+      #
+      # Each init run pushes a new <INIT_TAG>_<timestamp> image. If the init CI
+      # ran more than once for INIT_TAG, take the newest one. The release bundle
+      # also picks up the latest init run.
       - name: Resolve init image
         id: init-image
         env:
-          TAG: ${{ steps.init.outputs.image-tag }}
-          BUILD_NAME: ako-init
-          BUILD: ${{ steps.init.outputs.build }}
+          TAG: ${{ steps.init.outputs.tag }}
+          REPO: platforms-docker-dev-local
+          IMAGE: aerospike-kubernetes-init
         run: |
-          # The build-info of the init build found in the previous step.
-          build_info=$(jf rt curl -s "/api/build/$BUILD_NAME/$BUILD?project=platforms")
+          # The newest multi-platform manifest under <image>/<INIT_TAG>_*.
+          # Artifactory requires repo, path and name in include() for non-admin
+          # users.
+          query='items.find({
+            "repo": "'"$REPO"'",
+            "path": {"$match": "'"$IMAGE/${TAG}_*"'"},
+            "name": "list.manifest.json"
+          }).include("repo", "path", "name", "created").sort({"$desc": ["created"]}).limit(1)'
 
-          # The image we want, e.g.
-          # aerospike-kubernetes-init:2.5.5-pr-166-dd04cc5_20261030T091706Z
-          prefix="aerospike-kubernetes-init:${TAG}_"
+          path=$(jf rt curl -s -XPOST /api/search/aql \
+            -H "Content-Type: text/plain" -d "$query" |
+            jq -r '.results[0].path // empty')
 
-          # Each module ID is <image>:<tag>. The per-platform and attestation
-          # modules add a prefix, e.g. linux/amd64/<image>:<tag>, so strip
-          # everything up to the last "/". Then keep the IDs that start with
-          # $prefix, once each.
-          name_tag=$(jq -r --arg prefix "$prefix" '
-            [.buildInfo.modules[].id | sub(".*/"; "") | select(startswith($prefix))]
-            | unique
-            | .[]' <<< "$build_info")
-
-          # There must be exactly one match.
-          if [ "$(grep -c . <<< "$name_tag")" -ne 1 ]; then
-            echo "::error::Expected one ${prefix}<timestamp> image in build $BUILD_NAME/$BUILD, got: $name_tag"
+          if [ -z "$path" ]; then
+            echo "::error::No $IMAGE:${TAG}_<timestamp> image in $REPO"
             exit 1
           fi
-          echo "name-tag=$name_tag" | tee -a "$GITHUB_OUTPUT"
+
+          # The path is <image>/<tag>, e.g.
+          # aerospike-kubernetes-init/2.5.5-pr-166-dd04cc5_20261030T091706Z
+          echo "name-tag=$IMAGE:${path#*/}" | tee -a "$GITHUB_OUTPUT"
 
       - name: Select integration tests
         id: tests
@@ -252,7 +216,7 @@ jobs:
       # Note: Promote the bundle-version output, not version.
       jf-bundle-revision: auto
       # The operator build-infos come from build.yaml. The init ones are under
-      # the run number of the init run that built INIT_TAG.
+      # INIT_TAG.
       jf-build-names: ${{ needs.build.outputs.jf-build-names }},ako-init:${{ needs.prepare.outputs.init-build }},ako-init-openshift:${{ needs.prepare.outputs.init-build }}
 
   # The reusable workflow checks the stage order and runs one promotion per

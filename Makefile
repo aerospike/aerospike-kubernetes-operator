@@ -19,7 +19,7 @@ NEXT_VERSION ?= 4.8.0
 
 # INIT_TAG is the aerospike-kubernetes-init CI build that goes into the jfrog release bundle,
 # <version>-<pr-N|master>-<short commit sha>, e.g. 2.5.5-pr-166-50c3a4c.
-INIT_TAG ?= 2.5.5-pr-166-50c3a4c
+INIT_TAG ?= 2.5.6-pr-166-4a73e53
 
 # Platforms supported
 PLATFORMS ?= linux/amd64,linux/arm64
