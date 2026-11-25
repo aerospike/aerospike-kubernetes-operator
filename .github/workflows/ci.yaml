@@ -1,4 +1,5 @@
-# CI for pull requests, master and the nightly run. Replaces the Jenkins job.
+# CI for pull requests, master, the nightly run and approved fork PR commits.
+# Replaces the Jenkins job.
 #
 #   prepare -> build -> release bundle -> promote to DEV -> integration tests -> promote to TEST (master only)
 #
@@ -29,13 +30,22 @@ on:
   # Nightly run: 20:00 UTC every 2 days
   schedule:
     - cron: "0 20 */2 * *"
+  # fork-pr-approval.yaml dispatches CI on fork-pr/<PR number> for a fork PR
+  # commit a maintainer approved.
+  workflow_dispatch:
+    inputs:
+      pr-number:
+        description: Number of the fork PR, set by fork-pr-approval.yaml
+        type: string
+        required: false
 
 permissions: {}
 
 # Runs of the same PR wait for each other and run one by one, oldest first.
-# None are cancelled. Other runs get their own group, so they never wait.
+# None are cancelled. Runs of the same fork-pr branch do the same. Other runs
+# get their own group, so they never wait.
 concurrency:
-  group: ci-${{ github.event.pull_request.number || github.run_id }}
+  group: ci-${{ github.event.pull_request.number || (startsWith(github.ref_name, 'fork-pr/') && github.ref_name) || github.run_id }}
   queue: max
 
 defaults:
@@ -51,6 +61,9 @@ jobs:
   prepare:
     name: Prepare
     # Fork PRs get no secrets or OIDC token, so nothing below can run for them.
+    # After reviewing a fork PR, a maintainer comments /ok-to-test, and
+    # fork-pr-approval.yaml pushes its head to fork-pr/<PR number> and
+    # dispatches CI there.
     if: github.event_name != 'pull_request' || github.event.pull_request.head.repo.full_name == github.repository
     runs-on: ubuntu-24.04
     permissions:
@@ -82,7 +95,7 @@ jobs:
       - name: Compute version
         id: version
         env:
-          PR_NUMBER: ${{ github.event.pull_request.number }}
+          PR_NUMBER: ${{ github.event.pull_request.number || inputs.pr-number }}
           SHA: ${{ github.event.pull_request.head.sha || github.sha }}
         run: |
           # Base version from the Makefile, e.g. 4.8.0.
@@ -101,14 +114,22 @@ jobs:
             exit 1
           fi
 
-          # pr-<number>, nightly, or the branch name with anything other than
-          # a-z and 0-9 turned into dashes.
+          # pr-<number> for a pull request or for fork-pr/<number>, nightly, or
+          # the branch name with anything other than a-z and 0-9 turned into
+          # dashes.
           case "$GITHUB_EVENT_NAME" in
             pull_request)
               label="pr-$PR_NUMBER"
               ;;
             schedule)
               label="nightly"
+              ;;
+            workflow_dispatch)
+              if [[ "$GITHUB_REF_NAME" != fork-pr/* ]] || [ -z "$PR_NUMBER" ]; then
+                echo "::error::Dispatch CI only on a fork-pr/<PR number> branch, with the pr-number input set."
+                exit 1
+              fi
+              label="pr-$PR_NUMBER"
               ;;
             *)
               label=$(echo "$GITHUB_REF_NAME" |
@@ -175,9 +196,11 @@ jobs:
       - name: Select integration tests
         id: tests
         env:
-          BASE_REF: ${{ github.base_ref }}
+          # A fork-pr run has no base ref. Fork PRs target master.
+          BASE_REF: ${{ github.base_ref || 'master' }}
         run: |
-          if [ "$GITHUB_EVENT_NAME" = "pull_request" ]; then
+          # Pick suites from the PR's changes, for a PR or a fork-pr run.
+          if [ "$GITHUB_EVENT_NAME" = "pull_request" ] || [ "$GITHUB_EVENT_NAME" = "workflow_dispatch" ]; then
             git diff --name-only "origin/$BASE_REF...HEAD" | hack/ci/select-tests.sh
           else
             hack/ci/select-tests.sh all
@@ -291,7 +314,7 @@ jobs:
           RESULTS: ${{ join(needs.*.result, ' ') }}
         run: |
           if [ "$FORK_PR" = "true" ]; then
-            echo "::error::CI does not run on fork PRs. A maintainer needs to push this branch to the repository."
+            echo "::error::CI does not run on fork PRs. A maintainer needs to review the PR and comment /ok-to-test."
             exit 1
           fi
           echo "Job results: $RESULTS"
@@ -299,3 +322,44 @@ jobs:
             echo "::error::One or more CI jobs failed or were cancelled"
             exit 1
           fi
+
+  # Reports the result to the fork PR as the "CI result" status on its commit,
+  # and as a PR comment, which notifies the PR author.
+  report-fork-pr:
+    name: Report to fork PR
+    needs: ci-result
+    if: always() && startsWith(github.ref_name, 'fork-pr/')
+    runs-on: ubuntu-24.04
+    permissions:
+      statuses: write
+      pull-requests: write
+    steps:
+      - name: Harden the runner (Audit all outbound calls)
+        uses: step-security/harden-runner@351661ca32ac09a36dc5ee2d536e3128f2a3c8ed # v2.22.0
+        with:
+          egress-policy: audit
+
+      - name: Set commit status and comment on the PR
+        env:
+          GH_TOKEN: ${{ github.token }}
+          PR: ${{ inputs.pr-number }}
+          RESULT: ${{ needs.ci-result.result }}
+        run: |
+          if [ "$RESULT" = "success" ]; then
+            state=success
+            description="All CI jobs passed"
+          else
+            state=failure
+            description="One or more CI jobs failed or were cancelled"
+          fi
+
+          run_url="${GITHUB_SERVER_URL}/${GITHUB_REPOSITORY}/actions/runs/${GITHUB_RUN_ID}"
+          gh api --method POST "repos/${GITHUB_REPOSITORY}/statuses/${GITHUB_SHA}" \
+            -f state="$state" \
+            -f context="CI result" \
+            -f description="$description" \
+            -f target_url="$run_url" > /dev/null
+          echo "CI result: $RESULT -> $state"
+
+          gh pr comment "$PR" --repo "$GITHUB_REPOSITORY" \
+            --body "CI result for ${GITHUB_SHA:0:7}: **${state}**. ${description}. [View the run](${run_url})"

@@ -37,10 +37,13 @@ jobs:
           PR: ${{ github.event.issue.number }}
           COMMENTER: ${{ github.event.comment.user.login }}
         run: |
-          permission=$(gh api "repos/${GITHUB_REPOSITORY}/collaborators/${COMMENTER}/permission" --jq .permission)
+          # Anyone can comment, so ignore comments from users without write
+          # access. Exit 0, so their comments don't leave failed runs.
+          # A non-collaborator gets a 404 here, so treat an error as no access.
+          permission=$(gh api "repos/${GITHUB_REPOSITORY}/collaborators/${COMMENTER}/permission" --jq .permission 2> /dev/null || echo none)
           if [ "$permission" != admin ] && [ "$permission" != write ]; then
-            echo "::error::$COMMENTER has $permission access. /ok-to-test needs write access."
-            exit 1
+            echo "::notice::Ignoring /ok-to-test from $COMMENTER, who has $permission access. It needs write access."
+            exit 0
           fi
 
           git init -q
