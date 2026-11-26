@@ -2670,26 +2670,36 @@ func validateNetworkPolicy(cluster *asdbv1.AerospikeCluster) error {
 func validateNLBNetworkPolicy(cluster *asdbv1.AerospikeCluster) error {
 	networkPolicy := &cluster.Spec.AerospikeNetworkPolicy
 
-	if networkPolicy.AlternateAccessType == asdbv1.AerospikeNetworkTypeNetworkLoadBalancer &&
-		networkPolicy.LoadBalancerAlternateAccessAddress == "" {
-		return fmt.Errorf("loadBalancerAlternateAccessAddress is required when alternateAccess is 'networkLoadBalancer'")
+	// networkLoadBalancer distinguishes pods by their per-pod NodePort. With host networking the
+	// server also listens directly on the node's service port, so reject the combination.
+	if networkPolicy.UsesNetworkLoadBalancer() && cluster.Spec.PodSpec.HostNetwork {
+		return fmt.Errorf("host networking cannot be enabled with 'networkLoadBalancer' network type")
 	}
 
-	if networkPolicy.TLSAlternateAccessType == asdbv1.AerospikeNetworkTypeNetworkLoadBalancer &&
-		networkPolicy.LoadBalancerTLSAlternateAccessAddress == "" {
-		return fmt.Errorf("loadBalancerTLSAlternateAccessAddress is required " +
-			"when tlsAlternateAccess is 'networkLoadBalancer'")
+	if networkPolicy.AlternateAccessType == asdbv1.AerospikeNetworkTypeNetworkLoadBalancer {
+		if networkPolicy.LoadBalancerAlternateAccessAddress == "" {
+			return fmt.Errorf("loadBalancerAlternateAccessAddress is required when alternateAccess is 'networkLoadBalancer'")
+		}
+
+		if err := validateLoadBalancerAddress(
+			networkPolicy.LoadBalancerAlternateAccessAddress, "loadBalancerAlternateAccessAddress",
+		); err != nil {
+			return err
+		}
 	}
 
-	if err := validateLoadBalancerAddress(
-		networkPolicy.LoadBalancerAlternateAccessAddress, "loadBalancerAlternateAccessAddress",
-	); err != nil {
-		return err
+	if networkPolicy.TLSAlternateAccessType == asdbv1.AerospikeNetworkTypeNetworkLoadBalancer {
+		if networkPolicy.LoadBalancerTLSAlternateAccessAddress == "" {
+			return fmt.Errorf("loadBalancerTLSAlternateAccessAddress is required " +
+				"when tlsAlternateAccess is 'networkLoadBalancer'")
+		}
+
+		return validateLoadBalancerAddress(
+			networkPolicy.LoadBalancerTLSAlternateAccessAddress, "loadBalancerTLSAlternateAccessAddress",
+		)
 	}
 
-	return validateLoadBalancerAddress(
-		networkPolicy.LoadBalancerTLSAlternateAccessAddress, "loadBalancerTLSAlternateAccessAddress",
-	)
+	return nil
 }
 
 // validateLoadBalancerAddress accepts an IPv4 address, an IPv6 address, or an FQDN.

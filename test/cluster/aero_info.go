@@ -32,7 +32,7 @@ func newAsConn(
 
 	networkType := asdbv1.AerospikeNetworkType(*defaultNetworkType)
 	if (asdbv1.GetBool(aeroCluster.Spec.PodSpec.MultiPodPerHost) ||
-		networkType == asdbv1.AerospikeNetworkTypeNetworkLoadBalancer) &&
+		aeroCluster.Spec.AerospikeNetworkPolicy.UsesNetworkLoadBalancer()) &&
 		networkType != asdbv1.AerospikeNetworkTypePod &&
 		networkType != asdbv1.AerospikeNetworkTypeCustomInterface {
 		svc, err := getServiceForPod(pod, k8sClient)
