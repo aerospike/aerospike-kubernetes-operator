@@ -815,7 +815,7 @@ func getOperatorInitImage(ctx goctx.Context) (registry, registryNamespace, nameA
 	// OLM and helm name and label the operator Deployment differently.
 	// Both have a manager container with the init registry envVar, so match on that.
 	deployments := &appsv1.DeploymentList{}
-	Expect(k8sClient.List(ctx, deployments)).To(Succeed())
+	Expect(k8sClient.List(ctx, deployments, client.InNamespace(namespace))).To(Succeed())
 
 	var managers []*corev1.Container
 

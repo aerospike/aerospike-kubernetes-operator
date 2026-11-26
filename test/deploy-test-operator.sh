@@ -28,10 +28,11 @@ case $(kubectl get nodes -o yaml) in
     echo "Installing ssd and local-ssd storage classes for GKE."
     kubectl apply -f config/samples/storage/gke_ssd_storage_class.yaml
 
-    # The CI cluster's local-ssd class, which is backed by PD-SSD, not local
-    # disks. A storage class can't be changed after it is created, so this must
-    # match the CI cluster's class exactly.
-    kubectl apply -f - <<EOF
+    # A local-ssd class backed by PD-SSD, not local disks, like the CI
+    # cluster's. A storage class can't be changed after it is created, so
+    # create it only if it is missing and leave an existing one as it is.
+    if ! kubectl get storageclass local-ssd > /dev/null 2>&1; then
+      kubectl apply -f - <<EOF
 apiVersion: storage.k8s.io/v1
 kind: StorageClass
 metadata:
@@ -42,6 +43,7 @@ parameters:
 reclaimPolicy: Delete
 volumeBindingMode: WaitForFirstConsumer
 EOF
+    fi
     ;;
   *"eks.amazonaws.com"*)
     echo "Installing ssd storage class for EKS."

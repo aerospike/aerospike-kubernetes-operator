@@ -27,9 +27,9 @@ on:
   push:
     branches:
       - master
-  # Nightly run: 20:00 UTC every 2 days
+  # Nightly run: 20:00 UTC on Monday, Wednesday and Friday
   schedule:
-    - cron: "0 20 */2 * *"
+    - cron: "0 20 * * 1,3,5"
   # fork-pr-approval.yaml dispatches CI on fork-pr/<PR number>-<short SHA> for
   # a fork PR commit a maintainer approved.
   workflow_dispatch:
@@ -89,7 +89,8 @@ jobs:
 
       # e.g. 4.8.0-pr-620-a1b2c3d, 4.8.0-master-e4f5a6b, 4.8.0-nightly-e4f5a6b.
       # The short commit SHA ties every version, and so every release bundle, to
-      # the commit it was built from. For a PR it is the PR's head commit.
+      # a commit. For a PR it is the PR's head commit, but the build uses the
+      # merge of that commit with master.
       # The base is NEXT_VERSION, which must be newer than the last release tag,
       # or the dev versions would sort below that release.
       - name: Compute version
@@ -180,7 +181,7 @@ jobs:
 
           # e.g. aerospike-kubernetes-init/2.5.6-pr-166-4a73e53_20261125T050759Z
           dir="${path%/*}"
-          echo "name-tag=${dir%%/*}:${dir#*/}" | tee -a "$GITHUB_OUTPUT"
+          echo "name-tag=${dir%/*}:${dir##*/}" | tee -a "$GITHUB_OUTPUT"
 
       - name: Select integration tests
         id: tests
@@ -289,9 +290,11 @@ jobs:
       target-stage: TEST                                           # Stage to promote to
       runs-on: ubuntu-24.04                                        # Runner for the promote job
 
-  # The single required status check.
+  # The single required status check. A fork PR's own run names it "Fork PR
+  # gate" instead, so its failure doesn't count as "CI result". The run that
+  # /ok-to-test starts reports "CI result" on the same commit.
   ci-result:
-    name: CI result
+    name: ${{ (github.event_name == 'pull_request' && github.event.pull_request.head.repo.full_name != github.repository) && 'Fork PR gate' || 'CI result' }}
     needs: [prepare, build, integration-tests, release-bundle, promote-dev, promote-test]
     if: always()
     runs-on: ubuntu-24.04
