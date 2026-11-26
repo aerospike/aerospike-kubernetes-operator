@@ -1,0 +1,59 @@
+# Runs CI for a fork PR after a maintainer reviews it. Fork PRs get no
+# secrets, so ci.yaml can't run for them on its own.
+#
+# To run it, comment /ok-to-test on the PR. Only users with write access can
+# do this. It tests the PR's head commit at the time the job runs, so comment
+# right after reviewing, and comment again after each new push.
+#
+# It pushes the commit to fork-pr/<PR number>-<short SHA> and dispatches ci.yaml there,
+# without running any of the PR's code. GitHub refuses the push if the PR
+# changes .github/workflows/. ci.yaml deletes the branch when its run ends.
+
+name: Fork PR approval
+
+on:
+  issue_comment:
+    types: [created]
+
+permissions: {}
+
+jobs:
+  mirror:
+    name: Run CI for a fork PR
+    if: github.event.issue.pull_request && startsWith(github.event.comment.body, '/ok-to-test')
+    runs-on: ubuntu-24.04
+    permissions:
+      contents: write
+      actions: write
+    steps:
+      - name: Harden the runner (Audit all outbound calls)
+        uses: step-security/harden-runner@351661ca32ac09a36dc5ee2d536e3128f2a3c8ed # v2.22.0
+        with:
+          egress-policy: audit
+
+      - name: Push the PR head and start CI
+        env:
+          GH_TOKEN: ${{ github.token }}
+          PR: ${{ github.event.issue.number }}
+          COMMENTER: ${{ github.event.comment.user.login }}
+        run: |
+          # Anyone can comment, so ignore comments from users without write
+          # access. Exit 0, so their comments don't leave failed runs.
+          # A non-collaborator gets a 404 here, so treat an error as no access.
+          permission=$(gh api "repos/${GITHUB_REPOSITORY}/collaborators/${COMMENTER}/permission" --jq .permission 2> /dev/null || echo none)
+          if [ "$permission" != admin ] && [ "$permission" != write ]; then
+            echo "::notice::Ignoring /ok-to-test from $COMMENTER, who has $permission access. It needs write access."
+            exit 0
+          fi
+
+          git init -q
+          git remote add origin "https://x-access-token:${GH_TOKEN}@github.com/${GITHUB_REPOSITORY}.git"
+          git fetch -q --depth=1 origin "refs/pull/${PR}/head"
+          sha=$(git rev-parse FETCH_HEAD)
+
+          # One branch per commit, so a run for a new commit doesn't wait for
+          # or replace the run for an older one.
+          branch="fork-pr/${PR}-${sha::7}"
+          git push -q --force origin "${sha}:refs/heads/${branch}"
+          gh workflow run ci.yaml --repo "$GITHUB_REPOSITORY" --ref "$branch" -f pr-number="$PR"
+          echo "Started CI for $sha on $branch"
