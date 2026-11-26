@@ -5,9 +5,9 @@
 # do this. It tests the PR's head commit at the time the job runs, so comment
 # right after reviewing, and comment again after each new push.
 #
-# It pushes the commit to fork-pr/<PR number> and dispatches ci.yaml there,
+# It pushes the commit to fork-pr/<PR number>-<short SHA> and dispatches ci.yaml there,
 # without running any of the PR's code. GitHub refuses the push if the PR
-# changes .github/workflows/.
+# changes .github/workflows/. ci.yaml deletes the branch when its run ends.
 
 name: Fork PR approval
 
@@ -51,6 +51,9 @@ jobs:
           git fetch -q --depth=1 origin "refs/pull/${PR}/head"
           sha=$(git rev-parse FETCH_HEAD)
 
-          git push -q --force origin "${sha}:refs/heads/fork-pr/${PR}"
-          gh workflow run ci.yaml --repo "$GITHUB_REPOSITORY" --ref "fork-pr/${PR}" -f pr-number="$PR"
-          echo "Started CI for $sha on fork-pr/${PR}"
+          # One branch per commit, so a run for a new commit doesn't wait for
+          # or replace the run for an older one.
+          branch="fork-pr/${PR}-${sha::7}"
+          git push -q --force origin "${sha}:refs/heads/${branch}"
+          gh workflow run ci.yaml --repo "$GITHUB_REPOSITORY" --ref "$branch" -f pr-number="$PR"
+          echo "Started CI for $sha on $branch"
