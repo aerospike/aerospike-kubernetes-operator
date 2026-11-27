@@ -98,7 +98,7 @@ helm install aerospike aerospike/aerospike-cluster --namespace <namespace> \
 | `paused`                    | Pause reconciliation of the cluster                                                                                          | `false`                                                   |
 | `devMode`                   | Deploy Aerospike cluster in dev mode                                                                                         | `false`                                                   |
 | `operations`                | Operations is a list of on-demand operations to be performed on the Aerospike cluster.                                       | `[]`                                                      |
-| `previewFeatures`           | previewFeatures is a list of Aerospike server preview feature names to enable via the `--preview` startup flag. `index-checkpoint` requires server 8.2.0.0 or later. | `[]`                                                      |
+| `previewFeatures`           | previewFeatures is a list of Aerospike server preview feature names to enable via the `--preview` startup flag. `index-checkpoint` is a preview feature in server 8.2.0 only; it is GA from 8.2.1 and must not be listed there. | `[]`                                                      |
 
 ### Default values in "dev" mode (`devMode=true`):
 

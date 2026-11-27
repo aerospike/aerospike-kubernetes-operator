@@ -155,16 +155,16 @@ const (
 // PreviewFeatureInfo describes the server version range for a preview feature.
 type PreviewFeatureInfo struct {
 	MinVersion string // first server version supporting this feature
-	GAVersion  string // server version where the flag is no longer needed ("" = still preview)
+	GAVersion  string // first server version where the feature is GA ("" = still preview)
 }
 
 // PreviewFeatureVersions maps known preview feature names to their version constraints.
 //
-// GAVersion currently only drives an admission warning. No preview feature has graduated yet,
-// and the server has not decided whether a graduated name stays a tolerated --preview value or
-// becomes an error, so setting GAVersion does not change which flags the operator passes.
+// A graduated name is no longer a --preview value: the server refuses to start with it. So
+// from GAVersion onwards admission rejects the name in spec.previewFeatures, and the config
+// the feature used to gate needs no opt-in.
 var PreviewFeatureVersions = map[string]PreviewFeatureInfo{
-	PreviewFeatureIndexCheckpoint: {MinVersion: "8.2.0.0", GAVersion: ""},
+	PreviewFeatureIndexCheckpoint: {MinVersion: "8.2.0.0", GAVersion: "8.2.1.0"},
 }
 
 // GetConfiguredWorkDirectory returns the Aerospike work directory configured in aerospikeConfig.

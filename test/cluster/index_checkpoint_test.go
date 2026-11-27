@@ -10,6 +10,7 @@ import (
 	operatorUtils "github.com/aerospike/aerospike-kubernetes-operator/v4/pkg/utils"
 	"github.com/aerospike/aerospike-kubernetes-operator/v4/test"
 	"github.com/aerospike/aerospike-kubernetes-operator/v4/test/testutil"
+	lib "github.com/aerospike/aerospike-management-lib"
 	"github.com/aerospike/aerospike-management-lib/deployment"
 	. "github.com/onsi/ginkgo/v2"
 	. "github.com/onsi/gomega"
@@ -149,7 +150,11 @@ var _ = Describe(
 		It("Should checkpoint during image upgrade", func() {
 			By("Deploying the cluster with index-checkpoint enabled")
 
-			aeroCluster := createIndexCheckpointCluster(clusterNamespacedName)
+			// Starts on the first version that has the feature, where it is still a preview
+			// feature, so that an upgrade image at or past GA takes the cluster across the graduation.
+			aeroCluster := createIndexCheckpointClusterWithImage(
+				clusterNamespacedName, testutil.GetEnterpriseImage(testutil.IndexCheckpointPreviewServerVersion),
+			)
 			Expect(DeployCluster(k8sClient, ctx, aeroCluster)).ToNot(HaveOccurred())
 
 			aeroCluster, err := getCluster(k8sClient, ctx, clusterNamespacedName)
@@ -159,7 +164,14 @@ var _ = Describe(
 
 			By("Upgrading the image — the checkpoint must carry the data across")
 
-			aeroCluster.Spec.Image = testutil.IndexCheckpointUpgradeImage
+			// The opt-in has to change in the same update as the image: a GA server refuses
+			// to start with index-checkpoint in --preview, and the webhook rejects it.
+			// aeroCluster.Spec.Image =  testutil.GetEnterpriseImage(testutil.IndexCheckpointGAServerVersion)
+			// TODO: Remove this when 8.2.1.0 is GA
+			aeroCluster.Spec.Image =
+				"aerospike.jfrog.io/database-docker-test-local/aerospike-server-enterprise:8.2.1.0-64_20261123T174538Z"
+			aeroCluster.Spec.PodSpec.ImagePullSecrets = []corev1.LocalObjectReference{{Name: "regcred"}}
+			aeroCluster.Spec.PreviewFeatures = indexCheckpointPreviewFeatures(aeroCluster.Spec.Image)
 
 			applyAndExpectCheckpoint(ctx, aeroCluster, []string{ckptNsName, testNsName})
 
@@ -638,9 +650,14 @@ func expectRecords(ctx goctx.Context, clusterNamespacedName types.NamespacedName
 // createIndexCheckpointCluster builds a 2-node cluster with the index-checkpoint
 // feature enabled and a pure in-memory namespace at RF=1 alongside the device backed namespace.
 func createIndexCheckpointCluster(clusterNamespacedName types.NamespacedName) *asdbv1.AerospikeCluster {
-	aeroCluster := CreateAerospikeClusterPost640(
-		clusterNamespacedName, 2, testutil.LatestEnterpriseImage,
-	)
+	return createIndexCheckpointClusterWithImage(clusterNamespacedName, testutil.LatestEnterpriseImage)
+}
+
+// createIndexCheckpointClusterWithImage is createIndexCheckpointCluster on a given server image.
+func createIndexCheckpointClusterWithImage(
+	clusterNamespacedName types.NamespacedName, image string,
+) *asdbv1.AerospikeCluster {
+	aeroCluster := CreateAerospikeClusterPost640(clusterNamespacedName, 2, image)
 
 	nsConf := getNonSCInMemoryNamespaceConfig(ckptNsName)
 	nsConf[asdbv1.ConfKeyReplicationFactor] = 1
@@ -651,7 +668,7 @@ func createIndexCheckpointCluster(clusterNamespacedName types.NamespacedName) *a
 	svc := aeroCluster.Spec.AerospikeConfig.Value[asdbv1.ConfKeyService].(map[string]interface{})
 	svc[asdbv1.ConfKeyServiceIndexCheckpointPath] = ckptPath
 
-	aeroCluster.Spec.PreviewFeatures = []string{asdbv1.PreviewFeatureIndexCheckpoint}
+	aeroCluster.Spec.PreviewFeatures = indexCheckpointPreviewFeatures(image)
 
 	aeroCluster.Spec.Storage.Volumes = append(aeroCluster.Spec.Storage.Volumes,
 		checkpointVolume("index-ckpt", ckptPath),
@@ -670,7 +687,7 @@ func createAllFlashCheckpointCluster(clusterNamespacedName types.NamespacedName)
 	svc := aeroCluster.Spec.AerospikeConfig.Value[asdbv1.ConfKeyService].(map[string]any)
 	svc[asdbv1.ConfKeyServiceIndexCheckpointPath] = ckptPath
 
-	aeroCluster.Spec.PreviewFeatures = []string{asdbv1.PreviewFeatureIndexCheckpoint}
+	aeroCluster.Spec.PreviewFeatures = indexCheckpointPreviewFeatures(aeroCluster.Spec.Image)
 
 	aeroCluster.Spec.Storage.Volumes = append(aeroCluster.Spec.Storage.Volumes,
 		checkpointVolume("index-ckpt", ckptPath),
@@ -689,6 +706,27 @@ func createAllFlashCheckpointCluster(clusterNamespacedName types.NamespacedName)
 	)
 
 	return aeroCluster
+}
+
+// indexCheckpointPreviewFeatures returns the spec.previewFeatures a checkpoint cluster needs on
+// the given server image: the index-checkpoint opt-in while the feature is a preview feature,
+// and nothing from the version where it is GA, which rejects the name.
+func indexCheckpointPreviewFeatures(image string) []string {
+	GinkgoHelper()
+
+	version, err := asdbv1.GetImageVersion(image)
+	Expect(err).ToNot(HaveOccurred())
+
+	gaVersion := asdbv1.PreviewFeatureVersions[asdbv1.PreviewFeatureIndexCheckpoint].GAVersion
+
+	val, err := lib.CompareVersions(version, gaVersion)
+	Expect(err).ToNot(HaveOccurred())
+
+	if val >= 0 {
+		return nil
+	}
+
+	return []string{asdbv1.PreviewFeatureIndexCheckpoint}
 }
 
 // checkpointVolume is the durable per-pod volume backing index-checkpoint-path.
