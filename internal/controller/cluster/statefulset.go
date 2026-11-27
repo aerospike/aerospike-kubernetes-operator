@@ -2,6 +2,7 @@ package cluster
 
 import (
 	"context"
+	"encoding/json"
 	"fmt"
 	"reflect"
 	"sort"
@@ -41,6 +42,9 @@ const (
 	confDirName                = "confdir"
 	initConfDirName            = "initconfigs"
 	podServiceAccountMountPath = "/var/run/secrets/kubernetes.io/serviceaccount"
+
+	// Hash of the container images rendered from the CR, set on the pod template.
+	imagesHashAnnotationKey = "asdb.aerospike.com/images-hash"
 )
 
 type PortInfo struct {
@@ -188,7 +192,9 @@ func (r *SingleClusterReconciler) createSTS(
 		},
 	}
 
-	r.updateSTSFromPodSpec(st, rackState)
+	if err := r.updateSTSFromPodSpec(st, rackState); err != nil {
+		return nil, err
+	}
 
 	// TODO: Add validation. device, file, both should not exist in same storage class
 	r.updateSTSStorage(st, rackState)
@@ -600,6 +606,28 @@ func (r *SingleClusterReconciler) isPodUpgraded(pod *corev1.Pod) bool {
 func (r *SingleClusterReconciler) isPodOnDesiredImage(
 	pod *corev1.Pod, logChanges bool,
 ) bool {
+	// A mutating webhook may have rewritten the live images, so compare the images
+	// the operator rendered for this pod instead.
+	desiredHash, err := r.getDesiredImagesHash()
+	if err == nil {
+		if podHash, ok := pod.Annotations[imagesHashAnnotationKey]; ok {
+			if podHash == desiredHash {
+				return true
+			}
+
+			if logChanges {
+				r.Log.Info(
+					"Found Pod for upgrading/downgrading", "pod", pod.Name,
+					"currentImagesHash", podHash, "desiredImagesHash", desiredHash,
+				)
+			}
+
+			return false
+		}
+	}
+
+	// Pods created by an older operator version do not carry the annotation,
+	// fall back to comparing the live images for those.
 	return r.allContainersAreOnDesiredImages(
 		r.aeroCluster,
 		pod.Name, pod.Spec.Containers, logChanges,
@@ -609,6 +637,34 @@ func (r *SingleClusterReconciler) isPodOnDesiredImage(
 			pod.Name, pod.Spec.InitContainers,
 			logChanges,
 		)
+}
+
+// getDesiredImagesHash hashes the images from the cluster spec. aerospike-init is
+// skipped because a change to its image is already ignored, see
+// allContainersAreOnDesiredImages.
+func (r *SingleClusterReconciler) getDesiredImagesHash() (string, error) {
+	images := map[string]string{
+		asdbv1.AerospikeServerContainerName: r.aeroCluster.Spec.Image,
+	}
+
+	for idx := range r.aeroCluster.Spec.PodSpec.Sidecars {
+		sidecar := &r.aeroCluster.Spec.PodSpec.Sidecars[idx]
+		images[sidecar.Name] = sidecar.Image
+	}
+
+	for idx := range r.aeroCluster.Spec.PodSpec.InitContainers {
+		initContainer := &r.aeroCluster.Spec.PodSpec.InitContainers[idx]
+		if initContainer.Name != asdbv1.AerospikeInitContainerName {
+			images[initContainer.Name] = initContainer.Image
+		}
+	}
+
+	imagesStr, err := json.Marshal(images)
+	if err != nil {
+		return "", err
+	}
+
+	return utils.GetHash(string(imagesStr))
 }
 
 func (r *SingleClusterReconciler) allContainersAreOnDesiredImages(
@@ -707,7 +763,9 @@ func (r *SingleClusterReconciler) updateSTS(
 	ctx context.Context, statefulSet *appsv1.StatefulSet, rackState *RackState,
 ) error {
 	// Update settings from pod spec.
-	r.updateSTSFromPodSpec(statefulSet, rackState)
+	if err := r.updateSTSFromPodSpec(statefulSet, rackState); err != nil {
+		return err
+	}
 
 	// Updating ports when switching between tls and non-tls.
 	r.updateSTSPorts(statefulSet)
@@ -1061,7 +1119,7 @@ func (r *SingleClusterReconciler) updateSTSSchedulingPolicy(
 // Called while creating new cluster and also during rolling restart.
 func (r *SingleClusterReconciler) updateSTSFromPodSpec(
 	st *appsv1.StatefulSet, rackState *RackState,
-) {
+) error {
 	defaultLabels := utils.LabelsForAerospikeClusterRack(
 		r.aeroCluster.Name, rackState.Rack.ID, rackState.Rack.Revision,
 	)
@@ -1071,9 +1129,17 @@ func (r *SingleClusterReconciler) updateSTSFromPodSpec(
 	userDefinedLabels := r.aeroCluster.Spec.PodSpec.AerospikeObjectMeta.Labels
 	mergedLabels := utils.MergeLabels(defaultLabels, userDefinedLabels)
 
+	imagesHash, err := r.getDesiredImagesHash()
+	if err != nil {
+		return err
+	}
+
 	st.Spec.Template.Spec.HostNetwork = r.aeroCluster.Spec.PodSpec.HostNetwork
 	st.Spec.Template.Labels = mergedLabels
-	st.Spec.Template.Annotations = r.aeroCluster.Spec.PodSpec.AerospikeObjectMeta.Annotations
+	st.Spec.Template.Annotations = utils.MergeLabels(
+		map[string]string{imagesHashAnnotationKey: imagesHash},
+		r.aeroCluster.Spec.PodSpec.AerospikeObjectMeta.Annotations,
+	)
 
 	st.Spec.Template.Spec.DNSPolicy = r.aeroCluster.Spec.PodSpec.DNSPolicy
 	st.Spec.Template.Spec.DNSConfig = r.aeroCluster.Spec.PodSpec.DNSConfig
@@ -1094,6 +1160,8 @@ func (r *SingleClusterReconciler) updateSTSFromPodSpec(
 		)
 
 	r.updateReservedContainers(st)
+
+	return nil
 }
 
 // updateSTSContainers updates containers with custom containers from spec, maintaining order.
