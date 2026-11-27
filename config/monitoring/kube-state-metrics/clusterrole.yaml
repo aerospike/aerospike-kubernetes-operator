@@ -1,0 +1,22 @@
+# Read access to AerospikeCluster objects for the Datadog Operator. The Operator grants the Cluster Agent
+# list/watch on aerospikeclusters when collectCrMetrics is set, and Kubernetes only lets it grant permissions
+# it holds itself. Bind this role to the Operator's service account:
+#
+#   kubectl create clusterrolebinding aerospikecluster-metrics-reader \
+#     --clusterrole=aerospikecluster-metrics-reader \
+#     --serviceaccount=<operator-namespace>:<operator-service-account>
+#
+# Not needed when the Operator is installed with clusterRole.allowReadAllResources=true, or when the Datadog
+# Helm chart deploys the Cluster Agent.
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRole
+metadata:
+  name: aerospikecluster-metrics-reader
+rules:
+  - apiGroups:
+      - asdb.aerospike.com
+    resources:
+      - aerospikeclusters
+    verbs:
+      - list
+      - watch

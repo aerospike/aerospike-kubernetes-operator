@@ -586,6 +586,9 @@ func (r *SingleClusterReconciler) setDynamicConfig(
 				errorStatus = asdbv1.PartiallyFailed
 			}
 
+			// Counted before the status patch so that a failed patch does not lose the update attempt.
+			r.incDynamicConfigUpdateMetric(dynamicConfigResultFromStatus(errorStatus))
+
 			patches := make([]jsonpatch.PatchOperation, 0, 1)
 
 			patch := jsonpatch.PatchOperation{
@@ -612,6 +615,8 @@ func (r *SingleClusterReconciler) setDynamicConfig(
 		if err := r.updateAerospikeConfInPod(podName); err != nil {
 			return common.ReconcileError(err)
 		}
+
+		r.incDynamicConfigUpdateMetric(dynamicConfigResultSuccess)
 	}
 
 	return common.ReconcileSuccess()
@@ -968,11 +973,15 @@ func (r *SingleClusterReconciler) pollAndDeleteParkedPods(
 			r.Log.Info("Index checkpoint completed", "pod", utils.GetNamespacedName(pod),
 				"namespaces", savedNSs, "status", resp)
 
+			isUpgrade := r.isParkedPodUpgrade(ctx, rackForPod[pod.Name], pod)
+
 			// isFailureRecovery is false by construction: the checkpoint save is only
 			// triggered on the planned path, so a parked pod is never a failure-recovery pod.
 			if err := r.deletePodWithLocalPVCs(ctx, rackForPod[pod.Name], pod, false); err != nil {
 				return deleted, common.ReconcileError(err)
 			}
+
+			r.incPodRestartMetric(podRestart, podRestartTrigger(false, isUpgrade))
 
 			deleted = append(deleted, pod)
 

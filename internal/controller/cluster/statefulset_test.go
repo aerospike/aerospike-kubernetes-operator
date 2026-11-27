@@ -26,6 +26,7 @@ import (
 	corev1 "k8s.io/api/core/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/util/sets"
+	"sigs.k8s.io/controller-runtime/pkg/client"
 	"sigs.k8s.io/controller-runtime/pkg/client/interceptor"
 
 	asdbv1 "github.com/aerospike/aerospike-kubernetes-operator/v4/api/v1"
@@ -501,6 +502,140 @@ func TestIsPreviewFeaturesUpdated(t *testing.T) {
 	for _, tc := range testCases {
 		t.Run(tc.name, func(t *testing.T) {
 			assert.Equal(t, tc.want, isPreviewFeaturesUpdated(tc.desiredArgs, tc.pod))
+		})
+	}
+}
+
+func TestPodImagesMatchTemplate(t *testing.T) {
+	const (
+		oldServer  = "aerospike/aerospike-server-enterprise:8.1.0.0"
+		newServer  = "aerospike/aerospike-server-enterprise:8.2.0.0"
+		oldSidecar = "exporter:1.0"
+		newSidecar = "exporter:2.0"
+	)
+
+	podWith := func(server, sidecar, init string) *corev1.Pod {
+		return &corev1.Pod{Spec: corev1.PodSpec{
+			Containers: []corev1.Container{
+				{Name: asdbv1.AerospikeServerContainerName, Image: server},
+				{Name: "exporter", Image: sidecar},
+			},
+			InitContainers: []corev1.Container{{Name: asdbv1.AerospikeInitContainerName, Image: init}},
+		}}
+	}
+
+	templateWith := func(server, sidecar, init string) *corev1.PodSpec {
+		return &podWith(server, sidecar, init).Spec
+	}
+
+	tests := []struct {
+		pod      *corev1.Pod
+		template *corev1.PodSpec
+		name     string
+		want     bool
+	}{
+		{
+			name:     "same images",
+			pod:      podWith(oldServer, oldSidecar, "init:1"),
+			template: templateWith(oldServer, oldSidecar, "init:1"),
+			want:     true,
+		},
+		{
+			name:     "server image differs",
+			pod:      podWith(oldServer, oldSidecar, "init:1"),
+			template: templateWith(newServer, oldSidecar, "init:1"),
+			want:     false,
+		},
+		{
+			name:     "sidecar image differs",
+			pod:      podWith(oldServer, oldSidecar, "init:1"),
+			template: templateWith(oldServer, newSidecar, "init:1"),
+			want:     false,
+		},
+		{
+			name:     "only aerospike-init image differs",
+			pod:      podWith(oldServer, oldSidecar, "init:1"),
+			template: templateWith(oldServer, oldSidecar, "init:2"),
+			want:     true,
+		},
+		{
+			name: "container removed from the template is ignored",
+			pod:  podWith(oldServer, oldSidecar, "init:1"),
+			template: &corev1.PodSpec{
+				Containers: []corev1.Container{{Name: asdbv1.AerospikeServerContainerName, Image: oldServer}},
+			},
+			want: true,
+		},
+	}
+
+	for _, tc := range tests {
+		t.Run(tc.name, func(t *testing.T) {
+			assert.Equal(t, tc.want, podImagesMatchTemplate(tc.pod, tc.template))
+		})
+	}
+}
+
+func TestIsParkedPodUpgrade(t *testing.T) {
+	const (
+		oldServer = "aerospike/aerospike-server-enterprise:8.1.0.0"
+		newServer = "aerospike/aerospike-server-enterprise:8.2.0.0"
+	)
+
+	stsWithImage := func(image string) *appsv1.StatefulSet {
+		return &appsv1.StatefulSet{
+			ObjectMeta: metav1.ObjectMeta{Name: clusterName + "-1", Namespace: namespace},
+			Spec: appsv1.StatefulSetSpec{Template: corev1.PodTemplateSpec{Spec: corev1.PodSpec{
+				Containers: []corev1.Container{{Name: asdbv1.AerospikeServerContainerName, Image: image}},
+			}}},
+		}
+	}
+
+	parkedPod := &corev1.Pod{
+		ObjectMeta: metav1.ObjectMeta{Name: clusterName + "-1-0", Namespace: namespace},
+		Spec: corev1.PodSpec{
+			Containers: []corev1.Container{{Name: asdbv1.AerospikeServerContainerName, Image: oldServer}},
+		},
+	}
+
+	tests := []struct {
+		sts       *appsv1.StatefulSet
+		name      string
+		specImage string
+		want      bool
+	}{
+		{
+			name:      "parked for a restart, image changed before the delete: StatefulSet still old",
+			specImage: newServer,
+			sts:       stsWithImage(oldServer),
+			want:      false,
+		},
+		{
+			name:      "parked for an upgrade, image reverted before the delete: StatefulSet already new",
+			specImage: oldServer,
+			sts:       stsWithImage(newServer),
+			want:      true,
+		},
+		{
+			name:      "StatefulSet not readable: falls back to spec.image",
+			specImage: newServer,
+			want:      true,
+		},
+	}
+
+	for _, tc := range tests {
+		t.Run(tc.name, func(t *testing.T) {
+			aeroCluster := newTestAerospikeCluster(namespace, clusterName)
+			aeroCluster.Spec.Image = tc.specImage
+
+			var objects []client.Object
+			if tc.sts != nil {
+				objects = append(objects, tc.sts)
+			}
+
+			r := newTestReconciler(t, aeroCluster, &interceptor.Funcs{}, objects...)
+			rackState := &RackState{Rack: &aeroCluster.Spec.RackConfig.Racks[0], Size: 1}
+
+			assert.Equal(t, tc.want, r.isParkedPodUpgrade(context.Background(), rackState, parkedPod))
 		})
 	}
 }

@@ -524,6 +524,7 @@ func (r *SingleClusterReconciler) restartPods(
 	restartedPods := make([]*corev1.Pod, 0, len(podsToRestart))
 	restartedPodNames := make([]string, 0, len(podsToRestart))
 	restartedASDPodNames := make([]string, 0, len(podsToRestart))
+	trigger := podRestartTrigger(isFailureRecovery, false)
 
 	for idx := range podsToRestart {
 		pod := podsToRestart[idx]
@@ -553,6 +554,8 @@ func (r *SingleClusterReconciler) restartPods(
 		case noRestart, noRestartUpdateConf:
 			// No action needed for these restart types
 		}
+
+		r.incPodRestartMetric(restartType, trigger)
 	}
 
 	if err := r.updateOperationStatus(ctx, restartedASDPodNames, restartedPodNames); err != nil {
@@ -842,6 +845,8 @@ func (r *SingleClusterReconciler) deletePodAndEnsureImageUpdated(
 		if err := r.deletePodWithLocalPVCs(ctx, rackState, pod, isFailureRecovery); err != nil {
 			return common.ReconcileError(err)
 		}
+
+		r.incPodRestartMetric(podRestart, podRestartTrigger(isFailureRecovery, true))
 
 		r.Recorder.Eventf(
 			r.aeroCluster, corev1.EventTypeNormal, "PodWaitUpdate",

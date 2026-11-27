@@ -1,0 +1,42 @@
+# Datadog Helm chart values that make the Cluster Agent's kubernetes_state_core check collect the
+# AerospikeCluster status conditions written by AKO 4.6.0+. Requires Datadog Cluster Agent 7.63.0+.
+#
+#   helm upgrade <release> datadog/datadog -f <your-values>.yaml -f datadog-values.yaml
+#
+# Helm replaces lists, so if your values already set collectCrMetrics, merge this entry into that list.
+# The chart creates the Cluster Agent's list/watch permission on aerospikeclusters from this entry.
+# The resource entry under collectCrMetrics must stay identical to the one in datadogagent.yaml.
+
+datadog:
+  kubeStateMetricsCore:
+    enabled: true
+    collectCrMetrics:
+      - groupVersionKind:
+          group: asdb.aerospike.com
+          version: v1
+          kind: AerospikeCluster
+        metricNamePrefix: aerospikecluster
+        labelsFromPath:
+          cluster_name: [metadata, name]
+          cluster_namespace: [metadata, namespace]
+        metrics:
+          - name: status_condition
+            help: "AerospikeCluster status condition, 1 for the current status (True, False or Unknown), 0 for the others."
+            each:
+              type: StateSet
+              stateSet:
+                path: [status, conditions]
+                labelsFromPath:
+                  type: [type]
+                labelName: status
+                valueFrom: [status]
+                list: ["True", "False", "Unknown"]
+          - name: status_condition_last_transition_time
+            help: "Unix time of the last status change of the AerospikeCluster status condition."
+            each:
+              type: Gauge
+              gauge:
+                path: [status, conditions]
+                labelsFromPath:
+                  type: [type]
+                valueFrom: [lastTransitionTime]
