@@ -2212,6 +2212,34 @@ var _ = Describe("AerospikeCluster validation", func() {
 						Validate(err)
 				})
 
+				It("rejects networkLoadBalancer when the init image is older than the minimum", func() {
+					aeroCluster := testCluster.CreateDummyAerospikeCluster(clusterNamespacedName, 2)
+					aeroCluster.Spec.PodSpec.AerospikeInitContainerSpec = &asdbv1.AerospikeInitContainerSpec{
+						ImageNameAndTag: "aerospike-kubernetes-init:2.5.5",
+					}
+					aeroCluster.Spec.AerospikeNetworkPolicy.AlternateAccessType = asdbv1.AerospikeNetworkTypeNetworkLoadBalancer
+					aeroCluster.Spec.AerospikeNetworkPolicy.LoadBalancerAlternateAccessAddress = "203.0.113.10"
+
+					err := envtests.K8sClient.Create(ctx, aeroCluster)
+					Expect(err).To(HaveOccurred())
+					envtests.NewStatusErrorMatcher().
+						WithMessageSubstrings(testutil.WebhookErrorPrefix, "networkLoadBalancer", "2.5.5", "2.6.0").
+						Validate(err)
+				})
+
+				It("rejects tlsAlternateAccess networkLoadBalancer when no TLS service port is configured", func() {
+					// The dummy cluster has no TLS in its network config.
+					aeroCluster := testCluster.CreateDummyAerospikeCluster(clusterNamespacedName, 2)
+					aeroCluster.Spec.AerospikeNetworkPolicy.TLSAlternateAccessType = asdbv1.AerospikeNetworkTypeNetworkLoadBalancer
+					aeroCluster.Spec.AerospikeNetworkPolicy.LoadBalancerTLSAlternateAccessAddress = "203.0.113.11"
+
+					err := envtests.K8sClient.Create(ctx, aeroCluster)
+					Expect(err).To(HaveOccurred())
+					envtests.NewStatusErrorMatcher().
+						WithMessageSubstrings(testutil.WebhookErrorPrefix, "tlsAlternateAccess", "no TLS service port").
+						Validate(err)
+				})
+
 				DescribeTable("rejects networkLoadBalancer with host networking",
 					func(set func(*asdbv1.AerospikeNetworkPolicy)) {
 						aeroCluster := testCluster.CreateDummyAerospikeCluster(clusterNamespacedName, 2)
@@ -2274,6 +2302,17 @@ var _ = Describe("AerospikeCluster validation", func() {
 					Expect(envtests.K8sClient.Create(ctx, aeroCluster)).To(Succeed())
 				})
 
+				It("accepts networkLoadBalancer with a 2.6.0 dev init image", func() {
+					aeroCluster := testCluster.CreateDummyAerospikeCluster(clusterNamespacedName, 2)
+					aeroCluster.Spec.PodSpec.AerospikeInitContainerSpec = &asdbv1.AerospikeInitContainerSpec{
+						ImageNameAndTag: "aerospike-kubernetes-init:2.6.0-dev1",
+					}
+					aeroCluster.Spec.AerospikeNetworkPolicy.AlternateAccessType = asdbv1.AerospikeNetworkTypeNetworkLoadBalancer
+					aeroCluster.Spec.AerospikeNetworkPolicy.LoadBalancerAlternateAccessAddress = "203.0.113.10"
+
+					Expect(envtests.K8sClient.Create(ctx, aeroCluster)).To(Succeed())
+				})
+
 				It("accepts changing alternateAccess away from networkLoadBalancer", func() {
 					aeroCluster := testCluster.CreateDummyAerospikeCluster(clusterNamespacedName, 2)
 					aeroCluster.Spec.AerospikeNetworkPolicy.AlternateAccessType = asdbv1.AerospikeNetworkTypeNetworkLoadBalancer
@@ -2309,7 +2348,8 @@ var _ = Describe("AerospikeCluster validation", func() {
 				})
 
 				It("accepts networkLoadBalancer when multiPodPerHost is true and the matching address is set", func() {
-					aeroCluster := testCluster.CreateDummyAerospikeCluster(clusterNamespacedName, 2)
+					// tlsAlternateAccess: networkLoadBalancer needs a TLS service port.
+					aeroCluster := testCluster.CreateBasicTLSCluster(clusterNamespacedName, 2)
 					aeroCluster.Spec.PodSpec.MultiPodPerHost = ptr.To(true)
 					aeroCluster.Spec.AerospikeNetworkPolicy.AlternateAccessType = asdbv1.AerospikeNetworkTypeNetworkLoadBalancer
 					aeroCluster.Spec.AerospikeNetworkPolicy.LoadBalancerAlternateAccessAddress = "aerospike-nlb.example.com"
@@ -2334,6 +2374,10 @@ var _ = Describe("AerospikeCluster validation", func() {
 				DescribeTable("accepts an IPv4 address, an IPv6 address, or an FQDN",
 					func(alternate, tls string, tlsNLB bool) {
 						aeroCluster := testCluster.CreateDummyAerospikeCluster(clusterNamespacedName, 2)
+						if tlsNLB {
+							// tlsAlternateAccess: networkLoadBalancer needs a TLS service port.
+							aeroCluster = testCluster.CreateBasicTLSCluster(clusterNamespacedName, 2)
+						}
 
 						policy := &aeroCluster.Spec.AerospikeNetworkPolicy
 						if alternate != "" {
@@ -2360,6 +2404,7 @@ var _ = Describe("AerospikeCluster validation", func() {
 					Entry("IPv6", "2001:db8::1", "", false),
 					Entry("FQDN with trailing dot", "aerospike-nlb.example.com.", "", false),
 					Entry("TLS address only", "", "2001:db8::1", true),
+					Entry("both alternate and TLS addresses", "10.0.0.5", "aerospike-nlb-tls.example.com", true),
 				)
 			})
 		})

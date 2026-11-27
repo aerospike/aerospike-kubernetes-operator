@@ -1284,13 +1284,13 @@ const (
 	// AerospikeNetworkTypeCustomInterface specifies any other custom interface to be used with Aerospike
 	AerospikeNetworkTypeCustomInterface AerospikeNetworkType = "customInterface"
 
-	// AerospikeNetworkTypeNetworkLoadBalancer specifies alternate access using one cluster-level
-	// network load balancer or PSC address.
-	// alternateAccess advertises loadBalancerAlternateAccessAddress.
+	// AerospikeNetworkTypeNetworkLoadBalancer specifies access using one cluster-level
+	// network load balancer address.
+	// It is only applicable for alternateAccess and tlsAlternateAccess.
+	// When set alternateAccess advertises loadBalancerAlternateAccessAddress and
 	// tlsAlternateAccess advertises loadBalancerTLSAlternateAccessAddress.
 	// The per-pod NodePort distinguishes nodes.
-	// Valid only for alternateAccess and tlsAlternateAccess.
-	// AKO creates that Service even when multiPodPerHost is false.
+	// AKO creates the pod service even when multiPodPerHost is false.
 	AerospikeNetworkTypeNetworkLoadBalancer AerospikeNetworkType = "networkLoadBalancer"
 )
 

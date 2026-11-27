@@ -24,6 +24,7 @@ import (
 
 	asdbv1 "github.com/aerospike/aerospike-kubernetes-operator/v4/api/v1"
 	aerospikecluster "github.com/aerospike/aerospike-kubernetes-operator/v4/internal/controller/cluster"
+	"github.com/aerospike/aerospike-kubernetes-operator/v4/pkg/utils"
 	"github.com/aerospike/aerospike-kubernetes-operator/v4/test"
 	"github.com/aerospike/aerospike-management-lib/deployment"
 )
@@ -46,6 +47,9 @@ const (
 	// Documentation-range IPs (RFC 5737). The stock server resolves alternate-access
 	// hostnames at startup and aborts on a name that does not resolve, so the e2e test
 	// uses IP literals. The webhook envtests cover FQDN validation.
+	// TODO: Switch these back to FQDNs (aerospike-nlb.example.com and
+	// aerospike-nlb-tls.example.com) once the e2e tests run on a server version with
+	// pluggable discovery, which does not resolve them at startup.
 	nlbAlternateAddress        = "203.0.113.10"
 	nlbTLSAddress              = "203.0.113.11"
 	networkAnnotationKey       = "k8s.v1.cni.cncf.io/networks"
@@ -767,8 +771,8 @@ func doTestNetworkPolicy(
 			Expect(aerospikeClusterCreateUpdate(k8sClient, aeroCluster, ctx)).ToNot(HaveOccurred())
 			Expect(validateNetworkPolicy(ctx, aeroCluster)).ToNot(HaveOccurred())
 
-			expectNLBPodServices(ctx, aeroCluster, enableTLS, true)
-			expectServerHostPorts(aeroCluster, false)
+			validateNLBPodServices(aeroCluster, enableTLS, true)
+			validateServerHostPorts(aeroCluster, false)
 
 			By("Rolling restart keeps the NodePort")
 
@@ -783,9 +787,9 @@ func doTestNetworkPolicy(
 				Name:      restarted.Name,
 				Namespace: restarted.Namespace,
 			}})).ToNot(HaveOccurred())
-			Expect(waitForPod(types.NamespacedName{
-				Name: restarted.Name, Namespace: restarted.Namespace,
-			})).To(BeTrue())
+			// Wait for a new pod (new UID), not the old one that is still terminating.
+			Expect(waitForPodRestart(ctx, restarted.Name, restarted.Namespace, string(restarted.UID))).
+				ToNot(HaveOccurred())
 			Expect(waitForAerospikeCluster(
 				k8sClient, ctx, aeroCluster, int(aeroCluster.Spec.Size), retryInterval,
 				getTimeout(aeroCluster.Spec.Size),
@@ -836,7 +840,7 @@ func doTestNetworkPolicy(
 				}
 			}
 
-			expectNLBPodServices(ctx, aeroCluster, enableTLS, true)
+			validateNLBPodServices(aeroCluster, enableTLS, true)
 			Expect(validateNetworkPolicy(ctx, aeroCluster)).ToNot(HaveOccurred())
 
 			By("Leaving networkLoadBalancer removes the per-pod service and restores hostPort")
@@ -852,8 +856,8 @@ func doTestNetworkPolicy(
 			}
 			Expect(updateCluster(k8sClient, ctx, aeroCluster)).ToNot(HaveOccurred())
 
-			expectNLBPodServices(ctx, aeroCluster, enableTLS, false)
-			expectServerHostPorts(aeroCluster, true)
+			validateNLBPodServices(aeroCluster, enableTLS, false)
+			validateServerHostPorts(aeroCluster, true)
 			Expect(validateNetworkPolicy(ctx, aeroCluster)).ToNot(HaveOccurred())
 		})
 	}
@@ -1416,9 +1420,7 @@ func getExpectedServicePortForPod(
 ) (int32, error) {
 	var port int32
 
-	if (networkType != asdbv1.AerospikeNetworkTypePod && networkType != asdbv1.AerospikeNetworkTypeCustomInterface) &&
-		(asdbv1.GetBool(aeroCluster.Spec.PodSpec.MultiPodPerHost) ||
-			aeroCluster.Spec.AerospikeNetworkPolicy.UsesNetworkLoadBalancer()) {
+	if usesPodNodePort(aeroCluster, networkType) {
 		svc, err := getServiceForPod(pod, k8sClient)
 		if err != nil {
 			return 0, fmt.Errorf("error getting service port: %v", err)
@@ -1479,25 +1481,22 @@ func getIPs(ctx goctx.Context, pod *corev1.Pod) (
 	return podIP, hostInternalIP, hostExternalIP, nil
 }
 
-// expectNLBPodServices checks the per-pod NodePort created for networkLoadBalancer.
-func expectNLBPodServices(
-	ctx goctx.Context, aeroCluster *asdbv1.AerospikeCluster, enableTLS, shouldExist bool,
-) {
+// validateNLBPodServices checks the per-pod NodePort created for networkLoadBalancer.
+func validateNLBPodServices(aeroCluster *asdbv1.AerospikeCluster, enableTLS, shouldExist bool) {
 	podList, err := getPodList(aeroCluster, k8sClient)
 	Expect(err).ToNot(HaveOccurred())
 	Expect(podList.Items).ToNot(BeEmpty())
 
 	for idx := range podList.Items {
 		pod := &podList.Items[idx]
-		svc := &corev1.Service{}
-		err = k8sClient.Get(ctx, types.NamespacedName{Name: pod.Name, Namespace: pod.Namespace}, svc)
+		svc, svcErr := getServiceForPod(pod, k8sClient)
 
 		if !shouldExist {
-			Expect(errors.IsNotFound(err)).To(BeTrue(), "service %s should be absent", pod.Name)
+			Expect(errors.IsNotFound(svcErr)).To(BeTrue(), "service %s should be absent", pod.Name)
 			continue
 		}
 
-		Expect(err).ToNot(HaveOccurred())
+		Expect(svcErr).ToNot(HaveOccurred())
 		Expect(svc.Spec.Type).To(Equal(corev1.ServiceTypeNodePort))
 		Expect(svc.Spec.PublishNotReadyAddresses).To(BeTrue())
 		Expect(svc.Spec.ExternalTrafficPolicy).To(Equal(corev1.ServiceExternalTrafficPolicyTypeLocal))
@@ -1518,9 +1517,9 @@ func expectNLBPodServices(
 	}
 }
 
-// expectServerHostPorts checks hostPort on the Aerospike server container.
+// validateServerHostPorts checks hostPort on the Aerospike server container.
 // exposed ports match the container port when hostAccess is set.
-func expectServerHostPorts(aeroCluster *asdbv1.AerospikeCluster, hostAccess bool) {
+func validateServerHostPorts(aeroCluster *asdbv1.AerospikeCluster, hostAccess bool) {
 	podList, err := getPodList(aeroCluster, k8sClient)
 	Expect(err).ToNot(HaveOccurred())
 	Expect(podList.Items).ToNot(BeEmpty())
@@ -1528,15 +1527,7 @@ func expectServerHostPorts(aeroCluster *asdbv1.AerospikeCluster, hostAccess bool
 	for idx := range podList.Items {
 		pod := &podList.Items[idx]
 
-		var server *corev1.Container
-
-		for containerIdx := range pod.Spec.Containers {
-			if pod.Spec.Containers[containerIdx].Name == asdbv1.AerospikeServerContainerName {
-				server = &pod.Spec.Containers[containerIdx]
-				break
-			}
-		}
-
+		server := test.GetContainerByName(pod.Spec.Containers, asdbv1.AerospikeServerContainerName)
 		Expect(server).NotTo(BeNil())
 
 		for _, port := range server.Ports {
@@ -1561,7 +1552,7 @@ func nlbServiceNodePorts(aeroCluster *asdbv1.AerospikeCluster) map[string]map[st
 
 	for idx := range podList.Items {
 		pod := &podList.Items[idx]
-		if pod.DeletionTimestamp != nil {
+		if utils.IsPodTerminating(pod) {
 			continue
 		}
 
@@ -1588,7 +1579,7 @@ func highestOrdinalPodName(pods []corev1.Pod) string {
 
 	for idx := range pods {
 		pod := &pods[idx]
-		if pod.DeletionTimestamp != nil {
+		if utils.IsPodTerminating(pod) {
 			continue
 		}
 
