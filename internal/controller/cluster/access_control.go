@@ -44,8 +44,9 @@ func AerospikeAdminCredentials(
 		return "", "", nil
 	}
 
-	// If federal image, return empty user and empty password.
-	if asdbv1.IsFederal(desiredState.Image) {
+	// If federal image or enforce-fips is set, return empty user and empty password.
+	// Both only allow PKI logins, so the operator logs in with its client certificate.
+	if asdbv1.IsFederal(desiredState.Image) || asdbv1.IsFIPSEnforced(desiredState) {
 		return "", "", nil
 	}
 

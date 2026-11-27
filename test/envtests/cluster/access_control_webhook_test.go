@@ -142,6 +142,9 @@ func networkTLSConfigSecondTLSEntryCAPathOnly() map[string]interface{} {
 	return cfg
 }
 
+// fipsTestImage is the first server version that accepts service.enforce-fips.
+var fipsTestImage = testutil.BaseEnterpriseImage + ":8.2.1.0"
+
 // tlsCertKeyParityWebhookSubstrings matches admission errors for pkg/validation cert-file/key-file parity (KO-537).
 var tlsCertKeyParityWebhookSubstrings = []string{
 	"\"vaerospikecluster.kb.io\"",
@@ -317,6 +320,16 @@ var _ = Describe("AerospikeCluster access control validation (envtests)", func()
 				It("allows deploy with valid roles and users", func() {
 					aeroCluster := testCluster.CreateDummyAerospikeCluster(clusterNamespacedName, 2)
 					aeroCluster.Spec.AerospikeAccessControl = validAccessControlForDeployPositive()
+
+					err := envtests.K8sClient.Create(ctx, aeroCluster)
+					Expect(err).ToNot(HaveOccurred())
+				})
+
+				It("allows deploy with enforce-fips true and PKIOnly users", func() {
+					aeroCluster := testCluster.CreatePKIAuthEnabledCluster(clusterNamespacedName, 2)
+					aeroCluster.Spec.Image = fipsTestImage
+					serviceConf := aeroCluster.Spec.AerospikeConfig.Value[asdbv1.ConfKeyService].(map[string]interface{})
+					serviceConf[asdbv1.ConfKeyEnforceFIPS] = true
 
 					err := envtests.K8sClient.Create(ctx, aeroCluster)
 					Expect(err).ToNot(HaveOccurred())
@@ -828,6 +841,96 @@ var _ = Describe("AerospikeCluster access control validation (envtests)", func()
 					envtests.NewStatusErrorMatcher().
 						WithMessageSubstrings(testutil.WebhookErrorPrefix,
 							"authMode for all users must be PKI with Federal Edition").
+						Validate(err)
+				})
+
+				It("fails if enforce-fips is true and auth mode of all users is not set to PKIOnly", func() {
+					accessControl := &asdbv1.AerospikeAccessControlSpec{
+						Users: []asdbv1.AerospikeUserSpec{
+							{
+								Name:     "admin",
+								AuthMode: asdbv1.AerospikeAuthModePKIOnly,
+								Roles:    []string{"sys-admin", "user-admin"},
+							},
+							{
+								Name:       "user01",
+								AuthMode:   asdbv1.AerospikeAuthModeInternal,
+								SecretName: test.AuthSecretName,
+								Roles:      []string{"sys-admin"},
+							},
+						},
+					}
+
+					aeroCluster := testCluster.GetPKIAuthAerospikeClusterWithAccessControl(
+						clusterNamespacedName, 2, accessControl,
+					)
+					aeroCluster.Spec.Image = fipsTestImage
+					serviceConf := aeroCluster.Spec.AerospikeConfig.Value[asdbv1.ConfKeyService].(map[string]interface{})
+					serviceConf[asdbv1.ConfKeyEnforceFIPS] = true
+
+					err := envtests.K8sClient.Create(ctx, aeroCluster)
+					Expect(err).To(HaveOccurred())
+
+					envtests.NewStatusErrorMatcher().
+						WithMessageSubstrings(testutil.WebhookErrorPrefix,
+							"authMode for all users must be PKIOnly when service.enforce-fips is true").
+						Validate(err)
+				})
+
+				It("fails if enforce-fips is true only in a rack and auth mode of a user is not PKIOnly", func() {
+					accessControl := &asdbv1.AerospikeAccessControlSpec{
+						Users: []asdbv1.AerospikeUserSpec{
+							{
+								Name:     "admin",
+								AuthMode: asdbv1.AerospikeAuthModePKIOnly,
+								Roles:    []string{"sys-admin", "user-admin"},
+							},
+							{
+								Name:       "user01",
+								AuthMode:   asdbv1.AerospikeAuthModeInternal,
+								SecretName: test.AuthSecretName,
+								Roles:      []string{"sys-admin"},
+							},
+						},
+					}
+
+					aeroCluster := testCluster.GetPKIAuthAerospikeClusterWithAccessControl(
+						clusterNamespacedName, 2, accessControl,
+					)
+					aeroCluster.Spec.Image = fipsTestImage
+					aeroCluster.Spec.RackConfig.Racks = []asdbv1.Rack{
+						{ID: 1},
+						{
+							ID: 2,
+							InputAerospikeConfig: &asdbv1.AerospikeConfigSpec{
+								Value: map[string]interface{}{
+									asdbv1.ConfKeyService: map[string]interface{}{
+										asdbv1.ConfKeyEnforceFIPS: true,
+									},
+								},
+							},
+						},
+					}
+
+					err := envtests.K8sClient.Create(ctx, aeroCluster)
+					Expect(err).To(HaveOccurred())
+
+					envtests.NewStatusErrorMatcher().
+						WithMessageSubstrings(testutil.WebhookErrorPrefix,
+							"authMode for all users must be PKIOnly when service.enforce-fips is true").
+						Validate(err)
+				})
+
+				It("fails if enforce-fips is set on a server version without it", func() {
+					aeroCluster := testCluster.CreatePKIAuthEnabledCluster(clusterNamespacedName, 2)
+					serviceConf := aeroCluster.Spec.AerospikeConfig.Value[asdbv1.ConfKeyService].(map[string]interface{})
+					serviceConf[asdbv1.ConfKeyEnforceFIPS] = true
+
+					err := envtests.K8sClient.Create(ctx, aeroCluster)
+					Expect(err).To(HaveOccurred())
+
+					envtests.NewStatusErrorMatcher().
+						WithMessageSubstrings(testutil.WebhookErrorPrefix, "enforce-fips").
 						Validate(err)
 				})
 

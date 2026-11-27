@@ -176,14 +176,20 @@ func (r *SingleClusterReconciler) getClientPolicy(ctx context.Context) *as.Clien
 	policy.User = user
 	policy.Password = pass
 
-	// If admin user is present in status, use its auth mode
+	// If enforce-fips is set with access control, use PKI auth mode.
+	// FIPS mode rejects password logins, even for the first login on a new cluster.
+	// Else if admin user is present in status, use its auth mode
 	// Else if federal image, use PKI auth mode.
 	// We can't use spec admin user because for EE the spec can have PKI or Internal but for new EE clusters,
 	// the authMode must be Internal always for the first time.
 	adminUser := asdbv1.GetAdminUserFromSpec(statusToSpec)
-	if adminUser != nil {
+
+	switch {
+	case r.aeroCluster.Spec.AerospikeAccessControl != nil && asdbv1.IsFIPSEnforced(&r.aeroCluster.Spec):
+		policy.AuthMode = as.AuthModePKI
+	case adminUser != nil:
 		policy.AuthMode = asdbv1.GetClientAuthMode(adminUser.AuthMode)
-	} else if asdbv1.IsFederal(r.aeroCluster.Spec.Image) {
+	case asdbv1.IsFederal(r.aeroCluster.Spec.Image):
 		policy.AuthMode = as.AuthModePKI
 	}
 
