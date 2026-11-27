@@ -3,7 +3,7 @@ apiVersion: apiextensions.k8s.io/v1
 kind: CustomResourceDefinition
 metadata:
   annotations:
-    aerospike-kubernetes-operator/version: 4.7.0
+    aerospike-kubernetes-operator/version: 4.8.0-dev1
     controller-gen.kubebuilder.io/version: v0.23.0
   name: aerospikeclusters.asdb.aerospike.com
 spec:
@@ -197,6 +197,7 @@ spec:
                     - hostExternal
                     - configuredIP
                     - customInterface
+                    - networkLoadBalancer
                     type: string
                   customAccessNetworkNames:
                     description: |-
@@ -279,6 +280,18 @@ spec:
                     enum:
                     - customInterface
                     type: string
+                  loadBalancerAlternateAccessAddress:
+                    description: |-
+                      LoadBalancerAlternateAccessAddress is the IPv4 address, IPv6 address, or FQDN of the
+                      cluster-level network load balancer or PSC endpoint advertised for alternate access.
+                      Required when alternateAccess is 'networkLoadBalancer'.
+                    type: string
+                  loadBalancerTLSAlternateAccessAddress:
+                    description: |-
+                      LoadBalancerTLSAlternateAccessAddress is the IPv4 address, IPv6 address, or FQDN of the
+                      cluster-level network load balancer or PSC endpoint advertised for TLS alternate access.
+                      Required when tlsAlternateAccess is 'networkLoadBalancer'.
+                    type: string
                   tlsAccess:
                     default: hostInternal
                     description: |-
@@ -302,6 +315,7 @@ spec:
                     - hostExternal
                     - configuredIP
                     - customInterface
+                    - networkLoadBalancer
                     type: string
                   tlsFabric:
                     description: |-
@@ -470,7 +484,8 @@ spec:
               podService:
                 description: |-
                   PodService defines additional configuration parameters for the pod service created to expose the
-                  Aerospike Cluster nodes outside the Kubernetes cluster. This service is created only created when
+                  Aerospike Cluster nodes outside the Kubernetes cluster. This service is only created when
+                  `aerospikeNetworkPolicy` is 'networkLoadBalancer' or
                   `multiPodPerHost` is set to `true` and `aerospikeNetworkPolicy` has one of the network types:
                   'hostInternal', 'hostExternal', 'configuredIP'
                 properties:
@@ -9854,6 +9869,7 @@ spec:
                     - hostExternal
                     - configuredIP
                     - customInterface
+                    - networkLoadBalancer
                     type: string
                   customAccessNetworkNames:
                     description: |-
@@ -9936,6 +9952,18 @@ spec:
                     enum:
                     - customInterface
                     type: string
+                  loadBalancerAlternateAccessAddress:
+                    description: |-
+                      LoadBalancerAlternateAccessAddress is the IPv4 address, IPv6 address, or FQDN of the
+                      cluster-level network load balancer or PSC endpoint advertised for alternate access.
+                      Required when alternateAccess is 'networkLoadBalancer'.
+                    type: string
+                  loadBalancerTLSAlternateAccessAddress:
+                    description: |-
+                      LoadBalancerTLSAlternateAccessAddress is the IPv4 address, IPv6 address, or FQDN of the
+                      cluster-level network load balancer or PSC endpoint advertised for TLS alternate access.
+                      Required when tlsAlternateAccess is 'networkLoadBalancer'.
+                    type: string
                   tlsAccess:
                     default: hostInternal
                     description: |-
@@ -9959,6 +9987,7 @@ spec:
                     - hostExternal
                     - configuredIP
                     - customInterface
+                    - networkLoadBalancer
                     type: string
                   tlsFabric:
                     description: |-
@@ -10214,7 +10243,8 @@ spec:
               podService:
                 description: |-
                   PodService defines additional configuration parameters for the pod service created to expose the
-                  Aerospike Cluster nodes outside the Kubernetes cluster. This service is created only created when
+                  Aerospike Cluster nodes outside the Kubernetes cluster. This service is only created when
+                  `aerospikeNetworkPolicy` is 'networkLoadBalancer' or
                   `multiPodPerHost` is set to `true` and `aerospikeNetworkPolicy` has one of the network types:
                   'hostInternal', 'hostExternal', 'configuredIP'
                 properties:

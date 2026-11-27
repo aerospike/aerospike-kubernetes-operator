@@ -272,8 +272,15 @@ func (r *SingleClusterReconciler) updateLBService(ctx context.Context, service *
 }
 
 func (r *SingleClusterReconciler) reconcilePodService(ctx context.Context, rackState *RackState) error {
-	// PodService is only created if MultiPodPerHost is enabled
-	if !asdbv1.GetBool(r.aeroCluster.Spec.PodSpec.MultiPodPerHost) {
+	// A per-pod NodePort Service is created when multiPodPerHost is true, and also when
+	// networkLoadBalancer is set.
+	// Status still has the previous policy during this reconcile, so leaving
+	// networkLoadBalancer deletes those Services on this pass when multiPodPerHost is false.
+	if !isPodServiceManaged(
+		asdbv1.GetBool(r.aeroCluster.Spec.PodSpec.MultiPodPerHost),
+		r.aeroCluster.Spec.AerospikeNetworkPolicy.UsesNetworkLoadBalancer(),
+		r.aeroCluster.Status.AerospikeNetworkPolicy.UsesNetworkLoadBalancer(),
+	) {
 		return nil
 	}
 
@@ -498,8 +505,15 @@ func (r *SingleClusterReconciler) cleanupDanglingPodServices(ctx context.Context
 	return nil
 }
 
+// isPodServiceManaged reports whether per-pod Services should be reconciled.
+// statusNLB is the previous policy, so leaving networkLoadBalancer still cleans them up once.
+func isPodServiceManaged(multiPodPerHost, specNLB, statusNLB bool) bool {
+	return multiPodPerHost || specNLB || statusNLB
+}
+
 func podServiceNeeded(multiPodPerHost *bool, networkPolicy *asdbv1.AerospikeNetworkPolicy) bool {
-	if !asdbv1.GetBool(multiPodPerHost) || networkPolicy == nil {
+	// networkLoadBalancer needs a per-pod NodePort even when multiPodPerHost is false.
+	if networkPolicy == nil || (!asdbv1.GetBool(multiPodPerHost) && !networkPolicy.UsesNetworkLoadBalancer()) {
 		return false
 	}
 

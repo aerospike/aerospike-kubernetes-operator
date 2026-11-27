@@ -20,6 +20,17 @@ import (
 	"github.com/aerospike/aerospike-management-lib/info"
 )
 
+// usesPodNodePort reports whether an endpoint of networkType is reached through the pod's
+// NodePort Service. That Service exists with multiPodPerHost or networkLoadBalancer, and
+// then every host-network endpoint uses the NodePort. Pod and customInterface endpoints
+// always use the container port.
+func usesPodNodePort(aeroCluster *asdbv1.AerospikeCluster, networkType asdbv1.AerospikeNetworkType) bool {
+	return (asdbv1.GetBool(aeroCluster.Spec.PodSpec.MultiPodPerHost) ||
+		aeroCluster.Spec.AerospikeNetworkPolicy.UsesNetworkLoadBalancer()) &&
+		networkType != asdbv1.AerospikeNetworkTypePod &&
+		networkType != asdbv1.AerospikeNetworkTypeCustomInterface
+}
+
 func newAsConn(
 	_ logr.Logger, aeroCluster *asdbv1.AerospikeCluster, pod *corev1.Pod,
 	k8sClient client.Client,
@@ -31,8 +42,7 @@ func newAsConn(
 	tlsName := getServiceTLSName(aeroCluster)
 
 	networkType := asdbv1.AerospikeNetworkType(*defaultNetworkType)
-	if asdbv1.GetBool(aeroCluster.Spec.PodSpec.MultiPodPerHost) && networkType != asdbv1.AerospikeNetworkTypePod &&
-		networkType != asdbv1.AerospikeNetworkTypeCustomInterface {
+	if usesPodNodePort(aeroCluster, networkType) {
 		svc, err := getServiceForPod(pod, k8sClient)
 		if err != nil {
 			return nil, err
@@ -136,6 +146,10 @@ func getEndpointIP(
 		return "", fmt.Errorf(
 			"%s not support yet", networkType,
 		)
+	case asdbv1.AerospikeNetworkTypeNetworkLoadBalancer:
+		return "", fmt.Errorf(
+			"can not use networkLoadBalancer network type: %s", networkType,
+		)
 	case asdbv1.AerospikeNetworkTypeUnspecified:
 		return "", fmt.Errorf(
 			"unknown network type: %s", networkType,
@@ -184,6 +198,10 @@ func createHost(pod *asdbv1.AerospikePodStatus, network string) (*as.Host, error
 	case asdbv1.AerospikeNetworkTypeCustomInterface:
 		return nil, fmt.Errorf(
 			"%s not support yet", networkType,
+		)
+	case asdbv1.AerospikeNetworkTypeNetworkLoadBalancer:
+		return nil, fmt.Errorf(
+			"can not use networkLoadBalancer network type: %s", networkType,
 		)
 	case asdbv1.AerospikeNetworkTypeUnspecified:
 		return nil, fmt.Errorf(

@@ -896,7 +896,7 @@ func getServiceForPod(
 	)
 	if err != nil {
 		return nil, fmt.Errorf(
-			"failed to get service for pod %s: %v", pod.Name, err,
+			"failed to get service for pod %s: %w", pod.Name, err,
 		)
 	}
 

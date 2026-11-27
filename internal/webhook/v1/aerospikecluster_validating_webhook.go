@@ -33,6 +33,7 @@ import (
 	"k8s.io/apimachinery/pkg/util/intstr"
 	"k8s.io/apimachinery/pkg/util/sets"
 	k8svalidation "k8s.io/apimachinery/pkg/util/validation"
+	"k8s.io/apimachinery/pkg/util/validation/field"
 	"k8s.io/utils/ptr"
 	logf "sigs.k8s.io/controller-runtime/pkg/log"
 	"sigs.k8s.io/controller-runtime/pkg/webhook/admission"
@@ -240,6 +241,10 @@ func (acv *AerospikeClusterCustomValidator) ValidateUpdate(_ context.Context,
 	}
 
 	if err := validateEnableDynamicConfigUpdate(aerospikeCluster); err != nil {
+		return warnings, err
+	}
+
+	if err := validateNLBInitVersion(aerospikeCluster); err != nil {
 		return warnings, err
 	}
 
@@ -471,16 +476,30 @@ func validate(aslog logr.Logger, cluster *asdbv1.AerospikeCluster) (admission.Wa
 	}
 
 	if asdbv1.GetBool(cluster.Spec.EnableDynamicConfigUpdate) {
-		val, err = lib.CompareVersions(initVersion, minInitVersionForDynamicConf)
-		if err != nil {
-			return warnings, fmt.Errorf("failed to check init image version: %v", err)
+		below, belowErr := isInitVersionBelow(initVersion, minInitVersionForDynamicConf)
+		if belowErr != nil {
+			return warnings, belowErr
 		}
 
-		if val < 0 {
+		if below {
 			return warnings, fmt.Errorf("cannot set enableDynamicConfigUpdate flag, init container version is less"+
 				" than %s. Please visit https://aerospike.com/docs/cloud/kubernetes/operator/Cluster-configuration-settings#spec"+
 				" for more details about enableDynamicConfigUpdate flag",
 				minInitVersionForDynamicConf)
+		}
+	}
+
+	// Only init containers from minInitVersionForNLB onwards can advertise the load balancer
+	// address with the per-pod NodePort.
+	if cluster.Spec.AerospikeNetworkPolicy.UsesNetworkLoadBalancer() {
+		below, belowErr := isInitVersionBelow(initVersion, minInitVersionForNLB)
+		if belowErr != nil {
+			return warnings, belowErr
+		}
+
+		if below {
+			return warnings, fmt.Errorf("cannot use 'networkLoadBalancer' network type, init container version %s"+
+				" is less than %s", initVersion, minInitVersionForNLB)
 		}
 	}
 
@@ -2659,7 +2678,66 @@ func validateNetworkPolicy(cluster *asdbv1.AerospikeCluster) error {
 		}
 	}
 
+	if err := validateNLBNetworkPolicy(cluster); err != nil {
+		return err
+	}
+
 	return nil
+}
+
+func validateNLBNetworkPolicy(cluster *asdbv1.AerospikeCluster) error {
+	networkPolicy := &cluster.Spec.AerospikeNetworkPolicy
+
+	// networkLoadBalancer distinguishes pods by their per-pod NodePort. With host networking the
+	// server also listens directly on the node's service port, so reject the combination.
+	if networkPolicy.UsesNetworkLoadBalancer() && cluster.Spec.PodSpec.HostNetwork {
+		return fmt.Errorf("host networking cannot be enabled with 'networkLoadBalancer' network type")
+	}
+
+	if networkPolicy.AlternateAccessType == asdbv1.AerospikeNetworkTypeNetworkLoadBalancer {
+		if networkPolicy.LoadBalancerAlternateAccessAddress == "" {
+			return fmt.Errorf("loadBalancerAlternateAccessAddress is required when alternateAccess is 'networkLoadBalancer'")
+		}
+
+		if err := validateLoadBalancerAddress(
+			networkPolicy.LoadBalancerAlternateAccessAddress, "loadBalancerAlternateAccessAddress",
+		); err != nil {
+			return err
+		}
+	}
+
+	if networkPolicy.TLSAlternateAccessType == asdbv1.AerospikeNetworkTypeNetworkLoadBalancer {
+		if networkPolicy.LoadBalancerTLSAlternateAccessAddress == "" {
+			return fmt.Errorf("loadBalancerTLSAlternateAccessAddress is required " +
+				"when tlsAlternateAccess is 'networkLoadBalancer'")
+		}
+
+		if err := validateLoadBalancerAddress(
+			networkPolicy.LoadBalancerTLSAlternateAccessAddress, "loadBalancerTLSAlternateAccessAddress",
+		); err != nil {
+			return err
+		}
+
+		// Without a TLS service port the TLS endpoints are never written, so the load balancer
+		// address would not be advertised, yet the per-pod NodePort Services would still be
+		// created and hostPort removed.
+		if _, tlsPort := asdbv1.GetServiceTLSNameAndPort(cluster.Spec.AerospikeConfig); tlsPort == nil {
+			return fmt.Errorf("tlsAlternateAccess cannot be 'networkLoadBalancer' when no TLS service port is configured")
+		}
+	}
+
+	return nil
+}
+
+// validateLoadBalancerAddress accepts an IPv4 address, an IPv6 address, or an FQDN.
+func validateLoadBalancerAddress(address, fieldName string) error {
+	fldPath := field.NewPath("spec", "aerospikeNetworkPolicy", fieldName)
+	if len(k8svalidation.IsValidIP(fldPath, address)) == 0 ||
+		len(k8svalidation.IsFullyQualifiedDomainName(fldPath, address)) == 0 {
+		return nil
+	}
+
+	return fmt.Errorf("%s %q must be an IPv4 address, an IPv6 address, or an FQDN", fieldName, address)
 }
 
 // validateBatchSize validates the batch size for the following types:
@@ -2820,21 +2898,12 @@ func validateEnableDynamicConfigUpdate(cluster *asdbv1.AerospikeCluster) error {
 		return nil
 	}
 
-	if len(cluster.Status.Pods) == 0 {
-		return nil
-	}
-
-	minInitVersion, err := getMinRunningInitVersion(cluster.Status.Pods)
+	_, below, err := isMinRunningInitVersionBelow(cluster.Status.Pods, minInitVersionForDynamicConf)
 	if err != nil {
 		return err
 	}
 
-	val, err := lib.CompareVersions(minInitVersion, minInitVersionForDynamicConf)
-	if err != nil {
-		return fmt.Errorf("failed to check image version: %v", err)
-	}
-
-	if val < 0 {
+	if below {
 		return fmt.Errorf("cannot enable enableDynamicConfigUpdate flag, some init containers are running version less"+
 			" than %s. Please visit https://aerospike.com/docs/cloud/kubernetes/operator/Cluster-configuration-settings#spec"+
 			" for more details about enableDynamicConfigUpdate flag",
@@ -2842,6 +2911,61 @@ func validateEnableDynamicConfigUpdate(cluster *asdbv1.AerospikeCluster) error {
 	}
 
 	return nil
+}
+
+// validateNLBInitVersion checks the init version the running pods use. Switching to
+// networkLoadBalancer warm-restarts pods, which regenerates aerospike.conf with the akoinit
+// binary already in each pod. An older binary does not know networkLoadBalancer and would
+// advertise the pod address instead, so every running pod must already be on minInitVersionForNLB.
+func validateNLBInitVersion(cluster *asdbv1.AerospikeCluster) error {
+	if !cluster.Spec.AerospikeNetworkPolicy.UsesNetworkLoadBalancer() {
+		return nil
+	}
+
+	minInitVersion, below, err := isMinRunningInitVersionBelow(cluster.Status.Pods, minInitVersionForNLB)
+	if err != nil {
+		return err
+	}
+
+	if below {
+		return fmt.Errorf("cannot use 'networkLoadBalancer' network type, some pods are running init container"+
+			" version %s, which is less than %s. Upgrade the init container image and let the pods restart"+
+			" before enabling networkLoadBalancer", minInitVersion, minInitVersionForNLB)
+	}
+
+	return nil
+}
+
+// isInitVersionBelow reports whether initVersion is lower than minVersion.
+func isInitVersionBelow(initVersion, minVersion string) (bool, error) {
+	val, err := lib.CompareVersions(initVersion, minVersion)
+	if err != nil {
+		return false, fmt.Errorf("failed to check init image version: %v", err)
+	}
+
+	return val < 0, nil
+}
+
+// isMinRunningInitVersionBelow returns the lowest init version among the running pods and
+// whether it is lower than minVersion. With no pods there is nothing to check, so it returns false.
+func isMinRunningInitVersionBelow(
+	pods map[string]asdbv1.AerospikePodStatus, minVersion string,
+) (minInitVersion string, below bool, err error) {
+	if len(pods) == 0 {
+		return "", false, nil
+	}
+
+	minInitVersion, err = getMinRunningInitVersion(pods)
+	if err != nil {
+		return "", false, err
+	}
+
+	val, err := lib.CompareVersions(minInitVersion, minVersion)
+	if err != nil {
+		return "", false, fmt.Errorf("failed to check image version: %v", err)
+	}
+
+	return minInitVersion, val < 0, nil
 }
 
 func validateOperationUpdate(oldSpec, newSpec *asdbv1.AerospikeClusterSpec,

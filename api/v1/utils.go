@@ -122,7 +122,7 @@ const (
 	AerospikeInitContainerNameTagEnvVar            = "AEROSPIKE_KUBERNETES_INIT_NAME_TAG"
 	AerospikeInitContainerDefaultRegistry          = "docker.io"
 	AerospikeInitContainerDefaultRegistryNamespace = "aerospike"
-	AerospikeInitContainerDefaultNameAndTag        = "aerospike-kubernetes-init:2.5.5"
+	AerospikeInitContainerDefaultNameAndTag        = "aerospike-kubernetes-init:2.6.0-dev1"
 	AerospikeAppLabel                              = "app"
 	AerospikeAppLabelValue                         = "aerospike-cluster"
 	AerospikeCustomResourceLabel                   = "aerospike.com/cr"
@@ -644,6 +644,18 @@ func IsNSSCEnabled(nsConf map[string]interface{}) bool {
 // GetBool returns the value of the given bool pointer. If the pointer is nil, it returns false.
 func GetBool(boolPtr *bool) bool {
 	return ptr.Deref(boolPtr, false)
+}
+
+// UsesNetworkLoadBalancer reports whether alternate access or TLS alternate access advertises the
+// cluster network load balancer address.
+// AKO creates a per-pod NodePort Service in that case even when multiPodPerHost is false.
+func (p *AerospikeNetworkPolicy) UsesNetworkLoadBalancer() bool {
+	if p == nil {
+		return false
+	}
+
+	return p.AlternateAccessType == AerospikeNetworkTypeNetworkLoadBalancer ||
+		p.TLSAlternateAccessType == AerospikeNetworkTypeNetworkLoadBalancer
 }
 
 // GetDefaultPasswordFilePath returns the default-password-fille path if configured.

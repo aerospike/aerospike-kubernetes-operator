@@ -9,6 +9,8 @@ import (
 	"fmt"
 	"net"
 	"reflect"
+	"strconv"
+	"strings"
 	"time"
 
 	. "github.com/onsi/ginkgo/v2"
@@ -22,6 +24,7 @@ import (
 
 	asdbv1 "github.com/aerospike/aerospike-kubernetes-operator/v4/api/v1"
 	aerospikecluster "github.com/aerospike/aerospike-kubernetes-operator/v4/internal/controller/cluster"
+	"github.com/aerospike/aerospike-kubernetes-operator/v4/pkg/utils"
 	"github.com/aerospike/aerospike-kubernetes-operator/v4/test"
 	"github.com/aerospike/aerospike-management-lib/deployment"
 )
@@ -41,8 +44,16 @@ const (
 	customNetIPVlanOne           = "10.0.4.70"
 	customNetIPVlanTwo           = "10.0.6.70"
 	customNetIPVlanThree         = "0.0.0.0"
-	networkAnnotationKey         = "k8s.v1.cni.cncf.io/networks"
-	networkStatusAnnotationKey   = "k8s.v1.cni.cncf.io/network-status"
+	// Documentation-range IPs (RFC 5737). The stock server resolves alternate-access
+	// hostnames at startup and aborts on a name that does not resolve, so the e2e test
+	// uses IP literals. The webhook envtests cover FQDN validation.
+	// TODO: Switch these back to FQDNs (aerospike-nlb.example.com and
+	// aerospike-nlb-tls.example.com) once the e2e tests run on a server version with
+	// pluggable discovery, which does not resolve them at startup.
+	nlbAlternateAddress        = "203.0.113.10"
+	nlbTLSAddress              = "203.0.113.11"
+	networkAnnotationKey       = "k8s.v1.cni.cncf.io/networks"
+	networkStatusAnnotationKey = "k8s.v1.cni.cncf.io/network-status"
 
 	shortRetry = 2 * time.Minute
 )
@@ -732,6 +743,125 @@ func doTestNetworkPolicy(
 			}
 		}
 	})
+
+	// Single pod per host. Both runs exercise the NodePort lifecycle: non-TLS through
+	// alternate-access, TLS through tls-alternate-access. multiPodPerHost already
+	// creates the same per-pod NodePort.
+	if !multiPodPerHost {
+		It("NetworkLoadBalancer advertises the load balancer address on the per-pod NodePort", func() {
+			clusterName := fmt.Sprintf("np-nlb-%d", GinkgoParallelProcess())
+			clusterNamespacedName := test.GetNamespacedName(clusterName, test.MultiClusterNs1)
+
+			// Non-TLS advertises alternate-access. TLS advertises tls-alternate-access
+			// and leaves alternate-access on the default hostExternal path.
+			networkPolicy := &asdbv1.AerospikeNetworkPolicy{}
+			if enableTLS {
+				networkPolicy.TLSAlternateAccessType = asdbv1.AerospikeNetworkTypeNetworkLoadBalancer
+				networkPolicy.LoadBalancerTLSAlternateAccessAddress = nlbTLSAddress
+			} else {
+				networkPolicy.AlternateAccessType = asdbv1.AerospikeNetworkTypeNetworkLoadBalancer
+				networkPolicy.LoadBalancerAlternateAccessAddress = nlbAlternateAddress
+			}
+
+			aeroCluster = getAerospikeClusterSpecWithNetworkPolicy(
+				clusterNamespacedName, networkPolicy, multiPodPerHost, enableTLS,
+			)
+			randomizeServicePorts(aeroCluster, enableTLS, GinkgoParallelProcess())
+
+			Expect(aerospikeClusterCreateUpdate(k8sClient, aeroCluster, ctx)).ToNot(HaveOccurred())
+			Expect(validateNetworkPolicy(ctx, aeroCluster)).ToNot(HaveOccurred())
+
+			validateNLBPodServices(aeroCluster, enableTLS, true)
+			validateServerHostPorts(aeroCluster, false)
+
+			By("Rolling restart keeps the NodePort")
+
+			podList, err := getPodList(aeroCluster, k8sClient)
+			Expect(err).ToNot(HaveOccurred())
+			Expect(podList.Items).ToNot(BeEmpty())
+
+			nodePorts := nlbServiceNodePorts(aeroCluster)
+			restarted := podList.Items[0]
+
+			Expect(k8sClient.Delete(ctx, &corev1.Pod{ObjectMeta: metav1.ObjectMeta{
+				Name:      restarted.Name,
+				Namespace: restarted.Namespace,
+			}})).ToNot(HaveOccurred())
+			// Wait for a new pod (new UID), not the old one that is still terminating.
+			Expect(waitForPodRestart(ctx, restarted.Name, restarted.Namespace, string(restarted.UID))).
+				ToNot(HaveOccurred())
+			Expect(waitForAerospikeCluster(
+				k8sClient, ctx, aeroCluster, int(aeroCluster.Spec.Size), retryInterval,
+				getTimeout(aeroCluster.Spec.Size),
+				[]asdbv1.AerospikeClusterPhase{asdbv1.AerospikeClusterCompleted},
+			)).ToNot(HaveOccurred())
+			Expect(nlbServiceNodePorts(aeroCluster)).To(Equal(nodePorts))
+			Expect(validateNetworkPolicy(ctx, aeroCluster)).ToNot(HaveOccurred())
+
+			By("Scaling down removes the pod Service")
+
+			podList, err = getPodList(aeroCluster, k8sClient)
+			Expect(err).ToNot(HaveOccurred())
+
+			removed := highestOrdinalPodName(podList.Items)
+
+			aeroCluster, err = getCluster(k8sClient, ctx, clusterNamespacedName)
+			Expect(err).ToNot(HaveOccurred())
+
+			aeroCluster.Spec.Size--
+			Expect(updateCluster(k8sClient, ctx, aeroCluster)).ToNot(HaveOccurred())
+
+			removedSvc := &corev1.Service{}
+			err = k8sClient.Get(ctx, types.NamespacedName{
+				Name: removed, Namespace: aeroCluster.Namespace,
+			}, removedSvc)
+			Expect(errors.IsNotFound(err)).To(BeTrue(), "service %s should be absent", removed)
+
+			for podName, nodePort := range nlbServiceNodePorts(aeroCluster) {
+				Expect(nodePorts).To(HaveKeyWithValue(podName, nodePort))
+			}
+
+			By("Scaling up creates a pod Service and the server advertises its NodePort")
+
+			aeroCluster, err = getCluster(k8sClient, ctx, clusterNamespacedName)
+			Expect(err).ToNot(HaveOccurred())
+
+			aeroCluster.Spec.Size++
+			Expect(updateCluster(k8sClient, ctx, aeroCluster)).ToNot(HaveOccurred())
+
+			// The re-added pod may get any free NodePort, including the one it had before.
+			// validateNetworkPolicy checks that the server advertises whatever it got.
+			scaledUpPorts := nlbServiceNodePorts(aeroCluster)
+			Expect(scaledUpPorts).To(HaveKey(removed))
+
+			for podName, ports := range scaledUpPorts {
+				if podName != removed {
+					Expect(nodePorts).To(HaveKeyWithValue(podName, ports))
+				}
+			}
+
+			validateNLBPodServices(aeroCluster, enableTLS, true)
+			Expect(validateNetworkPolicy(ctx, aeroCluster)).ToNot(HaveOccurred())
+
+			By("Leaving networkLoadBalancer removes the per-pod service and restores hostPort")
+
+			aeroCluster, err = getCluster(k8sClient, ctx, clusterNamespacedName)
+			Expect(err).ToNot(HaveOccurred())
+
+			aeroCluster.Spec.AerospikeNetworkPolicy = asdbv1.AerospikeNetworkPolicy{
+				AccessType:             asdbv1.AerospikeNetworkTypeHostInternal,
+				AlternateAccessType:    asdbv1.AerospikeNetworkTypeHostExternal,
+				TLSAccessType:          asdbv1.AerospikeNetworkTypeHostInternal,
+				TLSAlternateAccessType: asdbv1.AerospikeNetworkTypeHostExternal,
+			}
+			Expect(updateCluster(k8sClient, ctx, aeroCluster)).ToNot(HaveOccurred())
+
+			validateNLBPodServices(aeroCluster, enableTLS, false)
+			validateServerHostPorts(aeroCluster, true)
+			Expect(validateNetworkPolicy(ctx, aeroCluster)).ToNot(HaveOccurred())
+		})
+	}
+
 	// test-case valid only for multiPodPerHost true
 	if multiPodPerHost {
 		It("PodOnlyNetwork: should create cluster without nodePort service", func() {
@@ -1245,6 +1375,18 @@ func validatePodEndpoint(
 				"expected custom network IP %v got %v", customNetIP, hostIPList,
 			)
 		}
+	case asdbv1.AerospikeNetworkTypeNetworkLoadBalancer:
+		expectedAddress := aeroCluster.Spec.AerospikeNetworkPolicy.LoadBalancerAlternateAccessAddress
+		if isTLS {
+			expectedAddress = aeroCluster.Spec.AerospikeNetworkPolicy.LoadBalancerTLSAlternateAccessAddress
+		}
+
+		if expectedAddress != hostIPList[0] {
+			return fmt.Errorf(
+				"expected load balancer address %v got %v",
+				expectedAddress, hostIPList[0],
+			)
+		}
 	case asdbv1.AerospikeNetworkTypeUnspecified:
 		return fmt.Errorf(
 			"network type cannot be unspecified",
@@ -1278,8 +1420,7 @@ func getExpectedServicePortForPod(
 ) (int32, error) {
 	var port int32
 
-	if (networkType != asdbv1.AerospikeNetworkTypePod && networkType != asdbv1.AerospikeNetworkTypeCustomInterface) &&
-		asdbv1.GetBool(aeroCluster.Spec.PodSpec.MultiPodPerHost) {
+	if usesPodNodePort(aeroCluster, networkType) {
 		svc, err := getServiceForPod(pod, k8sClient)
 		if err != nil {
 			return 0, fmt.Errorf("error getting service port: %v", err)
@@ -1338,6 +1479,121 @@ func getIPs(ctx goctx.Context, pod *corev1.Pod) (
 	}
 
 	return podIP, hostInternalIP, hostExternalIP, nil
+}
+
+// validateNLBPodServices checks the per-pod NodePort created for networkLoadBalancer.
+func validateNLBPodServices(aeroCluster *asdbv1.AerospikeCluster, enableTLS, shouldExist bool) {
+	podList, err := getPodList(aeroCluster, k8sClient)
+	Expect(err).ToNot(HaveOccurred())
+	Expect(podList.Items).ToNot(BeEmpty())
+
+	for idx := range podList.Items {
+		pod := &podList.Items[idx]
+		svc, svcErr := getServiceForPod(pod, k8sClient)
+
+		if !shouldExist {
+			Expect(errors.IsNotFound(svcErr)).To(BeTrue(), "service %s should be absent", pod.Name)
+			continue
+		}
+
+		Expect(svcErr).ToNot(HaveOccurred())
+		Expect(svc.Spec.Type).To(Equal(corev1.ServiceTypeNodePort))
+		Expect(svc.Spec.PublishNotReadyAddresses).To(BeTrue())
+		Expect(svc.Spec.ExternalTrafficPolicy).To(Equal(corev1.ServiceExternalTrafficPolicyTypeLocal))
+		Expect(svc.Spec.Selector).To(Equal(map[string]string{
+			"statefulset.kubernetes.io/pod-name": pod.Name,
+		}))
+
+		portNames := make(map[string]int32, len(svc.Spec.Ports))
+		for _, port := range svc.Spec.Ports {
+			portNames[port.Name] = port.Port
+		}
+
+		Expect(portNames).To(HaveKey(asdbv1.ServicePortName))
+
+		if enableTLS {
+			Expect(portNames).To(HaveKey(asdbv1.ServiceTLSPortName))
+		}
+	}
+}
+
+// validateServerHostPorts checks hostPort on the Aerospike server container.
+// exposed ports match the container port when hostAccess is set.
+func validateServerHostPorts(aeroCluster *asdbv1.AerospikeCluster, hostAccess bool) {
+	podList, err := getPodList(aeroCluster, k8sClient)
+	Expect(err).ToNot(HaveOccurred())
+	Expect(podList.Items).ToNot(BeEmpty())
+
+	for idx := range podList.Items {
+		pod := &podList.Items[idx]
+
+		server := test.GetContainerByName(pod.Spec.Containers, asdbv1.AerospikeServerContainerName)
+		Expect(server).NotTo(BeNil())
+
+		for _, port := range server.Ports {
+			exposed := port.Name == asdbv1.ServicePortName || port.Name == asdbv1.ServiceTLSPortName
+			if hostAccess && exposed {
+				Expect(port.HostPort).To(Equal(port.ContainerPort), pod.Name+"/"+port.Name)
+				continue
+			}
+
+			Expect(port.HostPort).To(BeZero(), pod.Name+"/"+port.Name)
+		}
+	}
+}
+
+// nlbServiceNodePorts returns each pod's Service NodePorts, keyed by pod name and then by port name.
+// Every NodePort must be allocated, so this also covers the TLS port when TLS is configured.
+func nlbServiceNodePorts(aeroCluster *asdbv1.AerospikeCluster) map[string]map[string]int32 {
+	podList, err := getPodList(aeroCluster, k8sClient)
+	Expect(err).ToNot(HaveOccurred())
+
+	nodePorts := make(map[string]map[string]int32, len(podList.Items))
+
+	for idx := range podList.Items {
+		pod := &podList.Items[idx]
+		if utils.IsPodTerminating(pod) {
+			continue
+		}
+
+		svc, svcErr := getServiceForPod(pod, k8sClient)
+		Expect(svcErr).ToNot(HaveOccurred())
+		Expect(svc.Spec.Ports).ToNot(BeEmpty())
+
+		ports := make(map[string]int32, len(svc.Spec.Ports))
+		for _, port := range svc.Spec.Ports {
+			Expect(port.NodePort).To(BeNumerically(">", 0), "%s/%s has no NodePort", pod.Name, port.Name)
+			ports[port.Name] = port.NodePort
+		}
+
+		nodePorts[pod.Name] = ports
+	}
+
+	return nodePorts
+}
+
+// highestOrdinalPodName returns the running pod with the highest StatefulSet ordinal, which is
+// the one a scale-down removes. It compares ordinals as numbers, so "-10" sorts after "-9".
+func highestOrdinalPodName(pods []corev1.Pod) string {
+	name, highest := "", -1
+
+	for idx := range pods {
+		pod := &pods[idx]
+		if utils.IsPodTerminating(pod) {
+			continue
+		}
+
+		ordinal, err := strconv.Atoi(pod.Name[strings.LastIndex(pod.Name, "-")+1:])
+		Expect(err).ToNot(HaveOccurred(), "pod name %s has no ordinal", pod.Name)
+
+		if ordinal > highest {
+			name, highest = pod.Name, ordinal
+		}
+	}
+
+	Expect(name).ToNot(BeEmpty(), "no running pods")
+
+	return name
 }
 
 // getAerospikeClusterSpecWithNetworkPolicy create a spec with input network policy.
