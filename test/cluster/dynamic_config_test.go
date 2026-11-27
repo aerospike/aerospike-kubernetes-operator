@@ -519,7 +519,7 @@ var _ = Describe(
 
 						aeroCluster.Spec.AerospikeAccessControl.Users = append(aeroCluster.Spec.AerospikeAccessControl.Users, admin2)
 
-						aeroCluster.Spec.PreviewFeatures = []string{asdbv1.PreviewFeatureIndexCheckpoint}
+						aeroCluster.Spec.PreviewFeatures = indexCheckpointPreviewFeatures(aeroCluster.Spec.Image)
 
 						Expect(DeployCluster(k8sClient, ctx, aeroCluster)).ToNot(HaveOccurred())
 					},

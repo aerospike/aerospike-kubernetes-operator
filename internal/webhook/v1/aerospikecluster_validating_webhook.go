@@ -22,9 +22,11 @@ import (
 	"encoding/json"
 	"encoding/pem"
 	"fmt"
+	"maps"
 	"os"
 	"path/filepath"
 	"reflect"
+	"slices"
 	"strconv"
 	"strings"
 
@@ -509,9 +511,7 @@ func validate(aslog logr.Logger, cluster *asdbv1.AerospikeCluster) (admission.Wa
 	}
 
 	// Validate preview features
-	expWarns, err := validatePreviewFeatures(cluster, version)
-	warnings = append(warnings, expWarns...)
-
+	err = validatePreviewFeatures(cluster, version)
 	if err != nil {
 		return warnings, err
 	}
@@ -1694,23 +1694,35 @@ func cgroupMemTrackingWarning(version string, conf map[string]interface{}) admis
 	return nil
 }
 
-// validatePreviewFeatures validates spec.previewFeatures: rejects unknown names, checks
-// server version compatibility, cross-checks with aerospikeConfig fields that require opt-in,
-// and warns when a feature has graduated to GA.
-func validatePreviewFeatures(cluster *asdbv1.AerospikeCluster, version string) (admission.Warnings, error) {
-	var warnings admission.Warnings
+// isPreviewFeatureGA reports whether a known preview feature has graduated to GA in the given
+// server version. A feature still in preview (no GAVersion) is never GA.
+func isPreviewFeatureGA(name, version string) (bool, error) {
+	gaVersion := asdbv1.PreviewFeatureVersions[name].GAVersion
+	if gaVersion == "" {
+		return false, nil
+	}
 
+	val, err := lib.CompareVersions(version, gaVersion)
+	if err != nil {
+		return false, fmt.Errorf(
+			"failed to check image version against GA version for preview feature %q: %v", name, err,
+		)
+	}
+
+	return val >= 0, nil
+}
+
+// validatePreviewFeatures validates spec.previewFeatures: rejects unknown names, checks
+// server version compatibility, rejects a feature that has graduated to GA, and cross-checks
+// with aerospikeConfig fields that require opt-in.
+func validatePreviewFeatures(cluster *asdbv1.AerospikeCluster, version string) error {
 	enabledSet := sets.New[string](cluster.Spec.PreviewFeatures...)
+	knownNames := slices.Sorted(maps.Keys(asdbv1.PreviewFeatureVersions))
 
 	for _, name := range cluster.Spec.PreviewFeatures {
 		info, known := asdbv1.PreviewFeatureVersions[name]
 		if !known {
-			knownNames := make([]string, 0, len(asdbv1.PreviewFeatureVersions))
-			for k := range asdbv1.PreviewFeatureVersions {
-				knownNames = append(knownNames, k)
-			}
-
-			return warnings, fmt.Errorf(
+			return fmt.Errorf(
 				"unknown preview feature %q; known features: %v",
 				name, knownNames,
 			)
@@ -1718,51 +1730,60 @@ func validatePreviewFeatures(cluster *asdbv1.AerospikeCluster, version string) (
 
 		val, err := lib.CompareVersions(version, info.MinVersion)
 		if err != nil {
-			return warnings, fmt.Errorf("failed to check image version for preview feature %q: %v", name, err)
+			return fmt.Errorf("failed to check image version for preview feature %q: %v", name, err)
 		}
 
 		if val < 0 {
-			return warnings, fmt.Errorf(
+			return fmt.Errorf(
 				"preview feature %q requires server version >= %s, but image version is %s",
 				name, info.MinVersion, version,
 			)
 		}
 
-		if info.GAVersion != "" {
-			gaVal, err := lib.CompareVersions(version, info.GAVersion)
-			if err != nil {
-				return warnings, fmt.Errorf(
-					"failed to check image version against GA version for preview feature %q: %v",
-					name, err,
-				)
-			}
+		// Same as the server: a graduated name is not a --preview value any more, and asd refuses to start with it.
+		isGA, err := isPreviewFeatureGA(name, version)
+		if err != nil {
+			return err
+		}
 
-			if gaVal >= 0 {
-				warnings = append(warnings, fmt.Sprintf(
-					"preview feature %q graduated to GA in server version %s, so can be removed"+
-						" from spec.previewFeatures.",
-					name, info.GAVersion,
-				))
-			}
+		if isGA {
+			return fmt.Errorf(
+				"%q is not a preview feature in server version %s: it graduated to GA in %s; "+
+					"remove it from spec.previewFeatures",
+				name, version, info.GAVersion,
+			)
 		}
 	}
 
-	// Cross-check: every index-checkpoint config key requires the opt-in.
+	// The loop above only sees names that are listed. This handles the opposite case, where
+	// index-checkpoint is not listed: while it is a preview feature (8.2.0.x) its config keys
+	// need the opt-in, so they are rejected. From GA the keys need no opt-in, so the check is
+	// skipped.
+	checkpointGA, err := isPreviewFeatureGA(asdbv1.PreviewFeatureIndexCheckpoint, version)
+	if err != nil {
+		return err
+	}
+
+	if checkpointGA {
+		return nil
+	}
+
 	if !enabledSet.Has(asdbv1.PreviewFeatureIndexCheckpoint) {
 		for idx := range cluster.Spec.RackConfig.Racks {
 			rack := &cluster.Spec.RackConfig.Racks[idx]
 
 			if err := validateNoIndexCheckpointKeys(rack.AerospikeConfig.Value); err != nil {
-				return warnings, err
+				return err
 			}
 		}
 	}
 
-	return warnings, nil
+	return nil
 }
 
 // indexCheckpointNamespaceKeys are the namespace-context keys the server gates behind
-// --preview index-checkpoint. The path itself is service-context and checked separately.
+// --preview index-checkpoint until the feature is GA. The path itself is service-context and
+// checked separately.
 var indexCheckpointNamespaceKeys = []string{
 	asdbv1.ConfKeyIndexCheckpointThreads,
 	asdbv1.ConfKeyIndexCheckpointCompression,
@@ -1771,6 +1792,7 @@ var indexCheckpointNamespaceKeys = []string{
 
 // validateNoIndexCheckpointKeys rejects any index-checkpoint config key when
 // "index-checkpoint" is absent from spec.previewFeatures. All four are gated, not just the path.
+// Only applies to server versions where index-checkpoint is still a preview feature.
 func validateNoIndexCheckpointKeys(config map[string]interface{}) error {
 	if serviceConf, ok := config[asdbv1.ConfKeyService].(map[string]interface{}); ok {
 		if _, has := serviceConf[asdbv1.ConfKeyServiceIndexCheckpointPath]; has {

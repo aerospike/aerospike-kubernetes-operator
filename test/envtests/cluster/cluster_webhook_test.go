@@ -628,7 +628,7 @@ var _ = Describe("AerospikeCluster validation", func() {
 
 		Context("spec.aerospikeConfig (index-checkpoint)", func() {
 			Context("negative", func() {
-				It("rejects index-checkpoint-path with server version < "+testutil.IndexCheckpointServerVersion, func() {
+				It("rejects index-checkpoint-path with server version < "+testutil.IndexCheckpointPreviewServerVersion, func() {
 					aeroCluster := testCluster.CreateAerospikeClusterPost640(
 						clusterNamespacedName, 1, testutil.GetEnterpriseImage(testutil.CgroupMemTrackingServerVersion),
 					)
@@ -646,7 +646,7 @@ var _ = Describe("AerospikeCluster validation", func() {
 
 				It("rejects index-checkpoint-threads out of range [1,16]", func() {
 					aeroCluster := testCluster.CreateAerospikeClusterPost640(
-						clusterNamespacedName, 1, testutil.GetEnterpriseImage(testutil.IndexCheckpointServerVersion),
+						clusterNamespacedName, 1, testutil.GetEnterpriseImage(testutil.IndexCheckpointPreviewServerVersion),
 					)
 					setCheckpointPath(aeroCluster, indexCheckpointPath)
 					firstNamespace :=
@@ -665,7 +665,7 @@ var _ = Describe("AerospikeCluster validation", func() {
 
 				It("rejects service index-checkpoint-path without previewFeatures opt-in", func() {
 					aeroCluster := testCluster.CreateAerospikeClusterPost640(
-						clusterNamespacedName, 1, testutil.GetEnterpriseImage(testutil.IndexCheckpointServerVersion),
+						clusterNamespacedName, 1, testutil.GetEnterpriseImage(testutil.IndexCheckpointPreviewServerVersion),
 					)
 					setCheckpointPath(aeroCluster, indexCheckpointWorkdirPath)
 
@@ -678,10 +678,43 @@ var _ = Describe("AerospikeCluster validation", func() {
 						Validate(err)
 				})
 
+				It("rejects index-checkpoint in previewFeatures with server version >= "+
+					testutil.IndexCheckpointGAServerVersion, func() {
+					aeroCluster := testCluster.CreateAerospikeClusterPost640(
+						clusterNamespacedName, 1, testutil.GetEnterpriseImage(testutil.IndexCheckpointGAServerVersion),
+					)
+					setCheckpointPath(aeroCluster, indexCheckpointWorkdirPath)
+					aeroCluster.Spec.PreviewFeatures = []string{asdbv1.PreviewFeatureIndexCheckpoint}
+
+					err := envtests.K8sClient.Create(ctx, aeroCluster)
+					Expect(err).To(HaveOccurred())
+
+					envtests.NewStatusErrorMatcher().
+						WithMessageSubstrings(testutil.WebhookErrorPrefix,
+							"index-checkpoint", "is not a preview feature", "remove it from spec.previewFeatures").
+						Validate(err)
+				})
+
+				It("rejects index-checkpoint in previewFeatures with server version >= "+
+					testutil.IndexCheckpointGAServerVersion+" even with no index-checkpoint config", func() {
+					aeroCluster := testCluster.CreateAerospikeClusterPost640(
+						clusterNamespacedName, 1, testutil.GetEnterpriseImage(testutil.IndexCheckpointGAServerVersion),
+					)
+					aeroCluster.Spec.PreviewFeatures = []string{asdbv1.PreviewFeatureIndexCheckpoint}
+
+					err := envtests.K8sClient.Create(ctx, aeroCluster)
+					Expect(err).To(HaveOccurred())
+
+					envtests.NewStatusErrorMatcher().
+						WithMessageSubstrings(testutil.WebhookErrorPrefix,
+							"index-checkpoint", "is not a preview feature", "remove it from spec.previewFeatures").
+						Validate(err)
+				})
+
 				DescribeTable("rejects a namespace index-checkpoint key without previewFeatures opt-in",
 					func(key string, value interface{}) {
 						aeroCluster := testCluster.CreateAerospikeClusterPost640(
-							clusterNamespacedName, 1, testutil.GetEnterpriseImage(testutil.IndexCheckpointServerVersion),
+							clusterNamespacedName, 1, testutil.GetEnterpriseImage(testutil.IndexCheckpointPreviewServerVersion),
 						)
 						firstNamespace :=
 							aeroCluster.Spec.AerospikeConfig.Value[asdbv1.ConfKeyNamespace].([]interface{})[0].(map[string]interface{})
@@ -717,7 +750,7 @@ var _ = Describe("AerospikeCluster validation", func() {
 
 				It("rejects index-checkpoint-path backed by an emptyDir volume", func() {
 					aeroCluster := testCluster.CreateAerospikeClusterPost640(
-						clusterNamespacedName, 1, testutil.GetEnterpriseImage(testutil.IndexCheckpointServerVersion),
+						clusterNamespacedName, 1, testutil.GetEnterpriseImage(testutil.IndexCheckpointPreviewServerVersion),
 					)
 
 					svc := aeroCluster.Spec.AerospikeConfig.Value[asdbv1.ConfKeyService].(map[string]interface{})
@@ -744,7 +777,7 @@ var _ = Describe("AerospikeCluster validation", func() {
 
 				It("rejects index-checkpoint-path backed by a hostPath volume", func() {
 					aeroCluster := testCluster.CreateAerospikeClusterPost640(
-						clusterNamespacedName, 1, testutil.GetEnterpriseImage(testutil.IndexCheckpointServerVersion),
+						clusterNamespacedName, 1, testutil.GetEnterpriseImage(testutil.IndexCheckpointPreviewServerVersion),
 					)
 					svc := aeroCluster.Spec.AerospikeConfig.Value[asdbv1.ConfKeyService].(map[string]interface{})
 					svc[asdbv1.ConfKeyServiceIndexCheckpointPath] = indexCheckpointPath
@@ -773,7 +806,7 @@ var _ = Describe("AerospikeCluster validation", func() {
 
 				It("rejects index-checkpoint-path backed by a Block-mode PersistentVolume", func() {
 					aeroCluster := testCluster.CreateAerospikeClusterPost640(
-						clusterNamespacedName, 1, testutil.GetEnterpriseImage(testutil.IndexCheckpointServerVersion),
+						clusterNamespacedName, 1, testutil.GetEnterpriseImage(testutil.IndexCheckpointPreviewServerVersion),
 					)
 					svc := aeroCluster.Spec.AerospikeConfig.Value[asdbv1.ConfKeyService].(map[string]interface{})
 					svc[asdbv1.ConfKeyServiceIndexCheckpointPath] = indexCheckpointPath
@@ -803,7 +836,7 @@ var _ = Describe("AerospikeCluster validation", func() {
 
 				It("rejects index-checkpoint-path with no backing storage volume", func() {
 					aeroCluster := testCluster.CreateAerospikeClusterPost640(
-						clusterNamespacedName, 1, testutil.GetEnterpriseImage(testutil.IndexCheckpointServerVersion),
+						clusterNamespacedName, 1, testutil.GetEnterpriseImage(testutil.IndexCheckpointPreviewServerVersion),
 					)
 					svc := aeroCluster.Spec.AerospikeConfig.Value[asdbv1.ConfKeyService].(map[string]interface{})
 					svc[asdbv1.ConfKeyServiceIndexCheckpointPath] = indexCheckpointPath
@@ -824,7 +857,7 @@ var _ = Describe("AerospikeCluster validation", func() {
 				DescribeTable("rejects a namespace name that collides with the checkpoint directory layout",
 					func(nsName string) {
 						aeroCluster := testCluster.CreateAerospikeClusterPost640(
-							clusterNamespacedName, 1, testutil.GetEnterpriseImage(testutil.IndexCheckpointServerVersion),
+							clusterNamespacedName, 1, testutil.GetEnterpriseImage(testutil.IndexCheckpointPreviewServerVersion),
 						)
 						setCheckpointPath(aeroCluster, indexCheckpointWorkdirPath)
 						aeroCluster.Spec.PreviewFeatures = []string{asdbv1.PreviewFeatureIndexCheckpoint}
@@ -844,7 +877,7 @@ var _ = Describe("AerospikeCluster validation", func() {
 
 				It("rejects a colliding namespace name even with skip-checkpoint set", func() {
 					aeroCluster := testCluster.CreateAerospikeClusterPost640(
-						clusterNamespacedName, 1, testutil.GetEnterpriseImage(testutil.IndexCheckpointServerVersion),
+						clusterNamespacedName, 1, testutil.GetEnterpriseImage(testutil.IndexCheckpointPreviewServerVersion),
 					)
 					setCheckpointPath(aeroCluster, indexCheckpointWorkdirPath)
 					aeroCluster.Spec.PreviewFeatures = []string{asdbv1.PreviewFeatureIndexCheckpoint}
@@ -868,9 +901,9 @@ var _ = Describe("AerospikeCluster validation", func() {
 				})
 
 				It("allows index-checkpoint-path and index-checkpoint-threads for version >= "+
-					testutil.IndexCheckpointServerVersion, func() {
+					testutil.IndexCheckpointPreviewServerVersion, func() {
 					aeroCluster := testCluster.CreateAerospikeClusterPost640(
-						clusterNamespacedName, 1, testutil.GetEnterpriseImage(testutil.IndexCheckpointServerVersion),
+						clusterNamespacedName, 1, testutil.GetEnterpriseImage(testutil.IndexCheckpointPreviewServerVersion),
 					)
 					setCheckpointPath(aeroCluster, indexCheckpointWorkdirPath)
 					firstNamespace :=
@@ -881,10 +914,25 @@ var _ = Describe("AerospikeCluster validation", func() {
 					Expect(envtests.K8sClient.Create(ctx, aeroCluster)).To(Succeed())
 				})
 
-				It("allows index-checkpoint-compression for version >= "+
-					testutil.IndexCheckpointServerVersion, func() {
+				It("allows index-checkpoint config keys without previewFeatures opt-in for version >= "+
+					testutil.IndexCheckpointGAServerVersion, func() {
 					aeroCluster := testCluster.CreateAerospikeClusterPost640(
-						clusterNamespacedName, 1, testutil.GetEnterpriseImage(testutil.IndexCheckpointServerVersion),
+						clusterNamespacedName, 1, testutil.GetEnterpriseImage(testutil.IndexCheckpointGAServerVersion),
+					)
+					setCheckpointPath(aeroCluster, indexCheckpointWorkdirPath)
+					firstNamespace :=
+						aeroCluster.Spec.AerospikeConfig.Value[asdbv1.ConfKeyNamespace].([]interface{})[0].(map[string]interface{})
+					firstNamespace[asdbv1.ConfKeyIndexCheckpointThreads] = 4
+					firstNamespace[asdbv1.ConfKeyIndexCheckpointCompression] = false
+					firstNamespace[asdbv1.ConfKeySkipCheckpoint] = false
+
+					Expect(envtests.K8sClient.Create(ctx, aeroCluster)).To(Succeed())
+				})
+
+				It("allows index-checkpoint-compression for version >= "+
+					testutil.IndexCheckpointPreviewServerVersion, func() {
+					aeroCluster := testCluster.CreateAerospikeClusterPost640(
+						clusterNamespacedName, 1, testutil.GetEnterpriseImage(testutil.IndexCheckpointPreviewServerVersion),
 					)
 					setCheckpointPath(aeroCluster, indexCheckpointWorkdirPath)
 					firstNamespace :=
@@ -897,7 +945,7 @@ var _ = Describe("AerospikeCluster validation", func() {
 
 				It("allows skip-checkpoint on a namespace", func() {
 					aeroCluster := testCluster.CreateAerospikeClusterPost640(
-						clusterNamespacedName, 1, testutil.GetEnterpriseImage(testutil.IndexCheckpointServerVersion),
+						clusterNamespacedName, 1, testutil.GetEnterpriseImage(testutil.IndexCheckpointPreviewServerVersion),
 					)
 					setCheckpointPath(aeroCluster, indexCheckpointWorkdirPath)
 					firstNamespace :=
@@ -910,7 +958,7 @@ var _ = Describe("AerospikeCluster validation", func() {
 
 				It("allows skip-checkpoint without any index-checkpoint-path", func() {
 					aeroCluster := testCluster.CreateAerospikeClusterPost640(
-						clusterNamespacedName, 1, testutil.GetEnterpriseImage(testutil.IndexCheckpointServerVersion),
+						clusterNamespacedName, 1, testutil.GetEnterpriseImage(testutil.IndexCheckpointPreviewServerVersion),
 					)
 					firstNamespace :=
 						aeroCluster.Spec.AerospikeConfig.Value[asdbv1.ConfKeyNamespace].([]interface{})[0].(map[string]interface{})
@@ -922,7 +970,7 @@ var _ = Describe("AerospikeCluster validation", func() {
 
 				It("allows index-checkpoint-threads at the server's default of 16", func() {
 					aeroCluster := testCluster.CreateAerospikeClusterPost640(
-						clusterNamespacedName, 1, testutil.GetEnterpriseImage(testutil.IndexCheckpointServerVersion),
+						clusterNamespacedName, 1, testutil.GetEnterpriseImage(testutil.IndexCheckpointPreviewServerVersion),
 					)
 					setCheckpointPath(aeroCluster, indexCheckpointWorkdirPath)
 					firstNamespace :=
@@ -937,7 +985,7 @@ var _ = Describe("AerospikeCluster validation", func() {
 					// The guard is scoped to the feature being on — it is not a new
 					// cluster-wide namespace-naming rule.
 					aeroCluster := testCluster.CreateAerospikeClusterPost640(
-						clusterNamespacedName, 1, testutil.GetEnterpriseImage(testutil.IndexCheckpointServerVersion),
+						clusterNamespacedName, 1, testutil.GetEnterpriseImage(testutil.IndexCheckpointPreviewServerVersion),
 					)
 					addInMemoryNamespace(aeroCluster, "cache.tmp", nil)
 
@@ -950,7 +998,7 @@ var _ = Describe("AerospikeCluster validation", func() {
 			Context("negative", func() {
 				It("rejects pure in-memory SC namespace without index-checkpoint-path", func() {
 					aeroCluster := testCluster.CreateAerospikeClusterPost640(
-						clusterNamespacedName, 1, testutil.GetEnterpriseImage(testutil.IndexCheckpointServerVersion),
+						clusterNamespacedName, 1, testutil.GetEnterpriseImage(testutil.IndexCheckpointPreviewServerVersion),
 					)
 					addSCInMemoryNamespace(aeroCluster, "sc-mem")
 
@@ -966,7 +1014,7 @@ var _ = Describe("AerospikeCluster validation", func() {
 
 				It("rejects skip-checkpoint on a pure in-memory SC namespace", func() {
 					aeroCluster := testCluster.CreateAerospikeClusterPost640(
-						clusterNamespacedName, 1, testutil.GetEnterpriseImage(testutil.IndexCheckpointServerVersion),
+						clusterNamespacedName, 1, testutil.GetEnterpriseImage(testutil.IndexCheckpointPreviewServerVersion),
 					)
 					setCheckpointPath(aeroCluster, indexCheckpointWorkdirPath)
 					aeroCluster.Spec.PreviewFeatures = []string{asdbv1.PreviewFeatureIndexCheckpoint}
@@ -986,7 +1034,7 @@ var _ = Describe("AerospikeCluster validation", func() {
 
 				It("rejects adding skip-checkpoint to a pure in-memory SC namespace on update", func() {
 					aeroCluster := testCluster.CreateAerospikeClusterPost640(
-						clusterNamespacedName, 1, testutil.GetEnterpriseImage(testutil.IndexCheckpointServerVersion),
+						clusterNamespacedName, 1, testutil.GetEnterpriseImage(testutil.IndexCheckpointPreviewServerVersion),
 					)
 					setCheckpointPath(aeroCluster, indexCheckpointWorkdirPath)
 					aeroCluster.Spec.PreviewFeatures = []string{asdbv1.PreviewFeatureIndexCheckpoint}
@@ -1019,7 +1067,7 @@ var _ = Describe("AerospikeCluster validation", func() {
 			Context("positive", func() {
 				It("allows pure in-memory SC namespace when index-checkpoint-path is configured", func() {
 					aeroCluster := testCluster.CreateAerospikeClusterPost640(
-						clusterNamespacedName, 1, testutil.GetEnterpriseImage(testutil.IndexCheckpointServerVersion),
+						clusterNamespacedName, 1, testutil.GetEnterpriseImage(testutil.IndexCheckpointPreviewServerVersion),
 					)
 					setCheckpointPath(aeroCluster, indexCheckpointWorkdirPath)
 					aeroCluster.Spec.PreviewFeatures = []string{asdbv1.PreviewFeatureIndexCheckpoint}
@@ -1030,7 +1078,7 @@ var _ = Describe("AerospikeCluster validation", func() {
 
 				It("allows device-backed in-memory SC namespace with skip-checkpoint and no checkpoint path", func() {
 					aeroCluster := testCluster.CreateAerospikeClusterPost640(
-						clusterNamespacedName, 1, testutil.GetEnterpriseImage(testutil.IndexCheckpointServerVersion),
+						clusterNamespacedName, 1, testutil.GetEnterpriseImage(testutil.IndexCheckpointPreviewServerVersion),
 					)
 					aeroCluster.Spec.PreviewFeatures = []string{asdbv1.PreviewFeatureIndexCheckpoint}
 					// Use a distinct device path — /test/dev/xvdf is already claimed by the "test" namespace.
@@ -1044,7 +1092,7 @@ var _ = Describe("AerospikeCluster validation", func() {
 
 				It("allows all-device-backed SC in-memory with checkpointing disabled entirely", func() {
 					aeroCluster := testCluster.CreateAerospikeClusterPost640(
-						clusterNamespacedName, 1, testutil.GetEnterpriseImage(testutil.IndexCheckpointServerVersion),
+						clusterNamespacedName, 1, testutil.GetEnterpriseImage(testutil.IndexCheckpointPreviewServerVersion),
 					)
 					// No previewFeatures, no index-checkpoint-path — device-backed in-memory doesn't need it.
 					// Use a distinct device path — /test/dev/xvdf is already claimed by the "test" namespace.
@@ -2639,7 +2687,8 @@ var _ = Describe("AerospikeCluster validation", func() {
 				envtests.GlobalWarnings.Reset()
 
 				aeroCluster := testCluster.CreateAerospikeClusterPost640(
-					updateValidationClusterNamespacedName, 1, testutil.GetEnterpriseImage(testutil.IndexCheckpointServerVersion),
+					updateValidationClusterNamespacedName, 1,
+					testutil.GetEnterpriseImage(testutil.IndexCheckpointPreviewServerVersion),
 				)
 				setCheckpointPath(aeroCluster, indexCheckpointWorkdirPath)
 				aeroCluster.Spec.PreviewFeatures = []string{asdbv1.PreviewFeatureIndexCheckpoint}
@@ -2676,6 +2725,51 @@ var _ = Describe("AerospikeCluster validation", func() {
 				Expect(envtests.GlobalWarnings.Warnings).To(ContainElement(ContainSubstring("data-size changed")))
 			})
 
+			It("rejects an image upgrade to the index-checkpoint GA version while it is still listed in previewFeatures",
+				func() {
+					current, err := testCluster.GetCluster(envtests.K8sClient, ctx, updateValidationClusterNamespacedName)
+					Expect(err).ToNot(HaveOccurred())
+
+					current.Spec.Image = testutil.GetEnterpriseImage(testutil.IndexCheckpointGAServerVersion)
+
+					err = envtests.K8sClient.Update(ctx, current)
+					Expect(err).To(HaveOccurred())
+
+					envtests.NewStatusErrorMatcher().
+						WithMessageSubstrings(testutil.WebhookErrorPrefix,
+							"index-checkpoint", "is not a preview feature", "remove it from spec.previewFeatures").
+						Validate(err)
+				})
+
+			It("allows an image upgrade to the index-checkpoint GA version when previewFeatures drops it in the same update",
+				func() {
+					current, err := testCluster.GetCluster(envtests.K8sClient, ctx, updateValidationClusterNamespacedName)
+					Expect(err).ToNot(HaveOccurred())
+
+					current.Spec.Image = testutil.GetEnterpriseImage(testutil.IndexCheckpointGAServerVersion)
+					current.Spec.PreviewFeatures = nil
+
+					Expect(envtests.K8sClient.Update(ctx, current)).To(Succeed())
+
+					// Rolling back needs the opt-in again, in the same update as the image.
+					current, err = testCluster.GetCluster(envtests.K8sClient, ctx, updateValidationClusterNamespacedName)
+					Expect(err).ToNot(HaveOccurred())
+
+					current.Spec.Image = testutil.GetEnterpriseImage(testutil.IndexCheckpointPreviewServerVersion)
+
+					err = envtests.K8sClient.Update(ctx, current)
+					Expect(err).To(HaveOccurred())
+
+					envtests.NewStatusErrorMatcher().
+						WithMessageSubstrings(testutil.WebhookErrorPrefix,
+							"index-checkpoint-path", "not listed in spec.previewFeatures").
+						Validate(err)
+
+					current.Spec.PreviewFeatures = []string{asdbv1.PreviewFeatureIndexCheckpoint}
+
+					Expect(envtests.K8sClient.Update(ctx, current)).To(Succeed())
+				})
+
 			Context("when checkpointing is enabled for the first time", func() {
 				// Use a separate cluster without any SC in-memory namespace, so that
 				// stripping and re-adding index-checkpoint-path is always valid.
@@ -2687,7 +2781,7 @@ var _ = Describe("AerospikeCluster validation", func() {
 					envtests.GlobalWarnings.Reset()
 
 					aeroCluster := testCluster.CreateAerospikeClusterPost640(
-						firstTimeClusterNSN, 1, testutil.GetEnterpriseImage(testutil.IndexCheckpointServerVersion),
+						firstTimeClusterNSN, 1, testutil.GetEnterpriseImage(testutil.IndexCheckpointPreviewServerVersion),
 					)
 					setCheckpointPath(aeroCluster, indexCheckpointWorkdirPath)
 					aeroCluster.Spec.PreviewFeatures = []string{asdbv1.PreviewFeatureIndexCheckpoint}

@@ -300,8 +300,9 @@ type AerospikeClusterSpec struct { //nolint:govet // for readability
 	Operations []OperationSpec `json:"operations,omitempty"`
 
 	// PreviewFeatures is a list of Aerospike server preview feature names to enable via the
-	// --preview startup flag. Features gated behind this flag (e.g. "index-checkpoint")
-	// will cause the server to crash at startup if the flag is not present.
+	// --preview startup flag. Config gated behind a preview feature makes the server fail at
+	// startup if the flag is not present. A feature that has graduated to GA must not be listed:
+	// "index-checkpoint" is a preview feature in server 8.2.0 only, and is GA from 8.2.1.
 	// +operator-sdk:csv:customresourcedefinitions:type=spec,displayName="Preview Features"
 	// +optional
 	PreviewFeatures []string `json:"previewFeatures,omitempty"`
@@ -1208,8 +1209,9 @@ type AerospikeClusterStatusSpec struct { //nolint:govet // for readability
 	RestartStrategy *RestartStrategy `json:"restartStrategy,omitempty"`
 
 	// PreviewFeatures is a list of Aerospike server preview feature names to enable via the
-	// --preview startup flag. Features gated behind this flag (e.g. "index-checkpoint")
-	// will cause the server to crash at startup if the flag is not present.
+	// --preview startup flag. Config gated behind a preview feature makes the server fail at
+	// startup if the flag is not present. A feature that has graduated to GA must not be listed:
+	// "index-checkpoint" is a preview feature in server 8.2.0 only, and is GA from 8.2.1.
 	// +optional
 	PreviewFeatures []string `json:"previewFeatures,omitempty"`
 }
